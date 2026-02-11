@@ -204,7 +204,7 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
 }
 
 // Sample data for demo
-export const SAMPLE_PLAYLIST: PlaylistInput = {
+export const SAMPLE_PLAYLIST: PlaylistInput & { _trackList: { name: string; artists: string }[] } = {
   playlistUrl: "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
   playlistId: "37i9dQZF1DXcBWIGoYBM5M",
   playlistName: "Chill Vibes",
@@ -217,9 +217,26 @@ export const SAMPLE_PLAYLIST: PlaylistInput = {
   submissionLanguageDetected: false,
   churnRate30d: 0.12,
   bottomDumpScore: 0.18,
+  _trackList: [
+    { name: "Weightless", artists: "Marconi Union" },
+    { name: "Sunset Lover", artists: "Petit Biscuit" },
+    { name: "Intro", artists: "The xx" },
+    { name: "Skinny Love", artists: "Bon Iver" },
+    { name: "Electric Feel", artists: "MGMT" },
+    { name: "Do I Wanna Know?", artists: "Arctic Monkeys" },
+    { name: "Motion Sickness", artists: "Phoebe Bridgers" },
+    { name: "Pink + White", artists: "Frank Ocean" },
+    { name: "Cigarette Daydreams", artists: "Cage The Elephant" },
+    { name: "Apocalypse", artists: "Cigarettes After Sex" },
+    { name: "Dissolve", artists: "Absofacto" },
+    { name: "Ivy", artists: "Frank Ocean" },
+    { name: "Agnes", artists: "Glass Animals" },
+    { name: "Dreams", artists: "Fleetwood Mac" },
+    { name: "Redbone", artists: "Childish Gambino" },
+  ],
 };
 
-export const SAMPLE_EDITORIAL: PlaylistInput = {
+export const SAMPLE_EDITORIAL: PlaylistInput & { _trackList: { name: string; artists: string }[] } = {
   playlistUrl: "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
   playlistId: "37i9dQZF1DXcBWIGoYBM5M",
   playlistName: "Today's Top Hits",
@@ -232,4 +249,21 @@ export const SAMPLE_EDITORIAL: PlaylistInput = {
   submissionLanguageDetected: false,
   churnRate30d: 0.30,
   bottomDumpScore: 0.10,
+  _trackList: [
+    { name: "Die With A Smile", artists: "Lady Gaga, Bruno Mars" },
+    { name: "APT.", artists: "ROSÉ, Bruno Mars" },
+    { name: "Birds of a Feather", artists: "Billie Eilish" },
+    { name: "Espresso", artists: "Sabrina Carpenter" },
+    { name: "That's So True", artists: "Gracie Abrams" },
+    { name: "Taste", artists: "Sabrina Carpenter" },
+    { name: "Good Luck, Babe!", artists: "Chappell Roan" },
+    { name: "Stargazing", artists: "Myles Smith" },
+    { name: "Luther", artists: "Kendrick Lamar, SZA" },
+    { name: "I Love You, I'm Sorry", artists: "Gracie Abrams" },
+    { name: "Timeless", artists: "The Weeknd, Playboi Carti" },
+    { name: "Messy", artists: "Lola Young" },
+    { name: "Sympathy Is a Knife", artists: "Charli XCX" },
+    { name: "Beautiful Things", artists: "Benson Boone" },
+    { name: "Too Sweet", artists: "Hozier" },
+  ],
 };
