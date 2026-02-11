@@ -124,7 +124,7 @@ export default function HowScoringWorks() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              How <span className="text-gradient-primary">Scoring</span> Works
+              Inside the <span className="text-gradient-primary">Fitting</span> Room
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               Every playlist is scored 0–100 across 7 categories. Only available data is counted — the score adjusts automatically.

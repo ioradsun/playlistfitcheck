@@ -101,7 +101,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
 
       <p className="text-center text-xs">
         <Link to="/how-scoring-works" className="text-primary hover:underline underline-offset-2">
-          How scoring works
+          Inside the Fitting Room
         </Link>
       </p>
 
