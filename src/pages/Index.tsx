@@ -2,13 +2,59 @@ import { useState, useCallback } from "react";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
 import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
+import { supabase } from "@/integrations/supabase/client";
+import type { VibeAnalysis } from "@/components/VibeCard";
+
+interface AnalysisResult {
+  output: HealthOutput;
+  input: PlaylistInput;
+  name?: string;
+  key: number;
+  trackList?: { name: string; artists: string }[];
+}
 
 const Index = () => {
-  const [result, setResult] = useState<{ output: HealthOutput; input: PlaylistInput; name?: string; key: number } | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
+  const [vibeLoading, setVibeLoading] = useState(false);
 
-  const handleAnalyze = useCallback((data: PlaylistInput) => {
+  const fetchVibeAnalysis = useCallback(async (data: PlaylistInput, trackList?: { name: string; artists: string }[]) => {
+    if (!trackList || trackList.length === 0) return;
+    setVibeLoading(true);
+    try {
+      const { data: analysis, error } = await supabase.functions.invoke("playlist-vibe", {
+        body: {
+          playlistName: data.playlistName,
+          description: data.description,
+          ownerName: data.ownerName,
+          trackList,
+        },
+      });
+      if (error) throw error;
+      if (analysis?.error) throw new Error(analysis.error);
+      setVibeAnalysis(analysis as VibeAnalysis);
+    } catch (e) {
+      console.error("Vibe analysis error:", e);
+    } finally {
+      setVibeLoading(false);
+    }
+  }, []);
+
+  const handleAnalyze = useCallback((data: PlaylistInput & { _trackList?: { name: string; artists: string }[] }) => {
+    const trackList = data._trackList;
     const output = computePlaylistHealth(data);
-    setResult({ output, input: data, name: data.playlistName, key: Date.now() });
+    setVibeAnalysis(null);
+    setResult({ output, input: data, name: data.playlistName, key: Date.now(), trackList });
+    // Trigger vibe analysis in background
+    if (trackList && trackList.length > 0) {
+      fetchVibeAnalysis(data, trackList);
+    }
+  }, [fetchVibeAnalysis]);
+
+  const handleBack = useCallback(() => {
+    setResult(null);
+    setVibeAnalysis(null);
+    setVibeLoading(false);
   }, []);
 
   return (
@@ -20,7 +66,9 @@ const Index = () => {
             result={result.output}
             inputData={result.input}
             playlistName={result.name}
-            onBack={() => setResult(null)}
+            vibeAnalysis={vibeAnalysis}
+            vibeLoading={vibeLoading}
+            onBack={handleBack}
           />
         ) : (
           <PlaylistInputSection onAnalyze={handleAnalyze} />

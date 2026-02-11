@@ -31,12 +31,12 @@ function extractPlaylistId(url: string): string | null {
 
 interface TrackItem {
   added_at: string;
-  track: { id: string } | null;
+  track: { id: string; name: string; artists: { name: string }[] } | null;
 }
 
 async function fetchAllTracks(playlistId: string, token: string): Promise<TrackItem[]> {
   const items: TrackItem[] = [];
-  let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=items(added_at,track(id)),next&limit=100`;
+  let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=items(added_at,track(id,name,artists(name))),next&limit=100`;
 
   while (url) {
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -208,6 +208,15 @@ serve(async (req) => {
       track_ids: trackIds,
     });
 
+    // Build track list for vibe analysis
+    const trackList = trackItems
+      .filter((item) => item.track)
+      .slice(0, 50) // Limit to 50 for AI context
+      .map((item) => ({
+        name: item.track!.name,
+        artists: item.track!.artists?.map((a) => a.name).join(", ") || "Unknown",
+      }));
+
     const result = {
       playlistUrl,
       playlistId,
@@ -222,6 +231,7 @@ serve(async (req) => {
       churnRate30d: derived.churnRate30d,
       bottomDumpScore: derived.bottomDumpScore,
       _snapshotCount: derived.snapshotCount,
+      _trackList: trackList,
     };
 
     return new Response(JSON.stringify(result), {
