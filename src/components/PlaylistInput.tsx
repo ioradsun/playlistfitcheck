@@ -71,9 +71,8 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
           Playlist <span className="text-gradient-primary">Fit</span> Check
         </h1>
-        <p className="text-muted-foreground max-w-md mx-auto">
-          Paste a Spotify playlist URL to score curation quality, update cadence, and pitch suitability.
-        </p>
+
+
       </div>
 
       {/* URL input */}
@@ -95,7 +94,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
           ) : (
             <Zap size={16} className="mr-1" />
           )}
-          {loading ? "Fetching..." : "Analyze"}
+          {loading ? "Fetching..." : "Check Fit"}
         </Button>
       </div>
 
