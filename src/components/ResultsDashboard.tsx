@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, AlertTriangle, Info, Flag } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { CategoryBar } from "@/components/CategoryBar";
@@ -22,8 +22,8 @@ function fmt(n: number | undefined): string {
 const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string; max: number; description: string }[] = [
   { key: "sizeFocus", label: "Size vs Focus", max: 20, description: "Ideal playlists have 30–80 tracks. Oversized playlists dilute listener attention." },
   { key: "followerTrackRatio", label: "Follower/Track Ratio", max: 15, description: "Higher follower-to-track ratio means more listeners per song — a quality signal." },
-  { key: "updateCadence", label: "Update Cadence", max: 15, description: "How recently the playlist was updated. Improves with repeated analyses over time." },
   { key: "curatorIntentQuality", label: "Curator Intent", max: 15, description: "Evaluates owner type, description quality, and submission language signals." },
+  { key: "updateCadence", label: "Update Cadence", max: 15, description: "How recently the playlist was updated. Improves with repeated analyses over time." },
   { key: "churnStability", label: "Churn vs Stability", max: 20, description: "Track add/remove rate over 30 days. Requires 2+ analyses spaced over time." },
   { key: "trackPlacementBehavior", label: "Track Placement", max: 15, description: "Detects if new tracks are dumped at the bottom vs placed thoughtfully. Requires 2+ analyses." },
 ];
@@ -120,60 +120,22 @@ export function ResultsDashboard({ result, inputData, playlistName, onBack }: Pr
         </motion.div>
       </div>
 
-      {/* Flags, Missing, Notes */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {result.flags.length > 0 && (
-          <motion.div
-            className="glass-card rounded-xl p-4 space-y-2"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-          >
-            <div className="flex items-center gap-2 text-score-weak text-sm font-semibold">
-              <Flag size={14} /> Flags
-            </div>
-            {result.flags.map(f => (
-              <div key={f} className="text-xs font-mono text-secondary-foreground bg-muted rounded px-2 py-1">
-                {f}
-              </div>
-            ))}
-          </motion.div>
-        )}
-
-        {result.missingFields.length > 0 && (
-          <motion.div
-            className="glass-card rounded-xl p-4 space-y-2"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-          >
-            <div className="flex items-center gap-2 text-score-ok text-sm font-semibold">
-              <AlertTriangle size={14} /> Missing Data
-            </div>
-            {result.missingFields.map(f => (
-              <div key={f} className="text-xs font-mono text-muted-foreground">
-                {f}
-              </div>
-            ))}
-          </motion.div>
-        )}
-
-        {result.notes.length > 0 && (
-          <motion.div
-            className="glass-card rounded-xl p-4 space-y-2"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-          >
-            <div className="flex items-center gap-2 text-primary text-sm font-semibold">
-              <Info size={14} /> Notes
-            </div>
-            {result.notes.map((n, i) => (
-              <p key={i} className="text-xs text-secondary-foreground">{n}</p>
-            ))}
-          </motion.div>
-        )}
-      </div>
+      {/* Notes */}
+      {result.notes.length > 0 && (
+        <motion.div
+          className="glass-card rounded-xl p-4 space-y-2"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+        >
+          <div className="flex items-center gap-2 text-primary text-sm font-semibold">
+            <Info size={14} /> Notes
+          </div>
+          {result.notes.map((n, i) => (
+            <p key={i} className="text-xs text-secondary-foreground">{n}</p>
+          ))}
+        </motion.div>
+      )}
 
       {/* Raw JSON toggle */}
       <motion.details
