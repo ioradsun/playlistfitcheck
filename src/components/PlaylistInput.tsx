@@ -104,14 +104,13 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
       </p>
 
       <p className="text-center text-xs text-muted-foreground">
-        I only listen to one playlist:{" "}
         <a
           href="https://open.spotify.com/playlist/3wtgtkdE8aDOf3V0LYoAXa"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-primary hover:underline underline-offset-2 font-mono"
+          className="text-primary hover:underline underline-offset-2"
         >
-          open.spotify.com/playlist/3wtgtkdE8aDOf3V0LYoAXa
+          I only listen to one playlist.
         </a>
       </p>
     </motion.div>
