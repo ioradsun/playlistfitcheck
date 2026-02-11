@@ -105,16 +105,22 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         </Link>
       </p>
 
-      <p className="text-center text-xs text-muted-foreground">
-        <a
-          href="https://open.spotify.com/playlist/3wtgtkdE8aDOf3V0LYoAXa"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:underline underline-offset-2"
-        >
+      <div className="flex flex-col items-center gap-2">
+        <p className="text-xs text-muted-foreground">
           I don't need this tool. I only listen to one playlist.
-        </a>
-      </p>
+        </p>
+        <div className="w-full max-w-md rounded-xl overflow-hidden">
+          <iframe
+            src="https://open.spotify.com/embed/playlist/3wtgtkdE8aDOf3V0LYoAXa?utm_source=generator&theme=0"
+            width="100%"
+            height="152"
+            frameBorder="0"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+            className="rounded-xl"
+          />
+        </div>
+      </div>
     </motion.div>
   );
 }
