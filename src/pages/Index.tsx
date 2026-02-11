@@ -4,11 +4,11 @@ import { ResultsDashboard } from "@/components/ResultsDashboard";
 import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
 
 const Index = () => {
-  const [result, setResult] = useState<{ output: HealthOutput; name?: string; key: number } | null>(null);
+  const [result, setResult] = useState<{ output: HealthOutput; input: PlaylistInput; name?: string; key: number } | null>(null);
 
   const handleAnalyze = useCallback((data: PlaylistInput) => {
     const output = computePlaylistHealth(data);
-    setResult({ output, name: data.playlistName, key: Date.now() });
+    setResult({ output, input: data, name: data.playlistName, key: Date.now() });
   }, []);
 
   return (
@@ -18,6 +18,7 @@ const Index = () => {
           <ResultsDashboard
             key={result.key}
             result={result.output}
+            inputData={result.input}
             playlistName={result.name}
             onBack={() => setResult(null)}
           />
