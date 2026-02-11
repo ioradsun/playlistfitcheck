@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 
 interface CategoryBarProps {
   label: string;
+  description?: string;
   score: number | null;
   max: number;
   delay?: number;
@@ -16,7 +17,7 @@ function getBarColor(score: number, max: number): string {
   return "bg-score-bad";
 }
 
-export function CategoryBar({ label, score, max, delay = 0 }: CategoryBarProps) {
+export function CategoryBar({ label, description, score, max, delay = 0 }: CategoryBarProps) {
   const isNull = score === null;
   const pct = isNull ? 0 : (score / max) * 100;
 
@@ -37,6 +38,9 @@ export function CategoryBar({ label, score, max, delay = 0 }: CategoryBarProps) 
           )}
         </span>
       </div>
+      {description && (
+        <p className="text-[11px] text-muted-foreground leading-snug">{description}</p>
+      )}
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         {!isNull && (
           <motion.div
