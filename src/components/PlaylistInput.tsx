@@ -69,7 +69,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
           Deterministic Scoring Engine
         </motion.div>
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-          Playlist <span className="text-gradient-primary">Health</span> Check
+          Playlist <span className="text-gradient-primary">Fit</span> Check
         </h1>
         <p className="text-muted-foreground max-w-md mx-auto">
           Paste a Spotify playlist URL to score curation quality, update cadence, and pitch suitability.
