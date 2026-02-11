@@ -56,12 +56,14 @@ serve(async (req) => {
     }
 
     const token = await getSpotifyToken(clientId, clientSecret);
+    console.log("Spotify token obtained, fetching playlist:", playlistId);
 
     // Fetch playlist details
-    const playlistResp = await fetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}?fields=name,description,owner(display_name),followers(total),tracks(total)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const apiUrl = `https://api.spotify.com/v1/playlists/${playlistId}`;
+    console.log("Fetching:", apiUrl);
+    const playlistResp = await fetch(apiUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     if (!playlistResp.ok) {
       const errText = await playlistResp.text();
