@@ -5,11 +5,18 @@ import { ScoreGauge } from "@/components/ScoreGauge";
 import { CategoryBar } from "@/components/CategoryBar";
 import { PitchBadge } from "@/components/PitchBadge";
 import type { HealthOutput } from "@/lib/playlistHealthEngine";
+import type { PlaylistInput } from "@/lib/playlistHealthEngine";
 
 interface Props {
   result: HealthOutput;
+  inputData?: PlaylistInput;
   playlistName?: string;
   onBack: () => void;
+}
+
+function fmt(n: number | undefined): string {
+  if (n == null) return "—";
+  return n.toLocaleString();
 }
 
 const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string; max: number; description: string }[] = [
@@ -21,7 +28,40 @@ const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string;
   { key: "trackPlacementBehavior", label: "Track Placement", max: 15, description: "Detects if new tracks are dumped at the bottom vs placed thoughtfully. Requires 2+ analyses." },
 ];
 
-export function ResultsDashboard({ result, playlistName, onBack }: Props) {
+function getDataLabel(key: string, input?: PlaylistInput): string | undefined {
+  if (!input) return undefined;
+  switch (key) {
+    case "sizeFocus":
+      return input.tracksTotal != null ? `${fmt(input.tracksTotal)} tracks` : undefined;
+    case "followerTrackRatio": {
+      if (input.followersTotal != null && input.tracksTotal != null && input.tracksTotal > 0) {
+        const ratio = Math.round(input.followersTotal / input.tracksTotal);
+        return `${fmt(input.followersTotal)} followers ÷ ${fmt(input.tracksTotal)} tracks = ${ratio}:1 ratio`;
+      }
+      if (input.followersTotal != null) return `${fmt(input.followersTotal)} followers`;
+      return undefined;
+    }
+    case "updateCadence":
+      return input.lastUpdatedDays != null
+        ? input.lastUpdatedDays === 0 ? "Updated today" : `Updated ${input.lastUpdatedDays} day${input.lastUpdatedDays !== 1 ? "s" : ""} ago`
+        : undefined;
+    case "curatorIntentQuality": {
+      const parts: string[] = [];
+      if (input.ownerName) parts.push(`by ${input.ownerName}`);
+      if (input.playlistOwnerIsSpotifyEditorial) parts.push("(Spotify Editorial)");
+      if (input.submissionLanguageDetected) parts.push("⚠ submission language");
+      return parts.length > 0 ? parts.join(" ") : undefined;
+    }
+    case "churnStability":
+      return input.churnRate30d != null ? `${Math.round(input.churnRate30d * 100)}% churn over 30 days` : undefined;
+    case "trackPlacementBehavior":
+      return input.bottomDumpScore != null ? `${Math.round(input.bottomDumpScore * 100)}% of new tracks placed at bottom` : undefined;
+    default:
+      return undefined;
+  }
+}
+
+export function ResultsDashboard({ result, inputData, playlistName, onBack }: Props) {
   return (
     <motion.div
       className="w-full max-w-3xl mx-auto space-y-8"
@@ -71,6 +111,7 @@ export function ResultsDashboard({ result, playlistName, onBack }: Props) {
               key={cat.key}
               label={cat.label}
               description={cat.description}
+              dataLabel={getDataLabel(cat.key, inputData)}
               score={result.scoreBreakdown[cat.key]}
               max={cat.max}
               delay={0.3 + i * 0.08}

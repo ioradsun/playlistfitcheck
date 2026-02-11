@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 interface CategoryBarProps {
   label: string;
   description?: string;
+  dataLabel?: string;
   score: number | null;
   max: number;
   delay?: number;
@@ -17,15 +18,15 @@ function getBarColor(score: number, max: number): string {
   return "bg-score-bad";
 }
 
-export function CategoryBar({ label, description, score, max, delay = 0 }: CategoryBarProps) {
+export function CategoryBar({ label, description, dataLabel, score, max, delay = 0 }: CategoryBarProps) {
   const isNull = score === null;
   const pct = isNull ? 0 : (score / max) * 100;
 
   return (
     <motion.div
-      className="space-y-1.5"
+      className={`space-y-1.5 ${isNull ? "opacity-40" : ""}`}
       initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
+      animate={{ opacity: isNull ? 0.4 : 1, x: 0 }}
       transition={{ delay, duration: 0.4 }}
     >
       <div className="flex justify-between items-center text-sm">
@@ -38,6 +39,9 @@ export function CategoryBar({ label, description, score, max, delay = 0 }: Categ
           )}
         </span>
       </div>
+      {dataLabel && (
+        <p className="text-[11px] font-mono text-primary/70 leading-snug">{dataLabel}</p>
+      )}
       {description && (
         <p className="text-[11px] text-muted-foreground leading-snug">{description}</p>
       )}
