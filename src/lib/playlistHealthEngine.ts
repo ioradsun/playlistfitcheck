@@ -80,8 +80,9 @@ function scoreCuratorType(
 
   const desc = (description || "").toLowerCase();
 
-  const payForPlayKeywords = ["guaranteed", "promo", "placements", "pay", "price", "fee", "package", "boost"];
-  const hasPayForPlay = payForPlayKeywords.some(k => desc.includes(k));
+  const payForPlayPhrases = ["guaranteed placement", "guaranteed add", "pay for play", "pay for placement", "fee for inclusion", "promotional service", "direct placement", "promo package", "paid placement", "paid promotion", "buy placement"];
+  const payForPlayWords = ["payola"];
+  const hasPayForPlay = payForPlayPhrases.some(p => desc.includes(p)) || payForPlayWords.some(w => new RegExp(`\\b${w}\\b`).test(desc));
 
   const submissionKeywords = ["submit", "submissions", " dm "];
   const hasSubmissionLanguage = submissionLanguageDetected || submissionKeywords.some(k => desc.includes(k));
