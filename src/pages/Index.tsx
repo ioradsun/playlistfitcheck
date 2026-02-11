@@ -74,9 +74,8 @@ const Index = () => {
           <PlaylistInputSection onAnalyze={handleAnalyze} />
         )}
       </div>
-      <footer className="text-center py-4 text-xs text-muted-foreground font-mono">
-        PlaylistHealthChecker · Deterministic Scoring Engine
-      </footer>
+
+
     </div>
   );
 };
