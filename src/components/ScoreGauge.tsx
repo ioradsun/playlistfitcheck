@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
+import { getFitLabelDisplay, type HealthOutput } from "@/lib/playlistHealthEngine";
 
 interface ScoreGaugeProps {
   score: number;
-  label: string;
+  label: HealthOutput["summary"]["healthLabel"];
   size?: number;
 }
 
@@ -20,6 +21,7 @@ export function ScoreGauge({ score, label, size = 200 }: ScoreGaugeProps) {
   const circumference = 2 * Math.PI * radius;
   const progress = (score / 100) * circumference;
   const color = getScoreColor(score);
+  const fitDisplay = getFitLabelDisplay(label);
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -69,7 +71,7 @@ export function ScoreGauge({ score, label, size = 200 }: ScoreGaugeProps) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8 }}
       >
-        {label}
+        {fitDisplay.emoji} {fitDisplay.text}
       </motion.span>
     </div>
   );

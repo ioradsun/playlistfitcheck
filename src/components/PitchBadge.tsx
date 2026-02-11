@@ -1,11 +1,11 @@
 import type { HealthOutput } from "@/lib/playlistHealthEngine";
 
 const CONFIG: Record<HealthOutput["summary"]["pitchSuitability"], { label: string; className: string }> = {
-  GOOD_TARGET: { label: "Good Target", className: "bg-primary/15 text-primary border-primary/30" },
+  WORTH_PITCHING: { label: "Worth Pitching", className: "bg-primary/15 text-primary border-primary/30" },
   LOW_PRIORITY: { label: "Low Priority", className: "bg-score-weak/15 text-score-weak border-score-weak/30" },
   ACCEPTS_SUBMISSIONS: { label: "Accepts Submissions", className: "bg-score-strong/15 text-score-strong border-score-strong/30" },
-  PAY_FOR_PLAY: { label: "⚠ Pay-for-Play Risk", className: "bg-score-bad/15 text-score-bad border-score-bad/30" },
-  DO_NOT_PITCH_SPOTIFY_OWNED: { label: "Spotify Editorial — Do Not Pitch", className: "bg-score-ok/15 text-score-ok border-score-ok/30" },
+  HIGH_RISK: { label: "⚠ High Risk", className: "bg-score-bad/15 text-score-bad border-score-bad/30" },
+  SPOTIFY_EDITORIAL: { label: "Spotify Editorial — Use S4A", className: "bg-score-ok/15 text-score-ok border-score-ok/30" },
 };
 
 export function PitchBadge({ suitability }: { suitability: HealthOutput["summary"]["pitchSuitability"] }) {
