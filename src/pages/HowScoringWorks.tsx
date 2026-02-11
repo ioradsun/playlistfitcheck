@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 
 const CATEGORIES = [
@@ -135,74 +136,113 @@ export default function HowScoringWorks() {
           </div>
         </motion.div>
 
-        {/* Categories */}
-        <div className="space-y-6">
-          {CATEGORIES.map((cat, i) => (
+        <Tabs defaultValue="criteria" className="w-full">
+          <TabsList className="w-full grid grid-cols-2 mb-6">
+            <TabsTrigger value="criteria">The Fit Criteria</TabsTrigger>
+            <TabsTrigger value="story">The Fit Story</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="criteria" className="space-y-6">
+            {/* Categories */}
+            <div className="space-y-6">
+              {CATEGORIES.map((cat, i) => (
+                <motion.div
+                  key={cat.name}
+                  className="glass-card rounded-xl p-5 space-y-3"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 * i }}
+                >
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-semibold">{cat.name}</h2>
+                    <span className="text-xs font-mono text-primary">max {cat.max} pts</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{cat.description}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {cat.tiers.map((tier) => (
+                      <div key={tier.range} className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2">
+                        <span className="text-xs text-secondary-foreground">{tier.range}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{tier.label}</span>
+                          <span className="text-xs font-mono text-primary font-semibold">{tier.score}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Fit Labels */}
             <motion.div
-              key={cat.name}
               className="glass-card rounded-xl p-5 space-y-3"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 * i }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
             >
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold">{cat.name}</h2>
-                <span className="text-xs font-mono text-primary">max {cat.max} pts</span>
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{cat.description}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {cat.tiers.map((tier) => (
-                  <div key={tier.range} className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2">
-                    <span className="text-xs text-secondary-foreground">{tier.range}</span>
+              <h2 className="text-base font-semibold">Fit Labels</h2>
+              <div className="space-y-2">
+                {FIT_LABELS.map((h) => (
+                  <div key={h.label} className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{tier.label}</span>
-                      <span className="text-xs font-mono text-primary font-semibold">{tier.score}</span>
+                      <span className={`text-sm font-bold ${h.color}`}>{h.label}</span>
+                      <span className="text-xs text-muted-foreground">{h.range}</span>
                     </div>
+                    <span className="text-xs text-muted-foreground">{h.desc}</span>
                   </div>
                 ))}
               </div>
             </motion.div>
-          ))}
-        </div>
 
-        {/* Fit Labels */}
-        <motion.div
-          className="glass-card rounded-xl p-5 space-y-3"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-        >
-          <h2 className="text-base font-semibold">Fit Labels</h2>
-          <div className="space-y-2">
-            {FIT_LABELS.map((h) => (
-              <div key={h.label} className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-bold ${h.color}`}>{h.label}</span>
-                  <span className="text-xs text-muted-foreground">{h.range}</span>
-                </div>
-                <span className="text-xs text-muted-foreground">{h.desc}</span>
+            {/* Pitch Labels */}
+            <motion.div
+              className="glass-card rounded-xl p-5 space-y-3"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              <h2 className="text-base font-semibold">Pitch Labels</h2>
+              <div className="space-y-2">
+                {PITCH_LABELS.map((p) => (
+                  <div key={p.label} className="flex items-start gap-3 bg-secondary/40 rounded-lg px-3 py-2">
+                    <span className="text-xs font-mono text-primary font-semibold whitespace-nowrap">{p.label}</span>
+                    <span className="text-xs text-muted-foreground">{p.description}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </motion.div>
+            </motion.div>
+          </TabsContent>
 
-        {/* Pitch Labels */}
-        <motion.div
-          className="glass-card rounded-xl p-5 space-y-3"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
-          <h2 className="text-base font-semibold">Pitch Labels</h2>
-          <div className="space-y-2">
-            {PITCH_LABELS.map((p) => (
-              <div key={p.label} className="flex items-start gap-3 bg-secondary/40 rounded-lg px-3 py-2">
-                <span className="text-xs font-mono text-primary font-semibold whitespace-nowrap">{p.label}</span>
-                <span className="text-xs text-muted-foreground">{p.description}</span>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+          <TabsContent value="story">
+            <motion.div
+              className="glass-card rounded-xl p-6 space-y-5"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                My son{" "}
+                <a
+                  href="https://open.spotify.com/artist/1PlkAOmfFYqBYFpN8jDj4v?si=ZKcGkrQ2RgGnKN-IRsIXEA"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline underline-offset-2 font-semibold"
+                >
+                  Ajan Patel
+                </a>{" "}
+                makes music.
+              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                He's the only artist I listen to.
+              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                He told me how messy playlist pitching can be — bots, fees, guesswork.
+              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                So I built a tool. That's the story. The End.
+              </p>
+            </motion.div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
