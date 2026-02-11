@@ -15,10 +15,10 @@ interface Props {
 const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string; max: number; description: string }[] = [
   { key: "sizeFocus", label: "Size vs Focus", max: 20, description: "Ideal playlists have 30–80 tracks. Oversized playlists dilute listener attention." },
   { key: "followerTrackRatio", label: "Follower/Track Ratio", max: 15, description: "Higher follower-to-track ratio means more listeners per song — a quality signal." },
-  { key: "updateCadence", label: "Update Cadence", max: 15, description: "How recently the playlist was updated. Requires snapshot tracking — not available via API." },
+  { key: "updateCadence", label: "Update Cadence", max: 15, description: "How recently the playlist was updated. Improves with repeated analyses over time." },
   { key: "curatorIntentQuality", label: "Curator Intent", max: 15, description: "Evaluates owner type, description quality, and submission language signals." },
-  { key: "churnStability", label: "Churn vs Stability", max: 20, description: "Measures how frequently tracks are added/removed. Requires snapshot tracking — not available via API." },
-  { key: "trackPlacementBehavior", label: "Track Placement", max: 15, description: "Detects if new tracks are dumped at the bottom. Requires snapshot tracking — not available via API." },
+  { key: "churnStability", label: "Churn vs Stability", max: 20, description: "Track add/remove rate over 30 days. Requires 2+ analyses spaced over time." },
+  { key: "trackPlacementBehavior", label: "Track Placement", max: 15, description: "Detects if new tracks are dumped at the bottom vs placed thoughtfully. Requires 2+ analyses." },
 ];
 
 export function ResultsDashboard({ result, playlistName, onBack }: Props) {
