@@ -110,7 +110,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
           rel="noopener noreferrer"
           className="text-primary hover:underline underline-offset-2"
         >
-          I only listen to one playlist.
+          I don't need this tool. I only listen to one playlist.
         </a>
       </p>
     </motion.div>
