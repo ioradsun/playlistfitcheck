@@ -1,4 +1,6 @@
 import { motion } from "framer-motion";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 
 interface CategoryBarProps {
   label: string;
@@ -30,7 +32,23 @@ export function CategoryBar({ label, description, dataLabel, score, max, delay =
       transition={{ delay, duration: 0.4 }}
     >
       <div className="flex justify-between items-center text-sm">
-        <span className="text-secondary-foreground">{label}</span>
+        <span className="flex items-center gap-1.5 text-secondary-foreground">
+          {label}
+          {description && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Info size={12} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[240px] text-xs">
+                  {description}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </span>
         <span className="font-mono text-foreground">
           {isNull ? (
             <span className="text-muted-foreground text-xs">N/A</span>
@@ -41,9 +59,6 @@ export function CategoryBar({ label, description, dataLabel, score, max, delay =
       </div>
       {dataLabel && (
         <p className="text-[11px] font-mono text-primary/70 leading-snug">{dataLabel}</p>
-      )}
-      {description && (
-        <p className="text-[11px] text-muted-foreground leading-snug">{description}</p>
       )}
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         {!isNull && (
