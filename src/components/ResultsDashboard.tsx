@@ -24,13 +24,13 @@ function fmt(n: number | undefined): string {
 
 // Priority order per spec: Song Activity, Focus Level, Curator Type, Recent Activity, Reach Per Song, Rotation Style, Song Placement
 const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string; max: number; description: string }[] = [
-  { key: "songActivity", label: "Song Activity", max: 20, description: "Do people actually listen here? Average track popularity reflects saves, streams, and real listener behavior." },
-  { key: "focusLevel", label: "Focus Level", max: 20, description: "Is it a niche fit or a crowded mess? Smaller, focused playlists = deeper listener engagement." },
-  { key: "curatorType", label: "Curator Type", max: 15, description: "Who owns this playlist and how should you pitch? Detects editorial, submission, and pay-for-play signals." },
-  { key: "recentActivity", label: "Recent Activity", max: 15, description: "Is the curator still paying attention? Dead playlists = dead ends." },
-  { key: "reachPerSong", label: "Reach Per Song", max: 15, description: "How many followers per track? This is the exposure each song gets." },
-  { key: "rotationStyle", label: "Rotation Style", max: 20, description: "Will your song stick around or get deleted quickly? Track add/remove rate over 30 days." },
-  { key: "songPlacement", label: "Song Placement", max: 15, description: "Are new tracks placed thoughtfully or dumped at the bottom? Bottom-dumping = lazy curation." },
+  { key: "songActivity", label: "Song Activity", max: 20, description: "Are the songs on this playlist generally active on Spotify? Active songs usually indicate real listener demand." },
+  { key: "focusLevel", label: "Focus Level", max: 20, description: "Is it a niche fit or a crowded playlist? Focused playlists tend to drive deeper engagement per track." },
+  { key: "curatorType", label: "Curator Type", max: 15, description: "Who owns this playlist and how should you approach it? Detects editorial, submission, and pay-for-play signals." },
+  { key: "recentActivity", label: "Recent Activity", max: 15, description: "Is the curator still paying attention? Inactive playlists are unlikely to help your song gain traction." },
+  { key: "reachPerSong", label: "Reach Per Song", max: 15, description: "How many followers per track? This reflects the potential exposure each song receives." },
+  { key: "rotationStyle", label: "Rotation Style", max: 20, description: "Will your song stick around or get removed quickly? Measures how often songs are changed over 30 days." },
+  { key: "songPlacement", label: "Song Placement", max: 15, description: "Are new tracks placed thoughtfully or added at the bottom? Thoughtful placement suggests active curation." },
 ];
 
 function getScoreIndicator(score: number | null, max: number): { icon: string; color: string } {

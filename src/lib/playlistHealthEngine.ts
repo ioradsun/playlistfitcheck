@@ -152,11 +152,11 @@ function generateNarrative(input: PlaylistInput, scores: HealthOutput["scoreBrea
   // Song Activity narrative
   if (scores.songActivity != null) {
     if (scores.songActivity >= 15) {
-      parts.push(`Songs here get real plays${input.avgTrackPopularity ? ` (avg popularity ${input.avgTrackPopularity})` : ""} — listeners are engaging, saving, and returning.`);
+      parts.push(`Songs on this playlist are generally active on Spotify${input.avgTrackPopularity ? ` (avg popularity ${input.avgTrackPopularity})` : ""}, indicating real listener demand.`);
     } else if (scores.songActivity >= 8) {
-      parts.push(`Moderate listener activity${input.avgTrackPopularity ? ` (avg popularity ${input.avgTrackPopularity})` : ""}. Some engagement, but not a hotbed.`);
+      parts.push(`Moderate song activity${input.avgTrackPopularity ? ` (avg popularity ${input.avgTrackPopularity})` : ""}. Some engagement, but room for stronger options.`);
     } else {
-      parts.push(`Minimal listener activity${input.avgTrackPopularity ? ` (avg popularity ${input.avgTrackPopularity})` : ""}. Songs here barely get saves or streams.`);
+      parts.push(`Low song activity${input.avgTrackPopularity ? ` (avg popularity ${input.avgTrackPopularity})` : ""}. Low-activity playlists rarely generate traction.`);
     }
   }
 
@@ -223,10 +223,10 @@ function generateRecommendation(healthScore: number, curatorResult: ReturnType<t
     return "Solid choice. Worth pitching or submitting if your song fits the vibe.";
   }
   if (healthScore >= 60) {
-    return "Might work, but better options likely exist. Pitch if running out of targets.";
+    return "Might work, but stronger options likely exist. Consider if strategically aligned.";
   }
   if (healthScore >= 40) {
-    return "Long shot. Only pitch if genre-aligned enough to override the score.";
+    return "Long shot. Only consider if strategically aligned with your genre and goals.";
   }
   return "Skip this one. Your time is better spent elsewhere.";
 }
