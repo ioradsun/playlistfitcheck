@@ -103,23 +103,17 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         Note: Churn rate, update cadence, and track placement data require deeper analysis beyond the basic Spotify API.
       </p>
 
-      {/* Demo buttons */}
-      <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
-        <span>Try a demo:</span>
-        <button
-          onClick={() => onAnalyze(SAMPLE_PLAYLIST)}
+      <p className="text-center text-xs text-muted-foreground">
+        I only listen to one playlist:{" "}
+        <a
+          href="https://open.spotify.com/playlist/3wtgtkdE8aDOf3V0LYoAXa"
+          target="_blank"
+          rel="noopener noreferrer"
           className="text-primary hover:underline underline-offset-2 font-mono"
         >
-          Indie Playlist
-        </button>
-        <span>·</span>
-        <button
-          onClick={() => onAnalyze(SAMPLE_EDITORIAL)}
-          className="text-primary hover:underline underline-offset-2 font-mono"
-        >
-          Spotify Editorial
-        </button>
-      </div>
+          open.spotify.com/playlist/3wtgtkdE8aDOf3V0LYoAXa
+        </a>
+      </p>
     </motion.div>
   );
 }
