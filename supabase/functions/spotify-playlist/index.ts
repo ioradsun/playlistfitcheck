@@ -31,12 +31,12 @@ function extractPlaylistId(url: string): string | null {
 
 interface TrackItem {
   added_at: string;
-  track: { id: string; name: string; artists: { name: string }[] } | null;
+  track: { id: string; name: string; popularity: number; artists: { name: string }[] } | null;
 }
 
 async function fetchAllTracks(playlistId: string, token: string): Promise<TrackItem[]> {
   const items: TrackItem[] = [];
-  let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=items(added_at,track(id,name,artists(name))),next&limit=100`;
+  let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=items(added_at,track(id,name,popularity,artists(name))),next&limit=100`;
 
   while (url) {
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -217,6 +217,14 @@ serve(async (req) => {
         artists: item.track!.artists?.map((a) => a.name).join(", ") || "Unknown",
       }));
 
+    // Compute average track popularity
+    const popularities = trackItems
+      .map((item) => item.track?.popularity)
+      .filter((p): p is number => p != null);
+    const avgTrackPopularity = popularities.length > 0
+      ? Math.round(popularities.reduce((a, b) => a + b, 0) / popularities.length)
+      : undefined;
+
     const result = {
       playlistUrl,
       playlistId,
@@ -230,6 +238,7 @@ serve(async (req) => {
       submissionLanguageDetected,
       churnRate30d: derived.churnRate30d,
       bottomDumpScore: derived.bottomDumpScore,
+      avgTrackPopularity,
       _snapshotCount: derived.snapshotCount,
       _trackList: trackList,
     };

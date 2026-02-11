@@ -13,6 +13,7 @@ export interface PlaylistInput {
   submissionLanguageDetected?: boolean;
   churnRate30d?: number;
   bottomDumpScore?: number;
+  avgTrackPopularity?: number;
 }
 
 export interface HealthOutput {
@@ -28,6 +29,7 @@ export interface HealthOutput {
   scoreBreakdown: {
     sizeFocus: number | null;
     followerTrackRatio: number | null;
+    listenerEngagement: number | null;
     updateCadence: number | null;
     curatorIntentQuality: number | null;
     churnStability: number | null;
@@ -117,6 +119,14 @@ function scoreTrackPlacement(bottomDumpScore?: number): number | null {
   return 0;
 }
 
+function scoreListenerEngagement(avgPopularity?: number): number | null {
+  if (avgPopularity == null) return null;
+  if (avgPopularity >= 60) return 20;
+  if (avgPopularity >= 40) return 15;
+  if (avgPopularity >= 20) return 8;
+  return 0;
+}
+
 function getHealthLabel(score: number): HealthOutput["summary"]["healthLabel"] {
   if (score >= 85) return "EXCELLENT";
   if (score >= 75) return "STRONG";
@@ -132,6 +142,7 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
 
   if (input.tracksTotal == null) missingFields.push("tracksTotal");
   if (input.followersTotal == null) missingFields.push("followersTotal");
+  if (input.avgTrackPopularity == null) missingFields.push("avgTrackPopularity");
   if (input.lastUpdatedDays == null) missingFields.push("lastUpdatedDays");
   if (input.churnRate30d == null) missingFields.push("churnRate30d");
   if (input.bottomDumpScore == null) missingFields.push("bottomDumpScore");
@@ -144,6 +155,7 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
     input.playlistOwnerIsSpotifyEditorial, input.submissionLanguageDetected
   );
   const curatorIntentQuality = curatorResult.score;
+  const listenerEngagement = scoreListenerEngagement(input.avgTrackPopularity);
   const churnStability = scoreChurnStability(input.churnRate30d);
   const trackPlacementBehavior = scoreTrackPlacement(input.bottomDumpScore);
 
@@ -165,8 +177,8 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
     notes.push("Playlist was recently updated — good signal of active curation.");
   }
 
-  const maxMap = { sizeFocus: 20, followerTrackRatio: 15, updateCadence: 15, curatorIntentQuality: 15, churnStability: 20, trackPlacementBehavior: 15 };
-  const scores = { sizeFocus, followerTrackRatio, updateCadence, curatorIntentQuality, churnStability, trackPlacementBehavior };
+  const maxMap = { sizeFocus: 20, followerTrackRatio: 15, listenerEngagement: 20, updateCadence: 15, curatorIntentQuality: 15, churnStability: 20, trackPlacementBehavior: 15 };
+  const scores = { sizeFocus, followerTrackRatio, listenerEngagement, updateCadence, curatorIntentQuality, churnStability, trackPlacementBehavior };
 
   let totalScore = 0;
   let maxPossible = 0;
