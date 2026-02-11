@@ -23,7 +23,7 @@ export interface HealthOutput {
   summary: {
     healthScore: number;
     healthLabel: "EXCELLENT" | "STRONG" | "OK" | "WEAK" | "BAD";
-    pitchSuitability: "GOOD_TARGET" | "LOW_PRIORITY" | "RISKY_SUBMISSION_FUNNEL" | "DO_NOT_PITCH_SPOTIFY_OWNED";
+    pitchSuitability: "GOOD_TARGET" | "LOW_PRIORITY" | "ACCEPTS_SUBMISSIONS" | "PAY_FOR_PLAY" | "DO_NOT_PITCH_SPOTIFY_OWNED";
   };
   scoreBreakdown: {
     sizeFocus: number | null;
@@ -69,25 +69,35 @@ function scoreCuratorIntent(
   description?: string,
   isSpotifyEditorial?: boolean,
   submissionLanguageDetected?: boolean
-): { score: number | null; isEditorial: boolean; isSubmissionFunnel: boolean } {
+): { score: number | null; isEditorial: boolean; isSubmissionFunnel: boolean; isPayForPlay: boolean } {
   if (isSpotifyEditorial) {
-    return { score: 10, isEditorial: true, isSubmissionFunnel: false };
+    return { score: 10, isEditorial: true, isSubmissionFunnel: false, isPayForPlay: false };
   }
 
   const desc = (description || "").toLowerCase();
-  const submissionKeywords = ["submit", "submissions", " dm ", "promo", "placements", "guaranteed"];
+
+  // Pay-for-play red flags
+  const payForPlayKeywords = ["guaranteed", "promo", "placements", "pay", "price", "fee", "package", "boost"];
+  const hasPayForPlay = payForPlayKeywords.some(k => desc.includes(k));
+
+  // Legitimate submission language
+  const submissionKeywords = ["submit", "submissions", " dm "];
   const hasSubmissionLanguage = submissionLanguageDetected || submissionKeywords.some(k => desc.includes(k));
 
+  if (hasPayForPlay) {
+    return { score: 3, isEditorial: false, isSubmissionFunnel: true, isPayForPlay: true };
+  }
+
   if (hasSubmissionLanguage) {
-    return { score: 3, isEditorial: false, isSubmissionFunnel: true };
+    return { score: 8, isEditorial: false, isSubmissionFunnel: true, isPayForPlay: false };
   }
 
   // Heuristic: if owner and description exist, score based on signals
-  if (!ownerName && !description) return { score: null, isEditorial: false, isSubmissionFunnel: false };
+  if (!ownerName && !description) return { score: null, isEditorial: false, isSubmissionFunnel: false, isPayForPlay: false };
 
   const hasTheme = description && description.length > 15;
-  if (hasTheme) return { score: 15, isEditorial: false, isSubmissionFunnel: false };
-  return { score: 5, isEditorial: false, isSubmissionFunnel: false };
+  if (hasTheme) return { score: 15, isEditorial: false, isSubmissionFunnel: false, isPayForPlay: false };
+  return { score: 5, isEditorial: false, isSubmissionFunnel: false, isPayForPlay: false };
 }
 
 function scoreChurnStability(churnRate30d?: number): number | null {
@@ -141,7 +151,8 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
 
   // Flags
   if (curatorResult.isEditorial) flags.push("SPOTIFY_EDITORIAL_PLAYLIST");
-  if (curatorResult.isSubmissionFunnel) flags.push("SUBMISSION_LANGUAGE_DETECTED");
+  if (curatorResult.isPayForPlay) flags.push("PAY_FOR_PLAY_LANGUAGE_DETECTED");
+  if (curatorResult.isSubmissionFunnel && !curatorResult.isPayForPlay) flags.push("ACCEPTS_SUBMISSIONS");
   if (input.tracksTotal && input.tracksTotal > 300) flags.push("OVERSIZED_PLAYLIST");
   if (input.churnRate30d != null && input.churnRate30d > 0.70) flags.push("HIGH_CHURN");
   if (input.bottomDumpScore != null && input.bottomDumpScore > 0.75) flags.push("BOTTOM_DUMP_DETECTED");
@@ -172,8 +183,10 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
   let pitchSuitability: HealthOutput["summary"]["pitchSuitability"];
   if (input.playlistOwnerIsSpotifyEditorial) {
     pitchSuitability = "DO_NOT_PITCH_SPOTIFY_OWNED";
-  } else if (input.submissionLanguageDetected || curatorResult.isSubmissionFunnel) {
-    pitchSuitability = "RISKY_SUBMISSION_FUNNEL";
+  } else if (curatorResult.isPayForPlay) {
+    pitchSuitability = "PAY_FOR_PLAY";
+  } else if (curatorResult.isSubmissionFunnel) {
+    pitchSuitability = "ACCEPTS_SUBMISSIONS";
   } else if (healthScore >= 75) {
     pitchSuitability = "GOOD_TARGET";
   } else {
