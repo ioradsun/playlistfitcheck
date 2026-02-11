@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { Search, Zap, BarChart3, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,8 +99,11 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         </Button>
       </div>
 
-
-
+      <p className="text-center text-xs">
+        <Link to="/how-scoring-works" className="text-primary hover:underline underline-offset-2">
+          How scoring works
+        </Link>
+      </p>
 
       <p className="text-center text-xs text-muted-foreground">
         <a
