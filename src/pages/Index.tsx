@@ -1,12 +1,32 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { PlaylistInputSection } from "@/components/PlaylistInput";
+import { ResultsDashboard } from "@/components/ResultsDashboard";
+import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
 
 const Index = () => {
+  const [result, setResult] = useState<{ output: HealthOutput; name?: string } | null>(null);
+
+  const handleAnalyze = (data: PlaylistInput) => {
+    const output = computePlaylistHealth(data);
+    setResult({ output, name: data.playlistName });
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="flex-1 flex items-center justify-center px-4 py-16">
+        {result ? (
+          <ResultsDashboard
+            result={result.output}
+            playlistName={result.name}
+            onBack={() => setResult(null)}
+          />
+        ) : (
+          <PlaylistInputSection onAnalyze={handleAnalyze} />
+        )}
       </div>
+      <footer className="text-center py-4 text-xs text-muted-foreground font-mono">
+        PlaylistHealthChecker · Deterministic Scoring Engine
+      </footer>
     </div>
   );
 };
