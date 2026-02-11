@@ -20,7 +20,7 @@ function extractPlaylistId(url: string): string | null {
 
 export function PlaylistInputSection({ onAnalyze }: Props) {
   const [url, setUrl] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(true);
 
   // Form fields
   const [playlistName, setPlaylistName] = useState("");
@@ -34,9 +34,14 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
   const [isSpotifyEditorial, setIsSpotifyEditorial] = useState(false);
   const [submissionLanguage, setSubmissionLanguage] = useState(false);
 
+  const hasData = !!(tracksTotal || followersTotal || lastUpdatedDays || churnRate30d || bottomDumpScore);
+
   const handleAnalyze = () => {
+    if (!hasData) {
+      setShowAdvanced(true);
+      return;
+    }
     const trimmedUrl = url.trim();
-    if (!trimmedUrl && !tracksTotal) return;
 
     const data: PlaylistInputType = {
       playlistUrl: trimmedUrl || "manual-entry",
