@@ -12,13 +12,13 @@ interface Props {
   onBack: () => void;
 }
 
-const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string; max: number }[] = [
-  { key: "sizeFocus", label: "Size vs Focus", max: 20 },
-  { key: "followerTrackRatio", label: "Follower/Track Ratio", max: 15 },
-  { key: "updateCadence", label: "Update Cadence", max: 15 },
-  { key: "curatorIntentQuality", label: "Curator Intent", max: 15 },
-  { key: "churnStability", label: "Churn vs Stability", max: 20 },
-  { key: "trackPlacementBehavior", label: "Track Placement", max: 15 },
+const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string; max: number; description: string }[] = [
+  { key: "sizeFocus", label: "Size vs Focus", max: 20, description: "Ideal playlists have 30–80 tracks. Oversized playlists dilute listener attention." },
+  { key: "followerTrackRatio", label: "Follower/Track Ratio", max: 15, description: "Higher follower-to-track ratio means more listeners per song — a quality signal." },
+  { key: "updateCadence", label: "Update Cadence", max: 15, description: "How recently the playlist was updated. Requires snapshot tracking — not available via API." },
+  { key: "curatorIntentQuality", label: "Curator Intent", max: 15, description: "Evaluates owner type, description quality, and submission language signals." },
+  { key: "churnStability", label: "Churn vs Stability", max: 20, description: "Measures how frequently tracks are added/removed. Requires snapshot tracking — not available via API." },
+  { key: "trackPlacementBehavior", label: "Track Placement", max: 15, description: "Detects if new tracks are dumped at the bottom. Requires snapshot tracking — not available via API." },
 ];
 
 export function ResultsDashboard({ result, playlistName, onBack }: Props) {
@@ -70,6 +70,7 @@ export function ResultsDashboard({ result, playlistName, onBack }: Props) {
             <CategoryBar
               key={cat.key}
               label={cat.label}
+              description={cat.description}
               score={result.scoreBreakdown[cat.key]}
               max={cat.max}
               delay={0.3 + i * 0.08}
