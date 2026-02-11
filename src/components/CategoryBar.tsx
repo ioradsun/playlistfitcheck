@@ -9,6 +9,7 @@ interface CategoryBarProps {
   score: number | null;
   max: number;
   delay?: number;
+  indicator?: string;
 }
 
 function getBarColor(score: number, max: number): string {
@@ -20,7 +21,7 @@ function getBarColor(score: number, max: number): string {
   return "bg-score-bad";
 }
 
-export function CategoryBar({ label, description, dataLabel, score, max, delay = 0 }: CategoryBarProps) {
+export function CategoryBar({ label, description, dataLabel, score, max, delay = 0, indicator }: CategoryBarProps) {
   const isNull = score === null;
   const pct = isNull ? 0 : (score / max) * 100;
 
@@ -33,6 +34,7 @@ export function CategoryBar({ label, description, dataLabel, score, max, delay =
     >
       <div className="flex justify-between items-center text-sm">
         <span className="flex items-center gap-1.5 text-secondary-foreground">
+          {indicator && <span className="text-xs">{indicator}</span>}
           {label}
           {description && (
             <TooltipProvider delayDuration={0}>

@@ -1,4 +1,4 @@
-// Deterministic Playlist Health Scoring Engine
+// Deterministic Playlist Fit Scoring Engine
 
 export interface PlaylistInput {
   playlistUrl: string;
@@ -23,33 +23,35 @@ export interface HealthOutput {
   };
   summary: {
     healthScore: number;
-    healthLabel: "EXCELLENT" | "STRONG" | "OK" | "WEAK" | "BAD";
-    pitchSuitability: "GOOD_TARGET" | "LOW_PRIORITY" | "ACCEPTS_SUBMISSIONS" | "PAY_FOR_PLAY" | "DO_NOT_PITCH_SPOTIFY_OWNED";
+    healthLabel: "GREAT_FIT" | "GOOD_FIT" | "POSSIBLE_FIT" | "WEAK_FIT" | "POOR_FIT";
+    pitchSuitability: "WORTH_PITCHING" | "LOW_PRIORITY" | "ACCEPTS_SUBMISSIONS" | "HIGH_RISK" | "SPOTIFY_EDITORIAL";
   };
   scoreBreakdown: {
-    sizeFocus: number | null;
-    followerTrackRatio: number | null;
-    listenerEngagement: number | null;
-    updateCadence: number | null;
-    curatorIntentQuality: number | null;
-    churnStability: number | null;
-    trackPlacementBehavior: number | null;
+    songActivity: number | null;
+    focusLevel: number | null;
+    curatorType: number | null;
+    recentActivity: number | null;
+    reachPerSong: number | null;
+    rotationStyle: number | null;
+    songPlacement: number | null;
   };
   flags: string[];
   missingFields: string[];
   notes: string[];
+  narrative?: string;
+  recommendation?: string;
 }
 
-function scoreSizeFocus(tracksTotal?: number): number | null {
+function scoreFocusLevel(tracksTotal?: number): number | null {
   if (tracksTotal == null) return null;
   if (tracksTotal >= 30 && tracksTotal <= 80) return 20;
   if (tracksTotal >= 81 && tracksTotal <= 150) return 15;
   if (tracksTotal >= 151 && tracksTotal <= 300) return 8;
   if (tracksTotal > 300) return 0;
-  return 0; // < 30
+  return 0;
 }
 
-function scoreFollowerTrackRatio(followers?: number, tracks?: number): number | null {
+function scoreReachPerSong(followers?: number, tracks?: number): number | null {
   if (followers == null || tracks == null || tracks === 0) return null;
   const ratio = followers / tracks;
   if (ratio >= 100) return 15;
@@ -58,7 +60,7 @@ function scoreFollowerTrackRatio(followers?: number, tracks?: number): number | 
   return 0;
 }
 
-function scoreUpdateCadence(lastUpdatedDays?: number): number | null {
+function scoreRecentActivity(lastUpdatedDays?: number): number | null {
   if (lastUpdatedDays == null) return null;
   if (lastUpdatedDays <= 7) return 15;
   if (lastUpdatedDays <= 30) return 10;
@@ -66,7 +68,7 @@ function scoreUpdateCadence(lastUpdatedDays?: number): number | null {
   return 0;
 }
 
-function scoreCuratorIntent(
+function scoreCuratorType(
   ownerName?: string,
   description?: string,
   isSpotifyEditorial?: boolean,
@@ -78,11 +80,9 @@ function scoreCuratorIntent(
 
   const desc = (description || "").toLowerCase();
 
-  // Pay-for-play red flags
   const payForPlayKeywords = ["guaranteed", "promo", "placements", "pay", "price", "fee", "package", "boost"];
   const hasPayForPlay = payForPlayKeywords.some(k => desc.includes(k));
 
-  // Legitimate submission language
   const submissionKeywords = ["submit", "submissions", " dm "];
   const hasSubmissionLanguage = submissionLanguageDetected || submissionKeywords.some(k => desc.includes(k));
 
@@ -94,7 +94,6 @@ function scoreCuratorIntent(
     return { score: 8, isEditorial: false, isSubmissionFunnel: true, isPayForPlay: false };
   }
 
-  // Heuristic: if owner and description exist, score based on signals
   if (!ownerName && !description) return { score: null, isEditorial: false, isSubmissionFunnel: false, isPayForPlay: false };
 
   const hasTheme = description && description.length > 15;
@@ -102,7 +101,7 @@ function scoreCuratorIntent(
   return { score: 5, isEditorial: false, isSubmissionFunnel: false, isPayForPlay: false };
 }
 
-function scoreChurnStability(churnRate30d?: number): number | null {
+function scoreRotationStyle(churnRate30d?: number): number | null {
   if (churnRate30d == null) return null;
   if (churnRate30d >= 0.05 && churnRate30d <= 0.25) return 20;
   if (churnRate30d >= 0.26 && churnRate30d <= 0.45) return 12;
@@ -111,7 +110,7 @@ function scoreChurnStability(churnRate30d?: number): number | null {
   return 0;
 }
 
-function scoreTrackPlacement(bottomDumpScore?: number): number | null {
+function scoreSongPlacement(bottomDumpScore?: number): number | null {
   if (bottomDumpScore == null) return null;
   if (bottomDumpScore <= 0.25) return 15;
   if (bottomDumpScore <= 0.50) return 10;
@@ -119,7 +118,7 @@ function scoreTrackPlacement(bottomDumpScore?: number): number | null {
   return 0;
 }
 
-function scoreListenerEngagement(avgPopularity?: number): number | null {
+function scoreSongActivity(avgPopularity?: number): number | null {
   if (avgPopularity == null) return null;
   if (avgPopularity >= 60) return 20;
   if (avgPopularity >= 40) return 15;
@@ -127,12 +126,109 @@ function scoreListenerEngagement(avgPopularity?: number): number | null {
   return 0;
 }
 
-function getHealthLabel(score: number): HealthOutput["summary"]["healthLabel"] {
-  if (score >= 85) return "EXCELLENT";
-  if (score >= 75) return "STRONG";
-  if (score >= 60) return "OK";
-  if (score >= 40) return "WEAK";
-  return "BAD";
+function getFitLabel(score: number): HealthOutput["summary"]["healthLabel"] {
+  if (score >= 85) return "GREAT_FIT";
+  if (score >= 75) return "GOOD_FIT";
+  if (score >= 60) return "POSSIBLE_FIT";
+  if (score >= 40) return "WEAK_FIT";
+  return "POOR_FIT";
+}
+
+const FIT_LABEL_DISPLAY: Record<HealthOutput["summary"]["healthLabel"], { emoji: string; text: string }> = {
+  GREAT_FIT: { emoji: "🔥", text: "Great Fit" },
+  GOOD_FIT: { emoji: "👍", text: "Good Fit" },
+  POSSIBLE_FIT: { emoji: "🤷", text: "Possible Fit" },
+  WEAK_FIT: { emoji: "⚠️", text: "Weak Fit" },
+  POOR_FIT: { emoji: "❌", text: "Poor Fit" },
+};
+
+export function getFitLabelDisplay(label: HealthOutput["summary"]["healthLabel"]) {
+  return FIT_LABEL_DISPLAY[label];
+}
+
+function generateNarrative(input: PlaylistInput, scores: HealthOutput["scoreBreakdown"], healthScore: number, curatorResult: ReturnType<typeof scoreCuratorType>): string {
+  const parts: string[] = [];
+
+  // Song Activity narrative
+  if (scores.songActivity != null) {
+    if (scores.songActivity >= 15) {
+      parts.push(`Songs here get real plays${input.avgTrackPopularity ? ` (avg popularity ${input.avgTrackPopularity})` : ""} — listeners are engaging, saving, and returning.`);
+    } else if (scores.songActivity >= 8) {
+      parts.push(`Moderate listener activity${input.avgTrackPopularity ? ` (avg popularity ${input.avgTrackPopularity})` : ""}. Some engagement, but not a hotbed.`);
+    } else {
+      parts.push(`Minimal listener activity${input.avgTrackPopularity ? ` (avg popularity ${input.avgTrackPopularity})` : ""}. Songs here barely get saves or streams.`);
+    }
+  }
+
+  // Focus Level
+  if (scores.focusLevel != null) {
+    if (input.tracksTotal != null) {
+      if (scores.focusLevel >= 20) {
+        parts.push(`With ${input.tracksTotal} tracks, this is a focused playlist where each song gets attention.`);
+      } else if (scores.focusLevel >= 15) {
+        parts.push(`At ${input.tracksTotal} tracks, it's slightly large but still manageable.`);
+      } else {
+        parts.push(`With ${input.tracksTotal} tracks, your song will compete with a crowded field.`);
+      }
+    }
+  }
+
+  // Curator
+  if (curatorResult.isPayForPlay) {
+    parts.push("There are pay-for-play red flags in the description — proceed with caution.");
+  } else if (curatorResult.isEditorial) {
+    parts.push("This is a Spotify Editorial playlist. Use Spotify for Artists instead of pitching directly.");
+  } else if (curatorResult.isSubmissionFunnel) {
+    parts.push("The curator accepts submissions — check the description for their preferred method.");
+  }
+
+  // Recent Activity
+  if (scores.recentActivity != null) {
+    if (input.lastUpdatedDays != null) {
+      if (input.lastUpdatedDays <= 7) {
+        parts.push("The curator is actively managing this playlist.");
+      } else if (input.lastUpdatedDays > 90) {
+        parts.push(`Last updated ${input.lastUpdatedDays} days ago — the curator may have moved on.`);
+      }
+    }
+  }
+
+  // Reach
+  if (scores.reachPerSong != null && input.followersTotal != null && input.tracksTotal != null && input.tracksTotal > 0) {
+    const ratio = Math.round(input.followersTotal / input.tracksTotal);
+    if (ratio >= 100) {
+      parts.push(`Each song gets excellent exposure (${ratio}:1 follower-to-track ratio).`);
+    } else if (ratio < 20) {
+      parts.push(`Low reach per song (${ratio}:1 ratio) — limited exposure for each track.`);
+    }
+  }
+
+  return parts.join(" ");
+}
+
+function generateRecommendation(healthScore: number, curatorResult: ReturnType<typeof scoreCuratorType>, input: PlaylistInput): string {
+  if (curatorResult.isEditorial) {
+    return "Use Spotify for Artists (S4A) to submit. Don't pitch directly.";
+  }
+  if (curatorResult.isPayForPlay) {
+    return "Skip. Pay-for-play playlists can hurt your algorithmic standing.";
+  }
+  if (healthScore >= 85) {
+    if (curatorResult.isSubmissionFunnel) {
+      return "Pitch directly. Check the playlist description for their submission method (DM, email, form). High confidence this will drive real plays.";
+    }
+    return "Worth pitching. This playlist shows strong signals across the board.";
+  }
+  if (healthScore >= 75) {
+    return "Solid choice. Worth pitching or submitting if your song fits the vibe.";
+  }
+  if (healthScore >= 60) {
+    return "Might work, but better options likely exist. Pitch if running out of targets.";
+  }
+  if (healthScore >= 40) {
+    return "Long shot. Only pitch if genre-aligned enough to override the score.";
+  }
+  return "Skip this one. Your time is better spent elsewhere.";
 }
 
 export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
@@ -147,19 +243,19 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
   if (input.churnRate30d == null) missingFields.push("churnRate30d");
   if (input.bottomDumpScore == null) missingFields.push("bottomDumpScore");
 
-  const sizeFocus = scoreSizeFocus(input.tracksTotal);
-  const followerTrackRatio = scoreFollowerTrackRatio(input.followersTotal, input.tracksTotal);
-  const updateCadence = scoreUpdateCadence(input.lastUpdatedDays);
-  const curatorResult = scoreCuratorIntent(
+  const focusLevel = scoreFocusLevel(input.tracksTotal);
+  const reachPerSong = scoreReachPerSong(input.followersTotal, input.tracksTotal);
+  const recentActivity = scoreRecentActivity(input.lastUpdatedDays);
+  const curatorResult = scoreCuratorType(
     input.ownerName, input.description,
     input.playlistOwnerIsSpotifyEditorial, input.submissionLanguageDetected
   );
-  const curatorIntentQuality = curatorResult.score;
-  const listenerEngagement = scoreListenerEngagement(input.avgTrackPopularity);
-  const churnStability = scoreChurnStability(input.churnRate30d);
-  const trackPlacementBehavior = scoreTrackPlacement(input.bottomDumpScore);
+  const curatorType = curatorResult.score;
+  const songActivity = scoreSongActivity(input.avgTrackPopularity);
+  const rotationStyle = scoreRotationStyle(input.churnRate30d);
+  const songPlacement = scoreSongPlacement(input.bottomDumpScore);
 
-  if (curatorIntentQuality == null) missingFields.push("ownerName", "description");
+  if (curatorType == null) missingFields.push("ownerName", "description");
 
   // Flags
   if (curatorResult.isEditorial) flags.push("SPOTIFY_EDITORIAL_PLAYLIST");
@@ -169,16 +265,8 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
   if (input.churnRate30d != null && input.churnRate30d > 0.70) flags.push("HIGH_CHURN");
   if (input.bottomDumpScore != null && input.bottomDumpScore > 0.75) flags.push("BOTTOM_DUMP_DETECTED");
 
-  // Notes
-  if (input.tracksTotal && input.tracksTotal >= 30 && input.tracksTotal <= 80) {
-    notes.push("Track count is in the ideal range for focused playlists.");
-  }
-  if (input.lastUpdatedDays != null && input.lastUpdatedDays <= 7) {
-    notes.push("Playlist was recently updated — good signal of active curation.");
-  }
-
-  const maxMap = { sizeFocus: 20, followerTrackRatio: 15, listenerEngagement: 20, updateCadence: 15, curatorIntentQuality: 15, churnStability: 20, trackPlacementBehavior: 15 };
-  const scores = { sizeFocus, followerTrackRatio, listenerEngagement, updateCadence, curatorIntentQuality, churnStability, trackPlacementBehavior };
+  const maxMap = { songActivity: 20, focusLevel: 20, curatorType: 15, recentActivity: 15, reachPerSong: 15, rotationStyle: 20, songPlacement: 15 };
+  const scores = { songActivity, focusLevel, curatorType, recentActivity, reachPerSong, rotationStyle, songPlacement };
 
   let totalScore = 0;
   let maxPossible = 0;
@@ -190,20 +278,23 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
   }
 
   const healthScore = maxPossible > 0 ? Math.round((totalScore / maxPossible) * 100) : 0;
-  const healthLabel = getHealthLabel(healthScore);
+  const healthLabel = getFitLabel(healthScore);
 
   let pitchSuitability: HealthOutput["summary"]["pitchSuitability"];
   if (input.playlistOwnerIsSpotifyEditorial) {
-    pitchSuitability = "DO_NOT_PITCH_SPOTIFY_OWNED";
+    pitchSuitability = "SPOTIFY_EDITORIAL";
   } else if (curatorResult.isPayForPlay) {
-    pitchSuitability = "PAY_FOR_PLAY";
+    pitchSuitability = "HIGH_RISK";
   } else if (curatorResult.isSubmissionFunnel) {
     pitchSuitability = "ACCEPTS_SUBMISSIONS";
   } else if (healthScore >= 75) {
-    pitchSuitability = "GOOD_TARGET";
+    pitchSuitability = "WORTH_PITCHING";
   } else {
     pitchSuitability = "LOW_PRIORITY";
   }
+
+  const narrative = generateNarrative(input, scores, healthScore, curatorResult);
+  const recommendation = generateRecommendation(healthScore, curatorResult, input);
 
   return {
     input: { playlistUrl: input.playlistUrl, playlistId: input.playlistId },
@@ -212,6 +303,8 @@ export function computePlaylistHealth(input: PlaylistInput): HealthOutput {
     flags,
     missingFields,
     notes,
+    narrative,
+    recommendation,
   };
 }
 

@@ -1,38 +1,14 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, BarChart3 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
 const CATEGORIES = [
   {
-    name: "Size vs Focus",
+    name: "Song Activity",
     max: 20,
     description:
-      "Measures whether the playlist is focused enough for listeners to engage deeply. Oversized playlists dilute per-track attention.",
-    tiers: [
-      { range: "30–80 tracks", score: "20/20", label: "Ideal sweet spot" },
-      { range: "81–150 tracks", score: "15/20", label: "Slightly large" },
-      { range: "151–300 tracks", score: "8/20", label: "Diluted" },
-      { range: "300+ tracks", score: "0/20", label: "Oversized" },
-    ],
-  },
-  {
-    name: "Follower/Track Ratio",
-    max: 15,
-    description:
-      "How many followers exist per track. A high ratio means each song gets more listener exposure — a strong quality signal for pitching.",
-    tiers: [
-      { range: "≥ 100:1", score: "15/15", label: "Excellent reach" },
-      { range: "50–99:1", score: "10/15", label: "Good reach" },
-      { range: "20–49:1", score: "5/15", label: "Moderate" },
-      { range: "< 20:1", score: "0/15", label: "Low reach" },
-    ],
-  },
-  {
-    name: "Listener Engagement",
-    max: 20,
-    description:
-      "Average Spotify popularity score (0–100) across all tracks. This reflects real listener activity — saves, streams, and algorithmic traction. The most important signal of whether a playlist drives actual plays.",
+      "Do people actually listen here? This is your best predictor of success. A playlist full of songs with avg popularity 65+ means listeners are engaging, saving, and returning. A playlist full of unknown tracks is a graveyard.",
     tiers: [
       { range: "Avg ≥ 60", score: "20/20", label: "High engagement" },
       { range: "Avg 40–59", score: "15/20", label: "Moderate engagement" },
@@ -41,22 +17,34 @@ const CATEGORIES = [
     ],
   },
   {
-    name: "Curator Intent",
+    name: "Focus Level",
+    max: 20,
+    description:
+      "Is it a niche fit or a crowded mess? Smaller, focused playlists = deeper listener engagement. Huge playlists = your song disappears.",
+    tiers: [
+      { range: "30–80 tracks", score: "20/20", label: "Ideal sweet spot" },
+      { range: "81–150 tracks", score: "15/20", label: "Slightly large" },
+      { range: "151–300 tracks", score: "8/20", label: "Diluted" },
+      { range: "300+ tracks", score: "0/20", label: "Oversized" },
+    ],
+  },
+  {
+    name: "Curator Type",
     max: 15,
     description:
-      "Analyzes the playlist owner and description for signals: Is it Spotify editorial? Does it accept submissions? Are there pay-for-play red flags?",
+      "Who owns this playlist and how should you pitch? Not all playlists are created equal. Some accept submissions. Some are Spotify editorial. Some have pay-for-play red flags.",
     tiers: [
       { range: "Themed description (15+ chars)", score: "15/15", label: "Strong curation signal" },
-      { range: "Spotify editorial", score: "10/15", label: "Editorial — don't pitch directly" },
+      { range: "Spotify editorial", score: "10/15", label: "Editorial — use S4A instead" },
       { range: "Submission language detected", score: "8/15", label: "Accepts submissions" },
       { range: "Pay-for-play keywords", score: "3/15", label: "⚠ High risk" },
     ],
   },
   {
-    name: "Update Cadence",
+    name: "Recent Activity",
     max: 15,
     description:
-      "How recently the playlist was updated. Active playlists signal engaged curators. This metric improves with repeated analyses over time.",
+      "Is the curator still paying attention? Dead playlists = dead ends. A playlist last updated 2 years ago won't help your song.",
     tiers: [
       { range: "≤ 7 days ago", score: "15/15", label: "Very active" },
       { range: "8–30 days ago", score: "10/15", label: "Active" },
@@ -65,10 +53,22 @@ const CATEGORIES = [
     ],
   },
   {
-    name: "Churn vs Stability",
+    name: "Reach Per Song",
+    max: 15,
+    description:
+      "How many followers per track? This is the exposure each song gets. Same playlist size, different impact depending on follower count.",
+    tiers: [
+      { range: "≥ 100:1", score: "15/15", label: "Excellent reach" },
+      { range: "50–99:1", score: "10/15", label: "Good reach" },
+      { range: "20–49:1", score: "5/15", label: "Moderate" },
+      { range: "< 20:1", score: "0/15", label: "Low reach" },
+    ],
+  },
+  {
+    name: "Rotation Style",
     max: 20,
     description:
-      "Track add/remove rate over 30 days. Healthy playlists rotate tracks at a moderate pace — not too static, not too volatile. Requires 2+ analyses spaced over time.",
+      "Will your song stick around or get deleted quickly? Healthy playlists rotate tracks at a moderate pace — not too static, not too volatile. Requires 2+ analyses spaced over time.",
     tiers: [
       { range: "5–25% churn", score: "20/20", label: "Healthy rotation" },
       { range: "26–45% churn", score: "12/20", label: "Moderate churn" },
@@ -78,10 +78,10 @@ const CATEGORIES = [
     ],
   },
   {
-    name: "Track Placement",
+    name: "Song Placement",
     max: 15,
     description:
-      "Detects whether newly added tracks are placed thoughtfully in the playlist or dumped at the bottom. Bottom-dumping suggests lazy curation. Requires 2+ analyses.",
+      "Are new tracks placed thoughtfully or dumped at the bottom? Bottom-dumping = lazy curation = your song gets buried. Requires 2+ analyses.",
     tiers: [
       { range: "≤ 25% bottom-placed", score: "15/15", label: "Thoughtful placement" },
       { range: "26–50% bottom-placed", score: "10/15", label: "Mixed" },
@@ -91,20 +91,20 @@ const CATEGORIES = [
   },
 ];
 
-const HEALTH_LABELS = [
-  { range: "85–100", label: "EXCELLENT", color: "text-primary" },
-  { range: "75–84", label: "STRONG", color: "text-primary/80" },
-  { range: "60–74", label: "OK", color: "text-yellow-400" },
-  { range: "40–59", label: "WEAK", color: "text-orange-400" },
-  { range: "0–39", label: "BAD", color: "text-destructive" },
+const FIT_LABELS = [
+  { range: "85–100", label: "🔥 Great Fit", color: "text-score-excellent", desc: "High confidence. Your song should thrive here." },
+  { range: "75–84", label: "👍 Good Fit", color: "text-score-strong", desc: "Solid choice. Worth pitching or submitting." },
+  { range: "60–74", label: "🤷 Possible Fit", color: "text-score-ok", desc: "Might work, but better options exist." },
+  { range: "40–59", label: "⚠️ Weak Fit", color: "text-score-weak", desc: "Long shot. Only pitch if genre-aligned." },
+  { range: "0–39", label: "❌ Poor Fit", color: "text-score-bad", desc: "Skip this one." },
 ];
 
 const PITCH_LABELS = [
-  { label: "GOOD_TARGET", description: "Health score ≥ 75 — worth pitching to" },
-  { label: "ACCEPTS_SUBMISSIONS", description: "Description contains submission language (submit, DM)" },
-  { label: "PAY_FOR_PLAY", description: "⚠ Red flags detected (guaranteed, promo, fee)" },
-  { label: "DO_NOT_PITCH_SPOTIFY_OWNED", description: "Spotify editorial — use Spotify for Artists instead" },
-  { label: "LOW_PRIORITY", description: "Score below 75, no submission signals" },
+  { label: "Worth Pitching", description: "Score ≥ 75 — this is worth your time." },
+  { label: "Accepts Submissions", description: "Description contains submission language (submit, DM). You can pitch directly." },
+  { label: "High Risk", description: "⚠ Pay-for-play keywords detected. Avoid." },
+  { label: "Spotify Editorial", description: "Spotify-owned playlist. Use Spotify for Artists (S4A) instead." },
+  { label: "Low Priority", description: "Score below 75, no submission signals. Only pitch if desperate." },
 ];
 
 export default function HowScoringWorks() {
@@ -127,7 +127,7 @@ export default function HowScoringWorks() {
               How <span className="text-gradient-primary">Scoring</span> Works
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Every playlist is scored out of 100 across 7 categories. Only available data is counted — the score normalizes automatically.
+              Every playlist is scored 0–100 across 7 categories. Only available data is counted — the score normalizes automatically.
             </p>
           </div>
         </motion.div>
@@ -162,32 +162,35 @@ export default function HowScoringWorks() {
           ))}
         </div>
 
-        {/* Health labels */}
+        {/* Fit Labels */}
         <motion.div
           className="glass-card rounded-xl p-5 space-y-3"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
         >
-          <h2 className="text-base font-semibold">Health Labels</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            {HEALTH_LABELS.map((h) => (
-              <div key={h.label} className="text-center bg-secondary/40 rounded-lg px-3 py-2">
-                <span className={`text-sm font-bold ${h.color}`}>{h.label}</span>
-                <p className="text-xs text-muted-foreground mt-0.5">{h.range}</p>
+          <h2 className="text-base font-semibold">Fit Labels</h2>
+          <div className="space-y-2">
+            {FIT_LABELS.map((h) => (
+              <div key={h.label} className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-bold ${h.color}`}>{h.label}</span>
+                  <span className="text-xs text-muted-foreground">{h.range}</span>
+                </div>
+                <span className="text-xs text-muted-foreground">{h.desc}</span>
               </div>
             ))}
           </div>
         </motion.div>
 
-        {/* Pitch suitability */}
+        {/* Pitch Labels */}
         <motion.div
           className="glass-card rounded-xl p-5 space-y-3"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
         >
-          <h2 className="text-base font-semibold">Pitch Suitability</h2>
+          <h2 className="text-base font-semibold">Pitch Labels</h2>
           <div className="space-y-2">
             {PITCH_LABELS.map((p) => (
               <div key={p.label} className="flex items-start gap-3 bg-secondary/40 rounded-lg px-3 py-2">

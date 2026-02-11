@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, Info, MessageSquare, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { CategoryBar } from "@/components/CategoryBar";
@@ -22,22 +22,31 @@ function fmt(n: number | undefined): string {
   return n.toLocaleString();
 }
 
+// Priority order per spec: Song Activity, Focus Level, Curator Type, Recent Activity, Reach Per Song, Rotation Style, Song Placement
 const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string; max: number; description: string }[] = [
-  { key: "sizeFocus", label: "Size vs Focus", max: 20, description: "Ideal playlists have 30–80 tracks. Oversized playlists dilute listener attention." },
-  { key: "followerTrackRatio", label: "Follower/Track Ratio", max: 15, description: "Higher follower-to-track ratio means more listeners per song — a quality signal." },
-  { key: "listenerEngagement", label: "Listener Engagement", max: 20, description: "Average track popularity (0–100) from Spotify — reflects saves, streams, and real listener activity." },
-  { key: "curatorIntentQuality", label: "Curator Intent", max: 15, description: "Evaluates owner type, description quality, and submission language signals." },
-  { key: "updateCadence", label: "Update Cadence", max: 15, description: "How recently the playlist was updated. Improves with repeated analyses over time." },
-  { key: "churnStability", label: "Churn vs Stability", max: 20, description: "Track add/remove rate over 30 days. Requires 2+ analyses spaced over time." },
-  { key: "trackPlacementBehavior", label: "Track Placement", max: 15, description: "Detects if new tracks are dumped at the bottom vs placed thoughtfully. Requires 2+ analyses." },
+  { key: "songActivity", label: "Song Activity", max: 20, description: "Do people actually listen here? Average track popularity reflects saves, streams, and real listener behavior." },
+  { key: "focusLevel", label: "Focus Level", max: 20, description: "Is it a niche fit or a crowded mess? Smaller, focused playlists = deeper listener engagement." },
+  { key: "curatorType", label: "Curator Type", max: 15, description: "Who owns this playlist and how should you pitch? Detects editorial, submission, and pay-for-play signals." },
+  { key: "recentActivity", label: "Recent Activity", max: 15, description: "Is the curator still paying attention? Dead playlists = dead ends." },
+  { key: "reachPerSong", label: "Reach Per Song", max: 15, description: "How many followers per track? This is the exposure each song gets." },
+  { key: "rotationStyle", label: "Rotation Style", max: 20, description: "Will your song stick around or get deleted quickly? Track add/remove rate over 30 days." },
+  { key: "songPlacement", label: "Song Placement", max: 15, description: "Are new tracks placed thoughtfully or dumped at the bottom? Bottom-dumping = lazy curation." },
 ];
+
+function getScoreIndicator(score: number | null, max: number): { icon: string; color: string } {
+  if (score === null) return { icon: "—", color: "text-muted-foreground" };
+  const pct = (score / max) * 100;
+  if (pct >= 75) return { icon: "✅", color: "text-score-excellent" };
+  if (pct >= 45) return { icon: "⚠️", color: "text-score-ok" };
+  return { icon: "❌", color: "text-score-bad" };
+}
 
 function getDataLabel(key: string, input?: PlaylistInput): string | undefined {
   if (!input) return undefined;
   switch (key) {
-    case "sizeFocus":
+    case "focusLevel":
       return input.tracksTotal != null ? `${fmt(input.tracksTotal)} tracks` : undefined;
-    case "followerTrackRatio": {
+    case "reachPerSong": {
       if (input.followersTotal != null && input.tracksTotal != null && input.tracksTotal > 0) {
         const ratio = Math.round(input.followersTotal / input.tracksTotal);
         return `${fmt(input.followersTotal)} followers ÷ ${fmt(input.tracksTotal)} tracks = ${ratio}:1 ratio`;
@@ -45,22 +54,22 @@ function getDataLabel(key: string, input?: PlaylistInput): string | undefined {
       if (input.followersTotal != null) return `${fmt(input.followersTotal)} followers`;
       return undefined;
     }
-    case "listenerEngagement":
+    case "songActivity":
       return input.avgTrackPopularity != null ? `Avg popularity: ${input.avgTrackPopularity}/100` : undefined;
-    case "updateCadence":
+    case "recentActivity":
       return input.lastUpdatedDays != null
         ? input.lastUpdatedDays === 0 ? "Updated today" : `Updated ${input.lastUpdatedDays} day${input.lastUpdatedDays !== 1 ? "s" : ""} ago`
         : undefined;
-    case "curatorIntentQuality": {
+    case "curatorType": {
       const parts: string[] = [];
       if (input.ownerName) parts.push(`by ${input.ownerName}`);
       if (input.playlistOwnerIsSpotifyEditorial) parts.push("(Spotify Editorial)");
       if (input.submissionLanguageDetected) parts.push("⚠ submission language");
       return parts.length > 0 ? parts.join(" ") : undefined;
     }
-    case "churnStability":
+    case "rotationStyle":
       return input.churnRate30d != null ? `${Math.round(input.churnRate30d * 100)}% churn over 30 days` : undefined;
-    case "trackPlacementBehavior":
+    case "songPlacement":
       return input.bottomDumpScore != null ? `${Math.round(input.bottomDumpScore * 100)}% of new tracks placed at bottom` : undefined;
     default:
       return undefined;
@@ -112,40 +121,63 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
           <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
             Score Breakdown
           </h3>
-          {CATEGORY_META.map((cat, i) => (
-            <CategoryBar
-              key={cat.key}
-              label={cat.label}
-              description={cat.description}
-              dataLabel={getDataLabel(cat.key, inputData)}
-              score={result.scoreBreakdown[cat.key]}
-              max={cat.max}
-              delay={0.3 + i * 0.08}
-            />
-          ))}
+          {CATEGORY_META.map((cat, i) => {
+            const indicator = getScoreIndicator(result.scoreBreakdown[cat.key], cat.max);
+            return (
+              <CategoryBar
+                key={cat.key}
+                label={cat.label}
+                description={cat.description}
+                dataLabel={getDataLabel(cat.key, inputData)}
+                score={result.scoreBreakdown[cat.key]}
+                max={cat.max}
+                delay={0.3 + i * 0.08}
+                indicator={indicator.icon}
+              />
+            );
+          })}
         </motion.div>
       </div>
 
-      {/* Vibe Analysis */}
-      {(vibeLoading || vibeAnalysis) && (
-        <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} />
+      {/* Narrative */}
+      {result.narrative && (
+        <motion.div
+          className="glass-card rounded-xl p-5 space-y-3"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+            <MessageSquare size={14} className="text-primary" />
+            Why this {result.summary.healthScore >= 75 ? "works" : result.summary.healthScore >= 60 ? "might work" : "doesn't work"} for you
+          </div>
+          <p className="text-sm text-secondary-foreground leading-relaxed">
+            {result.narrative}
+          </p>
+        </motion.div>
       )}
 
-      {/* Notes */}
-      {result.notes.length > 0 && (
+      {/* Recommendation */}
+      {result.recommendation && (
         <motion.div
-          className="glass-card rounded-xl p-4 space-y-2"
+          className="glass-card rounded-xl p-5 space-y-2 border-primary/20"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
         >
-          <div className="flex items-center gap-2 text-primary text-sm font-semibold">
-            <Info size={14} /> Notes
+          <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+            <ArrowRight size={14} />
+            What to do
           </div>
-          {result.notes.map((n, i) => (
-            <p key={i} className="text-xs text-secondary-foreground">{n}</p>
-          ))}
+          <p className="text-sm text-secondary-foreground leading-relaxed">
+            {result.recommendation}
+          </p>
         </motion.div>
+      )}
+
+      {/* Vibe Analysis */}
+      {(vibeLoading || vibeAnalysis) && (
+        <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} />
       )}
 
       {/* Raw JSON toggle */}
