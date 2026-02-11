@@ -66,7 +66,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
           transition={{ delay: 0.2 }}
         >
           <BarChart3 size={14} />
-          Deterministic Scoring Engine
+          Know before you pitch.
         </motion.div>
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
           Playlist <span className="text-gradient-primary">Fit</span> Check
@@ -99,9 +99,8 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         </Button>
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
-        Note: Churn rate, update cadence, and track placement data require deeper analysis beyond the basic Spotify API.
-      </p>
+
+
 
       <p className="text-center text-xs text-muted-foreground">
         <a
