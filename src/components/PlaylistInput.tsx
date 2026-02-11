@@ -106,9 +106,6 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
       </p>
 
       <div className="flex flex-col items-center gap-2">
-        <p className="text-xs text-muted-foreground">
-          I don't need this tool. I only listen to one playlist.
-        </p>
         <div className="w-full max-w-md rounded-xl overflow-hidden">
           <iframe
             src="https://open.spotify.com/embed/playlist/3wtgtkdE8aDOf3V0LYoAXa?utm_source=generator&theme=0"
