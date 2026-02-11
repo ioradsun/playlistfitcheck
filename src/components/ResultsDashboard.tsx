@@ -25,6 +25,7 @@ function fmt(n: number | undefined): string {
 const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string; max: number; description: string }[] = [
   { key: "sizeFocus", label: "Size vs Focus", max: 20, description: "Ideal playlists have 30–80 tracks. Oversized playlists dilute listener attention." },
   { key: "followerTrackRatio", label: "Follower/Track Ratio", max: 15, description: "Higher follower-to-track ratio means more listeners per song — a quality signal." },
+  { key: "listenerEngagement", label: "Listener Engagement", max: 20, description: "Average track popularity (0–100) from Spotify — reflects saves, streams, and real listener activity." },
   { key: "curatorIntentQuality", label: "Curator Intent", max: 15, description: "Evaluates owner type, description quality, and submission language signals." },
   { key: "updateCadence", label: "Update Cadence", max: 15, description: "How recently the playlist was updated. Improves with repeated analyses over time." },
   { key: "churnStability", label: "Churn vs Stability", max: 20, description: "Track add/remove rate over 30 days. Requires 2+ analyses spaced over time." },
@@ -44,6 +45,8 @@ function getDataLabel(key: string, input?: PlaylistInput): string | undefined {
       if (input.followersTotal != null) return `${fmt(input.followersTotal)} followers`;
       return undefined;
     }
+    case "listenerEngagement":
+      return input.avgTrackPopularity != null ? `Avg popularity: ${input.avgTrackPopularity}/100` : undefined;
     case "updateCadence":
       return input.lastUpdatedDays != null
         ? input.lastUpdatedDays === 0 ? "Updated today" : `Updated ${input.lastUpdatedDays} day${input.lastUpdatedDays !== 1 ? "s" : ""} ago`
