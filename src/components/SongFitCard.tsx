@@ -11,6 +11,7 @@ export interface SongFitAnalysis {
   suggestion: string;
   songName?: string;
   artistName?: string;
+  soundDescription?: string;
   sonicFitScore?: number;
   playlistQualityScore?: number;
 }
