@@ -41,8 +41,22 @@ serve(async (req) => {
     if (!clientSecret) throw new Error("SPOTIFY_CLIENT_SECRET is not configured");
 
     const { query, type } = await req.json();
-    if (!query || !type) {
-      return new Response(JSON.stringify({ error: "query and type are required" }), {
+
+    // Input validation
+    if (!query || typeof query !== "string") {
+      return new Response(JSON.stringify({ error: "query is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (query.length > 200) {
+      return new Response(JSON.stringify({ error: "query is too long (max 200 characters)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!type || typeof type !== "string" || !["playlist", "track"].includes(type)) {
+      return new Response(JSON.stringify({ error: "type must be 'playlist' or 'track'" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -50,14 +64,9 @@ serve(async (req) => {
 
     const token = await getSpotifyToken(clientId, clientSecret);
 
-    // type should be "playlist" or "track"
     const searchType = type === "playlist" ? "playlist" : "track";
-    // Playlists: search by name only. Tracks: search name + artist.
-    const searchQuery = searchType === "playlist"
-      ? query
-      : query;
     const resp = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=${searchType}&limit=8`,
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${searchType}&limit=8`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -99,8 +108,7 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("Search error:", e);
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: "An internal error occurred" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

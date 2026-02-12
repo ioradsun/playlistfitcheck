@@ -45,8 +45,16 @@ serve(async (req) => {
     if (!clientSecret) throw new Error("SPOTIFY_CLIENT_SECRET is not configured");
 
     const { playlistId } = await req.json();
-    if (!playlistId) {
+
+    // Input validation
+    if (!playlistId || typeof playlistId !== "string") {
       return new Response(JSON.stringify({ error: "playlistId is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (playlistId.length > 100 || !/^[a-zA-Z0-9]+$/.test(playlistId)) {
+      return new Response(JSON.stringify({ error: "Invalid playlistId format" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -54,7 +62,6 @@ serve(async (req) => {
 
     const token = await getSpotifyToken(clientId, clientSecret);
 
-    // Fetch playlist tracks with preview URLs and album art
     const resp = await fetch(
       `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=items(track(id,name,preview_url,external_urls,artists(name),album(images),duration_ms)),next&limit=100`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -88,8 +95,7 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("Edge function error:", e);
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: "An internal error occurred" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -6,6 +6,20 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function validateTrackList(trackList: unknown): trackList is { name: string; artists: string }[] {
+  if (!Array.isArray(trackList)) return false;
+  if (trackList.length === 0 || trackList.length > 200) return false;
+  return trackList.every(
+    (t) =>
+      t &&
+      typeof t === "object" &&
+      typeof t.name === "string" &&
+      t.name.length <= 300 &&
+      typeof t.artists === "string" &&
+      t.artists.length <= 500
+  );
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -15,12 +29,36 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const { songUrl, playlistName, description, ownerName, trackList, healthScore, healthLabel, scoreBreakdown, narrative, recommendation, pitchSuitability } = await req.json();
+    const body = await req.json();
+    const { songUrl, playlistName, description, ownerName, trackList, healthScore, healthLabel, scoreBreakdown, narrative, recommendation, pitchSuitability } = body;
 
-    if (!songUrl) {
+    // Input validation
+    if (!songUrl || typeof songUrl !== "string") {
       return new Response(JSON.stringify({ error: "No song URL provided" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (songUrl.length > 500 || !songUrl.match(/^https:\/\/open\.spotify\.com\/track\/[a-zA-Z0-9]+/)) {
+      return new Response(JSON.stringify({ error: "Invalid Spotify track URL format" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!validateTrackList(trackList)) {
+      return new Response(JSON.stringify({ error: "Invalid or missing track data" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (playlistName != null && (typeof playlistName !== "string" || playlistName.length > 300)) {
+      return new Response(JSON.stringify({ error: "Invalid playlistName" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (description != null && (typeof description !== "string" || description.length > 2000)) {
+      return new Response(JSON.stringify({ error: "Invalid description" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -53,13 +91,6 @@ serve(async (req) => {
       }
     } catch (e) {
       console.error("Failed to fetch song name:", e);
-    }
-
-    if (!trackList || trackList.length === 0) {
-      return new Response(JSON.stringify({ error: "No track data provided" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     const trackListStr = trackList
@@ -106,16 +137,16 @@ Be honest, specific, and reference actual patterns from the track list. The stre
 Song: ${songName}${artistName ? ` by ${artistName}` : ""}
 Song URL: ${songUrl}
 
-Playlist: ${playlistName || "Unknown"}
-Description: ${description || "None"}
-Curator: ${ownerName || "Unknown"}
+Playlist: ${(playlistName || "Unknown").slice(0, 200)}
+Description: ${(description || "None").slice(0, 500)}
+Curator: ${(typeof ownerName === "string" ? ownerName : "Unknown").slice(0, 100)}
 
-Playlist Health Score: ${healthScore ?? "N/A"}/100 (${healthLabel || "N/A"})
-Pitch Suitability: ${pitchSuitability || "N/A"}
+Playlist Health Score: ${typeof healthScore === "number" ? healthScore : "N/A"}/100 (${typeof healthLabel === "string" ? healthLabel.slice(0, 50) : "N/A"})
+Pitch Suitability: ${typeof pitchSuitability === "string" ? pitchSuitability.slice(0, 100) : "N/A"}
 Health Breakdown:
 ${breakdownStr}
-${narrative ? `\nAnalysis: ${narrative}` : ""}
-${recommendation ? `\nRecommendation: ${recommendation}` : ""}
+${narrative && typeof narrative === "string" ? `\nAnalysis: ${narrative.slice(0, 500)}` : ""}
+${recommendation && typeof recommendation === "string" ? `\nRecommendation: ${recommendation.slice(0, 500)}` : ""}
 
 Playlist tracks:
 ${trackListStr}
@@ -182,8 +213,7 @@ Produce a single blended score factoring in both how well "${songName}" fits son
     });
   } catch (e) {
     console.error("Song fit error:", e);
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: "An internal error occurred" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

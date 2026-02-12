@@ -7,6 +7,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const VALID_ACTIONS = ["play", "spotify_click", "pause", "skip"];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -19,8 +21,33 @@ serve(async (req) => {
 
     const { trackId, trackName, artistName, action, sessionId } = await req.json();
 
-    if (!trackId || !action) {
-      return new Response(JSON.stringify({ error: "trackId and action are required" }), {
+    // Input validation
+    if (!trackId || typeof trackId !== "string" || trackId.length > 100) {
+      return new Response(JSON.stringify({ error: "Invalid trackId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!action || typeof action !== "string" || !VALID_ACTIONS.includes(action)) {
+      return new Response(JSON.stringify({ error: "Invalid action" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (trackName != null && (typeof trackName !== "string" || trackName.length > 300)) {
+      return new Response(JSON.stringify({ error: "Invalid trackName" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (artistName != null && (typeof artistName !== "string" || artistName.length > 300)) {
+      return new Response(JSON.stringify({ error: "Invalid artistName" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (sessionId != null && (typeof sessionId !== "string" || sessionId.length > 200)) {
+      return new Response(JSON.stringify({ error: "Invalid sessionId" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -40,8 +67,7 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("Track engagement error:", e);
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: "An internal error occurred" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
