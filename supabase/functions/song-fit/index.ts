@@ -15,7 +15,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const { songUrl, playlistName, description, ownerName, trackList } = await req.json();
+    const { songUrl, playlistName, description, ownerName, trackList, healthScore, healthLabel, scoreBreakdown, narrative, recommendation, pitchSuitability } = await req.json();
 
     if (!songUrl) {
       return new Response(JSON.stringify({ error: "No song URL provided" }), {
@@ -65,39 +65,60 @@ serve(async (req) => {
       .map((t: { name: string; artists: string }, i: number) => `${i + 1}. "${t.name}" by ${t.artists}`)
       .join("\n");
 
-    const systemPrompt = `You are a music industry analyst specializing in Spotify playlist curation and song-to-playlist fit analysis. Given a song URL and a playlist's track list, analyze how well the song fits the playlist's sonic character.
+    const breakdownStr = scoreBreakdown ? Object.entries(scoreBreakdown)
+      .map(([k, v]) => `  ${k}: ${v}`)
+      .join("\n") : "Not available";
+
+    const systemPrompt = `You are a music industry analyst specializing in Spotify playlist curation and song-to-playlist fit analysis. You are given:
+1. A song URL and its inferred sonic character
+2. A playlist's track list
+3. The playlist's structural health metrics (algorithmic scores for activity, curation quality, reach, etc.)
+
+Your job is to produce ONE BLENDED SCORE (0-100) that combines:
+- How well the SONG fits the playlist sonically (genre, mood, energy, production style) — weighted ~60%
+- How healthy/valuable the PLAYLIST is for pitching — weighted ~40%
 
 Your response MUST be valid JSON with this exact structure:
 {
-  "fitScore": <number 0-100>,
-  "fitLabel": "PERFECT_FIT" | "STRONG_FIT" | "DECENT_FIT" | "WEAK_FIT" | "POOR_FIT",
-  "summary": "1-2 sentence summary of how well the song fits",
-  "strengths": ["strength1", "strength2"],
+  "blendedScore": <number 0-100>,
+  "blendedLabel": "PERFECT_FIT" | "STRONG_FIT" | "DECENT_FIT" | "WEAK_FIT" | "POOR_FIT",
+  "summary": "2-3 sentence summary blending song fit + playlist quality insights",
+  "strengths": ["strength1", "strength2", "strength3"],
   "concerns": ["concern1", "concern2"],
-  "suggestion": "1-2 sentence actionable suggestion for the artist"
+  "suggestion": "2-3 sentence actionable suggestion for the artist",
+  "sonicFitScore": <number 0-100>,
+  "playlistQualityScore": <number 0-100>
 }
 
-Scoring guide:
-- 85-100: PERFECT_FIT — the song would blend seamlessly
-- 70-84: STRONG_FIT — very compatible with minor differences
-- 50-69: DECENT_FIT — could work but noticeable differences
-- 30-49: WEAK_FIT — significant sonic mismatch
-- 0-29: POOR_FIT — fundamentally different sonic space
+Scoring guide for blendedScore:
+- 85-100: PERFECT_FIT — great sonic match + strong playlist
+- 70-84: STRONG_FIT — very compatible, minor gaps in fit or playlist quality
+- 50-69: DECENT_FIT — could work but notable differences or playlist concerns
+- 30-49: WEAK_FIT — significant sonic mismatch or poor playlist quality
+- 0-29: POOR_FIT — fundamentally wrong fit or problematic playlist
 
-Be honest, specific, and reference actual patterns from the track list. Base your analysis on genre, mood, energy, production style, and artist caliber patterns visible in the tracklist.`;
+Be honest, specific, and reference actual patterns from the track list. The strengths and concerns should cover BOTH sonic fit and playlist quality factors.`;
 
-    const userPrompt = `Analyze this song's fit for the playlist:
+    const userPrompt = `Analyze this song's fit for the playlist, considering both sonic compatibility and playlist quality:
 
+Song: ${songName}
 Song URL: ${songUrl}
 
 Playlist: ${playlistName || "Unknown"}
 Description: ${description || "None"}
 Curator: ${ownerName || "Unknown"}
 
+Playlist Health Score: ${healthScore ?? "N/A"}/100 (${healthLabel || "N/A"})
+Pitch Suitability: ${pitchSuitability || "N/A"}
+Health Breakdown:
+${breakdownStr}
+${narrative ? `\nAnalysis: ${narrative}` : ""}
+${recommendation ? `\nRecommendation: ${recommendation}` : ""}
+
 Playlist tracks:
 ${trackListStr}
 
-Based on the genres, moods, and sonic patterns in the playlist tracks above, evaluate how likely this song (inferred from its Spotify URL context) would fit.`;
+Produce a single blended score factoring in both how well "${songName}" fits sonically AND how valuable this playlist is as a pitching target.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -142,12 +163,14 @@ Based on the genres, moods, and sonic patterns in the playlist tracks above, eva
     } catch {
       console.error("Failed to parse AI response:", content);
       analysis = {
-        fitScore: 50,
-        fitLabel: "DECENT_FIT",
+        blendedScore: healthScore ?? 50,
+        blendedLabel: "DECENT_FIT",
         summary: "Unable to fully analyze song fit.",
         strengths: [],
         concerns: [],
         suggestion: content.slice(0, 300),
+        sonicFitScore: 50,
+        playlistQualityScore: healthScore ?? 50,
       };
     }
 

@@ -44,7 +44,7 @@ const Index = () => {
     }
   }, []);
 
-  const fetchSongFitAnalysis = useCallback(async (songUrl: string, data: PlaylistInput, trackList?: { name: string; artists: string }[]) => {
+  const fetchSongFitAnalysis = useCallback(async (songUrl: string, data: PlaylistInput, trackList: { name: string; artists: string }[] | undefined, healthOutput: HealthOutput) => {
     if (!trackList || trackList.length === 0) return;
     setSongFitLoading(true);
     try {
@@ -55,6 +55,12 @@ const Index = () => {
           description: data.description,
           ownerName: data.ownerName,
           trackList,
+          healthScore: healthOutput.summary.healthScore,
+          healthLabel: healthOutput.summary.healthLabel,
+          scoreBreakdown: healthOutput.scoreBreakdown,
+          narrative: healthOutput.narrative,
+          recommendation: healthOutput.recommendation,
+          pitchSuitability: healthOutput.summary.pitchSuitability,
         },
       });
       if (error) throw error;
@@ -77,9 +83,8 @@ const Index = () => {
     // Trigger vibe analysis in background
     if (trackList && trackList.length > 0) {
       fetchVibeAnalysis(data, trackList);
-      // Trigger song fit analysis if song URL provided
       if (songUrl) {
-        fetchSongFitAnalysis(songUrl, data, trackList);
+        fetchSongFitAnalysis(songUrl, data, trackList, output);
       }
     }
   }, [fetchVibeAnalysis, fetchSongFitAnalysis]);
