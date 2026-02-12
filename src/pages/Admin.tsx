@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, BarChart3, Play, ExternalLink, Search, Music, ChevronDown } from "lucide-react";
+import { Lock, BarChart3, Play, ExternalLink, Search, Music, ChevronDown, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,31 +38,64 @@ interface DashboardData {
 }
 
 export default function Admin() {
-  const [password, setPassword] = useState("");
+  const stored = sessionStorage.getItem("admin_pw") || "";
+  const [password, setPassword] = useState(stored);
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
   const [expandedFit, setExpandedFit] = useState<number | null>(null);
+
+  const fetchData = async (pw: string) => {
+    const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", {
+      body: { password: pw },
+    });
+    if (fnError) throw fnError;
+    if (result?.error) throw new Error(result.error);
+    return result as DashboardData;
+  };
 
   const handleLogin = async () => {
     if (!password.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", {
-        body: { password: password.trim() },
-      });
-      if (fnError) throw fnError;
-      if (result?.error) throw new Error(result.error);
-      setData(result as DashboardData);
+      const result = await fetchData(password.trim());
+      sessionStorage.setItem("admin_pw", password.trim());
+      setData(result);
       setAuthenticated(true);
     } catch (e) {
+      sessionStorage.removeItem("admin_pw");
       setError(e instanceof Error ? e.message : "Authentication failed");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const pw = sessionStorage.getItem("admin_pw") || "";
+      const result = await fetchData(pw);
+      setData(result);
+    } catch (e) {
+      console.error("Refresh failed", e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Auto-login on mount if password is stored
+  useState(() => {
+    if (stored) {
+      setLoading(true);
+      fetchData(stored)
+        .then((result) => { setData(result); setAuthenticated(true); })
+        .catch(() => sessionStorage.removeItem("admin_pw"))
+        .finally(() => setLoading(false));
+    }
+  });
 
   if (!authenticated) {
     return (
@@ -99,10 +132,18 @@ export default function Admin() {
         <div className="flex items-center gap-3">
           <BarChart3 size={20} className="text-primary" />
           <h1 className="text-xl font-bold">Admin Dashboard</h1>
-          <div className="ml-auto flex gap-3 text-xs font-mono text-muted-foreground">
+          <div className="ml-auto flex items-center gap-3 text-xs font-mono text-muted-foreground">
             <span>{data?.totalEngagements ?? 0} clicks</span>
             <span>·</span>
             <span>{data?.totalSearches ?? 0} fits checked</span>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="ml-2 p-1.5 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+              title="Refresh data"
+            >
+              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+            </button>
           </div>
         </div>
 
