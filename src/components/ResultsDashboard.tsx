@@ -6,6 +6,7 @@ import { CategoryBar } from "@/components/CategoryBar";
 import { PitchBadge } from "@/components/PitchBadge";
 import { VibeCard, type VibeAnalysis } from "@/components/VibeCard";
 import { type SongFitAnalysis, FIT_CONFIG } from "@/components/SongFitCard";
+import { PitchDraftCard } from "@/components/PitchDraftCard";
 import type { HealthOutput } from "@/lib/playlistHealthEngine";
 import type { PlaylistInput } from "@/lib/playlistHealthEngine";
 
@@ -311,6 +312,18 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
             {result.recommendation}
           </p>
         </motion.div>
+      )}
+
+      {/* Pitch Draft */}
+      {hasBlendedScore && songFitAnalysis.songName && playlistName && (
+        <PitchDraftCard
+          songName={songFitAnalysis.songName}
+          artistName={undefined}
+          playlistName={playlistName}
+          curatorName={inputData?.ownerName}
+          fitLabel={songFitAnalysis.blendedLabel}
+          strengths={songFitAnalysis.strengths}
+        />
       )}
 
       {/* Vibe Analysis */}
