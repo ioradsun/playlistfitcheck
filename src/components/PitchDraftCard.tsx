@@ -68,8 +68,9 @@ function generateEmailPitch({ songName, artistName, playlistName, curatorName, s
   // Fit line — translate strengths into a natural sentence
   let fitLine = "";
   if (strengths && strengths.length > 0) {
-    // Take the first strength and humanize it
-    fitLine = `\n\nI think it complements the list without disrupting the flow.`;
+    fitLine = `\n\nI think it complements the list without disrupting the flow. [Optional: "It's currently seeing a __% save rate on similar playlists."]`;
+  } else {
+    fitLine = `\n\nI think it fits the direction you've built. [Optional: "It's currently seeing a __% save rate on similar playlists."]`;
   }
 
   // Risk removal — soft, confident
@@ -86,7 +87,7 @@ Hey ${curator},
 
 ${opener}
 
-I'm sharing "${songName}" by ${artist}.${fitLine}
+I'm sharing "${songName}" by ${artist}. [Describe your sound in one line — e.g. "reverb-heavy vocal, ambient textures, mid-tempo."]${fitLine}
 
 Here's the track:
 [Spotify Link]
@@ -120,7 +121,9 @@ function generateDMPitch({ songName, artistName, playlistName, curatorName, inpu
 
 ${intelLine}
 
-"${songName}" by ${artist} lives in a similar lane. I think it fits without disrupting the flow.
+"${songName}" by ${artist} — [Describe your sound briefly — e.g. "atmospheric, mid-tempo, reverb-heavy vocal."]
+
+I think it fits without disrupting the flow. [Optional: "Seeing __% save rate on similar playlists."]
 
 Link here:
 [Spotify Link]${riskLine}
