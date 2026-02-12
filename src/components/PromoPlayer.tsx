@@ -41,7 +41,7 @@ export function PromoPlayer() {
         });
         if (fnError) throw fnError;
         if (data?.error) throw new Error(data.error);
-        setTracks(data.tracks || []);
+        setTracks((data.tracks || []).slice(0, 3));
       } catch (e) {
         console.error("Failed to fetch player tracks:", e);
         setError("Could not load tracks");
@@ -81,10 +81,10 @@ export function PromoPlayer() {
         <div className={`glass-card rounded-xl overflow-hidden ${activeTrack && !isMobile ? "flex-1 min-w-0" : "w-full"}`}>
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Music2 size={14} className="text-primary" />
-            <span className="text-xs font-mono text-muted-foreground">Featured Tracks</span>
+            <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
           </div>
 
-          <div className="max-h-[352px] overflow-y-auto">
+          <div className="max-h-[200px] overflow-y-auto">
             {tracks.map((track, i) => {
               const isActive = activeTrack?.id === track.id;
 
@@ -159,7 +159,7 @@ export function PromoPlayer() {
                   key={activeTrack.id}
                   src={`https://open.spotify.com/embed/track/${activeTrack.id}?utm_source=generator&theme=0`}
                   width="100%"
-                  height="352"
+                  height="200"
                   frameBorder="0"
                   allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                   loading="lazy"
