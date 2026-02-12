@@ -18,7 +18,7 @@ const ENERGY_CONFIG = {
   mixed: { label: "Mixed Energy", className: "bg-primary/15 text-primary border-primary/30" },
 };
 
-export function VibeCard({ analysis, loading }: { analysis: VibeAnalysis | null; loading: boolean }) {
+export function VibeCard({ analysis, loading, playlistName }: { analysis: VibeAnalysis | null; loading: boolean; playlistName?: string }) {
   if (loading) {
     return (
       <motion.div
@@ -53,7 +53,7 @@ export function VibeCard({ analysis, loading }: { analysis: VibeAnalysis | null;
     >
       <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
         <Sparkles size={14} className="text-primary" />
-        Playlist Vibe Analysis
+        {playlistName ? `"${playlistName}" Vibe Analysis` : "Playlist Vibe Analysis"}
       </div>
 
       {/* Genres + Energy */}

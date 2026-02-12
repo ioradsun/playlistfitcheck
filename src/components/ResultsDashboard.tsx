@@ -185,7 +185,7 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
 
       {/* Vibe Analysis */}
       {(vibeLoading || vibeAnalysis) && (
-        <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} />
+        <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} playlistName={playlistName} />
       )}
 
       {/* Raw JSON toggle */}
