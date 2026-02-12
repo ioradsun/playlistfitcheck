@@ -55,7 +55,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
   };
 
   const DEMO_PLAYLIST_URL = "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M";
-  const DEMO_SONG_URL = "https://open.spotify.com/track/3KkXRkHbMCARz0aVfEt68P";
+  const DEMO_SONG_URL = "https://open.spotify.com/track/7tncKjVXrUutWHOWYqf4eK";
 
   const handleDemo = () => {
     setUrl(DEMO_PLAYLIST_URL);
