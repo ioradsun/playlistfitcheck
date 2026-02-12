@@ -3,6 +3,7 @@ import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
 import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import type { VibeAnalysis } from "@/components/VibeCard";
 import type { SongFitAnalysis } from "@/components/SongFitCard";
 import { motion } from "framer-motion";
@@ -40,6 +41,7 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 );
 
 const Index = () => {
+  const { user } = useAuth();
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
   const [vibeLoading, setVibeLoading] = useState(false);
@@ -104,6 +106,25 @@ const Index = () => {
     }
   }, []);
 
+  const saveSearch = useCallback(async (data: PlaylistInput, output: HealthOutput, songUrl?: string, songFit?: SongFitAnalysis | null) => {
+    if (!user) return;
+    try {
+      await supabase.from("saved_searches").insert({
+        user_id: user.id,
+        playlist_url: (data as any).playlistUrl ?? "",
+        playlist_name: data.playlistName,
+        song_url: songUrl ?? null,
+        song_name: (data as any)._songName ?? null,
+        health_score: output.summary.healthScore,
+        health_label: output.summary.healthLabel,
+        blended_score: songFit?.blendedScore ?? null,
+        blended_label: songFit?.blendedLabel ?? null,
+      });
+    } catch (e) {
+      console.error("Failed to save search:", e);
+    }
+  }, [user]);
+
   const handleAnalyze = useCallback((data: PlaylistInput & { _trackList?: { name: string; artists: string }[]; _songUrl?: string }) => {
     const trackList = data._trackList;
     const songUrl = data._songUrl;
@@ -113,13 +134,17 @@ const Index = () => {
     setVibeLoading(false);
     setSongFitLoading(false);
     setResult({ output, input: data, name: data.playlistName, key: Date.now(), trackList, songUrl });
+
+    // Save search for logged-in users (without song fit initially)
+    saveSearch(data, output, songUrl);
+
     if (trackList && trackList.length > 0) {
       fetchVibeAnalysis(data, trackList);
       if (songUrl) {
         fetchSongFitAnalysis(songUrl, data, trackList, output);
       }
     }
-  }, [fetchVibeAnalysis, fetchSongFitAnalysis]);
+  }, [fetchVibeAnalysis, fetchSongFitAnalysis, saveSearch]);
 
   const handleBack = useCallback(() => {
     setResult(null);
@@ -131,7 +156,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <div className="flex-1 flex items-center justify-center px-4 py-16">
+      <div className="flex-1 flex items-center justify-center px-4 py-16 pt-20">
         {result ? (
           isFullyLoaded ? (
             <ResultsDashboard

@@ -56,6 +56,72 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          bio: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          spotify_embed_url: string | null
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          spotify_embed_url?: string | null
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          spotify_embed_url?: string | null
+        }
+        Relationships: []
+      }
+      saved_searches: {
+        Row: {
+          blended_label: string | null
+          blended_score: number | null
+          created_at: string
+          health_label: string | null
+          health_score: number | null
+          id: string
+          playlist_name: string | null
+          playlist_url: string | null
+          song_name: string | null
+          song_url: string | null
+          user_id: string
+        }
+        Insert: {
+          blended_label?: string | null
+          blended_score?: number | null
+          created_at?: string
+          health_label?: string | null
+          health_score?: number | null
+          id?: string
+          playlist_name?: string | null
+          playlist_url?: string | null
+          song_name?: string | null
+          song_url?: string | null
+          user_id: string
+        }
+        Update: {
+          blended_label?: string | null
+          blended_score?: number | null
+          created_at?: string
+          health_label?: string | null
+          health_score?: number | null
+          id?: string
+          playlist_name?: string | null
+          playlist_url?: string | null
+          song_name?: string | null
+          song_url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       search_logs: {
         Row: {
           created_at: string
@@ -116,15 +182,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "artist" | "curator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -251,6 +341,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["artist", "curator", "user"],
+    },
   },
 } as const
