@@ -104,16 +104,41 @@ serve(async (req) => {
       }))
       .sort((a, b) => b.totalInteractions - a.totalInteractions);
 
-    // Enrich searches with correlated track clicks
-    const enrichedSearches = (searches || []).slice(0, 50).map((s) => ({
-      playlist_name: s.playlist_name,
-      playlist_url: s.playlist_url,
-      song_name: s.song_name,
-      song_url: s.song_url,
-      session_id: s.session_id,
-      created_at: s.created_at,
-      tracksClicked: s.session_id ? (sessionTracksMap[s.session_id] || []) : [],
-    }));
+    // Group searches by playlist_url (deduplicate)
+    const searchGroups: Record<string, {
+      playlist_name: string | null;
+      playlist_url: string | null;
+      song_name: string | null;
+      song_url: string | null;
+      count: number;
+      last_checked: string;
+      tracksClicked: { track_name: string; artist_name: string; action: string }[];
+    }> = {};
+
+    for (const s of (searches || []).slice(0, 200)) {
+      const key = s.playlist_url || s.playlist_name || "unknown";
+      if (!searchGroups[key]) {
+        searchGroups[key] = {
+          playlist_name: s.playlist_name,
+          playlist_url: s.playlist_url,
+          song_name: s.song_name,
+          song_url: s.song_url,
+          count: 0,
+          last_checked: s.created_at,
+          tracksClicked: [],
+        };
+      }
+      searchGroups[key].count++;
+      if (new Date(s.created_at) > new Date(searchGroups[key].last_checked)) {
+        searchGroups[key].last_checked = s.created_at;
+      }
+      if (s.session_id && sessionTracksMap[s.session_id]) {
+        searchGroups[key].tracksClicked.push(...sessionTracksMap[s.session_id]);
+      }
+    }
+
+    const enrichedSearches = Object.values(searchGroups)
+      .sort((a, b) => new Date(b.last_checked).getTime() - new Date(a.last_checked).getTime());
 
     return new Response(
       JSON.stringify({

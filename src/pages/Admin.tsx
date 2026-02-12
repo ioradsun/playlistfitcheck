@@ -25,8 +25,8 @@ interface CheckFit {
   playlist_url: string | null;
   song_name: string | null;
   song_url: string | null;
-  session_id: string | null;
-  created_at: string;
+  count: number;
+  last_checked: string;
   tracksClicked: ClickedTrack[];
 }
 
@@ -221,10 +221,15 @@ export default function Admin() {
                           <p className="text-xs text-muted-foreground truncate">× {fit.song_name}</p>
                         )}
                       </div>
-                      <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
-                        {new Date(fit.created_at).toLocaleDateString()}
-                      </span>
-                      <div className="flex items-center gap-1 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {fit.count > 1 && (
+                          <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
+                            ×{fit.count}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {new Date(fit.last_checked).toLocaleDateString()}
+                        </span>
                         <span className={`text-xs font-mono ${hasClicks ? "text-primary" : "text-muted-foreground/50"}`}>
                           {fit.tracksClicked.length} click{fit.tracksClicked.length !== 1 ? "s" : ""}
                         </span>
