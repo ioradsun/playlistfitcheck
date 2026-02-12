@@ -139,7 +139,7 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
             </div>
           ) : (
             <>
-              <ScoreGauge score={displayScore} label={displayLabel} />
+              <ScoreGauge score={displayScore} label={displayLabel} hideLabel={hasBlendedScore} />
               {hasBlendedScore && fit ? (
                 <div className="mt-4">
                   <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-mono border ${fit.className}`}>
