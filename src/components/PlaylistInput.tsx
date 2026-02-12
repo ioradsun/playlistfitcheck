@@ -11,7 +11,7 @@ import { SAMPLE_PLAYLIST, SAMPLE_EDITORIAL } from "@/lib/playlistHealthEngine";
 import { PromoPlayer } from "@/components/PromoPlayer";
 
 interface Props {
-  onAnalyze: (data: PlaylistInputType) => void;
+  onAnalyze: (data: PlaylistInputType & { _songUrl?: string }) => void;
 }
 
 export function PlaylistInputSection({ onAnalyze }: Props) {
@@ -45,7 +45,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         throw new Error(data.error);
       }
 
-      onAnalyze(data as PlaylistInputType);
+      onAnalyze({ ...(data as PlaylistInputType), _songUrl: songUrl.trim() || undefined });
     } catch (e) {
       console.error("Analyze error:", e);
       toast.error(e instanceof Error ? e.message : "Failed to analyze playlist");
@@ -62,7 +62,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
     setSongUrl(DEMO_SONG_URL);
     // Brief delay so users see the fields populate before results load
     setTimeout(() => {
-      onAnalyze(SAMPLE_PLAYLIST as PlaylistInputType & { _trackList: { name: string; artists: string }[] });
+      onAnalyze({ ...(SAMPLE_PLAYLIST as PlaylistInputType & { _trackList: { name: string; artists: string }[] }), _songUrl: DEMO_SONG_URL });
     }, 600);
   };
 
