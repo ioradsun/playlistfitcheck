@@ -26,6 +26,7 @@ serve(async (req) => {
 
     // Fetch song name from Spotify
     let songName = "Unknown Song";
+    let artistName = "";
     try {
       const trackIdMatch = songUrl.match(/track\/([a-zA-Z0-9]+)/);
       if (trackIdMatch) {
@@ -44,8 +45,8 @@ serve(async (req) => {
             });
             if (trackRes.ok) {
               const track = await trackRes.json();
-              const artists = track.artists?.map((a: { name: string }) => a.name).join(", ") || "";
-              songName = artists ? `${track.name} by ${artists}` : track.name;
+              artistName = track.artists?.map((a: { name: string }) => a.name).join(", ") || "";
+              songName = track.name;
             }
           }
         }
@@ -101,7 +102,7 @@ Be honest, specific, and reference actual patterns from the track list. The stre
 
     const userPrompt = `Analyze this song's fit for the playlist, considering both sonic compatibility and playlist quality:
 
-Song: ${songName}
+Song: ${songName}${artistName ? ` by ${artistName}` : ""}
 Song URL: ${songUrl}
 
 Playlist: ${playlistName || "Unknown"}
@@ -174,7 +175,7 @@ Produce a single blended score factoring in both how well "${songName}" fits son
       };
     }
 
-    return new Response(JSON.stringify({ ...analysis, songName }), {
+    return new Response(JSON.stringify({ ...analysis, songName, artistName }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
