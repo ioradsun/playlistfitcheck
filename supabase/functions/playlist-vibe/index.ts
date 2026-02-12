@@ -6,6 +6,20 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function validateTrackList(trackList: unknown): trackList is { name: string; artists: string }[] {
+  if (!Array.isArray(trackList)) return false;
+  if (trackList.length === 0 || trackList.length > 200) return false;
+  return trackList.every(
+    (t) =>
+      t &&
+      typeof t === "object" &&
+      typeof t.name === "string" &&
+      t.name.length <= 300 &&
+      typeof t.artists === "string" &&
+      t.artists.length <= 500
+  );
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -15,12 +29,29 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const { playlistName, description, ownerName, trackList } = await req.json();
+    const body = await req.json();
+    const { playlistName, description, ownerName, trackList } = body;
 
-    if (!trackList || trackList.length === 0) {
-      return new Response(JSON.stringify({ error: "No track data provided" }), {
+    // Input validation
+    if (!validateTrackList(trackList)) {
+      return new Response(JSON.stringify({ error: "Invalid or missing track data" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (playlistName != null && (typeof playlistName !== "string" || playlistName.length > 300)) {
+      return new Response(JSON.stringify({ error: "Invalid playlistName" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (description != null && (typeof description !== "string" || description.length > 2000)) {
+      return new Response(JSON.stringify({ error: "Invalid description" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (ownerName != null && (typeof ownerName !== "string" || ownerName.length > 200)) {
+      return new Response(JSON.stringify({ error: "Invalid ownerName" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -43,9 +74,9 @@ Your response MUST be valid JSON with this exact structure:
 Be specific and actionable. Reference actual patterns you see in the track list.`;
 
     const userPrompt = `Analyze this playlist:
-Name: ${playlistName || "Unknown"}
-Description: ${description || "None"}
-Curator: ${ownerName || "Unknown"}
+Name: ${(playlistName || "Unknown").slice(0, 200)}
+Description: ${(description || "None").slice(0, 500)}
+Curator: ${(ownerName || "Unknown").slice(0, 100)}
 
 Track list:
 ${trackListStr}`;
@@ -86,10 +117,8 @@ ${trackListStr}`;
     const aiData = await response.json();
     const content = aiData.choices?.[0]?.message?.content || "";
 
-    // Parse the JSON from the AI response
     let analysis;
     try {
-      // Try to extract JSON from the response (handle markdown code blocks)
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(content);
     } catch {
@@ -110,8 +139,7 @@ ${trackListStr}`;
     });
   } catch (e) {
     console.error("Vibe analysis error:", e);
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: "An internal error occurred" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -65,7 +65,6 @@ function computeDerivedMetrics(
     return { lastUpdatedDays, churnRate30d, bottomDumpScore, snapshotCount: 0 };
   }
 
-  // Sort snapshots by date descending
   const sorted = [...snapshots].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
@@ -73,25 +72,20 @@ function computeDerivedMetrics(
   const previousSnapshot = sorted[0];
   const prevTrackIds = previousSnapshot.track_ids || [];
 
-  // Last updated: compare current vs previous — if tracks changed, it was updated recently
   const prevSet = new Set(prevTrackIds);
   const currSet = new Set(currentTrackIds);
   const added = currentTrackIds.filter((id) => !prevSet.has(id));
   const removed = prevTrackIds.filter((id) => !currSet.has(id));
 
   if (added.length > 0 || removed.length > 0) {
-    // Playlist changed since last snapshot — updated today
     lastUpdatedDays = 0;
   } else {
-    // No change — days since last snapshot is minimum
     const daysSinceSnapshot = Math.floor(
       (Date.now() - new Date(previousSnapshot.created_at).getTime()) / (1000 * 60 * 60 * 24)
     );
     lastUpdatedDays = daysSinceSnapshot;
   }
 
-  // Churn rate: ratio of tracks changed over 30 days
-  // Find snapshots from ~30 days ago
   const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const oldSnapshots = sorted.filter(
     (s) => new Date(s.created_at).getTime() <= thirtyDaysAgo
@@ -108,7 +102,6 @@ function computeDerivedMetrics(
     churnRate30d = totalUnique.size > 0 ? Math.round((changedCount / totalUnique.size) * 100) / 100 : 0;
   }
 
-  // Bottom dump: check if newly added tracks are in the bottom 25% of positions
   if (added.length > 0 && currentTrackIds.length > 0) {
     const bottomQuartileStart = Math.floor(currentTrackIds.length * 0.75);
     let bottomCount = 0;
@@ -137,9 +130,36 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { playlistUrl, sessionId, songUrl } = await req.json();
-    if (!playlistUrl) {
+    const body = await req.json();
+    const { playlistUrl, sessionId, songUrl } = body;
+
+    // Input validation
+    if (!playlistUrl || typeof playlistUrl !== "string") {
       return new Response(JSON.stringify({ error: "playlistUrl is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (playlistUrl.length > 500) {
+      return new Response(JSON.stringify({ error: "playlistUrl is too long" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!playlistUrl.match(/^https:\/\/open\.spotify\.com\/playlist\/[a-zA-Z0-9]+/)) {
+      return new Response(JSON.stringify({ error: "Invalid Spotify playlist URL format" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (sessionId != null && (typeof sessionId !== "string" || sessionId.length > 200)) {
+      return new Response(JSON.stringify({ error: "Invalid sessionId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (songUrl != null && (typeof songUrl !== "string" || songUrl.length > 500)) {
+      return new Response(JSON.stringify({ error: "Invalid songUrl" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -171,7 +191,6 @@ serve(async (req) => {
 
     const playlist = await playlistResp.json();
 
-    // Fetch all track IDs with positions
     const trackItems = await fetchAllTracks(playlistId, token);
     const trackIds = trackItems
       .map((item) => item.track?.id)
@@ -185,7 +204,6 @@ serve(async (req) => {
     const descLower = description.toLowerCase();
     const submissionLanguageDetected = submissionKeywords.some((k) => descLower.includes(k));
 
-    // Fetch previous snapshots for this playlist
     const { data: snapshots } = await supabase
       .from("playlist_snapshots")
       .select("track_ids, created_at")
@@ -193,10 +211,8 @@ serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(10);
 
-    // Compute derived metrics from snapshot history
     const derived = computeDerivedMetrics(trackIds, snapshots || []);
 
-    // Save current snapshot
     await supabase.from("playlist_snapshots").insert({
       playlist_id: playlistId,
       playlist_url: playlistUrl,
@@ -208,7 +224,6 @@ serve(async (req) => {
       track_ids: trackIds,
     });
 
-    // Log search for admin correlation
     await supabase.from("search_logs").insert({
       playlist_name: playlist.name || null,
       playlist_url: playlistUrl,
@@ -217,16 +232,14 @@ serve(async (req) => {
       session_id: sessionId || null,
     });
 
-    // Build track list for vibe analysis
     const trackList = trackItems
       .filter((item) => item.track)
-      .slice(0, 50) // Limit to 50 for AI context
+      .slice(0, 50)
       .map((item) => ({
         name: item.track!.name,
         artists: item.track!.artists?.map((a) => a.name).join(", ") || "Unknown",
       }));
 
-    // Compute average track popularity
     const popularities = trackItems
       .map((item) => item.track?.popularity)
       .filter((p): p is number => p != null);
@@ -258,8 +271,7 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("Edge function error:", e);
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: "An internal error occurred" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
