@@ -7,6 +7,7 @@ import { PitchBadge } from "@/components/PitchBadge";
 import { VibeCard, type VibeAnalysis } from "@/components/VibeCard";
 import { type SongFitAnalysis, FIT_CONFIG } from "@/components/SongFitCard";
 import { PitchDraftCard } from "@/components/PitchDraftCard";
+import { PromoPlayer } from "@/components/PromoPlayer";
 import type { HealthOutput } from "@/lib/playlistHealthEngine";
 import type { PlaylistInput } from "@/lib/playlistHealthEngine";
 
@@ -336,20 +337,14 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
         <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} playlistName={playlistName} />
       )}
 
-      {/* Raw JSON toggle */}
-      <motion.details
-        className="glass-card rounded-xl p-4"
+      {/* Tracklist & Player */}
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1 }}
       >
-        <summary className="text-xs text-muted-foreground cursor-pointer font-mono hover:text-foreground transition-colors">
-          View Raw JSON Output
-        </summary>
-        <pre className="mt-3 text-xs font-mono text-secondary-foreground overflow-x-auto whitespace-pre-wrap">
-          {JSON.stringify(result, null, 2)}
-        </pre>
-      </motion.details>
+        <PromoPlayer />
+      </motion.div>
     </motion.div>
   );
 }
