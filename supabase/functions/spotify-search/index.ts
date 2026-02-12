@@ -71,7 +71,7 @@ serve(async (req) => {
     let results: any[] = [];
 
     if (searchType === "playlist") {
-      results = (data.playlists?.items || []).map((p: any) => ({
+      results = (data.playlists?.items || []).filter((p: any) => p != null).map((p: any) => ({
         id: p.id,
         name: p.name,
         owner: p.owner?.display_name || "",
@@ -80,7 +80,7 @@ serve(async (req) => {
         url: p.external_urls?.spotify || `https://open.spotify.com/playlist/${p.id}`,
       }));
     } else {
-      results = (data.tracks?.items || []).map((t: any) => ({
+      results = (data.tracks?.items || []).filter((t: any) => t != null).map((t: any) => ({
         id: t.id,
         name: t.name,
         artists: t.artists?.map((a: any) => a.name).join(", ") || "Unknown",
