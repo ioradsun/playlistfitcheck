@@ -9,6 +9,7 @@ export interface SongFitAnalysis {
   strengths: string[];
   concerns: string[];
   suggestion: string;
+  songName?: string;
 }
 
 const FIT_CONFIG: Record<string, { emoji: string; text: string; className: string }> = {
@@ -55,7 +56,7 @@ export function SongFitCard({ analysis, loading }: { analysis: SongFitAnalysis |
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
           <Target size={14} className="text-primary" />
-          Song Fit Analysis
+          {analysis.songName ? `"${analysis.songName}" Fit Analysis` : "Song Fit Analysis"}
         </div>
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono border ${fit.className}`}>

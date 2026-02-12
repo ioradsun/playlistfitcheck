@@ -24,6 +24,36 @@ serve(async (req) => {
       });
     }
 
+    // Fetch song name from Spotify
+    let songName = "Unknown Song";
+    try {
+      const trackIdMatch = songUrl.match(/track\/([a-zA-Z0-9]+)/);
+      if (trackIdMatch) {
+        const SPOTIFY_CLIENT_ID = Deno.env.get("SPOTIFY_CLIENT_ID");
+        const SPOTIFY_CLIENT_SECRET = Deno.env.get("SPOTIFY_CLIENT_SECRET");
+        if (SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_SECRET) {
+          const tokenRes = await fetch("https://accounts.spotify.com/api/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `grant_type=client_credentials&client_id=${SPOTIFY_CLIENT_ID}&client_secret=${SPOTIFY_CLIENT_SECRET}`,
+          });
+          if (tokenRes.ok) {
+            const { access_token } = await tokenRes.json();
+            const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${trackIdMatch[1]}`, {
+              headers: { Authorization: `Bearer ${access_token}` },
+            });
+            if (trackRes.ok) {
+              const track = await trackRes.json();
+              const artists = track.artists?.map((a: { name: string }) => a.name).join(", ") || "";
+              songName = artists ? `${track.name} by ${artists}` : track.name;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch song name:", e);
+    }
+
     if (!trackList || trackList.length === 0) {
       return new Response(JSON.stringify({ error: "No track data provided" }), {
         status: 400,
@@ -121,7 +151,7 @@ Based on the genres, moods, and sonic patterns in the playlist tracks above, eva
       };
     }
 
-    return new Response(JSON.stringify(analysis), {
+    return new Response(JSON.stringify({ ...analysis, songName }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
