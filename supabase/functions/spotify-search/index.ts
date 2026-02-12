@@ -52,13 +52,12 @@ serve(async (req) => {
 
     // type should be "playlist" or "track"
     const searchType = type === "playlist" ? "playlist" : "track";
-    // Spotify search already matches across track name, artist, album.
-    // For tracks, also search with artist: filter for better artist-name matching.
-    const searchQuery = searchType === "track"
-      ? `${query} OR artist:${query}`
+    // Playlists: search by name only. Tracks: search name + artist.
+    const searchQuery = searchType === "playlist"
+      ? query
       : query;
     const resp = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=${searchType}&limit=5`,
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=${searchType}&limit=8`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
