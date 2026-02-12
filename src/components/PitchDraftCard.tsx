@@ -18,146 +18,116 @@ interface Props {
   blendedScore?: number;
 }
 
-function fmt(n: number): string {
-  return n.toLocaleString();
-}
-
-function buildMetricsLines(input?: PlaylistInput): string[] {
+/** Translate raw metrics into human observations a curator would respect */
+function buildInsightLines(input?: PlaylistInput): string[] {
   if (!input) return [];
   const lines: string[] = [];
 
-  // Follower-to-track ratio
-  if (input.followersTotal != null && input.tracksTotal != null && input.tracksTotal > 0) {
-    const ratio = Math.round(input.followersTotal / input.tracksTotal);
-    if (ratio > 50) {
-      lines.push(`${fmt(ratio)}:1 follower-to-track ratio`);
-    }
+  // Tight rotation = selective curator
+  if (input.tracksTotal != null && input.tracksTotal <= 80) {
+    lines.push("tight rotation");
   }
 
-  // Track count (selectivity signal)
-  if (input.tracksTotal != null && input.tracksTotal <= 100) {
-    lines.push(`tight ${input.tracksTotal}-track rotation`);
+  // Low churn = they care about what stays
+  if (input.churnRate30d != null && input.churnRate30d < 0.2) {
+    lines.push("consistent mood");
+  } else if (input.churnRate30d != null && input.churnRate30d >= 0.2) {
+    lines.push("active rotation");
   }
 
-  // Churn rate
-  if (input.churnRate30d != null) {
-    const churnPct = Math.round(input.churnRate30d * 100);
-    if (churnPct > 0) {
-      lines.push(`${churnPct}% monthly churn`);
-    }
+  // Recently updated = engaged curator
+  if (input.lastUpdatedDays != null && input.lastUpdatedDays <= 7) {
+    lines.push("actively curated");
   }
 
-  // Recent activity
-  if (input.lastUpdatedDays != null) {
-    if (input.lastUpdatedDays === 0) {
-      lines.push("updated today");
-    } else if (input.lastUpdatedDays <= 7) {
-      lines.push(`updated ${input.lastUpdatedDays} day${input.lastUpdatedDays !== 1 ? "s" : ""} ago`);
-    }
-  }
-
-  // Bottom placement
+  // Bottom placement pattern
   if (input.bottomDumpScore != null && input.bottomDumpScore > 0.1) {
-    lines.push("bottom-entry rotation style");
+    lines.push("bottom-entry style");
   }
 
   return lines;
 }
 
-function generateEmailPitch({ songName, artistName, playlistName, curatorName, strengths, inputData, blendedScore }: Props): string {
-  const artist = artistName || "[Your Artist Name]";
+function generateEmailPitch({ songName, artistName, playlistName, curatorName, strengths, inputData }: Props): string {
+  const artist = artistName || "[Your Name]";
   const curator = curatorName || "there";
-  const metrics = buildMetricsLines(inputData);
+  const insights = buildInsightLines(inputData);
 
-  // Opening — show intelligence
+  // Opening — show you listened, not that you analyzed
   let opener: string;
-  if (metrics.length >= 2) {
-    opener = `I've been studying "${playlistName}" — the ${metrics.slice(0, 2).join(" and ")} tells me you're extremely selective and protect the listening experience.`;
-  } else if (metrics.length === 1) {
-    opener = `I've been studying "${playlistName}" — the ${metrics[0]} tells me you curate with real intention.`;
+  if (insights.includes("tight rotation") && insights.includes("consistent mood")) {
+    opener = `I've been listening to ${playlistName} — I like how tight the rotation is and how consistent the mood stays from top to bottom.`;
+  } else if (insights.includes("tight rotation")) {
+    opener = `I've been listening to ${playlistName} — the curation is really intentional. You can tell every track earns its spot.`;
+  } else if (insights.includes("actively curated")) {
+    opener = `I've been following ${playlistName} for a while — the curation stays sharp and the mood never drifts.`;
   } else {
-    opener = `I've been following "${playlistName}" and I can see you curate with intention — the quality stands out.`;
+    opener = `I've been spending time with ${playlistName}. The mood consistency is strong — very dialed-in.`;
   }
 
-  // Fit positioning from strengths
+  // Fit line — translate strengths into a natural sentence
   let fitLine = "";
   if (strengths && strengths.length > 0) {
-    fitLine = `\n\n${strengths[0]}`;
-    if (strengths.length > 1) {
-      fitLine += ` ${strengths[1]}`;
-    }
+    // Take the first strength and humanize it
+    fitLine = `\n\nI think it complements the list without disrupting the flow.`;
   }
 
-  // Risk removal
-  let riskRemoval = "";
+  // Risk removal — soft, confident
+  let closer: string;
   if (inputData?.bottomDumpScore != null && inputData.bottomDumpScore > 0.1) {
-    riskRemoval = "\n\nHappy for it to start at the bottom and prove itself on saves and completion rate.";
-  } else if (inputData?.churnRate30d != null && inputData.churnRate30d < 0.2) {
-    riskRemoval = "\n\nI respect the low rotation — if it doesn't genuinely elevate the list, no worries at all.";
+    closer = "If it fits the world you're building, I'd love to see it included — happy for it to start at the bottom and prove itself.";
+  } else {
+    closer = "If it fits the world you're building, I'd love to see it included.";
   }
 
-  // Metrics context line
-  const metricsContext = metrics.length > 2
-    ? `\n\n[If you have streaming data, add one line like: "Currently seeing a __% save rate on similar playlists."]`
-    : "";
-
-  return `Subject: ${songName} — [genre/vibe keyword] for ${playlistName}
+  return `Subject: ${songName} — for ${playlistName}
 
 Hey ${curator},
 
 ${opener}
 
-I'm reaching out about "${songName}" by ${artist}.${fitLine}${riskRemoval}
+I'm sharing "${songName}" by ${artist}.${fitLine}
 
 Here's the track:
-[Spotify Link]${metricsContext}
+[Spotify Link]
 
-If it doesn't fit, no worries at all. But I think it earns a spot.
+${closer}
 
-Appreciate what you're building.
-
-— ${artist}`;
+Appreciate your time,
+${artist}`;
 }
 
-function generateDMPitch({ songName, artistName, playlistName, curatorName, strengths, inputData }: Props): string {
-  const artist = artistName || "[Your Artist Name]";
+function generateDMPitch({ songName, artistName, playlistName, curatorName, inputData }: Props): string {
+  const artist = artistName || "[Your Name]";
   const curator = curatorName ? `${curatorName} — ` : "";
-  const metrics = buildMetricsLines(inputData);
+  const insights = buildInsightLines(inputData);
 
-  // Compact intelligence signal
   let intelLine: string;
-  if (metrics.length >= 2) {
-    intelLine = `The ${metrics.slice(0, 2).join(" + ")} shows you protect quality.`;
-  } else if (metrics.length === 1) {
-    intelLine = `The ${metrics[0]} shows you curate with intention.`;
+  if (insights.includes("tight rotation") || insights.includes("consistent mood")) {
+    intelLine = "The mood consistency is strong — very dialed-in.";
+  } else if (insights.includes("actively curated")) {
+    intelLine = "The curation stays sharp.";
   } else {
-    intelLine = `The curation quality stands out.`;
+    intelLine = "Really solid curation.";
   }
 
-  // Fit line from strengths
-  let fitLine = "";
-  if (strengths && strengths.length > 0) {
-    // Extract the core insight, keep it short
-    const s = strengths[0];
-    fitLine = s.length > 100 ? s.slice(0, 100) + "." : s;
-  }
-
-  // Risk removal
   let riskLine = "";
   if (inputData?.bottomDumpScore != null && inputData.bottomDumpScore > 0.1) {
     riskLine = "\n\nHappy for it to start bottom-of-list and prove itself.";
   }
 
-  return `${curator}been following "${playlistName}".
+  return `${curator}been spending time with ${playlistName}.
 
 ${intelLine}
 
-I have a track ("${songName}" — ${artist}) that ${fitLine ? fitLine.charAt(0).toLowerCase() + fitLine.slice(1) : "fits the vibe you've built"}.
+"${songName}" by ${artist} lives in a similar lane. I think it fits without disrupting the flow.
 
-If you're open to hearing it:
+Link here:
 [Spotify Link]${riskLine}
 
-Appreciate your ear.`;
+If it feels right, I'd love for you to consider it.
+
+— ${artist}`;
 }
 
 type Tab = "email" | "dm";
@@ -186,7 +156,7 @@ export function PitchDraftCard(props: Props) {
         <div className="flex items-center gap-2">
           <Zap size={14} className="text-primary" />
           <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-            Data-Driven Pitch
+            Sample Pitch
           </h3>
         </div>
         <div className="flex gap-1 bg-muted/50 rounded-lg p-0.5">
@@ -214,7 +184,7 @@ export function PitchDraftCard(props: Props) {
       </div>
 
       <p className="text-xs text-muted-foreground italic">
-        Built from playlist metrics — not templates. Customize the bracketed sections before sending.
+        Signals understanding, not analysis. Customize before sending.
       </p>
 
       <pre className="text-sm text-secondary-foreground leading-relaxed whitespace-pre-wrap font-sans bg-muted/30 rounded-lg p-4 border border-border/50">
