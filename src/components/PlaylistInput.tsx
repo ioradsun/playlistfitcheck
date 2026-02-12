@@ -167,7 +167,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
       </div>
 
       {/* Combined URL inputs */}
-      <div className="glass-card rounded-xl p-4 space-y-3 relative" style={{ overflow: 'visible' }}>
+      <div className="glass-card rounded-xl p-4 space-y-3 relative z-50" style={{ overflow: 'visible' }}>
         {/* Playlist input with search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
