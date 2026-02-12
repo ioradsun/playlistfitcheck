@@ -161,7 +161,7 @@ export function PromoPlayer() {
               </div>
               <iframe
                 key={activeTrack.id}
-                src={`https://open.spotify.com/embed/track/${activeTrack.id}?utm_source=generator&theme=0`}
+                src={`https://open.spotify.com/embed/track/${activeTrack.id}?utm_source=generator&theme=0&autoplay=1`}
                 width="100%"
                 className="flex-1 rounded-b-xl"
                 frameBorder="0"
