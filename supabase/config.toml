@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.track-engagement]
 verify_jwt = false
+
+[functions.spotify-search]
+verify_jwt = false
