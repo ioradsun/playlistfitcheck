@@ -137,7 +137,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { playlistUrl } = await req.json();
+    const { playlistUrl, sessionId, songUrl } = await req.json();
     if (!playlistUrl) {
       return new Response(JSON.stringify({ error: "playlistUrl is required" }), {
         status: 400,
@@ -206,6 +206,15 @@ serve(async (req) => {
       followers_total: playlist.followers?.total,
       tracks_total: playlist.tracks?.total,
       track_ids: trackIds,
+    });
+
+    // Log search for admin correlation
+    await supabase.from("search_logs").insert({
+      playlist_name: playlist.name || null,
+      playlist_url: playlistUrl,
+      song_name: null,
+      song_url: songUrl || null,
+      session_id: sessionId || null,
     });
 
     // Build track list for vibe analysis

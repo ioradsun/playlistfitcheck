@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { PlaylistInput as PlaylistInputType } from "@/lib/playlistHealthEngine";
 import { SAMPLE_PLAYLIST, SAMPLE_EDITORIAL } from "@/lib/playlistHealthEngine";
 import { PromoPlayer } from "@/components/PromoPlayer";
+import { getSessionId } from "@/lib/sessionId";
 
 interface Props {
   onAnalyze: (data: PlaylistInputType & { _songUrl?: string }) => void;
@@ -98,7 +99,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("spotify-playlist", {
-        body: { playlistUrl: trimmedUrl },
+        body: { playlistUrl: trimmedUrl, sessionId: getSessionId(), songUrl: songUrl.trim() || null },
       });
 
       if (error) {

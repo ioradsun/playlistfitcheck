@@ -62,6 +62,7 @@ export type Database = {
           id: string
           playlist_name: string | null
           playlist_url: string | null
+          session_id: string | null
           song_name: string | null
           song_url: string | null
         }
@@ -70,6 +71,7 @@ export type Database = {
           id?: string
           playlist_name?: string | null
           playlist_url?: string | null
+          session_id?: string | null
           song_name?: string | null
           song_url?: string | null
         }
@@ -78,6 +80,7 @@ export type Database = {
           id?: string
           playlist_name?: string | null
           playlist_url?: string | null
+          session_id?: string | null
           song_name?: string | null
           song_url?: string | null
         }
@@ -89,6 +92,7 @@ export type Database = {
           artist_name: string | null
           created_at: string
           id: string
+          session_id: string | null
           track_id: string
           track_name: string | null
         }
@@ -97,6 +101,7 @@ export type Database = {
           artist_name?: string | null
           created_at?: string
           id?: string
+          session_id?: string | null
           track_id: string
           track_name?: string | null
         }
@@ -105,6 +110,7 @@ export type Database = {
           artist_name?: string | null
           created_at?: string
           id?: string
+          session_id?: string | null
           track_id?: string
           track_name?: string | null
         }
