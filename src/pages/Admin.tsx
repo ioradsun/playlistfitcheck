@@ -228,7 +228,10 @@ export default function Admin() {
                           </span>
                         )}
                         <span className="text-xs text-muted-foreground font-mono">
-                          {new Date(fit.last_checked).toLocaleDateString()}
+                          {(() => {
+                            const d = new Date(fit.last_checked || (fit as any).created_at);
+                            return isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
+                          })()}
                         </span>
                         <span className={`text-xs font-mono ${hasClicks ? "text-primary" : "text-muted-foreground/50"}`}>
                           {fit.tracksClicked.length} click{fit.tracksClicked.length !== 1 ? "s" : ""}
