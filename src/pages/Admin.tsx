@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
-import { Lock, BarChart3, Play, ExternalLink, Search, Music } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Lock, BarChart3, Play, ExternalLink, Search, Music, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,23 +12,29 @@ interface TrackStat {
   plays: number;
   spotifyClicks: number;
   totalInteractions: number;
-  correlatedSearches: { playlist_name: string | null; song_name: string | null }[] | null;
 }
 
-interface SearchLog {
+interface ClickedTrack {
+  track_name: string;
+  artist_name: string;
+  action: string;
+}
+
+interface CheckFit {
   playlist_name: string | null;
   playlist_url: string | null;
   song_name: string | null;
   song_url: string | null;
   session_id: string | null;
   created_at: string;
+  tracksClicked: ClickedTrack[];
 }
 
 interface DashboardData {
   trackStats: TrackStat[];
   totalEngagements: number;
   totalSearches: number;
-  recentSearches: SearchLog[];
+  checkFits: CheckFit[];
 }
 
 export default function Admin() {
@@ -37,6 +43,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
+  const [expandedFit, setExpandedFit] = useState<number | null>(null);
 
   const handleLogin = async () => {
     if (!password.trim()) return;
@@ -95,7 +102,7 @@ export default function Admin() {
           <div className="ml-auto flex gap-3 text-xs font-mono text-muted-foreground">
             <span>{data?.totalEngagements ?? 0} clicks</span>
             <span>·</span>
-            <span>{data?.totalSearches ?? 0} searches</span>
+            <span>{data?.totalSearches ?? 0} fits checked</span>
           </div>
         </div>
 
@@ -113,39 +120,22 @@ export default function Admin() {
           {data?.trackStats && data.trackStats.length > 0 ? (
             <div className="divide-y divide-border">
               {data.trackStats.map((track, i) => (
-                <div key={track.trackId} className="px-4 py-3 flex flex-col gap-1.5">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground font-mono w-6 text-right">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{track.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
+                <div key={track.trackId} className="px-4 py-3 flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground font-mono w-6 text-right">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{track.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
+                  </div>
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    <div className="flex items-center gap-1 text-xs font-mono" title="In-page plays">
+                      <Play size={12} className="text-primary" />
+                      <span>{track.plays}</span>
                     </div>
-                    <div className="flex items-center gap-4 flex-shrink-0">
-                      <div className="flex items-center gap-1 text-xs font-mono">
-                        <Play size={12} className="text-primary" />
-                        <span>{track.plays}</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-xs font-mono">
-                        <ExternalLink size={12} className="text-primary" />
-                        <span>{track.spotifyClicks}</span>
-                      </div>
+                    <div className="flex items-center gap-1 text-xs font-mono" title="Opened in Spotify">
+                      <ExternalLink size={12} className="text-primary" />
+                      <span>{track.spotifyClicks}</span>
                     </div>
                   </div>
-
-                  {/* Correlated searches */}
-                  {track.correlatedSearches && track.correlatedSearches.length > 0 && (
-                    <div className="ml-9 space-y-1">
-                      {track.correlatedSearches.map((s, j) => (
-                        <div key={j} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Search size={10} />
-                          <span className="truncate">
-                            {s.playlist_name || "—"}
-                            {s.song_name ? ` × ${s.song_name}` : ""}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -156,7 +146,7 @@ export default function Admin() {
           )}
         </motion.div>
 
-        {/* Recent Searches */}
+        {/* Check Fits */}
         <motion.div
           className="glass-card rounded-xl overflow-hidden"
           initial={{ opacity: 0, y: 10 }}
@@ -165,28 +155,81 @@ export default function Admin() {
         >
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Search size={14} className="text-primary" />
-            <span className="text-sm font-mono font-medium">Recent Searches</span>
+            <span className="text-sm font-mono font-medium">Check Fits</span>
           </div>
 
-          {data?.recentSearches && data.recentSearches.length > 0 ? (
+          {data?.checkFits && data.checkFits.length > 0 ? (
             <div className="divide-y divide-border">
-              {data.recentSearches.map((s, i) => (
-                <div key={i} className="px-4 py-2.5 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{s.playlist_name || s.playlist_url || "—"}</p>
-                    {s.song_name && (
-                      <p className="text-xs text-muted-foreground truncate">× {s.song_name}</p>
-                    )}
+              {data.checkFits.map((fit, i) => {
+                const isExpanded = expandedFit === i;
+                const hasClicks = fit.tracksClicked.length > 0;
+
+                return (
+                  <div key={i}>
+                    <button
+                      className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors ${
+                        hasClicks ? "hover:bg-muted/50 cursor-pointer" : "cursor-default"
+                      } ${isExpanded ? "bg-muted/30" : ""}`}
+                      onClick={() => hasClicks && setExpandedFit(isExpanded ? null : i)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate">
+                          {fit.playlist_name || fit.playlist_url || "—"}
+                        </p>
+                        {fit.song_name && (
+                          <p className="text-xs text-muted-foreground truncate">× {fit.song_name}</p>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
+                        {new Date(fit.created_at).toLocaleDateString()}
+                      </span>
+                      {hasClicks && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="text-xs font-mono text-primary">{fit.tracksClicked.length}</span>
+                          <ChevronDown
+                            size={14}
+                            className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          />
+                        </div>
+                      )}
+                    </button>
+
+                    <AnimatePresence>
+                      {isExpanded && hasClicks && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 pb-3 pt-1 space-y-1 ml-4 border-l-2 border-primary/20">
+                            {fit.tracksClicked.map((t, j) => (
+                              <div key={j} className="flex items-center gap-2 text-xs text-muted-foreground">
+                                {t.action === "play" ? (
+                                  <Play size={10} className="text-primary flex-shrink-0" />
+                                ) : (
+                                  <ExternalLink size={10} className="text-primary flex-shrink-0" />
+                                )}
+                                <span className="truncate">
+                                  {t.track_name} — {t.artist_name}
+                                </span>
+                                <span className="text-[10px] ml-auto flex-shrink-0 opacity-60">
+                                  {t.action === "play" ? "played" : "opened"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
-                    {new Date(s.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              No search data yet.
+              No fit checks yet.
             </div>
           )}
         </motion.div>

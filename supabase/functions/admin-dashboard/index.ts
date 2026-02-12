@@ -48,6 +48,9 @@ serve(async (req) => {
     // Aggregate track clicks: { trackId -> { name, artist, plays, spotify_clicks } }
     const trackMap: Record<string, { name: string; artist: string; plays: number; spotify_clicks: number; sessions: string[] }> = {};
 
+    // Build session -> tracks mapping (for hover on searches)
+    const sessionTracksMap: Record<string, { track_name: string; artist_name: string; action: string }[]> = {};
+
     for (const e of engagements || []) {
       if (!trackMap[e.track_id]) {
         trackMap[e.track_id] = {
@@ -64,6 +67,16 @@ serve(async (req) => {
       if (e.session_id && !t.sessions.includes(e.session_id)) {
         t.sessions.push(e.session_id);
       }
+
+      // Build per-session track list
+      if (e.session_id) {
+        if (!sessionTracksMap[e.session_id]) sessionTracksMap[e.session_id] = [];
+        sessionTracksMap[e.session_id].push({
+          track_name: e.track_name || "Unknown",
+          artist_name: e.artist_name || "Unknown",
+          action: e.action,
+        });
+      }
     }
 
     // Build session -> search mapping for correlation
@@ -79,31 +92,35 @@ serve(async (req) => {
       }
     }
 
-    // Build final track stats with correlated searches
+    // Build final track stats
     const trackStats = Object.entries(trackMap)
-      .map(([trackId, data]) => {
-        const correlatedSearches = data.sessions
-          .filter((sid) => sessionSearchMap[sid])
-          .map((sid) => sessionSearchMap[sid]);
-
-        return {
-          trackId,
-          name: data.name,
-          artist: data.artist,
-          plays: data.plays,
-          spotifyClicks: data.spotify_clicks,
-          totalInteractions: data.plays + data.spotify_clicks,
-          correlatedSearches: correlatedSearches.length > 0 ? correlatedSearches : null,
-        };
-      })
+      .map(([trackId, data]) => ({
+        trackId,
+        name: data.name,
+        artist: data.artist,
+        plays: data.plays,
+        spotifyClicks: data.spotify_clicks,
+        totalInteractions: data.plays + data.spotify_clicks,
+      }))
       .sort((a, b) => b.totalInteractions - a.totalInteractions);
+
+    // Enrich searches with correlated track clicks
+    const enrichedSearches = (searches || []).slice(0, 50).map((s) => ({
+      playlist_name: s.playlist_name,
+      playlist_url: s.playlist_url,
+      song_name: s.song_name,
+      song_url: s.song_url,
+      session_id: s.session_id,
+      created_at: s.created_at,
+      tracksClicked: s.session_id ? (sessionTracksMap[s.session_id] || []) : [],
+    }));
 
     return new Response(
       JSON.stringify({
         trackStats,
         totalEngagements: engagements?.length || 0,
         totalSearches: searches?.length || 0,
-        recentSearches: (searches || []).slice(0, 20),
+        checkFits: enrichedSearches,
       }),
       {
         status: 200,
