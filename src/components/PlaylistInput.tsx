@@ -60,7 +60,10 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
   const handleDemo = () => {
     setUrl(DEMO_PLAYLIST_URL);
     setSongUrl(DEMO_SONG_URL);
-    onAnalyze(SAMPLE_PLAYLIST as PlaylistInputType & { _trackList: { name: string; artists: string }[] });
+    // Brief delay so users see the fields populate before results load
+    setTimeout(() => {
+      onAnalyze(SAMPLE_PLAYLIST as PlaylistInputType & { _trackList: { name: string; artists: string }[] });
+    }, 600);
   };
 
   return (
@@ -85,32 +88,31 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         </h1>
       </div>
 
-      {/* Playlist URL input */}
-      <div className="glass-card rounded-xl p-4 flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-          <Input
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            placeholder="Paste Spotify playlist URL..."
-            className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
-            onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
-            disabled={loading}
-          />
+      {/* Combined URL inputs */}
+      <div className="glass-card rounded-xl p-4 space-y-3">
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+            <Input
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              placeholder="Paste Spotify playlist URL..."
+              className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+              onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
+              disabled={loading}
+            />
+          </div>
+          <Button onClick={handleAnalyze} className="glow-primary" disabled={loading}>
+            {loading ? (
+              <Loader2 size={16} className="mr-1 animate-spin" />
+            ) : (
+              <Zap size={16} className="mr-1" />
+            )}
+            {loading ? "Fetching..." : "Check Fit"}
+          </Button>
         </div>
-        <Button onClick={handleAnalyze} className="glow-primary" disabled={loading}>
-          {loading ? (
-            <Loader2 size={16} className="mr-1 animate-spin" />
-          ) : (
-            <Zap size={16} className="mr-1" />
-          )}
-          {loading ? "Fetching..." : "Check Fit"}
-        </Button>
-      </div>
-
-      {/* Song URL input */}
-      <div className="glass-card rounded-xl p-4 flex gap-3">
-        <div className="relative flex-1">
+        <div className="border-t border-border" />
+        <div className="relative">
           <Music className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
           <Input
             value={songUrl}
