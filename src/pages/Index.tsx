@@ -1,10 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
 import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
 import { supabase } from "@/integrations/supabase/client";
 import type { VibeAnalysis } from "@/components/VibeCard";
 import type { SongFitAnalysis } from "@/components/SongFitCard";
+import { motion } from "framer-motion";
+import { Loader2 } from "lucide-react";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -15,12 +17,41 @@ interface AnalysisResult {
   songUrl?: string;
 }
 
+const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
+  <motion.div
+    className="w-full max-w-md mx-auto flex flex-col items-center gap-6 py-24"
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+  >
+    <div className="relative">
+      <div className="w-20 h-20 rounded-full border-2 border-primary/30 flex items-center justify-center">
+        <Loader2 size={32} className="text-primary animate-spin" />
+      </div>
+    </div>
+    <div className="text-center space-y-2">
+      <h2 className="text-lg font-semibold">Analyzing{hasSong ? " fit" : " playlist"}...</h2>
+      <p className="text-sm text-muted-foreground">
+        {hasSong
+          ? "Running sonic fit analysis and playlist health check"
+          : "Evaluating playlist health and generating vibe analysis"}
+      </p>
+    </div>
+  </motion.div>
+);
+
 const Index = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
   const [vibeLoading, setVibeLoading] = useState(false);
   const [songFitAnalysis, setSongFitAnalysis] = useState<SongFitAnalysis | null>(null);
   const [songFitLoading, setSongFitLoading] = useState(false);
+
+  const isFullyLoaded = useMemo(() => {
+    if (!result) return false;
+    if (vibeLoading) return false;
+    if (songFitLoading) return false;
+    return true;
+  }, [result, vibeLoading, songFitLoading]);
 
   const fetchVibeAnalysis = useCallback(async (data: PlaylistInput, trackList?: { name: string; artists: string }[]) => {
     if (!trackList || trackList.length === 0) return;
@@ -79,8 +110,9 @@ const Index = () => {
     const output = computePlaylistHealth(data);
     setVibeAnalysis(null);
     setSongFitAnalysis(null);
+    setVibeLoading(false);
+    setSongFitLoading(false);
     setResult({ output, input: data, name: data.playlistName, key: Date.now(), trackList, songUrl });
-    // Trigger vibe analysis in background
     if (trackList && trackList.length > 0) {
       fetchVibeAnalysis(data, trackList);
       if (songUrl) {
@@ -101,17 +133,21 @@ const Index = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <div className="flex-1 flex items-center justify-center px-4 py-16">
         {result ? (
-          <ResultsDashboard
-            key={result.key}
-            result={result.output}
-            inputData={result.input}
-            playlistName={result.name}
-            vibeAnalysis={vibeAnalysis}
-            vibeLoading={vibeLoading}
-            songFitAnalysis={songFitAnalysis}
-            songFitLoading={songFitLoading}
-            onBack={handleBack}
-          />
+          isFullyLoaded ? (
+            <ResultsDashboard
+              key={result.key}
+              result={result.output}
+              inputData={result.input}
+              playlistName={result.name}
+              vibeAnalysis={vibeAnalysis}
+              vibeLoading={false}
+              songFitAnalysis={songFitAnalysis}
+              songFitLoading={false}
+              onBack={handleBack}
+            />
+          ) : (
+            <AnalysisLoadingScreen hasSong={!!result.songUrl} />
+          )
         ) : (
           <PlaylistInputSection onAnalyze={handleAnalyze} />
         )}
