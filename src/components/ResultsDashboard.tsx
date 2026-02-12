@@ -5,6 +5,7 @@ import { ScoreGauge } from "@/components/ScoreGauge";
 import { CategoryBar } from "@/components/CategoryBar";
 import { PitchBadge } from "@/components/PitchBadge";
 import { VibeCard, type VibeAnalysis } from "@/components/VibeCard";
+import { SongFitCard, type SongFitAnalysis } from "@/components/SongFitCard";
 import type { HealthOutput } from "@/lib/playlistHealthEngine";
 import type { PlaylistInput } from "@/lib/playlistHealthEngine";
 
@@ -14,6 +15,8 @@ interface Props {
   playlistName?: string;
   vibeAnalysis?: VibeAnalysis | null;
   vibeLoading?: boolean;
+  songFitAnalysis?: SongFitAnalysis | null;
+  songFitLoading?: boolean;
   onBack: () => void;
 }
 
@@ -76,7 +79,7 @@ function getDataLabel(key: string, input?: PlaylistInput): string | undefined {
   }
 }
 
-export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis, vibeLoading, onBack }: Props) {
+export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis, vibeLoading, songFitAnalysis, songFitLoading, onBack }: Props) {
   return (
     <motion.div
       className="w-full max-w-3xl mx-auto space-y-8"
@@ -173,6 +176,11 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
             {result.recommendation}
           </p>
         </motion.div>
+      )}
+
+      {/* Song Fit Analysis */}
+      {(songFitLoading || songFitAnalysis) && (
+        <SongFitCard analysis={songFitAnalysis || null} loading={!!songFitLoading} />
       )}
 
       {/* Vibe Analysis */}
