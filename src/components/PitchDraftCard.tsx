@@ -8,6 +8,7 @@ import type { PlaylistInput } from "@/lib/playlistHealthEngine";
 interface Props {
   songName: string;
   artistName?: string;
+  soundDescription?: string;
   playlistName: string;
   curatorName?: string;
   fitLabel?: string;
@@ -48,7 +49,7 @@ function buildInsightLines(input?: PlaylistInput): string[] {
   return lines;
 }
 
-function generateEmailPitch({ songName, artistName, playlistName, curatorName, strengths, inputData }: Props): string {
+function generateEmailPitch({ songName, artistName, playlistName, curatorName, strengths, inputData, soundDescription }: Props): string {
   const artist = artistName || "[Your Name]";
   const curator = curatorName || "there";
   const insights = buildInsightLines(inputData);
@@ -87,7 +88,7 @@ Hey ${curator},
 
 ${opener}
 
-I'm sharing "${songName}" by ${artist}. [Describe your sound in one line — e.g. "reverb-heavy vocal, ambient textures, mid-tempo."]${fitLine}
+I'm sharing "${songName}" by ${artist}. ${soundDescription || "[Describe your sound in one line]"}${fitLine}
 
 Here's the track:
 [Spotify Link]
@@ -98,7 +99,7 @@ Appreciate your time,
 ${artist}`;
 }
 
-function generateDMPitch({ songName, artistName, playlistName, curatorName, inputData }: Props): string {
+function generateDMPitch({ songName, artistName, playlistName, curatorName, inputData, soundDescription }: Props): string {
   const artist = artistName || "[Your Name]";
   const curator = curatorName ? `${curatorName} — ` : "";
   const insights = buildInsightLines(inputData);
@@ -121,7 +122,7 @@ function generateDMPitch({ songName, artistName, playlistName, curatorName, inpu
 
 ${intelLine}
 
-"${songName}" by ${artist} — [Describe your sound briefly — e.g. "atmospheric, mid-tempo, reverb-heavy vocal."]
+"${songName}" by ${artist} — ${soundDescription || "[describe your sound briefly]"}.
 
 I think it fits without disrupting the flow. [Optional: "Seeing __% save rate on similar playlists."]
 

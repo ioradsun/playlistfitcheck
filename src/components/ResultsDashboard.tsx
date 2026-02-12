@@ -319,6 +319,7 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
         <PitchDraftCard
           songName={songFitAnalysis.songName}
           artistName={songFitAnalysis.artistName}
+          soundDescription={songFitAnalysis.soundDescription}
           playlistName={playlistName}
           curatorName={inputData?.ownerName}
           fitLabel={songFitAnalysis.blendedLabel}

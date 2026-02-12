@@ -88,7 +88,8 @@ Your response MUST be valid JSON with this exact structure:
   "concerns": ["concern1", "concern2"],
   "suggestion": "2-3 sentence actionable suggestion for the artist",
   "sonicFitScore": <number 0-100>,
-  "playlistQualityScore": <number 0-100>
+  "playlistQualityScore": <number 0-100>,
+  "soundDescription": "One concise line describing the song's sound — e.g. 'reverb-heavy vocal, ambient textures, mid-tempo indie' — max 15 words, no fluff"
 }
 
 Scoring guide for blendedScore:
