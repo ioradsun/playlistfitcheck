@@ -41,7 +41,7 @@ export function PromoPlayer() {
         });
         if (fnError) throw fnError;
         if (data?.error) throw new Error(data.error);
-        setTracks((data.tracks || []).slice(0, 3));
+        setTracks(data.tracks || []);
       } catch (e) {
         console.error("Failed to fetch player tracks:", e);
         setError("Could not load tracks");
@@ -84,7 +84,7 @@ export function PromoPlayer() {
             <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto max-h-[156px]">
             {tracks.map((track, i) => {
               const isActive = activeTrack?.id === track.id;
 
