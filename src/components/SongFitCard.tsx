@@ -3,13 +3,15 @@ import { Music, Target, ThumbsUp, AlertTriangle, Lightbulb } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 
 export interface SongFitAnalysis {
-  fitScore: number;
-  fitLabel: "PERFECT_FIT" | "STRONG_FIT" | "DECENT_FIT" | "WEAK_FIT" | "POOR_FIT";
+  blendedScore: number;
+  blendedLabel: "PERFECT_FIT" | "STRONG_FIT" | "DECENT_FIT" | "WEAK_FIT" | "POOR_FIT";
   summary: string;
   strengths: string[];
   concerns: string[];
   suggestion: string;
   songName?: string;
+  sonicFitScore?: number;
+  playlistQualityScore?: number;
 }
 
 const FIT_CONFIG: Record<string, { emoji: string; text: string; className: string }> = {
@@ -19,6 +21,8 @@ const FIT_CONFIG: Record<string, { emoji: string; text: string; className: strin
   WEAK_FIT: { emoji: "⚠️", text: "Weak Fit", className: "bg-score-bad/15 text-score-bad border-score-bad/30" },
   POOR_FIT: { emoji: "❌", text: "Poor Fit", className: "bg-score-bad/15 text-score-bad border-score-bad/30" },
 };
+
+export { FIT_CONFIG };
 
 export function SongFitCard({ analysis, loading }: { analysis: SongFitAnalysis | null; loading: boolean }) {
   if (loading) {
@@ -44,7 +48,7 @@ export function SongFitCard({ analysis, loading }: { analysis: SongFitAnalysis |
 
   if (!analysis) return null;
 
-  const fit = FIT_CONFIG[analysis.fitLabel] || FIT_CONFIG.DECENT_FIT;
+  const fit = FIT_CONFIG[analysis.blendedLabel] || FIT_CONFIG.DECENT_FIT;
 
   return (
     <motion.div
@@ -62,7 +66,7 @@ export function SongFitCard({ analysis, loading }: { analysis: SongFitAnalysis |
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono border ${fit.className}`}>
             {fit.emoji} {fit.text}
           </span>
-          <span className="text-lg font-bold text-foreground">{analysis.fitScore}/100</span>
+          <span className="text-lg font-bold text-foreground">{analysis.blendedScore}/100</span>
         </div>
       </div>
 
