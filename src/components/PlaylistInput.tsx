@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Search, Zap, BarChart3, Loader2 } from "lucide-react";
+import { Search, Zap, BarChart3, Loader2, Music } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ interface Props {
 
 export function PlaylistInputSection({ onAnalyze }: Props) {
   const [url, setUrl] = useState("");
+  const [songUrl, setSongUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleAnalyze = async () => {
@@ -53,6 +54,10 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
     }
   };
 
+  const handleDemo = () => {
+    onAnalyze(SAMPLE_PLAYLIST as PlaylistInputType & { _trackList: { name: string; artists: string }[] });
+  };
+
   return (
     <motion.div
       className="w-full max-w-2xl mx-auto space-y-6"
@@ -73,11 +78,9 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
           Playlist <span className="text-gradient-primary">Fit</span> Check
         </h1>
-
-
       </div>
 
-      {/* URL input */}
+      {/* Playlist URL input */}
       <div className="glass-card rounded-xl p-4 flex gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
@@ -100,11 +103,32 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         </Button>
       </div>
 
-      <p className="text-center text-xs">
+      {/* Song URL input */}
+      <div className="glass-card rounded-xl p-4 flex gap-3">
+        <div className="relative flex-1">
+          <Music className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+          <Input
+            value={songUrl}
+            onChange={e => setSongUrl(e.target.value)}
+            placeholder="Paste Spotify song URL (optional)..."
+            className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center gap-4 text-xs">
         <Link to="/how-scoring-works" className="text-primary hover:underline underline-offset-2">
           Inside the Fitting Room
         </Link>
-      </p>
+        <span className="text-muted-foreground">·</span>
+        <button
+          onClick={handleDemo}
+          className="text-primary hover:underline underline-offset-2"
+        >
+          See Demo Results
+        </button>
+      </div>
 
       <div className="flex flex-col items-center gap-2">
         <PromoPlayer />
