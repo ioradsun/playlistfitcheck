@@ -5,6 +5,7 @@ interface ScoreGaugeProps {
   score: number;
   label: HealthOutput["summary"]["healthLabel"];
   size?: number;
+  hideLabel?: boolean;
 }
 
 function getScoreColor(score: number): string {
@@ -15,7 +16,7 @@ function getScoreColor(score: number): string {
   return "hsl(var(--score-bad))";
 }
 
-export function ScoreGauge({ score, label, size = 200 }: ScoreGaugeProps) {
+export function ScoreGauge({ score, label, size = 200, hideLabel = false }: ScoreGaugeProps) {
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -64,15 +65,17 @@ export function ScoreGauge({ score, label, size = 200 }: ScoreGaugeProps) {
           </span>
         </div>
       </div>
-      <motion.span
-        className="text-sm font-semibold uppercase tracking-[0.2em] font-mono"
-        style={{ color }}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8 }}
-      >
-        {fitDisplay.emoji} {fitDisplay.text}
-      </motion.span>
+      {!hideLabel && (
+        <motion.span
+          className="text-sm font-semibold uppercase tracking-[0.2em] font-mono"
+          style={{ color }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+        >
+          {fitDisplay.emoji} {fitDisplay.text}
+        </motion.span>
+      )}
     </div>
   );
 }
