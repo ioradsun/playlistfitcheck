@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, Music } from "lucide-react";
+import { LogOut, Music, LayoutDashboard } from "lucide-react";
 
 export const Navbar = () => {
   const { user, loading, profile } = useAuth();
@@ -28,6 +28,9 @@ export const Navbar = () => {
         <div className="flex items-center gap-3">
           {loading ? null : user ? (
             <>
+              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => navigate("/dashboard")}>
+                <LayoutDashboard size={14} /> Dashboard
+              </Button>
               <button
                 onClick={() => navigate("/profile")}
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"

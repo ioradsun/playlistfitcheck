@@ -9,24 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Search, Save, Music, ExternalLink, Pencil, Camera, Share2, X } from "lucide-react";
+import { Save, Music, Pencil, Camera, Share2, X, LayoutDashboard } from "lucide-react";
 
-interface SavedSearch {
-  id: string;
-  playlist_name: string | null;
-  playlist_url: string | null;
-  song_name: string | null;
-  health_score: number | null;
-  health_label: string | null;
-  blended_score: number | null;
-  blended_label: string | null;
-  created_at: string;
-}
 
 const Profile = () => {
   const { user, loading: authLoading, roles, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
-  const [searches, setSearches] = useState<SavedSearch[]>([]);
+  
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
@@ -50,11 +39,6 @@ const Profile = () => {
     }
   }, [profile]);
 
-  useEffect(() => {
-    if (!user) return;
-    supabase.from("saved_searches").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
-      .then(({ data }) => { if (data) setSearches(data as SavedSearch[]); });
-  }, [user]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -133,8 +117,8 @@ const Profile = () => {
             <Button variant={editing ? "secondary" : "outline"} size="sm" className="gap-1.5" onClick={() => setEditing(!editing)}>
               {editing ? <><X size={14} /> Cancel</> : <><Pencil size={14} /> Edit</>}
             </Button>
-            <Button size="sm" onClick={() => navigate("/")} className="gap-1.5">
-              <Search size={14} /> Search
+            <Button size="sm" onClick={() => navigate("/dashboard")} className="gap-1.5">
+              <LayoutDashboard size={14} /> Dashboard
             </Button>
           </div>
         </div>
@@ -186,38 +170,6 @@ const Profile = () => {
           </Card>
         )}
 
-        {/* Search history */}
-        <Card className="glass-card border-border">
-          <CardHeader><CardTitle className="text-lg">Search History</CardTitle></CardHeader>
-          <CardContent>
-            {searches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No searches yet. Run a Fit Check to see results here.</p>
-            ) : (
-              <div className="space-y-3">
-                {searches.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{s.playlist_name || "Untitled"}</p>
-                      {s.song_name && <p className="text-xs text-muted-foreground truncate">🎵 {s.song_name}</p>}
-                      <p className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString()}</p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-sm font-mono font-bold text-primary">{s.health_score ?? "—"}</span>
-                      {s.blended_score != null && (
-                        <span className="text-xs font-mono text-accent-foreground">Fit: {s.blended_score}</span>
-                      )}
-                      {s.playlist_url && (
-                        <a href={s.playlist_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
-                          <ExternalLink size={14} />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

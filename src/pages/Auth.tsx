@@ -24,7 +24,7 @@ const Auth = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) navigate("/profile");
+    if (user) navigate("/dashboard");
   }, [user, navigate]);
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -62,7 +62,7 @@ const Auth = () => {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate("/profile");
+        navigate("/dashboard");
       }
     } catch (err: any) {
       toast.error(err.message);
