@@ -323,6 +323,10 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
           curatorName={inputData?.ownerName}
           fitLabel={songFitAnalysis.blendedLabel}
           strengths={songFitAnalysis.strengths}
+          concerns={songFitAnalysis.concerns}
+          suggestion={songFitAnalysis.suggestion}
+          inputData={inputData}
+          blendedScore={songFitAnalysis.blendedScore}
         />
       )}
 
