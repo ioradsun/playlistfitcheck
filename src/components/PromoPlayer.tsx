@@ -84,7 +84,7 @@ export function PromoPlayer() {
             <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
           </div>
 
-          <div className="max-h-[200px] overflow-y-auto">
+          <div className="overflow-y-auto">
             {tracks.map((track, i) => {
               const isActive = activeTrack?.id === track.id;
 
@@ -159,11 +159,12 @@ export function PromoPlayer() {
                   key={activeTrack.id}
                   src={`https://open.spotify.com/embed/track/${activeTrack.id}?utm_source=generator&theme=0`}
                   width="100%"
-                  height="200"
+                  height="152"
                   frameBorder="0"
                   allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                   loading="lazy"
                   className="rounded-xl"
+                  style={{ minHeight: 152 }}
                 />
               </div>
             </motion.div>
