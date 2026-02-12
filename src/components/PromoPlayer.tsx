@@ -76,15 +76,15 @@ export function PromoPlayer() {
 
   return (
     <div className={`w-full ${activeTrack ? "max-w-3xl" : "max-w-md"} mx-auto transition-all duration-300`}>
-      <div className={`flex ${isMobile ? "flex-col" : "flex-row"} gap-3`}>
+      <div className={`flex ${isMobile ? "flex-col" : "flex-row"} gap-3 items-stretch`}>
         {/* Track list */}
-        <div className={`glass-card rounded-xl overflow-hidden ${activeTrack && !isMobile ? "flex-1 min-w-0" : "w-full"}`}>
+        <div className={`glass-card rounded-xl flex flex-col ${activeTrack && !isMobile ? "flex-1 min-w-0" : "w-full"}`}>
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Music2 size={14} className="text-primary" />
             <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
           </div>
 
-          <div className="overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
             {tracks.map((track, i) => {
               const isActive = activeTrack?.id === track.id;
 
@@ -152,21 +152,19 @@ export function PromoPlayer() {
               animate={{ opacity: 1, scale: 1, width: isMobile ? "100%" : 300 }}
               exit={{ opacity: 0, scale: 0.95, width: isMobile ? "100%" : 0 }}
               transition={{ duration: 0.3 }}
-              className={`flex-shrink-0 overflow-hidden ${isMobile ? "w-full" : ""}`}
+              className={`flex-shrink-0 ${isMobile ? "w-full" : ""}`}
             >
-              <div className="glass-card rounded-xl overflow-hidden h-full">
-                <iframe
-                  key={activeTrack.id}
-                  src={`https://open.spotify.com/embed/track/${activeTrack.id}?utm_source=generator&theme=0`}
-                  width="100%"
-                  height="152"
-                  frameBorder="0"
-                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                  loading="lazy"
-                  className="rounded-xl"
-                  style={{ minHeight: 152 }}
-                />
-              </div>
+              <iframe
+                key={activeTrack.id}
+                src={`https://open.spotify.com/embed/track/${activeTrack.id}?utm_source=generator&theme=0`}
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                loading="lazy"
+                className="rounded-xl"
+                style={{ minHeight: 152 }}
+              />
             </motion.div>
           )}
         </AnimatePresence>
