@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ExternalLink, Music2, Loader2, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getSessionId } from "@/lib/sessionId";
 
 interface Track {
   id: string;
@@ -22,7 +23,7 @@ function formatTime(ms: number) {
 
 function logEngagement(trackId: string, trackName: string, artistName: string, action: "play" | "spotify_click") {
   supabase.functions.invoke("track-engagement", {
-    body: { trackId, trackName, artistName, action },
+    body: { trackId, trackName, artistName, action, sessionId: getSessionId() },
   }).catch(() => {});
 }
 

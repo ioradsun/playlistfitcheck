@@ -17,7 +17,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { trackId, trackName, artistName, action } = await req.json();
+    const { trackId, trackName, artistName, action, sessionId } = await req.json();
 
     if (!trackId || !action) {
       return new Response(JSON.stringify({ error: "trackId and action are required" }), {
@@ -30,7 +30,8 @@ serve(async (req) => {
       track_id: trackId,
       track_name: trackName || null,
       artist_name: artistName || null,
-      action, // 'play' or 'spotify_click'
+      action,
+      session_id: sessionId || null,
     });
 
     return new Response(JSON.stringify({ success: true }), {
