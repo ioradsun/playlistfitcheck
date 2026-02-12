@@ -83,6 +83,33 @@ export type Database = {
         }
         Relationships: []
       }
+      track_engagement: {
+        Row: {
+          action: string
+          artist_name: string | null
+          created_at: string
+          id: string
+          track_id: string
+          track_name: string | null
+        }
+        Insert: {
+          action: string
+          artist_name?: string | null
+          created_at?: string
+          id?: string
+          track_id: string
+          track_name?: string | null
+        }
+        Update: {
+          action?: string
+          artist_name?: string | null
+          created_at?: string
+          id?: string
+          track_id?: string
+          track_name?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
