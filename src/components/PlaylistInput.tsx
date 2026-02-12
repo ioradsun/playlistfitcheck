@@ -90,26 +90,16 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
 
       {/* Combined URL inputs */}
       <div className="glass-card rounded-xl p-4 space-y-3">
-        <div className="flex gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-            <Input
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              placeholder="Paste Spotify playlist URL..."
-              className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
-              onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
-              disabled={loading}
-            />
-          </div>
-          <Button onClick={handleAnalyze} className="glow-primary" disabled={loading}>
-            {loading ? (
-              <Loader2 size={16} className="mr-1 animate-spin" />
-            ) : (
-              <Zap size={16} className="mr-1" />
-            )}
-            {loading ? "Fetching..." : "Check Fit"}
-          </Button>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+          <Input
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            placeholder="Paste Spotify playlist URL..."
+            className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+            onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
+            disabled={loading}
+          />
         </div>
         <div className="border-t border-border" />
         <div className="relative">
@@ -121,6 +111,16 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
             className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
             disabled={loading}
           />
+        </div>
+        <div className="flex justify-end">
+          <Button onClick={handleAnalyze} className="glow-primary" disabled={loading}>
+            {loading ? (
+              <Loader2 size={16} className="mr-1 animate-spin" />
+            ) : (
+              <Zap size={16} className="mr-1" />
+            )}
+            {loading ? "Fetching..." : "Check Fit"}
+          </Button>
         </div>
       </div>
 
