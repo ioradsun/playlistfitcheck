@@ -54,7 +54,12 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
     }
   };
 
+  const DEMO_PLAYLIST_URL = "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M";
+  const DEMO_SONG_URL = "https://open.spotify.com/track/3KkXRkHbMCARz0aVfEt68P";
+
   const handleDemo = () => {
+    setUrl(DEMO_PLAYLIST_URL);
+    setSongUrl(DEMO_SONG_URL);
     onAnalyze(SAMPLE_PLAYLIST as PlaylistInputType & { _trackList: { name: string; artists: string }[] });
   };
 
