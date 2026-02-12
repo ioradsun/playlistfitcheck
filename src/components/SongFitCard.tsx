@@ -10,6 +10,7 @@ export interface SongFitAnalysis {
   concerns: string[];
   suggestion: string;
   songName?: string;
+  artistName?: string;
   sonicFitScore?: number;
   playlistQualityScore?: number;
 }

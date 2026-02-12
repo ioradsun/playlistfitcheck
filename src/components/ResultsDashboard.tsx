@@ -113,7 +113,7 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
         <div>
           <h2 className="text-xl font-bold">
             {hasBlendedScore && songFitAnalysis.songName
-              ? `${songFitAnalysis.songName} × ${playlistName || "Playlist"}`
+              ? `${songFitAnalysis.songName}${songFitAnalysis.artistName ? ` by ${songFitAnalysis.artistName}` : ""} × ${playlistName || "Playlist"}`
               : playlistName || "Playlist Analysis"}
           </h2>
           <p className="text-xs text-muted-foreground font-mono truncate max-w-md">
@@ -318,7 +318,7 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
       {hasBlendedScore && songFitAnalysis.songName && playlistName && (
         <PitchDraftCard
           songName={songFitAnalysis.songName}
-          artistName={undefined}
+          artistName={songFitAnalysis.artistName}
           playlistName={playlistName}
           curatorName={inputData?.ownerName}
           fitLabel={songFitAnalysis.blendedLabel}
