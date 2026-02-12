@@ -167,7 +167,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
       </div>
 
       {/* Combined URL inputs */}
-      <div className="glass-card rounded-xl p-4 space-y-3">
+      <div className="glass-card rounded-xl p-4 space-y-3 relative" style={{ overflow: 'visible' }}>
         {/* Playlist input with search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
@@ -185,7 +185,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
           )}
           {showPlaylistDropdown && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
               {playlistResults.map((p) => (
                 <button
                   key={p.id}
@@ -227,7 +227,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
           )}
           {showSongDropdown && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
               {songResults.map((t) => (
                 <button
                   key={t.id}
