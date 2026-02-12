@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.playlist-vibe]
 verify_jwt = false
+
+[functions.playlist-player]
+verify_jwt = false
+
+[functions.track-engagement]
+verify_jwt = false

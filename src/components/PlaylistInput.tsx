@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { PlaylistInput as PlaylistInputType } from "@/lib/playlistHealthEngine";
 import { SAMPLE_PLAYLIST, SAMPLE_EDITORIAL } from "@/lib/playlistHealthEngine";
+import { PromoPlayer } from "@/components/PromoPlayer";
 
 interface Props {
   onAnalyze: (data: PlaylistInputType) => void;
@@ -106,17 +107,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
       </p>
 
       <div className="flex flex-col items-center gap-2">
-        <div className="w-full max-w-md rounded-xl overflow-hidden">
-          <iframe
-            src="https://open.spotify.com/embed/playlist/3wtgtkdE8aDOf3V0LYoAXa?utm_source=generator&theme=0"
-            width="100%"
-            height="352"
-            frameBorder="0"
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="lazy"
-            className="rounded-xl"
-          />
-        </div>
+        <PromoPlayer />
       </div>
     </motion.div>
   );
