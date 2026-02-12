@@ -56,6 +56,33 @@ export type Database = {
         }
         Relationships: []
       }
+      search_logs: {
+        Row: {
+          created_at: string
+          id: string
+          playlist_name: string | null
+          playlist_url: string | null
+          song_name: string | null
+          song_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          playlist_name?: string | null
+          playlist_url?: string | null
+          song_name?: string | null
+          song_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          playlist_name?: string | null
+          playlist_url?: string | null
+          song_name?: string | null
+          song_url?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
