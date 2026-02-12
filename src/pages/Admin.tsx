@@ -183,15 +183,17 @@ export default function Admin() {
                       <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
                         {new Date(fit.created_at).toLocaleDateString()}
                       </span>
-                      {hasClicks && (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <span className="text-xs font-mono text-primary">{fit.tracksClicked.length}</span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className={`text-xs font-mono ${hasClicks ? "text-primary" : "text-muted-foreground/50"}`}>
+                          {fit.tracksClicked.length} click{fit.tracksClicked.length !== 1 ? "s" : ""}
+                        </span>
+                        {hasClicks && (
                           <ChevronDown
                             size={14}
                             className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
                           />
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </button>
 
                     <AnimatePresence>
