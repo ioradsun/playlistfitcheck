@@ -146,31 +146,25 @@ export function PromoPlayer() {
         </div>
 
         {/* Embedded player for selected track */}
-        <AnimatePresence>
-          {activeTrack && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, width: isMobile ? "100%" : 0 }}
-              animate={{ opacity: 1, scale: 1, width: isMobile ? "100%" : 300 }}
-              exit={{ opacity: 0, scale: 0.95, width: isMobile ? "100%" : 0 }}
-              transition={{ duration: 0.3 }}
-              className={`flex-shrink-0 glass-card rounded-xl flex flex-col max-h-[200px] ${isMobile ? "w-full" : ""}`}
-            >
-              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                <Music2 size={14} className="text-primary" />
-                <span className="text-xs font-mono text-muted-foreground">Spotify Player</span>
-              </div>
-              <iframe
-                key={activeTrack.id}
-                src={`https://open.spotify.com/embed/track/${activeTrack.id}?utm_source=generator&theme=0&autoplay=1`}
-                width="100%"
-                className="flex-1 rounded-b-xl"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {activeTrack && (
+          <div
+            className={`flex-shrink-0 glass-card rounded-xl flex flex-col max-h-[200px] ${isMobile ? "w-full" : "w-[300px]"}`}
+          >
+            <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+              <Music2 size={14} className="text-primary" />
+              <span className="text-xs font-mono text-muted-foreground">Spotify Player</span>
+            </div>
+            <iframe
+              key={activeTrack.id}
+              src={`https://open.spotify.com/embed/track/${activeTrack.id}?utm_source=generator&theme=0&autoplay=1`}
+              width="100%"
+              className="flex-1 rounded-b-xl"
+              frameBorder="0"
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              loading="eager"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
