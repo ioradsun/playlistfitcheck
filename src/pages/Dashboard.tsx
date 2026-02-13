@@ -101,8 +101,11 @@ const Dashboard = () => {
                   if (s.report_data) {
                     navigate("/", { state: { reportData: s.report_data } });
                   } else {
-                    toast("Report data not available. Please run the fit check again.");
-                    navigate("/");
+                    // No cached report — re-run via URL params
+                    const params = new URLSearchParams();
+                    if (s.playlist_url) params.set("playlist", s.playlist_url);
+                    if (s.song_url) params.set("song", s.song_url);
+                    navigate(`/`, { state: { autoRun: { playlistUrl: s.playlist_url, songUrl: s.song_url } } });
                   }
                 }}
               >

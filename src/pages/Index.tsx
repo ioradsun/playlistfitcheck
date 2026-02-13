@@ -181,17 +181,41 @@ const Index = () => {
   // Load cached report from dashboard navigation state
   useEffect(() => {
     const state = location.state as any;
-    if (!state?.reportData || autoRunRef.current) return;
-    autoRunRef.current = true;
-    // Clear navigation state
-    window.history.replaceState({}, "", "/");
+    if (autoRunRef.current) return;
+    
+    if (state?.reportData) {
+      // Cached report from dashboard
+      autoRunRef.current = true;
+      window.history.replaceState({}, "", "/");
+      const { input, output, vibeAnalysis: vibe, songFitAnalysis: songFit, trackList, songUrl } = state.reportData;
+      setResult({ output, input, name: input.playlistName, key: Date.now(), trackList, songUrl });
+      setVibeAnalysis(vibe ?? null);
+      setSongFitAnalysis(songFit ?? null);
+      setVibeLoading(false);
+      setSongFitLoading(false);
+    } else if (state?.autoRun) {
+      // No cached data — re-run analysis
+      autoRunRef.current = true;
+      const { playlistUrl, songUrl } = state.autoRun;
+      window.history.replaceState({}, "", "/");
+      if (!playlistUrl) return;
 
-    const { input, output, vibeAnalysis: vibe, songFitAnalysis: songFit, trackList, songUrl } = state.reportData;
-    setResult({ output, input, name: input.playlistName, key: Date.now(), trackList, songUrl });
-    setVibeAnalysis(vibe ?? null);
-    setSongFitAnalysis(songFit ?? null);
-    setVibeLoading(false);
-    setSongFitLoading(false);
+      (async () => {
+        setVibeLoading(true);
+        try {
+          const { data, error } = await supabase.functions.invoke("spotify-playlist", {
+            body: { playlistUrl, sessionId: null, songUrl: songUrl || null },
+          });
+          if (error) throw new Error(error.message);
+          if (data?.error) throw new Error(data.error);
+          handleAnalyze({ ...(data as PlaylistInput), _songUrl: songUrl || undefined });
+        } catch (e) {
+          console.error("Auto-run error:", e);
+          toast.error("Failed to load report. Try running the fit check again.");
+          setVibeLoading(false);
+        }
+      })();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
