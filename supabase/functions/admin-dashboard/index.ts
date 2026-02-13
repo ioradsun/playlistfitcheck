@@ -69,6 +69,19 @@ serve(async (req) => {
       });
     }
 
+    if (body.action === "update_widget_config") {
+      const { data: existing } = await supabase.from("widget_config").select("id").limit(1).single();
+      if (existing) {
+        const updates: Record<string, string> = { updated_at: new Date().toISOString() };
+        if (body.embed_url) updates.embed_url = body.embed_url;
+        if (body.widget_title) updates.widget_title = body.widget_title;
+        await supabase.from("widget_config").update(updates).eq("id", existing.id);
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── WIDGET ANALYTICS ──
     if (section === "widget_analytics") {
       const { data: engagements } = await supabase

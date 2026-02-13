@@ -43,8 +43,11 @@ export default function Admin() {
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [widgetMode, setWidgetMode] = useState<"tracklist" | "embed">("tracklist");
+  const [widgetTitle, setWidgetTitle] = useState("");
+  const [embedUrl, setEmbedUrl] = useState("");
   const [widgetAnalytics, setWidgetAnalytics] = useState<{ widget_opens: number; widget_closes: number } | null>(null);
   const [togglingWidget, setTogglingWidget] = useState(false);
+  const [savingWidget, setSavingWidget] = useState(false);
 
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
@@ -79,7 +82,11 @@ export default function Admin() {
     }
     if (tab === "widget" && isAdmin) {
       supabase.functions.invoke("admin-dashboard", { body: { action: "get_widget_config" } })
-        .then(({ data: r }) => { if (r?.config?.mode) setWidgetMode(r.config.mode); });
+        .then(({ data: r }) => {
+          if (r?.config?.mode) setWidgetMode(r.config.mode);
+          if (r?.config?.widget_title) setWidgetTitle(r.config.widget_title);
+          if (r?.config?.embed_url) setEmbedUrl(r.config.embed_url);
+        });
       supabase.functions.invoke("admin-dashboard", { body: { section: "widget_analytics" } })
         .then(({ data: r }) => { if (r) setWidgetAnalytics(r); });
     }
@@ -94,6 +101,17 @@ export default function Admin() {
       toast.success(`Widget switched to ${newMode === "embed" ? "Spotify Embed" : "Static Tracklist"}`);
     } catch (e) { toast.error("Failed to update widget mode"); }
     finally { setTogglingWidget(false); }
+  };
+
+  const handleSaveWidgetConfig = async () => {
+    setSavingWidget(true);
+    try {
+      await supabase.functions.invoke("admin-dashboard", {
+        body: { action: "update_widget_config", embed_url: embedUrl, widget_title: widgetTitle },
+      });
+      toast.success("Widget config saved");
+    } catch (e) { toast.error("Failed to save widget config"); }
+    finally { setSavingWidget(false); }
   };
 
   const handleRefresh = async () => {
@@ -391,7 +409,7 @@ export default function Admin() {
                   <div>
                     <p className="text-sm font-medium">{widgetMode === "embed" ? "Spotify Embed" : "Static Tracklist"}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {widgetMode === "embed" ? "Full playlist embed from Spotify" : "Custom tracklist with per-track engagement"}
+                      {widgetMode === "embed" ? "Embeds a Spotify player directly" : "Custom tracklist with per-track engagement"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -403,6 +421,37 @@ export default function Admin() {
                     />
                     <span className="text-xs font-mono text-muted-foreground">Embed</span>
                   </div>
+                </div>
+
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <div>
+                    <label className="text-xs font-mono text-muted-foreground mb-1 block">Widget Title</label>
+                    <input
+                      type="text"
+                      value={widgetTitle}
+                      onChange={(e) => setWidgetTitle(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                      placeholder="Featured Artist"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-mono text-muted-foreground mb-1 block">Embed URL</label>
+                    <input
+                      type="text"
+                      value={embedUrl}
+                      onChange={(e) => setEmbedUrl(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                      placeholder="https://open.spotify.com/embed/..."
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Paste a Spotify embed URL (artist, album, playlist, or track)</p>
+                  </div>
+                  <button
+                    onClick={handleSaveWidgetConfig}
+                    disabled={savingWidget}
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-mono hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    {savingWidget ? "Saving..." : "Save Config"}
+                  </button>
                 </div>
               </div>
             </motion.div>
