@@ -74,7 +74,7 @@ export const Navbar = () => {
                 Log in
               </Button>
               <Button size="sm" onClick={() => navigate("/auth?mode=signup")}>
-                Sign up free
+                Sign Up For Free
               </Button>
             </>
           )}
