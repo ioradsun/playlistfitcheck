@@ -34,13 +34,19 @@ function logEngagement(trackId: string, trackName: string, artistName: string, a
   }).catch(() => {});
 }
 
-const WidgetHeader = ({ title, thumbnailUrl, onPointerDown }: { title: string; thumbnailUrl?: string | null; onPointerDown?: (e: React.PointerEvent) => void }) => (
+const WidgetHeader = ({ title, thumbnailUrl, thumbnailLink, onPointerDown }: { title: string; thumbnailUrl?: string | null; thumbnailLink?: string | null; onPointerDown?: (e: React.PointerEvent) => void }) => (
   <div
     className="px-3 py-2.5 border-b border-border cursor-grab active:cursor-grabbing flex items-center gap-2"
     onPointerDown={onPointerDown}
   >
     {thumbnailUrl && (
-      <img src={thumbnailUrl} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" />
+      thumbnailLink ? (
+        <a href={thumbnailLink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
+          <img src={thumbnailUrl} alt="" className="w-5 h-5 rounded object-cover hover:ring-1 hover:ring-primary transition-all" />
+        </a>
+      ) : (
+        <img src={thumbnailUrl} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" />
+      )
     )}
     <span className="text-xs font-mono text-muted-foreground truncate">{title}</span>
   </div>
@@ -55,16 +61,18 @@ export function PromoPlayer() {
   const [embedUrl, setEmbedUrl] = useState("");
   const [widgetTitle, setWidgetTitle] = useState("Featured Artist");
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [thumbnailLink, setThumbnailLink] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const constraintsRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
 
   const fetchConfig = useCallback(() => {
-    supabase.from("widget_config").select("mode, embed_url, widget_title, thumbnail_url").limit(1).single().then(({ data }) => {
+    supabase.from("widget_config").select("mode, embed_url, widget_title, thumbnail_url, thumbnail_link").limit(1).single().then(({ data }) => {
       if (data?.mode) setWidgetMode(data.mode as "tracklist" | "embed");
       if (data?.embed_url) setEmbedUrl(data.embed_url);
       if (data?.widget_title) setWidgetTitle(data.widget_title);
       if (data?.thumbnail_url) setThumbnailUrl(data.thumbnail_url);
+      setThumbnailLink(data?.thumbnail_link ?? null);
     });
   }, []);
 
@@ -121,7 +129,7 @@ export function PromoPlayer() {
   // ── TRACKLIST MODE content ──
   const trackList = (
     <div className="flex flex-col">
-      <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} onPointerDown={(e) => dragControls.start(e)} />
+      <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} thumbnailLink={thumbnailLink} onPointerDown={(e) => dragControls.start(e)} />
       <div className="overflow-y-auto max-h-[132px]">
         {tracks.map((track, i) => {
           const isActive = activeTrack?.id === track.id;
@@ -199,7 +207,7 @@ export function PromoPlayer() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
         >
-          <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} onPointerDown={(e) => dragControls.start(e)} />
+          <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} thumbnailLink={thumbnailLink} onPointerDown={(e) => dragControls.start(e)} />
           <iframe
             src={toEmbedUrl(embedUrl)}
             width="100%"

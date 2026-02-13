@@ -76,6 +76,7 @@ serve(async (req) => {
         if (body.embed_url) updates.embed_url = body.embed_url;
         if (body.widget_title) updates.widget_title = body.widget_title;
         if (body.thumbnail_url !== undefined) updates.thumbnail_url = body.thumbnail_url;
+        if (body.thumbnail_link !== undefined) updates.thumbnail_link = body.thumbnail_link;
         await supabase.from("widget_config").update(updates).eq("id", existing.id);
       }
       return new Response(JSON.stringify({ success: true }), {
