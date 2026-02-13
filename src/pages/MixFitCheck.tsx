@@ -224,6 +224,8 @@ export default function MixFitCheck() {
               isPlaying={playingId === mix.id}
               usedRanks={usedRanks}
               totalMixes={activeMixes.length}
+              markerStartPct={(markerStart / (mix.waveform.duration || 1)) * 100}
+              markerEndPct={(markerEnd / (mix.waveform.duration || 1)) * 100}
               onPlay={() => play(mix.id, mix.buffer, markerStart, markerEnd)}
               onStop={stop}
               onNameChange={(name) => updateMix(mix.id, { name })}
