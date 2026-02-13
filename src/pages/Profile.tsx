@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Save, Music, Pencil, Camera, Share2, X, LayoutDashboard } from "lucide-react";
+import { Pencil, Camera, Share2, X, LayoutDashboard, Check, Loader2 } from "lucide-react";
 
 
 const Profile = () => {
@@ -20,9 +20,10 @@ const Profile = () => {
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [spotifyUrl, setSpotifyUrl] = useState("");
-  const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const isArtist = roles.includes("artist");
 
@@ -30,7 +31,6 @@ const Profile = () => {
     if (!authLoading && !user) navigate("/auth");
   }, [user, authLoading, navigate]);
 
-  // Sync form state from profile context
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.display_name ?? "");
@@ -39,6 +39,29 @@ const Profile = () => {
     }
   }, [profile]);
 
+  const autoSave = useCallback((fields: { display_name?: string; bio?: string; spotify_embed_url?: string }) => {
+    if (!user) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setAutoSaveStatus("saving");
+    saveTimerRef.current = setTimeout(async () => {
+      const { error } = await supabase.from("profiles").update(fields).eq("id", user.id);
+      if (error) { toast.error(error.message); setAutoSaveStatus("idle"); }
+      else { setAutoSaveStatus("saved"); refreshProfile(); setTimeout(() => setAutoSaveStatus("idle"), 1500); }
+    }, 800);
+  }, [user, refreshProfile]);
+
+  const handleDisplayNameChange = (val: string) => {
+    setDisplayName(val);
+    autoSave({ display_name: val, bio, spotify_embed_url: isArtist ? spotifyUrl : undefined });
+  };
+  const handleBioChange = (val: string) => {
+    setBio(val);
+    autoSave({ display_name: displayName, bio: val, spotify_embed_url: isArtist ? spotifyUrl : undefined });
+  };
+  const handleSpotifyUrlChange = (val: string) => {
+    setSpotifyUrl(val);
+    autoSave({ display_name: displayName, bio, spotify_embed_url: val });
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -61,23 +84,6 @@ const Profile = () => {
     if (updateErr) toast.error(updateErr.message);
     else { toast.success("Avatar updated!"); refreshProfile(); }
   };
-
-  const handleSave = async () => {
-    if (!user) return;
-    setSaving(true);
-    const { error } = await supabase.from("profiles").update({
-      display_name: displayName,
-      bio,
-      spotify_embed_url: isArtist ? spotifyUrl : undefined,
-    }).eq("id", user.id);
-    setSaving(false);
-    if (error) toast.error(error.message);
-    else { toast.success("Profile saved!"); setEditing(false); refreshProfile(); }
-  };
-
-  const embedUrl = spotifyUrl
-    ? spotifyUrl.replace("open.spotify.com/", "open.spotify.com/embed/")
-    : null;
 
   const initials = (profile?.display_name ?? user?.email ?? "?")
     .split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -123,49 +129,32 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Edit form (collapsible) */}
+        {/* Edit form (collapsible) — auto-saves */}
         {editing && (
           <Card className="glass-card border-border">
-            <CardHeader><CardTitle className="text-lg">Edit Profile</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Edit Profile</CardTitle>
+                {autoSaveStatus === "saving" && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Saving…</span>}
+                {autoSaveStatus === "saved" && <span className="text-xs text-primary flex items-center gap-1"><Check size={12} /> Saved</span>}
+              </div>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Display name</Label>
-                <Input value={displayName} onChange={e => setDisplayName(e.target.value)} />
+                <Input value={displayName} onChange={e => handleDisplayNameChange(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Bio</Label>
-                <Textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Tell us about yourself" rows={3} />
+                <Textarea value={bio} onChange={e => handleBioChange(e.target.value)} placeholder="Tell us about yourself" rows={3} />
               </div>
               {isArtist && (
                 <div className="space-y-2">
                   <Label>Spotify Playlist URL</Label>
-                  <Input value={spotifyUrl} onChange={e => setSpotifyUrl(e.target.value)} placeholder="https://open.spotify.com/playlist/..." />
-                  <p className="text-xs text-muted-foreground">Paste a Spotify playlist or album link to embed your works</p>
+                  <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="https://open.spotify.com/playlist/..." />
+                  <p className="text-xs text-muted-foreground">Paste a Spotify playlist or album link to embed on your public profile</p>
                 </div>
               )}
-              <Button onClick={handleSave} disabled={saving} className="gap-2">
-                <Save size={16} />
-                {saving ? "Saving…" : "Save changes"}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Spotify embed for artists */}
-        {isArtist && embedUrl && (
-          <Card className="glass-card border-border overflow-hidden">
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Music size={18} /> My Music</CardTitle></CardHeader>
-            <CardContent>
-              <iframe
-                src={embedUrl}
-                width="100%"
-                height="352"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                className="rounded-lg"
-                title="Spotify embed"
-              />
             </CardContent>
           </Card>
         )}
