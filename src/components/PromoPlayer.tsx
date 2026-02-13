@@ -15,6 +15,7 @@ interface Track {
 }
 
 const PLAYLIST_ID = "3wtgtkdE8aDOf3V0LYoAXa";
+const ARTIST_ID = "1PlkAOmfFYqBYFpN8jDj4v";
 
 function logEngagement(trackId: string, trackName: string, artistName: string, action: string) {
   supabase.functions.invoke("track-engagement", {
@@ -164,7 +165,7 @@ export function PromoPlayer() {
         >
           <WidgetHeader />
           <iframe
-            src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
+            src={`https://open.spotify.com/embed/artist/${ARTIST_ID}?utm_source=generator&theme=0`}
             width="100%"
             height="152"
             frameBorder="0"
