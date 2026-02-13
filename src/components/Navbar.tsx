@@ -10,7 +10,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Music, LayoutDashboard, User } from "lucide-react";
+import { LogOut, Music, LayoutDashboard, User, Shield } from "lucide-react";
+
+const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
 export const Navbar = () => {
   const { user, loading, profile } = useAuth();
@@ -55,6 +57,11 @@ export const Navbar = () => {
                 <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer gap-2">
                   <User size={14} /> Profile
                 </DropdownMenuItem>
+                {ADMIN_EMAILS.includes(user.email ?? "") && (
+                  <DropdownMenuItem onClick={() => navigate("/admin")} className="cursor-pointer gap-2">
+                    <Shield size={14} /> Admin
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer gap-2 text-destructive focus:text-destructive">
                   <LogOut size={14} /> Log out
