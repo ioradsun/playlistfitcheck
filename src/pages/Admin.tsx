@@ -223,13 +223,15 @@ export default function Admin() {
                         </div>
 
                         {/* Delete */}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(u); }}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
-                          title="Delete user"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {u.id !== "__anonymous__" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteTarget(u); }}
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+                            title="Delete user"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
 
                     </div>

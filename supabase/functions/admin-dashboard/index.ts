@@ -103,43 +103,46 @@ serve(async (req) => {
       const roleMap: Record<string, string> = {};
       for (const r of roles || []) roleMap[r.user_id] = r.role;
 
-      // Build per-user engagement: { userId -> { trackId -> { name, artist, plays, spotify_clicks } } }
-      const userEngagementMap: Record<string, Record<string, { track_name: string; artist_name: string; plays: number; spotify_clicks: number }>> = {};
-      let totalPlays = 0;
-      let totalClicks = 0;
+      // Build per-user engagement (including anonymous)
+      const userEngagementMap: Record<string, number> = {};
+      let anonymousTotal = 0;
 
       for (const e of engagements || []) {
-        if (!e.user_id) continue;
-        if (!userEngagementMap[e.user_id]) userEngagementMap[e.user_id] = {};
-        const tracks = userEngagementMap[e.user_id];
-        if (!tracks[e.track_id]) {
-          tracks[e.track_id] = { track_name: e.track_name || "Unknown", artist_name: e.artist_name || "Unknown", plays: 0, spotify_clicks: 0 };
+        if (e.user_id) {
+          userEngagementMap[e.user_id] = (userEngagementMap[e.user_id] || 0) + 1;
+        } else {
+          anonymousTotal++;
         }
-        if (e.action === "play") { tracks[e.track_id].plays++; totalPlays++; }
-        else if (e.action === "spotify_click") { tracks[e.track_id].spotify_clicks++; totalClicks++; }
       }
 
-      const users = (authUsers || []).map((u: any) => {
-        const userTracks = userEngagementMap[u.id] || {};
-        const trackList = Object.entries(userTracks)
-          .map(([trackId, t]) => ({ track_id: trackId, ...t, total: t.plays + t.spotify_clicks }))
-          .sort((a, b) => b.total - a.total);
+      const users: any[] = (authUsers || []).map((u: any) => ({
+        id: u.id,
+        email: u.email,
+        display_name: profileMap[u.id]?.display_name || null,
+        avatar_url: profileMap[u.id]?.avatar_url || u.user_metadata?.avatar_url || u.user_metadata?.picture || null,
+        role: roleMap[u.id] || "user",
+        fit_checks: fitCountMap[u.id] || 0,
+        created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at,
+        provider: u.app_metadata?.provider || "email",
+        engagement: { total: userEngagementMap[u.id] || 0 },
+      }));
 
-        const totalInteractions = trackList.reduce((sum, t) => sum + t.total, 0);
-
-        return {
-          id: u.id,
-          email: u.email,
-          display_name: profileMap[u.id]?.display_name || null,
-          avatar_url: profileMap[u.id]?.avatar_url || u.user_metadata?.avatar_url || u.user_metadata?.picture || null,
-          role: roleMap[u.id] || "user",
-          fit_checks: fitCountMap[u.id] || 0,
-          created_at: u.created_at,
-          last_sign_in_at: u.last_sign_in_at,
-          provider: u.app_metadata?.provider || "email",
-          engagement: { total: totalInteractions, tracks: trackList },
-        };
-      });
+      // Add anonymous pseudo-user if there are anonymous engagements
+      if (anonymousTotal > 0) {
+        users.push({
+          id: "__anonymous__",
+          email: "—",
+          display_name: "Anonymous",
+          avatar_url: null,
+          role: "user",
+          fit_checks: 0,
+          created_at: new Date().toISOString(),
+          last_sign_in_at: null,
+          provider: "anonymous",
+          engagement: { total: anonymousTotal },
+        });
+      }
 
       // Sort: users with most engagement first
       users.sort((a: any, b: any) => b.engagement.total - a.engagement.total);
