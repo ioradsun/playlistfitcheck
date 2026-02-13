@@ -59,15 +59,6 @@ serve(async (req) => {
       });
     }
 
-    if (body.action === "set_widget_mode" && body.mode) {
-      const { data: existing } = await supabase.from("widget_config").select("id").limit(1).single();
-      if (existing) {
-        await supabase.from("widget_config").update({ mode: body.mode, updated_at: new Date().toISOString() }).eq("id", existing.id);
-      }
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     if (body.action === "update_widget_config") {
       const { data: existing } = await supabase.from("widget_config").select("id").limit(1).single();
@@ -84,26 +75,6 @@ serve(async (req) => {
       });
     }
 
-    // ── WIDGET ANALYTICS ──
-    if (section === "widget_analytics") {
-      const { data: engagements } = await supabase
-        .from("track_engagement")
-        .select("action, created_at")
-        .in("action", ["widget_open", "widget_close"])
-        .order("created_at", { ascending: false })
-        .limit(5000);
-
-      let opens = 0;
-      let closes = 0;
-      for (const e of engagements || []) {
-        if (e.action === "widget_open") opens++;
-        else if (e.action === "widget_close") closes++;
-      }
-
-      return new Response(JSON.stringify({ widget_opens: opens, widget_closes: closes }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     // ── USERS section ──
     if (section === "users") {
