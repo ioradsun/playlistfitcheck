@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { MixProjectForm } from "@/components/mix/MixProjectForm";
 import { MixCard } from "@/components/mix/MixCard";
@@ -12,7 +12,7 @@ import { toast } from "sonner";
 const MAX_MIXES = 6;
 
 export default function MixFitCheck() {
-  const { decodeFile, play, stop, playingId } = useAudioEngine();
+  const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
   const { save } = useMixProjectStorage();
 
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -26,6 +26,30 @@ export default function MixFitCheck() {
   const fileRef = useRef<HTMLInputElement>(null);
   // Track which mixes need re-upload (loaded from saved project without audio)
   const [needsReupload, setNeedsReupload] = useState(false);
+  const [playheadPct, setPlayheadPct] = useState(0);
+  const rafRef = useRef<number | null>(null);
+  const firstWaveform = mixes.find((m) => m.buffer)?.waveform || null;
+
+  // Animate playhead
+  useEffect(() => {
+    if (!playingId) {
+      setPlayheadPct(0);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      return;
+    }
+    const tick = () => {
+      const pos = getPlayheadPosition();
+      if (pos !== null) {
+        const duration = firstWaveform?.duration || 1;
+        setPlayheadPct((pos / duration) * 100);
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        setPlayheadPct(0);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [playingId, getPlayheadPosition, firstWaveform]);
 
   const resetProject = useCallback(() => {
     stop();
@@ -137,7 +161,6 @@ export default function MixFitCheck() {
   );
 
   const usedRanks = mixes.map((m) => m.rank).filter((r): r is number => r !== null);
-  const firstWaveform = mixes.find((m) => m.buffer)?.waveform || null;
   const activeMixes = mixes.filter((m) => m.buffer);
 
   // If no project created yet, show form + saved projects
@@ -186,10 +209,18 @@ export default function MixFitCheck() {
         waveform={firstWaveform}
         markerStart={markerStart}
         markerEnd={markerEnd}
+        isPlaying={!!playingId}
+        playheadPct={playheadPct}
         onMarkersChange={(s, e) => {
           setMarkerStart(s);
           setMarkerEnd(e);
         }}
+        onPlay={() => {
+          // Play the first available mix in the comparison region
+          const first = activeMixes[0];
+          if (first) play(first.id, first.buffer, markerStart, markerEnd);
+        }}
+        onStop={stop}
       />
 
       {/* Upload area */}
@@ -226,6 +257,7 @@ export default function MixFitCheck() {
               totalMixes={activeMixes.length}
               markerStartPct={(markerStart / (mix.waveform.duration || 1)) * 100}
               markerEndPct={(markerEnd / (mix.waveform.duration || 1)) * 100}
+              playheadPct={playingId === mix.id ? playheadPct : 0}
               onPlay={() => play(mix.id, mix.buffer, markerStart, markerEnd)}
               onStop={stop}
               onNameChange={(name) => updateMix(mix.id, { name })}
