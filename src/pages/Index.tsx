@@ -10,6 +10,8 @@ import type { SongFitAnalysis } from "@/components/SongFitCard";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import MixFitCheck from "@/pages/MixFitCheck";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -230,25 +232,38 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <div className="flex-1 flex items-center justify-center px-4 py-16 pt-20">
-        {result && !isFullyLoaded ? (
-          <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
-        ) : result && isFullyLoaded ? (
-          <ResultsDashboard
-            key={result.key}
-            result={result.output}
-            inputData={result.input}
-            playlistName={result.name}
-            vibeAnalysis={vibeAnalysis}
-            vibeLoading={false}
-            songFitAnalysis={songFitAnalysis}
-            songFitLoading={false}
-            onBack={handleBack}
-          />
-        ) : (
-          <PlaylistInputSection onAnalyze={handleAnalyze} />
-        )}
-      </div>
+      <Tabs defaultValue="playlist" className="flex-1 flex flex-col">
+        <div className="flex justify-center pt-20 pb-2">
+          <TabsList>
+            <TabsTrigger value="playlist">Playlist Fit Check</TabsTrigger>
+            <TabsTrigger value="mix">Mix Fit Check</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="playlist" className="flex-1 flex items-center justify-center px-4 py-8">
+          {result && !isFullyLoaded ? (
+            <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
+          ) : result && isFullyLoaded ? (
+            <ResultsDashboard
+              key={result.key}
+              result={result.output}
+              inputData={result.input}
+              playlistName={result.name}
+              vibeAnalysis={vibeAnalysis}
+              vibeLoading={false}
+              songFitAnalysis={songFitAnalysis}
+              songFitLoading={false}
+              onBack={handleBack}
+            />
+          ) : (
+            <PlaylistInputSection onAnalyze={handleAnalyze} />
+          )}
+        </TabsContent>
+
+        <TabsContent value="mix" className="flex-1 flex items-center justify-center px-4 py-8">
+          <MixFitCheck />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
