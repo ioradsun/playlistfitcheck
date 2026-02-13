@@ -11,7 +11,11 @@ import { toast } from "sonner";
 
 const MAX_MIXES = 6;
 
-export default function MixFitCheck() {
+interface MixFitCheckProps {
+  initialProject?: MixProjectData | null;
+}
+
+export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
   const { save } = useMixProjectStorage();
 
@@ -49,6 +53,8 @@ export default function MixFitCheck() {
     rafRef.current = requestAnimationFrame(tick);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [playingId, getPlayheadPosition]);
+
+  // (initialProject effect is below handleLoadProject)
 
   const resetProject = useCallback(() => {
     stop();
@@ -88,6 +94,14 @@ export default function MixFitCheck() {
     setNeedsReupload(project.mixes.length > 0);
     toast.info("Project loaded — please re-upload your audio files to continue.");
   }, [stop]);
+
+  // Load initial project from dashboard navigation
+  useEffect(() => {
+    if (initialProject && !projectId) {
+      handleLoadProject(initialProject);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialProject]);
 
   const handleUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
