@@ -113,7 +113,7 @@ export default function HowScoringWorks() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-3xl mx-auto px-4 py-12 space-y-10">
+      <div className="max-w-3xl mx-auto px-4 pt-24 pb-12 space-y-10">
         {/* Header */}
         <motion.div
           className="flex items-center gap-4"
