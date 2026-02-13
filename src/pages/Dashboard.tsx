@@ -150,8 +150,8 @@ const Dashboard = () => {
             ) : searches.length === 0 ? (
               <EmptyState
                 icon={BarChart3}
-                message="No playlist fit checks yet. Run your first one to see results here."
-                actionLabel="Run a Fit Check"
+                message="No PlaylistFit checks yet. Run your first one to see results here."
+                actionLabel="Run PlaylistFit"
                 onAction={() => navigate("/")}
               />
             ) : (
