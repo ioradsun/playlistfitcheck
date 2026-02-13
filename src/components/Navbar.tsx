@@ -40,7 +40,7 @@ export const Navbar = () => {
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 hover:opacity-80 transition-opacity outline-none">
                   <Avatar className="h-8 w-8 border border-border">
-                    <AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.display_name ?? "Avatar"} />
+                    <AvatarImage src={profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || undefined} alt={profile?.display_name ?? "Avatar"} />
                     <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                       {initials}
                     </AvatarFallback>
