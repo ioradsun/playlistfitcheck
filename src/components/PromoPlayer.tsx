@@ -23,7 +23,7 @@ function toEmbedUrl(url: string): string {
   // Convert https://open.spotify.com/artist/X... → https://open.spotify.com/embed/artist/X...
   const match = url.match(/open\.spotify\.com\/(track|artist|album|playlist|episode|show)\/([a-zA-Z0-9]+)/);
   if (match) {
-    return `https://open.spotify.com/embed/${match[1]}/${match[2]}?utm_source=generator`;
+    return `https://open.spotify.com/embed/${match[1]}/${match[2]}?utm_source=generator&theme=0`;
   }
   return url;
 }
