@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, useDragControls } from "framer-motion";
 import { ExternalLink, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -25,8 +25,11 @@ function logEngagement(trackId: string, trackName: string, artistName: string, a
 
 const WIDGET_TITLE = "Featured Artist";
 
-const WidgetHeader = () => (
-  <div className="px-3 py-2.5 border-b border-border cursor-grab active:cursor-grabbing">
+const WidgetHeader = ({ onPointerDown }: { onPointerDown?: (e: React.PointerEvent) => void }) => (
+  <div
+    className="px-3 py-2.5 border-b border-border cursor-grab active:cursor-grabbing"
+    onPointerDown={onPointerDown}
+  >
     <span className="text-xs font-mono text-muted-foreground">{WIDGET_TITLE}</span>
   </div>
 );
@@ -39,6 +42,7 @@ export function PromoPlayer() {
   const [widgetMode, setWidgetMode] = useState<"tracklist" | "embed">("tracklist");
   const isMobile = useIsMobile();
   const constraintsRef = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
 
   useEffect(() => {
     supabase.from("widget_config").select("mode").limit(1).single().then(({ data }) => {
@@ -88,7 +92,7 @@ export function PromoPlayer() {
 
   const trackList = (
     <div className="flex flex-col">
-      <WidgetHeader />
+      <WidgetHeader onPointerDown={(e) => dragControls.start(e)} />
       <div className="overflow-y-auto max-h-[132px]">
         {tracks.map((track, i) => {
           const isActive = activeTrack?.id === track.id;
@@ -156,6 +160,8 @@ export function PromoPlayer() {
         {dragBoundary}
         <motion.div
           drag={!isMobile}
+          dragControls={dragControls}
+          dragListener={false}
           dragConstraints={constraintsRef}
           dragMomentum={false}
           className="fixed bottom-20 right-4 z-50 w-[280px] glass-card rounded-xl shadow-2xl overflow-hidden"
@@ -163,7 +169,7 @@ export function PromoPlayer() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
         >
-          <WidgetHeader />
+          <WidgetHeader onPointerDown={(e) => dragControls.start(e)} />
           <iframe
             src={`https://open.spotify.com/embed/artist/${ARTIST_ID}?utm_source=generator&theme=0`}
             width="100%"
@@ -184,6 +190,8 @@ export function PromoPlayer() {
       {dragBoundary}
       <motion.div
         drag={!isMobile}
+        dragControls={dragControls}
+        dragListener={false}
         dragConstraints={constraintsRef}
         dragMomentum={false}
         className="fixed bottom-20 right-4 z-50 w-[280px] glass-card rounded-xl shadow-2xl overflow-hidden"
