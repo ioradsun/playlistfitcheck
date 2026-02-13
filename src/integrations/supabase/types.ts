@@ -215,6 +215,7 @@ export type Database = {
           id: string
           mode: string
           playlist_url: string
+          thumbnail_url: string | null
           updated_at: string
           widget_title: string
         }
@@ -223,6 +224,7 @@ export type Database = {
           id?: string
           mode?: string
           playlist_url?: string
+          thumbnail_url?: string | null
           updated_at?: string
           widget_title?: string
         }
@@ -231,6 +233,7 @@ export type Database = {
           id?: string
           mode?: string
           playlist_url?: string
+          thumbnail_url?: string | null
           updated_at?: string
           widget_title?: string
         }
