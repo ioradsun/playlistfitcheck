@@ -16,6 +16,8 @@ interface MixCardProps {
   isPlaying: boolean;
   usedRanks: number[];
   totalMixes: number;
+  markerStartPct: number;
+  markerEndPct: number;
   onPlay: () => void;
   onStop: () => void;
   onNameChange: (name: string) => void;
@@ -35,12 +37,13 @@ function drawCardWaveform(canvas: HTMLCanvasElement, peaks: number[], isPlaying:
   ctx.clearRect(0, 0, cw, ch);
 
   const barW = cw / peaks.length;
+  const gap = 1;
   peaks.forEach((peak, i) => {
-    const barH = peak * ch * 0.85;
+    const barH = Math.max(peak * ch * 0.85, 1);
     ctx.fillStyle = isPlaying
       ? "hsl(var(--primary))"
-      : "hsla(var(--primary), 0.5)";
-    ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - 1, 1), barH);
+      : "hsla(var(--primary), 0.35)";
+    ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
 }
 
@@ -53,6 +56,8 @@ export function MixCard({
   isPlaying,
   usedRanks,
   totalMixes,
+  markerStartPct,
+  markerEndPct,
   onPlay,
   onStop,
   onNameChange,
@@ -93,8 +98,31 @@ export function MixCard({
           </Button>
         </div>
 
-        {/* Waveform */}
-        <canvas ref={canvasRef} className="w-full h-12 rounded" />
+        {/* Waveform with marker overlay */}
+        <div className="relative">
+          <canvas ref={canvasRef} className="w-full h-12 rounded" />
+
+          {/* Dimmed regions outside markers */}
+          <div
+            className="absolute inset-y-0 left-0 bg-background/60 rounded-l pointer-events-none"
+            style={{ width: `${markerStartPct}%` }}
+          />
+          <div
+            className="absolute inset-y-0 right-0 bg-background/60 rounded-r pointer-events-none"
+            style={{ width: `${100 - markerEndPct}%` }}
+          />
+
+          {/* Start marker line */}
+          <div
+            className="absolute inset-y-0 w-[2px] bg-primary pointer-events-none"
+            style={{ left: `${markerStartPct}%` }}
+          />
+          {/* End marker line */}
+          <div
+            className="absolute inset-y-0 w-[2px] bg-primary pointer-events-none"
+            style={{ left: `${markerEndPct}%` }}
+          />
+        </div>
 
         {/* Controls row */}
         <div className="flex items-center gap-2">
