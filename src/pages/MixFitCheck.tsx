@@ -1,0 +1,245 @@
+import { useState, useCallback, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { MixProjectForm } from "@/components/mix/MixProjectForm";
+import { MixCard } from "@/components/mix/MixCard";
+import { GlobalTimeline } from "@/components/mix/GlobalTimeline";
+import { SavedProjectsList } from "@/components/mix/SavedProjectsList";
+import { useAudioEngine, type AudioMix } from "@/hooks/useAudioEngine";
+import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
+import { Upload, Save, ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
+
+const MAX_MIXES = 6;
+
+export default function MixFitCheck() {
+  const { decodeFile, play, stop, playingId } = useAudioEngine();
+  const { save } = useMixProjectStorage();
+
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
+  const [mixes, setMixes] = useState<AudioMix[]>([]);
+  const [markerStart, setMarkerStart] = useState(0);
+  const [markerEnd, setMarkerEnd] = useState(10);
+  const [saving, setSaving] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
+  // Track which mixes need re-upload (loaded from saved project without audio)
+  const [needsReupload, setNeedsReupload] = useState(false);
+
+  const resetProject = useCallback(() => {
+    stop();
+    setProjectId(null);
+    setTitle("");
+    setNotes("");
+    setMixes([]);
+    setMarkerStart(0);
+    setMarkerEnd(10);
+    setNeedsReupload(false);
+  }, [stop]);
+
+  const handleCreate = useCallback((t: string, n: string) => {
+    setProjectId(crypto.randomUUID());
+    setTitle(t);
+    setNotes(n);
+  }, []);
+
+  const handleLoadProject = useCallback((project: MixProjectData) => {
+    stop();
+    setProjectId(project.id);
+    setTitle(project.title);
+    setNotes(project.notes);
+    setMarkerStart(project.markerStart);
+    setMarkerEnd(project.markerEnd);
+    // Restore mix metadata without audio buffers
+    setMixes(
+      project.mixes.map((m, i) => ({
+        id: crypto.randomUUID(),
+        name: m.name,
+        buffer: null as any,
+        waveform: { peaks: [], duration: 0 },
+        rank: m.rank,
+        comments: m.comments,
+      }))
+    );
+    setNeedsReupload(project.mixes.length > 0);
+    toast.info("Project loaded — please re-upload your audio files to continue.");
+  }, [stop]);
+
+  const handleUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files) return;
+      const remaining = MAX_MIXES - mixes.filter((m) => m.buffer).length;
+      const toProcess = Array.from(files).slice(0, remaining);
+
+      for (const file of toProcess) {
+        try {
+          const { buffer, waveform } = await decodeFile(file);
+          const newMix: AudioMix = {
+            id: crypto.randomUUID(),
+            name: file.name.replace(/\.(mp3|wav)$/i, ""),
+            buffer,
+            waveform,
+            rank: null,
+            comments: "",
+          };
+          setMixes((prev) => {
+            const updated = [...prev, newMix];
+            // Set marker end to duration of first mix if this is the first
+            if (updated.filter((m) => m.buffer).length === 1) {
+              setMarkerEnd(waveform.duration);
+            }
+            return updated;
+          });
+        } catch {
+          toast.error(`Failed to decode ${file.name}`);
+        }
+      }
+      if (fileRef.current) fileRef.current.value = "";
+      setNeedsReupload(false);
+    },
+    [decodeFile, mixes]
+  );
+
+  const handleSave = useCallback(async () => {
+    if (!projectId) return;
+    setSaving(true);
+    try {
+      await save({
+        id: projectId,
+        title,
+        notes,
+        mixes: mixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })),
+        markerStart,
+        markerEnd,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      toast.success("Project saved");
+      setRefreshKey((k) => k + 1);
+    } catch {
+      toast.error("Failed to save");
+    }
+    setSaving(false);
+  }, [projectId, title, notes, mixes, markerStart, markerEnd, save]);
+
+  const updateMix = useCallback((id: string, updates: Partial<AudioMix>) => {
+    setMixes((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
+  }, []);
+
+  const removeMix = useCallback(
+    (id: string) => {
+      if (playingId === id) stop();
+      setMixes((prev) => prev.filter((m) => m.id !== id));
+    },
+    [playingId, stop]
+  );
+
+  const usedRanks = mixes.map((m) => m.rank).filter((r): r is number => r !== null);
+  const firstWaveform = mixes.find((m) => m.buffer)?.waveform || null;
+  const activeMixes = mixes.filter((m) => m.buffer);
+
+  // If no project created yet, show form + saved projects
+  if (!projectId) {
+    return (
+      <div className="w-full max-w-2xl mx-auto py-8 px-4">
+        <MixProjectForm onSubmit={handleCreate} />
+        <SavedProjectsList onLoad={handleLoadProject} refreshKey={refreshKey} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-5xl mx-auto py-6 px-4 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetProject}>
+            <ArrowLeft size={16} />
+          </Button>
+          <div>
+            <h1 className="text-lg font-semibold">{title}</h1>
+            {notes && <p className="text-xs text-muted-foreground">{notes}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleSave} disabled={saving}>
+            <Save size={14} className="mr-1" />
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Re-upload prompt */}
+      {needsReupload && (
+        <div className="rounded-md border border-primary/30 bg-primary/5 p-4 text-sm text-center space-y-2">
+          <p>Audio files aren't stored — please re-upload your mix files to resume playback.</p>
+          <p className="text-xs text-muted-foreground">
+            Your rankings, comments, and marker positions have been restored.
+          </p>
+        </div>
+      )}
+
+      {/* Global Timeline */}
+      <GlobalTimeline
+        waveform={firstWaveform}
+        markerStart={markerStart}
+        markerEnd={markerEnd}
+        onMarkersChange={(s, e) => {
+          setMarkerStart(s);
+          setMarkerEnd(e);
+        }}
+      />
+
+      {/* Upload area */}
+      {activeMixes.length < MAX_MIXES && (
+        <div className="flex items-center gap-3">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".mp3,.wav,audio/mpeg,audio/wav"
+            multiple
+            className="hidden"
+            onChange={handleUpload}
+          />
+          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+            <Upload size={14} className="mr-1" />
+            Upload Mix{activeMixes.length > 0 ? "" : "es"} ({activeMixes.length}/{MAX_MIXES})
+          </Button>
+        </div>
+      )}
+
+      {/* Mix Cards Grid */}
+      {activeMixes.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {activeMixes.map((mix) => (
+            <MixCard
+              key={mix.id}
+              id={mix.id}
+              name={mix.name}
+              waveform={mix.waveform}
+              rank={mix.rank}
+              comments={mix.comments}
+              isPlaying={playingId === mix.id}
+              usedRanks={usedRanks}
+              totalMixes={activeMixes.length}
+              onPlay={() => play(mix.id, mix.buffer, markerStart, markerEnd)}
+              onStop={stop}
+              onNameChange={(name) => updateMix(mix.id, { name })}
+              onRankChange={(rank) => updateMix(mix.id, { rank })}
+              onCommentsChange={(comments) => updateMix(mix.id, { comments })}
+              onRemove={() => removeMix(mix.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {activeMixes.length === 0 && !needsReupload && (
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          Upload your first mix to get started
+        </div>
+      )}
+    </div>
+  );
+}
