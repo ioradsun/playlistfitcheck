@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import MixFitCheck from "@/pages/MixFitCheck";
+import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -51,6 +52,8 @@ const Index = () => {
   const autoRunRef = useRef(false);
   const cameFromDashboardRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [activeTab, setActiveTab] = useState("playlist");
+  const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
   const [vibeLoading, setVibeLoading] = useState(false);
   const [songFitAnalysis, setSongFitAnalysis] = useState<SongFitAnalysis | null>(null);
@@ -226,13 +229,19 @@ const Index = () => {
           setVibeLoading(false);
         }
       })();
+    } else if (state?.loadMixProject) {
+      autoRunRef.current = true;
+      cameFromDashboardRef.current = true;
+      window.history.replaceState({}, "", "/");
+      setLoadedMixProject(state.loadMixProject);
+      setActiveTab("mix");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Tabs defaultValue="playlist" className="flex-1 flex flex-col">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="flex justify-center pt-20 pb-2">
           <TabsList>
             <TabsTrigger value="playlist">Playlist Fit Check</TabsTrigger>
@@ -261,7 +270,7 @@ const Index = () => {
         </TabsContent>
 
         <TabsContent value="mix" className="flex-1 flex items-start justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
-          <MixFitCheck />
+          <MixFitCheck initialProject={loadedMixProject} />
         </TabsContent>
       </Tabs>
     </div>
