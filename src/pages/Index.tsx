@@ -165,16 +165,29 @@ const Index = () => {
     if (!playlistUrl || autoRunRef.current) return;
     autoRunRef.current = true;
     const songUrl = searchParams.get("song") || undefined;
-    setSearchParams({}, { replace: true }); // clear params
+    // Clear params immediately to prevent re-trigger
+    window.history.replaceState({}, "", "/");
 
     (async () => {
       setAutoRunLoading(true);
       try {
         const { data, error } = await supabase.functions.invoke("spotify-playlist", {
-          body: { playlistUrl, songUrl: songUrl || null },
+          body: { playlistUrl, sessionId: null, songUrl: songUrl || null },
         });
-        if (error || data?.error) throw new Error(data?.error || error?.message);
-        handleAnalyze({ ...(data as PlaylistInput), _songUrl: songUrl });
+        if (error) throw new Error(error.message);
+        if (data?.error) throw new Error(data.error);
+        const trackList = data._trackList;
+        const output = computePlaylistHealth(data as PlaylistInput);
+        setVibeAnalysis(null);
+        setSongFitAnalysis(null);
+        setResult({ output, input: data as PlaylistInput, name: data.playlistName, key: Date.now(), trackList, songUrl });
+
+        if (trackList && trackList.length > 0) {
+          fetchVibeAnalysis(data as PlaylistInput, trackList);
+          if (songUrl) {
+            fetchSongFitAnalysis(songUrl, data as PlaylistInput, trackList, output);
+          }
+        }
       } catch (e) {
         console.error("Auto-run error:", e);
         toast.error("Failed to load report. Try running the fit check again.");
@@ -182,7 +195,8 @@ const Index = () => {
         setAutoRunLoading(false);
       }
     })();
-  }, [searchParams, setSearchParams, handleAnalyze]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

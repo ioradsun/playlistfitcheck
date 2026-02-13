@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Pencil, Camera, Share2, X, Check, Loader2 } from "lucide-react";
+import { Pencil, Camera, Share2, X, Check, Loader2, Music } from "lucide-react";
 
 
 const Profile = () => {
@@ -152,6 +152,25 @@ const Profile = () => {
                   <p className="text-xs text-muted-foreground">Paste a Spotify playlist or album link to embed on your public profile</p>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Spotify embed for artists (outside edit view) */}
+        {!editing && isArtist && spotifyUrl && (
+          <Card className="glass-card border-border overflow-hidden">
+            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Music size={18} /> My Music</CardTitle></CardHeader>
+            <CardContent>
+              <iframe
+                src={spotifyUrl.replace("open.spotify.com/", "open.spotify.com/embed/")}
+                width="100%"
+                height="352"
+                frameBorder="0"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                loading="lazy"
+                className="rounded-lg"
+                title="Spotify embed"
+              />
             </CardContent>
           </Card>
         )}
