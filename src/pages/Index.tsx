@@ -240,7 +240,7 @@ const Index = () => {
           </TabsList>
         </div>
 
-        <TabsContent value="playlist" className="flex-1 flex items-center justify-center px-4 py-8">
+        <TabsContent value="playlist" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
           {result && !isFullyLoaded ? (
             <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
           ) : result && isFullyLoaded ? (
@@ -260,7 +260,7 @@ const Index = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="mix" className="flex-1 flex items-center justify-center px-4 py-8">
+        <TabsContent value="mix" className="flex-1 flex items-start justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
           <MixFitCheck />
         </TabsContent>
       </Tabs>
