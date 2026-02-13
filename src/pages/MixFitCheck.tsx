@@ -92,7 +92,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
       }))
     );
     setNeedsReupload(project.mixes.length > 0);
-    toast.info("Project loaded — please re-upload your audio files to continue.");
+    toast.info("Project loaded — re-upload audio files to resume playback.");
   }, [stop]);
 
   // Load initial project from dashboard navigation
@@ -153,7 +153,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
-      toast.success("Project saved");
+      toast.success("Project saved — audio files are not stored, only filenames, rankings & notes.");
       setRefreshKey((k) => k + 1);
     } catch {
       toast.error("Failed to save");
@@ -210,9 +210,9 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
       {/* Re-upload prompt */}
       {needsReupload && (
         <div className="rounded-md border border-primary/30 bg-primary/5 p-4 text-sm text-center space-y-2">
-          <p>Audio files aren't stored — please re-upload your mix files to resume playback.</p>
+          <p>Re-upload your audio files to resume playback.</p>
           <p className="text-xs text-muted-foreground">
-            Your rankings, comments, and marker positions have been restored.
+            Filenames, rankings, and notes have been restored.
           </p>
         </div>
       )}

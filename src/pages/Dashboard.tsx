@@ -256,28 +256,37 @@ const Dashboard = () => {
                             <Sliders size={14} className="text-primary shrink-0" />
                             <p className="text-sm font-medium truncate">{p.title}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground pl-[22px]">
-                            {p.mixes.length} mix{p.mixes.length !== 1 ? "es" : ""}
-                            {p.notes ? ` · ${p.notes}` : ""}
-                          </p>
+                          {p.notes && (
+                            <p className="text-xs text-muted-foreground pl-[22px] truncate">{p.notes}</p>
+                          )}
+                          {/* Mix details: filename, rank, comments */}
+                          {p.mixes.length > 0 && (
+                            <div className="pl-[22px] space-y-1 mt-1">
+                              {p.mixes
+                                .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
+                                .map((m, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs">
+                                    {m.rank != null && (
+                                      <span className={`font-mono font-bold ${m.rank === 1 ? "text-primary" : "text-muted-foreground"}`}>
+                                        #{m.rank}
+                                      </span>
+                                    )}
+                                    <span className="text-foreground/80 truncate">{m.name}</span>
+                                    {m.comments && (
+                                      <span className="text-muted-foreground truncate italic max-w-[120px]">— {m.comments}</span>
+                                    )}
+                                  </div>
+                                ))}
+                            </div>
+                          )}
                           <p className="text-xs text-muted-foreground pl-[22px]">
                             {new Date(p.updatedAt).toLocaleDateString(undefined, {
                               year: "numeric", month: "short", day: "numeric",
-                              hour: "2-digit", minute: "2-digit",
                             })}
                           </p>
                         </div>
 
                         <div className="flex items-center gap-3 shrink-0">
-                          {/* Show top-ranked mix if any */}
-                          {p.mixes.some(m => m.rank === 1) && (
-                            <div className="text-right">
-                              <p className="text-xs text-primary font-medium">★ Top Pick</p>
-                              <p className="text-[10px] text-muted-foreground truncate max-w-[100px]">
-                                {p.mixes.find(m => m.rank === 1)?.name}
-                              </p>
-                            </div>
-                          )}
 
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
