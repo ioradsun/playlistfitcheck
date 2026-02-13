@@ -252,7 +252,6 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
           setMarkerEnd(e);
         }}
         onPlay={() => {
-          // Play the first available mix in the comparison region
           const first = activeMixes[0];
           if (first) play(first.id, first.buffer, markerStart, markerEnd);
         }}
