@@ -1,43 +1,94 @@
 
 
-## Auto-Fetch Metadata via Spotify oEmbed
+# Mix Fit Check — with Save Support (Local + Cloud)
 
-When an admin pastes a Spotify URL in the widget config, automatically fetch the title and thumbnail from Spotify's oEmbed endpoint to populate the widget header and optionally show album art.
+## Overview
 
-### How It Works
+Add a tabbed homepage with the existing **PlaylistFitCheck** and a new **Mix Fit Check** tool. Mix projects save to **localStorage** for guests and additionally to the **cloud database** for logged-in users. Audio files themselves stay in browser memory (too large for cloud storage in this context), but project metadata, rankings, comments, and marker positions persist.
 
-1. **New backend function** `spotify-oembed` that proxies requests to `https://open.spotify.com/oembed?url={spotifyUrl}` (avoids CORS issues from the browser).
+## What Gets Saved
 
-2. **Admin panel enhancement** — When the admin pastes/changes the embed URL field:
-   - Auto-fetch oEmbed data via the new function
-   - Pre-fill the "Widget Title" field with the returned `title`
-   - Store the `thumbnail_url` in the database for optional use
+| Data | Local (guest) | Cloud (logged-in) |
+|------|--------------|-------------------|
+| Song title + notes | Yes | Yes |
+| Mix names + rankings + comments | Yes | Yes |
+| Start/end marker positions | Yes | Yes |
+| Audio files (MP3/WAV) | No (too large) | No |
 
-3. **Database update** — Add a `thumbnail_url` column to `widget_config` to cache the fetched thumbnail.
+When a logged-in user reopens a saved project, they will see their metadata, rankings, and comments but will need to re-upload the audio files. A clear prompt will guide them to do so.
 
-4. **Widget enhancement** — Optionally display the thumbnail in the widget header alongside the title for a richer appearance.
+## Database Changes
 
-### Technical Details
+**New table: `mix_projects`**
 
-**New edge function: `supabase/functions/spotify-oembed/index.ts`**
-- Accepts a Spotify URL in the request body
-- Calls `https://open.spotify.com/oembed?url={url}` server-side
-- Returns `{ title, thumbnail_url, type }` to the client
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid (PK) | auto-generated |
+| user_id | uuid (FK) | references auth.users, cascade delete |
+| title | text | required |
+| notes | text | optional |
+| mixes | jsonb | array of mix objects (name, rank, comments, marker positions) |
+| created_at | timestamptz | default now() |
+| updated_at | timestamptz | default now() |
 
-**Database migration**
-- `ALTER TABLE widget_config ADD COLUMN thumbnail_url text;`
+**RLS policies:**
+- Users can SELECT, INSERT, UPDATE, DELETE only their own rows (`auth.uid() = user_id`)
 
-**Admin panel changes (`src/pages/Admin.tsx`)**
-- Add a debounced effect on the embed URL input that calls the `spotify-oembed` function
-- Auto-populate the title field with the oEmbed response title
-- Show a small thumbnail preview next to the URL input
+## New Files
 
-**Widget changes (`src/components/PromoPlayer.tsx`)**
-- If `thumbnail_url` is set, display it in the widget header as a small icon next to the title
-- Falls back to text-only header if no thumbnail
+| File | Purpose |
+|------|---------|
+| `src/pages/MixFitCheck.tsx` | Main workspace: project creation, mix cards grid, global timeline, save/load |
+| `src/components/mix/MixCard.tsx` | Individual card: waveform canvas, play/pause, rank, comments, remove |
+| `src/components/mix/GlobalTimeline.tsx` | Shared waveform with draggable start/end markers |
+| `src/components/mix/MixProjectForm.tsx` | Song title + notes entry form |
+| `src/components/mix/SavedProjectsList.tsx` | List of saved projects (from localStorage or cloud) with load/delete |
+| `src/hooks/useAudioEngine.ts` | Web Audio API: decode files, extract waveform peaks, manage playback with marker bounds |
+| `src/hooks/useMixProjectStorage.ts` | Abstraction over localStorage + cloud save/load logic |
 
-### What This Does NOT Change
-- The actual Spotify embed iframe stays the same — oEmbed does not unlock extra player features
-- The admin can still manually override the title after auto-fill
-- Existing widget behavior (dragging, modes) remains untouched
+## Modified Files
+
+| File | Change |
+|------|--------|
+| `src/pages/Index.tsx` | Add tab bar (PlaylistFitCheck / Mix Fit Check) wrapping existing content |
+
+## How It Works
+
+### Tab Navigation
+A minimal tab bar appears at the top of the Index page. First tab renders the existing `PlaylistInputSection`/`ResultsDashboard` flow unchanged. Second tab renders the new `MixFitCheck` component.
+
+### Audio Engine (useAudioEngine)
+- `AudioContext.decodeAudioData()` decodes uploaded MP3/WAV into `AudioBuffer`
+- Waveform peaks extracted from buffer channel data, rendered to `<canvas>`
+- Playback via `AudioBufferSourceNode.start(0, startOffset, duration)` respecting marker positions
+- Only one source node active at a time (exclusive playback)
+
+### Global Timeline (GlobalTimeline)
+- Renders waveform of the first uploaded mix as reference
+- Two draggable handles for start/end markers stored as time offsets
+- Label displays "Comparing: M:SS - M:SS"
+- Marker changes propagate to all mix cards instantly
+
+### Mix Cards (MixCard)
+- 3-column responsive grid (1 col mobile, 2 col tablet, 3 col desktop)
+- Each card: editable name input, canvas waveform, play/pause button, rank dropdown (1-6, validated for no duplicates), textarea for comments, remove button
+- Play button starts from global start marker, stops at end marker
+
+### Save Logic (useMixProjectStorage)
+- **Guest**: serialize project metadata (title, notes, mixes array with names/ranks/comments, marker positions) to `localStorage` under a key like `mix_projects`
+- **Logged-in**: same data saved to `mix_projects` table via Supabase client, plus localStorage as offline cache
+- Save triggers on explicit "Save" button click and auto-saves on significant changes (debounced)
+- Load: on mount, check cloud first (if logged in), fall back to localStorage
+
+### Saved Projects List
+- Shows previously saved projects with title, date, mix count
+- Click to load — restores metadata and prompts user to re-upload audio files
+- Delete option available
+
+## Design
+- Matches existing dark aesthetic with glass-card patterns
+- Waveform rendered in primary color with subtle opacity
+- Marker handles styled as primary-colored vertical lines with drag cursors
+- Rank #1 card gets a subtle primary border glow
+- Professional, minimal, no clutter
 
