@@ -34,21 +34,21 @@ function logEngagement(trackId: string, trackName: string, artistName: string, a
   }).catch(() => {});
 }
 
-const WidgetHeader = ({ title, thumbnailUrl, thumbnailLink, onPointerDown, compact }: { title: string; thumbnailUrl?: string | null; thumbnailLink?: string | null; onPointerDown?: (e: React.PointerEvent) => void; compact?: boolean }) => (
+const WidgetHeader = ({ title, thumbnailUrl, thumbnailLink, onPointerDown }: { title: string; thumbnailUrl?: string | null; thumbnailLink?: string | null; onPointerDown?: (e: React.PointerEvent) => void }) => (
   <div
-    className={`border-b border-border cursor-grab active:cursor-grabbing flex items-center gap-1.5 ${compact ? "px-2 py-1.5" : "px-3 py-2.5 gap-2"}`}
+    className="border-b border-border cursor-grab active:cursor-grabbing flex items-center gap-1.5 px-2 py-1.5"
     onPointerDown={onPointerDown}
   >
     {thumbnailUrl && (
       thumbnailLink ? (
         <a href={thumbnailLink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
-          <img src={thumbnailUrl} alt="" className={`rounded object-cover hover:ring-1 hover:ring-primary transition-all ${compact ? "w-4 h-4" : "w-5 h-5"}`} />
+          <img src={thumbnailUrl} alt="" className="w-4 h-4 rounded object-cover hover:ring-1 hover:ring-primary transition-all" />
         </a>
       ) : (
-        <img src={thumbnailUrl} alt="" className={`rounded object-cover flex-shrink-0 ${compact ? "w-4 h-4" : "w-5 h-5"}`} />
+        <img src={thumbnailUrl} alt="" className="w-4 h-4 rounded object-cover flex-shrink-0" />
       )
     )}
-    <span className={`font-mono text-muted-foreground truncate ${compact ? "text-[10px]" : "text-xs"}`}>{title}</span>
+    <span className="font-mono text-[10px] text-muted-foreground truncate">{title}</span>
   </div>
 );
 
@@ -129,8 +129,8 @@ export function PromoPlayer() {
   // ── TRACKLIST MODE content ──
   const trackList = (
     <div className="flex flex-col">
-      <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} thumbnailLink={thumbnailLink} onPointerDown={(e) => dragControls.start(e)} compact={isMobile} />
-      <div className={`overflow-y-auto ${isMobile ? "max-h-[88px]" : "max-h-[132px]"}`}>
+      <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} thumbnailLink={thumbnailLink} onPointerDown={(e) => dragControls.start(e)} />
+      <div className="overflow-y-auto max-h-[88px]">
         {tracks.map((track, i) => {
           const isActive = activeTrack?.id === track.id;
           return (
@@ -139,7 +139,7 @@ export function PromoPlayer() {
               onClick={() => handleTrackClick(track)}
               className={`w-full flex items-center text-left group transition-colors ${
                 isActive ? "bg-primary/10" : "hover:bg-muted/50"
-              } ${isMobile ? "gap-1.5 px-2 py-1" : "gap-2.5 px-3 py-2"}`}
+              } gap-1.5 px-2 py-1`}
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.02 }}
@@ -148,24 +148,24 @@ export function PromoPlayer() {
                 {isActive ? (
                   <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                 ) : (
-                  <Play size={isMobile ? 8 : 10} className="text-muted-foreground group-hover:text-primary transition-colors" />
+                  <Play size={8} className="text-muted-foreground group-hover:text-primary transition-colors" />
                 )}
               </span>
               {track.albumArt && (
-                <img src={track.albumArt} alt="" className={`rounded object-cover flex-shrink-0 ${isMobile ? "w-6 h-6" : "w-8 h-8"}`} />
+                <img src={track.albumArt} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" />
               )}
               <div className="flex-1 min-w-0">
-                <p className={`truncate transition-colors ${isActive ? "text-primary font-medium" : "group-hover:text-primary"} ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                <p className={`text-[10px] truncate transition-colors ${isActive ? "text-primary font-medium" : "group-hover:text-primary"}`}>
                   {track.name}
                 </p>
-                <p className={`text-muted-foreground truncate ${isMobile ? "text-[9px]" : "text-[11px]"}`}>{track.artists}</p>
+                <p className="text-[9px] text-muted-foreground truncate">{track.artists}</p>
               </div>
               <button
                 onClick={(e) => handleSpotifyClick(e, track)}
                 className="flex-shrink-0 p-1 rounded-full hover:bg-primary/20 text-muted-foreground hover:text-primary transition-colors"
                 title="Open in Spotify"
               >
-                <ExternalLink size={isMobile ? 9 : 11} />
+                <ExternalLink size={9} />
               </button>
             </motion.button>
           );
@@ -202,16 +202,16 @@ export function PromoPlayer() {
           dragListener={false}
           dragConstraints={constraintsRef}
           dragMomentum={false}
-          className={`fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden ${isMobile ? "bottom-16 right-2 w-[200px]" : "bottom-20 right-4 w-[280px]"}`}
+          className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-4 left-1/2 -translate-x-1/2 w-[200px]"
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
         >
-          <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} thumbnailLink={thumbnailLink} onPointerDown={(e) => dragControls.start(e)} compact={isMobile} />
+          <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} thumbnailLink={thumbnailLink} onPointerDown={(e) => dragControls.start(e)} />
           <iframe
             src={toEmbedUrl(embedUrl)}
             width="100%"
-            height={isMobile ? "80" : "152"}
+            height="80"
             frameBorder="0"
             allowFullScreen
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
@@ -233,7 +233,7 @@ export function PromoPlayer() {
         dragListener={false}
         dragConstraints={constraintsRef}
         dragMomentum={false}
-        className={`fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden ${isMobile ? "bottom-16 right-2 w-[200px]" : "bottom-20 right-4 w-[280px]"}`}
+        className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-4 left-1/2 -translate-x-1/2 w-[200px]"
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
