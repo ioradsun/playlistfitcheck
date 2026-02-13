@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, Music, Plus, BarChart3, MoreVertical, Trash2, Sliders } from "lucide-react";
+import { User, Music, Plus, BarChart3, MoreVertical, Trash2, Sliders, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
 
@@ -61,6 +61,8 @@ const Dashboard = () => {
   const [loadingSearches, setLoadingSearches] = useState(true);
   const [mixProjects, setMixProjects] = useState<MixProjectData[]>([]);
   const [loadingMix, setLoadingMix] = useState(true);
+  const [savedLyrics, setSavedLyrics] = useState<any[]>([]);
+  const [loadingLyrics, setLoadingLyrics] = useState(true);
   const { list: listMixProjects, remove: removeMixProject } = useMixProjectStorage();
 
   useEffect(() => {
@@ -91,6 +93,20 @@ const Dashboard = () => {
     });
   }, [user, listMixProjects]);
 
+  // Load saved lyrics
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("saved_lyrics")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setSavedLyrics(data);
+        setLoadingLyrics(false);
+      });
+  }, [user]);
+
   const handleDeleteSearch = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const { error } = await supabase.from("saved_searches").delete().eq("id", id);
@@ -108,6 +124,17 @@ const Dashboard = () => {
     setMixProjects(prev => prev.filter(p => p.id !== id));
     toast.success("Mix project deleted");
   }, [removeMixProject]);
+
+  const handleDeleteLyric = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const { error } = await supabase.from("saved_lyrics").delete().eq("id", id);
+    if (error) {
+      toast.error("Failed to delete");
+    } else {
+      setSavedLyrics(prev => prev.filter(l => l.id !== id));
+      toast.success("Lyrics deleted");
+    }
+  };
 
   if (authLoading || !user) return null;
 
@@ -140,6 +167,9 @@ const Dashboard = () => {
             </TabsTrigger>
             <TabsTrigger value="mix" className="flex-1 gap-1.5">
               <Sliders size={14} /> MixFit
+            </TabsTrigger>
+            <TabsTrigger value="lyric" className="flex-1 gap-1.5">
+              <FileText size={14} /> LyricFit
             </TabsTrigger>
           </TabsList>
 
@@ -278,6 +308,73 @@ const Dashboard = () => {
                             <DropdownMenuContent align="end" className="w-40 bg-card border-border z-[100]">
                               <DropdownMenuItem
                                 onClick={(e) => handleDeleteMixProject(e, p.id)}
+                                className="cursor-pointer gap-2 text-destructive focus:text-destructive"
+                              >
+                                <Trash2 size={14} /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* LyricFit Tab */}
+          <TabsContent value="lyric" className="mt-4">
+            {loadingLyrics ? (
+              <div className="text-sm text-muted-foreground py-12 text-center">Loading your saved lyrics…</div>
+            ) : savedLyrics.length === 0 ? (
+              <EmptyState
+                icon={FileText}
+                message="No saved lyrics yet. Transcribe a song and save it to see it here."
+                actionLabel="Transcribe a Song"
+                onAction={() => navigate("/")}
+              />
+            ) : (
+              <div className="space-y-3">
+                {savedLyrics.map((l) => (
+                  <Card
+                    key={l.id}
+                    className="glass-card border-border hover:border-primary/30 transition-colors cursor-pointer"
+                    onClick={() => {
+                      navigate("/", { state: { loadLyric: l } });
+                    }}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <FileText size={14} className="text-primary shrink-0" />
+                            <p className="text-sm font-medium truncate">
+                              {l.title !== "Unknown" ? l.title : l.filename || "Untitled"}
+                            </p>
+                          </div>
+                          {l.artist !== "Unknown" && (
+                            <p className="text-xs text-muted-foreground truncate pl-[22px]">
+                              🎤 {l.artist}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground pl-[22px]">
+                            {(l.lines as any[])?.length ?? 0} lines · {new Date(l.created_at).toLocaleDateString(undefined, {
+                              year: "numeric", month: "short", day: "numeric",
+                            })}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <button className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors">
+                                <MoreVertical size={16} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40 bg-card border-border z-[100]">
+                              <DropdownMenuItem
+                                onClick={(e) => handleDeleteLyric(e, l.id)}
                                 className="cursor-pointer gap-2 text-destructive focus:text-destructive"
                               >
                                 <Trash2 size={14} /> Delete
