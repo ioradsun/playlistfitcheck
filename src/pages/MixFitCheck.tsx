@@ -282,7 +282,46 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
         </div>
       )}
 
-      {activeMixes.length === 0 && !needsReupload && (
+      {/* Results Summary Table */}
+      {mixes.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-muted-foreground">Results</h3>
+          <div className="rounded-md border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Rank</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Filename</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...mixes]
+                  .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
+                  .map((m) => (
+                    <tr key={m.id} className="border-b border-border last:border-0">
+                      <td className="px-3 py-2">
+                        {m.rank != null ? (
+                          <span className={`font-mono font-bold ${m.rank === 1 ? "text-primary" : "text-foreground/70"}`}>
+                            #{m.rank}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-foreground truncate max-w-[200px]">{m.name}</td>
+                      <td className="px-3 py-2 text-muted-foreground truncate max-w-[200px] italic">
+                        {m.comments || "—"}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeMixes.length === 0 && !needsReupload && mixes.length === 0 && (
         <div className="text-center py-12 text-muted-foreground text-sm">
           Upload your first mix to get started
         </div>
