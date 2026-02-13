@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ExternalLink, Music2, Loader2, Play, X } from "lucide-react";
+import { ExternalLink, Music2, Play, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getSessionId } from "@/lib/sessionId";
@@ -17,7 +17,7 @@ interface Track {
 
 const PLAYLIST_ID = "3wtgtkdE8aDOf3V0LYoAXa";
 
-function logEngagement(trackId: string, trackName: string, artistName: string, action: "play" | "spotify_click") {
+function logEngagement(trackId: string, trackName: string, artistName: string, action: string) {
   supabase.functions.invoke("track-engagement", {
     body: { trackId, trackName, artistName, action, sessionId: getSessionId() },
   }).catch(() => {});
@@ -29,9 +29,19 @@ export function PromoPlayer() {
   const [error, setError] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [widgetMode, setWidgetMode] = useState<"tracklist" | "embed">("tracklist");
   const isMobile = useIsMobile();
 
+  // Fetch widget config
   useEffect(() => {
+    supabase.from("widget_config").select("mode").limit(1).single().then(({ data }) => {
+      if (data?.mode) setWidgetMode(data.mode as "tracklist" | "embed");
+    });
+  }, []);
+
+  // Fetch tracks only if tracklist mode
+  useEffect(() => {
+    if (widgetMode !== "tracklist") { setLoading(false); return; }
     async function fetchTracks() {
       try {
         const { data, error: fnError } = await supabase.functions.invoke("playlist-player", {
@@ -48,7 +58,21 @@ export function PromoPlayer() {
       }
     }
     fetchTracks();
-  }, []);
+  }, [widgetMode]);
+
+  const handleExpand = useCallback(() => {
+    setExpanded(true);
+    if (widgetMode === "embed") {
+      logEngagement("widget", "Widget", "System", "widget_open");
+    }
+  }, [widgetMode]);
+
+  const handleCollapse = useCallback(() => {
+    setExpanded(false);
+    if (widgetMode === "embed") {
+      logEngagement("widget", "Widget", "System", "widget_close");
+    }
+  }, [widgetMode]);
 
   const handleTrackClick = useCallback((track: Track) => {
     logEngagement(track.id, track.name, track.artists, "play");
@@ -61,8 +85,36 @@ export function PromoPlayer() {
     window.open(track.spotifyUrl, "_blank", "noopener");
   }, []);
 
-  if (loading || error || tracks.length === 0) return null;
+  if (loading || error) return null;
+  if (widgetMode === "tracklist" && tracks.length === 0) return null;
 
+  // ── EMBED MODE ──
+  const embedContent = (
+    <div className="flex flex-col">
+      <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Music2 size={13} className="text-primary" />
+          <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
+        </div>
+        {!isMobile && (
+          <button onClick={handleCollapse} className="p-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors">
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      <iframe
+        src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
+        width="100%"
+        height="352"
+        frameBorder="0"
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"
+        className="rounded-b-xl"
+      />
+    </div>
+  );
+
+  // ── TRACKLIST MODE ──
   const trackList = (
     <div className="flex flex-col">
       <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
@@ -71,7 +123,7 @@ export function PromoPlayer() {
           <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
         </div>
         {!isMobile && (
-          <button onClick={() => setExpanded(false)} className="p-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors">
+          <button onClick={handleCollapse} className="p-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors">
             <X size={14} />
           </button>
         )}
@@ -122,7 +174,6 @@ export function PromoPlayer() {
         })}
       </div>
 
-      {/* Embedded player for selected track */}
       {activeTrack && (
         <div className="border-t border-border">
           <iframe
@@ -140,10 +191,12 @@ export function PromoPlayer() {
     </div>
   );
 
+  const widgetContent = widgetMode === "embed" ? embedContent : trackList;
+
   // Collapsed floating button
   const floatingButton = (
     <motion.button
-      onClick={() => setExpanded(true)}
+      onClick={handleExpand}
       className="fixed bottom-20 right-4 z-50 w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 transition-transform"
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
@@ -162,10 +215,10 @@ export function PromoPlayer() {
     return (
       <>
         {!expanded && floatingButton}
-        <Drawer open={expanded} onOpenChange={setExpanded}>
+        <Drawer open={expanded} onOpenChange={(open) => { if (!open) handleCollapse(); else handleExpand(); }}>
           <DrawerContent>
             <DrawerTitle className="sr-only">Music Player</DrawerTitle>
-            {trackList}
+            {widgetContent}
           </DrawerContent>
         </Drawer>
       </>
@@ -188,7 +241,7 @@ export function PromoPlayer() {
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
-            {trackList}
+            {widgetContent}
           </motion.div>
         )}
       </AnimatePresence>

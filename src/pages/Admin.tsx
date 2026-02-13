@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BarChart3, Play, ExternalLink, Search, Music, ChevronDown, RefreshCw, Loader2, Users, Database, Trash2, Headphones } from "lucide-react";
+import { BarChart3, Play, ExternalLink, Search, Music, ChevronDown, RefreshCw, Loader2, Users, Database, Trash2, Headphones, Music2, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -41,6 +42,9 @@ export default function Admin() {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [widgetMode, setWidgetMode] = useState<"tracklist" | "embed">("tracklist");
+  const [widgetAnalytics, setWidgetAnalytics] = useState<{ widget_opens: number; widget_closes: number } | null>(null);
+  const [togglingWidget, setTogglingWidget] = useState(false);
 
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
@@ -73,7 +77,24 @@ export default function Admin() {
       setRefreshing(true);
       fetchData().then((d) => { setData(d); setDataLoaded(true); }).catch(console.error).finally(() => setRefreshing(false));
     }
+    if (tab === "widget" && isAdmin) {
+      supabase.functions.invoke("admin-dashboard", { body: { action: "get_widget_config" } })
+        .then(({ data: r }) => { if (r?.config?.mode) setWidgetMode(r.config.mode); });
+      supabase.functions.invoke("admin-dashboard", { body: { section: "widget_analytics" } })
+        .then(({ data: r }) => { if (r) setWidgetAnalytics(r); });
+    }
   }, [tab, dataLoaded, isAdmin]);
+
+  const handleToggleWidgetMode = async () => {
+    const newMode = widgetMode === "tracklist" ? "embed" : "tracklist";
+    setTogglingWidget(true);
+    try {
+      await supabase.functions.invoke("admin-dashboard", { body: { action: "set_widget_mode", mode: newMode } });
+      setWidgetMode(newMode);
+      toast.success(`Widget switched to ${newMode === "embed" ? "Spotify Embed" : "Static Tracklist"}`);
+    } catch (e) { toast.error("Failed to update widget mode"); }
+    finally { setTogglingWidget(false); }
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -118,9 +139,10 @@ export default function Admin() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full max-w-xs grid-cols-2">
+          <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="users" className="gap-1.5"><Users size={14} /> Users</TabsTrigger>
             <TabsTrigger value="data" className="gap-1.5"><Database size={14} /> Data</TabsTrigger>
+            <TabsTrigger value="widget" className="gap-1.5"><Music2 size={14} /> Widget</TabsTrigger>
           </TabsList>
 
           {/* ── USERS TAB ── */}
@@ -355,6 +377,65 @@ export default function Admin() {
                 </motion.div>
               </>
             )}
+          </TabsContent>
+
+          {/* ── WIDGET TAB ── */}
+          <TabsContent value="widget" className="mt-4 space-y-6">
+            <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                <Music2 size={14} className="text-primary" />
+                <span className="text-sm font-mono font-medium">Widget Mode</span>
+              </div>
+              <div className="px-4 py-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">{widgetMode === "embed" ? "Spotify Embed" : "Static Tracklist"}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {widgetMode === "embed" ? "Full playlist embed from Spotify" : "Custom tracklist with per-track engagement"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-muted-foreground">Tracklist</span>
+                    <Switch
+                      checked={widgetMode === "embed"}
+                      onCheckedChange={handleToggleWidgetMode}
+                      disabled={togglingWidget}
+                    />
+                    <span className="text-xs font-mono text-muted-foreground">Embed</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Widget Analytics */}
+            <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                <BarChart3 size={14} className="text-primary" />
+                <span className="text-sm font-mono font-medium">Widget Analytics</span>
+              </div>
+              <div className="px-4 py-4">
+                {widgetAnalytics ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-3 rounded-lg bg-muted/30">
+                      <div className="flex items-center justify-center gap-1.5 mb-1">
+                        <Eye size={14} className="text-primary" />
+                        <span className="text-xs font-mono text-muted-foreground">Opens</span>
+                      </div>
+                      <p className="text-2xl font-bold font-mono">{widgetAnalytics.widget_opens}</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-muted/30">
+                      <div className="flex items-center justify-center gap-1.5 mb-1">
+                        <EyeOff size={14} className="text-muted-foreground" />
+                        <span className="text-xs font-mono text-muted-foreground">Closes</span>
+                      </div>
+                      <p className="text-2xl font-bold font-mono">{widgetAnalytics.widget_closes}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-sm text-muted-foreground">Loading analytics...</div>
+                )}
+              </div>
+            </motion.div>
           </TabsContent>
         </Tabs>
       </div>
