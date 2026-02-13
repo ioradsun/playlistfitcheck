@@ -4,7 +4,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { User, Music, Plus, BarChart3 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { User, Music, Plus, BarChart3, MoreVertical, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface SavedSearch {
@@ -43,6 +49,17 @@ const Dashboard = () => {
         setLoadingSearches(false);
       });
   }, [user]);
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const { error } = await supabase.from("saved_searches").delete().eq("id", id);
+    if (error) {
+      toast.error("Failed to delete");
+    } else {
+      setSearches(prev => prev.filter(s => s.id !== id));
+      toast.success("Fit check deleted");
+    }
+  };
 
   if (authLoading || !user) return null;
 
@@ -93,66 +110,79 @@ const Dashboard = () => {
           </Card>
         ) : (
           <div className="space-y-3">
-            {searches.map((s) => (
-              <Card
-                key={s.id}
-                className="glass-card border-border hover:border-primary/30 transition-colors cursor-pointer"
-                onClick={() => {
-                  if (s.report_data) {
-                    navigate("/", { state: { reportData: s.report_data } });
-                  } else {
-                    // No cached report — re-run via URL params
-                    const params = new URLSearchParams();
-                    if (s.playlist_url) params.set("playlist", s.playlist_url);
-                    if (s.song_url) params.set("song", s.song_url);
-                    navigate(`/`, { state: { autoRun: { playlistUrl: s.playlist_url, songUrl: s.song_url } } });
-                  }
-                }}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Music size={14} className="text-primary shrink-0" />
-                        <p className="text-sm font-medium truncate">{s.playlist_name || "Untitled Playlist"}</p>
-                      </div>
-                      {s.song_name && (
-                        <p className="text-xs text-muted-foreground truncate pl-[22px]">
-                          🎵 {s.song_name}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground pl-[22px]">
-                        {new Date(s.created_at).toLocaleDateString(undefined, {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
+            {searches.map((s) => {
+              // Show single score: blended (fit) if available, otherwise health
+              const displayScore = s.blended_score ?? s.health_score;
+              const displayLabel = s.blended_score != null
+                ? (s.blended_label ?? "Fit")
+                : (s.health_label ?? "Health");
 
-                    <div className="flex items-center gap-4 shrink-0">
-                      <div className="text-right">
-                        <p className="text-lg font-mono font-bold text-primary">{s.health_score ?? "—"}</p>
-                        <p className={`text-[10px] font-medium ${getLabelColor(s.health_label)}`}>
-                          {s.health_label ?? "N/A"}
+              return (
+                <Card
+                  key={s.id}
+                  className="glass-card border-border hover:border-primary/30 transition-colors cursor-pointer"
+                  onClick={() => {
+                    if (s.report_data) {
+                      navigate("/", { state: { reportData: s.report_data } });
+                    } else {
+                      navigate(`/`, { state: { autoRun: { playlistUrl: s.playlist_url, songUrl: s.song_url } } });
+                    }
+                  }}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Music size={14} className="text-primary shrink-0" />
+                          <p className="text-sm font-medium truncate">{s.playlist_name || "Untitled Playlist"}</p>
+                        </div>
+                        {s.song_name && (
+                          <p className="text-xs text-muted-foreground truncate pl-[22px]">
+                            🎵 {s.song_name}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground pl-[22px]">
+                          {new Date(s.created_at).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </p>
                       </div>
 
-                      {s.blended_score != null && (
-                        <div className="text-right border-l border-border pl-4">
-                          <p className="text-lg font-mono font-bold text-accent-foreground">{s.blended_score}</p>
-                          <p className={`text-[10px] font-medium ${getLabelColor(s.blended_label)}`}>
-                            {s.blended_label ?? "Fit"}
+                      <div className="flex items-center gap-3 shrink-0">
+                        {/* Single unified score */}
+                        <div className="text-right">
+                          <p className="text-lg font-mono font-bold text-primary">{displayScore ?? "—"}</p>
+                          <p className={`text-[10px] font-medium ${getLabelColor(displayLabel)}`}>
+                            {displayLabel}
                           </p>
                         </div>
-                      )}
+
+                        {/* 3-dot menu */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <button className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors">
+                              <MoreVertical size={16} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40 bg-card border-border z-[100]">
+                            <DropdownMenuItem
+                              onClick={(e) => handleDelete(e, s.id)}
+                              className="cursor-pointer gap-2 text-destructive focus:text-destructive"
+                            >
+                              <Trash2 size={14} /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
