@@ -30,6 +30,7 @@ export function PromoPlayer() {
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [hasPlayed, setHasPlayed] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [widgetMode, setWidgetMode] = useState<"tracklist" | "embed">("tracklist");
   const isMobile = useIsMobile();
 
@@ -200,7 +201,7 @@ export function PromoPlayer() {
   );
 
   // Whether to show "now playing" animation on collapsed button
-  const showPlayingAnim = !expanded && hasPlayed;
+  const showPlayingAnim = !expanded && hasPlayed && isPlaying;
 
   // Collapsed floating button
   const floatingButton = (
@@ -213,7 +214,7 @@ export function PromoPlayer() {
       whileTap={{ scale: 0.95 }}
     >
       {showPlayingAnim ? (
-        <div className="flex items-end gap-[3px] h-5">
+        <div className="flex items-end gap-[3px] h-5" onClick={(e) => { e.stopPropagation(); setIsPlaying(false); }}>
           {[0, 0.2, 0.4, 0.15].map((delay, i) => (
             <motion.span
               key={i}
@@ -223,11 +224,13 @@ export function PromoPlayer() {
             />
           ))}
         </div>
+      ) : hasPlayed && !expanded ? (
+        <div className="relative" onClick={(e) => { e.stopPropagation(); setIsPlaying(true); }}>
+          <Music2 size={20} />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-score-excellent animate-pulse" />
+        </div>
       ) : (
         <Music2 size={20} />
-      )}
-      {activeTrack && (
-        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-score-excellent animate-pulse" />
       )}
     </motion.button>
   );
