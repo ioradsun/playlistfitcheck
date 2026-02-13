@@ -128,6 +128,7 @@ export default function Admin() {
         body: { action: "update_widget_config", embed_url: embedUrl, widget_title: widgetTitle, thumbnail_url: thumbnailUrl },
       });
       toast.success("Widget config saved");
+      window.dispatchEvent(new CustomEvent("widget-config-updated"));
     } catch (e) { toast.error("Failed to save widget config"); }
     finally { setSavingWidget(false); }
   };
