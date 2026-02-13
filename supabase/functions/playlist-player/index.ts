@@ -7,20 +7,36 @@ const corsHeaders = {
 };
 
 async function getSpotifyToken(clientId: string, clientSecret: string): Promise<string> {
-  const resp = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-    },
-    body: "grant_type=client_credentials",
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Spotify auth failed [${resp.status}]: ${text}`);
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const resp = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+        },
+        body: "grant_type=client_credentials",
+      });
+      if (resp.status >= 500 && attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Spotify auth failed [${resp.status}]: ${text}`);
+      }
+      const data = await resp.json();
+      return data.access_token;
+    } catch (e) {
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      throw e;
+    }
   }
-  const data = await resp.json();
-  return data.access_token;
+  throw new Error("Spotify auth failed after retries");
 }
 
 interface Track {
