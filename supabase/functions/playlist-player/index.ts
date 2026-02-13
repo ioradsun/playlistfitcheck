@@ -86,9 +86,10 @@ serve(async (req) => {
     if (!resp.ok) {
       const errText = await resp.text();
       console.error("Spotify API error:", resp.status, errText);
+      const userStatus = resp.status === 404 ? 404 : 502;
       return new Response(
-        JSON.stringify({ error: `Spotify API error [${resp.status}]` }),
-        { status: resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: resp.status === 404 ? "Playlist not found." : "Could not load playlist tracks. Please try again later." }),
+        { status: userStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
