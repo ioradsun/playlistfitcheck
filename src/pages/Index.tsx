@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
 import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
@@ -45,7 +45,9 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 const Index = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const autoRunRef = useRef(false);
+  const cameFromDashboardRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
   const [vibeLoading, setVibeLoading] = useState(false);
@@ -171,12 +173,17 @@ const Index = () => {
   }, [isFullyLoaded, result, vibeAnalysis, songFitAnalysis]);
 
   const handleBack = useCallback(() => {
+    if (cameFromDashboardRef.current) {
+      cameFromDashboardRef.current = false;
+      navigate("/dashboard");
+      return;
+    }
     setResult(null);
     setVibeAnalysis(null);
     setVibeLoading(false);
     setSongFitAnalysis(null);
     setSongFitLoading(false);
-  }, []);
+  }, [navigate]);
 
   // Load cached report from dashboard navigation state
   useEffect(() => {
@@ -186,6 +193,7 @@ const Index = () => {
     if (state?.reportData) {
       // Cached report from dashboard
       autoRunRef.current = true;
+      cameFromDashboardRef.current = true;
       window.history.replaceState({}, "", "/");
       const { input, output, vibeAnalysis: vibe, songFitAnalysis: songFit, trackList, songUrl } = state.reportData;
       setResult({ output, input, name: input.playlistName, key: Date.now(), trackList, songUrl });
@@ -196,6 +204,7 @@ const Index = () => {
     } else if (state?.autoRun) {
       // No cached data — re-run analysis
       autoRunRef.current = true;
+      cameFromDashboardRef.current = true;
       const { playlistUrl, songUrl } = state.autoRun;
       window.history.replaceState({}, "", "/");
       if (!playlistUrl) return;
