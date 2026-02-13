@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import MixFitCheck from "@/pages/MixFitCheck";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 import { LyricFitTab } from "@/components/lyric/LyricFitTab";
+import { HitFitTab } from "@/components/hitfit/HitFitTab";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -255,6 +256,7 @@ const Index = () => {
             <TabsTrigger value="playlist">PlaylistFit</TabsTrigger>
             <TabsTrigger value="mix">MixFit</TabsTrigger>
             <TabsTrigger value="lyric">LyricFit</TabsTrigger>
+            <TabsTrigger value="hitfit">HitFit</TabsTrigger>
           </TabsList>
         </div>
 
@@ -284,6 +286,10 @@ const Index = () => {
 
         <TabsContent value="lyric" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
           <LyricFitTab initialLyric={loadedLyric} />
+        </TabsContent>
+
+        <TabsContent value="hitfit" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
+          <HitFitTab />
         </TabsContent>
       </Tabs>
     </div>
