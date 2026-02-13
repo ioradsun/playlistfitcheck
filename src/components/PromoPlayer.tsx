@@ -47,8 +47,7 @@ export function PromoPlayer() {
   const constraintsRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
 
-  // Fetch widget config
-  useEffect(() => {
+  const fetchConfig = useCallback(() => {
     supabase.from("widget_config").select("mode, embed_url, widget_title, thumbnail_url").limit(1).single().then(({ data }) => {
       if (data?.mode) setWidgetMode(data.mode as "tracklist" | "embed");
       if (data?.embed_url) setEmbedUrl(data.embed_url);
@@ -56,6 +55,14 @@ export function PromoPlayer() {
       if (data?.thumbnail_url) setThumbnailUrl(data.thumbnail_url);
     });
   }, []);
+
+  // Fetch widget config on mount + listen for admin saves
+  useEffect(() => {
+    fetchConfig();
+    const handler = () => fetchConfig();
+    window.addEventListener("widget-config-updated", handler);
+    return () => window.removeEventListener("widget-config-updated", handler);
+  }, [fetchConfig]);
 
   // Fetch tracks only if tracklist mode
   useEffect(() => {
