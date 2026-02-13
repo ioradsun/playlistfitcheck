@@ -29,7 +29,6 @@ export function PromoPlayer() {
   const [error, setError] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [overlayDismissed, setOverlayDismissed] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -53,11 +52,7 @@ export function PromoPlayer() {
 
   const handleTrackClick = useCallback((track: Track) => {
     logEngagement(track.id, track.name, track.artists, "play");
-    setActiveTrack(prev => {
-      const next = prev?.id === track.id ? null : track;
-      setOverlayDismissed(false);
-      return next;
-    });
+    setActiveTrack(prev => prev?.id === track.id ? null : track);
   }, []);
 
   const handleSpotifyClick = useCallback((e: React.MouseEvent, track: Track) => {
@@ -76,13 +71,13 @@ export function PromoPlayer() {
           <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
         </div>
         {!isMobile && (
-          <button onClick={() => setExpanded(false)} className="p-1 rounded-full hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => setExpanded(false)} className="p-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors">
             <X size={14} />
           </button>
         )}
       </div>
 
-      <div className="overflow-y-auto max-h-[240px]">
+      <div className="overflow-y-auto max-h-[132px]">
         {tracks.map((track, i) => {
           const isActive = activeTrack?.id === track.id;
           return (
@@ -129,15 +124,7 @@ export function PromoPlayer() {
 
       {/* Embedded player for selected track */}
       {activeTrack && (
-        <div className="border-t border-border relative">
-          {!overlayDismissed && (
-            <div
-              className="absolute inset-0 z-10 cursor-pointer flex items-center justify-center bg-black/5 hover:bg-black/10 transition-colors"
-              onClick={() => setOverlayDismissed(true)}
-            >
-              <Play size={20} className="text-primary opacity-60" />
-            </div>
-          )}
+        <div className="border-t border-border">
           <iframe
             key={activeTrack.id}
             src={`https://open.spotify.com/embed/track/${activeTrack.id}?utm_source=generator&theme=0&autoplay=1`}
