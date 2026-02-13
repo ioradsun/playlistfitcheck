@@ -201,7 +201,7 @@ export default function Admin() {
                           {u.role}
                         </Badge>
 
-                        {/* Fit checks */}
+                        {/* PlaylistFit checks */}
                         <span className="text-sm font-mono">{u.fit_checks}</span>
 
                         {/* Widget Clicks */}
@@ -289,7 +289,7 @@ export default function Admin() {
                       ))}
                     </div>
                   ) : (
-                    <div className="px-4 py-8 text-center text-sm text-muted-foreground">No fit checks yet.</div>
+                    <div className="px-4 py-8 text-center text-sm text-muted-foreground">No PlaylistFit checks yet.</div>
                   )}
                 </motion.div>
               </>

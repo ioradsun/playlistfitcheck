@@ -67,7 +67,7 @@ const Dashboard = () => {
     if (!authLoading && !user) navigate("/auth");
   }, [user, authLoading, navigate]);
 
-  // Load playlist fit checks
+  // Load PlaylistFit checks
   useEffect(() => {
     if (!user) return;
     supabase
@@ -98,7 +98,7 @@ const Dashboard = () => {
       toast.error("Failed to delete");
     } else {
       setSearches(prev => prev.filter(s => s.id !== id));
-      toast.success("Fit check deleted");
+      toast.success("PlaylistFit check deleted");
     }
   };
 
@@ -146,7 +146,7 @@ const Dashboard = () => {
           {/* PlaylistFit Tab */}
           <TabsContent value="playlist" className="mt-4">
             {loadingSearches ? (
-              <div className="text-sm text-muted-foreground py-12 text-center">Loading your fit checks…</div>
+              <div className="text-sm text-muted-foreground py-12 text-center">Loading your PlaylistFit checks…</div>
             ) : searches.length === 0 ? (
               <EmptyState
                 icon={BarChart3}
