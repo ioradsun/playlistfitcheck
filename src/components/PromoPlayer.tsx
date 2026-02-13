@@ -19,20 +19,11 @@ function logEngagement(trackId: string, trackName: string, artistName: string, a
   }).catch(() => {});
 }
 
-const WidgetHeader = ({ title, thumbnailUrl, thumbnailLink, onPointerDown }: { title: string; thumbnailUrl?: string | null; thumbnailLink?: string | null; onPointerDown?: (e: React.PointerEvent) => void }) => (
+const WidgetHeader = ({ title, onPointerDown }: { title: string; onPointerDown?: (e: React.PointerEvent) => void }) => (
   <div
     className="border-b border-border cursor-grab active:cursor-grabbing flex items-center gap-1.5 px-2 py-1.5"
     onPointerDown={onPointerDown}
   >
-    {thumbnailUrl && (
-      thumbnailLink ? (
-        <a href={thumbnailLink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
-          <img src={thumbnailUrl} alt="" className="w-4 h-4 rounded object-cover hover:ring-1 hover:ring-primary transition-all" />
-        </a>
-      ) : (
-        <img src={thumbnailUrl} alt="" className="w-4 h-4 rounded object-cover flex-shrink-0" />
-      )
-    )}
     <span className="font-mono text-[10px] text-muted-foreground truncate">{title}</span>
   </div>
 );
@@ -41,8 +32,6 @@ export function PromoPlayer() {
   const [loading, setLoading] = useState(true);
   const [embedUrl, setEmbedUrl] = useState("");
   const [widgetTitle, setWidgetTitle] = useState("Featured Artist");
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-  const [thumbnailLink, setThumbnailLink] = useState<string | null>(null);
   const constraintsRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
 
@@ -51,8 +40,6 @@ export function PromoPlayer() {
       const { data } = await supabase.from("widget_config").select("embed_url, widget_title, thumbnail_url, thumbnail_link").limit(1).single();
       if (data?.embed_url) setEmbedUrl(data.embed_url);
       if (data?.widget_title) setWidgetTitle(data.widget_title);
-      if (data?.thumbnail_url) setThumbnailUrl(data.thumbnail_url);
-      setThumbnailLink(data?.thumbnail_link ?? null);
     } catch {} finally { setLoading(false); }
   }, []);
 
@@ -86,7 +73,7 @@ export function PromoPlayer() {
         animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
       >
-        <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} thumbnailLink={thumbnailLink} onPointerDown={(e) => dragControls.start(e)} />
+        <WidgetHeader title={widgetTitle} onPointerDown={(e) => dragControls.start(e)} />
         <iframe
           src={toEmbedUrl(embedUrl)}
           width="100%"
