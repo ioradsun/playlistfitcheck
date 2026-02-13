@@ -211,22 +211,28 @@ export type Database = {
       }
       widget_config: {
         Row: {
+          embed_url: string
           id: string
           mode: string
           playlist_url: string
           updated_at: string
+          widget_title: string
         }
         Insert: {
+          embed_url?: string
           id?: string
           mode?: string
           playlist_url?: string
           updated_at?: string
+          widget_title?: string
         }
         Update: {
+          embed_url?: string
           id?: string
           mode?: string
           playlist_url?: string
           updated_at?: string
+          widget_title?: string
         }
         Relationships: []
       }

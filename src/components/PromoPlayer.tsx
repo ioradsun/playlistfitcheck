@@ -15,7 +15,6 @@ interface Track {
 }
 
 const PLAYLIST_ID = "3wtgtkdE8aDOf3V0LYoAXa";
-const ARTIST_ID = "1PlkAOmfFYqBYFpN8jDj4v";
 
 function logEngagement(trackId: string, trackName: string, artistName: string, action: string) {
   supabase.functions.invoke("track-engagement", {
@@ -23,14 +22,12 @@ function logEngagement(trackId: string, trackName: string, artistName: string, a
   }).catch(() => {});
 }
 
-const WIDGET_TITLE = "Featured Artist";
-
-const WidgetHeader = ({ onPointerDown }: { onPointerDown?: (e: React.PointerEvent) => void }) => (
+const WidgetHeader = ({ title, onPointerDown }: { title: string; onPointerDown?: (e: React.PointerEvent) => void }) => (
   <div
     className="px-3 py-2.5 border-b border-border cursor-grab active:cursor-grabbing"
     onPointerDown={onPointerDown}
   >
-    <span className="text-xs font-mono text-muted-foreground">{WIDGET_TITLE}</span>
+    <span className="text-xs font-mono text-muted-foreground">{title}</span>
   </div>
 );
 
@@ -40,16 +37,22 @@ export function PromoPlayer() {
   const [error, setError] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [widgetMode, setWidgetMode] = useState<"tracklist" | "embed">("tracklist");
+  const [embedUrl, setEmbedUrl] = useState("");
+  const [widgetTitle, setWidgetTitle] = useState("Featured Artist");
   const isMobile = useIsMobile();
   const constraintsRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
 
+  // Fetch widget config
   useEffect(() => {
-    supabase.from("widget_config").select("mode").limit(1).single().then(({ data }) => {
+    supabase.from("widget_config").select("mode, embed_url, widget_title").limit(1).single().then(({ data }) => {
       if (data?.mode) setWidgetMode(data.mode as "tracklist" | "embed");
+      if (data?.embed_url) setEmbedUrl(data.embed_url);
+      if (data?.widget_title) setWidgetTitle(data.widget_title);
     });
   }, []);
 
+  // Fetch tracks only if tracklist mode
   useEffect(() => {
     if (widgetMode !== "tracklist") { setLoading(false); return; }
     async function fetchTracks() {
@@ -89,10 +92,12 @@ export function PromoPlayer() {
 
   if (loading || error) return null;
   if (widgetMode === "tracklist" && tracks.length === 0) return null;
+  if (widgetMode === "embed" && !embedUrl) return null;
 
+  // ── TRACKLIST MODE content ──
   const trackList = (
     <div className="flex flex-col">
-      <WidgetHeader onPointerDown={(e) => dragControls.start(e)} />
+      <WidgetHeader title={widgetTitle} onPointerDown={(e) => dragControls.start(e)} />
       <div className="overflow-y-auto max-h-[132px]">
         {tracks.map((track, i) => {
           const isActive = activeTrack?.id === track.id;
@@ -142,9 +147,10 @@ export function PromoPlayer() {
             width="100%"
             height="80"
             frameBorder="0"
+            allowFullScreen
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             loading="eager"
-            className="rounded-b-xl"
+            style={{ borderRadius: 12 }}
           />
         </div>
       )}
@@ -169,17 +175,16 @@ export function PromoPlayer() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
         >
-          <WidgetHeader onPointerDown={(e) => dragControls.start(e)} />
+          <WidgetHeader title={widgetTitle} onPointerDown={(e) => dragControls.start(e)} />
           <iframe
-            data-testid="embed-iframe"
-            src={`https://open.spotify.com/embed/artist/${ARTIST_ID}?utm_source=generator&theme=0`}
+            src={embedUrl}
             width="100%"
             height="152"
             frameBorder="0"
             allowFullScreen
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             loading="lazy"
-            style={{ borderRadius: 12 }}
+            style={{ borderRadius: "0 0 12px 12px" }}
           />
         </motion.div>
       </>
