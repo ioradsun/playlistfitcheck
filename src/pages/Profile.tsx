@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Pencil, Camera, Share2, X, Check, Loader2, Music } from "lucide-react";
+import { Pencil, Camera, X, Check, Loader2, Music } from "lucide-react";
 
 
 const Profile = () => {
@@ -20,12 +21,18 @@ const Profile = () => {
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [spotifyUrl, setSpotifyUrl] = useState("");
+  const [selectedRole, setSelectedRole] = useState<"artist" | "curator">("artist");
   const [uploading, setUploading] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
+  const currentRole = roles[0] ?? "user";
   const isArtist = roles.includes("artist");
+
+  // Google avatar fallback
+  const googleAvatar = user?.user_metadata?.avatar_url ?? user?.user_metadata?.picture;
+  const avatarSrc = profile?.avatar_url || googleAvatar || undefined;
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -38,6 +45,12 @@ const Profile = () => {
       setSpotifyUrl(profile.spotify_embed_url ?? "");
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (currentRole === "artist" || currentRole === "curator") {
+      setSelectedRole(currentRole as "artist" | "curator");
+    }
+  }, [currentRole]);
 
   const autoSave = useCallback((fields: { display_name?: string; bio?: string; spotify_embed_url?: string }) => {
     if (!user) return;
@@ -61,6 +74,18 @@ const Profile = () => {
   const handleSpotifyUrlChange = (val: string) => {
     setSpotifyUrl(val);
     autoSave({ display_name: displayName, bio, spotify_embed_url: val });
+  };
+
+  const handleRoleChange = async (newRole: "artist" | "curator") => {
+    setSelectedRole(newRole);
+    if (!user) return;
+    // Delete existing role and insert new one
+    const { error: delErr } = await supabase.from("user_roles").delete().eq("user_id", user.id);
+    if (delErr) { toast.error("Failed to update role"); return; }
+    const { error: insErr } = await supabase.from("user_roles").insert({ user_id: user.id, role: newRole });
+    if (insErr) { toast.error("Failed to update role"); return; }
+    toast.success(`Role updated to ${newRole}`);
+    refreshProfile();
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,8 +113,6 @@ const Profile = () => {
   const initials = (profile?.display_name ?? user?.email ?? "?")
     .split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
-  const publicUrl = user ? `${window.location.origin}/u/${user.id}` : "";
-
   if (authLoading || !user) return null;
 
   return (
@@ -99,7 +122,7 @@ const Profile = () => {
         <div className="flex items-start gap-4">
           <div className="relative group">
             <Avatar className="h-20 w-20 border-2 border-border">
-              <AvatarImage src={profile?.avatar_url ?? undefined} />
+              <AvatarImage src={avatarSrc} />
               <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">{initials}</AvatarFallback>
             </Avatar>
             <button
@@ -113,13 +136,10 @@ const Profile = () => {
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold truncate">{profile?.display_name || "Your Profile"}</h1>
-            <p className="text-sm text-muted-foreground capitalize">{roles[0] ?? "user"}</p>
+            <p className="text-sm text-muted-foreground capitalize">{currentRole}</p>
             {profile?.bio && !editing && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { navigator.clipboard.writeText(publicUrl); toast.success("Profile link copied!"); }}>
-              <Share2 size={14} /> Share
-            </Button>
             <Button variant={editing ? "secondary" : "outline"} size="sm" className="gap-1.5" onClick={() => setEditing(!editing)}>
               {editing ? <><X size={14} /> Cancel</> : <><Pencil size={14} /> Edit</>}
             </Button>
@@ -142,10 +162,23 @@ const Profile = () => {
                 <Input value={displayName} onChange={e => handleDisplayNameChange(e.target.value)} />
               </div>
               <div className="space-y-2">
+                <Label>I am a…</Label>
+                <RadioGroup value={selectedRole} onValueChange={(v) => handleRoleChange(v as "artist" | "curator")} className="flex gap-4">
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="artist" id="role-artist" />
+                    <Label htmlFor="role-artist" className="cursor-pointer">Artist</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="curator" id="role-curator" />
+                    <Label htmlFor="role-curator" className="cursor-pointer">Curator</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              <div className="space-y-2">
                 <Label>Bio</Label>
                 <Textarea value={bio} onChange={e => handleBioChange(e.target.value)} placeholder="Tell us about yourself" rows={3} />
               </div>
-              {isArtist && (
+              {(isArtist || selectedRole === "artist") && (
                 <div className="space-y-2">
                   <Label>Spotify Playlist URL</Label>
                   <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="https://open.spotify.com/playlist/..." />
