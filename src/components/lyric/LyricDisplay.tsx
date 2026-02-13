@@ -70,9 +70,12 @@ function downloadFile(content: string, filename: string, mime: string) {
 type ExportFormat = "lrc" | "srt" | "txt";
 
 export function LyricDisplay({ data, audioFile, onBack }: Props) {
+  const [lines, setLines] = useState<LyricLine[]>(data.lines);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [copied, setCopied] = useState<ExportFormat | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
@@ -126,12 +129,15 @@ export function LyricDisplay({ data, audioFile, onBack }: Props) {
     }
   }, [isPlaying]);
 
-  const activeLine = data.lines.findIndex(
+  // Build a mutable version of data for exports
+  const editedData: LyricData = { ...data, lines };
+
+  const activeLine = lines.findIndex(
     (l) => currentTime >= l.start && currentTime < l.end
   );
 
   const handleCopy = (format: ExportFormat) => {
-    const content = format === "lrc" ? toLRC(data) : format === "srt" ? toSRT(data) : toPlainText(data);
+    const content = format === "lrc" ? toLRC(editedData) : format === "srt" ? toSRT(editedData) : toPlainText(editedData);
     navigator.clipboard.writeText(content);
     setCopied(format);
     toast.success(`${format.toUpperCase()} copied to clipboard`);
@@ -139,15 +145,28 @@ export function LyricDisplay({ data, audioFile, onBack }: Props) {
   };
 
   const handleDownload = (format: ExportFormat) => {
-    const baseName = data.title !== "Unknown" ? data.title : "lyrics";
+    const baseName = editedData.title !== "Unknown" ? editedData.title : "lyrics";
     if (format === "lrc") {
-      downloadFile(toLRC(data), `${baseName}.lrc`, "text/plain");
+      downloadFile(toLRC(editedData), `${baseName}.lrc`, "text/plain");
     } else if (format === "srt") {
-      downloadFile(toSRT(data), `${baseName}.srt`, "text/plain");
+      downloadFile(toSRT(editedData), `${baseName}.srt`, "text/plain");
     } else {
-      downloadFile(toPlainText(data), `${baseName}.txt`, "text/plain");
+      downloadFile(toPlainText(editedData), `${baseName}.txt`, "text/plain");
     }
     toast.success(`${format.toUpperCase()} downloaded`);
+  };
+
+  const startEditing = (index: number) => {
+    setEditingIndex(index);
+    setEditText(lines[index].text);
+  };
+
+  const commitEdit = () => {
+    if (editingIndex === null) return;
+    setLines((prev) =>
+      prev.map((l, i) => (i === editingIndex ? { ...l, text: editText } : l))
+    );
+    setEditingIndex(null);
   };
 
   const exportOptions: { format: ExportFormat; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -191,30 +210,50 @@ export function LyricDisplay({ data, audioFile, onBack }: Props) {
         ref={lyricsContainerRef}
         className="glass-card rounded-xl p-5 max-h-[400px] overflow-y-auto space-y-1"
       >
-        {data.lines.length === 0 ? (
+        {lines.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             No lyrics detected — this may be an instrumental track.
           </p>
         ) : (
-          data.lines.map((line, i) => {
+          lines.map((line, i) => {
             const isActive = i === activeLine;
+            const isEditing = i === editingIndex;
             return (
               <div
                 key={i}
                 ref={isActive ? activeLineRef : undefined}
-                className={`flex items-start gap-3 px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                className={`flex items-start gap-3 px-3 py-1.5 rounded-lg transition-all ${
                   isActive
                     ? "bg-primary/10 text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
                 }`}
-                onClick={() => seekTo(line.start)}
               >
-                <span className="text-[10px] font-mono text-muted-foreground/60 pt-0.5 shrink-0 w-12">
+                <span
+                  className="text-[10px] font-mono text-muted-foreground/60 pt-0.5 shrink-0 w-12 cursor-pointer"
+                  onClick={() => seekTo(line.start)}
+                >
                   {formatTime(line.start)}
                 </span>
-                <span className={`text-sm leading-relaxed ${isActive ? "font-medium text-primary" : ""}`}>
-                  {line.text}
-                </span>
+                {isEditing ? (
+                  <input
+                    autoFocus
+                    className="flex-1 text-sm bg-transparent border-b border-primary outline-none leading-relaxed"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onBlur={commitEdit}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitEdit();
+                      if (e.key === "Escape") setEditingIndex(null);
+                    }}
+                  />
+                ) : (
+                  <span
+                    className={`text-sm leading-relaxed cursor-text ${isActive ? "font-medium text-primary" : ""}`}
+                    onDoubleClick={() => startEditing(i)}
+                  >
+                    {line.text}
+                  </span>
+                )}
               </div>
             );
           })
@@ -222,9 +261,12 @@ export function LyricDisplay({ data, audioFile, onBack }: Props) {
       </div>
 
       {/* Export buttons */}
-      {data.lines.length > 0 && (
+      {lines.length > 0 && (
         <div className="glass-card rounded-xl p-4">
-          <p className="text-xs text-muted-foreground mb-3 font-mono">Export</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-muted-foreground font-mono">Export</p>
+            <p className="text-[10px] text-muted-foreground">Double-click a line to edit</p>
+          </div>
           <div className="grid grid-cols-3 gap-3">
             {exportOptions.map(({ format, label, icon, desc }) => (
               <div key={format} className="space-y-1.5">
