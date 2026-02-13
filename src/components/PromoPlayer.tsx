@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ExternalLink, Minus, Music2, Play } from "lucide-react";
+import { motion } from "framer-motion";
+import { ExternalLink, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getSessionId } from "@/lib/sessionId";
-import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 
 interface Track {
   id: string;
@@ -25,14 +24,9 @@ function logEngagement(trackId: string, trackName: string, artistName: string, a
 
 const WIDGET_TITLE = "Featured Artist";
 
-const WidgetHeader = ({ onCollapse, showClose = true }: { onCollapse?: () => void; showClose?: boolean }) => (
-  <div className="px-3 py-2.5 border-b border-border flex items-center justify-between cursor-grab active:cursor-grabbing">
+const WidgetHeader = () => (
+  <div className="px-3 py-2.5 border-b border-border cursor-grab active:cursor-grabbing">
     <span className="text-xs font-mono text-muted-foreground">{WIDGET_TITLE}</span>
-    {showClose && onCollapse && (
-      <button onClick={onCollapse} className="p-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors">
-        <Minus size={14} />
-      </button>
-    )}
   </div>
 );
 
@@ -41,20 +35,16 @@ export function PromoPlayer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [hasPlayed, setHasPlayed] = useState(false);
   const [widgetMode, setWidgetMode] = useState<"tracklist" | "embed">("tracklist");
   const isMobile = useIsMobile();
   const constraintsRef = useRef<HTMLDivElement>(null);
 
-  // Fetch widget config
   useEffect(() => {
     supabase.from("widget_config").select("mode").limit(1).single().then(({ data }) => {
       if (data?.mode) setWidgetMode(data.mode as "tracklist" | "embed");
     });
   }, []);
 
-  // Fetch tracks only if tracklist mode
   useEffect(() => {
     if (widgetMode !== "tracklist") { setLoading(false); return; }
     async function fetchTracks() {
@@ -75,18 +65,9 @@ export function PromoPlayer() {
     fetchTracks();
   }, [widgetMode]);
 
-  const handleExpand = useCallback(() => {
-    setExpanded(true);
-    setHasPlayed(true);
+  useEffect(() => {
     if (widgetMode === "embed") {
       logEngagement("widget", "Widget", "System", "widget_open");
-    }
-  }, [widgetMode]);
-
-  const handleCollapse = useCallback(() => {
-    setExpanded(false);
-    if (widgetMode === "embed") {
-      logEngagement("widget", "Widget", "System", "widget_close");
     }
   }, [widgetMode]);
 
@@ -104,36 +85,9 @@ export function PromoPlayer() {
   if (loading || error) return null;
   if (widgetMode === "tracklist" && tracks.length === 0) return null;
 
-  // ── Persistent embed iframe (always mounted once loaded, hidden when collapsed) ──
-  const persistentEmbed = widgetMode === "embed" ? (
-    <motion.div
-      drag={!isMobile}
-      dragConstraints={constraintsRef}
-      dragMomentum={false}
-      className={`fixed z-40 ${expanded ? "bottom-20 right-4 w-[280px]" : "w-0 h-0 overflow-hidden"}`}
-      style={expanded ? undefined : { position: "fixed", bottom: 0, right: 0, opacity: 0, pointerEvents: "none" }}
-      aria-hidden={!expanded}
-    >
-      <div className="flex flex-col glass-card rounded-xl shadow-2xl overflow-hidden">
-        <WidgetHeader onCollapse={handleCollapse} />
-        <iframe
-          src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
-          width="100%"
-          height="152"
-          frameBorder="0"
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
-          className="rounded-b-xl"
-        />
-      </div>
-    </motion.div>
-  ) : null;
-
-  // ── TRACKLIST MODE content ──
   const trackList = (
     <div className="flex flex-col">
-      <WidgetHeader onCollapse={isMobile ? undefined : handleCollapse} showClose={!isMobile} />
-
+      <WidgetHeader />
       <div className="overflow-y-auto max-h-[132px]">
         {tracks.map((track, i) => {
           const isActive = activeTrack?.id === track.id;
@@ -155,18 +109,15 @@ export function PromoPlayer() {
                   <Play size={10} className="text-muted-foreground group-hover:text-primary transition-colors" />
                 )}
               </span>
-
               {track.albumArt && (
                 <img src={track.albumArt} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
               )}
-
               <div className="flex-1 min-w-0">
                 <p className={`text-xs truncate transition-colors ${isActive ? "text-primary font-medium" : "group-hover:text-primary"}`}>
                   {track.name}
                 </p>
                 <p className="text-[11px] text-muted-foreground truncate">{track.artists}</p>
               </div>
-
               <button
                 onClick={(e) => handleSpotifyClick(e, track)}
                 className="flex-shrink-0 p-1 rounded-full hover:bg-primary/20 text-muted-foreground hover:text-primary transition-colors"
@@ -178,7 +129,6 @@ export function PromoPlayer() {
           );
         })}
       </div>
-
       {activeTrack && (
         <div className="border-t border-border">
           <iframe
@@ -196,116 +146,52 @@ export function PromoPlayer() {
     </div>
   );
 
-  // Whether to show "now playing" animation on collapsed button
-  const showPlayingAnim = !expanded && hasPlayed;
+  const dragBoundary = !isMobile ? <div ref={constraintsRef} className="fixed inset-0 z-30 pointer-events-none" /> : null;
 
-  // Collapsed floating button
-  const floatingButton = (
-    <motion.button
-      onClick={handleExpand}
-      className="fixed bottom-20 right-4 z-50 w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 transition-transform"
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.95 }}
-    >
-      {showPlayingAnim ? (
-        <div className="flex items-end gap-[3px] h-5">
-          {[0, 0.2, 0.4, 0.15].map((delay, i) => (
-            <motion.span
-              key={i}
-              className="w-[3px] rounded-full bg-primary-foreground"
-              animate={{ height: ["4px", "16px", "8px", "18px", "4px"] }}
-              transition={{ duration: 1.2, repeat: Infinity, delay, ease: "easeInOut" }}
-            />
-          ))}
-        </div>
-      ) : (
-        <Music2 size={20} />
-      )}
-    </motion.button>
-  );
-
-  // Full-screen drag constraints
-  const dragBoundary = <div ref={constraintsRef} className="fixed inset-0 z-30 pointer-events-none" />;
-
-  // Embed mode: persistent iframe approach (no unmounting)
+  // Embed mode
   if (widgetMode === "embed") {
-    if (isMobile) {
-      return (
-        <>
-          {!expanded && floatingButton}
-          {persistentEmbed}
-          <Drawer open={expanded} onOpenChange={(open) => { if (!open) handleCollapse(); else handleExpand(); }}>
-            <DrawerContent>
-              <DrawerTitle className="sr-only">Music Player</DrawerTitle>
-              <WidgetHeader showClose={false} />
-              <iframe
-                src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
-                width="100%"
-                height="152"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                className="rounded-b-xl"
-              />
-            </DrawerContent>
-          </Drawer>
-        </>
-      );
-    }
-
-    // Desktop embed
     return (
       <>
         {dragBoundary}
-        <AnimatePresence>
-          {!expanded && floatingButton}
-        </AnimatePresence>
-        {persistentEmbed}
+        <motion.div
+          drag={!isMobile}
+          dragConstraints={constraintsRef}
+          dragMomentum={false}
+          className="fixed bottom-20 right-4 z-50 w-[280px] glass-card rounded-xl shadow-2xl overflow-hidden"
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        >
+          <WidgetHeader />
+          <iframe
+            src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
+            width="100%"
+            height="152"
+            frameBorder="0"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+            className="rounded-b-xl"
+          />
+        </motion.div>
       </>
     );
   }
 
-  // Tracklist mode (existing behavior)
-  if (isMobile) {
-    return (
-      <>
-        {!expanded && floatingButton}
-        <Drawer open={expanded} onOpenChange={(open) => { if (!open) handleCollapse(); else handleExpand(); }}>
-          <DrawerContent>
-            <DrawerTitle className="sr-only">Music Player</DrawerTitle>
-            {trackList}
-          </DrawerContent>
-        </Drawer>
-      </>
-    );
-  }
-
-  // Desktop tracklist (draggable)
+  // Tracklist mode
   return (
     <>
       {dragBoundary}
-      <AnimatePresence>
-        {!expanded && floatingButton}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            drag
-            dragConstraints={constraintsRef}
-            dragMomentum={false}
-            className="fixed bottom-20 right-4 z-50 w-[280px] glass-card rounded-xl shadow-2xl overflow-hidden"
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          >
-            {trackList}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <motion.div
+        drag={!isMobile}
+        dragConstraints={constraintsRef}
+        dragMomentum={false}
+        className="fixed bottom-20 right-4 z-50 w-[280px] glass-card rounded-xl shadow-2xl overflow-hidden"
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+      >
+        {trackList}
+      </motion.div>
     </>
   );
 }
