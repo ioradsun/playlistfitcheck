@@ -26,30 +26,29 @@ export default function MixFitCheck() {
   const fileRef = useRef<HTMLInputElement>(null);
   // Track which mixes need re-upload (loaded from saved project without audio)
   const [needsReupload, setNeedsReupload] = useState(false);
-  const [playheadPct, setPlayheadPct] = useState(0);
+  const [playheadTime, setPlayheadTime] = useState(0);
   const rafRef = useRef<number | null>(null);
   const firstWaveform = mixes.find((m) => m.buffer)?.waveform || null;
 
   // Animate playhead
   useEffect(() => {
     if (!playingId) {
-      setPlayheadPct(0);
+      setPlayheadTime(0);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       return;
     }
     const tick = () => {
       const pos = getPlayheadPosition();
       if (pos !== null) {
-        const duration = firstWaveform?.duration || 1;
-        setPlayheadPct((pos / duration) * 100);
+        setPlayheadTime(pos);
         rafRef.current = requestAnimationFrame(tick);
       } else {
-        setPlayheadPct(0);
+        setPlayheadTime(0);
       }
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [playingId, getPlayheadPosition, firstWaveform]);
+  }, [playingId, getPlayheadPosition]);
 
   const resetProject = useCallback(() => {
     stop();
@@ -210,7 +209,7 @@ export default function MixFitCheck() {
         markerStart={markerStart}
         markerEnd={markerEnd}
         isPlaying={!!playingId}
-        playheadPct={playheadPct}
+        playheadPct={playingId ? (playheadTime / (firstWaveform?.duration || 1)) * 100 : 0}
         onMarkersChange={(s, e) => {
           setMarkerStart(s);
           setMarkerEnd(e);
@@ -257,7 +256,7 @@ export default function MixFitCheck() {
               totalMixes={activeMixes.length}
               markerStartPct={(markerStart / (mix.waveform.duration || 1)) * 100}
               markerEndPct={(markerEnd / (mix.waveform.duration || 1)) * 100}
-              playheadPct={playingId === mix.id ? playheadPct : 0}
+              playheadPct={playingId === mix.id ? (playheadTime / (mix.waveform.duration || 1)) * 100 : 0}
               onPlay={() => play(mix.id, mix.buffer, markerStart, markerEnd)}
               onStop={stop}
               onNameChange={(name) => updateMix(mix.id, { name })}
