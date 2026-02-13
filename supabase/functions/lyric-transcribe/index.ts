@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,9 +19,15 @@ serve(async (req) => {
     const audioFile = formData.get("audio") as File;
     if (!audioFile) throw new Error("No audio file provided");
 
-    // Convert audio to base64
+    // Convert audio to base64 using built-in btoa (chunked to avoid stack overflow)
     const audioBuffer = await audioFile.arrayBuffer();
-    const audioBase64 = base64Encode(audioBuffer);
+    const bytes = new Uint8Array(audioBuffer);
+    let binary = "";
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    const audioBase64 = btoa(binary);
 
     // Determine MIME type
     const mimeType = audioFile.type || "audio/mpeg";
