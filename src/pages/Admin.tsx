@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { BarChart3, Play, ExternalLink, Search, ChevronDown, RefreshCw, Loader2, Users, Database, Trash2, Music2, Upload, MousePointerClick } from "lucide-react";
+import { motion } from "framer-motion";
+import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, Music2, Upload, MousePointerClick } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -14,16 +14,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
-interface TrackStat { trackId: string; name: string; artist: string; plays: number; spotifyClicks: number; totalInteractions: number; }
-interface ClickedTrack { track_name: string; artist_name: string; action: string; }
-interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; tracksClicked: ClickedTrack[]; }
-interface DashboardData { trackStats: TrackStat[]; totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
+interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
+interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
 
-interface UserTrack { track_id: string; track_name: string; artist_name: string; plays: number; spotify_clicks: number; total: number; }
 interface AdminUser {
   id: string; email: string; display_name: string | null; avatar_url: string | null;
   role: string; fit_checks: number; created_at: string; last_sign_in_at: string | null; provider: string;
-  engagement: { total: number; tracks: UserTrack[] };
+  engagement: { total: number };
 }
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
@@ -38,8 +35,8 @@ export default function Admin() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedFit, setExpandedFit] = useState<number | null>(null);
-  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  
+  
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [widgetTitle, setWidgetTitle] = useState("");
@@ -183,14 +180,11 @@ export default function Admin() {
                   const initials = (u.display_name ?? u.email ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
                   const joined = new Date(u.created_at);
                   const lastSeen = u.last_sign_in_at ? new Date(u.last_sign_in_at) : null;
-                  const isExpanded = expandedUser === u.id;
-                  const hasEngagement = u.engagement.total > 0;
 
                   return (
                     <div key={u.id}>
                       <div
-                        className={`px-4 py-3 flex flex-col sm:grid sm:grid-cols-[1fr_1fr_70px_60px_70px_90px_36px] gap-2 sm:items-center transition-colors group ${hasEngagement ? "cursor-pointer hover:bg-muted/30" : ""} ${isExpanded ? "bg-muted/20" : ""}`}
-                        onClick={() => hasEngagement && setExpandedUser(isExpanded ? null : u.id)}
+                        className="px-4 py-3 flex flex-col sm:grid sm:grid-cols-[1fr_1fr_70px_60px_70px_90px_36px] gap-2 sm:items-center transition-colors group hover:bg-muted/30"
                       >
                         {/* User */}
                         <div className="flex items-center gap-2 min-w-0">
@@ -215,13 +209,12 @@ export default function Admin() {
                         {/* Fit checks */}
                         <span className="text-sm font-mono">{u.fit_checks}</span>
 
-                        {/* Engagement / Listens */}
+                        {/* Widget Clicks */}
                         <div className="flex items-center gap-1">
-                          {hasEngagement ? (
+                          {u.engagement.total > 0 ? (
                             <>
                               <MousePointerClick size={12} className="text-primary flex-shrink-0" />
                               <span className="text-sm font-mono font-medium text-primary">{u.engagement.total}</span>
-                              <ChevronDown size={12} className={`text-muted-foreground transition-transform ml-0.5 ${isExpanded ? "rotate-180" : ""}`} />
                             </>
                           ) : (
                             <span className="text-sm font-mono text-muted-foreground/40">0</span>
@@ -244,47 +237,6 @@ export default function Admin() {
                         </button>
                       </div>
 
-                      {/* Expanded: per-user track engagement */}
-                      <AnimatePresence>
-                        {isExpanded && hasEngagement && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="px-4 pb-3 pt-1 ml-5 sm:ml-9 border-l-2 border-primary/20 space-y-1">
-                              <div className="grid grid-cols-[1fr_50px_50px] gap-2 text-[10px] font-mono text-muted-foreground uppercase tracking-wider pb-1">
-                                <span>Song</span>
-                                <span className="text-center">Plays</span>
-                                <span className="text-center">Opens</span>
-                              </div>
-                              {u.engagement.tracks.map((t) => (
-                                <div key={t.track_id} className="grid grid-cols-[1fr_50px_50px] gap-2 items-center text-xs">
-                                  <div className="min-w-0">
-                                    <span className="truncate block">{t.track_name}</span>
-                                    <span className="text-[10px] text-muted-foreground truncate block">{t.artist_name}</span>
-                                  </div>
-                                  <div className="flex items-center justify-center gap-1 font-mono">
-                                    <Play size={10} className="text-primary" />
-                                    <span>{t.plays}</span>
-                                  </div>
-                                  <div className="flex items-center justify-center gap-1 font-mono">
-                                    <ExternalLink size={10} className="text-primary" />
-                                    <span>{t.spotify_clicks}</span>
-                                  </div>
-                                </div>
-                              ))}
-                              {u.engagement.tracks.length > 1 && (
-                                <div className="pt-1 border-t border-border/50 text-[10px] font-mono text-muted-foreground">
-                                  {u.engagement.tracks.length} songs · {u.engagement.total} total interactions
-                                </div>
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
                     </div>
                   );
                 })}
@@ -304,31 +256,16 @@ export default function Admin() {
                   <span>{data?.totalSearches ?? 0} fits checked</span>
                 </div>
 
-                {/* Tracklist Clicks */}
+                {/* Widget Clicks */}
                 <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                   <div className="px-4 py-3 border-b border-border flex items-center gap-2">
                     <MousePointerClick size={14} className="text-primary" />
                     <span className="text-sm font-mono font-medium">Widget Clicks</span>
                   </div>
-                  {data?.trackStats && data.trackStats.length > 0 ? (
-                    <div className="divide-y divide-border">
-                      {data.trackStats.map((track, i) => (
-                        <div key={track.trackId} className="px-4 py-3 flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground font-mono w-6 text-right">{i + 1}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{track.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
-                          </div>
-                          <div className="flex items-center gap-4 flex-shrink-0">
-                            <div className="flex items-center gap-1 text-xs font-mono" title="In-page plays"><Play size={12} className="text-primary" /><span>{track.plays}</span></div>
-                            <div className="flex items-center gap-1 text-xs font-mono" title="Opened in Spotify"><ExternalLink size={12} className="text-primary" /><span>{track.spotifyClicks}</span></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="px-4 py-8 text-center text-sm text-muted-foreground">No widget click data yet.</div>
-                  )}
+                  <div className="px-4 py-6 text-center">
+                    <span className="text-3xl font-mono font-bold text-primary">{data?.totalEngagements ?? 0}</span>
+                    <p className="text-xs text-muted-foreground mt-1">total widget interactions</p>
+                  </div>
                 </motion.div>
 
                 {/* Check Fits */}
@@ -339,48 +276,20 @@ export default function Admin() {
                   </div>
                   {data?.checkFits && data.checkFits.length > 0 ? (
                     <div className="divide-y divide-border">
-                      {data.checkFits.map((fit, i) => {
-                        const isExpanded = expandedFit === i;
-                        const hasClicks = fit.tracksClicked.length > 0;
-                        return (
-                          <div key={i}>
-                            <button
-                              className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors ${hasClicks ? "hover:bg-muted/50 cursor-pointer" : "cursor-default"} ${isExpanded ? "bg-muted/30" : ""}`}
-                              onClick={() => hasClicks && setExpandedFit(isExpanded ? null : i)}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm truncate">{fit.playlist_name || fit.playlist_url || "—"}</p>
-                                {fit.song_name && <p className="text-xs text-muted-foreground truncate">× {fit.song_name}</p>}
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                {fit.count > 1 && <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">×{fit.count}</span>}
-                                <span className="text-xs text-muted-foreground font-mono">
-                                  {(() => { const d = new Date(fit.last_checked || (fit as any).created_at); return isNaN(d.getTime()) ? "—" : d.toLocaleDateString(); })()}
-                                </span>
-                                <span className={`text-xs font-mono ${hasClicks ? "text-primary" : "text-muted-foreground/50"}`}>
-                                  {fit.tracksClicked.length} click{fit.tracksClicked.length !== 1 ? "s" : ""}
-                                </span>
-                                {hasClicks && <ChevronDown size={14} className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} />}
-                              </div>
-                            </button>
-                            <AnimatePresence>
-                              {isExpanded && hasClicks && (
-                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                                  <div className="px-4 pb-3 pt-1 space-y-1 ml-4 border-l-2 border-primary/20">
-                                    {fit.tracksClicked.map((t, j) => (
-                                      <div key={j} className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        {t.action === "play" ? <Play size={10} className="text-primary flex-shrink-0" /> : <ExternalLink size={10} className="text-primary flex-shrink-0" />}
-                                        <span className="truncate">{t.track_name} — {t.artist_name}</span>
-                                        <span className="text-[10px] ml-auto flex-shrink-0 opacity-60">{t.action === "play" ? "played" : "opened"}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                      {data.checkFits.map((fit, i) => (
+                        <div key={i} className="px-4 py-2.5 flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate">{fit.playlist_name || fit.playlist_url || "—"}</p>
+                            {fit.song_name && <p className="text-xs text-muted-foreground truncate">× {fit.song_name}</p>}
                           </div>
-                        );
-                      })}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {fit.count > 1 && <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">×{fit.count}</span>}
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {(() => { const d = new Date(fit.last_checked || (fit as any).created_at); return isNaN(d.getTime()) ? "—" : d.toLocaleDateString(); })()}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="px-4 py-8 text-center text-sm text-muted-foreground">No fit checks yet.</div>
