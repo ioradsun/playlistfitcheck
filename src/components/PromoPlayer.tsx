@@ -16,6 +16,18 @@ interface Track {
 
 const PLAYLIST_ID = "3wtgtkdE8aDOf3V0LYoAXa";
 
+function toEmbedUrl(url: string): string {
+  if (!url) return url;
+  // Already an embed URL
+  if (url.includes("/embed/")) return url;
+  // Convert https://open.spotify.com/artist/X... → https://open.spotify.com/embed/artist/X...
+  const match = url.match(/open\.spotify\.com\/(track|artist|album|playlist|episode|show)\/([a-zA-Z0-9]+)/);
+  if (match) {
+    return `https://open.spotify.com/embed/${match[1]}/${match[2]}?utm_source=generator`;
+  }
+  return url;
+}
+
 function logEngagement(trackId: string, trackName: string, artistName: string, action: string) {
   supabase.functions.invoke("track-engagement", {
     body: { trackId, trackName, artistName, action, sessionId: getSessionId() },
@@ -189,7 +201,7 @@ export function PromoPlayer() {
         >
           <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} onPointerDown={(e) => dragControls.start(e)} />
           <iframe
-            src={embedUrl}
+            src={toEmbedUrl(embedUrl)}
             width="100%"
             height="152"
             frameBorder="0"
