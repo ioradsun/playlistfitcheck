@@ -111,7 +111,7 @@ const PublicProfile = () => {
         {/* Recent searches */}
         {searches.length > 0 && (
           <Card className="glass-card border-border">
-            <CardHeader><CardTitle className="text-lg">Recent Fit Checks</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">Recent PlaylistFit Checks</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {searches.map((s) => (

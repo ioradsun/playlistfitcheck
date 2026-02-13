@@ -225,7 +225,7 @@ const Index = () => {
           handleAnalyze({ ...(data as PlaylistInput), _songUrl: songUrl || undefined });
         } catch (e) {
           console.error("Auto-run error:", e);
-          toast.error("Failed to load report. Try running the fit check again.");
+          toast.error("Failed to load report. Try running PlaylistFit again.");
           setVibeLoading(false);
         }
       })();

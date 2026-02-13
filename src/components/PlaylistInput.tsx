@@ -163,7 +163,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
           Know before you pitch.
         </motion.div>
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-          Playlist <span className="text-gradient-primary">Fit</span> Check
+          Playlist<span className="text-gradient-primary">Fit</span>
         </h1>
       </div>
 
