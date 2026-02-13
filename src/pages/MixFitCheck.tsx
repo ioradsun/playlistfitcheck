@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { MixProjectForm } from "@/components/mix/MixProjectForm";
 import { MixCard } from "@/components/mix/MixCard";
@@ -26,6 +26,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
   const [markerStart, setMarkerStart] = useState(0);
   const [markerEnd, setMarkerEnd] = useState(10);
   const [saving, setSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   // Track which mixes need re-upload (loaded from saved project without audio)
@@ -140,7 +141,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
     [decodeFile, mixes]
   );
 
-  const handleSave = useCallback(async () => {
+  const saveProject = useCallback(async (showToast = false) => {
     if (!projectId) return;
     setSaving(true);
     try {
@@ -154,13 +155,31 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
-      toast.success("Project saved — audio files are not stored, only filenames, rankings & notes.");
+      setLastSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       setRefreshKey((k) => k + 1);
+      if (showToast) {
+        toast.success("Project saved — audio files are not stored, only filenames, rankings & notes.");
+      }
     } catch {
-      toast.error("Failed to save");
+      if (showToast) toast.error("Failed to save");
     }
     setSaving(false);
   }, [projectId, title, notes, mixes, markerStart, markerEnd, save]);
+
+  // Debounced autosave
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveData = useMemo(() => 
+    projectId ? JSON.stringify({ title, notes, mixes: mixes.map(m => ({ name: m.name, rank: m.rank, comments: m.comments })), markerStart, markerEnd }) : null
+  , [projectId, title, notes, mixes, markerStart, markerEnd]);
+
+  useEffect(() => {
+    if (!autosaveData || !projectId) return;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      saveProject(false);
+    }, 2000);
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
+  }, [autosaveData, projectId, saveProject]);
 
   const updateMix = useCallback((id: string, updates: Partial<AudioMix>) => {
     setMixes((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
@@ -201,7 +220,10 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleSave} disabled={saving}>
+          {lastSavedAt && (
+            <span className="text-xs text-muted-foreground">Saved {lastSavedAt}</span>
+          )}
+          <Button variant="outline" size="sm" onClick={() => saveProject(true)} disabled={saving}>
             <Save size={14} className="mr-1" />
             {saving ? "Saving..." : "Save"}
           </Button>
