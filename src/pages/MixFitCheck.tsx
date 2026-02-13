@@ -33,6 +33,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
   const [playheadTime, setPlayheadTime] = useState(0);
   const rafRef = useRef<number | null>(null);
   const firstWaveform = mixes.find((m) => m.buffer)?.waveform || null;
+  const referenceDuration = firstWaveform?.duration || 1;
 
   // Animate playhead
   useEffect(() => {
@@ -268,9 +269,9 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
               isPlaying={playingId === mix.id}
               usedRanks={usedRanks}
               totalMixes={activeMixes.length}
-              markerStartPct={(markerStart / (mix.waveform.duration || 1)) * 100}
-              markerEndPct={(markerEnd / (mix.waveform.duration || 1)) * 100}
-              playheadPct={playingId === mix.id ? (playheadTime / (mix.waveform.duration || 1)) * 100 : 0}
+              markerStartPct={(markerStart / referenceDuration) * 100}
+              markerEndPct={(markerEnd / referenceDuration) * 100}
+              playheadPct={playingId === mix.id ? (playheadTime / referenceDuration) * 100 : 0}
               onPlay={() => play(mix.id, mix.buffer, markerStart, markerEnd)}
               onStop={stop}
               onNameChange={(name) => updateMix(mix.id, { name })}
