@@ -74,8 +74,8 @@ serve(async (req) => {
       const errText = await resp.text();
       console.error("Spotify search error:", resp.status, errText);
       return new Response(
-        JSON.stringify({ error: `Spotify search error [${resp.status}]` }),
-        { status: resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Search failed. Please try again later." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

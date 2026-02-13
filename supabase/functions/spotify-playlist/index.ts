@@ -183,9 +183,10 @@ serve(async (req) => {
     if (!playlistResp.ok) {
       const errText = await playlistResp.text();
       console.error("Spotify API error:", playlistResp.status, errText);
+      const userStatus = playlistResp.status === 404 ? 404 : 502;
       return new Response(
-        JSON.stringify({ error: `Spotify API error [${playlistResp.status}]. Make sure your Spotify app is out of Development Mode to access public playlists.` }),
-        { status: playlistResp.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: playlistResp.status === 404 ? "Playlist not found. Check the URL and try again." : "Could not retrieve playlist data. Please try again later." }),
+        { status: userStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
