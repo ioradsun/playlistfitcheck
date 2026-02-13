@@ -53,18 +53,19 @@ serve(async (req) => {
 
     // ── USERS section ──
     if (section === "users") {
-      // Fetch all auth users (paginated, up to 1000)
       const { data: { users: authUsers }, error: authErr } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
       if (authErr) throw authErr;
 
-      // Fetch profiles
       const { data: profiles } = await supabase.from("profiles").select("id, display_name, avatar_url, created_at");
-
-      // Fetch roles
       const { data: roles } = await supabase.from("user_roles").select("user_id, role");
-
-      // Fetch saved_searches counts per user
       const { data: savedSearches } = await supabase.from("saved_searches").select("user_id");
+
+      // Fetch ALL track engagement with user_id
+      const { data: engagements } = await supabase
+        .from("track_engagement")
+        .select("user_id, track_id, track_name, artist_name, action, created_at")
+        .order("created_at", { ascending: false })
+        .limit(5000);
 
       const fitCountMap: Record<string, number> = {};
       for (const s of savedSearches || []) {
@@ -77,17 +78,46 @@ serve(async (req) => {
       const roleMap: Record<string, string> = {};
       for (const r of roles || []) roleMap[r.user_id] = r.role;
 
-      const users = (authUsers || []).map((u: any) => ({
-        id: u.id,
-        email: u.email,
-        display_name: profileMap[u.id]?.display_name || null,
-        avatar_url: profileMap[u.id]?.avatar_url || u.user_metadata?.avatar_url || u.user_metadata?.picture || null,
-        role: roleMap[u.id] || "user",
-        fit_checks: fitCountMap[u.id] || 0,
-        created_at: u.created_at,
-        last_sign_in_at: u.last_sign_in_at,
-        provider: u.app_metadata?.provider || "email",
-      }));
+      // Build per-user engagement: { userId -> { trackId -> { name, artist, plays, spotify_clicks } } }
+      const userEngagementMap: Record<string, Record<string, { track_name: string; artist_name: string; plays: number; spotify_clicks: number }>> = {};
+      let totalPlays = 0;
+      let totalClicks = 0;
+
+      for (const e of engagements || []) {
+        if (!e.user_id) continue;
+        if (!userEngagementMap[e.user_id]) userEngagementMap[e.user_id] = {};
+        const tracks = userEngagementMap[e.user_id];
+        if (!tracks[e.track_id]) {
+          tracks[e.track_id] = { track_name: e.track_name || "Unknown", artist_name: e.artist_name || "Unknown", plays: 0, spotify_clicks: 0 };
+        }
+        if (e.action === "play") { tracks[e.track_id].plays++; totalPlays++; }
+        else if (e.action === "spotify_click") { tracks[e.track_id].spotify_clicks++; totalClicks++; }
+      }
+
+      const users = (authUsers || []).map((u: any) => {
+        const userTracks = userEngagementMap[u.id] || {};
+        const trackList = Object.entries(userTracks)
+          .map(([trackId, t]) => ({ track_id: trackId, ...t, total: t.plays + t.spotify_clicks }))
+          .sort((a, b) => b.total - a.total);
+
+        const totalInteractions = trackList.reduce((sum, t) => sum + t.total, 0);
+
+        return {
+          id: u.id,
+          email: u.email,
+          display_name: profileMap[u.id]?.display_name || null,
+          avatar_url: profileMap[u.id]?.avatar_url || u.user_metadata?.avatar_url || u.user_metadata?.picture || null,
+          role: roleMap[u.id] || "user",
+          fit_checks: fitCountMap[u.id] || 0,
+          created_at: u.created_at,
+          last_sign_in_at: u.last_sign_in_at,
+          provider: u.app_metadata?.provider || "email",
+          engagement: { total: totalInteractions, tracks: trackList },
+        };
+      });
+
+      // Sort: users with most engagement first
+      users.sort((a: any, b: any) => b.engagement.total - a.engagement.total);
 
       return new Response(JSON.stringify({ users }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },

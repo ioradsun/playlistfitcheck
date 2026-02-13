@@ -167,6 +167,7 @@ export type Database = {
           session_id: string | null
           track_id: string
           track_name: string | null
+          user_id: string | null
         }
         Insert: {
           action: string
@@ -176,6 +177,7 @@ export type Database = {
           session_id?: string | null
           track_id: string
           track_name?: string | null
+          user_id?: string | null
         }
         Update: {
           action?: string
@@ -185,6 +187,7 @@ export type Database = {
           session_id?: string | null
           track_id?: string
           track_name?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
