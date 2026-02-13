@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Pencil, Camera, Share2, X, LayoutDashboard, Check, Loader2 } from "lucide-react";
+import { Pencil, Camera, Share2, X, Check, Loader2 } from "lucide-react";
 
 
 const Profile = () => {
@@ -122,9 +122,6 @@ const Profile = () => {
             </Button>
             <Button variant={editing ? "secondary" : "outline"} size="sm" className="gap-1.5" onClick={() => setEditing(!editing)}>
               {editing ? <><X size={14} /> Cancel</> : <><Pencil size={14} /> Edit</>}
-            </Button>
-            <Button size="sm" onClick={() => navigate("/dashboard")} className="gap-1.5">
-              <LayoutDashboard size={14} /> Dashboard
             </Button>
           </div>
         </div>

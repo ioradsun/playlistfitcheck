@@ -3,7 +3,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, Music, LayoutDashboard } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { LogOut, Music, LayoutDashboard, User } from "lucide-react";
 
 export const Navbar = () => {
   const { user, loading, profile } = useAuth();
@@ -27,28 +34,33 @@ export const Navbar = () => {
 
         <div className="flex items-center gap-3">
           {loading ? null : user ? (
-            <>
-              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => navigate("/dashboard")}>
-                <LayoutDashboard size={14} /> Dashboard
-              </Button>
-              <button
-                onClick={() => navigate("/profile")}
-                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-              >
-                <Avatar className="h-8 w-8 border border-border">
-                  <AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.display_name ?? "Avatar"} />
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-medium hidden sm:inline max-w-[120px] truncate">
-                  {profile?.display_name ?? user.email?.split("@")[0]}
-                </span>
-              </button>
-              <Button variant="ghost" size="icon" onClick={handleLogout} className="text-muted-foreground h-8 w-8">
-                <LogOut size={16} />
-              </Button>
-            </>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 hover:opacity-80 transition-opacity outline-none">
+                  <Avatar className="h-8 w-8 border border-border">
+                    <AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.display_name ?? "Avatar"} />
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium hidden sm:inline max-w-[120px] truncate">
+                    {profile?.display_name ?? user.email?.split("@")[0]}
+                  </span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-card border-border z-[100]">
+                <DropdownMenuItem onClick={() => navigate("/dashboard")} className="cursor-pointer gap-2">
+                  <LayoutDashboard size={14} /> Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer gap-2">
+                  <User size={14} /> Profile
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer gap-2 text-destructive focus:text-destructive">
+                  <LogOut size={14} /> Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <>
               <Button variant="ghost" size="sm" onClick={() => navigate("/auth")}>
