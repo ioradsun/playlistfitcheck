@@ -88,33 +88,37 @@ export function PromoPlayer() {
   if (loading || error) return null;
   if (widgetMode === "tracklist" && tracks.length === 0) return null;
 
-  // ── EMBED MODE ──
-  const embedContent = (
-    <div className="flex flex-col">
-      <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Music2 size={13} className="text-primary" />
-          <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
-        </div>
-        {!isMobile && (
+  // ── Persistent embed iframe (always mounted once loaded, hidden when collapsed) ──
+  const persistentEmbed = widgetMode === "embed" ? (
+    <div
+      className={`fixed z-40 ${expanded ? "bottom-20 right-4 w-[280px]" : "w-0 h-0 overflow-hidden"}`}
+      style={expanded ? undefined : { position: "fixed", bottom: 0, right: 0, opacity: 0, pointerEvents: "none" }}
+      aria-hidden={!expanded}
+    >
+      <div className="flex flex-col glass-card rounded-xl shadow-2xl overflow-hidden">
+        <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Music2 size={13} className="text-primary" />
+            <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
+          </div>
           <button onClick={handleCollapse} className="p-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors">
             <X size={14} />
           </button>
-        )}
+        </div>
+        <iframe
+          src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
+          width="100%"
+          height="152"
+          frameBorder="0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+          className="rounded-b-xl"
+        />
       </div>
-      <iframe
-        src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
-        width="100%"
-        height="152"
-        frameBorder="0"
-        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        loading="lazy"
-        className="rounded-b-xl"
-      />
     </div>
-  );
+  ) : null;
 
-  // ── TRACKLIST MODE ──
+  // ── TRACKLIST MODE content ──
   const trackList = (
     <div className="flex flex-col">
       <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
@@ -191,8 +195,6 @@ export function PromoPlayer() {
     </div>
   );
 
-  const widgetContent = widgetMode === "embed" ? embedContent : trackList;
-
   // Collapsed floating button
   const floatingButton = (
     <motion.button
@@ -210,7 +212,49 @@ export function PromoPlayer() {
     </motion.button>
   );
 
-  // Mobile: use drawer
+  // Embed mode: persistent iframe approach (no unmounting)
+  if (widgetMode === "embed") {
+    if (isMobile) {
+      return (
+        <>
+          {!expanded && floatingButton}
+          {persistentEmbed}
+          <Drawer open={expanded} onOpenChange={(open) => { if (!open) handleCollapse(); else handleExpand(); }}>
+            <DrawerContent>
+              <DrawerTitle className="sr-only">Music Player</DrawerTitle>
+              <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Music2 size={13} className="text-primary" />
+                  <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
+                </div>
+              </div>
+              <iframe
+                src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
+                width="100%"
+                height="152"
+                frameBorder="0"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                loading="lazy"
+                className="rounded-b-xl"
+              />
+            </DrawerContent>
+          </Drawer>
+        </>
+      );
+    }
+
+    // Desktop embed
+    return (
+      <>
+        <AnimatePresence>
+          {!expanded && floatingButton}
+        </AnimatePresence>
+        {persistentEmbed}
+      </>
+    );
+  }
+
+  // Tracklist mode (existing behavior)
   if (isMobile) {
     return (
       <>
@@ -218,14 +262,14 @@ export function PromoPlayer() {
         <Drawer open={expanded} onOpenChange={(open) => { if (!open) handleCollapse(); else handleExpand(); }}>
           <DrawerContent>
             <DrawerTitle className="sr-only">Music Player</DrawerTitle>
-            {widgetContent}
+            {trackList}
           </DrawerContent>
         </Drawer>
       </>
     );
   }
 
-  // Desktop: floating card
+  // Desktop tracklist
   return (
     <>
       <AnimatePresence>
@@ -241,7 +285,7 @@ export function PromoPlayer() {
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
-            {widgetContent}
+            {trackList}
           </motion.div>
         )}
       </AnimatePresence>
