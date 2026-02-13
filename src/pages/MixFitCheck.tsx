@@ -249,6 +249,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
         waveform={firstWaveform}
         markerStart={markerStart}
         markerEnd={markerEnd}
+        referenceName={activeMixes[0]?.name}
         isPlaying={!!playingId}
         playheadPct={playingId ? (playheadTime / (firstWaveform?.duration || 1)) * 100 : 0}
         onMarkersChange={(s, e) => {
