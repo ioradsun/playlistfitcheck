@@ -65,11 +65,11 @@ const Profile = () => {
 
   const handleDisplayNameChange = (val: string) => {
     setDisplayName(val);
-    autoSave({ display_name: val, bio, spotify_embed_url: isArtist ? spotifyUrl : undefined });
+    autoSave({ display_name: val, bio, spotify_embed_url: spotifyUrl || undefined });
   };
   const handleBioChange = (val: string) => {
     setBio(val);
-    autoSave({ display_name: displayName, bio: val, spotify_embed_url: isArtist ? spotifyUrl : undefined });
+    autoSave({ display_name: displayName, bio: val, spotify_embed_url: spotifyUrl || undefined });
   };
   const handleSpotifyUrlChange = (val: string) => {
     setSpotifyUrl(val);
@@ -178,19 +178,17 @@ const Profile = () => {
                 <Label>Bio</Label>
                 <Textarea value={bio} onChange={e => handleBioChange(e.target.value)} placeholder="Tell us about yourself" rows={3} />
               </div>
-              {(isArtist || selectedRole === "artist") && (
-                <div className="space-y-2">
-                  <Label>Spotify Playlist URL</Label>
-                  <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="https://open.spotify.com/playlist/..." />
-                  <p className="text-xs text-muted-foreground">Paste a Spotify playlist or album link to embed on your public profile</p>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label>Spotify Playlist URL</Label>
+                <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="https://open.spotify.com/playlist/..." />
+                <p className="text-xs text-muted-foreground">Paste a Spotify playlist or album link to embed on your public profile</p>
+              </div>
             </CardContent>
           </Card>
         )}
 
         {/* Spotify embed for artists (outside edit view) */}
-        {!editing && isArtist && spotifyUrl && (
+        {!editing && spotifyUrl && (
           <Card className="glass-card border-border overflow-hidden">
             <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Music size={18} /> My Music</CardTitle></CardHeader>
             <CardContent>
