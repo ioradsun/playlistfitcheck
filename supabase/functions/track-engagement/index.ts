@@ -17,6 +17,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { trackId, trackName, artistName, action, sessionId } = await req.json();
@@ -24,33 +25,41 @@ serve(async (req) => {
     // Input validation
     if (!trackId || typeof trackId !== "string" || trackId.length > 100) {
       return new Response(JSON.stringify({ error: "Invalid trackId" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (!action || typeof action !== "string" || !VALID_ACTIONS.includes(action)) {
       return new Response(JSON.stringify({ error: "Invalid action" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (trackName != null && (typeof trackName !== "string" || trackName.length > 300)) {
       return new Response(JSON.stringify({ error: "Invalid trackName" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (artistName != null && (typeof artistName !== "string" || artistName.length > 300)) {
       return new Response(JSON.stringify({ error: "Invalid artistName" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (sessionId != null && (typeof sessionId !== "string" || sessionId.length > 200)) {
       return new Response(JSON.stringify({ error: "Invalid sessionId" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Try to extract user_id from auth header
+    let userId: string | null = null;
+    const authHeader = req.headers.get("authorization");
+    if (authHeader) {
+      try {
+        const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user } } = await userClient.auth.getUser();
+        if (user) userId = user.id;
+      } catch { /* anonymous is fine */ }
     }
 
     await supabase.from("track_engagement").insert({
@@ -59,17 +68,16 @@ serve(async (req) => {
       artist_name: artistName || null,
       action,
       session_id: sessionId || null,
+      user_id: userId,
     });
 
     return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("Track engagement error:", e);
     return new Response(JSON.stringify({ error: "An internal error occurred" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
