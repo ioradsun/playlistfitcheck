@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
 import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
@@ -44,14 +44,14 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 
 const Index = () => {
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const autoRunRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
   const [vibeLoading, setVibeLoading] = useState(false);
   const [songFitAnalysis, setSongFitAnalysis] = useState<SongFitAnalysis | null>(null);
   const [songFitLoading, setSongFitLoading] = useState(false);
-  const [autoRunLoading, setAutoRunLoading] = useState(false);
+  const savedSearchIdRef = useRef<string | null>(null);
 
   const isFullyLoaded = useMemo(() => {
     if (!result) return false;
@@ -111,10 +111,10 @@ const Index = () => {
     }
   }, []);
 
-  const saveSearch = useCallback(async (data: PlaylistInput, output: HealthOutput, songUrl?: string, songFit?: SongFitAnalysis | null) => {
+  const saveSearch = useCallback(async (data: PlaylistInput, output: HealthOutput, songUrl?: string) => {
     if (!user) return;
     try {
-      await supabase.from("saved_searches").insert({
+      const { data: inserted } = await supabase.from("saved_searches").insert({
         user_id: user.id,
         playlist_url: (data as any).playlistUrl ?? "",
         playlist_name: data.playlistName,
@@ -122,9 +122,8 @@ const Index = () => {
         song_name: (data as any)._songName ?? null,
         health_score: output.summary.healthScore,
         health_label: output.summary.healthLabel,
-        blended_score: songFit?.blendedScore ?? null,
-        blended_label: songFit?.blendedLabel ?? null,
-      });
+      }).select("id").single();
+      if (inserted) savedSearchIdRef.current = inserted.id;
     } catch (e) {
       console.error("Failed to save search:", e);
     }
@@ -151,6 +150,26 @@ const Index = () => {
     }
   }, [fetchVibeAnalysis, fetchSongFitAnalysis, saveSearch]);
 
+  // Update saved search with full report data once all analyses complete
+  useEffect(() => {
+    if (!isFullyLoaded || !result || !savedSearchIdRef.current) return;
+    const reportData = {
+      input: result.input,
+      output: result.output,
+      trackList: result.trackList,
+      songUrl: result.songUrl,
+      vibeAnalysis,
+      songFitAnalysis,
+    };
+    supabase.from("saved_searches").update({
+      report_data: reportData as any,
+      blended_score: songFitAnalysis?.blendedScore ?? null,
+      blended_label: songFitAnalysis?.blendedLabel ?? null,
+    }).eq("id", savedSearchIdRef.current).then(() => {
+      savedSearchIdRef.current = null;
+    });
+  }, [isFullyLoaded, result, vibeAnalysis, songFitAnalysis]);
+
   const handleBack = useCallback(() => {
     setResult(null);
     setVibeAnalysis(null);
@@ -159,49 +178,27 @@ const Index = () => {
     setSongFitLoading(false);
   }, []);
 
-  // Auto-run analysis from URL params (e.g. from dashboard click)
+  // Load cached report from dashboard navigation state
   useEffect(() => {
-    const playlistUrl = searchParams.get("playlist");
-    if (!playlistUrl || autoRunRef.current) return;
+    const state = location.state as any;
+    if (!state?.reportData || autoRunRef.current) return;
     autoRunRef.current = true;
-    const songUrl = searchParams.get("song") || undefined;
-    // Clear params immediately to prevent re-trigger
+    // Clear navigation state
     window.history.replaceState({}, "", "/");
 
-    (async () => {
-      setAutoRunLoading(true);
-      try {
-        const { data, error } = await supabase.functions.invoke("spotify-playlist", {
-          body: { playlistUrl, sessionId: null, songUrl: songUrl || null },
-        });
-        if (error) throw new Error(error.message);
-        if (data?.error) throw new Error(data.error);
-        const trackList = data._trackList;
-        const output = computePlaylistHealth(data as PlaylistInput);
-        setVibeAnalysis(null);
-        setSongFitAnalysis(null);
-        setResult({ output, input: data as PlaylistInput, name: data.playlistName, key: Date.now(), trackList, songUrl });
-
-        if (trackList && trackList.length > 0) {
-          fetchVibeAnalysis(data as PlaylistInput, trackList);
-          if (songUrl) {
-            fetchSongFitAnalysis(songUrl, data as PlaylistInput, trackList, output);
-          }
-        }
-      } catch (e) {
-        console.error("Auto-run error:", e);
-        toast.error("Failed to load report. Try running the fit check again.");
-      } finally {
-        setAutoRunLoading(false);
-      }
-    })();
+    const { input, output, vibeAnalysis: vibe, songFitAnalysis: songFit, trackList, songUrl } = state.reportData;
+    setResult({ output, input, name: input.playlistName, key: Date.now(), trackList, songUrl });
+    setVibeAnalysis(vibe ?? null);
+    setSongFitAnalysis(songFit ?? null);
+    setVibeLoading(false);
+    setSongFitLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="flex-1 flex items-center justify-center px-4 py-16 pt-20">
-        {autoRunLoading || (result && !isFullyLoaded) ? (
+        {result && !isFullyLoaded ? (
           <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
         ) : result && isFullyLoaded ? (
           <ResultsDashboard

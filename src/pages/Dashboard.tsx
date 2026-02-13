@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { User, Music, Plus, BarChart3 } from "lucide-react";
+import { toast } from "sonner";
 
 interface SavedSearch {
   id: string;
@@ -17,6 +18,7 @@ interface SavedSearch {
   blended_score: number | null;
   blended_label: string | null;
   created_at: string;
+  report_data: any;
 }
 
 const Dashboard = () => {
@@ -96,10 +98,12 @@ const Dashboard = () => {
                 key={s.id}
                 className="glass-card border-border hover:border-primary/30 transition-colors cursor-pointer"
                 onClick={() => {
-                  const params = new URLSearchParams();
-                  if (s.playlist_url) params.set("playlist", s.playlist_url);
-                  if (s.song_url) params.set("song", s.song_url);
-                  navigate(`/?${params.toString()}`);
+                  if (s.report_data) {
+                    navigate("/", { state: { reportData: s.report_data } });
+                  } else {
+                    toast("Report data not available. Please run the fit check again.");
+                    navigate("/");
+                  }
                 }}
               >
                 <CardContent className="p-4">

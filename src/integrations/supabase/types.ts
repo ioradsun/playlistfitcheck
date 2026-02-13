@@ -93,6 +93,7 @@ export type Database = {
           id: string
           playlist_name: string | null
           playlist_url: string | null
+          report_data: Json | null
           song_name: string | null
           song_url: string | null
           user_id: string
@@ -106,6 +107,7 @@ export type Database = {
           id?: string
           playlist_name?: string | null
           playlist_url?: string | null
+          report_data?: Json | null
           song_name?: string | null
           song_url?: string | null
           user_id: string
@@ -119,6 +121,7 @@ export type Database = {
           id?: string
           playlist_name?: string | null
           playlist_url?: string | null
+          report_data?: Json | null
           song_name?: string | null
           song_url?: string | null
           user_id?: string

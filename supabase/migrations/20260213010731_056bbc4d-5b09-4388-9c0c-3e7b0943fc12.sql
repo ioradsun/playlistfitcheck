@@ -1,0 +1,1 @@
+ALTER TABLE public.saved_searches ADD COLUMN report_data jsonb DEFAULT NULL;
