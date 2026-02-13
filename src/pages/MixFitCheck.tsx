@@ -33,6 +33,10 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
   const [needsReupload, setNeedsReupload] = useState(false);
   const [playheadTime, setPlayheadTime] = useState(0);
   const rafRef = useRef<number | null>(null);
+  const markerStartRef = useRef(markerStart);
+  const markerEndRef = useRef(markerEnd);
+  markerStartRef.current = markerStart;
+  markerEndRef.current = markerEnd;
   const firstWaveform = mixes.find((m) => m.buffer)?.waveform || null;
   const referenceDuration = firstWaveform?.duration || 1;
 
@@ -253,7 +257,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
         }}
         onPlay={() => {
           const first = activeMixes[0];
-          if (first) play(first.id, first.buffer, markerStart, markerEnd);
+          if (first) play(first.id, first.buffer, markerStartRef.current, markerEndRef.current);
         }}
         onStop={stop}
       />
