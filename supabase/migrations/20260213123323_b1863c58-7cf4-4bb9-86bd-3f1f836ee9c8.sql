@@ -1,0 +1,1 @@
+ALTER TABLE public.widget_config ADD COLUMN thumbnail_link text;

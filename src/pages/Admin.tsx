@@ -47,6 +47,7 @@ export default function Admin() {
   const [embedUrl, setEmbedUrl] = useState("");
   const [widgetAnalytics, setWidgetAnalytics] = useState<{ widget_opens: number; widget_closes: number } | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState("");
+  const [thumbnailLink, setThumbnailLink] = useState("");
   const [fetchingOembed, setFetchingOembed] = useState(false);
   const [uploadingThumb, setUploadingThumb] = useState(false);
   const [togglingWidget, setTogglingWidget] = useState(false);
@@ -90,6 +91,7 @@ export default function Admin() {
           if (r?.config?.widget_title) setWidgetTitle(r.config.widget_title);
           if (r?.config?.embed_url) setEmbedUrl(r.config.embed_url);
           if (r?.config?.thumbnail_url) setThumbnailUrl(r.config.thumbnail_url);
+          if (r?.config?.thumbnail_link) setThumbnailLink(r.config.thumbnail_link);
         });
       supabase.functions.invoke("admin-dashboard", { body: { section: "widget_analytics" } })
         .then(({ data: r }) => { if (r) setWidgetAnalytics(r); });
@@ -127,7 +129,7 @@ export default function Admin() {
     setSavingWidget(true);
     try {
       await supabase.functions.invoke("admin-dashboard", {
-        body: { action: "update_widget_config", embed_url: embedUrl, widget_title: widgetTitle, thumbnail_url: thumbnailUrl },
+        body: { action: "update_widget_config", embed_url: embedUrl, widget_title: widgetTitle, thumbnail_url: thumbnailUrl, thumbnail_link: thumbnailLink },
       });
       toast.success("Widget config saved");
       window.dispatchEvent(new CustomEvent("widget-config-updated"));
@@ -514,6 +516,17 @@ export default function Admin() {
                       )}
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-1">Auto-filled from oEmbed, paste a URL, or upload an image</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-mono text-muted-foreground mb-1 block">Thumbnail Link</label>
+                    <input
+                      type="text"
+                      value={thumbnailLink}
+                      onChange={(e) => setThumbnailLink(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                      placeholder="https://open.spotify.com/artist/..."
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Where the thumbnail links to when clicked in the widget</p>
                   </div>
                   <button
                     onClick={handleSaveWidgetConfig}
