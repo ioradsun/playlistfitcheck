@@ -198,7 +198,7 @@ export default function MixFitCheck() {
           <input
             ref={fileRef}
             type="file"
-            accept=".mp3,.wav,audio/mpeg,audio/wav"
+            accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a"
             multiple
             className="hidden"
             onChange={handleUpload}
