@@ -29,6 +29,7 @@ export function PromoPlayer() {
   const [error, setError] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [hasPlayed, setHasPlayed] = useState(false);
   const [widgetMode, setWidgetMode] = useState<"tracklist" | "embed">("tracklist");
   const isMobile = useIsMobile();
 
@@ -62,6 +63,7 @@ export function PromoPlayer() {
 
   const handleExpand = useCallback(() => {
     setExpanded(true);
+    setHasPlayed(true);
     if (widgetMode === "embed") {
       logEngagement("widget", "Widget", "System", "widget_open");
     }
@@ -195,6 +197,9 @@ export function PromoPlayer() {
     </div>
   );
 
+  // Whether to show "now playing" animation on collapsed button
+  const showPlayingAnim = !expanded && hasPlayed;
+
   // Collapsed floating button
   const floatingButton = (
     <motion.button
@@ -205,7 +210,20 @@ export function PromoPlayer() {
       whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.95 }}
     >
-      <Music2 size={20} />
+      {showPlayingAnim ? (
+        <div className="flex items-end gap-[3px] h-5">
+          {[0, 0.2, 0.4, 0.15].map((delay, i) => (
+            <motion.span
+              key={i}
+              className="w-[3px] rounded-full bg-primary-foreground"
+              animate={{ height: ["4px", "16px", "8px", "18px", "4px"] }}
+              transition={{ duration: 1.2, repeat: Infinity, delay, ease: "easeInOut" }}
+            />
+          ))}
+        </div>
+      ) : (
+        <Music2 size={20} />
+      )}
       {activeTrack && (
         <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-score-excellent animate-pulse" />
       )}
