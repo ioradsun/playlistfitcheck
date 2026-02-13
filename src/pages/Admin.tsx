@@ -101,12 +101,13 @@ export default function Admin() {
     const timer = setTimeout(async () => {
       setFetchingOembed(true);
       try {
-        const { data: oembedData } = await supabase.functions.invoke("spotify-oembed", { body: { url: embedUrl } });
-        if (oembedData?.title) setWidgetTitle(oembedData.title);
-        if (oembedData?.thumbnail_url) setThumbnailUrl(oembedData.thumbnail_url);
-      } catch (e) { console.error("oEmbed fetch failed:", e); }
+        const { data: oembedData, error: oembedErr } = await supabase.functions.invoke("spotify-oembed", { body: { url: embedUrl } });
+        if (!oembedErr && oembedData?.title) setWidgetTitle(oembedData.title);
+        if (!oembedErr && oembedData?.thumbnail_url) setThumbnailUrl(oembedData.thumbnail_url);
+        if (oembedErr) console.warn("oEmbed fetch failed, you can still set title manually");
+      } catch (e) { console.warn("oEmbed fetch failed:", e); }
       finally { setFetchingOembed(false); }
-    }, 800);
+    }, 1200);
     return () => clearTimeout(timer);
   }, [embedUrl]);
 
