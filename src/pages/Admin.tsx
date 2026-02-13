@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, Music2, Upload, MousePointerClick } from "lucide-react";
+import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, Music2, MousePointerClick } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -41,9 +41,6 @@ export default function Admin() {
   const [deleting, setDeleting] = useState(false);
   const [widgetTitle, setWidgetTitle] = useState("");
   const [embedUrl, setEmbedUrl] = useState("");
-  const [thumbnailUrl, setThumbnailUrl] = useState("");
-  const [thumbnailLink, setThumbnailLink] = useState("");
-  const [uploadingThumb, setUploadingThumb] = useState(false);
   const [savingWidget, setSavingWidget] = useState(false);
 
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
@@ -82,8 +79,6 @@ export default function Admin() {
         .then(({ data: r }) => {
           if (r?.config?.widget_title) setWidgetTitle(r.config.widget_title);
           if (r?.config?.embed_url) setEmbedUrl(r.config.embed_url);
-          if (r?.config?.thumbnail_url) setThumbnailUrl(r.config.thumbnail_url);
-          if (r?.config?.thumbnail_link) setThumbnailLink(r.config.thumbnail_link);
         });
     }
   }, [tab, dataLoaded, isAdmin]);
@@ -95,7 +90,7 @@ export default function Admin() {
     setSavingWidget(true);
     try {
       await supabase.functions.invoke("admin-dashboard", {
-        body: { action: "update_widget_config", embed_url: embedUrl, widget_title: widgetTitle, thumbnail_url: thumbnailUrl, thumbnail_link: thumbnailLink },
+        body: { action: "update_widget_config", embed_url: embedUrl, widget_title: widgetTitle },
       });
       toast.success("Widget config saved");
       window.dispatchEvent(new CustomEvent("widget-config-updated"));
@@ -328,62 +323,6 @@ export default function Admin() {
                       placeholder="https://open.spotify.com/embed/..."
                     />
                     <p className="text-[10px] text-muted-foreground mt-1">Paste any Spotify URL (artist, track, album, playlist)</p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-mono text-muted-foreground mb-1 block">Thumbnail</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={thumbnailUrl}
-                        onChange={(e) => setThumbnailUrl(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                        placeholder="https://i.scdn.co/image/..."
-                      />
-                      <label className={`p-2 rounded-lg border border-border hover:bg-muted/50 transition-colors cursor-pointer flex-shrink-0 ${uploadingThumb ? "opacity-50 pointer-events-none" : ""}`} title="Upload image">
-                        {uploadingThumb ? <Loader2 size={14} className="animate-spin text-primary" /> : <Upload size={14} className="text-muted-foreground" />}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setUploadingThumb(true);
-                            try {
-                              const ext = file.name.split(".").pop() || "png";
-                              const path = `widget-thumb-${Date.now()}.${ext}`;
-                              const { error: upErr } = await supabase.storage.from("widget-assets").upload(path, file, { upsert: true });
-                              if (upErr) throw upErr;
-                              const { data: urlData } = supabase.storage.from("widget-assets").getPublicUrl(path);
-                              setThumbnailUrl(urlData.publicUrl);
-                              toast.success("Thumbnail uploaded");
-                            } catch (err) {
-                              console.error(err);
-                              toast.error("Upload failed");
-                            } finally {
-                              setUploadingThumb(false);
-                              e.target.value = "";
-                            }
-                          }}
-                        />
-                      </label>
-                      {thumbnailUrl && (
-                        <a href={thumbnailUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
-                          <img src={thumbnailUrl} alt="Thumbnail" className="w-8 h-8 rounded object-cover hover:ring-2 hover:ring-primary transition-all" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-mono text-muted-foreground mb-1 block">Thumbnail Link</label>
-                    <input
-                      type="text"
-                      value={thumbnailLink}
-                      onChange={(e) => setThumbnailLink(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                      placeholder="https://open.spotify.com/artist/..."
-                    />
-                    <p className="text-[10px] text-muted-foreground mt-1">Where the thumbnail links to when clicked</p>
                   </div>
                   <button
                     onClick={handleSaveWidgetConfig}
