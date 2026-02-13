@@ -98,21 +98,7 @@ export default function Admin() {
     }
   }, [tab, dataLoaded, isAdmin]);
 
-  // Auto-fetch oEmbed metadata when embed URL changes
-  useEffect(() => {
-    if (!embedUrl || !embedUrl.includes("spotify.com")) return;
-    const timer = setTimeout(async () => {
-      setFetchingOembed(true);
-      try {
-        const { data: oembedData, error: oembedErr } = await supabase.functions.invoke("spotify-oembed", { body: { url: embedUrl } });
-        if (!oembedErr && oembedData?.title) setWidgetTitle(oembedData.title);
-        if (!oembedErr && oembedData?.thumbnail_url) setThumbnailUrl(oembedData.thumbnail_url);
-        if (oembedErr) console.warn("oEmbed fetch failed, you can still set title manually");
-      } catch (e) { console.warn("oEmbed fetch failed:", e); }
-      finally { setFetchingOembed(false); }
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, [embedUrl]);
+  // oEmbed auto-fetch removed — title and thumbnail are now fully manual
 
   const handleToggleWidgetMode = async () => {
     const newMode = widgetMode === "tracklist" ? "embed" : "tracklist";
