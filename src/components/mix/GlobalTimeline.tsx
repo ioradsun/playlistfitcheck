@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Play, Pause } from "lucide-react";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
@@ -105,9 +106,18 @@ export function GlobalTimeline({
           >
             {isPlaying ? <Pause size={12} /> : <Play size={12} />}
           </Button>
-          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Comparison Region
-          </h3>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground cursor-help">
+                  Loop Zone
+                </h3>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Set zone to compare the same section across mixes</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         <span className="text-xs font-mono text-primary px-2 py-0.5 rounded bg-primary/10">
           {formatTime(markerStart)} – {formatTime(markerEnd)}
