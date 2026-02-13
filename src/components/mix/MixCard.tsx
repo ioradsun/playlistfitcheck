@@ -18,6 +18,7 @@ interface MixCardProps {
   totalMixes: number;
   markerStartPct: number;
   markerEndPct: number;
+  playheadPct: number;
   onPlay: () => void;
   onStop: () => void;
   onNameChange: (name: string) => void;
@@ -37,13 +38,14 @@ function drawCardWaveform(canvas: HTMLCanvasElement, peaks: number[], isPlaying:
   ctx.clearRect(0, 0, cw, ch);
 
   const barW = cw / peaks.length;
+  const barGap = 1;
   const gap = 1;
   peaks.forEach((peak, i) => {
     const barH = Math.max(peak * ch * 0.85, 1);
     ctx.fillStyle = isPlaying
-      ? "hsl(var(--primary))"
-      : "hsla(var(--primary), 0.35)";
-    ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
+      ? "hsla(0, 0%, 75%, 0.8)"
+      : "hsla(0, 0%, 55%, 0.4)";
+    ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - barGap, 1), barH);
   });
 }
 
@@ -58,6 +60,7 @@ export function MixCard({
   totalMixes,
   markerStartPct,
   markerEndPct,
+  playheadPct,
   onPlay,
   onStop,
   onNameChange,
@@ -122,6 +125,14 @@ export function MixCard({
             className="absolute inset-y-0 w-[2px] bg-primary pointer-events-none"
             style={{ left: `${markerEndPct}%` }}
           />
+
+          {/* Playhead */}
+          {isPlaying && playheadPct > 0 && (
+            <div
+              className="absolute inset-y-0 w-[2px] bg-white/90 pointer-events-none z-10"
+              style={{ left: `${playheadPct}%` }}
+            />
+          )}
         </div>
 
         {/* Controls row */}

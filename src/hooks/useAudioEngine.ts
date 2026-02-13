@@ -39,6 +39,7 @@ export function useAudioEngine() {
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const stopTimerRef = useRef<number | null>(null);
+  const playStartRef = useRef<{ ctxTime: number; offset: number; duration: number } | null>(null);
 
   const getCtx = useCallback(() => {
     if (!ctxRef.current) {
@@ -69,6 +70,7 @@ export function useAudioEngine() {
       stopTimerRef.current = null;
     }
     setPlayingId(null);
+    playStartRef.current = null;
   }, []);
 
   const play = useCallback(
@@ -84,6 +86,7 @@ export function useAudioEngine() {
       source.start(0, offset, duration);
       sourceRef.current = source;
       setPlayingId(id);
+      playStartRef.current = { ctxTime: ctx.currentTime, offset, duration };
 
       // Auto-stop when done
       stopTimerRef.current = window.setTimeout(() => {
@@ -101,5 +104,14 @@ export function useAudioEngine() {
     [getCtx, stop]
   );
 
-  return { decodeFile, play, stop, playingId };
+  const getPlayheadPosition = useCallback(() => {
+    if (!playStartRef.current || !ctxRef.current || !playingId) return null;
+    const { ctxTime, offset, duration } = playStartRef.current;
+    const elapsed = ctxRef.current.currentTime - ctxTime;
+    if (elapsed > duration) return null;
+    const currentTime = offset + elapsed;
+    return currentTime;
+  }, [playingId]);
+
+  return { decodeFile, play, stop, playingId, getPlayheadPosition };
 }
