@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { Navbar } from "@/components/Navbar";
+import { PromoPlayer } from "@/components/PromoPlayer";
 import Index from "./pages/Index";
 import HowScoringWorks from "./pages/HowScoringWorks";
 import Admin from "./pages/Admin";
@@ -25,6 +26,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Navbar />
+          <PromoPlayer />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/how-scoring-works" element={<HowScoringWorks />} />

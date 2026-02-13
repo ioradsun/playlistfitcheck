@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { PlaylistInput as PlaylistInputType } from "@/lib/playlistHealthEngine";
 import { SAMPLE_PLAYLIST, SAMPLE_EDITORIAL } from "@/lib/playlistHealthEngine";
-import { PromoPlayer } from "@/components/PromoPlayer";
+
 import { getSessionId } from "@/lib/sessionId";
 
 interface Props {
@@ -277,9 +277,6 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         </button>
       </div>
 
-      <div className="flex flex-col items-center gap-2">
-        <PromoPlayer />
-      </div>
     </motion.div>
   );
 }
