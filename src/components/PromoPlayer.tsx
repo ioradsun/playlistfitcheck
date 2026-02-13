@@ -202,9 +202,10 @@ export function PromoPlayer() {
           dragListener={false}
           dragConstraints={constraintsRef}
           dragMomentum={false}
-          className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-[50px] left-1/2 -translate-x-1/2 w-[200px]"
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-[50px] left-1/2 w-[200px]"
+          style={{ x: "-50%" }}
+          initial={{ opacity: 0, scale: 0.9, y: 20, x: "-50%" }}
+          animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
         >
           <WidgetHeader title={widgetTitle} thumbnailUrl={thumbnailUrl} thumbnailLink={thumbnailLink} onPointerDown={(e) => dragControls.start(e)} />
@@ -233,9 +234,10 @@ export function PromoPlayer() {
         dragListener={false}
         dragConstraints={constraintsRef}
         dragMomentum={false}
-        className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-[50px] left-1/2 -translate-x-1/2 w-[200px]"
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-[50px] left-1/2 w-[200px]"
+        style={{ x: "-50%" }}
+        initial={{ opacity: 0, scale: 0.9, y: 20, x: "-50%" }}
+        animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
       >
         {trackList}
