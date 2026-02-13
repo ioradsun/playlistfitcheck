@@ -107,15 +107,17 @@ export function PromoPlayer() {
             <X size={14} />
           </button>
         </div>
-        <iframe
-          src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
-          width="100%"
-          height="152"
-          frameBorder="0"
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
-          className="rounded-b-xl"
-        />
+        <div className="overflow-hidden rounded-b-xl" style={{ height: 80 }}>
+          <iframe
+            src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
+            width="100%"
+            height="152"
+            frameBorder="0"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+            style={{ marginTop: -72 }}
+          />
+        </div>
       </div>
     </div>
   ) : null;
@@ -246,15 +248,17 @@ export function PromoPlayer() {
                   <span className="text-xs font-mono text-muted-foreground">Putting you on my fav artist</span>
                 </div>
               </div>
-              <iframe
-                src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
-                width="100%"
-                height="152"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                className="rounded-b-xl"
-              />
+              <div className="overflow-hidden rounded-b-xl" style={{ height: 80 }}>
+                <iframe
+                  src={`https://open.spotify.com/embed/playlist/${PLAYLIST_ID}?utm_source=generator&theme=0`}
+                  width="100%"
+                  height="152"
+                  frameBorder="0"
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  loading="lazy"
+                  style={{ marginTop: -72 }}
+                />
+              </div>
             </DrawerContent>
           </Drawer>
         </>
