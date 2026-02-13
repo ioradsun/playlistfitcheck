@@ -7,7 +7,7 @@ import { PitchBadge } from "@/components/PitchBadge";
 import { VibeCard, type VibeAnalysis } from "@/components/VibeCard";
 import { type SongFitAnalysis, FIT_CONFIG } from "@/components/SongFitCard";
 import { PitchDraftCard } from "@/components/PitchDraftCard";
-import { PromoPlayer } from "@/components/PromoPlayer";
+
 import type { HealthOutput } from "@/lib/playlistHealthEngine";
 import type { PlaylistInput } from "@/lib/playlistHealthEngine";
 
@@ -337,14 +337,6 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
         <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} playlistName={playlistName} />
       )}
 
-      {/* Tracklist & Player */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1 }}
-      >
-        <PromoPlayer />
-      </motion.div>
     </motion.div>
   );
 }
