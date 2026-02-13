@@ -209,6 +209,27 @@ export type Database = {
         }
         Relationships: []
       }
+      widget_config: {
+        Row: {
+          id: string
+          mode: string
+          playlist_url: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          mode?: string
+          playlist_url?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          mode?: string
+          playlist_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
