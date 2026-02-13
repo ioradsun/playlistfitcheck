@@ -31,7 +31,7 @@ export const Navbar = () => {
       <div className="max-w-6xl mx-auto flex items-center justify-between px-4 h-14">
         <Link to="/" className="flex items-center gap-2 text-primary font-bold text-lg">
           <Music size={20} />
-          <span className="font-mono text-sm">PlaylistFitCheck</span>
+          <span className="font-mono text-sm">tools.fm</span>
         </Link>
 
         <div className="flex items-center gap-3">

@@ -136,14 +136,14 @@ const Dashboard = () => {
         <Tabs defaultValue="playlist">
           <TabsList className="w-full">
             <TabsTrigger value="playlist" className="flex-1 gap-1.5">
-              <Music size={14} /> Playlist Fit Check
+              <Music size={14} /> PlaylistFit
             </TabsTrigger>
             <TabsTrigger value="mix" className="flex-1 gap-1.5">
-              <Sliders size={14} /> Mix Fit Check
+              <Sliders size={14} /> MixFit
             </TabsTrigger>
           </TabsList>
 
-          {/* Playlist Fit Check Tab */}
+          {/* PlaylistFit Tab */}
           <TabsContent value="playlist" className="mt-4">
             {loadingSearches ? (
               <div className="text-sm text-muted-foreground py-12 text-center">Loading your fit checks…</div>
@@ -227,7 +227,7 @@ const Dashboard = () => {
             )}
           </TabsContent>
 
-          {/* Mix Fit Check Tab */}
+          {/* MixFit Tab */}
           <TabsContent value="mix" className="mt-4">
             {loadingMix ? (
               <div className="text-sm text-muted-foreground py-12 text-center">Loading your mix projects…</div>
@@ -245,7 +245,7 @@ const Dashboard = () => {
                     key={p.id}
                     className="glass-card border-border hover:border-primary/30 transition-colors cursor-pointer"
                     onClick={() => {
-                      // Navigate to Mix Fit Check tab with this project loaded
+                      // Navigate to MixFit tab with this project loaded
                       navigate("/", { state: { loadMixProject: p } });
                     }}
                   >

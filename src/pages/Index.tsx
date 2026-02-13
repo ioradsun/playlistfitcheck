@@ -244,8 +244,8 @@ const Index = () => {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="flex justify-center pt-20 pb-2">
           <TabsList>
-            <TabsTrigger value="playlist">Playlist Fit Check</TabsTrigger>
-            <TabsTrigger value="mix">Mix Fit Check</TabsTrigger>
+            <TabsTrigger value="playlist">PlaylistFit</TabsTrigger>
+            <TabsTrigger value="mix">MixFit</TabsTrigger>
           </TabsList>
         </div>
 
