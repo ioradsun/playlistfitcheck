@@ -508,7 +508,9 @@ export default function Admin() {
                         />
                       </label>
                       {thumbnailUrl && (
-                        <img src={thumbnailUrl} alt="Thumbnail" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                        <a href={thumbnailUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                          <img src={thumbnailUrl} alt="Thumbnail" className="w-8 h-8 rounded object-cover hover:ring-2 hover:ring-primary transition-all" />
+                        </a>
                       )}
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-1">Auto-filled from oEmbed, paste a URL, or upload an image</p>
