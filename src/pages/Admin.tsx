@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BarChart3, Play, ExternalLink, Search, Music, ChevronDown, RefreshCw, Loader2, Users, Database, Trash2, Headphones, Music2, Eye, EyeOff, Image } from "lucide-react";
+import { BarChart3, Play, ExternalLink, Search, Music, ChevronDown, RefreshCw, Loader2, Users, Database, Trash2, Headphones, Music2, Eye, EyeOff, Image, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -48,6 +48,7 @@ export default function Admin() {
   const [widgetAnalytics, setWidgetAnalytics] = useState<{ widget_opens: number; widget_closes: number } | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [fetchingOembed, setFetchingOembed] = useState(false);
+  const [uploadingThumb, setUploadingThumb] = useState(false);
   const [togglingWidget, setTogglingWidget] = useState(false);
   const [savingWidget, setSavingWidget] = useState(false);
 
@@ -469,7 +470,7 @@ export default function Admin() {
                     <p className="text-[10px] text-muted-foreground mt-1">Paste any Spotify URL — title & thumbnail auto-fill via oEmbed</p>
                   </div>
                   <div>
-                    <label className="text-xs font-mono text-muted-foreground mb-1 block">Thumbnail URL</label>
+                    <label className="text-xs font-mono text-muted-foreground mb-1 block">Thumbnail</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
@@ -478,11 +479,39 @@ export default function Admin() {
                         className="flex-1 px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                         placeholder="https://i.scdn.co/image/..."
                       />
+                      <label className={`p-2 rounded-lg border border-border hover:bg-muted/50 transition-colors cursor-pointer flex-shrink-0 ${uploadingThumb ? "opacity-50 pointer-events-none" : ""}`} title="Upload image">
+                        {uploadingThumb ? <Loader2 size={14} className="animate-spin text-primary" /> : <Upload size={14} className="text-muted-foreground" />}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploadingThumb(true);
+                            try {
+                              const ext = file.name.split(".").pop() || "png";
+                              const path = `widget-thumb-${Date.now()}.${ext}`;
+                              const { error: upErr } = await supabase.storage.from("widget-assets").upload(path, file, { upsert: true });
+                              if (upErr) throw upErr;
+                              const { data: urlData } = supabase.storage.from("widget-assets").getPublicUrl(path);
+                              setThumbnailUrl(urlData.publicUrl);
+                              toast.success("Thumbnail uploaded");
+                            } catch (err) {
+                              console.error(err);
+                              toast.error("Upload failed");
+                            } finally {
+                              setUploadingThumb(false);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                      </label>
                       {thumbnailUrl && (
                         <img src={thumbnailUrl} alt="Thumbnail" className="w-8 h-8 rounded object-cover flex-shrink-0" />
                       )}
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">Auto-filled from oEmbed, or paste any image URL</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Auto-filled from oEmbed, paste a URL, or upload an image</p>
                   </div>
                   <button
                     onClick={handleSaveWidgetConfig}
