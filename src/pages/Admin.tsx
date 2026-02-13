@@ -465,11 +465,24 @@ export default function Admin() {
                         placeholder="https://open.spotify.com/embed/..."
                       />
                       {fetchingOembed && <Loader2 size={14} className="animate-spin text-primary flex-shrink-0" />}
-                      {thumbnailUrl && !fetchingOembed && (
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">Paste any Spotify URL — title & thumbnail auto-fill via oEmbed</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-mono text-muted-foreground mb-1 block">Thumbnail URL</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={thumbnailUrl}
+                        onChange={(e) => setThumbnailUrl(e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-lg bg-muted/30 border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                        placeholder="https://i.scdn.co/image/..."
+                      />
+                      {thumbnailUrl && (
                         <img src={thumbnailUrl} alt="Thumbnail" className="w-8 h-8 rounded object-cover flex-shrink-0" />
                       )}
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">Paste any Spotify URL — title & thumbnail auto-fill via oEmbed</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Auto-filled from oEmbed, or paste any image URL</p>
                   </div>
                   <button
                     onClick={handleSaveWidgetConfig}
