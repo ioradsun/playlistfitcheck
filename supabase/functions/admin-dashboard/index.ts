@@ -75,6 +75,7 @@ serve(async (req) => {
         const updates: Record<string, string> = { updated_at: new Date().toISOString() };
         if (body.embed_url) updates.embed_url = body.embed_url;
         if (body.widget_title) updates.widget_title = body.widget_title;
+        if (body.thumbnail_url !== undefined) updates.thumbnail_url = body.thumbnail_url;
         await supabase.from("widget_config").update(updates).eq("id", existing.id);
       }
       return new Response(JSON.stringify({ success: true }), {
