@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import MixFitCheck from "@/pages/MixFitCheck";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
+import { LyricFitTab } from "@/components/lyric/LyricFitTab";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -246,6 +247,7 @@ const Index = () => {
           <TabsList>
             <TabsTrigger value="playlist">PlaylistFit</TabsTrigger>
             <TabsTrigger value="mix">MixFit</TabsTrigger>
+            <TabsTrigger value="lyric">LyricFit</TabsTrigger>
           </TabsList>
         </div>
 
@@ -271,6 +273,10 @@ const Index = () => {
 
         <TabsContent value="mix" className="flex-1 flex items-start justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
           <MixFitCheck initialProject={loadedMixProject} />
+        </TabsContent>
+
+        <TabsContent value="lyric" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
+          <LyricFitTab />
         </TabsContent>
       </Tabs>
     </div>
