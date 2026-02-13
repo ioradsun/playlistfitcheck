@@ -23,8 +23,7 @@ serve(async (req) => {
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -35,19 +34,72 @@ serve(async (req) => {
 
     if (userError || !user || !ADMIN_EMAILS.includes(user.email ?? "")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const body = await req.json().catch(() => ({}));
+    const section = body.section || "data";
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // ── DELETE USER action ──
+    if (body.action === "delete_user" && body.user_id) {
+      const { error: delErr } = await supabase.auth.admin.deleteUser(body.user_id);
+      if (delErr) throw delErr;
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── USERS section ──
+    if (section === "users") {
+      // Fetch all auth users (paginated, up to 1000)
+      const { data: { users: authUsers }, error: authErr } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (authErr) throw authErr;
+
+      // Fetch profiles
+      const { data: profiles } = await supabase.from("profiles").select("id, display_name, avatar_url, created_at");
+
+      // Fetch roles
+      const { data: roles } = await supabase.from("user_roles").select("user_id, role");
+
+      // Fetch saved_searches counts per user
+      const { data: savedSearches } = await supabase.from("saved_searches").select("user_id");
+
+      const fitCountMap: Record<string, number> = {};
+      for (const s of savedSearches || []) {
+        fitCountMap[s.user_id] = (fitCountMap[s.user_id] || 0) + 1;
+      }
+
+      const profileMap: Record<string, any> = {};
+      for (const p of profiles || []) profileMap[p.id] = p;
+
+      const roleMap: Record<string, string> = {};
+      for (const r of roles || []) roleMap[r.user_id] = r.role;
+
+      const users = (authUsers || []).map((u: any) => ({
+        id: u.id,
+        email: u.email,
+        display_name: profileMap[u.id]?.display_name || null,
+        avatar_url: profileMap[u.id]?.avatar_url || u.user_metadata?.avatar_url || u.user_metadata?.picture || null,
+        role: roleMap[u.id] || "user",
+        fit_checks: fitCountMap[u.id] || 0,
+        created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at,
+        provider: u.app_metadata?.provider || "email",
+      }));
+
+      return new Response(JSON.stringify({ users }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── DATA section (existing logic) ──
     const { data: engagements, error: engErr } = await supabase
       .from("track_engagement")
       .select("track_id, track_name, artist_name, action, session_id, created_at")
       .order("created_at", { ascending: false })
       .limit(1000);
-
     if (engErr) throw engErr;
 
     const { data: searches, error: searchErr } = await supabase
@@ -55,7 +107,6 @@ serve(async (req) => {
       .select("playlist_name, playlist_url, song_name, song_url, session_id, created_at")
       .order("created_at", { ascending: false })
       .limit(1000);
-
     if (searchErr) throw searchErr;
 
     const trackMap: Record<string, { name: string; artist: string; plays: number; spotify_clicks: number; sessions: string[] }> = {};
@@ -69,17 +120,9 @@ serve(async (req) => {
       if (e.action === "play") t.plays++;
       else if (e.action === "spotify_click") t.spotify_clicks++;
       if (e.session_id && !t.sessions.includes(e.session_id)) t.sessions.push(e.session_id);
-
       if (e.session_id) {
         if (!sessionTracksMap[e.session_id]) sessionTracksMap[e.session_id] = [];
         sessionTracksMap[e.session_id].push({ track_name: e.track_name || "Unknown", artist_name: e.artist_name || "Unknown", action: e.action });
-      }
-    }
-
-    const sessionSearchMap: Record<string, { playlist_name: string | null; song_name: string | null; playlist_url: string | null; song_url: string | null }> = {};
-    for (const s of searches || []) {
-      if (s.session_id) {
-        sessionSearchMap[s.session_id] = { playlist_name: s.playlist_name, song_name: s.song_name, playlist_url: s.playlist_url, song_url: s.song_url };
       }
     }
 
@@ -88,7 +131,6 @@ serve(async (req) => {
       .sort((a, b) => b.totalInteractions - a.totalInteractions);
 
     const searchGroups: Record<string, { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; tracksClicked: { track_name: string; artist_name: string; action: string }[] }> = {};
-
     for (const s of (searches || []).slice(0, 200)) {
       const key = s.playlist_url || s.playlist_name || "unknown";
       if (!searchGroups[key]) {
@@ -108,8 +150,7 @@ serve(async (req) => {
   } catch (e) {
     console.error("Admin dashboard error:", e);
     return new Response(JSON.stringify({ error: "An internal error occurred" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
