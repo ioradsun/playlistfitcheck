@@ -1,13 +1,33 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData } from "./LyricDisplay";
 
-export function LyricFitTab() {
+interface Props {
+  initialLyric?: any;
+}
+
+export function LyricFitTab({ initialLyric }: Props) {
   const [loading, setLoading] = useState(false);
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+
+  // Load saved lyric from dashboard navigation
+  useEffect(() => {
+    if (initialLyric && !lyricData) {
+      setLyricData({
+        title: initialLyric.title,
+        artist: initialLyric.artist,
+        lines: initialLyric.lines as any[],
+      });
+      setSavedId(initialLyric.id);
+      // Create a dummy file for the display component (no actual audio)
+      const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+      setAudioFile(dummyFile);
+    }
+  }, [initialLyric, lyricData]);
 
   const handleTranscribe = useCallback(async (file: File) => {
     setLoading(true);
@@ -39,6 +59,7 @@ export function LyricFitTab() {
 
       setLyricData(data as LyricData);
       setAudioFile(file);
+      setSavedId(null);
     } catch (e) {
       console.error("Transcription error:", e);
       toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");
@@ -50,10 +71,19 @@ export function LyricFitTab() {
   const handleBack = useCallback(() => {
     setLyricData(null);
     setAudioFile(null);
+    setSavedId(null);
   }, []);
 
   if (lyricData && audioFile) {
-    return <LyricDisplay data={lyricData} audioFile={audioFile} onBack={handleBack} />;
+    return (
+      <LyricDisplay
+        data={lyricData}
+        audioFile={audioFile}
+        savedId={savedId}
+        onBack={handleBack}
+        onSaved={(id) => setSavedId(id)}
+      />
+    );
   }
 
   return <LyricUploader onTranscribe={handleTranscribe} loading={loading} />;

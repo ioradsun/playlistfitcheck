@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Play, Pause, Copy, Download, Check, FileText, Subtitles, Type } from "lucide-react";
+import { ArrowLeft, Play, Pause, Copy, Download, Check, FileText, Subtitles, Type, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface LyricLine {
   start: number;
@@ -19,7 +21,9 @@ export interface LyricData {
 interface Props {
   data: LyricData;
   audioFile: File;
+  savedId?: string | null;
   onBack: () => void;
+  onSaved?: (id: string) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -69,13 +73,16 @@ function downloadFile(content: string, filename: string, mime: string) {
 
 type ExportFormat = "lrc" | "srt" | "txt";
 
-export function LyricDisplay({ data, audioFile, onBack }: Props) {
+export function LyricDisplay({ data, audioFile, savedId, onBack, onSaved }: Props) {
+  const { user } = useAuth();
   const [lines, setLines] = useState<LyricLine[]>(data.lines);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [copied, setCopied] = useState<ExportFormat | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [currentSavedId, setCurrentSavedId] = useState<string | null>(savedId ?? null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
@@ -169,6 +176,46 @@ export function LyricDisplay({ data, audioFile, onBack }: Props) {
     setEditingIndex(null);
   };
 
+  const handleSave = useCallback(async () => {
+    if (!user) {
+      toast.error("Sign in to save lyrics to your profile");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (currentSavedId) {
+        // Update existing
+        const { error } = await supabase.from("saved_lyrics").update({
+          title: editedData.title,
+          artist: editedData.artist,
+          lines: lines as any,
+        }).eq("id", currentSavedId);
+        if (error) throw error;
+        toast.success("Lyrics updated");
+      } else {
+        // Insert new
+        const { data: inserted, error } = await supabase.from("saved_lyrics").insert({
+          user_id: user.id,
+          title: editedData.title,
+          artist: editedData.artist,
+          filename: audioFile.name,
+          lines: lines as any,
+        }).select("id").single();
+        if (error) throw error;
+        if (inserted) {
+          setCurrentSavedId(inserted.id);
+          onSaved?.(inserted.id);
+        }
+        toast.success("Lyrics saved to your profile");
+      }
+    } catch (e) {
+      console.error("Save lyrics error:", e);
+      toast.error("Failed to save lyrics");
+    } finally {
+      setSaving(false);
+    }
+  }, [user, currentSavedId, editedData, lines, audioFile.name, onSaved]);
+
   const exportOptions: { format: ExportFormat; label: string; icon: React.ReactNode; desc: string }[] = [
     { format: "lrc", label: "LRC", icon: <Subtitles size={14} />, desc: "Synced lyrics" },
     { format: "srt", label: "SRT", icon: <FileText size={14} />, desc: "Subtitles" },
@@ -194,15 +241,29 @@ export function LyricDisplay({ data, audioFile, onBack }: Props) {
             <p className="text-sm text-muted-foreground">{data.artist}</p>
           )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={togglePlay}
-          className="gap-1.5"
-        >
-          {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-          {isPlaying ? "Pause" : "Play"}
-        </Button>
+        <div className="flex gap-2">
+          {user && lines.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSave}
+              disabled={saving}
+              className="gap-1.5"
+            >
+              <Save size={14} />
+              {saving ? "Saving…" : currentSavedId ? "Update" : "Save"}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={togglePlay}
+            className="gap-1.5"
+          >
+            {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+            {isPlaying ? "Pause" : "Play"}
+          </Button>
+        </div>
       </div>
 
       {/* Lyrics with synced highlighting */}

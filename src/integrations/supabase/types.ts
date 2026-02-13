@@ -113,6 +113,39 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_lyrics: {
+        Row: {
+          artist: string
+          created_at: string
+          filename: string | null
+          id: string
+          lines: Json
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          artist?: string
+          created_at?: string
+          filename?: string | null
+          id?: string
+          lines?: Json
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          artist?: string
+          created_at?: string
+          filename?: string | null
+          id?: string
+          lines?: Json
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       saved_searches: {
         Row: {
           blended_label: string | null

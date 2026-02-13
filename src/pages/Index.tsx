@@ -55,6 +55,7 @@ const Index = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [activeTab, setActiveTab] = useState("playlist");
   const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
+  const [loadedLyric, setLoadedLyric] = useState<any>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
   const [vibeLoading, setVibeLoading] = useState(false);
   const [songFitAnalysis, setSongFitAnalysis] = useState<SongFitAnalysis | null>(null);
@@ -236,6 +237,12 @@ const Index = () => {
       window.history.replaceState({}, "", "/");
       setLoadedMixProject(state.loadMixProject);
       setActiveTab("mix");
+    } else if (state?.loadLyric) {
+      autoRunRef.current = true;
+      cameFromDashboardRef.current = true;
+      window.history.replaceState({}, "", "/");
+      setLoadedLyric(state.loadLyric);
+      setActiveTab("lyric");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -276,7 +283,7 @@ const Index = () => {
         </TabsContent>
 
         <TabsContent value="lyric" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
-          <LyricFitTab />
+          <LyricFitTab initialLyric={loadedLyric} />
         </TabsContent>
       </Tabs>
     </div>
