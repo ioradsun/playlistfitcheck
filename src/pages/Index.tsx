@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
 import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
@@ -8,6 +9,7 @@ import type { VibeAnalysis } from "@/components/VibeCard";
 import type { SongFitAnalysis } from "@/components/SongFitCard";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -42,11 +44,14 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 
 const Index = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const autoRunRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
   const [vibeLoading, setVibeLoading] = useState(false);
   const [songFitAnalysis, setSongFitAnalysis] = useState<SongFitAnalysis | null>(null);
   const [songFitLoading, setSongFitLoading] = useState(false);
+  const [autoRunLoading, setAutoRunLoading] = useState(false);
 
   const isFullyLoaded = useMemo(() => {
     if (!result) return false;
@@ -154,25 +159,48 @@ const Index = () => {
     setSongFitLoading(false);
   }, []);
 
+  // Auto-run analysis from URL params (e.g. from dashboard click)
+  useEffect(() => {
+    const playlistUrl = searchParams.get("playlist");
+    if (!playlistUrl || autoRunRef.current) return;
+    autoRunRef.current = true;
+    const songUrl = searchParams.get("song") || undefined;
+    setSearchParams({}, { replace: true }); // clear params
+
+    (async () => {
+      setAutoRunLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("spotify-playlist", {
+          body: { playlistUrl, songUrl: songUrl || null },
+        });
+        if (error || data?.error) throw new Error(data?.error || error?.message);
+        handleAnalyze({ ...(data as PlaylistInput), _songUrl: songUrl });
+      } catch (e) {
+        console.error("Auto-run error:", e);
+        toast.error("Failed to load report. Try running the fit check again.");
+      } finally {
+        setAutoRunLoading(false);
+      }
+    })();
+  }, [searchParams, setSearchParams, handleAnalyze]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="flex-1 flex items-center justify-center px-4 py-16 pt-20">
-        {result ? (
-          isFullyLoaded ? (
-            <ResultsDashboard
-              key={result.key}
-              result={result.output}
-              inputData={result.input}
-              playlistName={result.name}
-              vibeAnalysis={vibeAnalysis}
-              vibeLoading={false}
-              songFitAnalysis={songFitAnalysis}
-              songFitLoading={false}
-              onBack={handleBack}
-            />
-          ) : (
-            <AnalysisLoadingScreen hasSong={!!result.songUrl} />
-          )
+        {autoRunLoading || (result && !isFullyLoaded) ? (
+          <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
+        ) : result && isFullyLoaded ? (
+          <ResultsDashboard
+            key={result.key}
+            result={result.output}
+            inputData={result.input}
+            playlistName={result.name}
+            vibeAnalysis={vibeAnalysis}
+            vibeLoading={false}
+            songFitAnalysis={songFitAnalysis}
+            songFitLoading={false}
+            onBack={handleBack}
+          />
         ) : (
           <PlaylistInputSection onAnalyze={handleAnalyze} />
         )}

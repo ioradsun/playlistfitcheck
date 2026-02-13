@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { User, Music, ExternalLink, Plus, BarChart3 } from "lucide-react";
+import { User, Music, Plus, BarChart3 } from "lucide-react";
 
 interface SavedSearch {
   id: string;
@@ -92,7 +92,16 @@ const Dashboard = () => {
         ) : (
           <div className="space-y-3">
             {searches.map((s) => (
-              <Card key={s.id} className="glass-card border-border hover:border-primary/30 transition-colors">
+              <Card
+                key={s.id}
+                className="glass-card border-border hover:border-primary/30 transition-colors cursor-pointer"
+                onClick={() => {
+                  const params = new URLSearchParams();
+                  if (s.playlist_url) params.set("playlist", s.playlist_url);
+                  if (s.song_url) params.set("song", s.song_url);
+                  navigate(`/?${params.toString()}`);
+                }}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1 space-y-1">
@@ -117,7 +126,6 @@ const Dashboard = () => {
                     </div>
 
                     <div className="flex items-center gap-4 shrink-0">
-                      {/* Health score */}
                       <div className="text-right">
                         <p className="text-lg font-mono font-bold text-primary">{s.health_score ?? "—"}</p>
                         <p className={`text-[10px] font-medium ${getLabelColor(s.health_label)}`}>
@@ -125,7 +133,6 @@ const Dashboard = () => {
                         </p>
                       </div>
 
-                      {/* Blended/fit score */}
                       {s.blended_score != null && (
                         <div className="text-right border-l border-border pl-4">
                           <p className="text-lg font-mono font-bold text-accent-foreground">{s.blended_score}</p>
@@ -133,18 +140,6 @@ const Dashboard = () => {
                             {s.blended_label ?? "Fit"}
                           </p>
                         </div>
-                      )}
-
-                      {/* External link */}
-                      {s.playlist_url && (
-                        <a
-                          href={s.playlist_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <ExternalLink size={14} />
-                        </a>
                       )}
                     </div>
                   </div>
