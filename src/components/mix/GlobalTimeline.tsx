@@ -1,11 +1,12 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, Info } from "lucide-react";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
 interface GlobalTimelineProps {
   waveform: WaveformData | null;
+  referenceName?: string;
   markerStart: number;
   markerEnd: number;
   isPlaying: boolean;
@@ -41,7 +42,7 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[]) {
 }
 
 export function GlobalTimeline({
-  waveform, markerStart, markerEnd, isPlaying, playheadPct,
+  waveform, referenceName, markerStart, markerEnd, isPlaying, playheadPct,
   onMarkersChange, onPlay, onStop,
 }: GlobalTimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -106,18 +107,24 @@ export function GlobalTimeline({
           >
             {isPlaying ? <Pause size={12} /> : <Play size={12} />}
           </Button>
+          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Loop Zone
+          </h3>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground cursor-help">
-                  Loop Zone
-                </h3>
+                <Info size={13} className="text-muted-foreground/60 cursor-help" />
               </TooltipTrigger>
               <TooltipContent>
                 <p>Set zone to compare the same section across mixes</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {referenceName && (
+            <span className="text-xs text-muted-foreground/70 truncate max-w-[200px]">
+              · {referenceName}
+            </span>
+          )}
         </div>
         <span className="text-xs font-mono text-primary px-2 py-0.5 rounded bg-primary/10">
           {formatTime(markerStart)} – {formatTime(markerEnd)}
@@ -186,7 +193,7 @@ export function GlobalTimeline({
       {/* Footer */}
       <div className="flex justify-between text-[10px] text-muted-foreground/60 font-mono pt-1">
         <span>0:00</span>
-        <span className="text-muted-foreground/40">Drag markers to set comparison region</span>
+        <span className="text-muted-foreground/40">Drag markers to set loop zone</span>
         <span>{formatTime(duration)}</span>
       </div>
     </div>
