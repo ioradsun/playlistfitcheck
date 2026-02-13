@@ -36,14 +36,16 @@ serve(async (req) => {
     const master1 = formData.get("master1") as File | null;
     const master2 = formData.get("master2") as File | null;
     const reference = formData.get("reference") as File | null;
+    const referenceType = formData.get("referenceType") as string | null;
+    const referenceUrl = formData.get("referenceUrl") as string | null;
     const master1Name = formData.get("master1Name") as string || master1?.name || "Master 1";
     const master2Name = formData.get("master2Name") as string || master2?.name || "Master 2";
     const referenceName = formData.get("referenceName") as string || reference?.name || "Reference";
 
     if (!master1) throw new Error("At least one master file is required");
-    if (!reference) throw new Error("A reference track is required");
+    if (!reference && !referenceUrl) throw new Error("A reference track is required");
 
-    // Build audio parts
+    // Build audio parts for masters
     const audioParts: any[] = [];
 
     const master1Base64 = toBase64(await master1.arrayBuffer());
@@ -61,21 +63,40 @@ serve(async (req) => {
       });
     }
 
-    const referenceBase64 = toBase64(await reference.arrayBuffer());
-    audioParts.push({
-      type: "input_audio",
-      input_audio: { data: referenceBase64, format: getAudioFormat(reference.type) },
-    });
+    // Handle reference: file upload or URL
+    let referenceContext = "";
+    if (reference && reference.size > 0) {
+      const referenceBase64 = toBase64(await reference.arrayBuffer());
+      audioParts.push({
+        type: "input_audio",
+        input_audio: { data: referenceBase64, format: getAudioFormat(reference.type) },
+      });
+    } else if (referenceUrl) {
+      // For URL-based references, we describe the reference by URL and ask the AI to use its knowledge
+      const platform = referenceType === "youtube" ? "YouTube" : "Spotify";
+      referenceContext = `\n\nIMPORTANT: The reference track is provided as a ${platform} link: ${referenceUrl}
+Since you cannot play URLs directly, use your extensive knowledge of this track's sonic characteristics, production style, mastering qualities, and overall sound. If you recognize the track, analyze against its known sonic profile. If you don't recognize it, inform the user that URL-based analysis works best with well-known tracks, and provide general mastering feedback based on the uploaded masters alone.`;
+    }
 
-    const trackCount = master2Base64 ? 3 : 2;
-    const trackLabels = master2Base64
-      ? `Audio 1 = "${master1Name}" (your master A), Audio 2 = "${master2Name}" (your master B), Audio 3 = "${referenceName}" (reference track)`
-      : `Audio 1 = "${master1Name}" (your master), Audio 2 = "${referenceName}" (reference track)`;
+    const masterCount = master2Base64 ? 2 : 1;
+    const totalAudioCount = audioParts.length;
+    const hasAudioRef = reference && reference.size > 0;
+
+    let trackLabels: string;
+    if (master2Base64 && hasAudioRef) {
+      trackLabels = `Audio 1 = "${master1Name}" (your master A), Audio 2 = "${master2Name}" (your master B), Audio 3 = "${referenceName}" (reference track)`;
+    } else if (master2Base64 && !hasAudioRef) {
+      trackLabels = `Audio 1 = "${master1Name}" (your master A), Audio 2 = "${master2Name}" (your master B). Reference = "${referenceName}" (provided via URL)`;
+    } else if (!master2Base64 && hasAudioRef) {
+      trackLabels = `Audio 1 = "${master1Name}" (your master), Audio 2 = "${referenceName}" (reference track)`;
+    } else {
+      trackLabels = `Audio 1 = "${master1Name}" (your master). Reference = "${referenceName}" (provided via URL)`;
+    }
 
     const systemPrompt = `You are a world-class mastering engineer and mix analyst. You have perfect ears and deep knowledge of audio production, EQ, dynamics, stereo imaging, loudness standards (LUFS), harmonic balance, and genre-specific sonics.
 
-You will receive ${trackCount} audio files:
-${trackLabels}
+You will receive ${totalAudioCount} audio file(s):
+${trackLabels}${referenceContext}
 
 Your job is to analyze and compare the masters against the reference track, providing actionable feedback to help the artist achieve the sonic quality of the reference.
 
@@ -132,7 +153,7 @@ Output this exact JSON structure:
               ...audioParts,
               {
                 type: "text",
-                text: `Analyze these ${trackCount} audio files. ${trackLabels}. Compare the master(s) against the reference and provide detailed mastering feedback. Return ONLY valid JSON.`,
+                text: `Analyze these audio files. ${trackLabels}. Compare the master(s) against the reference and provide detailed mastering feedback. Return ONLY valid JSON.`,
               },
             ],
           },
