@@ -294,7 +294,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
               markerStartPct={(markerStart / referenceDuration) * 100}
               markerEndPct={(markerEnd / referenceDuration) * 100}
               playheadPct={playingId === mix.id ? (playheadTime / referenceDuration) * 100 : 0}
-              onPlay={() => play(mix.id, mix.buffer, markerStart, markerEnd)}
+              onPlay={() => play(mix.id, mix.buffer, 0, mix.waveform.duration)}
               onStop={stop}
               onNameChange={(name) => updateMix(mix.id, { name })}
               onRankChange={(rank) => updateMix(mix.id, { rank })}
