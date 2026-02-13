@@ -189,7 +189,7 @@ export function PromoPlayer() {
     </div>
   );
 
-  const dragBoundary = !isMobile ? <div ref={constraintsRef} className="fixed inset-0 z-30 pointer-events-none" /> : null;
+  const dragBoundary = <div ref={constraintsRef} className="fixed inset-0 z-30 pointer-events-none" />;
 
   // Embed mode
   if (widgetMode === "embed") {
@@ -197,12 +197,12 @@ export function PromoPlayer() {
       <>
         {dragBoundary}
         <motion.div
-          drag={!isMobile}
+          drag
           dragControls={dragControls}
           dragListener={false}
           dragConstraints={constraintsRef}
           dragMomentum={false}
-          className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-4 left-1/2 -translate-x-1/2 w-[200px]"
+          className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-[50px] left-1/2 -translate-x-1/2 w-[200px]"
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
@@ -228,12 +228,12 @@ export function PromoPlayer() {
     <>
       {dragBoundary}
       <motion.div
-        drag={!isMobile}
+        drag
         dragControls={dragControls}
         dragListener={false}
         dragConstraints={constraintsRef}
         dragMomentum={false}
-        className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-4 left-1/2 -translate-x-1/2 w-[200px]"
+        className="fixed z-50 glass-card rounded-xl shadow-2xl overflow-hidden bottom-[50px] left-1/2 -translate-x-1/2 w-[200px]"
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
