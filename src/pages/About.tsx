@@ -53,10 +53,10 @@ const PRODUCTS = [
   },
 ];
 
-const TABS = ["Origin", "The Tools"] as const;
+const TABS = ["Origin Story", "The Tools"] as const;
 
 export default function About() {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Origin");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Origin Story");
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-8 pb-12 space-y-6">
@@ -77,7 +77,7 @@ export default function About() {
         ))}
       </div>
 
-      {tab === "Origin" && (
+      {tab === "Origin Story" && (
         <motion.div
           key="origin"
           initial={{ opacity: 0, y: 10 }}
