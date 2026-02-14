@@ -101,6 +101,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   const [profileExpanded, setProfileExpanded] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [aboutExpanded, setAboutExpanded] = useState(false);
 
   const fetchRecents = useCallback(async () => {
     if (!user) return;
@@ -470,32 +471,38 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="About"
-                  isActive={location.pathname === "/about" || location.pathname === "/our-story" || location.pathname === "/how-scoring-works"}
-                  onClick={() => { navigate("/about"); closeMobileIfNeeded(); }}
+                  isActive={aboutExpanded || location.pathname === "/about" || location.pathname === "/our-story" || location.pathname === "/ajans-music"}
+                  onClick={() => setAboutExpanded(!aboutExpanded)}
                 >
                   <Info size={16} />
                   <span>About</span>
                 </SidebarMenuButton>
-                {!collapsed && (location.pathname === "/about" || location.pathname === "/our-story" || location.pathname === "/how-scoring-works") && (
+                {!collapsed && aboutExpanded && (
                   <ul className="ml-6 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
                     <li>
                       <button
                         className={`w-full text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${location.pathname === "/our-story" ? "text-primary font-medium" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
                         onClick={(e) => { e.stopPropagation(); navigate("/our-story"); closeMobileIfNeeded(); }}
                       >
-                        Our Story
+                        The Story
                       </button>
                     </li>
-                    {TOOLS.map((tool) => (
-                      <li key={tool.value}>
-                        <button
-                          className="w-full text-left px-2 py-1 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-md truncate transition-colors"
-                          onClick={(e) => { e.stopPropagation(); navigate(tool.path); closeMobileIfNeeded(); }}
-                        >
-                          {tool.label}
-                        </button>
-                      </li>
-                    ))}
+                    <li>
+                      <button
+                        className={`w-full text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${location.pathname === "/about" ? "text-primary font-medium" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
+                        onClick={(e) => { e.stopPropagation(); navigate("/about"); closeMobileIfNeeded(); }}
+                      >
+                        The Tools
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        className={`w-full text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${location.pathname === "/ajans-music" ? "text-primary font-medium" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
+                        onClick={(e) => { e.stopPropagation(); navigate("/ajans-music"); closeMobileIfNeeded(); }}
+                      >
+                        Ajan's Music
+                      </button>
+                    </li>
                   </ul>
                 )}
               </SidebarMenuItem>
