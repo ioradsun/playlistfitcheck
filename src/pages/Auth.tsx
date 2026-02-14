@@ -22,7 +22,7 @@ const Auth = () => {
   const [isForgot, setIsForgot] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  
   const [artistQuery, setArtistQuery] = useState("");
   const [artistResults, setArtistResults] = useState<SpotifyArtistResult[]>([]);
   const [artistSearching, setArtistSearching] = useState(false);
@@ -96,7 +96,8 @@ const Auth = () => {
           options: {
             emailRedirectTo: window.location.origin,
             data: {
-              display_name: displayName || email,
+              display_name: selectedArtist?.name || email,
+              avatar_url: selectedArtist?.image ?? null,
               spotify_artist_id: selectedArtist?.id ?? null,
               spotify_artist_url: selectedArtist?.url ?? null,
             },
@@ -151,10 +152,6 @@ const Auth = () => {
               <form onSubmit={handleEmailAuth} className="space-y-4">
                 {isSignup && (
                   <>
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Display name</Label>
-                      <Input id="name" placeholder="Your name" value={displayName} onChange={e => setDisplayName(e.target.value)} />
-                    </div>
                     <div className="space-y-2">
                       <Label>Spotify Artist Profile</Label>
                       <p className="text-xs text-muted-foreground">Search or paste your Spotify artist URL</p>
