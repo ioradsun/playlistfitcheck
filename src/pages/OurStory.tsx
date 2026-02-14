@@ -15,21 +15,15 @@ export default function OurStory() {
             rel="noopener noreferrer"
             className="text-primary hover:underline underline-offset-2 font-semibold"
           >
-            Ajan Patel
+            Ajan
           </a>{" "}
-          makes music. His dad, Sundeep Patel, makes tech.
+          makes music, so he knows the 3am doubt — is the mix ready, should you pitch it, is it actually good? His dad builds tech. Instead of adding more opinions to the noise, they built tools for clarity.
         </p>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Ajan kept running into the same walls every independent artist hits — no real way to know if a playlist is worth pitching, no honest read on whether a mix is ready, no clarity on what's actually working and what's noise. Just vibes and guesswork.
-        </p>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Sundeep saw the problems and started building solutions. Not some corporate "music tech" play — just a father helping his son figure it out, one tool at a time.
+          No gatekeepers. No hype. No secrets. Just answers to the questions you're asking yourself at 2am.
         </p>
         <p className="text-sm text-primary font-semibold leading-relaxed">
-          tools.fm was born.
-        </p>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Six tools built from real frustrations. No gatekeeping, no fluff. If it doesn't help you make better decisions about your music, it doesn't belong here.
+          tools.fm: less guessing, more answers.
         </p>
       </motion.div>
 
