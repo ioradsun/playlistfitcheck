@@ -102,16 +102,6 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
             No artwork
           </div>
         )}
-
-        {/* Track info overlay */}
-        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 pt-10">
-          <h3 className="font-bold text-white text-lg leading-tight drop-shadow-md truncate">
-            {post.track_title}
-          </h3>
-          <p className="text-white/80 text-sm leading-tight truncate drop-shadow-md">
-            {artists.map((a: any) => a.name).join(", ")}
-          </p>
-        </div>
       </div>
 
       {/* Spotify Embed Player — compact 80px strip */}
