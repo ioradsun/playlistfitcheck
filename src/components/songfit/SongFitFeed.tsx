@@ -75,17 +75,13 @@ export function SongFitFeed() {
     <div className="w-full max-w-[470px] mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between px-3 pt-2 pb-3">
-        <h1 className="text-xl font-black tracking-tight">SongFit</h1>
+        <p className="text-xs text-muted-foreground">Scroll songs like Instagram. Tap to open in Spotify.</p>
         {user && (
           <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setShowCreate(true)}>
             <Plus size={14} /> Post
           </Button>
         )}
       </div>
-
-      <p className="text-xs text-muted-foreground px-3 pb-3">
-        Scroll songs like Instagram. Tap to open in Spotify.
-      </p>
 
       {/* Search */}
       <div className="relative px-3 pb-3">

@@ -36,9 +36,6 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
           <DollarSign size={14} />
           Free AI Revenue Consulting
         </motion.div>
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-          Pro<span className="text-primary">Fit</span>
-        </h1>
         <p className="text-lg text-muted-foreground max-w-md mx-auto">
           Turn listeners into income.
         </p>
