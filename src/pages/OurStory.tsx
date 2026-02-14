@@ -4,7 +4,7 @@ import { PageBadge } from "@/components/PageBadge";
 export default function OurStory() {
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-3xl mx-auto px-4 pt-24 pb-12 space-y-10">
+      <div className="max-w-2xl mx-auto px-4 pt-22 pb-12 space-y-6">
         <PageBadge label="Our Story" subtitle="See how tools.fm found its fit." />
         <motion.div
           className="glass-card rounded-xl p-6 space-y-5"
