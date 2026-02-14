@@ -164,13 +164,14 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
         <div className="flex-1 min-w-0 relative">
           <div className="flex items-center gap-2">
             <div className="flex-1 relative">
+              <p className="text-sm font-medium text-muted-foreground mb-1.5">What you on right now?</p>
               <Input
                 value={query}
                 onChange={e => { setQuery(e.target.value); setSelectedTrack(null); }}
                 onKeyDown={handleKeyDown}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setTimeout(() => setFocused(false), 200)}
-                placeholder="What you on right now?"
+                placeholder="Search or paste Spotify link"
                 className="h-10 text-sm pr-8"
                 disabled={publishing}
               />
