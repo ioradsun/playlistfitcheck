@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Heart, MessageCircle, Bookmark, Share2, ExternalLink, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -129,7 +128,7 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
       </div>
 
       {/* Action Row */}
-      <div className="flex items-center justify-between px-2 pt-1">
+      <div className="flex items-center justify-between px-2 pt-1 pb-1">
         <div className="flex items-center -ml-1">
           <button onClick={toggleLike} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <Heart size={24} className={liked ? "fill-red-500 text-red-500" : "text-foreground"} />
@@ -140,60 +139,18 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
           <button onClick={handleShare} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <Share2 size={24} className="text-foreground" />
           </button>
+          <button onClick={() => window.open(post.spotify_track_url, "_blank")} className="p-2.5 hover:opacity-70 active:scale-90 transition-all" title="Open in Spotify">
+            <ExternalLink size={24} className="text-foreground" />
+          </button>
+          {primaryArtist?.spotifyUrl && (
+            <button onClick={() => window.open(primaryArtist.spotifyUrl, "_blank")} className="p-2.5 hover:opacity-70 active:scale-90 transition-all" title="Visit Artist">
+              <User size={24} className="text-foreground" />
+            </button>
+          )}
         </div>
         <button onClick={toggleSave} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
           <Bookmark size={24} className={saved ? "fill-foreground text-foreground" : "text-foreground"} />
         </button>
-      </div>
-
-      {/* Likes */}
-      {likesCount > 0 && (
-        <p className="px-3 text-sm font-semibold">
-          {likesCount.toLocaleString()} {likesCount === 1 ? "like" : "likes"}
-        </p>
-      )}
-
-      {/* Caption */}
-      {post.caption && (
-        <div className="px-3 pt-0.5">
-          <p className={`text-sm ${captionExpanded ? "" : "line-clamp-2"}`}>
-            <span className="font-semibold mr-1">{displayName}</span>
-            {post.caption}
-          </p>
-          {post.caption.length > 100 && !captionExpanded && (
-            <button onClick={() => setCaptionExpanded(true)} className="text-xs text-muted-foreground mt-0.5">
-              more
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Tags */}
-      {tags.length > 0 && (
-        <div className="px-3 pt-1 flex flex-wrap gap-1">
-          {tags.map((t, i) => (
-            <Badge key={i} variant="secondary" className="text-[11px] px-2 py-0 h-5">{t}</Badge>
-          ))}
-        </div>
-      )}
-
-      {/* Comments link */}
-      {post.comments_count > 0 && (
-        <button onClick={() => onOpenComments(post.id)} className="px-3 pt-1 text-sm text-muted-foreground hover:text-foreground">
-          View all {post.comments_count} comment{post.comments_count !== 1 ? "s" : ""}
-        </button>
-      )}
-
-      {/* CTAs */}
-      <div className="px-3 pt-2 pb-4 flex gap-2">
-        <Button size="sm" className="flex-1 gap-1.5 h-9 text-xs font-semibold" onClick={() => window.open(post.spotify_track_url, "_blank")}>
-          <ExternalLink size={14} /> Open in Spotify
-        </Button>
-        {primaryArtist?.spotifyUrl && (
-          <Button size="sm" variant="outline" className="gap-1.5 h-9 text-xs font-semibold" onClick={() => window.open(primaryArtist.spotifyUrl, "_blank")}>
-            <User size={14} /> Visit Artist
-          </Button>
-        )}
       </div>
     </div>
   );
