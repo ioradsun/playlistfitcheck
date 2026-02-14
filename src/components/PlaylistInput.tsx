@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { PlaylistInput as PlaylistInputType } from "@/lib/playlistHealthEngine";
 import { SAMPLE_PLAYLIST, SAMPLE_EDITORIAL } from "@/lib/playlistHealthEngine";
 import { getSessionId } from "@/lib/sessionId";
-import { PageBadge } from "@/components/PageBadge";
+
 
 interface Props {
   onAnalyze: (data: PlaylistInputType & { _songUrl?: string }) => void;
@@ -146,7 +146,6 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
-      <PageBadge label="PlaylistFit" subtitle="See if your song fits playlists." />
 
       <div className="space-y-4">
         {/* Combined URL inputs */}

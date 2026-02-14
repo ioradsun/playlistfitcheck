@@ -20,7 +20,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Music,
-  Plus,
   Users,
   BarChart3,
   ListMusic,
@@ -35,6 +34,7 @@ import {
   Heart,
   MessageCircle,
   UserPlus,
+  ChevronDown,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -67,7 +67,7 @@ export interface RecentItem {
   label: string;
   meta: string;
   type: string;
-  rawData?: any; // raw DB row for loading
+  rawData?: any;
 }
 
 export interface AppSidebarProps {
@@ -77,7 +77,9 @@ export interface AppSidebarProps {
   onLoadProject?: (type: string, data: any) => void;
 }
 
-export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject }: AppSidebarProps) {
+export { TOOLS };
+
+export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebarProps) {
   const { user, loading: authLoading, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -86,12 +88,12 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject
   const { notifications, unreadCount, loading: notiLoading, markAllRead, refetch: refetchNotifications } = useNotifications();
 
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
+  const [profileExpanded, setProfileExpanded] = useState(false);
 
   const fetchRecents = useCallback(async () => {
     if (!user) return;
     const items: RecentItem[] = [];
 
-    // ProFit reports — need spotify_artist_id to re-trigger analysis
     const { data: reports } = await supabase
       .from("profit_reports")
       .select("id, created_at, artist_id, profit_artists!inner(name, spotify_artist_id)")
@@ -109,7 +111,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject
       });
     }
 
-    // Saved searches (PlaylistFit) — need report_data, playlist_url, song_url
     const { data: searches } = await supabase
       .from("saved_searches")
       .select("id, playlist_name, playlist_url, song_url, report_data, created_at")
@@ -128,7 +129,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject
       });
     }
 
-    // Mix projects — need full project data
     const { data: mixes } = await supabase
       .from("mix_projects")
       .select("id, title, notes, mixes, updated_at")
@@ -147,7 +147,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject
       });
     }
 
-    // Saved lyrics — need full lyric data
     const { data: lyrics } = await supabase
       .from("saved_lyrics")
       .select("id, title, artist, lines, filename, updated_at")
@@ -179,11 +178,9 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject
   };
 
   const handleRecentClick = (item: RecentItem) => {
-    // Switch to the tool tab
     onTabChange?.(item.type);
     const tool = TOOLS.find(t => t.value === item.type);
     if (tool) navigate(tool.path);
-    // Emit load event
     onLoadProject?.(item.type, item.rawData);
   };
 
@@ -195,7 +192,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject
   const initials = (profile?.display_name ?? user?.email ?? "?")
     .split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
-  // Group recent items by tool type
   const recentByType = TOOLS.reduce((acc, tool) => {
     acc[tool.value] = recentItems.filter(i => i.type === tool.value);
     return acc;
@@ -210,24 +206,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject
             <span className="font-mono text-sm font-bold text-primary">tools.fm</span>
           )}
         </div>
-        {!collapsed && (
-          <button
-            onClick={() => onNewProject?.()}
-            className="mx-2 mt-2 flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground hover:bg-secondary transition-colors"
-          >
-            <Plus size={16} />
-            <span>New Project</span>
-          </button>
-        )}
-        {collapsed && (
-          <button
-            onClick={() => onNewProject?.()}
-            className="mx-auto mt-1 flex items-center justify-center rounded-md p-2 text-foreground hover:bg-secondary transition-colors"
-            title="New Project"
-          >
-            <Plus size={16} />
-          </button>
-        )}
       </SidebarHeader>
 
       <SidebarSeparator className="my-2" />
@@ -398,7 +376,7 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject
         {authLoading ? null : user ? (
           <div className="space-y-1">
             <button
-              onClick={() => navigate("/profile")}
+              onClick={() => setProfileExpanded(!profileExpanded)}
               className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors"
             >
               <Avatar className="h-7 w-7 border border-sidebar-border shrink-0">
@@ -411,28 +389,40 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject
                 </AvatarFallback>
               </Avatar>
               {!collapsed && (
-                <span className="text-xs font-medium truncate flex-1 text-left">
-                  {profile?.display_name ?? user.email?.split("@")[0]}
-                </span>
+                <>
+                  <span className="text-xs font-medium truncate flex-1 text-left">
+                    {profile?.display_name ?? user.email?.split("@")[0]}
+                  </span>
+                  <ChevronDown size={14} className={`text-muted-foreground transition-transform ${profileExpanded ? "rotate-180" : ""}`} />
+                </>
               )}
             </button>
-            {!collapsed && ADMIN_EMAILS.includes(user.email ?? "") && (
-              <button
-                onClick={() => navigate("/admin")}
-                className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent transition-colors"
-              >
-                <Shield size={14} />
-                <span>Admin</span>
-              </button>
-            )}
-            {!collapsed && (
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-destructive hover:bg-sidebar-accent transition-colors"
-              >
-                <LogOut size={14} />
-                <span>Log out</span>
-              </button>
+            {!collapsed && profileExpanded && (
+              <div className="space-y-0.5 pl-2">
+                <button
+                  onClick={() => navigate("/profile")}
+                  className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                >
+                  <User size={14} />
+                  <span>Profile</span>
+                </button>
+                {ADMIN_EMAILS.includes(user.email ?? "") && (
+                  <button
+                    onClick={() => navigate("/admin")}
+                    className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                  >
+                    <Shield size={14} />
+                    <span>Admin</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-destructive hover:bg-sidebar-accent transition-colors"
+                >
+                  <LogOut size={14} />
+                  <span>Log out</span>
+                </button>
+              </div>
             )}
           </div>
         ) : (

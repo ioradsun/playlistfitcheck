@@ -69,6 +69,15 @@ const TAB_LABELS: Record<string, string> = {
   hitfit: "HitFit",
 };
 
+const TAB_SUBTITLES: Record<string, string> = {
+  songfit: "Share and discover music with the community.",
+  profit: "See how your Spotify fits making money.",
+  playlist: "See if your song fits playlists.",
+  mix: "See which mix fits best.",
+  lyric: "Make sure your lyrics fit captions.",
+  hitfit: "Compare your master to the hits.",
+};
+
 const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
   const location = useLocation();
@@ -293,13 +302,7 @@ const Index = () => {
   const [profitLoadKey, setProfitLoadKey] = useState(0);
 
   const handleNewProject = useCallback(() => {
-    setResult(null);
-    setVibeAnalysis(null);
-    setSongFitAnalysis(null);
-    setLoadedMixProject(null);
-    setLoadedLyric(null);
-    setProfitArtistUrl(null);
-    setProfitLoadKey(k => k + 1);
+    // No-op: we always default to new project state
   }, []);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
@@ -414,14 +417,19 @@ const Index = () => {
 
   return (
     <>
-      <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} onNewProject={handleNewProject} onLoadProject={handleLoadProject} />
+      <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} onLoadProject={handleLoadProject} />
       <SidebarInset>
-        {/* Minimal top header */}
-        <header className="sticky top-0 z-40 flex items-center gap-2 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
+        {/* Minimal top header with pill badge */}
+        <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
           <SidebarTrigger />
-          <span className="text-sm font-medium text-muted-foreground">
+          <span className="text-sm font-semibold text-foreground">
             {TAB_LABELS[activeTab] || "tools.fm"}
           </span>
+          {TAB_SUBTITLES[activeTab] && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+              {TAB_SUBTITLES[activeTab]}
+            </span>
+          )}
         </header>
         <div className="flex-1 flex flex-col">
           {renderTabContent()}

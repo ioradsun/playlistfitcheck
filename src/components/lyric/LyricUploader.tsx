@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 
 import { Upload, Music, Loader2, FileAudio } from "lucide-react";
-import { PageBadge } from "@/components/PageBadge";
+
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -47,8 +47,6 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
-      <PageBadge label="LyricFit" subtitle="Make sure your lyrics fit captions." />
-
       <div className="space-y-4">
         <div
           className={`glass-card rounded-xl p-8 transition-colors cursor-pointer ${

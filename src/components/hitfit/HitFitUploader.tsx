@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 
 import { Upload, X, Disc3, Music, Loader2, Link, Youtube } from "lucide-react";
-import { PageBadge } from "@/components/PageBadge";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -67,7 +67,6 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
 
   return (
     <div className="w-full max-w-xl mx-auto space-y-4">
-      <PageBadge label="HitFit" subtitle="See if your song fits a hit." />
       <div className="text-center space-y-2">
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
           Upload your master(s) and a reference track. AI will analyze and compare the sonics, telling you exactly how to bridge the gap.
