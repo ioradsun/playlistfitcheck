@@ -14,8 +14,16 @@ import Dashboard from "./pages/Dashboard";
 import PublicProfile from "./pages/PublicProfile";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import type { ReactNode } from "react";
 
 const queryClient = new QueryClient();
+
+const WithNavbar = ({ children }: { children: ReactNode }) => (
+  <>
+    <Navbar />
+    {children}
+  </>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -24,18 +32,17 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Navbar />
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/how-scoring-works" element={<HowScoringWorks />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/u/:userId" element={<PublicProfile />} />
+            <Route path="/how-scoring-works" element={<WithNavbar><HowScoringWorks /></WithNavbar>} />
+            <Route path="/admin" element={<WithNavbar><Admin /></WithNavbar>} />
+            <Route path="/dashboard" element={<WithNavbar><Dashboard /></WithNavbar>} />
+            <Route path="/auth" element={<WithNavbar><Auth /></WithNavbar>} />
+            <Route path="/profile" element={<WithNavbar><Profile /></WithNavbar>} />
+            <Route path="/reset-password" element={<WithNavbar><ResetPassword /></WithNavbar>} />
+            <Route path="/u/:userId" element={<WithNavbar><PublicProfile /></WithNavbar>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
+            <Route path="*" element={<WithNavbar><NotFound /></WithNavbar>} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>

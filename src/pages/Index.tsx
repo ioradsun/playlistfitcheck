@@ -10,13 +10,13 @@ import type { SongFitAnalysis } from "@/components/SongFitCard";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import MixFitCheck from "@/pages/MixFitCheck";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 import { LyricFitTab } from "@/components/lyric/LyricFitTab";
 import { HitFitTab } from "@/components/hitfit/HitFitTab";
 import { ProFitTab } from "@/components/profit/ProFitTab";
 import { SongFitTab } from "@/components/songfit/SongFitTab";
+import { Navbar } from "@/components/Navbar";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -150,10 +150,7 @@ const Index = () => {
     setVibeLoading(false);
     setSongFitLoading(false);
     setResult({ output, input: data, name: data.playlistName, key: Date.now(), trackList, songUrl });
-
-    // Save search for logged-in users (without song fit initially)
     saveSearch(data, output, songUrl);
-
     if (trackList && trackList.length > 0) {
       fetchVibeAnalysis(data, trackList);
       if (songUrl) {
@@ -162,7 +159,6 @@ const Index = () => {
     }
   }, [fetchVibeAnalysis, fetchSongFitAnalysis, saveSearch]);
 
-  // Update saved search with full report data once all analyses complete
   useEffect(() => {
     if (!isFullyLoaded || !result || !savedSearchIdRef.current) return;
     const reportData = {
@@ -195,13 +191,11 @@ const Index = () => {
     setSongFitLoading(false);
   }, [navigate]);
 
-  // Load cached report from dashboard navigation state
   useEffect(() => {
     const state = location.state as any;
     if (autoRunRef.current) return;
     
     if (state?.reportData) {
-      // Cached report from dashboard
       autoRunRef.current = true;
       cameFromDashboardRef.current = true;
       window.history.replaceState({}, "", "/");
@@ -212,7 +206,6 @@ const Index = () => {
       setVibeLoading(false);
       setSongFitLoading(false);
     } else if (state?.autoRun) {
-      // No cached data — re-run analysis
       autoRunRef.current = true;
       cameFromDashboardRef.current = true;
       const { playlistUrl, songUrl } = state.autoRun;
@@ -250,60 +243,51 @@ const Index = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "profit":
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><ProFitTab /></div>;
+      case "songfit":
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><SongFitTab /></div>;
+      case "playlist":
+        return (
+          <div className="flex-1 flex items-center justify-center px-4 py-8">
+            {result && !isFullyLoaded ? (
+              <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
+            ) : result && isFullyLoaded ? (
+              <ResultsDashboard
+                key={result.key}
+                result={result.output}
+                inputData={result.input}
+                playlistName={result.name}
+                vibeAnalysis={vibeAnalysis}
+                vibeLoading={false}
+                songFitAnalysis={songFitAnalysis}
+                songFitLoading={false}
+                onBack={handleBack}
+              />
+            ) : (
+              <PlaylistInputSection onAnalyze={handleAnalyze} />
+            )}
+          </div>
+        );
+      case "mix":
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><MixFitCheck initialProject={loadedMixProject} /></div>;
+      case "lyric":
+        return <div className="flex-1 flex items-center justify-center px-4 py-8"><LyricFitTab initialLyric={loadedLyric} /></div>;
+      case "hitfit":
+        return <div className="flex-1 flex items-center justify-center px-4 py-8"><HitFitTab /></div>;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <div className="flex justify-center pt-20 pb-2">
-          <TabsList>
-            <TabsTrigger value="profit">ProFit</TabsTrigger>
-            <TabsTrigger value="songfit">SongFit</TabsTrigger>
-            <TabsTrigger value="playlist">PlaylistFit</TabsTrigger>
-            <TabsTrigger value="mix">MixFit</TabsTrigger>
-            <TabsTrigger value="lyric">LyricFit</TabsTrigger>
-            <TabsTrigger value="hitfit">HitFit</TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="profit" className="flex-1 flex items-start justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
-          <ProFitTab />
-        </TabsContent>
-
-        <TabsContent value="songfit" className="flex-1 flex items-start justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
-          <SongFitTab />
-        </TabsContent>
-
-        <TabsContent value="playlist" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
-          {result && !isFullyLoaded ? (
-            <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
-          ) : result && isFullyLoaded ? (
-            <ResultsDashboard
-              key={result.key}
-              result={result.output}
-              inputData={result.input}
-              playlistName={result.name}
-              vibeAnalysis={vibeAnalysis}
-              vibeLoading={false}
-              songFitAnalysis={songFitAnalysis}
-              songFitLoading={false}
-              onBack={handleBack}
-            />
-          ) : (
-            <PlaylistInputSection onAnalyze={handleAnalyze} />
-          )}
-        </TabsContent>
-
-        <TabsContent value="mix" className="flex-1 flex items-start justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
-          <MixFitCheck initialProject={loadedMixProject} />
-        </TabsContent>
-
-        <TabsContent value="lyric" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
-          <LyricFitTab initialLyric={loadedLyric} />
-        </TabsContent>
-
-        <TabsContent value="hitfit" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
-          <HitFitTab />
-        </TabsContent>
-      </Tabs>
+      <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
+      <div className="flex-1 flex flex-col pt-14">
+        {renderTabContent()}
+      </div>
     </div>
   );
 };
