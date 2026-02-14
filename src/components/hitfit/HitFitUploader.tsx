@@ -211,7 +211,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
       </Button>
 
       <p className="text-[10px] text-center text-muted-foreground">
-        Audio files up to 20 MB each · MP3, WAV, M4A, FLAC supported · Spotify & YouTube links for reference
+        Audio files up to 75 MB each · MP3, WAV, M4A, FLAC supported · Spotify & YouTube links for reference
       </p>
     </motion.div>
   );
