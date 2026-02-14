@@ -93,7 +93,11 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          instagram_url: string | null
+          spotify_artist_id: string | null
           spotify_embed_url: string | null
+          website_url: string | null
+          youtube_url: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -101,7 +105,11 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id: string
+          instagram_url?: string | null
+          spotify_artist_id?: string | null
           spotify_embed_url?: string | null
+          website_url?: string | null
+          youtube_url?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -109,7 +117,11 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          instagram_url?: string | null
+          spotify_artist_id?: string | null
           spotify_embed_url?: string | null
+          website_url?: string | null
+          youtube_url?: string | null
         }
         Relationships: []
       }
@@ -364,6 +376,234 @@ export type Database = {
           song_url?: string | null
         }
         Relationships: []
+      }
+      songfit_blocks: {
+        Row: {
+          blocked_user_id: string
+          blocker_user_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_user_id: string
+          blocker_user_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_user_id?: string
+          blocker_user_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      songfit_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songfit_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      songfit_follows: {
+        Row: {
+          created_at: string
+          followed_user_id: string
+          follower_user_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          followed_user_id: string
+          follower_user_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          followed_user_id?: string
+          follower_user_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      songfit_likes: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songfit_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      songfit_posts: {
+        Row: {
+          album_art_url: string | null
+          album_title: string | null
+          caption: string | null
+          comments_count: number
+          created_at: string
+          id: string
+          likes_count: number
+          preview_url: string | null
+          release_date: string | null
+          spotify_track_id: string
+          spotify_track_url: string
+          tags_json: Json
+          track_artists_json: Json
+          track_title: string
+          user_id: string
+        }
+        Insert: {
+          album_art_url?: string | null
+          album_title?: string | null
+          caption?: string | null
+          comments_count?: number
+          created_at?: string
+          id?: string
+          likes_count?: number
+          preview_url?: string | null
+          release_date?: string | null
+          spotify_track_id: string
+          spotify_track_url: string
+          tags_json?: Json
+          track_artists_json?: Json
+          track_title: string
+          user_id: string
+        }
+        Update: {
+          album_art_url?: string | null
+          album_title?: string | null
+          caption?: string | null
+          comments_count?: number
+          created_at?: string
+          id?: string
+          likes_count?: number
+          preview_url?: string | null
+          release_date?: string | null
+          spotify_track_id?: string
+          spotify_track_url?: string
+          tags_json?: Json
+          track_artists_json?: Json
+          track_title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      songfit_reports: {
+        Row: {
+          comment_id: string | null
+          created_at: string
+          id: string
+          post_id: string | null
+          reason: string
+          reporter_user_id: string
+        }
+        Insert: {
+          comment_id?: string | null
+          created_at?: string
+          id?: string
+          post_id?: string | null
+          reason: string
+          reporter_user_id: string
+        }
+        Update: {
+          comment_id?: string | null
+          created_at?: string
+          id?: string
+          post_id?: string | null
+          reason?: string
+          reporter_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songfit_reports_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "songfit_reports_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      songfit_saves: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songfit_saves_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       track_engagement: {
         Row: {

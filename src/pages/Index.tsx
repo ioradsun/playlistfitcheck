@@ -16,6 +16,7 @@ import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 import { LyricFitTab } from "@/components/lyric/LyricFitTab";
 import { HitFitTab } from "@/components/hitfit/HitFitTab";
 import { ProFitTab } from "@/components/profit/ProFitTab";
+import { SongFitTab } from "@/components/songfit/SongFitTab";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -255,6 +256,7 @@ const Index = () => {
         <div className="flex justify-center pt-20 pb-2">
           <TabsList>
             <TabsTrigger value="profit">ProFit</TabsTrigger>
+            <TabsTrigger value="songfit">SongFit</TabsTrigger>
             <TabsTrigger value="playlist">PlaylistFit</TabsTrigger>
             <TabsTrigger value="mix">MixFit</TabsTrigger>
             <TabsTrigger value="lyric">LyricFit</TabsTrigger>
@@ -264,6 +266,10 @@ const Index = () => {
 
         <TabsContent value="profit" className="flex-1 flex items-start justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
           <ProFitTab />
+        </TabsContent>
+
+        <TabsContent value="songfit" className="flex-1 flex items-start justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
+          <SongFitTab />
         </TabsContent>
 
         <TabsContent value="playlist" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
