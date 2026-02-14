@@ -15,6 +15,7 @@ import MixFitCheck from "@/pages/MixFitCheck";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 import { LyricFitTab } from "@/components/lyric/LyricFitTab";
 import { HitFitTab } from "@/components/hitfit/HitFitTab";
+import { ProFitTab } from "@/components/profit/ProFitTab";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -54,7 +55,7 @@ const Index = () => {
   const autoRunRef = useRef(false);
   const cameFromDashboardRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [activeTab, setActiveTab] = useState("playlist");
+  const [activeTab, setActiveTab] = useState("profit");
   const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
@@ -253,12 +254,17 @@ const Index = () => {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="flex justify-center pt-20 pb-2">
           <TabsList>
+            <TabsTrigger value="profit">ProFit</TabsTrigger>
             <TabsTrigger value="playlist">PlaylistFit</TabsTrigger>
             <TabsTrigger value="mix">MixFit</TabsTrigger>
             <TabsTrigger value="lyric">LyricFit</TabsTrigger>
             <TabsTrigger value="hitfit">HitFit</TabsTrigger>
           </TabsList>
         </div>
+
+        <TabsContent value="profit" className="flex-1 flex items-start justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
+          <ProFitTab />
+        </TabsContent>
 
         <TabsContent value="playlist" className="flex-1 flex items-center justify-center px-4 py-8 mt-0 data-[state=inactive]:hidden">
           {result && !isFullyLoaded ? (
