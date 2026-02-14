@@ -20,6 +20,11 @@ interface SpotifyArtistResult {
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const [isSignup, setIsSignup] = useState(searchParams.get("mode") === "signup");
+  
+  // Sync with URL query param changes
+  useEffect(() => {
+    setIsSignup(searchParams.get("mode") === "signup");
+  }, [searchParams]);
   const [isForgot, setIsForgot] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
