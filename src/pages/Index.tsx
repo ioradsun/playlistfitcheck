@@ -53,10 +53,6 @@ const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!authLoading && !user) navigate("/auth");
-  }, [authLoading, user, navigate]);
   const autoRunRef = useRef(false);
   const profitAutoRef = useRef(false);
   const cameFromDashboardRef = useRef(false);
