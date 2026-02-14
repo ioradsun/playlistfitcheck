@@ -88,28 +88,12 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Album Art — sized so art + 80px player ≈ Instagram desktop square */}
-      <div className="relative w-full bg-black/20" style={{ aspectRatio: '1 / 0.83' }}>
-        {post.album_art_url ? (
-          <img
-            src={post.album_art_url}
-            alt={post.track_title}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-            No artwork
-          </div>
-        )}
-      </div>
-
-      {/* Spotify Embed Player — compact 80px strip */}
-      <div className="w-full bg-black/40">
+      {/* Spotify Embed Player — compact strip, no separate cover art */}
+      <div className="w-full">
         <iframe
           src={embedUrl}
           width="100%"
-          height="80"
+          height="152"
           allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
           loading="lazy"
           className="border-0"
