@@ -88,12 +88,12 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Spotify Embed Player — compact strip, no separate cover art */}
-      <div className="w-full">
+      {/* Spotify Embed Player — Instagram-sized */}
+      <div className="w-full" style={{ aspectRatio: '1 / 1' }}>
         <iframe
-          src={embedUrl}
+          src={`https://open.spotify.com/embed/track/${post.spotify_track_id}?utm_source=generator&theme=1`}
           width="100%"
-          height="152"
+          height="100%"
           allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
           loading="lazy"
           className="border-0"
