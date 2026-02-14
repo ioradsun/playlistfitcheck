@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { Navbar } from "@/components/Navbar";
 import Index from "./pages/Index";
 import HowScoringWorks from "./pages/HowScoringWorks";
+import OurStory from "./pages/OurStory";
 import Admin from "./pages/Admin";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/LyricFit" element={<Index />} />
             <Route path="/HitFit" element={<Index />} />
             <Route path="/how-scoring-works" element={<WithNavbar><HowScoringWorks /></WithNavbar>} />
+            <Route path="/our-story" element={<WithNavbar><OurStory /></WithNavbar>} />
             <Route path="/admin" element={<WithNavbar><Admin /></WithNavbar>} />
             <Route path="/dashboard" element={<WithNavbar><Dashboard /></WithNavbar>} />
             <Route path="/auth" element={<WithNavbar><Auth /></WithNavbar>} />
