@@ -88,8 +88,8 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Album Art */}
-      <div className="relative w-full aspect-square bg-black/20">
+      {/* Album Art — cropped to ~4:5 so art + 80px player ≈ Instagram 4:5 */}
+      <div className="relative w-full bg-black/20" style={{ aspectRatio: '4 / 4.7' }}>
         {post.album_art_url ? (
           <img
             src={post.album_art_url}
