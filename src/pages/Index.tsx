@@ -377,28 +377,32 @@ const Index = () => {
   }, [handleAnalyze]);
 
   const renderTabContent = () => {
+    // Feed/results pages: top-aligned, no vertical centering
+    // Input/form pages: centered with padding
     switch (activeTab) {
+      case "songfit":
+        return <div className="flex-1 px-4 py-6"><SongFitTab /></div>;
       case "profit":
         return <div className="flex-1 flex items-start justify-center px-4 py-8"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} /></div>;
-      case "songfit":
-        return <div className="flex-1 flex items-start justify-center px-4 py-8"><SongFitTab /></div>;
       case "playlist":
         return (
-           <div className="flex-1 flex items-start justify-center px-4 py-8">
+          <div className="flex-1 flex items-start justify-center px-4 py-8">
             {result && !isFullyLoaded ? (
               <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
             ) : result && isFullyLoaded ? (
-              <ResultsDashboard
-                key={result.key}
-                result={result.output}
-                inputData={result.input}
-                playlistName={result.name}
-                vibeAnalysis={vibeAnalysis}
-                vibeLoading={false}
-                songFitAnalysis={songFitAnalysis}
-                songFitLoading={false}
-                onBack={handleBack}
-              />
+              <div className="w-full">
+                <ResultsDashboard
+                  key={result.key}
+                  result={result.output}
+                  inputData={result.input}
+                  playlistName={result.name}
+                  vibeAnalysis={vibeAnalysis}
+                  vibeLoading={false}
+                  songFitAnalysis={songFitAnalysis}
+                  songFitLoading={false}
+                  onBack={handleBack}
+                />
+              </div>
             ) : (
               <PlaylistInputSection onAnalyze={handleAnalyze} />
             )}
