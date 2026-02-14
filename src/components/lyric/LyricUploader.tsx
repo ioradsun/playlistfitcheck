@@ -60,9 +60,6 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
           <FileAudio size={14} />
           Lyrics in seconds.
         </motion.div>
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-          Lyric<span className="text-gradient-primary">Fit</span>
-        </h1>
       </div>
 
       <div

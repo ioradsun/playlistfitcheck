@@ -71,7 +71,6 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
       animate={{ opacity: 1, y: 0 }}
     >
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">HitFit</h2>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
           Upload your master(s) and a reference track. AI will analyze and compare the sonics, telling you exactly how to bridge the gap.
         </p>

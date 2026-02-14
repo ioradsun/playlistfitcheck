@@ -162,9 +162,6 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
           <BarChart3 size={14} />
           Know your fit. Pitch with confidence.
         </motion.div>
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-          Playlist<span className="text-gradient-primary">Fit</span>
-        </h1>
       </div>
 
       {/* Combined URL inputs */}
