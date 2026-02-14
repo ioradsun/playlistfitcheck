@@ -1,94 +1,87 @@
 
 
-# Mix Fit Check — with Save Support (Local + Cloud)
+## Unified Project Launcher
 
-## Overview
+### The Problem
+Every tool handles saved work differently -- some show saved projects inline, some only in the Dashboard, some nowhere. Users have to remember where to find their work depending on which tool they're in.
 
-Add a tabbed homepage with the existing **PlaylistFitCheck** and a new **Mix Fit Check** tool. Mix projects save to **localStorage** for guests and additionally to the **cloud database** for logged-in users. Audio files themselves stay in browser memory (too large for cloud storage in this context), but project metadata, rankings, comments, and marker positions persist.
+### First-Principles UX Approach
 
-## What Gets Saved
+**Principle 1: Proximity** -- Saved work should live where you do the work, not in a separate page.
 
-| Data | Local (guest) | Cloud (logged-in) |
-|------|--------------|-------------------|
-| Song title + notes | Yes | Yes |
-| Mix names + rankings + comments | Yes | Yes |
-| Start/end marker positions | Yes | Yes |
-| Audio files (MP3/WAV) | No (too large) | No |
+**Principle 2: Progressive Disclosure** -- The default state should be "start new." Saved work should be visible but secondary, not blocking the primary action.
 
-When a logged-in user reopens a saved project, they will see their metadata, rankings, and comments but will need to re-upload the audio files. A clear prompt will guide them to do so.
+**Principle 3: Consistency** -- Every tool gets the exact same interaction pattern. Zero learning curve between tabs.
 
-## Database Changes
+### The Design
 
-**New table: `mix_projects`**
+Each tool's landing page keeps its existing "new project" form (search bar, upload zone, etc.) exactly as-is. Below the primary action, a small "Recent Projects" section appears if the user is logged in and has saved work. This mirrors how MixFit already works -- but applied uniformly.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid (PK) | auto-generated |
-| user_id | uuid (FK) | references auth.users, cascade delete |
-| title | text | required |
-| notes | text | optional |
-| mixes | jsonb | array of mix objects (name, rank, comments, marker positions) |
-| created_at | timestamptz | default now() |
-| updated_at | timestamptz | default now() |
+```text
++----------------------------------+
+|        [PageBadge]               |
+|                                  |
+|   [Primary Input / Upload]       |
+|   [Action Button]                |
+|   "See Demo Results"             |
+|                                  |
+|   --- Recent Projects ---        |
+|   [Card: Project 1]  [load|del] |
+|   [Card: Project 2]  [load|del] |
+|   (max 5 shown, compact)        |
++----------------------------------+
+```
 
-**RLS policies:**
-- Users can SELECT, INSERT, UPDATE, DELETE only their own rows (`auth.uid() = user_id`)
+### What Changes
 
-## New Files
+1. **Remove the Dashboard page entirely** -- all saved work moves inline into each tool's landing page.
 
-| File | Purpose |
-|------|---------|
-| `src/pages/MixFitCheck.tsx` | Main workspace: project creation, mix cards grid, global timeline, save/load |
-| `src/components/mix/MixCard.tsx` | Individual card: waveform canvas, play/pause, rank, comments, remove |
-| `src/components/mix/GlobalTimeline.tsx` | Shared waveform with draggable start/end markers |
-| `src/components/mix/MixProjectForm.tsx` | Song title + notes entry form |
-| `src/components/mix/SavedProjectsList.tsx` | List of saved projects (from localStorage or cloud) with load/delete |
-| `src/hooks/useAudioEngine.ts` | Web Audio API: decode files, extract waveform peaks, manage playback with marker bounds |
-| `src/hooks/useMixProjectStorage.ts` | Abstraction over localStorage + cloud save/load logic |
+2. **Create a shared `RecentProjects` component** -- a single reusable component that each tool imports. It takes:
+   - A `tableName` (or fetcher function) to query saved items
+   - A `renderItem` function for tool-specific display (score, mix count, line count, etc.)
+   - An `onLoad` callback to restore the project
+   - An `onDelete` callback
 
-## Modified Files
+3. **Add persistence to HitFit and ProFit** -- so they also have saveable history:
+   - **HitFit**: Save analysis results to a new `saved_hitfit` table (master names, reference name, analysis JSON, created_at)
+   - **ProFit**: Save reports to a new `saved_profit` table (already partially exists with `profit_reports` -- just wire it up inline)
 
-| File | Change |
-|------|--------|
-| `src/pages/Index.tsx` | Add tab bar (PlaylistFitCheck / Mix Fit Check) wrapping existing content |
+4. **Update each tool's landing component**:
+   - **PlaylistFit** (`PlaylistInput.tsx`): Add `RecentProjects` below the "See Demo Results" link, showing saved playlist checks with score chips
+   - **MixFit** (`MixProjectForm.tsx`): Replace the existing `SavedProjectsList` with the shared `RecentProjects` component
+   - **LyricFit** (`LyricUploader.tsx`): Add `RecentProjects` showing saved transcriptions with line count
+   - **HitFit** (`HitFitUploader.tsx`): Add `RecentProjects` showing past master analyses
+   - **ProFit** (`ProFitLanding.tsx`): Add `RecentProjects` showing past artist reports with tier badge
 
-## How It Works
+5. **Remove Dashboard route and nav link** -- clean up `App.tsx` routing, remove `/dashboard` and its nav entry.
 
-### Tab Navigation
-A minimal tab bar appears at the top of the Index page. First tab renders the existing `PlaylistInputSection`/`ResultsDashboard` flow unchanged. Second tab renders the new `MixFitCheck` component.
+6. **Update Profile page** -- if the Dashboard had a "Profile" button, ensure Profile remains accessible from the navbar avatar/menu.
 
-### Audio Engine (useAudioEngine)
-- `AudioContext.decodeAudioData()` decodes uploaded MP3/WAV into `AudioBuffer`
-- Waveform peaks extracted from buffer channel data, rendered to `<canvas>`
-- Playback via `AudioBufferSourceNode.start(0, startOffset, duration)` respecting marker positions
-- Only one source node active at a time (exclusive playback)
+### Technical Details
 
-### Global Timeline (GlobalTimeline)
-- Renders waveform of the first uploaded mix as reference
-- Two draggable handles for start/end markers stored as time offsets
-- Label displays "Comparing: M:SS - M:SS"
-- Marker changes propagate to all mix cards instantly
+**New shared component**: `src/components/RecentProjects.tsx`
+- Accepts generic props: `items`, `loading`, `onLoad(item)`, `onDelete(id)`, `renderLabel(item)`, `renderMeta(item)`
+- Renders a compact list (max 5 items) with subtle styling
+- Shows nothing if no items or not logged in
+- Each row: icon + title + meta + load button + delete button (same pattern as current MixFit's `SavedProjectsList`)
 
-### Mix Cards (MixCard)
-- 3-column responsive grid (1 col mobile, 2 col tablet, 3 col desktop)
-- Each card: editable name input, canvas waveform, play/pause button, rank dropdown (1-6, validated for no duplicates), textarea for comments, remove button
-- Play button starts from global start marker, stops at end marker
+**New database tables** (migrations):
+- `saved_hitfit`: id, user_id, master1_name, master2_name, reference_name, analysis (jsonb), created_at
+- Wire existing `profit_reports` table for inline loading (or create if not present)
+- RLS policies: users can only read/delete their own rows
 
-### Save Logic (useMixProjectStorage)
-- **Guest**: serialize project metadata (title, notes, mixes array with names/ranks/comments, marker positions) to `localStorage` under a key like `mix_projects`
-- **Logged-in**: same data saved to `mix_projects` table via Supabase client, plus localStorage as offline cache
-- Save triggers on explicit "Save" button click and auto-saves on significant changes (debounced)
-- Load: on mount, check cloud first (if logged in), fall back to localStorage
+**Files to modify**:
+- `src/components/PlaylistInput.tsx` -- add RecentProjects section
+- `src/components/mix/MixProjectForm.tsx` -- swap SavedProjectsList for RecentProjects
+- `src/components/lyric/LyricUploader.tsx` -- add RecentProjects section
+- `src/components/hitfit/HitFitUploader.tsx` -- add RecentProjects section
+- `src/components/hitfit/HitFitTab.tsx` -- add save logic after analysis
+- `src/components/profit/ProFitLanding.tsx` -- add RecentProjects section
+- `src/pages/Index.tsx` -- remove Dashboard-related state/navigation logic
+- `src/App.tsx` -- remove /dashboard route
+- `src/components/Navbar.tsx` -- remove Dashboard nav link if present
 
-### Saved Projects List
-- Shows previously saved projects with title, date, mix count
-- Click to load — restores metadata and prompts user to re-upload audio files
-- Delete option available
-
-## Design
-- Matches existing dark aesthetic with glass-card patterns
-- Waveform rendered in primary color with subtle opacity
-- Marker handles styled as primary-colored vertical lines with drag cursors
-- Rank #1 card gets a subtle primary border glow
-- Professional, minimal, no clutter
+**Files to delete**:
+- `src/pages/Dashboard.tsx`
+- `src/components/mix/SavedProjectsList.tsx` (replaced by shared component)
 
