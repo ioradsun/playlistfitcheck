@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Music, LayoutDashboard, User, Shield } from "lucide-react";
+import { LogOut, Music, LayoutDashboard, User, Shield, Bell } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useNotifications } from "@/hooks/useNotifications";
+import { NotificationsPanel } from "@/components/NotificationsPanel";
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
@@ -31,6 +35,8 @@ const TAB_ITEMS = [
 export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
   const { user, loading, profile } = useAuth();
   const navigate = useNavigate();
+  const { notifications, unreadCount, loading: notiLoading, markAllRead, refetch: refetchNotifications } = useNotifications();
+  const [notiOpen, setNotiOpen] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -67,7 +73,29 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
           </div>
         )}
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          {!loading && user && (
+            <Popover open={notiOpen} onOpenChange={(open) => { setNotiOpen(open); if (open) refetchNotifications(); }}>
+              <PopoverTrigger asChild>
+                <button className="relative p-2 rounded-full hover:bg-accent/50 transition-colors">
+                  <Bell size={18} className="text-muted-foreground" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="p-0 w-80 border-border z-[100]">
+                <NotificationsPanel
+                  notifications={notifications}
+                  loading={notiLoading}
+                  onMarkAllRead={markAllRead}
+                  onClose={() => setNotiOpen(false)}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
           {loading ? null : user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
