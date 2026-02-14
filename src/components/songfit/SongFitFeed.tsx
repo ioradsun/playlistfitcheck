@@ -72,45 +72,49 @@ export function SongFitFeed() {
   }
 
   return (
-    <div className="w-full max-w-lg mx-auto space-y-4">
+    <div className="w-full max-w-[470px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-black tracking-tight">SongFit</h1>
+      <div className="flex items-center justify-between px-3 pt-2 pb-3">
+        <h1 className="text-xl font-black tracking-tight">SongFit</h1>
         {user && (
-          <Button size="sm" className="gap-1.5" onClick={() => setShowCreate(true)}>
-            <Plus size={16} /> Post
+          <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setShowCreate(true)}>
+            <Plus size={14} /> Post
           </Button>
         )}
       </div>
 
-      <p className="text-sm text-muted-foreground">Scroll songs like Instagram. Tap to open in Spotify.</p>
+      <p className="text-xs text-muted-foreground px-3 pb-3">
+        Scroll songs like Instagram. Tap to open in Spotify.
+      </p>
 
       {/* Search */}
-      <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative px-3 pb-3">
+        <Search size={14} className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search tracks or captions..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="pl-9"
+          className="pl-9 h-9 text-sm"
         />
       </div>
 
       {/* Feed tabs */}
-      <Tabs value={feedTab} onValueChange={v => setFeedTab(v as FeedTab)}>
-        <TabsList className="w-full">
-          <TabsTrigger value="new" className="flex-1">New</TabsTrigger>
-          <TabsTrigger value="trending" className="flex-1">Trending</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="px-3 pb-3">
+        <Tabs value={feedTab} onValueChange={v => setFeedTab(v as FeedTab)}>
+          <TabsList className="w-full h-9">
+            <TabsTrigger value="new" className="flex-1 text-xs">New</TabsTrigger>
+            <TabsTrigger value="trending" className="flex-1 text-xs">Trending</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
-      {/* Posts */}
+      {/* Posts — IG-style, no gaps between cards, separated by border */}
       {loading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-16">
           <Loader2 size={24} className="animate-spin text-muted-foreground" />
         </div>
       ) : posts.length === 0 ? (
-        <div className="text-center py-12 space-y-3">
+        <div className="text-center py-16 space-y-3">
           <p className="text-muted-foreground text-sm">No posts yet.</p>
           {user && (
             <Button variant="outline" size="sm" onClick={() => setShowCreate(true)}>
@@ -119,7 +123,7 @@ export function SongFitFeed() {
           )}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div>
           {posts.map(post => (
             <SongFitPostCard
               key={post.id}
