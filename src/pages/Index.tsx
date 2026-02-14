@@ -16,7 +16,9 @@ import { LyricFitTab } from "@/components/lyric/LyricFitTab";
 import { HitFitTab } from "@/components/hitfit/HitFitTab";
 import { ProFitTab } from "@/components/profit/ProFitTab";
 import { SongFitTab } from "@/components/songfit/SongFitTab";
-import { Navbar } from "@/components/Navbar";
+import { AppSidebar } from "@/components/AppSidebar";
+import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { Music } from "lucide-react";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -58,6 +60,15 @@ const PATH_TO_TAB: Record<string, string> = {
   "/HitFit": "hitfit",
 };
 
+const TAB_LABELS: Record<string, string> = {
+  songfit: "CrowdFit",
+  profit: "ProFit",
+  playlist: "PlaylistFit",
+  mix: "MixFit",
+  lyric: "LyricFit",
+  hitfit: "HitFit",
+};
+
 const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
   const location = useLocation();
@@ -87,10 +98,8 @@ const Index = () => {
   // Auto-switch to ProFit tab on first login if user has a Spotify artist linked
   useEffect(() => {
     if (profitAutoRef.current || !profile?.spotify_artist_id) return;
-    // Only auto-switch if no location state is driving a specific tab
     const state = location.state as any;
     if (state?.reportData || state?.autoRun || state?.loadMixProject || state?.loadLyric) return;
-    // Only auto-switch if on default route
     if (location.pathname !== "/") return;
     profitAutoRef.current = true;
     setActiveTabState("profit");
@@ -230,11 +239,9 @@ const Index = () => {
     if (autoRunRef.current) return;
     
     if (state?.returnTab) {
-      // Came back from auth – restore previous tab
       const TAB_TO_PATH: Record<string, string> = { songfit: "/SongFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit" };
       setActiveTab(state.returnTab);
       navigate(TAB_TO_PATH[state.returnTab] || "/SongFit", { replace: true });
-      // Don't set autoRunRef so other state handlers can still fire if combined
       if (!state.reportData && !state.autoRun && !state.loadMixProject && !state.loadLyric) return;
     }
 
@@ -282,6 +289,15 @@ const Index = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleNewProject = useCallback(() => {
+    // Reset state for current tool
+    setResult(null);
+    setVibeAnalysis(null);
+    setSongFitAnalysis(null);
+    setLoadedMixProject(null);
+    setLoadedLyric(null);
+  }, []);
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "profit":
@@ -322,12 +338,21 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
-      <div className="flex-1 flex flex-col pt-14">
-        {renderTabContent()}
-      </div>
-    </div>
+    <>
+      <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} onNewProject={handleNewProject} />
+      <SidebarInset>
+        {/* Minimal top header */}
+        <header className="sticky top-0 z-40 flex items-center gap-2 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
+          <SidebarTrigger />
+          <span className="text-sm font-medium text-muted-foreground">
+            {TAB_LABELS[activeTab] || "tools.fm"}
+          </span>
+        </header>
+        <div className="flex-1 flex flex-col">
+          {renderTabContent()}
+        </div>
+      </SidebarInset>
+    </>
   );
 };
 
