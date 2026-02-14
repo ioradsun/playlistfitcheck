@@ -75,7 +75,7 @@ const TAB_SUBTITLES: Record<string, string> = {
   playlist: "See if your song fits playlists.",
   mix: "See which mix fits best.",
   lyric: "Make sure your lyrics fit captions.",
-  hitfit: "Compare your master to the hits.",
+  hitfit: "See if your song fits a hit.",
 };
 
 const Index = () => {
