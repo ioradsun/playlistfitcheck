@@ -76,7 +76,7 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Link to="/our-story" className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap hidden sm:inline">
+          <Link to="/our-story" className={`text-xs transition-colors whitespace-nowrap hidden sm:inline ${location.pathname === "/our-story" ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}>
             Our Story
           </Link>
           {!loading && user && (
@@ -136,10 +136,10 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
             </DropdownMenu>
           ) : (
             <>
-              <Button variant="ghost" size="sm" onClick={() => navigate("/auth", { state: { returnTab: activeTab } })}>
+              <Button variant={location.pathname === "/auth" ? "secondary" : "ghost"} size="sm" onClick={() => navigate("/auth", { state: { returnTab: activeTab } })} className={location.pathname === "/auth" && !location.search.includes("mode=signup") ? "text-foreground" : ""}>
                 Log in
               </Button>
-              <Button size="sm" onClick={() => navigate("/auth?mode=signup", { state: { returnTab: activeTab } })}>
+              <Button variant={location.search.includes("mode=signup") ? "secondary" : "default"} size="sm" onClick={() => navigate("/auth?mode=signup", { state: { returnTab: activeTab } })} className={location.search.includes("mode=signup") ? "text-foreground" : ""}>
                 Sign Up For Free
               </Button>
             </>
