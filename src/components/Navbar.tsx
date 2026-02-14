@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Music, LayoutDashboard, User, Shield, Bell } from "lucide-react";
+import { LogOut, Music, LayoutDashboard, User, Shield, Bell, BookOpen } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationsPanel } from "@/components/NotificationsPanel";
@@ -74,6 +74,9 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
         )}
 
         <div className="flex items-center gap-2 shrink-0">
+          <Link to="/our-story" className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap hidden sm:inline">
+            Our Story
+          </Link>
           {!loading && user && (
             <Popover open={notiOpen} onOpenChange={(open) => { setNotiOpen(open); if (open) refetchNotifications(); }}>
               <PopoverTrigger asChild>
