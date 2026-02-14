@@ -21,7 +21,7 @@ export function LyricUploader({ onTranscribe, onLoadSaved, loading }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const ACCEPTED_TYPES = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/mp4", "audio/m4a", "audio/ogg", "audio/flac"];
-  const MAX_SIZE = 20 * 1024 * 1024;
+  const MAX_SIZE = 75 * 1024 * 1024;
 
   const handleFile = (file: File) => {
     if (!ACCEPTED_TYPES.some(t => file.type === t || file.name.match(/\.(mp3|wav|m4a|ogg|flac)$/i))) {
@@ -29,7 +29,7 @@ export function LyricUploader({ onTranscribe, onLoadSaved, loading }: Props) {
       return;
     }
     if (file.size > MAX_SIZE) {
-      toast.error("File too large. Maximum size is 20MB.");
+      toast.error("File too large. Maximum size is 75MB.");
       return;
     }
     setSelectedFile(file);
@@ -121,7 +121,7 @@ export function LyricUploader({ onTranscribe, onLoadSaved, loading }: Props) {
                     <div>
                       <p className="text-sm font-medium">Drop your song here or click to browse</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        MP3, WAV, M4A, OGG, FLAC · Max 20MB
+                        MP3, WAV, M4A, OGG, FLAC · Max 75MB
                       </p>
                     </div>
                   </>
@@ -186,7 +186,7 @@ export function LyricUploader({ onTranscribe, onLoadSaved, loading }: Props) {
                   <div>
                     <p className="text-sm font-medium">Drop your song here or click to browse</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      MP3, WAV, M4A, OGG, FLAC · Max 20MB
+                      MP3, WAV, M4A, OGG, FLAC · Max 75MB
                     </p>
                   </div>
                 </>
