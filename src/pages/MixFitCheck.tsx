@@ -4,6 +4,7 @@ import { MixProjectForm } from "@/components/mix/MixProjectForm";
 import { MixCard } from "@/components/mix/MixCard";
 import { GlobalTimeline } from "@/components/mix/GlobalTimeline";
 import { RecentProjects } from "@/components/RecentProjects";
+import { PageBadge } from "@/components/PageBadge";
 import { useAudioEngine, type AudioMix } from "@/hooks/useAudioEngine";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
 import { Upload, Save, ArrowLeft } from "lucide-react";
@@ -210,14 +211,16 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
   if (!projectId) {
     return (
       <div className="w-full max-w-2xl mx-auto space-y-4">
-        <MixProjectForm onSubmit={handleCreate} />
+        <PageBadge label="MixFit" subtitle="See which mix fits best." />
         <RecentProjects
           fetcher={list}
           toItem={toMixItem}
           onLoad={handleLoadProject}
           onDelete={remove}
           refreshKey={refreshKey}
-        />
+        >
+          <MixProjectForm onSubmit={handleCreate} />
+        </RecentProjects>
       </div>
     );
   }

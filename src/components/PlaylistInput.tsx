@@ -182,122 +182,124 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
     >
       <PageBadge label="PlaylistFit" subtitle="See if your song fits playlists." />
 
-      {/* Combined URL inputs */}
-      <div className="glass-card rounded-xl p-4 space-y-3 relative z-50" style={{ overflow: 'visible' }}>
-        {/* Playlist input with search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
-          <Input
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            placeholder="Search or paste Spotify playlist URL..."
-            className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
-            onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
-            onFocus={() => setPlaylistFocused(true)}
-            onBlur={() => setTimeout(() => setPlaylistFocused(false), 200)}
-            disabled={loading}
-          />
-          {playlistSearching && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
-          )}
-          {showPlaylistDropdown && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
-              {playlistResults.map((p) => (
-                <button
-                  key={p.id}
-                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors text-left"
-                  onMouseDown={() => selectPlaylist(p)}
-                >
-                  {p.image ? (
-                    <img src={p.image} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
-                  ) : (
-                    <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                      <Search size={12} className="text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{p.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">by {p.owner} · {p.tracks} tracks</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-border" />
-
-        {/* Song input with search */}
-        <div className="relative">
-          <Music className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
-          <Input
-            value={songUrl}
-            onChange={e => setSongUrl(e.target.value)}
-            placeholder="Search or paste Spotify song URL (optional)..."
-            className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
-            onFocus={() => setSongFocused(true)}
-            onBlur={() => setTimeout(() => setSongFocused(false), 200)}
-            disabled={loading}
-          />
-          {songSearching && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
-          )}
-          {showSongDropdown && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
-              {songResults.map((t) => (
-                <button
-                  key={t.id}
-                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors text-left"
-                  onMouseDown={() => selectTrack(t)}
-                >
-                  {t.image ? (
-                    <img src={t.image} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
-                  ) : (
-                    <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                      <Music size={12} className="text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{t.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{t.artists}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end">
-          <Button onClick={handleAnalyze} className="glow-primary" disabled={loading}>
-            {loading ? (
-              <Loader2 size={16} className="mr-1 animate-spin" />
-            ) : (
-              <Zap size={16} className="mr-1" />
-            )}
-            {loading ? "Fetching..." : "Check Fit"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-center gap-4 text-xs">
-        <Link to="/how-scoring-works" className="text-primary hover:underline underline-offset-2">
-          Inside the Fitting Room
-        </Link>
-        <span className="text-muted-foreground">·</span>
-        <button
-          onClick={handleDemo}
-          className="text-primary hover:underline underline-offset-2"
-        >
-          See Demo Results
-        </button>
-      </div>
-
       <RecentProjects
         fetcher={fetchSavedSearches}
         toItem={toItem}
         onLoad={handleLoadSaved}
         onDelete={handleDeleteSaved}
-      />
+      >
+        <div className="space-y-4">
+          {/* Combined URL inputs */}
+          <div className="glass-card rounded-xl p-4 space-y-3 relative z-50" style={{ overflow: 'visible' }}>
+            {/* Playlist input with search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
+              <Input
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                placeholder="Search or paste Spotify playlist URL..."
+                className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+                onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
+                onFocus={() => setPlaylistFocused(true)}
+                onBlur={() => setTimeout(() => setPlaylistFocused(false), 200)}
+                disabled={loading}
+              />
+              {playlistSearching && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
+              )}
+              {showPlaylistDropdown && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
+                  {playlistResults.map((p) => (
+                    <button
+                      key={p.id}
+                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors text-left"
+                      onMouseDown={() => selectPlaylist(p)}
+                    >
+                      {p.image ? (
+                        <img src={p.image} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                          <Search size={12} className="text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{p.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">by {p.owner} · {p.tracks} tracks</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-border" />
+
+            {/* Song input with search */}
+            <div className="relative">
+              <Music className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
+              <Input
+                value={songUrl}
+                onChange={e => setSongUrl(e.target.value)}
+                placeholder="Search or paste Spotify song URL (optional)..."
+                className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+                onFocus={() => setSongFocused(true)}
+                onBlur={() => setTimeout(() => setSongFocused(false), 200)}
+                disabled={loading}
+              />
+              {songSearching && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
+              )}
+              {showSongDropdown && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
+                  {songResults.map((t) => (
+                    <button
+                      key={t.id}
+                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors text-left"
+                      onMouseDown={() => selectTrack(t)}
+                    >
+                      {t.image ? (
+                        <img src={t.image} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                          <Music size={12} className="text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{t.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{t.artists}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={handleAnalyze} className="glow-primary" disabled={loading}>
+                {loading ? (
+                  <Loader2 size={16} className="mr-1 animate-spin" />
+                ) : (
+                  <Zap size={16} className="mr-1" />
+                )}
+                {loading ? "Fetching..." : "Check Fit"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center gap-4 text-xs">
+            <Link to="/how-scoring-works" className="text-primary hover:underline underline-offset-2">
+              Inside the Fitting Room
+            </Link>
+            <span className="text-muted-foreground">·</span>
+            <button
+              onClick={handleDemo}
+              className="text-primary hover:underline underline-offset-2"
+            >
+              See Demo Results
+            </button>
+          </div>
+        </div>
+      </RecentProjects>
     </motion.div>
   );
 }
