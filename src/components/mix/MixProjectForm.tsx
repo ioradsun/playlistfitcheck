@@ -2,8 +2,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Music } from "lucide-react";
-import { PageBadge } from "@/components/PageBadge";
 
 interface MixProjectFormProps {
   onSubmit: (title: string, notes: string) => void;
@@ -15,7 +13,6 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
 
   return (
     <div className="w-full space-y-4 text-center">
-      <PageBadge label="MixFit" subtitle="See which mix fits best." />
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">New Song Project</h2>
         <p className="text-sm text-muted-foreground">
