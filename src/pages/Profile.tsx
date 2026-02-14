@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Pencil, Camera, X, Check, Loader2, Music } from "lucide-react";
 
@@ -21,7 +20,6 @@ const Profile = () => {
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [spotifyUrl, setSpotifyUrl] = useState("");
-  const [selectedRole, setSelectedRole] = useState<"artist" | "curator">("artist");
   const [uploading, setUploading] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,11 +44,8 @@ const Profile = () => {
     }
   }, [profile]);
 
-  useEffect(() => {
-    if (currentRole === "artist" || currentRole === "curator") {
-      setSelectedRole(currentRole as "artist" | "curator");
-    }
-  }, [currentRole]);
+
+
 
   const autoSave = useCallback((fields: { display_name?: string; bio?: string; spotify_embed_url?: string }) => {
     if (!user) return;
@@ -76,17 +71,8 @@ const Profile = () => {
     autoSave({ display_name: displayName, bio, spotify_embed_url: val });
   };
 
-  const handleRoleChange = async (newRole: "artist" | "curator") => {
-    setSelectedRole(newRole);
-    if (!user) return;
-    // Delete existing role and insert new one
-    const { error: delErr } = await supabase.from("user_roles").delete().eq("user_id", user.id);
-    if (delErr) { toast.error("Failed to update role"); return; }
-    const { error: insErr } = await supabase.from("user_roles").insert({ user_id: user.id, role: newRole });
-    if (insErr) { toast.error("Failed to update role"); return; }
-    toast.success(`Role updated to ${newRole}`);
-    refreshProfile();
-  };
+
+
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -162,26 +148,13 @@ const Profile = () => {
                 <Input value={displayName} onChange={e => handleDisplayNameChange(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>I am a…</Label>
-                <RadioGroup value={selectedRole} onValueChange={(v) => handleRoleChange(v as "artist" | "curator")} className="flex gap-4">
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="artist" id="role-artist" />
-                    <Label htmlFor="role-artist" className="cursor-pointer">Artist</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="curator" id="role-curator" />
-                    <Label htmlFor="role-curator" className="cursor-pointer">Curator</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-              <div className="space-y-2">
                 <Label>Bio</Label>
                 <Textarea value={bio} onChange={e => handleBioChange(e.target.value)} placeholder="Tell us about yourself" rows={3} />
               </div>
               <div className="space-y-2">
-                <Label>Spotify Playlist URL</Label>
-                <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="https://open.spotify.com/playlist/..." />
-                <p className="text-xs text-muted-foreground">Paste a Spotify playlist or album link to embed on your public profile</p>
+                <Label>Spotify Artist URL</Label>
+                <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="https://open.spotify.com/artist/..." />
+                <p className="text-xs text-muted-foreground">Your Spotify artist profile link — set during signup</p>
               </div>
             </CardContent>
           </Card>
