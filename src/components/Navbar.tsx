@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ const TAB_ITEMS = [
 export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
   const { user, loading, profile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { notifications, unreadCount, loading: notiLoading, markAllRead, refetch: refetchNotifications } = useNotifications();
   const [notiOpen, setNotiOpen] = useState(false);
 
@@ -54,24 +55,25 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
           <span className="font-mono text-sm">tools.fm</span>
         </Link>
 
-        {/* Tab navigation — only shown on Index page */}
-        {activeTab && onTabChange && (
-          <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none mx-2">
-            {TAB_ITEMS.map((tab) => (
+        {/* Tab navigation — always visible */}
+        <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none mx-2">
+          {TAB_ITEMS.map((tab) => {
+            const isActive = activeTab ? activeTab === tab.value : location.pathname === tab.path;
+            return (
               <button
                 key={tab.value}
-                onClick={() => { onTabChange(tab.value); navigate(tab.path); }}
+                onClick={() => { onTabChange?.(tab.value); navigate(tab.path); }}
                 className={`px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
-                  activeTab === tab.value
+                  isActive
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
               >
                 {tab.label}
               </button>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <Link to="/our-story" className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap hidden sm:inline">
