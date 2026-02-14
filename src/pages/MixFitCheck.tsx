@@ -209,7 +209,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
 
   if (!projectId) {
     return (
-      <div className="w-full max-w-2xl mx-auto py-8 px-4">
+      <div className="w-full max-w-2xl mx-auto space-y-4">
         <MixProjectForm onSubmit={handleCreate} />
         <RecentProjects
           fetcher={list}
