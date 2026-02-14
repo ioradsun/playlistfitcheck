@@ -16,7 +16,11 @@ interface ReportState {
   shareToken: string;
 }
 
-export const ProFitTab = () => {
+interface ProFitTabProps {
+  initialArtistUrl?: string | null;
+}
+
+export const ProFitTab = ({ initialArtistUrl }: ProFitTabProps = {}) => {
   const [view, setView] = useState<View>("landing");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportState | null>(null);
@@ -61,14 +65,20 @@ export const ProFitTab = () => {
     }
   }, []);
 
-  // Auto-run ProFit if user signed up with a Spotify artist
+  // Load from sidebar click (initialArtistUrl)
   useEffect(() => {
     if (autoRanRef.current || report || loading) return;
+    if (initialArtistUrl) {
+      autoRanRef.current = true;
+      handleAnalyze(initialArtistUrl);
+      return;
+    }
+    // Auto-run ProFit if user signed up with a Spotify artist
     const artistId = profile?.spotify_artist_id;
     if (!artistId) return;
     autoRanRef.current = true;
     handleAnalyze(`https://open.spotify.com/artist/${artistId}`);
-  }, [profile, report, loading, handleAnalyze]);
+  }, [profile, report, loading, handleAnalyze, initialArtistUrl]);
 
   if (view === "chat" && report) {
     return (
