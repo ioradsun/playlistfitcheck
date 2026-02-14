@@ -1,13 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { SongFitPost } from "./types";
 import { SongFitPostCard } from "./SongFitPostCard";
-import { SongFitCreatePost } from "./SongFitCreatePost";
 import { SongFitComments } from "./SongFitComments";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 
@@ -66,16 +62,8 @@ export function SongFitFeed() {
         <SongFitInlineComposer onPostCreated={fetchPosts} />
       )}
 
-      {/* Search */}
-      <div className="relative px-3 pb-3">
-        <Search size={14} className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search tracks or captions..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9 h-9 text-sm"
-        />
-      </div>
+
+
 
       {/* Posts */}
       {loading ? (
