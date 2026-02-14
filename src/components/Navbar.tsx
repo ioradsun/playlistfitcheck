@@ -24,12 +24,12 @@ interface NavbarProps {
 }
 
 const TAB_ITEMS = [
-  { value: "songfit", label: "SongFit" },
-  { value: "profit", label: "ProFit" },
-  { value: "playlist", label: "PlaylistFit" },
-  { value: "mix", label: "MixFit" },
-  { value: "lyric", label: "LyricFit" },
-  { value: "hitfit", label: "HitFit" },
+  { value: "songfit", label: "SongFit", path: "/SongFit" },
+  { value: "profit", label: "ProFit", path: "/ProFit" },
+  { value: "playlist", label: "PlaylistFit", path: "/PlaylistFit" },
+  { value: "mix", label: "MixFit", path: "/MixFit" },
+  { value: "lyric", label: "LyricFit", path: "/LyricFit" },
+  { value: "hitfit", label: "HitFit", path: "/HitFit" },
 ];
 
 export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
@@ -60,7 +60,7 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
             {TAB_ITEMS.map((tab) => (
               <button
                 key={tab.value}
-                onClick={() => onTabChange(tab.value)}
+                onClick={() => { onTabChange(tab.value); navigate(tab.path); }}
                 className={`px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
                   activeTab === tab.value
                     ? "bg-primary text-primary-foreground"

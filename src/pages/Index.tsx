@@ -49,6 +49,15 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
   </motion.div>
 );
 
+const PATH_TO_TAB: Record<string, string> = {
+  "/SongFit": "songfit",
+  "/ProFit": "profit",
+  "/PlaylistFit": "playlist",
+  "/MixFit": "mix",
+  "/LyricFit": "lyric",
+  "/HitFit": "hitfit",
+};
+
 const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
   const location = useLocation();
@@ -57,7 +66,24 @@ const Index = () => {
   const profitAutoRef = useRef(false);
   const cameFromDashboardRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [activeTab, setActiveTab] = useState("songfit");
+  
+  // Derive active tab from URL path
+  const tabFromPath = PATH_TO_TAB[location.pathname] || "songfit";
+  const [activeTab, setActiveTabState] = useState(tabFromPath);
+  
+  // Sync tab when path changes (e.g. browser back/forward)
+  useEffect(() => {
+    const t = PATH_TO_TAB[location.pathname];
+    if (t && t !== activeTab) setActiveTabState(t);
+    // Redirect bare "/" to "/SongFit"
+    if (location.pathname === "/" && !location.state) {
+      navigate("/SongFit", { replace: true });
+    }
+  }, [location.pathname]);
+
+  const setActiveTab = useCallback((tab: string) => {
+    setActiveTabState(tab);
+  }, []);
   
   // Auto-switch to ProFit tab on first login if user has a Spotify artist linked
   useEffect(() => {
@@ -65,9 +91,12 @@ const Index = () => {
     // Only auto-switch if no location state is driving a specific tab
     const state = location.state as any;
     if (state?.reportData || state?.autoRun || state?.loadMixProject || state?.loadLyric) return;
+    // Only auto-switch if on default route
+    if (location.pathname !== "/") return;
     profitAutoRef.current = true;
-    setActiveTab("profit");
-  }, [profile, location.state]);
+    setActiveTabState("profit");
+    navigate("/ProFit", { replace: true });
+  }, [profile, location.state, location.pathname, navigate]);
   const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
@@ -208,8 +237,9 @@ const Index = () => {
     
     if (state?.returnTab) {
       // Came back from auth – restore previous tab
+      const TAB_TO_PATH: Record<string, string> = { songfit: "/SongFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit" };
       setActiveTab(state.returnTab);
-      window.history.replaceState({}, "", "/");
+      navigate(TAB_TO_PATH[state.returnTab] || "/SongFit", { replace: true });
       // Don't set autoRunRef so other state handlers can still fire if combined
       if (!state.reportData && !state.autoRun && !state.loadMixProject && !state.loadLyric) return;
     }
@@ -217,7 +247,7 @@ const Index = () => {
     if (state?.reportData) {
       autoRunRef.current = true;
       cameFromDashboardRef.current = true;
-      window.history.replaceState({}, "", "/");
+      navigate("/PlaylistFit", { replace: true });
       const { input, output, vibeAnalysis: vibe, songFitAnalysis: songFit, trackList, songUrl } = state.reportData;
       setResult({ output, input, name: input.playlistName, key: Date.now(), trackList, songUrl });
       setVibeAnalysis(vibe ?? null);
@@ -228,7 +258,7 @@ const Index = () => {
       autoRunRef.current = true;
       cameFromDashboardRef.current = true;
       const { playlistUrl, songUrl } = state.autoRun;
-      window.history.replaceState({}, "", "/");
+      navigate("/PlaylistFit", { replace: true });
       if (!playlistUrl) return;
 
       (async () => {
@@ -249,13 +279,13 @@ const Index = () => {
     } else if (state?.loadMixProject) {
       autoRunRef.current = true;
       cameFromDashboardRef.current = true;
-      window.history.replaceState({}, "", "/");
+      navigate("/MixFit", { replace: true });
       setLoadedMixProject(state.loadMixProject);
       setActiveTab("mix");
     } else if (state?.loadLyric) {
       autoRunRef.current = true;
       cameFromDashboardRef.current = true;
-      window.history.replaceState({}, "", "/");
+      navigate("/LyricFit", { replace: true });
       setLoadedLyric(state.loadLyric);
       setActiveTab("lyric");
     }
