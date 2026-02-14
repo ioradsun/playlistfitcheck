@@ -1,38 +1,34 @@
 import { motion } from "framer-motion";
-import { PageBadge } from "@/components/PageBadge";
 
 export default function OurStory() {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-2xl mx-auto px-4 pt-8 pb-12 space-y-4">
-        <PageBadge label="Our Story" subtitle="See how tools.fm found its fit." />
-        <motion.div
-          className="glass-card rounded-xl p-6 space-y-5"
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            <a
-              href="https://open.spotify.com/artist/1PlkAOmfFYqBYFpN8jDj4v?si=ZKcGkrQ2RgGnKN-IRsIXEA"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline underline-offset-2 font-semibold"
-            >
-              Ajan Patel
-            </a>{" "}
-            — Son — makes music.
-          </p>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Sundeep Patel — Father — makes tech.
-          </p>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Ajan Patel has problems. Sundeep Patel has solutions.
-          </p>
-          <p className="text-sm text-primary font-semibold leading-relaxed">
-            tools.fm was born.
-          </p>
-        </motion.div>
-      </div>
+    <div className="max-w-2xl mx-auto px-4 pt-8 pb-12 space-y-4">
+      <motion.div
+        className="glass-card rounded-xl p-6 space-y-5"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          <a
+            href="https://open.spotify.com/artist/1PlkAOmfFYqBYFpN8jDj4v?si=ZKcGkrQ2RgGnKN-IRsIXEA"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline underline-offset-2 font-semibold"
+          >
+            Ajan Patel
+          </a>{" "}
+          — Son — makes music.
+        </p>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Sundeep Patel — Father — makes tech.
+        </p>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Ajan Patel has problems. Sundeep Patel has solutions.
+        </p>
+        <p className="text-sm text-primary font-semibold leading-relaxed">
+          tools.fm was born.
+        </p>
+      </motion.div>
     </div>
   );
 }
