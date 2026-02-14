@@ -206,6 +206,14 @@ const Index = () => {
     const state = location.state as any;
     if (autoRunRef.current) return;
     
+    if (state?.returnTab) {
+      // Came back from auth – restore previous tab
+      setActiveTab(state.returnTab);
+      window.history.replaceState({}, "", "/");
+      // Don't set autoRunRef so other state handlers can still fire if combined
+      if (!state.reportData && !state.autoRun && !state.loadMixProject && !state.loadLyric) return;
+    }
+
     if (state?.reportData) {
       autoRunRef.current = true;
       cameFromDashboardRef.current = true;
