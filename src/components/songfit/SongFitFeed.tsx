@@ -71,7 +71,7 @@ export function SongFitFeed() {
       )}
 
       {/* Comments side panel */}
-      <SongFitComments postId={commentPostId} onClose={() => { setCommentPostId(null); fetchPosts(); }} />
+      <SongFitComments postId={commentPostId} onClose={() => setCommentPostId(null)} />
     </div>
   );
 }

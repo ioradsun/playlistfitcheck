@@ -102,13 +102,15 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
       </div>
 
       {/* Action Row */}
-      <div className="flex items-center justify-between px-2 pt-1 pb-1">
+      <div className="flex items-center px-2 pt-1 pb-1">
         <div className="flex items-center -ml-1">
-          <button onClick={toggleLike} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
-            <Heart size={24} className={liked ? "fill-red-500 text-red-500" : "text-foreground"} />
+          <button onClick={toggleLike} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
+            <Heart size={22} className={liked ? "fill-red-500 text-red-500" : "text-foreground"} />
+            {likesCount > 0 && <span className="text-xs text-muted-foreground">{likesCount}</span>}
           </button>
-          <button onClick={() => onOpenComments(post.id)} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
-            <MessageCircle size={24} className="text-foreground" />
+          <button onClick={() => onOpenComments(post.id)} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
+            <MessageCircle size={22} className="text-foreground" />
+            {post.comments_count > 0 && <span className="text-xs text-muted-foreground">{post.comments_count}</span>}
           </button>
         </div>
       </div>
