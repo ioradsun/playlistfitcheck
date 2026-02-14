@@ -24,7 +24,7 @@ interface NavbarProps {
 }
 
 const TAB_ITEMS = [
-  { value: "songfit", label: "SongFit", path: "/SongFit" },
+  { value: "songfit", label: "CrowdFit", path: "/SongFit" },
   { value: "profit", label: "ProFit", path: "/ProFit" },
   { value: "playlist", label: "PlaylistFit", path: "/PlaylistFit" },
   { value: "mix", label: "MixFit", path: "/MixFit" },
