@@ -10,6 +10,7 @@ import type { PlaylistInput as PlaylistInputType } from "@/lib/playlistHealthEng
 import { SAMPLE_PLAYLIST, SAMPLE_EDITORIAL } from "@/lib/playlistHealthEngine";
 
 import { getSessionId } from "@/lib/sessionId";
+import { PageBadge } from "@/components/PageBadge";
 
 interface Props {
   onAnalyze: (data: PlaylistInputType & { _songUrl?: string }) => void;
@@ -152,17 +153,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="text-center space-y-3">
-        <motion.div
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-mono"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <BarChart3 size={14} />
-          Know your fit. Pitch with confidence.
-        </motion.div>
-      </div>
+      <PageBadge label="PlaylistFit" subtitle="See if your song fits playlists." />
 
       {/* Combined URL inputs */}
       <div className="glass-card rounded-xl p-4 space-y-3 relative z-50" style={{ overflow: 'visible' }}>
