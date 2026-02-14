@@ -15,7 +15,7 @@ export default function OurStory() {
             rel="noopener noreferrer"
             className="text-primary hover:underline underline-offset-2 font-semibold"
           >
-            Ajan
+            ajan
           </a>{" "}
           makes music, so he knows the 3am doubt — is the mix ready, should you pitch it, is it actually good? His dad builds tech. Instead of adding more opinions to the noise, they built tools for clarity.
         </p>
