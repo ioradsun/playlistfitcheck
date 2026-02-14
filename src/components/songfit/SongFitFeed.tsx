@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { SongFitPost } from "./types";
 import { SongFitPostCard } from "./SongFitPostCard";
 import { SongFitComments } from "./SongFitComments";
+import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 
 export function SongFitFeed() {
@@ -12,6 +13,7 @@ export function SongFitFeed() {
   const [posts, setPosts] = useState<SongFitPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [likesPostId, setLikesPostId] = useState<string | null>(null);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -64,14 +66,15 @@ export function SongFitFeed() {
               key={post.id}
               post={post}
               onOpenComments={setCommentPostId}
+              onOpenLikes={setLikesPostId}
               onRefresh={fetchPosts}
             />
           ))}
         </div>
       )}
 
-      {/* Comments side panel */}
       <SongFitComments postId={commentPostId} onClose={() => setCommentPostId(null)} />
+      <SongFitLikesList postId={likesPostId} onClose={() => setLikesPostId(null)} />
     </div>
   );
 }

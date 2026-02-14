@@ -495,6 +495,13 @@ export type Database = {
             referencedRelation: "songfit_posts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "songfit_likes_user_id_profiles_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       songfit_posts: {
