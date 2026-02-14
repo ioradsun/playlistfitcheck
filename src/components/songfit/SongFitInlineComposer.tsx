@@ -162,57 +162,52 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
 
         {/* Compose area */}
         <div className="flex-1 min-w-0">
-          {/* Selected track chip */}
-          {selectedTrack ? (
-            <div className="flex items-center gap-2.5 mb-2 p-2.5 rounded-xl bg-muted/60 border border-border/50 group">
-              {selectedTrack.albumArt ? (
-                <img src={selectedTrack.albumArt} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              {selectedTrack ? (
+                <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50 group">
+                  {selectedTrack.albumArt ? (
+                    <img src={selectedTrack.albumArt} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <Music size={16} className="text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate leading-tight">{selectedTrack.title}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      {selectedTrack.artists.map(a => a.name).join(", ")}
+                    </p>
+                  </div>
+                  <button
+                    onClick={clear}
+                    className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
               ) : (
-                <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                  <Music size={18} className="text-muted-foreground" />
+                <div className="relative">
+                  <input
+                    ref={inputRef}
+                    value={query}
+                    onChange={e => { setQuery(e.target.value); setSelectedTrack(null); }}
+                    onKeyDown={handleKeyDown}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => setTimeout(() => setFocused(false), 200)}
+                    placeholder="Search or paste Spotify link"
+                    className="w-full bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none py-2 pr-8"
+                    disabled={publishing}
+                  />
+                  {searching && (
+                    <Loader2 size={16} className="absolute right-1 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  )}
                 </div>
               )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate leading-tight">{selectedTrack.title}</p>
-                <p className="text-xs text-muted-foreground truncate mt-0.5">
-                  {selectedTrack.artists.map(a => a.name).join(", ")}
-                </p>
-              </div>
-              <button
-                onClick={clear}
-                className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100"
-              >
-                <X size={14} />
-              </button>
             </div>
-          ) : (
-            /* Search input area — looks like a plain text area */
-            <div className="relative">
-              <input
-                ref={inputRef}
-                value={query}
-                onChange={e => { setQuery(e.target.value); setSelectedTrack(null); }}
-                onKeyDown={handleKeyDown}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setTimeout(() => setFocused(false), 200)}
-                placeholder="Search or paste Spotify link"
-                className="w-full bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none py-2 pr-8"
-                disabled={publishing}
-              />
-              {searching && (
-                <Loader2 size={16} className="absolute right-1 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
-              )}
-            </div>
-          )}
-
-          {/* Toolbar row */}
-          <div className="flex items-center justify-between mt-1 pt-2 border-t border-border/30">
-            <p className="text-xs text-muted-foreground/50">
-              {selectedTrack ? "Ready to share" : "Search or paste Spotify link"}
-            </p>
             <Button
               size="sm"
-              className="h-8 px-5 rounded-full text-xs font-bold"
+              className="h-9 px-5 rounded-full text-xs font-bold shrink-0"
               disabled={!selectedTrack || publishing}
               onClick={publish}
             >
