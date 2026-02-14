@@ -70,7 +70,7 @@ const TAB_LABELS: Record<string, string> = {
 };
 
 const TAB_SUBTITLES: Record<string, string> = {
-  songfit: "Share and discover music with the community.",
+  songfit: "See how your song fits listeners.",
   profit: "See how your Spotify fits making money.",
   playlist: "See if your song fits playlists.",
   mix: "See which mix fits best.",
