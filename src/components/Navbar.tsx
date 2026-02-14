@@ -131,10 +131,10 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
             </DropdownMenu>
           ) : (
             <>
-              <Button variant="ghost" size="sm" onClick={() => navigate("/auth")}>
+              <Button variant="ghost" size="sm" onClick={() => navigate("/auth", { state: { returnTab: activeTab } })}>
                 Log in
               </Button>
-              <Button size="sm" onClick={() => navigate("/auth?mode=signup")}>
+              <Button size="sm" onClick={() => navigate("/auth?mode=signup", { state: { returnTab: activeTab } })}>
                 Sign Up For Free
               </Button>
             </>
