@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, MessageCircle, Bookmark, Share2, User } from "lucide-react";
+import { Heart, MessageCircle, Bookmark, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,9 +109,6 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
           </button>
           <button onClick={() => onOpenComments(post.id)} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <MessageCircle size={24} className="text-foreground" />
-          </button>
-          <button onClick={handleShare} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
-            <Share2 size={24} className="text-foreground" />
           </button>
         </div>
         <button onClick={toggleSave} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
