@@ -154,13 +154,19 @@ serve(async (req) => {
     const artistId = parseArtistId(artistUrl);
     const token = await getSpotifyToken();
 
-    // Fetch all Spotify data in parallel
-    const [artist, topTracksData, relatedData, albumsData] = await Promise.all([
+    // Fetch Spotify data in parallel (related-artists may 404 in Dev Mode)
+    const [artist, topTracksData, albumsData] = await Promise.all([
       spotifyGet(`/artists/${artistId}`, token),
       spotifyGet(`/artists/${artistId}/top-tracks?market=US`, token),
-      spotifyGet(`/artists/${artistId}/related-artists`, token),
       spotifyGet(`/artists/${artistId}/albums?include_groups=album,single&limit=50`, token),
     ]);
+
+    let relatedData: any = { artists: [] };
+    try {
+      relatedData = await spotifyGet(`/artists/${artistId}/related-artists`, token);
+    } catch (e) {
+      console.warn("Related artists unavailable (likely Dev Mode):", (e as Error).message);
+    }
 
     const topTracks = topTracksData.tracks || [];
     const relatedArtists = (relatedData.artists || []).slice(0, 20);
