@@ -181,11 +181,6 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
         </div>
       </div>
 
-      {/* Trust */}
-      <p className="text-xs text-muted-foreground/60 text-center">
-        No login required. We only analyze public Spotify data.
-      </p>
-
       {/* Feature pills */}
       <div className="flex flex-wrap justify-center gap-3 text-xs text-muted-foreground">
         {[
