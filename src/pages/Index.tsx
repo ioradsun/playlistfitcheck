@@ -300,7 +300,7 @@ const Index = () => {
         return <div className="flex-1 flex items-start justify-center px-4 py-8"><SongFitTab /></div>;
       case "playlist":
         return (
-          <div className="flex-1 flex items-center justify-center px-4 py-8">
+           <div className="flex-1 flex items-start justify-center px-4 py-8">
             {result && !isFullyLoaded ? (
               <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
             ) : result && isFullyLoaded ? (
@@ -323,9 +323,9 @@ const Index = () => {
       case "mix":
         return <div className="flex-1 flex items-start justify-center px-4 py-8"><MixFitCheck initialProject={loadedMixProject} /></div>;
       case "lyric":
-        return <div className="flex-1 flex items-center justify-center px-4 py-8"><LyricFitTab initialLyric={loadedLyric} /></div>;
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><LyricFitTab initialLyric={loadedLyric} /></div>;
       case "hitfit":
-        return <div className="flex-1 flex items-center justify-center px-4 py-8"><HitFitTab /></div>;
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><HitFitTab /></div>;
       default:
         return null;
     }
