@@ -64,8 +64,8 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
                 onClick={() => { onTabChange?.(tab.value); navigate(tab.path); }}
                 className={`px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
                   isActive
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:text-primary"
                 }`}
               >
                 {tab.label}
@@ -79,8 +79,8 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
             onClick={() => navigate("/our-story")}
             className={`px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors hidden sm:inline-block ${
               location.pathname === "/our-story"
-                ? "bg-secondary text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-primary text-primary-foreground"
+                : "text-foreground hover:text-primary"
             }`}
           >
             Our Story
@@ -146,8 +146,8 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
                 onClick={() => navigate("/auth", { state: { returnTab: activeTab } })}
                 className={`px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
                   location.pathname === "/auth" && !location.search.includes("mode=signup")
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:text-primary"
                 }`}
               >
                 Log in
@@ -156,8 +156,8 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
                 onClick={() => navigate("/auth?mode=signup", { state: { returnTab: activeTab } })}
                 className={`px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
                   location.pathname === "/auth" && location.search.includes("mode=signup")
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:text-primary"
                 }`}
               >
                 Sign Up For Free
