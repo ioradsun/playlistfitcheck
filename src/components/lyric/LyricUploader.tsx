@@ -1,22 +1,27 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Upload, Music, Loader2, FileAudio } from "lucide-react";
 import { PageBadge } from "@/components/PageBadge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { RecentProjects } from "@/components/RecentProjects";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Props {
   onTranscribe: (file: File) => void;
+  onLoadSaved?: (lyric: any) => void;
   loading: boolean;
 }
 
-export function LyricUploader({ onTranscribe, loading }: Props) {
+export function LyricUploader({ onTranscribe, onLoadSaved, loading }: Props) {
+  const { user } = useAuth();
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const ACCEPTED_TYPES = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/mp4", "audio/m4a", "audio/ogg", "audio/flac"];
-  const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+  const MAX_SIZE = 20 * 1024 * 1024;
 
   const handleFile = (file: File) => {
     if (!ACCEPTED_TYPES.some(t => file.type === t || file.name.match(/\.(mp3|wav|m4a|ogg|flac)$/i))) {
@@ -43,6 +48,22 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
     }
     onTranscribe(selectedFile);
   };
+
+  const fetchSavedLyrics = useCallback(async () => {
+    if (!user) return [];
+    const { data } = await supabase.from("saved_lyrics").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5);
+    return data ?? [];
+  }, [user]);
+
+  const toItem = useCallback((l: any) => ({
+    id: l.id,
+    label: l.title !== "Unknown" ? l.title : l.filename || "Untitled",
+    meta: `${(l.lines as any[])?.length ?? 0} lines · ${new Date(l.created_at).toLocaleDateString()}`,
+  }), []);
+
+  const handleDeleteLyric = useCallback(async (id: string) => {
+    await supabase.from("saved_lyrics").delete().eq("id", id);
+  }, []);
 
   return (
     <motion.div
@@ -114,6 +135,15 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
           {loading ? "Transcribing..." : "Transcribe Lyrics"}
         </Button>
       </div>
+
+      {onLoadSaved && (
+        <RecentProjects
+          fetcher={fetchSavedLyrics}
+          toItem={toItem}
+          onLoad={onLoadSaved}
+          onDelete={handleDeleteLyric}
+        />
+      )}
     </motion.div>
   );
 }

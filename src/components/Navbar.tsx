@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Music, LayoutDashboard, User, Shield, Bell, BookOpen } from "lucide-react";
+import { LogOut, Music, User, Shield, Bell, BookOpen } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationsPanel } from "@/components/NotificationsPanel";
@@ -123,9 +123,6 @@ export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-card border-border z-[100]">
-                <DropdownMenuItem onClick={() => navigate("/dashboard")} className="cursor-pointer gap-2">
-                  <LayoutDashboard size={14} /> Dashboard
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer gap-2">
                   <User size={14} /> Profile
                 </DropdownMenuItem>

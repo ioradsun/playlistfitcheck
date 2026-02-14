@@ -11,7 +11,6 @@ import OurStory from "./pages/OurStory";
 import Admin from "./pages/Admin";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
-import Dashboard from "./pages/Dashboard";
 import PublicProfile from "./pages/PublicProfile";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
@@ -44,7 +43,6 @@ const App = () => (
             <Route path="/how-scoring-works" element={<WithNavbar><HowScoringWorks /></WithNavbar>} />
             <Route path="/our-story" element={<WithNavbar><OurStory /></WithNavbar>} />
             <Route path="/admin" element={<WithNavbar><Admin /></WithNavbar>} />
-            <Route path="/dashboard" element={<WithNavbar><Dashboard /></WithNavbar>} />
             <Route path="/auth" element={<WithNavbar><Auth /></WithNavbar>} />
             <Route path="/profile" element={<WithNavbar><Profile /></WithNavbar>} />
             <Route path="/reset-password" element={<WithNavbar><ResetPassword /></WithNavbar>} />

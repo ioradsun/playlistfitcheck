@@ -64,7 +64,6 @@ const Index = () => {
   const navigate = useNavigate();
   const autoRunRef = useRef(false);
   const profitAutoRef = useRef(false);
-  const cameFromDashboardRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   
   // Derive active tab from URL path
@@ -219,17 +218,12 @@ const Index = () => {
   }, [isFullyLoaded, result, vibeAnalysis, songFitAnalysis]);
 
   const handleBack = useCallback(() => {
-    if (cameFromDashboardRef.current) {
-      cameFromDashboardRef.current = false;
-      navigate("/dashboard");
-      return;
-    }
     setResult(null);
     setVibeAnalysis(null);
     setVibeLoading(false);
     setSongFitAnalysis(null);
     setSongFitLoading(false);
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
     const state = location.state as any;
@@ -246,7 +240,6 @@ const Index = () => {
 
     if (state?.reportData) {
       autoRunRef.current = true;
-      cameFromDashboardRef.current = true;
       navigate("/PlaylistFit", { replace: true });
       const { input, output, vibeAnalysis: vibe, songFitAnalysis: songFit, trackList, songUrl } = state.reportData;
       setResult({ output, input, name: input.playlistName, key: Date.now(), trackList, songUrl });
@@ -256,7 +249,6 @@ const Index = () => {
       setSongFitLoading(false);
     } else if (state?.autoRun) {
       autoRunRef.current = true;
-      cameFromDashboardRef.current = true;
       const { playlistUrl, songUrl } = state.autoRun;
       navigate("/PlaylistFit", { replace: true });
       if (!playlistUrl) return;
@@ -278,13 +270,11 @@ const Index = () => {
       })();
     } else if (state?.loadMixProject) {
       autoRunRef.current = true;
-      cameFromDashboardRef.current = true;
       navigate("/MixFit", { replace: true });
       setLoadedMixProject(state.loadMixProject);
       setActiveTab("mix");
     } else if (state?.loadLyric) {
       autoRunRef.current = true;
-      cameFromDashboardRef.current = true;
       navigate("/LyricFit", { replace: true });
       setLoadedLyric(state.loadLyric);
       setActiveTab("lyric");
