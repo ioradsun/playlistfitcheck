@@ -1,12 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 
 import { Upload, Music, Loader2, FileAudio } from "lucide-react";
 import { PageBadge } from "@/components/PageBadge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { RecentProjects } from "@/components/RecentProjects";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 
 interface Props {
   onTranscribe: (file: File) => void;
@@ -14,8 +11,7 @@ interface Props {
   loading: boolean;
 }
 
-export function LyricUploader({ onTranscribe, onLoadSaved, loading }: Props) {
-  const { user } = useAuth();
+export function LyricUploader({ onTranscribe, loading }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -49,162 +45,73 @@ export function LyricUploader({ onTranscribe, onLoadSaved, loading }: Props) {
     onTranscribe(selectedFile);
   };
 
-  const fetchSavedLyrics = useCallback(async () => {
-    if (!user) return [];
-    const { data } = await supabase.from("saved_lyrics").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5);
-    return data ?? [];
-  }, [user]);
-
-  const toItem = useCallback((l: any) => ({
-    id: l.id,
-    label: l.title !== "Unknown" ? l.title : l.filename || "Untitled",
-    meta: `${(l.lines as any[])?.length ?? 0} lines · ${new Date(l.created_at).toLocaleDateString()}`,
-  }), []);
-
-  const handleDeleteLyric = useCallback(async (id: string) => {
-    await supabase.from("saved_lyrics").delete().eq("id", id);
-  }, []);
-
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
       <PageBadge label="LyricFit" subtitle="Make sure your lyrics fit captions." />
 
-      {onLoadSaved ? (
-        <RecentProjects
-          fetcher={fetchSavedLyrics}
-          toItem={toItem}
-          onLoad={onLoadSaved}
-          onDelete={handleDeleteLyric}
+      <div className="space-y-4">
+        <div
+          className={`glass-card rounded-xl p-8 transition-colors cursor-pointer ${
+            dragOver ? "border-primary/60 bg-primary/5" : ""
+          }`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => !loading && inputRef.current?.click()}
         >
-          <div className="space-y-4">
-            <div
-              className={`glass-card rounded-xl p-8 transition-colors cursor-pointer ${
-                dragOver ? "border-primary/60 bg-primary/5" : ""
-              }`}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              onClick={() => !loading && inputRef.current?.click()}
-            >
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".mp3,.wav,.m4a,.ogg,.flac,audio/*"
-                className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                disabled={loading}
-              />
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".mp3,.wav,.m4a,.ogg,.flac,audio/*"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+            disabled={loading}
+          />
 
-              <div className="flex flex-col items-center gap-4 text-center">
-                {selectedFile ? (
-                  <>
-                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Music size={28} className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium truncate max-w-xs">{selectedFile.name}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                      <Upload size={28} className="text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Drop your song here or click to browse</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        MP3, WAV, M4A, OGG, FLAC · Max 75MB
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-center">
-              <Button
-                onClick={handleSubmit}
-                className="glow-primary"
-                disabled={loading || !selectedFile}
-              >
-                {loading ? (
-                  <Loader2 size={16} className="mr-1 animate-spin" />
-                ) : (
-                  <FileAudio size={16} className="mr-1" />
-                )}
-                {loading ? "Transcribing..." : "Transcribe Lyrics"}
-              </Button>
-            </div>
+          <div className="flex flex-col items-center gap-4 text-center">
+            {selectedFile ? (
+              <>
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Music size={28} className="text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium truncate max-w-xs">{selectedFile.name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                  <Upload size={28} className="text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Drop your song here or click to browse</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    MP3, WAV, M4A, OGG, FLAC · Max 75MB
+                  </p>
+                </div>
+              </>
+            )}
           </div>
-        </RecentProjects>
-      ) : (
-        <>
-          <div
-            className={`glass-card rounded-xl p-8 transition-colors cursor-pointer ${
-              dragOver ? "border-primary/60 bg-primary/5" : ""
-            }`}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => !loading && inputRef.current?.click()}
+        </div>
+
+        <div className="flex justify-center">
+          <Button
+            onClick={handleSubmit}
+            className="glow-primary"
+            disabled={loading || !selectedFile}
           >
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".mp3,.wav,.m4a,.ogg,.flac,audio/*"
-              className="hidden"
-              onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-              disabled={loading}
-            />
-
-            <div className="flex flex-col items-center gap-4 text-center">
-              {selectedFile ? (
-                <>
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Music size={28} className="text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium truncate max-w-xs">{selectedFile.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                    <Upload size={28} className="text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Drop your song here or click to browse</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      MP3, WAV, M4A, OGG, FLAC · Max 75MB
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-center">
-            <Button
-              onClick={handleSubmit}
-              className="glow-primary"
-              disabled={loading || !selectedFile}
-            >
-              {loading ? (
-                <Loader2 size={16} className="mr-1 animate-spin" />
-              ) : (
-                <FileAudio size={16} className="mr-1" />
-              )}
-              {loading ? "Transcribing..." : "Transcribe Lyrics"}
-            </Button>
-          </div>
-        </>
-      )}
+            {loading ? (
+              <Loader2 size={16} className="mr-1 animate-spin" />
+            ) : (
+              <FileAudio size={16} className="mr-1" />
+            )}
+            {loading ? "Transcribing..." : "Transcribe Lyrics"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

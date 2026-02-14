@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { MixProjectForm } from "@/components/mix/MixProjectForm";
 import { MixCard } from "@/components/mix/MixCard";
 import { GlobalTimeline } from "@/components/mix/GlobalTimeline";
-import { RecentProjects } from "@/components/RecentProjects";
 import { PageBadge } from "@/components/PageBadge";
 import { useAudioEngine, type AudioMix } from "@/hooks/useAudioEngine";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
@@ -202,25 +201,11 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
   const activeMixes = mixes.filter((m) => m.buffer);
 
   // If no project created yet, show form + saved projects
-  const toMixItem = useCallback((p: MixProjectData) => ({
-    id: p.id,
-    label: p.title,
-    meta: `${p.mixes.length} mix${p.mixes.length !== 1 ? "es" : ""} · ${new Date(p.updatedAt).toLocaleDateString()}`,
-  }), []);
-
   if (!projectId) {
     return (
       <div className="w-full max-w-2xl mx-auto space-y-4">
         <PageBadge label="MixFit" subtitle="See which mix fits best." />
-        <RecentProjects
-          fetcher={list}
-          toItem={toMixItem}
-          onLoad={handleLoadProject}
-          onDelete={remove}
-          refreshKey={refreshKey}
-        >
-          <MixProjectForm onSubmit={handleCreate} />
-        </RecentProjects>
+        <MixProjectForm onSubmit={handleCreate} />
       </div>
     );
   }
