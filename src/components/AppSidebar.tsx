@@ -472,12 +472,20 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                 <SidebarMenuButton
                   tooltip="About"
                   isActive={location.pathname === "/about" || location.pathname === "/our-story"}
-                  onClick={() => { navigate("/about"); setAboutExpanded(true); closeMobileIfNeeded(); }}
+                  onClick={() => { 
+                    if (location.pathname === "/about") {
+                      setAboutExpanded(prev => !prev);
+                    } else {
+                      navigate("/about"); 
+                      setAboutExpanded(true); 
+                      closeMobileIfNeeded(); 
+                    }
+                  }}
                 >
                   <Info size={16} />
                   <span>About</span>
                 </SidebarMenuButton>
-                {!collapsed && aboutExpanded && (
+                {!collapsed && (aboutExpanded || location.pathname === "/about" || location.pathname === "/our-story") && (
                   <ul className="ml-6 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
                     <li>
                       <button
