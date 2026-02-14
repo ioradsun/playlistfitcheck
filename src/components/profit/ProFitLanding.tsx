@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { ArrowRight, Loader2, TrendingUp, DollarSign, BarChart3, Music, X } from "lucide-react";
-import { PageBadge } from "@/components/PageBadge";
+
 import { supabase } from "@/integrations/supabase/client";
 
 interface SpotifyArtistResult {
@@ -86,10 +86,6 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
 
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col items-center gap-6">
-      {/* Hero */}
-      <div className="text-center space-y-3">
-        <PageBadge label="ProFit" subtitle="See how your Spotify fits making money." />
-      </div>
 
       {/* Artist Search */}
       <div className="w-full max-w-lg space-y-3">
