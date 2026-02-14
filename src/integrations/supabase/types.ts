@@ -113,6 +113,150 @@ export type Database = {
         }
         Relationships: []
       }
+      profit_artists: {
+        Row: {
+          created_at: string
+          followers_total: number | null
+          genres_json: Json | null
+          id: string
+          image_url: string | null
+          name: string
+          popularity: number | null
+          raw_artist_json: Json | null
+          signals_json: Json | null
+          spotify_artist_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          followers_total?: number | null
+          genres_json?: Json | null
+          id?: string
+          image_url?: string | null
+          name: string
+          popularity?: number | null
+          raw_artist_json?: Json | null
+          signals_json?: Json | null
+          spotify_artist_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          followers_total?: number | null
+          genres_json?: Json | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          popularity?: number | null
+          raw_artist_json?: Json | null
+          signals_json?: Json | null
+          spotify_artist_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profit_chats: {
+        Row: {
+          created_at: string
+          id: string
+          messages_json: Json
+          report_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          messages_json?: Json
+          report_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          messages_json?: Json
+          report_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profit_chats_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "profit_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profit_plan_variants: {
+        Row: {
+          created_at: string
+          id: string
+          plan_json: Json
+          report_id: string
+          variant_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          plan_json: Json
+          report_id: string
+          variant_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          plan_json?: Json
+          report_id?: string
+          variant_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profit_plan_variants_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "profit_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profit_reports: {
+        Row: {
+          artist_id: string
+          blueprint_json: Json
+          created_at: string
+          id: string
+          model_info: string | null
+          share_token: string | null
+          signals_json: Json | null
+        }
+        Insert: {
+          artist_id: string
+          blueprint_json: Json
+          created_at?: string
+          id?: string
+          model_info?: string | null
+          share_token?: string | null
+          signals_json?: Json | null
+        }
+        Update: {
+          artist_id?: string
+          blueprint_json?: Json
+          created_at?: string
+          id?: string
+          model_info?: string | null
+          share_token?: string | null
+          signals_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profit_reports_artist_id_fkey"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "profit_artists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_lyrics: {
         Row: {
           artist: string

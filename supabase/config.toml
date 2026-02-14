@@ -20,3 +20,21 @@ verify_jwt = false
 
 [functions.spotify-oembed]
 verify_jwt = false
+
+[functions.profit-analyze]
+verify_jwt = false
+
+[functions.profit-chat]
+verify_jwt = false
+
+[functions.profit-focus-plan]
+verify_jwt = false
+
+[functions.song-fit]
+verify_jwt = false
+
+[functions.lyric-transcribe]
+verify_jwt = false
+
+[functions.hit-fit]
+verify_jwt = false
