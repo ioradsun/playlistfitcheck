@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import HowScoringWorks from "./pages/HowScoringWorks";
 import OurStory from "./pages/OurStory";
 import About from "./pages/About";
+import AjansMusic from "./pages/AjansMusic";
 import Admin from "./pages/Admin";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
@@ -36,8 +37,9 @@ const App = () => (
               <Route path="/LyricFit" element={<Index />} />
               <Route path="/HitFit" element={<Index />} />
               <Route path="/how-scoring-works" element={<PageLayout title="How Scoring Works"><HowScoringWorks /></PageLayout>} />
-              <Route path="/about" element={<PageLayout title="About" subtitle="What we built and why."><About /></PageLayout>} />
-              <Route path="/our-story" element={<PageLayout title="Our Story" subtitle="See how tools.fm found its fit."><OurStory /></PageLayout>} />
+              <Route path="/about" element={<PageLayout title="The Tools" subtitle="What we built and why."><About /></PageLayout>} />
+              <Route path="/our-story" element={<PageLayout title="The Story" subtitle="See how tools.fm found its fit."><OurStory /></PageLayout>} />
+              <Route path="/ajans-music" element={<PageLayout title="Ajan's Music" subtitle="The reason we're here."><AjansMusic /></PageLayout>} />
               <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />
               <Route path="/auth" element={<PageLayout title="Account"><Auth /></PageLayout>} />
               <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
