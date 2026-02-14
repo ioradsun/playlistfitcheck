@@ -1,11 +1,18 @@
 import { useState } from "react";
-import { Heart, MessageCircle, User } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { SongFitPost } from "./types";
 import { formatDistanceToNow } from "date-fns";
+import { ProfileHoverCard } from "./ProfileHoverCard";
+import { useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Props {
   post: SongFitPost;
@@ -16,16 +23,13 @@ interface Props {
 
 export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }: Props) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [liked, setLiked] = useState(post.user_has_liked ?? false);
-  const [saved, setSaved] = useState(post.user_has_saved ?? false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
-  const [captionExpanded, setCaptionExpanded] = useState(false);
+  const [isFollowing, setIsFollowing] = useState<boolean | null>(null);
+  const [followChecked, setFollowChecked] = useState(false);
 
-  const artists = (post.track_artists_json as any[]) || [];
-  const primaryArtist = artists[0];
-
-  // Spotify embed URL for iframe player
-  const embedUrl = `https://open.spotify.com/embed/track/${post.spotify_track_id}?utm_source=generator&theme=0`;
+  const isOwnPost = user?.id === post.user_id;
 
   const toggleLike = async () => {
     if (!user) { toast.error("Sign in to like posts"); return; }
@@ -44,49 +48,78 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
     }
   };
 
-  const toggleSave = async () => {
-    if (!user) { toast.error("Sign in to save posts"); return; }
-    const wasSaved = saved;
-    setSaved(!wasSaved);
-    try {
-      if (wasSaved) {
-        await supabase.from("songfit_saves").delete().eq("post_id", post.id).eq("user_id", user.id);
-      } else {
-        await supabase.from("songfit_saves").insert({ post_id: post.id, user_id: user.id });
-      }
-    } catch {
-      setSaved(wasSaved);
-    }
+  const checkFollow = async () => {
+    if (!user || isOwnPost || followChecked) return;
+    const { data } = await supabase.from("songfit_follows").select("id").eq("follower_user_id", user.id).eq("followed_user_id", post.user_id).maybeSingle();
+    setIsFollowing(!!data);
+    setFollowChecked(true);
   };
 
-  const handleShare = async () => {
+  const toggleFollow = async () => {
+    if (!user) { toast.error("Sign in to follow"); return; }
     try {
-      await navigator.clipboard.writeText(post.spotify_track_url);
-      toast.success("Spotify link copied!");
-    } catch {
-      toast.error("Failed to copy");
+      if (isFollowing) {
+        await supabase.from("songfit_follows").delete().eq("follower_user_id", user.id).eq("followed_user_id", post.user_id);
+        setIsFollowing(false);
+        toast.success("Unfollowed");
+      } else {
+        await supabase.from("songfit_follows").insert({ follower_user_id: user.id, followed_user_id: post.user_id });
+        setIsFollowing(true);
+        toast.success("Following!");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed");
     }
   };
 
   const displayName = post.profiles?.display_name || "Anonymous";
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
-  const tags = (post.tags_json as string[]) || [];
 
   return (
     <div className="border-b border-border/40">
       {/* Header */}
       <div className="flex items-center gap-3 px-3 py-2.5">
-        <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
-          {post.profiles?.avatar_url ? (
-            <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <User size={16} className="text-muted-foreground" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
-          <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
-        </div>
+        <ProfileHoverCard userId={post.user_id}>
+          <div className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+            onClick={() => navigate(`/u/${post.user_id}`)}
+          >
+            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20 shrink-0">
+              {post.profiles?.avatar_url ? (
+                <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <User size={16} className="text-muted-foreground" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
+              <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
+            </div>
+          </div>
+        </ProfileHoverCard>
+
+        {/* 3-dot menu */}
+        <DropdownMenu onOpenChange={(open) => { if (open) checkFollow(); }}>
+          <DropdownMenuTrigger asChild>
+            <button className="p-1.5 rounded-full hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors shrink-0">
+              <MoreHorizontal size={18} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => navigate(`/u/${post.user_id}`)}>
+              <ExternalLink size={14} className="mr-2" />
+              View Profile
+            </DropdownMenuItem>
+            {!isOwnPost && user && (
+              <DropdownMenuItem onClick={toggleFollow}>
+                {isFollowing ? (
+                  <><UserMinus size={14} className="mr-2" /> Unfollow</>
+                ) : (
+                  <><UserPlus size={14} className="mr-2" /> Follow</>
+                )}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Spotify Embed Player */}
