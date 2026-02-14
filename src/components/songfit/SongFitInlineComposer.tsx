@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X, Music } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -39,13 +38,13 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   const [selectedTrack, setSelectedTrack] = useState<TrackData | null>(null);
   const [publishing, setPublishing] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const initials = (profile?.display_name ?? user?.email ?? "?")
     .split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
   const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || undefined;
 
-  // Debounced search
   useEffect(() => {
     if (selectedTrack) return;
     if (!query.trim() || query.includes("spotify.com")) {
@@ -69,11 +68,9 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   }, [query, selectedTrack]);
 
   const selectTrack = useCallback(async (track: TrackResult) => {
-    setQuery(track.name + " — " + track.artists);
+    setQuery("");
     setResults([]);
     setFocused(false);
-
-    // Fetch full track data
     try {
       const { data, error } = await supabase.functions.invoke("songfit-track", {
         body: { trackUrl: track.url },
@@ -96,7 +93,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setSelectedTrack(data as TrackData);
-      setQuery(data.title + " — " + (data.artists || []).map((a: any) => a.name).join(", "));
+      setQuery("");
     } catch (e: any) {
       toast.error(e.message || "Failed to fetch track");
     } finally {
@@ -147,46 +144,75 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     setQuery("");
     setSelectedTrack(null);
     setResults([]);
+    inputRef.current?.focus();
   };
 
   const showDropdown = focused && results.length > 0 && !selectedTrack;
 
   return (
-    <div className="px-3 pt-3 pb-3 border-b border-border/40">
-      <div className="flex items-start gap-3">
-        <Avatar className="h-10 w-10 border border-border shrink-0 mt-0.5">
+    <div className="border-b border-border/40 transition-colors">
+      <div className="flex gap-3 px-4 pt-3 pb-3">
+        {/* Avatar */}
+        <Avatar className="h-10 w-10 border border-border shrink-0 mt-1">
           <AvatarImage src={avatarUrl} alt={profile?.display_name ?? "You"} />
           <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
             {initials}
           </AvatarFallback>
         </Avatar>
 
-        <div className="flex-1 min-w-0 relative">
-          <div className="flex items-center gap-2">
-            <div className="flex-1 relative">
-              <p className="text-sm font-medium text-muted-foreground mb-1.5">What you on right now?</p>
-              <Input
+        {/* Compose area */}
+        <div className="flex-1 min-w-0">
+          {/* Selected track chip */}
+          {selectedTrack ? (
+            <div className="flex items-center gap-2.5 mb-2 p-2.5 rounded-xl bg-muted/60 border border-border/50 group">
+              {selectedTrack.albumArt ? (
+                <img src={selectedTrack.albumArt} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                  <Music size={18} className="text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate leading-tight">{selectedTrack.title}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  {selectedTrack.artists.map(a => a.name).join(", ")}
+                </p>
+              </div>
+              <button
+                onClick={clear}
+                className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            /* Search input area — looks like a plain text area */
+            <div className="relative">
+              <input
+                ref={inputRef}
                 value={query}
                 onChange={e => { setQuery(e.target.value); setSelectedTrack(null); }}
                 onKeyDown={handleKeyDown}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setTimeout(() => setFocused(false), 200)}
-                placeholder="Search or paste Spotify link"
-                className="h-10 text-sm pr-8"
+                placeholder="What you on right now?"
+                className="w-full bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none py-2 pr-8"
                 disabled={publishing}
               />
-              {(query || selectedTrack) && (
-                <button onClick={clear} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  <X size={14} />
-                </button>
-              )}
               {searching && (
-                <Loader2 size={14} className="absolute right-8 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
+                <Loader2 size={16} className="absolute right-1 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
               )}
             </div>
+          )}
+
+          {/* Toolbar row */}
+          <div className="flex items-center justify-between mt-1 pt-2 border-t border-border/30">
+            <p className="text-xs text-muted-foreground/50">
+              {selectedTrack ? "Ready to share" : "Search or paste Spotify link"}
+            </p>
             <Button
               size="sm"
-              className="h-10 px-4 text-xs font-semibold shrink-0"
+              className="h-8 px-5 rounded-full text-xs font-bold"
               disabled={!selectedTrack || publishing}
               onClick={publish}
             >
@@ -194,34 +220,23 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
             </Button>
           </div>
 
-          {/* Selected track preview */}
-          {selectedTrack && (
-            <div className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-muted/50">
-              {selectedTrack.albumArt && (
-                <img src={selectedTrack.albumArt} alt="" className="w-10 h-10 rounded object-cover" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{selectedTrack.title}</p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {selectedTrack.artists.map(a => a.name).join(", ")}
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Search dropdown */}
           {showDropdown && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-64 overflow-y-auto">
+            <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-[100] overflow-hidden max-h-72 overflow-y-auto"
+              style={{ position: "relative" }}
+            >
               {results.map(t => (
                 <button
                   key={t.id}
-                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/40 transition-colors text-left"
                   onMouseDown={() => selectTrack(t)}
                 >
                   {t.image ? (
-                    <img src={t.image} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                    <img src={t.image} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                   ) : (
-                    <div className="w-10 h-10 rounded bg-muted shrink-0" />
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <Music size={16} className="text-muted-foreground" />
+                    </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{t.name}</p>
