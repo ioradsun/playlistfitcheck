@@ -122,7 +122,7 @@ ${bp.singleROIFocus.why}`;
       </div>
 
       {/* Artist Header */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden border-border/20">
         <CardContent className="p-5 flex gap-5 items-start flex-wrap sm:flex-nowrap">
           {artist.image_url && (
             <img src={artist.image_url} alt={artist.name} className="w-24 h-24 rounded-lg object-cover flex-shrink-0" />
@@ -149,7 +149,7 @@ ${bp.singleROIFocus.why}`;
       </Card>
 
       {/* Snapshot */}
-      <Card>
+      <Card className="border-border/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2"><Target size={16} /> Artist Snapshot</CardTitle>
         </CardHeader>
@@ -162,7 +162,7 @@ ${bp.singleROIFocus.why}`;
 
       {/* Signals */}
       <Collapsible open={signalsOpen} onOpenChange={setSignalsOpen}>
-        <Card>
+          <Card className="border-border/20">
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer pb-3">
               <CardTitle className="text-base flex items-center justify-between">
@@ -185,7 +185,7 @@ ${bp.singleROIFocus.why}`;
       </Collapsible>
 
       {/* Scorecard */}
-      <Card>
+      <Card className="border-border/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Revenue Leverage Scorecard</CardTitle>
         </CardHeader>
@@ -209,7 +209,7 @@ ${bp.singleROIFocus.why}`;
       </Card>
 
       {/* Top 3 Moves */}
-      <Card>
+      <Card className="border-border/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2"><Zap size={16} /> Top 3 Money Moves (Next 30 Days)</CardTitle>
         </CardHeader>
@@ -253,7 +253,7 @@ ${bp.singleROIFocus.why}`;
       </Card>
 
       {/* Ignore Now */}
-      <Card>
+      <Card className="border-border/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2"><AlertTriangle size={16} /> What to Ignore Right Now</CardTitle>
         </CardHeader>
@@ -269,7 +269,7 @@ ${bp.singleROIFocus.why}`;
       </Card>
 
       {/* 90-Day Roadmap */}
-      <Card>
+      <Card className="border-border/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2"><Calendar size={16} /> 90-Day Monetization Roadmap</CardTitle>
         </CardHeader>
@@ -292,7 +292,7 @@ ${bp.singleROIFocus.why}`;
       </Card>
 
       {/* Weekly Checklist */}
-      <Card>
+      <Card className="border-border/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2"><CheckSquare size={16} /> Weekly Execution Checklist</CardTitle>
         </CardHeader>
@@ -314,7 +314,7 @@ ${bp.singleROIFocus.why}`;
       </Card>
 
       {/* Single ROI Focus */}
-      <Card className="border-primary/30 bg-primary/5">
+      <Card className="border-primary/15 bg-primary/5">
         <CardContent className="p-5 text-center space-y-2">
           <p className="text-xs text-muted-foreground uppercase tracking-wide">🎯 If you only do one thing</p>
           <h3 className="text-lg font-bold text-primary">{bp.singleROIFocus.focus}</h3>
@@ -323,7 +323,7 @@ ${bp.singleROIFocus.why}`;
       </Card>
 
       {/* Focus Plan Generators */}
-      <Card>
+      <Card className="border-border/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Generate a Focus Plan</CardTitle>
         </CardHeader>
@@ -347,7 +347,7 @@ ${bp.singleROIFocus.why}`;
       {/* Focus Plan Result */}
       {focusPlan && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <Card>
+          <Card className="border-border/20">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">{focusPlan.title}</CardTitle>
             </CardHeader>
