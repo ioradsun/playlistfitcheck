@@ -471,8 +471,8 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="About"
-                  isActive={aboutExpanded || location.pathname === "/about" || location.pathname === "/our-story" || location.pathname === "/ajans-music"}
-                  onClick={() => setAboutExpanded(!aboutExpanded)}
+                  isActive={location.pathname === "/about" || location.pathname === "/our-story"}
+                  onClick={() => { navigate("/about"); setAboutExpanded(true); closeMobileIfNeeded(); }}
                 >
                   <Info size={16} />
                   <span>About</span>
@@ -484,23 +484,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                         className={`w-full text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${location.pathname === "/our-story" ? "text-primary font-medium" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
                         onClick={(e) => { e.stopPropagation(); navigate("/our-story"); closeMobileIfNeeded(); }}
                       >
-                        The Story
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        className={`w-full text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${location.pathname === "/about" ? "text-primary font-medium" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
-                        onClick={(e) => { e.stopPropagation(); navigate("/about"); closeMobileIfNeeded(); }}
-                      >
-                        The Tools
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        className={`w-full text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${location.pathname === "/ajans-music" ? "text-primary font-medium" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
-                        onClick={(e) => { e.stopPropagation(); navigate("/ajans-music"); closeMobileIfNeeded(); }}
-                      >
-                        ajan's music
+                        Origin Story
                       </button>
                     </li>
                   </ul>
