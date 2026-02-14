@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+
 import { Link } from "react-router-dom";
 import { Search, Zap, BarChart3, Loader2, Music } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -174,12 +174,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
   }), []);
 
   return (
-    <motion.div
-      className="w-full max-w-2xl mx-auto space-y-4"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <div className="w-full max-w-2xl mx-auto space-y-4">
       <PageBadge label="PlaylistFit" subtitle="See if your song fits playlists." />
 
       <RecentProjects
@@ -300,6 +295,6 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
           </div>
         </div>
       </RecentProjects>
-    </motion.div>
+    </div>
   );
 }

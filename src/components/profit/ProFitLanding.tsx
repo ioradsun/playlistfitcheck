@@ -108,12 +108,7 @@ export const ProFitLanding = ({ onAnalyze, onLoadReport, loading }: ProFitLandin
   }, []);
 
   return (
-    <motion.div
-      className="w-full max-w-2xl mx-auto flex flex-col items-center gap-6"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <div className="w-full max-w-2xl mx-auto flex flex-col items-center gap-6">
       {/* Hero */}
       <div className="text-center space-y-3">
         <PageBadge label="ProFit" subtitle="See how your Spotify fits making money." />
@@ -363,6 +358,6 @@ export const ProFitLanding = ({ onAnalyze, onLoadReport, loading }: ProFitLandin
           )}
         </>
       )}
-    </motion.div>
+    </div>
   );
 };
