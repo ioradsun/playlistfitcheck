@@ -55,8 +55,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!type || typeof type !== "string" || !["playlist", "track"].includes(type)) {
-      return new Response(JSON.stringify({ error: "type must be 'playlist' or 'track'" }), {
+    if (!type || typeof type !== "string" || !["playlist", "track", "artist"].includes(type)) {
+      return new Response(JSON.stringify({ error: "type must be 'playlist', 'track', or 'artist'" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -64,7 +64,7 @@ serve(async (req) => {
 
     const token = await getSpotifyToken(clientId, clientSecret);
 
-    const searchType = type === "playlist" ? "playlist" : "track";
+    const searchType = type;
     const resp = await fetch(
       `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${searchType}&limit=8`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -91,6 +91,13 @@ serve(async (req) => {
         tracks: p.tracks?.total || 0,
         image: p.images?.[0]?.url || null,
         url: p.external_urls?.spotify || `https://open.spotify.com/playlist/${p.id}`,
+      }));
+    } else if (searchType === "artist") {
+      results = (data.artists?.items || []).filter((a: any) => a != null).map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        image: a.images?.[0]?.url || a.images?.[1]?.url || null,
+        url: a.external_urls?.spotify || `https://open.spotify.com/artist/${a.id}`,
       }));
     } else {
       results = (data.tracks?.items || []).filter((t: any) => t != null).map((t: any) => ({
