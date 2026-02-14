@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.songfit-track]
 verify_jwt = false
+
+[functions.songfit-populate]
+verify_jwt = false
