@@ -84,11 +84,12 @@ export interface AppSidebarProps {
   onTabChange?: (tab: string) => void;
   onNewProject?: () => void;
   onLoadProject?: (type: string, data: any) => void;
+  refreshKey?: number;
 }
 
 export { TOOLS };
 
-export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebarProps) {
+export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }: AppSidebarProps) {
   const { user, loading: authLoading, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -181,7 +182,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
 
   useEffect(() => {
     fetchRecents();
-  }, [fetchRecents]);
+  }, [fetchRecents, refreshKey]);
 
   const closeMobileIfNeeded = () => {
     if (isMobile) setOpenMobile(false);

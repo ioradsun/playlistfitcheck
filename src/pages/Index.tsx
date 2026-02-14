@@ -121,6 +121,8 @@ const Index = () => {
   const [songFitAnalysis, setSongFitAnalysis] = useState<SongFitAnalysis | null>(null);
   const [songFitLoading, setSongFitLoading] = useState(false);
   const savedSearchIdRef = useRef<string | null>(null);
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
+  const refreshSidebar = useCallback(() => setSidebarRefreshKey(k => k + 1), []);
 
   const isFullyLoaded = useMemo(() => {
     if (!result) return false;
@@ -232,8 +234,9 @@ const Index = () => {
       blended_label: songFitAnalysis?.blendedLabel ?? null,
     }).eq("id", savedSearchIdRef.current).then(() => {
       savedSearchIdRef.current = null;
+      refreshSidebar();
     });
-  }, [isFullyLoaded, result, vibeAnalysis, songFitAnalysis]);
+  }, [isFullyLoaded, result, vibeAnalysis, songFitAnalysis, refreshSidebar]);
 
   const handleBack = useCallback(() => {
     setResult(null);
@@ -383,7 +386,7 @@ const Index = () => {
       case "songfit":
         return <div className="flex-1 px-4 py-6"><SongFitTab /></div>;
       case "profit":
-        return <div className="flex-1 flex items-start justify-center px-4 py-8"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} /></div>;
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} onProjectSaved={refreshSidebar} /></div>;
       case "playlist":
         return (
           <div className="flex-1 flex items-start justify-center px-4 py-8">
@@ -409,9 +412,9 @@ const Index = () => {
           </div>
         );
       case "mix":
-        return <div className="flex-1 flex items-start justify-center px-4 py-8"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} /></div>;
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} /></div>;
       case "lyric":
-        return <div className="flex-1 flex items-start justify-center px-4 py-8"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} /></div>;
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
       case "hitfit":
         return <div className="flex-1 flex items-start justify-center px-4 py-8"><HitFitTab /></div>;
       default:
@@ -421,7 +424,7 @@ const Index = () => {
 
   return (
     <>
-      <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} onLoadProject={handleLoadProject} />
+      <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} onLoadProject={handleLoadProject} refreshKey={sidebarRefreshKey} />
       <SidebarInset>
         {/* Minimal top header with pill badge */}
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">

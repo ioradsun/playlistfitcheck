@@ -18,9 +18,10 @@ interface ReportState {
 
 interface ProFitTabProps {
   initialArtistUrl?: string | null;
+  onProjectSaved?: () => void;
 }
 
-export const ProFitTab = ({ initialArtistUrl }: ProFitTabProps = {}) => {
+export const ProFitTab = ({ initialArtistUrl, onProjectSaved }: ProFitTabProps = {}) => {
   const [view, setView] = useState<View>("landing");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportState | null>(null);
@@ -43,7 +44,7 @@ export const ProFitTab = ({ initialArtistUrl }: ProFitTabProps = {}) => {
         shareToken: data.shareToken,
       });
       setView("report");
-
+      onProjectSaved?.();
       // Save to localStorage history
       try {
         const history = JSON.parse(localStorage.getItem("profit_history") || "[]");
