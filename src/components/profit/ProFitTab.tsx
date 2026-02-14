@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { ProFitLanding } from "./ProFitLanding";
 import { ProFitReport } from "./ProFitReport";
@@ -19,6 +20,8 @@ export const ProFitTab = () => {
   const [view, setView] = useState<View>("landing");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportState | null>(null);
+  const { profile } = useAuth();
+  const autoRanRef = useRef(false);
 
   const handleAnalyze = useCallback(async (url: string) => {
     setLoading(true);
@@ -57,6 +60,15 @@ export const ProFitTab = () => {
       setLoading(false);
     }
   }, []);
+
+  // Auto-run ProFit if user signed up with a Spotify artist
+  useEffect(() => {
+    if (autoRanRef.current || report || loading) return;
+    const artistId = profile?.spotify_artist_id;
+    if (!artistId) return;
+    autoRanRef.current = true;
+    handleAnalyze(`https://open.spotify.com/artist/${artistId}`);
+  }, [profile, report, loading, handleAnalyze]);
 
   if (view === "chat" && report) {
     return (
