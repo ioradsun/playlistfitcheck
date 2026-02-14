@@ -10,10 +10,11 @@ import { formatDistanceToNow } from "date-fns";
 interface Props {
   post: SongFitPost;
   onOpenComments: (postId: string) => void;
+  onOpenLikes: (postId: string) => void;
   onRefresh: () => void;
 }
 
-export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
+export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }: Props) {
   const { user } = useAuth();
   const [liked, setLiked] = useState(post.user_has_liked ?? false);
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
@@ -106,8 +107,12 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
         <div className="flex items-center -ml-1">
           <button onClick={toggleLike} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <Heart size={22} className={liked ? "fill-red-500 text-red-500" : "text-foreground"} />
-            {likesCount > 0 && <span className="text-xs text-muted-foreground">{likesCount}</span>}
           </button>
+          {likesCount > 0 && (
+            <button onClick={() => onOpenLikes(post.id)} className="text-xs text-muted-foreground hover:text-foreground transition-colors -ml-1 mr-2">
+              {likesCount}
+            </button>
+          )}
           <button onClick={() => onOpenComments(post.id)} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <MessageCircle size={22} className="text-foreground" />
             {post.comments_count > 0 && <span className="text-xs text-muted-foreground">{post.comments_count}</span>}
