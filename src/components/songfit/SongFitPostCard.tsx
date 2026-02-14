@@ -11,13 +11,14 @@ import { formatDistanceToNow } from "date-fns";
 // Global audio manager — only one card plays at a time
 let globalAudio: HTMLAudioElement | null = null;
 let globalPlayingPostId: string | null = null;
+let globalMuted = true; // Start muted to allow autoplay
 const listeners = new Set<() => void>();
 
 function notifyListeners() {
   listeners.forEach((fn) => fn());
 }
 
-function playGlobal(postId: string, url: string) {
+async function playGlobal(postId: string, url: string, isAutoplay = false) {
   if (globalAudio && globalPlayingPostId !== postId) {
     globalAudio.pause();
     globalAudio.src = "";
@@ -29,8 +30,18 @@ function playGlobal(postId: string, url: string) {
       notifyListeners();
     });
   }
+  globalAudio.muted = isAutoplay ? true : globalMuted;
   globalPlayingPostId = postId;
-  globalAudio.play().catch(() => {});
+  try {
+    await globalAudio.play();
+  } catch {
+    // Autoplay blocked — try muted
+    if (!globalAudio.muted) {
+      globalAudio.muted = true;
+      globalMuted = true;
+      try { await globalAudio.play(); } catch { /* give up */ }
+    }
+  }
   notifyListeners();
 }
 
@@ -101,7 +112,7 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
         if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
           // Auto-play when card is 60%+ visible
           if (globalPlayingPostId !== post.id) {
-            playGlobal(post.id, post.preview_url!);
+            playGlobal(post.id, post.preview_url!, true);
           }
         } else {
           // Pause when scrolled away
@@ -121,6 +132,7 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
   useEffect(() => {
     if (globalAudio && globalPlayingPostId === post.id) {
       globalAudio.muted = muted;
+      globalMuted = muted;
     }
   }, [muted, post.id]);
 
@@ -129,7 +141,8 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
     if (isPlaying) {
       pauseGlobal();
     } else {
-      playGlobal(post.id, post.preview_url);
+      // Manual play — use current globalMuted state, not forced mute
+      playGlobal(post.id, post.preview_url, false);
     }
   }, [post.id, post.preview_url, isPlaying]);
 
