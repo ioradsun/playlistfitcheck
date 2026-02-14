@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-import { Link } from "react-router-dom";
+
 import { Search, Zap, Loader2, Music } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -246,10 +246,6 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         </div>
 
         <div className="flex items-center justify-center gap-4 text-xs">
-          <Link to="/how-scoring-works" className="text-primary hover:underline underline-offset-2">
-            Inside the Fitting Room
-          </Link>
-          <span className="text-muted-foreground">·</span>
           <button
             onClick={handleDemo}
             className="text-primary hover:underline underline-offset-2"

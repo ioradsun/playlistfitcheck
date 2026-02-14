@@ -30,7 +30,7 @@ import {
   LogOut,
   User,
   Shield,
-  BookOpen,
+  Info,
   Heart,
   MessageCircle,
   UserPlus,
@@ -469,13 +469,35 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Our Story"
-                  isActive={location.pathname === "/our-story"}
-                  onClick={() => { navigate("/our-story"); closeMobileIfNeeded(); }}
+                  tooltip="About"
+                  isActive={location.pathname === "/about" || location.pathname === "/our-story" || location.pathname === "/how-scoring-works"}
+                  onClick={() => { navigate("/about"); closeMobileIfNeeded(); }}
                 >
-                  <BookOpen size={16} />
-                  <span>Our Story</span>
+                  <Info size={16} />
+                  <span>About</span>
                 </SidebarMenuButton>
+                {!collapsed && (location.pathname === "/about" || location.pathname === "/our-story" || location.pathname === "/how-scoring-works") && (
+                  <ul className="ml-6 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+                    <li>
+                      <button
+                        className={`w-full text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${location.pathname === "/our-story" ? "text-primary font-medium" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
+                        onClick={(e) => { e.stopPropagation(); navigate("/our-story"); closeMobileIfNeeded(); }}
+                      >
+                        Our Story
+                      </button>
+                    </li>
+                    {TOOLS.map((tool) => (
+                      <li key={tool.value}>
+                        <button
+                          className="w-full text-left px-2 py-1 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-md truncate transition-colors"
+                          onClick={(e) => { e.stopPropagation(); navigate(tool.path); closeMobileIfNeeded(); }}
+                        >
+                          {tool.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
