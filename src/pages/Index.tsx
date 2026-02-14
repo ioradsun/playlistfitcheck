@@ -56,7 +56,7 @@ const Index = () => {
   const autoRunRef = useRef(false);
   const cameFromDashboardRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [activeTab, setActiveTab] = useState("profit");
+  const [activeTab, setActiveTab] = useState("songfit");
   const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
