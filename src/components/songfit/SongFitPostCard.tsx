@@ -88,19 +88,6 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Spotify Embed Player — compact 80px strip */}
-      <div className="w-full bg-black/40">
-        <iframe
-          src={embedUrl}
-          width="100%"
-          height="80"
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
-          className="border-0"
-          title={`Play ${post.track_title}`}
-        />
-      </div>
-
       {/* Album Art */}
       <div className="relative w-full aspect-square bg-black/20">
         {post.album_art_url ? (
@@ -125,6 +112,19 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
             {artists.map((a: any) => a.name).join(", ")}
           </p>
         </div>
+      </div>
+
+      {/* Spotify Embed Player — compact 80px strip */}
+      <div className="w-full bg-black/40">
+        <iframe
+          src={embedUrl}
+          width="100%"
+          height="80"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+          className="border-0"
+          title={`Play ${post.track_title}`}
+        />
       </div>
 
       {/* Action Row */}
