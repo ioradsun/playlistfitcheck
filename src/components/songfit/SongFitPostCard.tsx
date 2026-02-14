@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, MessageCircle, Bookmark, Share2, ExternalLink, User } from "lucide-react";
+import { Heart, MessageCircle, Bookmark, Share2, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -88,7 +88,20 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Album Art — full-width 1:1 square */}
+      {/* Spotify Embed Player — compact 80px strip */}
+      <div className="w-full bg-black/40">
+        <iframe
+          src={embedUrl}
+          width="100%"
+          height="80"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+          className="border-0"
+          title={`Play ${post.track_title}`}
+        />
+      </div>
+
+      {/* Album Art */}
       <div className="relative w-full aspect-square bg-black/20">
         {post.album_art_url ? (
           <img
@@ -114,19 +127,6 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Spotify Embed Player — compact 80px strip */}
-      <div className="w-full bg-black/40">
-        <iframe
-          src={embedUrl}
-          width="100%"
-          height="80"
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
-          className="border-0"
-          title={`Play ${post.track_title}`}
-        />
-      </div>
-
       {/* Action Row */}
       <div className="flex items-center justify-between px-2 pt-1 pb-1">
         <div className="flex items-center -ml-1">
@@ -139,14 +139,6 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
           <button onClick={handleShare} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <Share2 size={24} className="text-foreground" />
           </button>
-          <button onClick={() => window.open(post.spotify_track_url, "_blank")} className="p-2.5 hover:opacity-70 active:scale-90 transition-all" title="Open in Spotify">
-            <ExternalLink size={24} className="text-foreground" />
-          </button>
-          {primaryArtist?.spotifyUrl && (
-            <button onClick={() => window.open(primaryArtist.spotifyUrl, "_blank")} className="p-2.5 hover:opacity-70 active:scale-90 transition-all" title="Visit Artist">
-              <User size={24} className="text-foreground" />
-            </button>
-          )}
         </div>
         <button onClick={toggleSave} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
           <Bookmark size={24} className={saved ? "fill-foreground text-foreground" : "text-foreground"} />
