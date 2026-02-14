@@ -50,9 +50,13 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 );
 
 const Index = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && !user) navigate("/auth");
+  }, [authLoading, user, navigate]);
   const autoRunRef = useRef(false);
   const cameFromDashboardRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
