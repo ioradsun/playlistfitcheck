@@ -470,12 +470,12 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="The tools.fm story"
+                  tooltip="the tools.fm story"
                   isActive={location.pathname === "/about"}
                   onClick={() => { navigate("/about"); closeMobileIfNeeded(); }}
                 >
                   <Info size={16} />
-                  <span>The tools.fm story</span>
+                  <span>the tools.fm story</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
