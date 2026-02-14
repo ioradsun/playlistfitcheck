@@ -206,6 +206,23 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
             <span className="font-mono text-sm font-bold text-primary">tools.fm</span>
           )}
         </div>
+        {!authLoading && !user && (
+          <div className="px-2 mt-2 space-y-1">
+            <button
+              onClick={() => navigate("/auth?mode=signup")}
+              className="w-full px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+            >
+              {collapsed ? <UserPlus size={14} className="mx-auto" /> : "Sign Up For Free"}
+            </button>
+            <button
+              onClick={() => navigate("/auth")}
+              className="flex items-center justify-center gap-2 w-full px-2 py-1.5 rounded-md text-xs font-medium hover:bg-sidebar-accent transition-colors"
+            >
+              <User size={14} />
+              {!collapsed && <span>Log in</span>}
+            </button>
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarSeparator className="my-2" />
@@ -425,25 +442,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
               </div>
             )}
           </div>
-        ) : (
-          <div className="space-y-1">
-            <button
-              onClick={() => navigate("/auth")}
-              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs font-medium hover:bg-sidebar-accent transition-colors"
-            >
-              <User size={16} />
-              {!collapsed && <span>Log in</span>}
-            </button>
-            {!collapsed && (
-              <button
-                onClick={() => navigate("/auth?mode=signup")}
-                className="w-full px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
-              >
-                Sign Up For Free
-              </button>
-            )}
-          </div>
-        )}
+        ) : null}
       </SidebarFooter>
     </Sidebar>
   );
