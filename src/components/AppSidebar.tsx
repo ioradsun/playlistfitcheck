@@ -500,7 +500,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                         className={`w-full text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${location.pathname === "/ajans-music" ? "text-primary font-medium" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
                         onClick={(e) => { e.stopPropagation(); navigate("/ajans-music"); closeMobileIfNeeded(); }}
                       >
-                        Ajan's Music
+                        ajan's music
                       </button>
                     </li>
                   </ul>
