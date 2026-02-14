@@ -64,8 +64,25 @@ const Auth = () => {
     if (!artistQuery.includes("spotify.com/artist/")) return;
     const match = artistQuery.match(/artist\/([a-zA-Z0-9]+)/);
     if (!match) return;
-    setSelectedArtist({ id: match[1], name: "Loading...", image: null, url: artistQuery.trim() });
+    setArtistSearching(true);
     setArtistQuery("");
+    try {
+      // Fetch artist info via search edge function using the artist ID
+      const { data, error } = await supabase.functions.invoke("spotify-search", {
+        body: { query: match[1], type: "artist" },
+      });
+      if (!error && data?.results?.length > 0) {
+        const a = data.results[0];
+        setSelectedArtist({ id: a.id, name: a.name, image: a.image, url: a.url });
+      } else {
+        // Fallback: use the raw ID
+        setSelectedArtist({ id: match[1], name: match[1], image: null, url: artistQuery.trim() });
+      }
+    } catch {
+      setSelectedArtist({ id: match[1], name: match[1], image: null, url: artistQuery.trim() });
+    } finally {
+      setArtistSearching(false);
+    }
   }, [artistQuery]);
 
   const handleForgotPassword = async (e: React.FormEvent) => {
