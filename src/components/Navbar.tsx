@@ -20,8 +20,8 @@ interface NavbarProps {
 }
 
 const TAB_ITEMS = [
-  { value: "profit", label: "ProFit" },
   { value: "songfit", label: "SongFit" },
+  { value: "profit", label: "ProFit" },
   { value: "playlist", label: "PlaylistFit" },
   { value: "mix", label: "MixFit" },
   { value: "lyric", label: "LyricFit" },
