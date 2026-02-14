@@ -35,9 +35,9 @@ const App = () => (
               <Route path="/LyricFit" element={<Index />} />
               <Route path="/HitFit" element={<Index />} />
               <Route path="/how-scoring-works" element={<PageLayout title="How Scoring Works"><HowScoringWorks /></PageLayout>} />
-              <Route path="/our-story" element={<PageLayout title="Our Story"><OurStory /></PageLayout>} />
+              <Route path="/our-story" element={<PageLayout title="Our Story" subtitle="See how tools.fm found its fit."><OurStory /></PageLayout>} />
               <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />
-              <Route path="/auth" element={<PageLayout title="Sign In"><Auth /></PageLayout>} />
+              <Route path="/auth" element={<PageLayout title="Account"><Auth /></PageLayout>} />
               <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
               <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
               <Route path="/u/:userId" element={<PageLayout><PublicProfile /></PageLayout>} />

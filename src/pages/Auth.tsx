@@ -146,7 +146,7 @@ const Auth = () => {
   const showArtistDropdown = artistFocused && artistResults.length > 0 && !selectedArtist;
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4 pt-20">
+    <div className="flex-1 flex items-start justify-center px-4 py-8">
       <Card className="w-full max-w-md glass-card border-border">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
