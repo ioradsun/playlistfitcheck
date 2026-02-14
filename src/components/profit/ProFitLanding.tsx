@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { ArrowRight, Loader2, TrendingUp, DollarSign, BarChart3 } from "lucide-react";
+import { PageBadge } from "@/components/PageBadge";
 
 interface ProFitLandingProps {
   onAnalyze: (url: string) => void;
@@ -28,17 +29,7 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
     >
       {/* Hero */}
       <div className="text-center space-y-3">
-        <motion.div
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-2"
-          initial={{ scale: 0.9 }}
-          animate={{ scale: 1 }}
-        >
-          <DollarSign size={14} />
-          Free AI Revenue Consulting
-        </motion.div>
-        <p className="text-lg text-muted-foreground max-w-md mx-auto">
-          Turn listeners into income.
-        </p>
+        <PageBadge label="ProFit" subtitle="See how your Spotify fits making money." />
         <p className="text-sm text-muted-foreground/70">
           Paste your Spotify artist link → get your highest-probability revenue path.
         </p>

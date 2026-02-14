@@ -1,9 +1,11 @@
 import { motion } from "framer-motion";
+import { PageBadge } from "@/components/PageBadge";
 
 export default function OurStory() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-4 pt-24 pb-12 space-y-10">
+        <PageBadge label="Our Story" subtitle="See how tools.fm found its fit." />
         <motion.div
           className="glass-card rounded-xl p-6 space-y-5"
           initial={{ opacity: 0, y: 15 }}

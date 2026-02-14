@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { Upload, Music, Loader2, FileAudio } from "lucide-react";
+import { PageBadge } from "@/components/PageBadge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -50,17 +51,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="text-center space-y-3">
-        <motion.div
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-mono"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <FileAudio size={14} />
-          Lyrics in seconds.
-        </motion.div>
-      </div>
+      <PageBadge label="LyricFit" subtitle="Make sure your lyrics fit captions." />
 
       <div
         className={`glass-card rounded-xl p-8 transition-colors cursor-pointer ${
