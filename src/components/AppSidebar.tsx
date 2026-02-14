@@ -101,7 +101,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   const [profileExpanded, setProfileExpanded] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
-  const [aboutExpanded, setAboutExpanded] = useState(false);
+  
 
   const fetchRecents = useCallback(async () => {
     if (!user) return;
@@ -470,33 +470,13 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="About"
-                  isActive={location.pathname === "/about" || location.pathname === "/our-story"}
-                  onClick={() => { 
-                    if (location.pathname === "/about") {
-                      setAboutExpanded(prev => !prev);
-                    } else {
-                      navigate("/about"); 
-                      setAboutExpanded(true); 
-                      closeMobileIfNeeded(); 
-                    }
-                  }}
+                  tooltip="The tools.fm story"
+                  isActive={location.pathname === "/about"}
+                  onClick={() => { navigate("/about"); closeMobileIfNeeded(); }}
                 >
                   <Info size={16} />
-                  <span>About</span>
+                  <span>The tools.fm story</span>
                 </SidebarMenuButton>
-                {!collapsed && (aboutExpanded || location.pathname === "/about" || location.pathname === "/our-story") && (
-                  <ul className="ml-6 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
-                    <li>
-                      <button
-                        className={`w-full text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${location.pathname === "/our-story" ? "text-primary font-medium" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
-                        onClick={(e) => { e.stopPropagation(); navigate("/our-story"); closeMobileIfNeeded(); }}
-                      >
-                        Origin Story
-                      </button>
-                    </li>
-                  </ul>
-                )}
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

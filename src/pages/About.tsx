@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Users, BarChart3, ListMusic, Sliders, FileText, Target } from "lucide-react";
 
@@ -52,48 +53,115 @@ const PRODUCTS = [
   },
 ];
 
-export default function About() {
-  return (
-    <div className="max-w-2xl mx-auto px-4 pt-8 pb-12 space-y-8">
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Six tools. One goal: give independent artists the clarity they deserve. No gatekeeping, no vague advice. Just data, context, and a little taste.
-        </p>
-      </motion.div>
+const TABS = ["Origin", "The Tools"] as const;
 
-      <div className="space-y-4">
-        {PRODUCTS.map((product, i) => (
-          <motion.div
-            key={product.name}
-            className="glass-card rounded-xl p-5 space-y-3"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 * i }}
+export default function About() {
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Origin");
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 pt-8 pb-12 space-y-6">
+      {/* Tab bar */}
+      <div className="flex gap-1 bg-muted/50 rounded-lg p-1 w-fit">
+        {TABS.map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              tab === t
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <product.icon size={16} className="text-primary" />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold">{product.name}</h2>
-                <p className="text-xs text-primary">{product.tagline}</p>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {product.description}
-            </p>
-            <div className="border-t border-border/30 pt-3">
-              <p className="text-xs font-medium text-foreground/80 mb-1">How it works</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {product.how}
-              </p>
-            </div>
-          </motion.div>
+            {t}
+          </button>
         ))}
       </div>
+
+      {tab === "Origin" && (
+        <motion.div
+          key="origin"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4"
+        >
+          <div className="glass-card rounded-xl p-6 space-y-5">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              <a
+                href="https://open.spotify.com/artist/1PlkAOmfFYqBYFpN8jDj4v?si=ZKcGkrQ2RgGnKN-IRsIXEA"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline underline-offset-2 font-semibold"
+              >
+                ajan
+              </a>{" "}
+              makes music, so he knows the 3am doubt — is the mix ready, should you pitch it, is it actually good? His dad builds tech. Instead of adding more opinions to the noise, they built tools for clarity.
+            </p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              No gatekeepers. No hype. No secrets. Just answers to the questions you're asking yourself at 2am.
+            </p>
+            <p className="text-sm text-primary font-semibold leading-relaxed">
+              tools.fm: less guessing, more answers.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs text-muted-foreground mb-3 font-medium">Listen to what started it all.</p>
+            <div className="rounded-xl overflow-hidden">
+              <iframe
+                src="https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=0"
+                width="100%"
+                height="552"
+                frameBorder="0"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                loading="lazy"
+                className="rounded-xl"
+              />
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {tab === "The Tools" && (
+        <motion.div
+          key="tools"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4"
+        >
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Six tools. One goal: give independent artists the clarity they deserve. No gatekeeping, no vague advice. Just data, context, and a little taste.
+          </p>
+
+          {PRODUCTS.map((product, i) => (
+            <motion.div
+              key={product.name}
+              className="glass-card rounded-xl p-5 space-y-3"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 * i }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <product.icon size={16} className="text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold">{product.name}</h2>
+                  <p className="text-xs text-primary">{product.tagline}</p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {product.description}
+              </p>
+              <div className="border-t border-border/30 pt-3">
+                <p className="text-xs font-medium text-foreground/80 mb-1">How it works</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {product.how}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
     </div>
   );
 }
