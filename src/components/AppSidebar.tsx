@@ -35,7 +35,16 @@ import {
   MessageCircle,
   UserPlus,
   ChevronDown,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
@@ -83,12 +92,14 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
   const { user, loading: authLoading, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { state: sidebarState } = useSidebar();
+  const { state: sidebarState, setOpenMobile, isMobile } = useSidebar();
   const collapsed = sidebarState === "collapsed";
   const { notifications, unreadCount, loading: notiLoading, markAllRead, refetch: refetchNotifications } = useNotifications();
 
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [profileExpanded, setProfileExpanded] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
 
   const fetchRecents = useCallback(async () => {
     if (!user) return;
@@ -172,9 +183,14 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
     fetchRecents();
   }, [fetchRecents]);
 
+  const closeMobileIfNeeded = () => {
+    if (isMobile) setOpenMobile(false);
+  };
+
   const handleToolClick = (tool: ToolItem) => {
     onTabChange?.(tool.value);
     navigate(tool.path);
+    closeMobileIfNeeded();
   };
 
   const handleRecentClick = (item: RecentItem) => {
@@ -182,6 +198,27 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
     const tool = TOOLS.find(t => t.value === item.type);
     if (tool) navigate(tool.path);
     onLoadProject?.(item.type, item.rawData);
+    closeMobileIfNeeded();
+  };
+
+  const handleDeleteRecent = async (item: RecentItem) => {
+    if (item.type === "profit") await supabase.from("profit_reports").delete().eq("id", item.id);
+    else if (item.type === "playlist") await supabase.from("saved_searches").delete().eq("id", item.id);
+    else if (item.type === "mix") await supabase.from("mix_projects").delete().eq("id", item.id);
+    else if (item.type === "lyric") await supabase.from("saved_lyrics").delete().eq("id", item.id);
+    setRecentItems((prev) => prev.filter((i) => i.id !== item.id));
+  };
+
+  const handleRenameRecent = async (item: RecentItem) => {
+    const name = editLabel.trim();
+    if (!name) return;
+    if (item.type === "mix") await supabase.from("mix_projects").update({ title: name }).eq("id", item.id);
+    else if (item.type === "lyric") await supabase.from("saved_lyrics").update({ title: name }).eq("id", item.id);
+    else if (item.type === "playlist") await supabase.from("saved_searches").update({ playlist_name: name }).eq("id", item.id);
+    setRecentItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, label: name } : i))
+    );
+    setEditingId(null);
   };
 
   const handleLogout = async () => {
@@ -209,13 +246,13 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
         {!authLoading && !user && (
           <div className="px-2 mt-2 space-y-1">
             <button
-              onClick={() => navigate("/auth?mode=signup")}
+              onClick={() => { navigate("/auth?mode=signup"); closeMobileIfNeeded(); }}
               className="w-full px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
             >
               {collapsed ? <UserPlus size={14} className="mx-auto" /> : "Sign Up For Free"}
             </button>
             <button
-              onClick={() => navigate("/auth")}
+              onClick={() => { navigate("/auth"); closeMobileIfNeeded(); }}
               className="flex items-center justify-center gap-2 w-full px-2 py-1.5 rounded-md text-xs font-medium hover:bg-sidebar-accent transition-colors"
             >
               <User size={14} />
@@ -252,18 +289,73 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
                     {!collapsed && isActive && recents.length > 0 && (
                       <ul className="ml-6 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
                         {recents.map((item) => (
-                          <li key={item.id}>
-                            <button
-                              className="w-full text-left px-2 py-1 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-md truncate transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRecentClick(item);
-                              }}
-                              title={item.label}
-                            >
-                              <span className="block truncate">{item.label}</span>
-                              <span className="text-[10px] text-muted-foreground">{item.meta}</span>
-                            </button>
+                          <li key={item.id} className="group flex items-center gap-0.5">
+                            {editingId === item.id ? (
+                              <form
+                                className="flex-1 min-w-0"
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  handleRenameRecent(item);
+                                }}
+                              >
+                                <input
+                                  autoFocus
+                                  className="w-full px-2 py-1 text-xs bg-sidebar-accent rounded-md border border-sidebar-border outline-none"
+                                  value={editLabel}
+                                  onChange={(e) => setEditLabel(e.target.value)}
+                                  onBlur={() => setEditingId(null)}
+                                  onKeyDown={(e) => e.key === "Escape" && setEditingId(null)}
+                                />
+                              </form>
+                            ) : (
+                              <>
+                                <button
+                                  className="flex-1 min-w-0 text-left px-2 py-1 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-md truncate transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRecentClick(item);
+                                  }}
+                                  title={item.label}
+                                >
+                                  <span className="block truncate">{item.label}</span>
+                                  <span className="text-[10px] text-muted-foreground">{item.meta}</span>
+                                </button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      className="opacity-0 group-hover:opacity-100 shrink-0 p-0.5 rounded hover:bg-sidebar-accent transition-opacity"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <MoreHorizontal size={12} className="text-muted-foreground" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-32">
+                                    {item.type !== "profit" && (
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditLabel(item.label);
+                                          setEditingId(item.id);
+                                        }}
+                                      >
+                                        <Pencil size={12} className="mr-2" />
+                                        Rename
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteRecent(item);
+                                      }}
+                                    >
+                                      <Trash2 size={12} className="mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -378,7 +470,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
                 <SidebarMenuButton
                   tooltip="Our Story"
                   isActive={location.pathname === "/our-story"}
-                  onClick={() => navigate("/our-story")}
+                  onClick={() => { navigate("/our-story"); closeMobileIfNeeded(); }}
                 >
                   <BookOpen size={16} />
                   <span>Our Story</span>
@@ -417,7 +509,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
             {!collapsed && profileExpanded && (
               <div className="space-y-0.5 pl-2">
                 <button
-                  onClick={() => navigate("/profile")}
+                  onClick={() => { navigate("/profile"); closeMobileIfNeeded(); }}
                   className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                 >
                   <User size={14} />
@@ -425,7 +517,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject }: AppSidebar
                 </button>
                 {ADMIN_EMAILS.includes(user.email ?? "") && (
                   <button
-                    onClick={() => navigate("/admin")}
+                    onClick={() => { navigate("/admin"); closeMobileIfNeeded(); }}
                     className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                   >
                     <Shield size={14} />
