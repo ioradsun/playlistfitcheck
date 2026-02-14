@@ -169,14 +169,13 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
             )}
           </div>
         )}
-        <div className="flex justify-center">
+        <div className="flex items-center justify-center gap-4 text-xs">
           <button
-            type="button"
             onClick={() => onAnalyze(EXAMPLE_URL)}
-            className="text-xs text-muted-foreground hover:text-primary transition-colors underline underline-offset-2"
+            className="text-primary hover:underline underline-offset-2"
             disabled={loading}
           >
-            Try an example artist
+            See Demo Results
           </button>
         </div>
       </div>
