@@ -14,7 +14,21 @@ import { LogOut, Music, LayoutDashboard, User, Shield } from "lucide-react";
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
-export const Navbar = () => {
+interface NavbarProps {
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
+}
+
+const TAB_ITEMS = [
+  { value: "profit", label: "ProFit" },
+  { value: "songfit", label: "SongFit" },
+  { value: "playlist", label: "PlaylistFit" },
+  { value: "mix", label: "MixFit" },
+  { value: "lyric", label: "LyricFit" },
+  { value: "hitfit", label: "HitFit" },
+];
+
+export const Navbar = ({ activeTab, onTabChange }: NavbarProps) => {
   const { user, loading, profile } = useAuth();
   const navigate = useNavigate();
 
@@ -29,12 +43,31 @@ export const Navbar = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
       <div className="max-w-6xl mx-auto flex items-center justify-between px-4 h-14">
-        <Link to="/" className="flex items-center gap-2 text-primary font-bold text-lg">
+        <Link to="/" className="flex items-center gap-2 text-primary font-bold text-lg shrink-0">
           <Music size={20} />
           <span className="font-mono text-sm">tools.fm</span>
         </Link>
 
-        <div className="flex items-center gap-3">
+        {/* Tab navigation — only shown on Index page */}
+        {activeTab && onTabChange && (
+          <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none mx-2">
+            {TAB_ITEMS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => onTabChange(tab.value)}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
+                  activeTab === tab.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 shrink-0">
           {loading ? null : user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
