@@ -14,7 +14,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
   const [notes, setNotes] = useState("");
 
   return (
-    <div className="w-full max-w-md mx-auto space-y-6 text-center">
+    <div className="w-full max-w-md mx-auto space-y-4 text-center">
       <PageBadge label="MixFit" subtitle="See which mix fits best." />
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">New Song Project</h2>
