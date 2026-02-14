@@ -50,7 +50,7 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 );
 
 const Index = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -58,9 +58,20 @@ const Index = () => {
     if (!authLoading && !user) navigate("/auth");
   }, [authLoading, user, navigate]);
   const autoRunRef = useRef(false);
+  const profitAutoRef = useRef(false);
   const cameFromDashboardRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [activeTab, setActiveTab] = useState("songfit");
+  
+  // Auto-switch to ProFit tab on first login if user has a Spotify artist linked
+  useEffect(() => {
+    if (profitAutoRef.current || !profile?.spotify_artist_id) return;
+    // Only auto-switch if no location state is driving a specific tab
+    const state = location.state as any;
+    if (state?.reportData || state?.autoRun || state?.loadMixProject || state?.loadLyric) return;
+    profitAutoRef.current = true;
+    setActiveTab("profit");
+  }, [profile, location.state]);
   const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
