@@ -8,10 +8,9 @@ import { SongFitComments } from "./SongFitComments";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 
 export function SongFitFeed() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [posts, setPosts] = useState<SongFitPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
 
   const fetchPosts = useCallback(async () => {
@@ -19,13 +18,8 @@ export function SongFitFeed() {
     let query = supabase
       .from("songfit_posts")
       .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id)")
-      .limit(50);
-
-    if (search.trim()) {
-      query = query.or(`track_title.ilike.%${search.trim()}%,caption.ilike.%${search.trim()}%`);
-    }
-
-    query = query.order("created_at", { ascending: false });
+      .limit(50)
+      .order("created_at", { ascending: false });
 
     const { data } = await query;
     let enriched = (data || []) as unknown as SongFitPost[];
@@ -47,25 +41,14 @@ export function SongFitFeed() {
 
     setPosts(enriched);
     setLoading(false);
-  }, [search, user]);
+  }, [user]);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
-  if (commentPostId) {
-    return <SongFitComments postId={commentPostId} onBack={() => { setCommentPostId(null); fetchPosts(); }} />;
-  }
-
   return (
     <div className="w-full max-w-[470px] mx-auto">
-      {/* Inline composer — X.com style */}
-      {user && (
-        <SongFitInlineComposer onPostCreated={fetchPosts} />
-      )}
+      {user && <SongFitInlineComposer onPostCreated={fetchPosts} />}
 
-
-
-
-      {/* Posts */}
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 size={24} className="animate-spin text-muted-foreground" />
@@ -86,6 +69,9 @@ export function SongFitFeed() {
           ))}
         </div>
       )}
+
+      {/* Comments side panel */}
+      <SongFitComments postId={commentPostId} onClose={() => { setCommentPostId(null); fetchPosts(); }} />
     </div>
   );
 }
