@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { motion } from "framer-motion";
+
 import { Upload, X, Disc3, Music, Loader2, Link, Youtube } from "lucide-react";
 import { PageBadge } from "@/components/PageBadge";
 import { Button } from "@/components/ui/button";
@@ -66,11 +66,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
   ];
 
   return (
-    <motion.div
-      className="w-full max-w-xl mx-auto space-y-4"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
+    <div className="w-full max-w-xl mx-auto space-y-4">
       <PageBadge label="HitFit" subtitle="See if your song fits a hit." />
       <div className="text-center space-y-2">
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
@@ -213,6 +209,6 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
       <p className="text-[10px] text-center text-muted-foreground">
         Audio files up to 75 MB each · MP3, WAV, M4A, FLAC supported · Spotify & YouTube links for reference
       </p>
-    </motion.div>
+    </div>
   );
 }

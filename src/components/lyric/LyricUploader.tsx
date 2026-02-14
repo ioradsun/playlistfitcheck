@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+
 import { Upload, Music, Loader2, FileAudio } from "lucide-react";
 import { PageBadge } from "@/components/PageBadge";
 import { Button } from "@/components/ui/button";
@@ -66,12 +66,7 @@ export function LyricUploader({ onTranscribe, onLoadSaved, loading }: Props) {
   }, []);
 
   return (
-    <motion.div
-      className="w-full max-w-2xl mx-auto space-y-4"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <div className="w-full max-w-2xl mx-auto space-y-4">
       <PageBadge label="LyricFit" subtitle="Make sure your lyrics fit captions." />
 
       {onLoadSaved ? (
@@ -210,6 +205,6 @@ export function LyricUploader({ onTranscribe, onLoadSaved, loading }: Props) {
           </div>
         </>
       )}
-    </motion.div>
+    </div>
   );
 }
