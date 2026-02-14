@@ -78,7 +78,7 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
   return (
     <div className="border-b border-border/40">
       {/* Header */}
-      <div className="flex items-center gap-3 px-3 py-2.5">
+      <div className="flex items-center gap-3 px-4 py-2.5">
         <ProfileHoverCard userId={post.user_id}>
           <div className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
             onClick={() => navigate(`/u/${post.user_id}`)}
@@ -136,7 +136,7 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
       </div>
 
       {/* Action Row */}
-      <div className="flex items-center px-2 pt-1 pb-1">
+      <div className="flex items-center px-3 pt-1 pb-1">
         <div className="flex items-center -ml-1">
           <button onClick={toggleLike} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <Heart size={22} className={liked ? "fill-red-500 text-red-500" : "text-foreground"} />
