@@ -14,6 +14,7 @@ interface SpotifyArtistResult {
   name: string;
   image: string | null;
   url: string;
+  genres?: string[];
 }
 
 const Auth = () => {
@@ -75,7 +76,7 @@ const Auth = () => {
       });
       if (!error && data?.results?.length > 0) {
         const a = data.results[0];
-        setSelectedArtist({ id: a.id, name: a.name, image: a.image, url: a.url });
+        setSelectedArtist({ id: a.id, name: a.name, image: a.image, url: a.url, genres: a.genres });
       } else {
         // Fallback: use the raw ID
         setSelectedArtist({ id: match[1], name: match[1], image: null, url: artistQuery.trim() });
@@ -119,6 +120,7 @@ const Auth = () => {
               avatar_url: selectedArtist?.image ?? null,
               spotify_artist_id: selectedArtist?.id ?? null,
               spotify_artist_url: selectedArtist?.url ?? null,
+              bio: selectedArtist?.genres?.length ? selectedArtist.genres.join(", ") : null,
             },
           },
         });
