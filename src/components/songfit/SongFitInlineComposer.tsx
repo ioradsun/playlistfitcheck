@@ -195,7 +195,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
                 onKeyDown={handleKeyDown}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setTimeout(() => setFocused(false), 200)}
-                placeholder="What you on right now?"
+                placeholder="Search or paste Spotify link"
                 className="w-full bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none py-2 pr-8"
                 disabled={publishing}
               />
