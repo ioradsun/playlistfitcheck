@@ -1,22 +1,13 @@
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
 
 export default function OurStory() {
-  const navigate = useNavigate();
-
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-4 pt-24 pb-12 space-y-10">
         <motion.div
-          className="flex items-center gap-4"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
-            <ArrowLeft size={20} />
-          </Button>
           <h1 className="text-3xl font-bold tracking-tight">
             Our <span className="text-gradient-primary">Story</span>
           </h1>
