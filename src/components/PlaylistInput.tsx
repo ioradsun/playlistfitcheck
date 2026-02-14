@@ -8,9 +8,10 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { PlaylistInput as PlaylistInputType } from "@/lib/playlistHealthEngine";
 import { SAMPLE_PLAYLIST, SAMPLE_EDITORIAL } from "@/lib/playlistHealthEngine";
-
 import { getSessionId } from "@/lib/sessionId";
 import { PageBadge } from "@/components/PageBadge";
+import { RecentProjects } from "@/components/RecentProjects";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Props {
   onAnalyze: (data: PlaylistInputType & { _songUrl?: string }) => void;
@@ -39,7 +40,6 @@ function useSpotifySearch<T>(type: "playlist" | "track", query: string) {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    // Don't search if it looks like a URL
     if (!query || query.length < 2 || query.includes("spotify.com")) {
       setResults([]);
       return;
@@ -74,6 +74,7 @@ function useSpotifySearch<T>(type: "playlist" | "track", query: string) {
 }
 
 export function PlaylistInputSection({ onAnalyze }: Props) {
+  const { user } = useAuth();
   const [url, setUrl] = useState("");
   const [songUrl, setSongUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -145,6 +146,32 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
 
   const showPlaylistDropdown = playlistFocused && playlistResults.length > 0;
   const showSongDropdown = songFocused && songResults.length > 0;
+
+  const fetchSavedSearches = useCallback(async () => {
+    if (!user) return [];
+    const { data } = await supabase.from("saved_searches").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5);
+    return data ?? [];
+  }, [user]);
+
+  const handleLoadSaved = useCallback((s: any) => {
+    if (s.report_data) {
+      const { input, trackList, songUrl: sUrl } = s.report_data;
+      onAnalyze({ ...input, _trackList: trackList, _songUrl: sUrl });
+    } else if (s.playlist_url) {
+      setUrl(s.playlist_url);
+      if (s.song_url) setSongUrl(s.song_url);
+    }
+  }, [onAnalyze]);
+
+  const handleDeleteSaved = useCallback(async (id: string) => {
+    await supabase.from("saved_searches").delete().eq("id", id);
+  }, []);
+
+  const toItem = useCallback((s: any) => ({
+    id: s.id,
+    label: s.playlist_name || "Untitled Playlist",
+    meta: `${s.blended_score != null ? `Fit ${s.blended_score}` : s.health_score != null ? `Health ${s.health_score}` : ""} · ${new Date(s.created_at).toLocaleDateString()}`,
+  }), []);
 
   return (
     <motion.div
@@ -265,6 +292,12 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         </button>
       </div>
 
+      <RecentProjects
+        fetcher={fetchSavedSearches}
+        toItem={toItem}
+        onLoad={handleLoadSaved}
+        onDelete={handleDeleteSaved}
+      />
     </motion.div>
   );
 }

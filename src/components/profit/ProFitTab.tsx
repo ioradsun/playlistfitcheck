@@ -93,5 +93,8 @@ export const ProFitTab = () => {
     );
   }
 
-  return <ProFitLanding onAnalyze={handleAnalyze} loading={loading} />;
+  return <ProFitLanding onAnalyze={handleAnalyze} onLoadReport={(r: any) => {
+    const artistUrl = `https://open.spotify.com/artist/${r.profit_artists?.spotify_artist_id}`;
+    handleAnalyze(artistUrl);
+  }} loading={loading} />;
 };

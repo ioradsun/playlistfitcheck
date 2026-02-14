@@ -86,5 +86,10 @@ export function LyricFitTab({ initialLyric }: Props) {
     );
   }
 
-  return <LyricUploader onTranscribe={handleTranscribe} loading={loading} />;
+  return <LyricUploader onTranscribe={handleTranscribe} onLoadSaved={(l: any) => {
+    setLyricData({ title: l.title, artist: l.artist, lines: l.lines as any[] });
+    setSavedId(l.id);
+    const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+    setAudioFile(dummyFile);
+  }} loading={loading} />;
 }

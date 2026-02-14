@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { ArrowRight, Loader2, TrendingUp, DollarSign, BarChart3, Music, X } from "lucide-react";
 import { PageBadge } from "@/components/PageBadge";
 import { supabase } from "@/integrations/supabase/client";
+import { RecentProjects } from "@/components/RecentProjects";
+import { useAuth } from "@/hooks/useAuth";
 
 interface SpotifyArtistResult {
   id: string;
@@ -16,12 +18,14 @@ interface SpotifyArtistResult {
 
 interface ProFitLandingProps {
   onAnalyze: (url: string) => void;
+  onLoadReport?: (report: any) => void;
   loading: boolean;
 }
 
 const EXAMPLE_URL = "https://open.spotify.com/artist/6qqNVTkY8uBg9cP3Jd7DAH";
 
-export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
+export const ProFitLanding = ({ onAnalyze, onLoadReport, loading }: ProFitLandingProps) => {
+  const { user } = useAuth();
   const [artistQuery, setArtistQuery] = useState("");
   const [artistResults, setArtistResults] = useState<SpotifyArtistResult[]>([]);
   const [artistSearching, setArtistSearching] = useState(false);
@@ -82,6 +86,26 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
   };
 
   const showArtistDropdown = artistFocused && artistResults.length > 0 && !selectedArtist;
+
+  const fetchRecentReports = useCallback(async () => {
+    if (!user) return [];
+    const { data } = await supabase
+      .from("profit_reports")
+      .select("id, artist_id, blueprint_json, created_at, profit_artists(name, image_url, spotify_artist_id)")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    return data ?? [];
+  }, [user]);
+
+  const toReportItem = useCallback((r: any) => ({
+    id: r.id,
+    label: r.profit_artists?.name ?? "Unknown Artist",
+    meta: `${(r.blueprint_json as any)?.tier?.name ?? "Report"} · ${new Date(r.created_at).toLocaleDateString()}`,
+  }), []);
+
+  const handleDeleteReport = useCallback(async (_id: string) => {
+    // profit_reports doesn't have delete RLS — no-op for now
+  }, []);
 
   return (
     <motion.div
@@ -209,6 +233,15 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
             <p className="text-xs text-muted-foreground">Fetching Spotify signals & generating your blueprint</p>
           </div>
         </motion.div>
+      )}
+
+      {onLoadReport && (
+        <RecentProjects
+          fetcher={fetchRecentReports}
+          toItem={toReportItem}
+          onLoad={onLoadReport}
+          onDelete={handleDeleteReport}
+        />
       )}
     </motion.div>
   );
