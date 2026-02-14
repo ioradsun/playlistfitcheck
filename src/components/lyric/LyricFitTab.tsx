@@ -6,9 +6,10 @@ import { LyricDisplay, type LyricData } from "./LyricDisplay";
 
 interface Props {
   initialLyric?: any;
+  onProjectSaved?: () => void;
 }
 
-export function LyricFitTab({ initialLyric }: Props) {
+export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -81,7 +82,7 @@ export function LyricFitTab({ initialLyric }: Props) {
         audioFile={audioFile}
         savedId={savedId}
         onBack={handleBack}
-        onSaved={(id) => setSavedId(id)}
+        onSaved={(id) => { setSavedId(id); onProjectSaved?.(); }}
       />
     );
   }

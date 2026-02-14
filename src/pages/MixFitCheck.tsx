@@ -13,9 +13,10 @@ const MAX_MIXES = 6;
 
 interface MixFitCheckProps {
   initialProject?: MixProjectData | null;
+  onProjectSaved?: () => void;
 }
 
-export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
+export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCheckProps = {}) {
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
   const { list, save, remove } = useMixProjectStorage();
 
@@ -161,6 +162,7 @@ export default function MixFitCheck({ initialProject }: MixFitCheckProps = {}) {
       });
       setLastSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       setRefreshKey((k) => k + 1);
+      onProjectSaved?.();
       if (showToast) {
         toast.success("Project saved — audio files are not stored, only filenames, rankings & notes.");
       }
