@@ -289,19 +289,94 @@ const Index = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const [profitArtistUrl, setProfitArtistUrl] = useState<string | null>(null);
+  const [profitLoadKey, setProfitLoadKey] = useState(0);
+
   const handleNewProject = useCallback(() => {
-    // Reset state for current tool
     setResult(null);
     setVibeAnalysis(null);
     setSongFitAnalysis(null);
     setLoadedMixProject(null);
     setLoadedLyric(null);
+    setProfitArtistUrl(null);
+    setProfitLoadKey(k => k + 1);
   }, []);
+
+  const handleLoadProject = useCallback((type: string, data: any) => {
+    // Reset everything first
+    setResult(null);
+    setVibeAnalysis(null);
+    setSongFitAnalysis(null);
+    setLoadedMixProject(null);
+    setLoadedLyric(null);
+    setProfitArtistUrl(null);
+
+    switch (type) {
+      case "profit": {
+        const artistId = data?.spotify_artist_id;
+        if (artistId) {
+          setProfitArtistUrl(`https://open.spotify.com/artist/${artistId}`);
+          setProfitLoadKey(k => k + 1);
+        }
+        break;
+      }
+      case "playlist": {
+        if (data?.report_data) {
+          const { input, output, vibeAnalysis: vibe, songFitAnalysis: songFit, trackList, songUrl } = data.report_data;
+          setResult({ output, input, name: input?.playlistName, key: Date.now(), trackList, songUrl });
+          setVibeAnalysis(vibe ?? null);
+          setSongFitAnalysis(songFit ?? null);
+          setVibeLoading(false);
+          setSongFitLoading(false);
+        } else if (data?.playlist_url) {
+          // Re-run analysis from scratch
+          (async () => {
+            setVibeLoading(true);
+            try {
+              const { data: plData, error } = await supabase.functions.invoke("spotify-playlist", {
+                body: { playlistUrl: data.playlist_url, sessionId: null, songUrl: data.song_url || null },
+              });
+              if (error) throw new Error(error.message);
+              if (plData?.error) throw new Error(plData.error);
+              handleAnalyze({ ...(plData as PlaylistInput), _songUrl: data.song_url || undefined });
+            } catch (e) {
+              console.error("Re-run error:", e);
+              toast.error("Failed to load report. Try running PlaylistFit again.");
+              setVibeLoading(false);
+            }
+          })();
+        }
+        break;
+      }
+      case "mix": {
+        if (data) {
+          const mixData: MixProjectData = {
+            id: data.id,
+            title: data.title || "",
+            notes: data.notes || "",
+            mixes: Array.isArray(data.mixes) ? data.mixes : [],
+            markerStart: 0,
+            markerEnd: 10,
+            createdAt: data.created_at || new Date().toISOString(),
+            updatedAt: data.updated_at || new Date().toISOString(),
+          };
+          setLoadedMixProject(mixData);
+        }
+        break;
+      }
+      case "lyric": {
+        if (data) {
+          setLoadedLyric(data);
+        }
+        break;
+      }
+    }
+  }, [handleAnalyze]);
 
   const renderTabContent = () => {
     switch (activeTab) {
       case "profit":
-        return <div className="flex-1 flex items-start justify-center px-4 py-8"><ProFitTab /></div>;
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} /></div>;
       case "songfit":
         return <div className="flex-1 flex items-start justify-center px-4 py-8"><SongFitTab /></div>;
       case "playlist":
@@ -327,9 +402,9 @@ const Index = () => {
           </div>
         );
       case "mix":
-        return <div className="flex-1 flex items-start justify-center px-4 py-8"><MixFitCheck initialProject={loadedMixProject} /></div>;
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} /></div>;
       case "lyric":
-        return <div className="flex-1 flex items-start justify-center px-4 py-8"><LyricFitTab initialLyric={loadedLyric} /></div>;
+        return <div className="flex-1 flex items-start justify-center px-4 py-8"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} /></div>;
       case "hitfit":
         return <div className="flex-1 flex items-start justify-center px-4 py-8"><HitFitTab /></div>;
       default:
@@ -339,7 +414,7 @@ const Index = () => {
 
   return (
     <>
-      <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} onNewProject={handleNewProject} />
+      <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} onNewProject={handleNewProject} onLoadProject={handleLoadProject} />
       <SidebarInset>
         {/* Minimal top header */}
         <header className="sticky top-0 z-40 flex items-center gap-2 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">

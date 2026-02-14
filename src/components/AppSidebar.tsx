@@ -62,20 +62,22 @@ const NOTI_ICON_MAP = {
   follow: { icon: UserPlus, className: "text-primary" },
 };
 
-interface RecentItem {
+export interface RecentItem {
   id: string;
   label: string;
   meta: string;
   type: string;
+  rawData?: any; // raw DB row for loading
 }
 
-interface AppSidebarProps {
+export interface AppSidebarProps {
   activeTab?: string;
   onTabChange?: (tab: string) => void;
   onNewProject?: () => void;
+  onLoadProject?: (type: string, data: any) => void;
 }
 
-export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarProps) {
+export function AppSidebar({ activeTab, onTabChange, onNewProject, onLoadProject }: AppSidebarProps) {
   const { user, loading: authLoading, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -83,17 +85,16 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
   const collapsed = sidebarState === "collapsed";
   const { notifications, unreadCount, loading: notiLoading, markAllRead, refetch: refetchNotifications } = useNotifications();
 
-  // Recent projects for sidebar
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
 
   const fetchRecents = useCallback(async () => {
     if (!user) return;
     const items: RecentItem[] = [];
 
-    // ProFit reports
+    // ProFit reports — need spotify_artist_id to re-trigger analysis
     const { data: reports } = await supabase
       .from("profit_reports")
-      .select("id, created_at, artist_id, profit_artists!inner(name)")
+      .select("id, created_at, artist_id, profit_artists!inner(name, spotify_artist_id)")
       .order("created_at", { ascending: false })
       .limit(5);
     if (reports) {
@@ -103,14 +104,15 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
           label: r.profit_artists?.name || "Artist Report",
           meta: formatDistanceToNow(new Date(r.created_at), { addSuffix: true }),
           type: "profit",
+          rawData: { spotify_artist_id: r.profit_artists?.spotify_artist_id },
         });
       });
     }
 
-    // Saved searches (PlaylistFit)
+    // Saved searches (PlaylistFit) — need report_data, playlist_url, song_url
     const { data: searches } = await supabase
       .from("saved_searches")
-      .select("id, playlist_name, created_at")
+      .select("id, playlist_name, playlist_url, song_url, report_data, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(5);
@@ -121,14 +123,15 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
           label: s.playlist_name || "Playlist Analysis",
           meta: formatDistanceToNow(new Date(s.created_at), { addSuffix: true }),
           type: "playlist",
+          rawData: { report_data: s.report_data, playlist_url: s.playlist_url, song_url: s.song_url },
         });
       });
     }
 
-    // Mix projects
+    // Mix projects — need full project data
     const { data: mixes } = await supabase
       .from("mix_projects")
-      .select("id, title, updated_at")
+      .select("id, title, notes, mixes, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(5);
@@ -139,14 +142,15 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
           label: m.title || "Mix Project",
           meta: formatDistanceToNow(new Date(m.updated_at), { addSuffix: true }),
           type: "mix",
+          rawData: m,
         });
       });
     }
 
-    // Saved lyrics
+    // Saved lyrics — need full lyric data
     const { data: lyrics } = await supabase
       .from("saved_lyrics")
-      .select("id, title, artist, updated_at")
+      .select("id, title, artist, lines, filename, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(5);
@@ -157,6 +161,7 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
           label: `${l.title || "Untitled"} – ${l.artist || "Unknown"}`,
           meta: formatDistanceToNow(new Date(l.updated_at), { addSuffix: true }),
           type: "lyric",
+          rawData: l,
         });
       });
     }
@@ -171,6 +176,15 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
   const handleToolClick = (tool: ToolItem) => {
     onTabChange?.(tool.value);
     navigate(tool.path);
+  };
+
+  const handleRecentClick = (item: RecentItem) => {
+    // Switch to the tool tab
+    onTabChange?.(item.type);
+    const tool = TOOLS.find(t => t.value === item.type);
+    if (tool) navigate(tool.path);
+    // Emit load event
+    onLoadProject?.(item.type, item.rawData);
   };
 
   const handleLogout = async () => {
@@ -189,7 +203,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
 
   return (
     <Sidebar collapsible="icon">
-      {/* Header: Brand + New button */}
       <SidebarHeader className="pb-0">
         <div className="flex items-center gap-2 px-2 py-1">
           <Music size={18} className="text-primary shrink-0" />
@@ -199,9 +212,7 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
         </div>
         {!collapsed && (
           <button
-            onClick={() => {
-              onNewProject?.();
-            }}
+            onClick={() => onNewProject?.()}
             className="mx-2 mt-2 flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground hover:bg-secondary transition-colors"
           >
             <Plus size={16} />
@@ -221,7 +232,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
 
       <SidebarSeparator className="my-2" />
 
-      {/* Tool Navigation + Recent Projects */}
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Tools</SidebarGroupLabel>
@@ -244,7 +254,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
                       <span>{tool.label}</span>
                     </SidebarMenuButton>
 
-                    {/* Show recent items under active tool */}
                     {!collapsed && isActive && recents.length > 0 && (
                       <ul className="ml-6 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
                         {recents.map((item) => (
@@ -253,7 +262,7 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
                               className="w-full text-left px-2 py-1 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-md truncate transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                // Navigation to load specific project will be wired in next phase
+                                handleRecentClick(item);
                               }}
                               title={item.label}
                             >
@@ -273,14 +282,13 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
 
         <SidebarSeparator />
 
-        {/* Notifications */}
         {!authLoading && user && (
           <SidebarGroup>
             <SidebarGroupLabel>
               <span className="flex items-center gap-2">
                 Notifications
                 {unreadCount > 0 && (
-                  <span className="flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  <span className="flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -352,7 +360,7 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
                       <div className="relative">
                         <Bell size={16} />
                         {unreadCount > 0 && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 text-[8px] font-bold text-white flex items-center justify-center">
+                          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-destructive text-[8px] font-bold text-destructive-foreground flex items-center justify-center">
                             {unreadCount > 9 ? "+" : unreadCount}
                           </span>
                         )}
@@ -368,7 +376,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
 
         <SidebarSeparator />
 
-        {/* Links */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -387,7 +394,6 @@ export function AppSidebar({ activeTab, onTabChange, onNewProject }: AppSidebarP
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Footer: User */}
       <SidebarFooter>
         {authLoading ? null : user ? (
           <div className="space-y-1">
