@@ -34,6 +34,12 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/SongFit" element={<Index />} />
+            <Route path="/ProFit" element={<Index />} />
+            <Route path="/PlaylistFit" element={<Index />} />
+            <Route path="/MixFit" element={<Index />} />
+            <Route path="/LyricFit" element={<Index />} />
+            <Route path="/HitFit" element={<Index />} />
             <Route path="/how-scoring-works" element={<WithNavbar><HowScoringWorks /></WithNavbar>} />
             <Route path="/admin" element={<WithNavbar><Admin /></WithNavbar>} />
             <Route path="/dashboard" element={<WithNavbar><Dashboard /></WithNavbar>} />
