@@ -88,109 +88,156 @@ export function SongFitPostCard({ post, onOpenComments, onRefresh }: Props) {
   const tags = (post.tags_json as string[]) || [];
 
   return (
-    <div className="glass-card rounded-2xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+    <div className="border-b border-border/40">
+      {/* Header — IG style: avatar + name + time */}
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
           {post.profiles?.avatar_url ? (
             <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
           ) : (
-            <User size={14} className="text-muted-foreground" />
+            <User size={16} className="text-muted-foreground" />
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate">{displayName}</p>
-          <p className="text-xs text-muted-foreground">{timeAgo}</p>
+          <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
+          <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
         </div>
       </div>
 
-      {/* Album Art */}
-      <div className="relative aspect-square bg-muted">
+      {/* Album Art — full-width, 1:1 square like IG */}
+      <div className="relative w-full aspect-square bg-black/20">
         {post.album_art_url ? (
-          <img src={post.album_art_url} alt={post.track_title} className="w-full h-full object-cover" />
+          <img
+            src={post.album_art_url}
+            alt={post.track_title}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground">No artwork</div>
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+            No artwork
+          </div>
         )}
-        {/* Preview play button overlay */}
+
+        {/* Track name + artist overlay at bottom of art */}
+        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 pt-10">
+          <h3 className="font-bold text-white text-lg leading-tight drop-shadow-md truncate">
+            {post.track_title}
+          </h3>
+          <p className="text-white/80 text-sm leading-tight truncate drop-shadow-md">
+            {artists.map((a: any) => a.name).join(", ")}
+          </p>
+        </div>
+
+        {/* Preview play button */}
         {post.preview_url && (
           <button
             onClick={togglePlay}
-            className="absolute bottom-3 right-3 w-12 h-12 rounded-full bg-primary/90 hover:bg-primary flex items-center justify-center text-primary-foreground shadow-lg transition-colors"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-sm flex items-center justify-center text-white shadow-2xl transition-all active:scale-90"
           >
-            {playing ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
+            {playing ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
           </button>
         )}
       </div>
 
-      {/* Track Info */}
-      <div className="px-4 pt-3 space-y-1">
-        <h3 className="font-bold text-base truncate">{post.track_title}</h3>
-        <p className="text-sm text-muted-foreground truncate">
-          {artists.map((a: any) => a.name).join(", ")}
-        </p>
+      {/* Action Row — IG layout */}
+      <div className="flex items-center justify-between px-2 pt-1">
+        <div className="flex items-center -ml-1">
+          <button
+            onClick={toggleLike}
+            className="p-2.5 hover:opacity-70 active:scale-90 transition-all"
+          >
+            <Heart
+              size={24}
+              className={liked ? "fill-red-500 text-red-500" : "text-foreground"}
+            />
+          </button>
+          <button
+            onClick={() => onOpenComments(post.id)}
+            className="p-2.5 hover:opacity-70 active:scale-90 transition-all"
+          >
+            <MessageCircle size={24} className="text-foreground" />
+          </button>
+          <button
+            onClick={handleShare}
+            className="p-2.5 hover:opacity-70 active:scale-90 transition-all"
+          >
+            <Share2 size={24} className="text-foreground" />
+          </button>
+        </div>
+        <button
+          onClick={toggleSave}
+          className="p-2.5 hover:opacity-70 active:scale-90 transition-all"
+        >
+          <Bookmark
+            size={24}
+            className={saved ? "fill-foreground text-foreground" : "text-foreground"}
+          />
+        </button>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-between px-4 py-2">
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={toggleLike}>
-            <Heart size={20} className={liked ? "fill-red-500 text-red-500" : ""} />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => onOpenComments(post.id)}>
-            <MessageCircle size={20} />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleShare}>
-            <Share2 size={20} />
-          </Button>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={toggleSave}>
-            <Bookmark size={20} className={saved ? "fill-primary text-primary" : ""} />
-          </Button>
-        </div>
-      </div>
-
-      {/* Likes count */}
+      {/* Likes */}
       {likesCount > 0 && (
-        <p className="px-4 text-sm font-semibold">{likesCount} {likesCount === 1 ? "like" : "likes"}</p>
+        <p className="px-3 text-sm font-semibold">
+          {likesCount.toLocaleString()} {likesCount === 1 ? "like" : "likes"}
+        </p>
       )}
 
       {/* Caption */}
       {post.caption && (
-        <div className="px-4 pb-1">
+        <div className="px-3 pt-0.5">
           <p className={`text-sm ${captionExpanded ? "" : "line-clamp-2"}`}>
             <span className="font-semibold mr-1">{displayName}</span>
             {post.caption}
           </p>
           {post.caption.length > 100 && !captionExpanded && (
-            <button onClick={() => setCaptionExpanded(true)} className="text-xs text-muted-foreground">more</button>
+            <button
+              onClick={() => setCaptionExpanded(true)}
+              className="text-xs text-muted-foreground mt-0.5"
+            >
+              more
+            </button>
           )}
         </div>
       )}
 
       {/* Tags */}
       {tags.length > 0 && (
-        <div className="px-4 flex flex-wrap gap-1 pb-2">
+        <div className="px-3 pt-1 flex flex-wrap gap-1">
           {tags.map((t, i) => (
-            <Badge key={i} variant="secondary" className="text-xs">{t}</Badge>
+            <Badge key={i} variant="secondary" className="text-[11px] px-2 py-0 h-5">
+              {t}
+            </Badge>
           ))}
         </div>
       )}
 
       {/* Comments link */}
       {post.comments_count > 0 && (
-        <button onClick={() => onOpenComments(post.id)} className="px-4 pb-2 text-sm text-muted-foreground hover:text-foreground">
-          View {post.comments_count} comment{post.comments_count !== 1 ? "s" : ""}
+        <button
+          onClick={() => onOpenComments(post.id)}
+          className="px-3 pt-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          View all {post.comments_count} comment{post.comments_count !== 1 ? "s" : ""}
         </button>
       )}
 
-      {/* CTAs */}
-      <div className="px-4 pb-4 flex gap-2">
-        <Button size="sm" className="flex-1 gap-1.5" onClick={() => window.open(post.spotify_track_url, "_blank")}>
+      {/* CTAs — compact row */}
+      <div className="px-3 pt-2 pb-4 flex gap-2">
+        <Button
+          size="sm"
+          className="flex-1 gap-1.5 h-9 text-xs font-semibold"
+          onClick={() => window.open(post.spotify_track_url, "_blank")}
+        >
           <ExternalLink size={14} /> Open in Spotify
         </Button>
         {primaryArtist?.spotifyUrl && (
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => window.open(primaryArtist.spotifyUrl, "_blank")}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 h-9 text-xs font-semibold"
+            onClick={() => window.open(primaryArtist.spotifyUrl, "_blank")}
+          >
             <User size={14} /> Visit Artist
           </Button>
         )}
