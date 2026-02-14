@@ -5,8 +5,6 @@ import { motion } from "framer-motion";
 import { ArrowRight, Loader2, TrendingUp, DollarSign, BarChart3, Music, X } from "lucide-react";
 import { PageBadge } from "@/components/PageBadge";
 import { supabase } from "@/integrations/supabase/client";
-import { RecentProjects } from "@/components/RecentProjects";
-import { useAuth } from "@/hooks/useAuth";
 
 interface SpotifyArtistResult {
   id: string;
@@ -24,8 +22,7 @@ interface ProFitLandingProps {
 
 const EXAMPLE_URL = "https://open.spotify.com/artist/6qqNVTkY8uBg9cP3Jd7DAH";
 
-export const ProFitLanding = ({ onAnalyze, onLoadReport, loading }: ProFitLandingProps) => {
-  const { user } = useAuth();
+export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
   const [artistQuery, setArtistQuery] = useState("");
   const [artistResults, setArtistResults] = useState<SpotifyArtistResult[]>([]);
   const [artistSearching, setArtistSearching] = useState(false);
@@ -87,26 +84,6 @@ export const ProFitLanding = ({ onAnalyze, onLoadReport, loading }: ProFitLandin
 
   const showArtistDropdown = artistFocused && artistResults.length > 0 && !selectedArtist;
 
-  const fetchRecentReports = useCallback(async () => {
-    if (!user) return [];
-    const { data } = await supabase
-      .from("profit_reports")
-      .select("id, artist_id, blueprint_json, created_at, profit_artists(name, image_url, spotify_artist_id)")
-      .order("created_at", { ascending: false })
-      .limit(5);
-    return data ?? [];
-  }, [user]);
-
-  const toReportItem = useCallback((r: any) => ({
-    id: r.id,
-    label: r.profit_artists?.name ?? "Unknown Artist",
-    meta: `${(r.blueprint_json as any)?.tier?.name ?? "Report"} · ${new Date(r.created_at).toLocaleDateString()}`,
-  }), []);
-
-  const handleDeleteReport = useCallback(async (_id: string) => {
-    // profit_reports doesn't have delete RLS — no-op for now
-  }, []);
-
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col items-center gap-6">
       {/* Hero */}
@@ -114,249 +91,120 @@ export const ProFitLanding = ({ onAnalyze, onLoadReport, loading }: ProFitLandin
         <PageBadge label="ProFit" subtitle="See how your Spotify fits making money." />
       </div>
 
-      {onLoadReport ? (
-        <RecentProjects
-          fetcher={fetchRecentReports}
-          toItem={toReportItem}
-          onLoad={onLoadReport}
-          onDelete={handleDeleteReport}
-        >
-          <div className="w-full flex flex-col items-center gap-6">
-            {/* Artist Search */}
-            <div className="w-full max-w-lg space-y-3">
-              {selectedArtist ? (
-                <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50">
-                  {selectedArtist.image ? (
-                    <img src={selectedArtist.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                      <Music size={14} className="text-muted-foreground" />
-                    </div>
-                  )}
-                  <span className="text-sm font-medium truncate flex-1">{selectedArtist.name}</span>
-                  <Button
-                    size="sm"
-                    onClick={handleAnalyze}
-                    disabled={loading}
-                    className="h-8 px-4"
-                  >
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedArtist(null)}
-                    className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors"
-                    disabled={loading}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Search artist or paste Spotify link…"
-                      value={artistQuery}
-                      onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
-                      onKeyDown={e => {
-                        if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) {
-                          e.preventDefault();
-                          handlePasteArtistUrl();
-                        }
-                      }}
-                      onFocus={() => setArtistFocused(true)}
-                      onBlur={() => setTimeout(() => setArtistFocused(false), 200)}
-                      className="flex-1 h-12 text-base"
-                      disabled={loading}
-                    />
-                  </div>
-                  {artistSearching && (
-                    <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
-                  )}
-                  {showArtistDropdown && (
-                    <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
-                      {artistResults.map(a => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/40 transition-colors text-left"
-                          onMouseDown={() => { setSelectedArtist(a); setArtistQuery(""); setArtistResults([]); }}
-                        >
-                          {a.image ? (
-                            <img src={a.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                              <Music size={14} className="text-muted-foreground" />
-                            </div>
-                          )}
-                          <span className="text-sm font-medium truncate">{a.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="flex items-center justify-center gap-4 text-xs">
-                <button
-                  onClick={() => onAnalyze(EXAMPLE_URL)}
-                  className="text-primary hover:underline underline-offset-2"
-                  disabled={loading}
-                >
-                  See Demo Results
-                </button>
-              </div>
-            </div>
-
-            {/* Feature pills */}
-            <div className="flex flex-wrap justify-center gap-3 text-xs text-muted-foreground">
-              {[
-                { icon: BarChart3, label: "Tier Classification" },
-                { icon: TrendingUp, label: "Revenue Scorecard" },
-                { icon: DollarSign, label: "90-Day Roadmap" },
-              ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card/50">
-                  <Icon size={12} />
-                  {label}
-                </div>
-              ))}
-            </div>
-
-            {/* Loading state */}
-            {loading && (
-              <motion.div
-                className="flex flex-col items-center gap-4 pt-4"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
-                <div className="w-16 h-16 rounded-full border-2 border-primary/30 flex items-center justify-center">
-                  <Loader2 size={28} className="text-primary animate-spin" />
-                </div>
-                <div className="text-center space-y-1">
-                  <p className="text-sm font-medium">Analyzing artist data...</p>
-                  <p className="text-xs text-muted-foreground">Fetching Spotify signals & generating your blueprint</p>
-                </div>
-              </motion.div>
-            )}
-          </div>
-        </RecentProjects>
-      ) : (
-        <>
-          {/* Artist Search (no recent projects available) */}
-          <div className="w-full max-w-lg space-y-3">
-            {selectedArtist ? (
-              <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50">
-                {selectedArtist.image ? (
-                  <img src={selectedArtist.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    <Music size={14} className="text-muted-foreground" />
-                  </div>
-                )}
-                <span className="text-sm font-medium truncate flex-1">{selectedArtist.name}</span>
-                <Button
-                  size="sm"
-                  onClick={handleAnalyze}
-                  disabled={loading}
-                  className="h-8 px-4"
-                >
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedArtist(null)}
-                  className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors"
-                  disabled={loading}
-                >
-                  <X size={14} />
-                </button>
-              </div>
+      {/* Artist Search */}
+      <div className="w-full max-w-lg space-y-3">
+        {selectedArtist ? (
+          <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50">
+            {selectedArtist.image ? (
+              <img src={selectedArtist.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
             ) : (
-              <div className="relative">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Search artist or paste Spotify link…"
-                    value={artistQuery}
-                    onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) {
-                        e.preventDefault();
-                        handlePasteArtistUrl();
-                      }
-                    }}
-                    onFocus={() => setArtistFocused(true)}
-                    onBlur={() => setTimeout(() => setArtistFocused(false), 200)}
-                    className="flex-1 h-12 text-base"
-                    disabled={loading}
-                  />
-                </div>
-                {artistSearching && (
-                  <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
-                )}
-                {showArtistDropdown && (
-                  <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
-                    {artistResults.map(a => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/40 transition-colors text-left"
-                        onMouseDown={() => { setSelectedArtist(a); setArtistQuery(""); setArtistResults([]); }}
-                      >
-                        {a.image ? (
-                          <img src={a.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                            <Music size={14} className="text-muted-foreground" />
-                          </div>
-                        )}
-                        <span className="text-sm font-medium truncate">{a.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                <Music size={14} className="text-muted-foreground" />
               </div>
             )}
-            <div className="flex items-center justify-center gap-4 text-xs">
-              <button
-                onClick={() => onAnalyze(EXAMPLE_URL)}
-                className="text-primary hover:underline underline-offset-2"
-                disabled={loading}
-              >
-                See Demo Results
-              </button>
-            </div>
-          </div>
-
-          {/* Feature pills */}
-          <div className="flex flex-wrap justify-center gap-3 text-xs text-muted-foreground">
-            {[
-              { icon: BarChart3, label: "Tier Classification" },
-              { icon: TrendingUp, label: "Revenue Scorecard" },
-              { icon: DollarSign, label: "90-Day Roadmap" },
-            ].map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card/50">
-                <Icon size={12} />
-                {label}
-              </div>
-            ))}
-          </div>
-
-          {/* Loading state */}
-          {loading && (
-            <motion.div
-              className="flex flex-col items-center gap-4 pt-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+            <span className="text-sm font-medium truncate flex-1">{selectedArtist.name}</span>
+            <Button
+              size="sm"
+              onClick={handleAnalyze}
+              disabled={loading}
+              className="h-8 px-4"
             >
-              <div className="w-16 h-16 rounded-full border-2 border-primary/30 flex items-center justify-center">
-                <Loader2 size={28} className="text-primary animate-spin" />
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setSelectedArtist(null)}
+              className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors"
+              disabled={loading}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Search artist or paste Spotify link…"
+                value={artistQuery}
+                onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) {
+                    e.preventDefault();
+                    handlePasteArtistUrl();
+                  }
+                }}
+                onFocus={() => setArtistFocused(true)}
+                onBlur={() => setTimeout(() => setArtistFocused(false), 200)}
+                className="flex-1 h-12 text-base"
+                disabled={loading}
+              />
+            </div>
+            {artistSearching && (
+              <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
+            {showArtistDropdown && (
+              <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
+                {artistResults.map(a => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/40 transition-colors text-left"
+                    onMouseDown={() => { setSelectedArtist(a); setArtistQuery(""); setArtistResults([]); }}
+                  >
+                    {a.image ? (
+                      <img src={a.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <Music size={14} className="text-muted-foreground" />
+                      </div>
+                    )}
+                    <span className="text-sm font-medium truncate">{a.name}</span>
+                  </button>
+                ))}
               </div>
-              <div className="text-center space-y-1">
-                <p className="text-sm font-medium">Analyzing artist data...</p>
-                <p className="text-xs text-muted-foreground">Fetching Spotify signals & generating your blueprint</p>
-              </div>
-            </motion.div>
-          )}
-        </>
+            )}
+          </div>
+        )}
+        <div className="flex items-center justify-center gap-4 text-xs">
+          <button
+            onClick={() => onAnalyze(EXAMPLE_URL)}
+            className="text-primary hover:underline underline-offset-2"
+            disabled={loading}
+          >
+            See Demo Results
+          </button>
+        </div>
+      </div>
+
+      {/* Feature pills */}
+      <div className="flex flex-wrap justify-center gap-3 text-xs text-muted-foreground">
+        {[
+          { icon: BarChart3, label: "Tier Classification" },
+          { icon: TrendingUp, label: "Revenue Scorecard" },
+          { icon: DollarSign, label: "90-Day Roadmap" },
+        ].map(({ icon: Icon, label }) => (
+          <div key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card/50">
+            <Icon size={12} />
+            {label}
+          </div>
+        ))}
+      </div>
+
+      {/* Loading state */}
+      {loading && (
+        <motion.div
+          className="flex flex-col items-center gap-4 pt-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="w-16 h-16 rounded-full border-2 border-primary/30 flex items-center justify-center">
+            <Loader2 size={28} className="text-primary animate-spin" />
+          </div>
+          <div className="text-center space-y-1">
+            <p className="text-sm font-medium">Analyzing artist data...</p>
+            <p className="text-xs text-muted-foreground">Fetching Spotify signals & generating your blueprint</p>
+          </div>
+        </motion.div>
       )}
     </div>
   );
