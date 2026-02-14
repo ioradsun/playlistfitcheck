@@ -98,6 +98,8 @@ serve(async (req) => {
         name: a.name,
         image: a.images?.[0]?.url || a.images?.[1]?.url || null,
         url: a.external_urls?.spotify || `https://open.spotify.com/artist/${a.id}`,
+        genres: (a.genres || []).slice(0, 5),
+        followers: a.followers?.total || 0,
       }));
     } else {
       results = (data.tracks?.items || []).filter((t: any) => t != null).map((t: any) => ({
