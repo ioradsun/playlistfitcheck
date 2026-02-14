@@ -39,7 +39,7 @@ const App = () => (
               <Route path="/how-scoring-works" element={<PageLayout title="How Scoring Works"><HowScoringWorks /></PageLayout>} />
               <Route path="/about" element={<PageLayout title="The Tools" subtitle="What we built and why."><About /></PageLayout>} />
               <Route path="/our-story" element={<PageLayout title="The Story" subtitle="See how tools.fm found its fit."><OurStory /></PageLayout>} />
-              <Route path="/ajans-music" element={<PageLayout title="Ajan's Music" subtitle="The reason we're here."><AjansMusic /></PageLayout>} />
+              <Route path="/ajans-music" element={<PageLayout title="ajan's music" subtitle="The reason we're here."><AjansMusic /></PageLayout>} />
               <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />
               <Route path="/auth" element={<PageLayout title="Account"><Auth /></PageLayout>} />
               <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
