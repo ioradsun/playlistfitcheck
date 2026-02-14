@@ -25,6 +25,8 @@ export interface SongFitComment {
   post_id: string;
   user_id: string;
   content: string;
+  parent_comment_id: string | null;
   created_at: string;
   profiles?: { display_name: string | null; avatar_url: string | null };
+  replies?: SongFitComment[];
 }
