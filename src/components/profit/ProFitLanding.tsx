@@ -185,19 +185,6 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
         </div>
       </div>
 
-      {/* Feature pills */}
-      <div className="flex flex-wrap justify-center gap-3 text-xs text-muted-foreground">
-        {[
-          { icon: BarChart3, label: "Tier Classification" },
-          { icon: TrendingUp, label: "Revenue Scorecard" },
-          { icon: DollarSign, label: "90-Day Roadmap" },
-        ].map(({ icon: Icon, label }) => (
-          <div key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 bg-card/50">
-            <Icon size={12} />
-            {label}
-          </div>
-        ))}
-      </div>
     </div>
   );
 };
