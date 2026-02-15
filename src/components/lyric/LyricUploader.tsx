@@ -44,9 +44,9 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
       <div className="space-y-2">
-        <h2 className="text-xl font-semibold">Transcribe Lyrics</h2>
+        <h2 className="text-xl font-semibold">Make your lyrics caption-ready</h2>
         <p className="text-sm text-muted-foreground">
-          Upload a song to get AI-synced lyrics you can edit and export.
+          Generate synced lyrics you can edit and export.
         </p>
       </div>
 
@@ -101,7 +101,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
         ) : (
           <FileAudio size={16} className="mr-1" />
         )}
-        {loading ? "Transcribing..." : "Transcribe Lyrics"}
+        {loading ? "Syncing..." : "Sync Lyrics"}
       </Button>
     </div>
   );
