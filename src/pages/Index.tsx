@@ -79,7 +79,7 @@ const TAB_SUBTITLES: Record<string, string> = {
   mix: "See which mix fits best.",
   lyric: "Make sure your lyrics fit captions.",
   hitfit: "See if your song fits a hit.",
-  dreamfit: "The incubator for the next Fit.",
+  dreamfit: "Let's build the next Fit together.",
 };
 
 const Index = () => {
