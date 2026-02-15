@@ -72,7 +72,7 @@ export function DreamInlineComposer({ onCreated }: Props) {
               onClick={publish}
             >
               {publishing ? <Loader2 size={14} className="animate-spin" /> : (
-                <span className="flex items-center gap-1.5"><Sparkles size={12} />Fix This</span>
+                <span className="flex items-center gap-1.5"><Sparkles size={12} />Make This Real</span>
               )}
             </Button>
           </div>
