@@ -3,6 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, X, Music } from "lucide-react";
+import { toast } from "sonner";
+
+const MAX_FILE_SIZE = 75 * 1024 * 1024; // 75MB
 
 interface MixProjectFormProps {
   onSubmit: (title: string, notes: string, files: File[]) => void;
@@ -20,7 +23,14 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
     const newFiles = e.target.files;
     if (!newFiles) return;
     const remaining = MAX_MIXES - files.length;
-    const toAdd = Array.from(newFiles).slice(0, remaining);
+    const toAdd: File[] = [];
+    for (const file of Array.from(newFiles).slice(0, remaining)) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`${file.name} exceeds 75 MB limit.`);
+      } else {
+        toAdd.push(file);
+      }
+    }
     setFiles((prev) => [...prev, ...toAdd]);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -91,7 +101,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
             >
               <Upload size={14} />
               {files.length === 0
-                ? "Upload Mixes (MP3, WAV, M4A)"
+                ? `Upload Mixes · MP3, WAV, M4A · 75 MB max`
                 : `Add more (${files.length}/${MAX_MIXES})`}
             </button>
           )}
