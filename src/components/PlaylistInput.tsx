@@ -254,7 +254,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
               <Input
                 value={url}
                 onChange={e => { setUrl(e.target.value); setSelectedPlaylist(null); }}
-                placeholder="Search or paste Spotify playlist URL..."
+                placeholder="Search playlists or paste Spotify link"
                 className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
                 onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
                 onPaste={handlePlaylistPaste}
@@ -318,7 +318,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
                 ref={songInputRef}
                 value={songUrl}
                 onChange={e => { setSongUrl(e.target.value); setSelectedTrack(null); }}
-                placeholder="Search or paste Spotify song URL (optional)..."
+                placeholder="Search songs or paste Spotify link"
                 className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
                 onPaste={handleSongPaste}
                 onFocus={() => setSongFocused(true)}
@@ -355,7 +355,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
           )}
 
           <div className="pt-1">
-            <Button onClick={handleAnalyze} className="w-full glow-primary" size="lg" disabled={loading}>
+            <Button onClick={handleAnalyze} className="w-full glow-primary" size="lg" disabled={loading || (!url.trim() && !selectedPlaylist)}>
               {loading ? (
                 <Loader2 size={16} className="mr-1 animate-spin" />
               ) : (

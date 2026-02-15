@@ -217,7 +217,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
                     onPaste={handlePaste}
                     onFocus={() => setFocused(true)}
                     onBlur={() => setTimeout(() => setFocused(false), 200)}
-                    placeholder="Search or paste Spotify link"
+                    placeholder="Share your song and get feedback"
                     className="w-full bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none py-2 pr-8"
                     disabled={publishing}
                   />

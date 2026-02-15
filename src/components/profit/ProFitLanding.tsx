@@ -129,7 +129,7 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
           <div className="glass-card rounded-xl p-4">
             <div className="flex gap-2">
               <Input
-                placeholder="Search artist or paste Spotify link…"
+                placeholder="Search artists or paste Spotify link"
                 value={artistQuery}
                 onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
                 onKeyDown={e => {
@@ -179,9 +179,10 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
         </div>
         <div className="flex items-center justify-center">
           <Button
-            onClick={() => onAnalyze(EXAMPLE_URL)}
+            onClick={handleAnalyze}
             className="w-full glow-primary"
             size="lg"
+            disabled={!selectedArtist}
           >
             {siteCopy.tools.profit?.cta || "Generate My Plan"}
           </Button>
