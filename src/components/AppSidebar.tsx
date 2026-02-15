@@ -113,7 +113,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
 
     const { data: reports } = await supabase
       .from("profit_reports")
-      .select("id, created_at, artist_id, profit_artists!inner(name, spotify_artist_id)")
+      .select("id, created_at, blueprint_json, share_token, artist_id, profit_artists!inner(name, spotify_artist_id, image_url, genres_json, followers_total, popularity, raw_artist_json, signals_json)")
       .order("created_at", { ascending: false })
       .limit(5);
     if (reports) {
@@ -123,7 +123,21 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
           label: r.profit_artists?.name || "Artist Report",
           meta: formatDistanceToNow(new Date(r.created_at), { addSuffix: true }),
           type: "profit",
-          rawData: { spotify_artist_id: r.profit_artists?.spotify_artist_id },
+          rawData: {
+            reportId: r.id,
+            shareToken: r.share_token,
+            blueprint: r.blueprint_json,
+            artist: r.profit_artists?.raw_artist_json ? {
+              ...r.profit_artists.raw_artist_json,
+              spotify_artist_id: r.profit_artists.spotify_artist_id,
+              name: r.profit_artists.name,
+              image_url: r.profit_artists.image_url,
+            } : {
+              spotify_artist_id: r.profit_artists?.spotify_artist_id,
+              name: r.profit_artists?.name,
+              image_url: r.profit_artists?.image_url,
+            },
+          },
         });
       });
     }
@@ -182,6 +196,24 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       });
     }
 
+    const { data: hitfits } = await supabase
+      .from("saved_hitfit")
+      .select("id, filename, analysis_json, updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(5);
+    if (hitfits) {
+      hitfits.forEach((h: any) => {
+        items.push({
+          id: h.id,
+          label: h.filename || "HitFit Analysis",
+          meta: formatDistanceToNow(new Date(h.updated_at), { addSuffix: true }),
+          type: "hitfit",
+          rawData: { analysis: h.analysis_json },
+        });
+      });
+    }
+
     setRecentItems(items);
   }, [user]);
 
@@ -212,6 +244,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
     else if (item.type === "playlist") await supabase.from("saved_searches").delete().eq("id", item.id);
     else if (item.type === "mix") await supabase.from("mix_projects").delete().eq("id", item.id);
     else if (item.type === "lyric") await supabase.from("saved_lyrics").delete().eq("id", item.id);
+    else if (item.type === "hitfit") await supabase.from("saved_hitfit").delete().eq("id", item.id);
     setRecentItems((prev) => prev.filter((i) => i.id !== item.id));
   };
 

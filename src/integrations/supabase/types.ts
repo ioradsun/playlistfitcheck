@@ -472,6 +472,41 @@ export type Database = {
           },
         ]
       }
+      saved_hitfit: {
+        Row: {
+          analysis_json: Json
+          created_at: string
+          filename: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analysis_json: Json
+          created_at?: string
+          filename?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analysis_json?: Json
+          created_at?: string
+          filename?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_hitfit_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_lyrics: {
         Row: {
           artist: string

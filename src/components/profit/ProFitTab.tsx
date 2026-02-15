@@ -18,10 +18,11 @@ interface ReportState {
 
 interface ProFitTabProps {
   initialArtistUrl?: string | null;
+  initialSavedReport?: { reportId: string; shareToken: string; blueprint: Blueprint; artist: ArtistData } | null;
   onProjectSaved?: () => void;
 }
 
-export const ProFitTab = ({ initialArtistUrl, onProjectSaved }: ProFitTabProps = {}) => {
+export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved }: ProFitTabProps = {}) => {
   const [view, setView] = useState<View>("landing");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportState | null>(null);
@@ -66,20 +67,29 @@ export const ProFitTab = ({ initialArtistUrl, onProjectSaved }: ProFitTabProps =
     }
   }, []);
 
-  // Load from sidebar click (initialArtistUrl)
+  // Load from saved report (instant, no re-analysis)
   useEffect(() => {
-    if (autoRanRef.current || report || loading) return;
+    if (initialSavedReport?.reportId && initialSavedReport?.blueprint && initialSavedReport?.artist) {
+      setReport({
+        artist: initialSavedReport.artist,
+        blueprint: initialSavedReport.blueprint,
+        reportId: initialSavedReport.reportId,
+        shareToken: initialSavedReport.shareToken || "",
+      });
+      setView("report");
+      return;
+    }
+  }, [initialSavedReport]);
+
+  // Load from sidebar click (initialArtistUrl) — only if no saved report
+  useEffect(() => {
+    if (autoRanRef.current || report || loading || initialSavedReport) return;
     if (initialArtistUrl) {
       autoRanRef.current = true;
       handleAnalyze(initialArtistUrl);
       return;
     }
-    // Auto-run ProFit if user signed up with a Spotify artist
-    const artistId = profile?.spotify_artist_id;
-    if (!artistId) return;
-    autoRanRef.current = true;
-    handleAnalyze(`https://open.spotify.com/artist/${artistId}`);
-  }, [profile, report, loading, handleAnalyze, initialArtistUrl]);
+  }, [profile, report, loading, handleAnalyze, initialArtistUrl, initialSavedReport]);
 
   if (view === "chat" && report) {
     return (
