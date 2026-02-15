@@ -220,6 +220,10 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
+      <div className="text-center space-y-1">
+        <h1 className="text-xl font-semibold text-foreground">Check the fit before you pitch</h1>
+        <p className="text-sm text-muted-foreground">Paste a playlist link to check its health and match your song.</p>
+      </div>
 
       <div className="space-y-4">
         {/* Combined URL inputs */}
@@ -355,19 +359,11 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
               ) : (
                 <Zap size={16} className="mr-1" />
               )}
-              {loading ? "Fetching..." : "Check Fit"}
+              {loading ? "Fetching..." : "Analyze Playlist"}
             </Button>
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-4 text-xs">
-          <button
-            onClick={handleDemo}
-            className="text-primary hover:underline underline-offset-2"
-          >
-            See Demo Results
-          </button>
-        </div>
       </div>
     </div>
   );
