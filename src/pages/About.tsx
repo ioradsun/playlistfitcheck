@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Users, BarChart3, ListMusic, Sliders, FileText, Target } from "lucide-react";
-import { useSiteCopy } from "@/hooks/useSiteCopy";
+import { Users, BarChart3, ListMusic, Sliders, FileText, Target, Sparkles } from "lucide-react";
+import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
-const ICON_MAP: Record<string, any> = {
-  CrowdFit: Users,
-  ProFit: BarChart3,
-  PlaylistFit: ListMusic,
-  MixFit: Sliders,
-  LyricFit: FileText,
-  HitFit: Target,
+const TOOL_ICON_MAP: Record<string, any> = {
+  songfit: Users,
+  profit: BarChart3,
+  playlist: ListMusic,
+  mix: Sliders,
+  lyric: FileText,
+  hitfit: Target,
+  dreamfit: Sparkles,
 };
 
 const TABS = ["Origin Story", "The Tools"] as const;
@@ -98,11 +99,12 @@ export default function About() {
             {about.tools_intro || "Six tools. One goal: give independent artists the clarity they deserve. No gatekeeping, no vague advice. Just data, context, and a little taste."}
           </p>
 
-          {about.products.map((product, i) => {
-            const Icon = ICON_MAP[product.name] || Target;
+          {Object.entries(siteCopy.tools).map(([key, tool]: [string, ToolCopy], i) => {
+            const Icon = TOOL_ICON_MAP[key] || Target;
+            const product = about.products.find((p) => p.name === tool.label);
             return (
               <motion.div
-                key={product.name}
+                key={key}
                 className="glass-card rounded-xl p-5 space-y-3"
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -113,19 +115,23 @@ export default function About() {
                     <Icon size={16} className="text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-semibold">{product.name}</h2>
-                    <p className="text-xs text-primary">{product.tagline}</p>
+                    <h2 className="text-sm font-semibold">{tool.label}</h2>
+                    <p className="text-xs text-primary">{tool.pill}</p>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {product.description}
-                </p>
-                <div className="border-t border-border/30 pt-3">
-                  <p className="text-xs font-medium text-foreground/80 mb-1">How it works</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {product.how}
+                {product?.description && (
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {product.description}
                   </p>
-                </div>
+                )}
+                {product?.how && (
+                  <div className="border-t border-border/30 pt-3">
+                    <p className="text-xs font-medium text-foreground/80 mb-1">How it works</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {product.how}
+                    </p>
+                  </div>
+                )}
               </motion.div>
             );
           })}
