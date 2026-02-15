@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Music, Mail, Loader2, X, CheckCircle2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -42,6 +43,7 @@ const Auth = () => {
   const artistDebounce = useRef<ReturnType<typeof setTimeout>>();
   const emailRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -314,6 +316,10 @@ const Auth = () => {
               <TabsContent value="signin">
                 <form onSubmit={e => handleEmailAuth(e, "signin")} className="space-y-4 mt-4">
                   {emailPasswordFields}
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="remember" checked={rememberMe} onCheckedChange={(v) => setRememberMe(v === true)} />
+                    <Label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer select-none">Remember Me</Label>
+                  </div>
                   <Button type="submit" className="w-full gap-2" disabled={loading}>
                     <Mail size={16} />
                     {loading ? "Loading…" : "Log In"}
