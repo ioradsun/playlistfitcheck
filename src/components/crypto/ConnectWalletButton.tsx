@@ -13,7 +13,6 @@ export function ConnectWalletButton() {
   const { disconnect } = useDisconnect();
   const [copied, setCopied] = useState(false);
 
-  // Save wallet address to profile when connected
   useEffect(() => {
     if (!user || !address) return;
     const saved = (profile as any)?.wallet_address;
@@ -69,14 +68,14 @@ export function ConnectWalletButton() {
     <div className="flex flex-wrap gap-2">
       {connectors.map((connector) => (
         <Button
-          key={connector.uid}
+          key={connector.id}
           variant="outline"
           size="sm"
           className="gap-1.5"
           onClick={() => connect({ connector })}
         >
           <Wallet size={14} />
-          {connector.name === "Injected" ? "Browser Wallet" : connector.name}
+          {connector.name}
         </Button>
       ))}
     </div>
