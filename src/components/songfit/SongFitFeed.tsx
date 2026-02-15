@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -54,16 +54,18 @@ export function SongFitFeed() {
       {user ? (
         <SongFitInlineComposer onPostCreated={fetchPosts} />
       ) : (
-        <div className="border-b border-border/40 px-4 py-5">
-          <p className="text-sm text-muted-foreground text-center">
-            <button
-              onClick={() => navigate("/auth?mode=signup", { state: { returnTab: "songfit" } })}
-              className="text-primary font-semibold hover:underline"
-            >
-              Sign Up
-            </button>{" "}
-            to post your song
-          </p>
+        <div
+          className="border-b border-border/40 cursor-pointer"
+          onClick={() => navigate("/auth?mode=signup", { state: { returnTab: "songfit" } })}
+        >
+          <div className="flex gap-3 px-4 pt-3 pb-3">
+            <div className="h-10 w-10 rounded-full bg-muted border border-border shrink-0 mt-1 flex items-center justify-center">
+              <User size={16} className="text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0 flex items-center">
+              <span className="text-base text-muted-foreground/60">Sign Up to post your song</span>
+            </div>
+          </div>
         </div>
       )}
 
