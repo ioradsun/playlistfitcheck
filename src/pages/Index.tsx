@@ -32,7 +32,7 @@ interface AnalysisResult {
 
 const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
   <motion.div
-    className="w-full max-w-md mx-auto flex flex-col items-center gap-6 py-24"
+    className="flex-1 w-full max-w-md mx-auto flex flex-col items-center justify-center gap-6"
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
   >
