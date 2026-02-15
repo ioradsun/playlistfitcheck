@@ -19,6 +19,7 @@ const QUICK_EMOJIS = ["🔥", "❤️", "🙌", "💯", "😍", "🎵", "👏", 
 interface Props {
   postId: string | null;
   onClose: () => void;
+  onCommentAdded?: (postId: string) => void;
 }
 
 function buildTree(comments: SongFitComment[]): SongFitComment[] {
@@ -84,7 +85,7 @@ function CommentItem({
   );
 }
 
-export function SongFitComments({ postId, onClose }: Props) {
+export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
   const { user } = useAuth();
   const [comments, setComments] = useState<SongFitComment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +139,7 @@ export function SongFitComments({ postId, onClose }: Props) {
       setReplyTo(null);
       setShowEmoji(false);
       await fetchComments();
+      onCommentAdded?.(postId!);
       inputRef.current?.focus();
     } catch (e: any) {
       toast.error(e.message || "Failed to comment");
