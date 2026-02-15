@@ -16,7 +16,7 @@ export function SignUpToSaveBanner() {
         className="ml-1"
         onClick={() => navigate("/auth?mode=signup")}
       >
-        Sign Up to Save
+        Save with a free account
       </Button>
     </div>
   );
