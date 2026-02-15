@@ -91,7 +91,13 @@ export function SongFitFeed() {
         </div>
       )}
 
-      <SongFitComments postId={commentPostId} onClose={() => setCommentPostId(null)} />
+      <SongFitComments
+        postId={commentPostId}
+        onClose={() => setCommentPostId(null)}
+        onCommentAdded={(pid) => {
+          setPosts(prev => prev.map(p => p.id === pid ? { ...p, comments_count: p.comments_count + 1 } : p));
+        }}
+      />
       <SongFitLikesList postId={likesPostId} onClose={() => setLikesPostId(null)} />
     </div>
   );
