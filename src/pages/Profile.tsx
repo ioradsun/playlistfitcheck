@@ -11,6 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { Pencil, Camera, X, Check, Loader2, Music, Wallet } from "lucide-react";
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
+import { MusicEmbed } from "@/components/MusicEmbed";
+import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 
 
 const Profile = () => {
@@ -153,9 +155,9 @@ const Profile = () => {
                 <Textarea value={bio} onChange={e => handleBioChange(e.target.value)} placeholder="Tell us about yourself" rows={3} />
               </div>
               <div className="space-y-2">
-                <Label>Spotify Artist URL</Label>
-                <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="https://open.spotify.com/artist/..." />
-                <p className="text-xs text-muted-foreground">Your Spotify artist profile link — set during signup</p>
+                <Label>Music Profile URL</Label>
+                <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="Spotify or SoundCloud URL..." />
+                <p className="text-xs text-muted-foreground">Your Spotify or SoundCloud profile link</p>
               </div>
             </CardContent>
           </Card>
@@ -172,21 +174,12 @@ const Profile = () => {
           </CardContent>
         </Card>
 
-        {/* Spotify embed for artists (outside edit view) */}
-        {!editing && spotifyUrl && (
+        {/* Music embed for artists (outside edit view) */}
+        {!editing && spotifyUrl && isMusicUrl(spotifyUrl) && (
           <Card className="glass-card border-border overflow-hidden">
             <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Music size={18} /> My Music</CardTitle></CardHeader>
             <CardContent>
-              <iframe
-                src={spotifyUrl.replace("open.spotify.com/", "open.spotify.com/embed/")}
-                width="100%"
-                height="352"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                className="rounded-lg"
-                title="Spotify embed"
-              />
+              <MusicEmbed url={spotifyUrl} title={`${getPlatformLabel(spotifyUrl)} embed`} />
             </CardContent>
           </Card>
         )}

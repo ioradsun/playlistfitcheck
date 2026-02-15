@@ -173,8 +173,8 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
         </DropdownMenu>
       </div>
 
-      {/* Spotify Embed Player */}
-      <LazySpotifyEmbed trackId={post.spotify_track_id} trackTitle={post.track_title} />
+      {/* Music Embed Player */}
+      <LazySpotifyEmbed trackId={post.spotify_track_id} trackTitle={post.track_title} trackUrl={post.spotify_track_url} />
 
       {/* Action Row */}
       <div className="flex items-center px-3 pt-1 pb-1">
