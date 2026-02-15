@@ -47,7 +47,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
   };
 
   const refModes: { mode: RefMode; label: string; icon: React.ReactNode }[] = [
-    { mode: "upload", label: "Upload", icon: <Upload size={12} /> },
+    { mode: "upload", label: "File", icon: <Upload size={12} /> },
     { mode: "spotify", label: "Spotify", icon: <Music size={12} /> },
     { mode: "youtube", label: "YouTube", icon: <Youtube size={12} /> },
   ];
