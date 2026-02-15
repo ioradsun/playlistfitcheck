@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 import type { SongFitPost } from "./types";
 import { SongFitPostCard } from "./SongFitPostCard";
 import { SongFitComments } from "./SongFitComments";
@@ -9,6 +10,7 @@ import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 
 export function SongFitFeed() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [posts, setPosts] = useState<SongFitPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +51,21 @@ export function SongFitFeed() {
 
   return (
     <div className="w-full max-w-[470px] mx-auto">
-      {user && <SongFitInlineComposer onPostCreated={fetchPosts} />}
+      {user ? (
+        <SongFitInlineComposer onPostCreated={fetchPosts} />
+      ) : (
+        <div className="border-b border-border/40 px-4 py-5">
+          <p className="text-sm text-muted-foreground text-center">
+            <button
+              onClick={() => navigate("/auth?mode=signup", { state: { returnTab: "songfit" } })}
+              className="text-primary font-semibold hover:underline"
+            >
+              Sign Up
+            </button>{" "}
+            to post your song
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16">

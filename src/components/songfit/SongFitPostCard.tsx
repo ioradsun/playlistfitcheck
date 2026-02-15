@@ -28,6 +28,7 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
   const [likesCount, setLikesCount] = useState(post.likes_count);
   const [isFollowing, setIsFollowing] = useState<boolean | null>(null);
   const [followChecked, setFollowChecked] = useState(false);
+  const [captionExpanded, setCaptionExpanded] = useState(false);
 
   const isOwnPost = user?.id === post.user_id;
 
@@ -152,6 +153,30 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
           </button>
         </div>
       </div>
+
+      {/* Caption - Instagram style */}
+      {post.caption && post.caption.trim() && (
+        <div className="px-3 pb-2.5">
+          {post.caption.length <= 125 || captionExpanded ? (
+            <p className="text-sm leading-snug">
+              <span className="font-semibold mr-1.5">{displayName}</span>
+              {post.caption}
+            </p>
+          ) : (
+            <p className="text-sm leading-snug">
+              <span className="font-semibold mr-1.5">{displayName}</span>
+              {post.caption.slice(0, 125).trimEnd()}
+              <span className="text-muted-foreground">… </span>
+              <button
+                onClick={() => setCaptionExpanded(true)}
+                className="text-muted-foreground hover:text-foreground text-sm"
+              >
+                more
+              </button>
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
