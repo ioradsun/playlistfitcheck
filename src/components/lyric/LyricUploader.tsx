@@ -33,7 +33,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
 
       <div className="glass-card rounded-xl p-4 space-y-2">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-sm font-medium">Audio File</span>
+          <span className="text-sm font-medium">Song</span>
           <Tooltip>
             <TooltipTrigger asChild>
               <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
@@ -44,7 +44,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
           </Tooltip>
         </div>
         <AudioUploadZone
-          label="Upload Song"
+          label="Upload"
           files={files}
           onChange={setFiles}
           maxFiles={1}
