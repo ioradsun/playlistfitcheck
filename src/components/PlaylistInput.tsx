@@ -77,6 +77,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
   const [loading, setLoading] = useState(false);
   const [playlistFocused, setPlaylistFocused] = useState(false);
   const [songFocused, setSongFocused] = useState(false);
+  const songInputRef = useRef<HTMLInputElement>(null);
 
   const { results: playlistResults, loading: playlistSearching, clear: clearPlaylist } =
     useSpotifySearch<PlaylistResult>("playlist", url);
@@ -90,6 +91,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
       setUrl(pasted.trim());
       clearPlaylist();
       setPlaylistFocused(false);
+      setTimeout(() => songInputRef.current?.focus(), 100);
     }
   };
 
@@ -153,6 +155,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
     setUrl(p.url);
     clearPlaylist();
     setPlaylistFocused(false);
+    setTimeout(() => songInputRef.current?.focus(), 100);
   };
 
   const selectTrack = (t: TrackResult) => {
@@ -218,6 +221,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
           <div className="relative">
             <Music className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
             <Input
+              ref={songInputRef}
               value={songUrl}
               onChange={e => setSongUrl(e.target.value)}
               placeholder="Search or paste Spotify song URL (optional)..."
