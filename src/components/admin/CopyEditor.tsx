@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Save, FileText, Download, Upload } from "lucide-react";
-import { useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +14,8 @@ export function CopyEditor() {
   const [copy, setCopy] = useState<SiteCopy | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [importJson, setImportJson] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -127,36 +127,10 @@ export function CopyEditor() {
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setShowImport((v) => !v)}
           >
             <Upload size={14} /> Import
           </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = (ev) => {
-                try {
-                  const parsed = JSON.parse(ev.target?.result as string);
-                  if (parsed.tools && parsed.about && parsed.sidebar && parsed.pages) {
-                    setCopy(parsed);
-                    toast.success("Copy imported — click Save to apply");
-                  } else {
-                    toast.error("Invalid copy JSON structure");
-                  }
-                } catch {
-                  toast.error("Failed to parse JSON file");
-                }
-              };
-              reader.readAsText(file);
-              e.target.value = "";
-            }}
-          />
         </div>
         <Button onClick={handleSave} disabled={saving} className="gap-2">
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -164,7 +138,37 @@ export function CopyEditor() {
         </Button>
       </div>
 
-      {/* Tool Copy */}
+      {/* Import paste panel */}
+      {showImport && (
+        <motion.div className="glass-card rounded-xl p-4 space-y-2" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
+          <label className="text-xs text-muted-foreground">Paste JSON below, then click Apply</label>
+          <Textarea
+            value={importJson}
+            onChange={(e) => setImportJson(e.target.value)}
+            placeholder='{"tools":{...},"about":{...},"sidebar":{...},"pages":{...}}'
+            className="text-xs font-mono min-h-[120px]"
+          />
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" size="sm" onClick={() => { setShowImport(false); setImportJson(""); }}>Cancel</Button>
+            <Button size="sm" onClick={() => {
+              try {
+                const parsed = JSON.parse(importJson);
+                if (parsed.tools && parsed.about && parsed.sidebar && parsed.pages) {
+                  setCopy(parsed);
+                  setShowImport(false);
+                  setImportJson("");
+                  toast.success("Copy imported — click Save to apply");
+                } else {
+                  toast.error("Invalid copy JSON structure");
+                }
+              } catch {
+                toast.error("Failed to parse JSON");
+              }
+            }}>Apply</Button>
+          </div>
+        </motion.div>
+      )}
+
       <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <FileText size={14} className="text-primary" />
