@@ -44,7 +44,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
       <div className="space-y-1">
-        <h2 className="text-xl font-semibold">Make your lyrics caption-ready</h2>
+        <h2 className="text-xl font-semibold">Get Perfectly Timed Lyrics For Every Drop</h2>
       </div>
 
       <div className="glass-card rounded-xl p-4 space-y-3 text-left">
