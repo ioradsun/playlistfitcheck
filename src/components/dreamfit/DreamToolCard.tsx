@@ -80,9 +80,6 @@ export function DreamToolCard({ dream, isBacked, onToggleBack, onOpenComments, o
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${status.className}`}>
-            {status.emoji} {status.label}
-          </span>
           {isOwnPost && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
