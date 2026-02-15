@@ -14,6 +14,26 @@ serve(async (req) => {
   try {
     const clientId = Deno.env.get("SOUNDCLOUD_CLIENT_ID");
     if (!clientId) throw new Error("SOUNDCLOUD_CLIENT_ID is not configured");
+    const clientSecret = Deno.env.get("SOUNDCLOUD_CLIENT_SECRET");
+    if (!clientSecret) throw new Error("SOUNDCLOUD_CLIENT_SECRET is not configured");
+
+    // Get OAuth2 token
+    const tokenResp = await fetch("https://secure.soundcloud.com/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+    if (!tokenResp.ok) {
+      const err = await tokenResp.text();
+      console.error("SoundCloud token error:", tokenResp.status, err);
+      throw new Error("Failed to obtain SoundCloud access token");
+    }
+    const { access_token } = await tokenResp.json();
+    const authHeader = { Authorization: `OAuth ${access_token}` };
 
     const { query, type } = await req.json();
 
@@ -44,7 +64,8 @@ serve(async (req) => {
 
     if (isSoundCloudUrl) {
       const resolveResp = await fetch(
-        `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(query.trim())}&client_id=${clientId}`
+        `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(query.trim())}`,
+        { headers: authHeader }
       );
       if (resolveResp.ok) {
         const d = await resolveResp.json();
@@ -88,14 +109,14 @@ serve(async (req) => {
     if (results.length === 0) {
       let endpoint = "";
       if (searchType === "track") {
-        endpoint = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=8`;
+        endpoint = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&limit=8`;
       } else if (searchType === "playlist") {
-        endpoint = `https://api-v2.soundcloud.com/search/playlists?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=8`;
+        endpoint = `https://api-v2.soundcloud.com/search/playlists?q=${encodeURIComponent(query)}&limit=8`;
       } else if (searchType === "user") {
-        endpoint = `https://api-v2.soundcloud.com/search/users?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=8`;
+        endpoint = `https://api-v2.soundcloud.com/search/users?q=${encodeURIComponent(query)}&limit=8`;
       }
 
-      const resp = await fetch(endpoint);
+      const resp = await fetch(endpoint, { headers: authHeader });
       if (!resp.ok) {
         const errText = await resp.text();
         console.error("SoundCloud search error:", resp.status, errText);
