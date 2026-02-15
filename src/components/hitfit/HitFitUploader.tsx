@@ -185,13 +185,19 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
               value={refUrl}
               onChange={(e) => setRefUrl(e.target.value)}
               onPaste={(e) => {
-                const pasted = e.clipboardData.getData("text");
+                const pasted = e.clipboardData.getData("text").trim();
                 if (
                   (refMode === "spotify" && pasted.includes("spotify.com/track/")) ||
                   (refMode === "youtube" && (pasted.includes("youtube.com/") || pasted.includes("youtu.be/")))
                 ) {
                   e.preventDefault();
-                  setRefUrl(pasted.trim());
+                  setRefUrl(pasted);
+                  if (master1 && !loading) {
+                    const ref: ReferenceSource = refMode === "youtube"
+                      ? { type: "youtube", url: pasted }
+                      : { type: "spotify", url: pasted };
+                    onAnalyze(master1, master2, ref);
+                  }
                 }
               }}
               className="h-11 bg-transparent border-0 focus-visible:ring-0 text-sm"
