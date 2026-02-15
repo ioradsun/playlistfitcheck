@@ -94,9 +94,9 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
 
   if (loading) {
     return (
-      <div className="w-full max-w-2xl mx-auto flex flex-col items-center gap-6">
+      <div className="flex-1 flex items-center justify-center w-full">
         <motion.div
-          className="flex flex-col items-center gap-4 pt-12"
+          className="flex flex-col items-center gap-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
