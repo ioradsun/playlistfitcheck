@@ -118,22 +118,24 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
           </div>
         ) : (
           <div className="relative">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Search artist or paste Spotify link…"
-                value={artistQuery}
-                onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
-                onKeyDown={e => {
-                  if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) {
-                    e.preventDefault();
-                    handlePasteArtistUrl();
-                  }
-                }}
-                onFocus={() => setArtistFocused(true)}
-                onBlur={() => setTimeout(() => setArtistFocused(false), 200)}
-                className="flex-1 h-12 text-base"
-                disabled={loading}
-              />
+            <div className="glass-card rounded-xl p-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Search artist or paste Spotify link…"
+                  value={artistQuery}
+                  onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) {
+                      e.preventDefault();
+                      handlePasteArtistUrl();
+                    }
+                  }}
+                  onFocus={() => setArtistFocused(true)}
+                  onBlur={() => setTimeout(() => setArtistFocused(false), 200)}
+                  className="flex-1 h-11 text-base bg-transparent border-0 focus-visible:ring-0"
+                  disabled={loading}
+                />
+              </div>
             </div>
             {artistSearching && (
               <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />

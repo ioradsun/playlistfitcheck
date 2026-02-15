@@ -98,7 +98,8 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
         <div className="flex justify-center">
           <Button
             onClick={handleSubmit}
-            className="glow-primary"
+            className="w-full max-w-xs glow-primary"
+            size="lg"
             disabled={loading || !selectedFile}
           >
             {loading ? (

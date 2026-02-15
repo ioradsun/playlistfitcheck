@@ -20,25 +20,27 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
         </p>
       </div>
 
-      <div className="space-y-3 text-left">
+      <div className="glass-card rounded-xl p-4 space-y-3 text-left">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Song Title *"
-          className="bg-transparent"
+          className="h-11 bg-transparent border-0 focus-visible:ring-0"
         />
+        <div className="border-t border-border" />
         <Textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Session notes (optional)"
-          className="bg-transparent min-h-[80px] resize-none"
+          className="bg-transparent border-0 focus-visible:ring-0 min-h-[80px] resize-none"
         />
       </div>
 
       <Button
         onClick={() => onSubmit(title.trim(), notes.trim())}
         disabled={!title.trim()}
-        className="w-full"
+        className="w-full glow-primary"
+        size="lg"
       >
         Create Project
       </Button>
