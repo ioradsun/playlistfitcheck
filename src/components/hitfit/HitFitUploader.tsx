@@ -206,10 +206,10 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
       >
         {loading ? (
           <>
-            <Loader2 size={18} className="animate-spin" /> Analyzing masters…
+            <Loader2 size={18} className="animate-spin" /> Analyzing…
           </>
         ) : (
-          <>Analyze Masters</>
+          <>Analyze</>
         )}
       </Button>
 
