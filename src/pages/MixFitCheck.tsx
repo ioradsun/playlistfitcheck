@@ -77,11 +77,34 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
     setNeedsReupload(false);
   }, [stop]);
 
-  const handleCreate = useCallback((t: string, n: string) => {
+  const handleCreate = useCallback(async (t: string, n: string, files: File[]) => {
     setProjectId(crypto.randomUUID());
     setTitle(t);
     setNotes(n);
-  }, []);
+    // Decode uploaded files
+    for (const file of files) {
+      try {
+        const { buffer, waveform } = await decodeFile(file);
+        const newMix: AudioMix = {
+          id: crypto.randomUUID(),
+          name: file.name.replace(/\.(mp3|wav|m4a)$/i, ""),
+          buffer,
+          waveform,
+          rank: null,
+          comments: "",
+        };
+        setMixes((prev) => {
+          const updated = [...prev, newMix];
+          if (updated.filter((m) => m.buffer).length === 1) {
+            setMarkerEnd(waveform.duration);
+          }
+          return updated;
+        });
+      } catch {
+        toast.error(`Failed to decode ${file.name}`);
+      }
+    }
+  }, [decodeFile]);
 
   const handleLoadProject = useCallback((project: MixProjectData) => {
     stop();
@@ -280,7 +303,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
             <Upload size={14} className="mr-1" />
             Upload Mix{activeMixes.length > 0 ? "" : "es"} ({activeMixes.length}/{MAX_MIXES})
           </Button>
-          <span className="text-xs text-muted-foreground">Your audio files aren't saved or stored.</span>
+          <span className="text-xs text-muted-foreground">Audio files aren't saved or stored.</span>
         </div>
       )}
 
