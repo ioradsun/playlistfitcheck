@@ -364,99 +364,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
 
         <SidebarSeparator />
 
-        {!authLoading && user && (
-          <SidebarGroup>
-            <SidebarGroupLabel>
-              <span className="flex items-center gap-2">
-                Notifications
-                {unreadCount > 0 && (
-                  <span className="flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
-              </span>
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              {!collapsed && (
-                <div className="px-2">
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={markAllRead}
-                      className="text-[11px] text-primary hover:underline mb-1"
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                  {notiLoading ? (
-                    <p className="text-xs text-muted-foreground py-2">Loading...</p>
-                  ) : notifications.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-2">No notifications</p>
-                  ) : (
-                    <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                      {notifications.slice(0, 8).map((n) => {
-                        const { icon: NIcon, className: nClass } = NOTI_ICON_MAP[n.type as keyof typeof NOTI_ICON_MAP] || NOTI_ICON_MAP.like;
-                        const actorName = n.actor?.display_name || "Someone";
-                        let text = "";
-                        if (n.type === "like") text = "liked your post";
-                        else if (n.type === "comment") text = "commented";
-                        else if (n.type === "follow") text = "followed you";
-
-                        return (
-                          <div
-                            key={n.id}
-                            className={`flex items-start gap-2 px-2 py-1.5 rounded-md text-xs ${!n.is_read ? "bg-primary/5" : ""}`}
-                          >
-                            <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
-                              {n.actor?.avatar_url ? (
-                                <img src={n.actor.avatar_url} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <User size={10} className="text-muted-foreground" />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="leading-tight truncate">
-                                <span className="font-medium">{actorName}</span>{" "}
-                                <span className="text-muted-foreground">{text}</span>
-                              </p>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <NIcon size={10} className={nClass} />
-                                <span className="text-[10px] text-muted-foreground">
-                                  {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-              {collapsed && (
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      tooltip={`Notifications${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
-                      onClick={() => refetchNotifications()}
-                    >
-                      <div className="relative">
-                        <Bell size={16} />
-                        {unreadCount > 0 && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-destructive text-[8px] font-bold text-destructive-foreground flex items-center justify-center">
-                            {unreadCount > 9 ? "+" : unreadCount}
-                          </span>
-                        )}
-                      </div>
-                      <span>Notifications</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              )}
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -492,15 +399,22 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
               onClick={() => setProfileExpanded(!profileExpanded)}
               className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors"
             >
-              <Avatar className="h-7 w-7 border border-sidebar-border shrink-0">
-                <AvatarImage
-                  src={profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || undefined}
-                  alt={profile?.display_name ?? "Avatar"}
-                />
-                <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative shrink-0">
+                <Avatar className="h-7 w-7 border border-sidebar-border">
+                  <AvatarImage
+                    src={profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || undefined}
+                    alt={profile?.display_name ?? "Avatar"}
+                  />
+                  <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-[9px] font-bold text-primary-foreground ring-2 ring-sidebar">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </div>
               {!collapsed && (
                 <>
                   <span className="text-xs font-medium truncate flex-1 text-left">
@@ -512,6 +426,63 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
             </button>
             {!collapsed && profileExpanded && (
               <div className="space-y-0.5 pl-2">
+                {/* Notifications inline */}
+                <div className="px-2 py-1">
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="text-[11px] text-primary hover:underline mb-1 block"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  {notiLoading ? (
+                    <p className="text-[11px] text-muted-foreground py-1">Loading...</p>
+                  ) : notifications.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground py-1">No notifications</p>
+                  ) : (
+                    <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                      {notifications.slice(0, 6).map((n) => {
+                        const { icon: NIcon, className: nClass } = NOTI_ICON_MAP[n.type as keyof typeof NOTI_ICON_MAP] || NOTI_ICON_MAP.like;
+                        const actorName = n.actor?.display_name || "Someone";
+                        let text = "";
+                        if (n.type === "like") text = "liked your post";
+                        else if (n.type === "comment") text = "commented";
+                        else if (n.type === "follow") text = "followed you";
+
+                        return (
+                          <div
+                            key={n.id}
+                            className={`flex items-start gap-2 px-1.5 py-1 rounded-md text-[11px] ${!n.is_read ? "bg-primary/5" : ""}`}
+                          >
+                            <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
+                              {n.actor?.avatar_url ? (
+                                <img src={n.actor.avatar_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <User size={8} className="text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="leading-tight truncate">
+                                <span className="font-medium">{actorName}</span>{" "}
+                                <span className="text-muted-foreground">{text}</span>
+                              </p>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <NIcon size={9} className={nClass} />
+                                <span className="text-[9px] text-muted-foreground">
+                                  {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <SidebarSeparator className="my-1" />
+
                 <button
                   onClick={() => { navigate("/profile"); closeMobileIfNeeded(); }}
                   className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
