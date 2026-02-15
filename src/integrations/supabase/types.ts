@@ -777,6 +777,7 @@ export type Database = {
           spotify_track_id: string
           spotify_track_url: string
           tags_json: Json
+          tips_total: number
           track_artists_json: Json
           track_title: string
           user_id: string
@@ -794,6 +795,7 @@ export type Database = {
           spotify_track_id: string
           spotify_track_url: string
           tags_json?: Json
+          tips_total?: number
           track_artists_json?: Json
           track_title: string
           user_id: string
@@ -811,6 +813,7 @@ export type Database = {
           spotify_track_id?: string
           spotify_track_url?: string
           tags_json?: Json
+          tips_total?: number
           track_artists_json?: Json
           track_title?: string
           user_id?: string
@@ -889,6 +892,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "songfit_saves_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      songfit_tips: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          post_id: string
+          recipient_user_id: string
+          tipper_user_id: string
+          tx_hash: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          post_id: string
+          recipient_user_id: string
+          tipper_user_id: string
+          tx_hash?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          post_id?: string
+          recipient_user_id?: string
+          tipper_user_id?: string
+          tx_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songfit_tips_post_id_fkey"
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "songfit_posts"

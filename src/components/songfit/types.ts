@@ -13,6 +13,7 @@ export interface SongFitPost {
   tags_json: string[];
   likes_count: number;
   comments_count: number;
+  tips_total: number;
   created_at: string;
   // joined
   profiles?: { display_name: string | null; avatar_url: string | null; spotify_artist_id: string | null };
