@@ -236,11 +236,8 @@ export function LyricDisplay({ data, audioFile, savedId, onBack, onSaved }: Prop
         </Button>
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-semibold truncate">
-            {data.title !== "Unknown" ? data.title : audioFile.name}
+            {audioFile.name}
           </h2>
-          {data.artist !== "Unknown" && (
-            <p className="text-sm text-muted-foreground">{data.artist}</p>
-          )}
         </div>
         <div className="flex gap-2">
           {user && lines.length > 0 && (
@@ -268,10 +265,14 @@ export function LyricDisplay({ data, audioFile, savedId, onBack, onSaved }: Prop
       </div>
 
       {/* Lyrics with synced highlighting */}
-      <div
-        ref={lyricsContainerRef}
-        className="glass-card rounded-xl p-5 max-h-[400px] overflow-y-auto space-y-1"
-      >
+      <div className="glass-card rounded-xl p-5 space-y-1">
+        {lines.length > 0 && (
+          <p className="text-[10px] text-muted-foreground text-right mb-2">Double-click a line to edit</p>
+        )}
+        <div
+          ref={lyricsContainerRef}
+          className="max-h-[360px] overflow-y-auto space-y-1"
+        >
         {lines.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             No lyrics detected — this may be an instrumental track.
@@ -320,15 +321,13 @@ export function LyricDisplay({ data, audioFile, savedId, onBack, onSaved }: Prop
             );
           })
         )}
+        </div>
       </div>
 
       {/* Export buttons */}
       {lines.length > 0 && (
         <div className="glass-card rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-muted-foreground font-mono">Export</p>
-            <p className="text-[10px] text-muted-foreground">Double-click a line to edit</p>
-          </div>
+          <p className="text-xs text-muted-foreground font-mono mb-3">Export</p>
           <div className="grid grid-cols-3 gap-3">
             {exportOptions.map(({ format, label, icon, desc }) => (
               <div key={format} className="space-y-1.5">

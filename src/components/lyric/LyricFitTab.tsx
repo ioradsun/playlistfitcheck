@@ -77,20 +77,26 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
 
   if (lyricData && audioFile) {
     return (
-      <LyricDisplay
-        data={lyricData}
-        audioFile={audioFile}
-        savedId={savedId}
-        onBack={handleBack}
-        onSaved={(id) => { setSavedId(id); onProjectSaved?.(); }}
-      />
+      <div className="flex-1 px-4 py-6">
+        <LyricDisplay
+          data={lyricData}
+          audioFile={audioFile}
+          savedId={savedId}
+          onBack={handleBack}
+          onSaved={(id) => { setSavedId(id); onProjectSaved?.(); }}
+        />
+      </div>
     );
   }
 
-  return <LyricUploader onTranscribe={handleTranscribe} onLoadSaved={(l: any) => {
-    setLyricData({ title: l.title, artist: l.artist, lines: l.lines as any[] });
-    setSavedId(l.id);
-    const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
-    setAudioFile(dummyFile);
-  }} loading={loading} />;
+  return (
+    <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
+      <LyricUploader onTranscribe={handleTranscribe} onLoadSaved={(l: any) => {
+        setLyricData({ title: l.title, artist: l.artist, lines: l.lines as any[] });
+        setSavedId(l.id);
+        const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+        setAudioFile(dummyFile);
+      }} loading={loading} />
+    </div>
+  );
 }
