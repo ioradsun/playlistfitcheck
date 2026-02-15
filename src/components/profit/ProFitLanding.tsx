@@ -92,94 +92,87 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
 
   const showArtistDropdown = artistFocused && artistResults.length > 0 && !selectedArtist;
 
+  if (loading) {
+    return (
+      <div className="w-full max-w-2xl mx-auto flex flex-col items-center gap-6">
+        <motion.div
+          className="flex flex-col items-center gap-4 pt-12"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="w-16 h-16 rounded-full border-2 border-primary/30 flex items-center justify-center">
+            <Loader2 size={28} className="text-primary animate-spin" />
+          </div>
+          <div className="text-center space-y-1">
+            <p className="text-sm font-medium">Analyzing {selectedArtist?.name || "artist"}...</p>
+            <p className="text-xs text-muted-foreground">Fetching Spotify signals & generating your blueprint</p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col items-center gap-6">
 
       {/* Artist Search */}
       <div className="w-full max-w-2xl space-y-3">
-        {loading ? (
-          <div className="flex flex-col items-center gap-3 py-4">
-            <Loader2 size={24} className="animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Analyzing {selectedArtist?.name || "artist"}…</p>
-          </div>
-        ) : selectedArtist ? (
-          <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50">
-            {selectedArtist.image ? (
-              <img src={selectedArtist.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                <Music size={14} className="text-muted-foreground" />
-              </div>
-            )}
-            <span className="text-sm font-medium truncate flex-1">{selectedArtist.name}</span>
-            <button
-              type="button"
-              onClick={() => setSelectedArtist(null)}
-              className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ) : (
-          <div className="relative">
-            <div className="glass-card rounded-xl p-4">
-              <div className="flex gap-2">
-                <Input
-                   placeholder="Search artist or paste Spotify link…"
-                   value={artistQuery}
-                   onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
-                   onKeyDown={e => {
-                     if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) {
-                       e.preventDefault();
-                       handlePasteArtistUrl();
-                     }
-                   }}
-                   onPaste={e => {
-                     const pasted = e.clipboardData.getData("text");
-                     if (pasted.includes("spotify.com/artist/")) {
-                       e.preventDefault();
-                       setArtistQuery(pasted.trim());
-                       handlePasteArtistUrl(pasted.trim());
-                     }
-                   }}
-                   onFocus={() => setArtistFocused(true)}
-                   onBlur={() => setTimeout(() => setArtistFocused(false), 200)}
-                   className="flex-1 h-11 text-base bg-transparent border-0 focus-visible:ring-0"
-                   disabled={loading}
-                 />
-              </div>
+        <div className="relative">
+          <div className="glass-card rounded-xl p-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Search artist or paste Spotify link…"
+                value={artistQuery}
+                onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) {
+                    e.preventDefault();
+                    handlePasteArtistUrl();
+                  }
+                }}
+                onPaste={e => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (pasted.includes("spotify.com/artist/")) {
+                    e.preventDefault();
+                    setArtistQuery(pasted.trim());
+                    handlePasteArtistUrl(pasted.trim());
+                  }
+                }}
+                onFocus={() => setArtistFocused(true)}
+                onBlur={() => setTimeout(() => setArtistFocused(false), 200)}
+                className="flex-1 h-11 text-base bg-transparent border-0 focus-visible:ring-0"
+              />
             </div>
-            {artistSearching && (
-              <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
-            )}
-            {showArtistDropdown && (
-              <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
-                {artistResults.map(a => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/40 transition-colors text-left"
-                    onMouseDown={() => { setSelectedArtist(a); setArtistQuery(""); setArtistResults([]); }}
-                  >
-                    {a.image ? (
-                      <img src={a.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                        <Music size={14} className="text-muted-foreground" />
-                      </div>
-                    )}
-                    <span className="text-sm font-medium truncate">{a.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
-        )}
+          {artistSearching && (
+            <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
+          )}
+          {showArtistDropdown && (
+            <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
+              {artistResults.map(a => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/40 transition-colors text-left"
+                  onMouseDown={() => { setSelectedArtist(a); setArtistQuery(""); setArtistResults([]); }}
+                >
+                  {a.image ? (
+                    <img src={a.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                      <Music size={14} className="text-muted-foreground" />
+                    </div>
+                  )}
+                  <span className="text-sm font-medium truncate">{a.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="flex items-center justify-center gap-4 text-xs">
           <button
             onClick={() => onAnalyze(EXAMPLE_URL)}
             className="text-primary hover:underline underline-offset-2"
-            disabled={loading}
           >
             See Demo Results
           </button>
@@ -199,23 +192,6 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
           </div>
         ))}
       </div>
-
-      {/* Loading state */}
-      {loading && (
-        <motion.div
-          className="flex flex-col items-center gap-4 pt-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          <div className="w-16 h-16 rounded-full border-2 border-primary/30 flex items-center justify-center">
-            <Loader2 size={28} className="text-primary animate-spin" />
-          </div>
-          <div className="text-center space-y-1">
-            <p className="text-sm font-medium">Analyzing artist data...</p>
-            <p className="text-xs text-muted-foreground">Fetching Spotify signals & generating your blueprint</p>
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 };
