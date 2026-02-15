@@ -149,6 +149,15 @@ export function CopyEditor() {
                       />
                     </div>
                   )}
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] text-muted-foreground">Subheading</label>
+                    <Input
+                      value={tool.subheading || ""}
+                      onChange={(e) => updateTool(key, "subheading", e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="Optional subheading"
+                    />
+                  </div>
                   {tool.cta !== undefined && (
                     <div>
                       <label className="text-[10px] text-muted-foreground">CTA Button</label>
