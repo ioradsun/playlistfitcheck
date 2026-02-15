@@ -63,7 +63,7 @@ export function DreamFitTab() {
               <User size={16} className="text-muted-foreground" />
             </div>
             <div className="flex-1 min-w-0 flex items-center">
-              <span className="text-base text-muted-foreground/60">Sign Up to post a dream</span>
+              <span className="text-base text-muted-foreground/60">Sign up to share your idea for the next Fit</span>
             </div>
           </div>
         </div>
