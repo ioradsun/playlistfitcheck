@@ -292,7 +292,9 @@ const Index = () => {
   }, []);
 
   const [profitArtistUrl, setProfitArtistUrl] = useState<string | null>(null);
+  const [profitSavedReport, setProfitSavedReport] = useState<any>(null);
   const [profitLoadKey, setProfitLoadKey] = useState(0);
+  const [loadedHitFitAnalysis, setLoadedHitFitAnalysis] = useState<any>(null);
 
   const handleNewProject = useCallback(() => {
     // No-op: we always default to new project state
@@ -304,15 +306,28 @@ const Index = () => {
     setVibeAnalysis(null);
     setSongFitAnalysis(null);
     setLoadedMixProject(null);
-    setLoadedLyric(null);
     setProfitArtistUrl(null);
+    setProfitSavedReport(null);
+    setLoadedHitFitAnalysis(null);
 
     switch (type) {
       case "profit": {
-        const artistId = data?.spotify_artist_id;
-        if (artistId) {
-          setProfitArtistUrl(`https://open.spotify.com/artist/${artistId}`);
+        if (data?.reportId && data?.blueprint && data?.artist) {
+          // Load saved report directly — no re-analysis needed
+          setProfitSavedReport(data);
           setProfitLoadKey(k => k + 1);
+        } else {
+          const artistId = data?.spotify_artist_id;
+          if (artistId) {
+            setProfitArtistUrl(`https://open.spotify.com/artist/${artistId}`);
+            setProfitLoadKey(k => k + 1);
+          }
+        }
+        break;
+      }
+      case "hitfit": {
+        if (data?.analysis) {
+          setLoadedHitFitAnalysis(data.analysis);
         }
         break;
       }
@@ -376,7 +391,7 @@ const Index = () => {
       case "songfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><SongFitTab /></div>;
       case "profit":
-        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onProjectSaved={refreshSidebar} /></div>;
       case "playlist":
         return (
            <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
@@ -406,7 +421,7 @@ const Index = () => {
       case "lyric":
         return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
       case "hitfit":
-        return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><HitFitTab /></div>;
+        return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><HitFitTab key={loadedHitFitAnalysis ? "loaded" : "new"} initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} /></div>;
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><DreamFitTab /></div>;
       default:
