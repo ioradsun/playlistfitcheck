@@ -9,7 +9,16 @@ export default function OurStory() {
         animate={{ opacity: 1, y: 0 }}
       >
         <p className="text-sm text-muted-foreground leading-relaxed">
-          I make music, so I know the 3am doubt—is the mix ready, is it actually good? My dad builds tech. So we built tools to try and answer those questions.
+          I'm{" "}
+          <a
+            href="https://open.spotify.com/artist/1PlkAOmfFYqBYFpN8jDj4v"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline underline-offset-2 font-semibold"
+          >
+            ajan
+          </a>
+          . I make music, so I know the 3am doubt—is the mix ready, is it actually good? My dad builds tech. So we built tools to try and answer those questions.
         </p>
         <p className="text-sm text-muted-foreground leading-relaxed">
           We're trying everything. Some will work. Some won't. That's how music works too. But at least we're not guessing alone.
