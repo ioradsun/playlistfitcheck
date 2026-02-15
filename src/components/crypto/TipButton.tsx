@@ -109,7 +109,7 @@ export function TipButton({ recipientAddress, recipientName, postId, recipientUs
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
-          <Coins size={20} className="text-foreground" />
+          <Coins size={20} className={isConnected ? "text-purple-400" : "text-foreground"} />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-3" align="start">
