@@ -154,7 +154,7 @@ const Auth = () => {
           </div>
           <CardTitle className="text-xl">{isForgot ? "Reset password" : isSignup ? "Create your account" : "Welcome back"}</CardTitle>
           <CardDescription>
-            {isForgot ? "Enter your email and we'll send a reset link" : isSignup ? "Sign up to get started" : "Sign in to your account"}
+            {isForgot ? "Enter your email and we'll send a reset link" : isSignup ? "" : "Sign in to your account"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -180,7 +180,6 @@ const Auth = () => {
                   <>
                     <div className="space-y-2">
                       <Label>Spotify Artist Profile</Label>
-                      <p className="text-xs text-muted-foreground">Search or paste your Spotify artist URL</p>
                       {selectedArtist ? (
                         <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50">
                           {selectedArtist.image ? (
@@ -198,7 +197,7 @@ const Auth = () => {
                       ) : (
                         <div className="relative">
                           <Input
-                            placeholder="Search artist or paste link…"
+                            placeholder="Search or paste your Spotify artist URL"
                             value={artistQuery}
                             onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
                             onKeyDown={e => { if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) { e.preventDefault(); handlePasteArtistUrl(); } }}
