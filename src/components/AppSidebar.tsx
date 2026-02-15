@@ -455,16 +455,24 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                             key={n.id}
                             className={`flex items-start gap-2 px-1.5 py-1 rounded-md text-[11px] ${!n.is_read ? "bg-primary/5" : ""}`}
                           >
-                            <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
+                            <button
+                              onClick={() => { navigate(`/u/${n.actor_user_id}`); closeMobileIfNeeded(); }}
+                              className="w-4 h-4 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 mt-0.5 hover:ring-1 hover:ring-primary transition-all"
+                            >
                               {n.actor?.avatar_url ? (
                                 <img src={n.actor.avatar_url} alt="" className="w-full h-full object-cover" />
                               ) : (
                                 <User size={8} className="text-muted-foreground" />
                               )}
-                            </div>
+                            </button>
                             <div className="min-w-0 flex-1">
                               <p className="leading-tight truncate">
-                                <span className="font-medium">{actorName}</span>{" "}
+                                <button
+                                  onClick={() => { navigate(`/u/${n.actor_user_id}`); closeMobileIfNeeded(); }}
+                                  className="font-medium hover:underline"
+                                >
+                                  {actorName}
+                                </button>{" "}
                                 <span className="text-muted-foreground">{text}</span>
                               </p>
                               <div className="flex items-center gap-1 mt-0.5">
