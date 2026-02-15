@@ -393,11 +393,11 @@ const Index = () => {
       case "profit":
         return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onProjectSaved={refreshSidebar} /></div>;
       case "playlist":
-        return (
-           <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
-            {result && !isFullyLoaded ? (
-              <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
-            ) : result && isFullyLoaded ? (
+        return result ? (
+          <div className="flex-1 overflow-y-auto px-4 py-6">
+            {!isFullyLoaded ? (
+              <div className="flex-1 flex items-center justify-center"><AnalysisLoadingScreen hasSong={!!result?.songUrl} /></div>
+            ) : (
               <div className="w-full">
                 <ResultsDashboard
                   key={result.key}
@@ -411,9 +411,11 @@ const Index = () => {
                   onBack={handleBack}
                 />
               </div>
-            ) : (
-              <PlaylistInputSection onAnalyze={handleAnalyze} />
             )}
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
+            <PlaylistInputSection onAnalyze={handleAnalyze} />
           </div>
         );
       case "mix":
