@@ -33,6 +33,7 @@ const App = () => (
           <SidebarProvider defaultOpen={true}>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/CrowdFit" element={<Index />} />
               <Route path="/SongFit" element={<Index />} />
               <Route path="/ProFit" element={<Index />} />
               <Route path="/PlaylistFit" element={<Index />} />

@@ -54,7 +54,8 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 );
 
 const PATH_TO_TAB: Record<string, string> = {
-  "/SongFit": "songfit",
+  "/CrowdFit": "songfit",
+  "/SongFit": "songfit", // legacy redirect support
   "/ProFit": "profit",
   "/PlaylistFit": "playlist",
   "/MixFit": "mix",
@@ -88,9 +89,12 @@ const Index = () => {
   useEffect(() => {
     const t = PATH_TO_TAB[location.pathname];
     if (t && t !== activeTab) setActiveTabState(t);
-    // Redirect bare "/" to "/SongFit"
+    // Redirect bare "/" or legacy "/SongFit" to "/CrowdFit"
     if (location.pathname === "/" && !location.state) {
-      navigate("/SongFit", { replace: true });
+      navigate("/CrowdFit", { replace: true });
+    }
+    if (location.pathname === "/SongFit") {
+      navigate("/CrowdFit", { replace: true });
     }
   }, [location.pathname]);
 
@@ -245,9 +249,9 @@ const Index = () => {
     if (autoRunRef.current) return;
     
     if (state?.returnTab) {
-      const TAB_TO_PATH: Record<string, string> = { songfit: "/SongFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit" };
+      const TAB_TO_PATH: Record<string, string> = { songfit: "/CrowdFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit" };
       setActiveTab(state.returnTab);
-      navigate(TAB_TO_PATH[state.returnTab] || "/SongFit", { replace: true });
+      navigate(TAB_TO_PATH[state.returnTab] || "/CrowdFit", { replace: true });
       if (!state.reportData && !state.autoRun && !state.loadMixProject && !state.loadLyric) return;
     }
 
