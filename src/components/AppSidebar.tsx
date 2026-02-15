@@ -66,6 +66,7 @@ const TOOLS: ToolItem[] = [
   { value: "lyric", label: "LyricFit", path: "/LyricFit", icon: FileText },
   { value: "hitfit", label: "HitFit", path: "/HitFit", icon: Target },
   { value: "dreamfit", label: "DreamFit", path: "/DreamFit", icon: Sparkles },
+  { value: "vibefit", label: "VibeFit", path: "/VibeFit", icon: Music },
 ];
 
 const NOTI_ICON_MAP = {

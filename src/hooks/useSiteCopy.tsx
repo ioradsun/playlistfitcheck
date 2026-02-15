@@ -11,6 +11,7 @@ const DEFAULT_COPY: SiteCopy = {
     lyric: { label: "LyricFit", pill: "Fit your lyrics inside captions.", heading: "Get Perfectly Timed Lyrics For Every Drop", cta: "Sync Lyrics" },
     hitfit: { label: "HitFit", pill: "See if your song fits the Top 10.", heading: "Compare Your Track to Your Target Sound", cta: "Analyze" },
     dreamfit: { label: "DreamFit", pill: "Let's build the next Fit together." },
+    vibefit: { label: "VibeFit", pill: "Art & captions that fit your song.", heading: "Art & Captions That Fit Your Song", cta: "Fit My Vibe" },
   },
   about: {
     origin_intro: "",

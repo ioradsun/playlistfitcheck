@@ -42,6 +42,7 @@ const App = () => (
               <Route path="/LyricFit" element={<Index />} />
               <Route path="/HitFit" element={<Index />} />
               <Route path="/DreamFit" element={<Index />} />
+              <Route path="/VibeFit" element={<Index />} />
               <Route path="/about" element={<PageLayout title="tools.fm story" subtitle="What we built and why."><About /></PageLayout>} />
               <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />
               <Route path="/auth" element={<PageLayout title="tools fmly"><Auth /></PageLayout>} />

@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.soundcloud-resolve]
 verify_jwt = false
+
+[functions.vibefit-generate]
+verify_jwt = false
