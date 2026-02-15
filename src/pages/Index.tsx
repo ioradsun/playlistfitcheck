@@ -18,6 +18,7 @@ import { HitFitTab } from "@/components/hitfit/HitFitTab";
 import { ProFitTab } from "@/components/profit/ProFitTab";
 import { SongFitTab } from "@/components/songfit/SongFitTab";
 import { DreamFitTab } from "@/components/dreamfit/DreamFitTab";
+import { VibeFitTab } from "@/components/vibefit/VibeFitTab";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Music } from "lucide-react";
@@ -62,6 +63,7 @@ const PATH_TO_TAB: Record<string, string> = {
   "/LyricFit": "lyric",
   "/HitFit": "hitfit",
   "/DreamFit": "dreamfit",
+  "/VibeFit": "vibefit",
 };
 
 // Labels and subtitles are now driven by useSiteCopy in the component below
@@ -241,7 +243,7 @@ const Index = () => {
     if (autoRunRef.current) return;
     
     if (state?.returnTab) {
-      const TAB_TO_PATH: Record<string, string> = { songfit: "/CrowdFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit" };
+      const TAB_TO_PATH: Record<string, string> = { songfit: "/CrowdFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
       setActiveTab(state.returnTab);
       navigate(TAB_TO_PATH[state.returnTab] || "/CrowdFit", { replace: true });
       if (!state.reportData && !state.autoRun && !state.loadMixProject && !state.loadLyric) return;
@@ -426,6 +428,8 @@ const Index = () => {
         return <div className="flex-1 overflow-y-auto px-4 py-6"><HitFitTab key={loadedHitFitAnalysis ? "loaded" : "new"} initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} /></div>;
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><DreamFitTab /></div>;
+      case "vibefit":
+        return <div className="flex-1 overflow-y-auto px-4 py-6"><VibeFitTab /></div>;
       default:
         return null;
     }
