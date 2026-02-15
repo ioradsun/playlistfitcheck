@@ -115,6 +115,12 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col items-center gap-6">
 
+      {/* Heading */}
+      <div className="text-center space-y-1">
+        <h2 className="text-xl font-semibold">Build your Spotify Money Plan</h2>
+        <p className="text-sm text-muted-foreground">Get a personalized revenue strategy based on your performance.</p>
+      </div>
+
       {/* Artist Search */}
       <div className="w-full max-w-2xl space-y-3">
         <div className="relative">
@@ -174,7 +180,7 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
             onClick={() => onAnalyze(EXAMPLE_URL)}
             className="text-primary hover:underline underline-offset-2"
           >
-            See Demo Results
+            Generate My Plan
           </button>
         </div>
       </div>

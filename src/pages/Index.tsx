@@ -74,7 +74,7 @@ const TAB_LABELS: Record<string, string> = {
 
 const TAB_SUBTITLES: Record<string, string> = {
   songfit: "See how your song fits listeners.",
-  profit: "See how your Spotify fits making money.",
+  profit: "See how you can profit from your Spotify",
   playlist: "See if your song fits playlists.",
   mix: "See which mix fits best.",
   lyric: "Make your lyrics caption-ready.",
