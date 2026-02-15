@@ -271,7 +271,7 @@ export function LyricDisplay({ data, audioFile, savedId, onBack, onSaved }: Prop
         )}
         <div
           ref={lyricsContainerRef}
-          className="max-h-[360px] overflow-y-auto space-y-1"
+          className="max-h-[40vh] overflow-y-auto space-y-1"
         >
         {lines.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
