@@ -30,25 +30,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [roles, setRoles] = useState<string[]>([]);
   const [profile, setProfile] = useState<ProfileData | null>(null);
 
+  const fetchRoles = async (userId: string) => {
+    try {
+      const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      setRoles(data?.map((d) => d.role) ?? []);
+    } catch {
+      setRoles([]);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
-    // Listener for ONGOING auth changes
+    // Set up listener FIRST for ongoing auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         if (!isMounted) return;
+        console.log("[auth] onAuthStateChange:", event, !!session);
         setSession(session);
         setUser(session?.user ?? null);
+
+        if (session?.user) {
+          // Use setTimeout to avoid deadlocks inside the callback
+          setTimeout(() => {
+            if (isMounted) fetchRoles(session.user.id);
+          }, 0);
+        } else {
+          setRoles([]);
+        }
+
+        // If this is a SIGNED_IN event (e.g. from email verification), ensure loading is false
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          setLoading(false);
+        }
       }
     );
 
-    // INITIAL load
+    // THEN do initial session check
     const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!isMounted) return;
+        console.log("[auth] getSession:", !!session);
         setSession(session);
         setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchRoles(session.user.id);
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -63,11 +91,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const fetchProfile = useCallback(() => {
-    if (!user) { setProfile(null); setRoles([]); return; }
+    if (!user) { setProfile(null); return; }
     supabase.from("profiles").select("display_name, avatar_url, bio, spotify_embed_url, spotify_artist_id").eq("id", user.id).single()
       .then(({ data }) => { if (data) setProfile(data as ProfileData); });
-    supabase.from("user_roles").select("role").eq("user_id", user.id)
-      .then(({ data }) => { setRoles(data?.map((r: any) => r.role) ?? []); });
   }, [user]);
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
