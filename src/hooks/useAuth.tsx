@@ -62,6 +62,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // If this is a SIGNED_IN event (e.g. from email verification), ensure loading is false
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setLoading(false);
+          // Clean up auth params from URL after verification
+          if (window.location.search?.includes('code=') || window.location.hash?.includes('access_token')) {
+            window.history.replaceState({}, '', '/CrowdFit');
+          }
         }
       }
     );
