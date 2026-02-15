@@ -93,12 +93,12 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     }
   }, []);
 
-  const handlePasteUrl = useCallback(async () => {
-    if (!query.includes("spotify.com/track/")) return;
+  const fetchTrackByUrl = useCallback(async (url: string) => {
+    if (!url.includes("spotify.com/track/")) return;
     setSearching(true);
     try {
       const { data, error } = await supabase.functions.invoke("songfit-track", {
-        body: { trackUrl: query.trim() },
+        body: { trackUrl: url.trim() },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -109,12 +109,21 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     } finally {
       setSearching(false);
     }
-  }, [query]);
+  }, []);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const pasted = e.clipboardData.getData("text");
+    if (pasted.includes("spotify.com/track/")) {
+      e.preventDefault();
+      setQuery(pasted);
+      fetchTrackByUrl(pasted);
+    }
+  }, [fetchTrackByUrl]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       if (query.includes("spotify.com/track/")) {
-        handlePasteUrl();
+        fetchTrackByUrl(query);
       } else if (selectedTrack) {
         publish();
       }
@@ -205,6 +214,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
                     value={query}
                     onChange={e => { setQuery(e.target.value); setSelectedTrack(null); }}
                     onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
                     onFocus={() => setFocused(true)}
                     onBlur={() => setTimeout(() => setFocused(false), 200)}
                     placeholder="Search or paste Spotify link"
