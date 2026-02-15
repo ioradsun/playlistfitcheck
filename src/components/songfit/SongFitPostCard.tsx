@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
+import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { supabase } from "@/integrations/supabase/client";
@@ -173,17 +174,7 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
       </div>
 
       {/* Spotify Embed Player */}
-      <div className="w-full">
-        <iframe
-          src={`https://open.spotify.com/embed/track/${post.spotify_track_id}?utm_source=generator&theme=1`}
-          width="100%"
-          height="352"
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
-          className="border-0 block"
-          title={`Play ${post.track_title}`}
-        />
-      </div>
+      <LazySpotifyEmbed trackId={post.spotify_track_id} trackTitle={post.track_title} />
 
       {/* Action Row */}
       <div className="flex items-center px-3 pt-1 pb-1">
