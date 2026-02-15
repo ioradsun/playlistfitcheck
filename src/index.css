@@ -64,10 +64,16 @@
     @apply border-border;
   }
 
+  html {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, sans-serif;
-    padding-bottom: 120px;
+    height: 100%;
+    overflow: hidden;
   }
 
   code, .font-mono {
