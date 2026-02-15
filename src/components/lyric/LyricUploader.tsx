@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
-import { Loader2, FileAudio } from "lucide-react";
+import { Loader2, FileAudio, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AudioUploadZone } from "@/components/ui/AudioUploadZone";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
 interface Props {
@@ -31,6 +32,17 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
       </div>
 
       <div className="glass-card rounded-xl p-4 space-y-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-medium">Audio File</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                <Info size={13} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs max-w-[220px]">MP3, WAV, M4A · 75 MB max · Not saved or stored</TooltipContent>
+          </Tooltip>
+        </div>
         <AudioUploadZone
           label="Upload Song"
           files={files}
@@ -38,7 +50,6 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
           maxFiles={1}
           disabled={loading}
         />
-        <p className="text-xs text-muted-foreground text-center">MP3, WAV, M4A · 75 MB max · Not saved or stored</p>
       </div>
 
       <Button
