@@ -5,6 +5,7 @@ import { MixCard } from "@/components/mix/MixCard";
 import { GlobalTimeline } from "@/components/mix/GlobalTimeline";
 
 import { useAudioEngine, type AudioMix } from "@/hooks/useAudioEngine";
+import { useAuth } from "@/hooks/useAuth";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
 import { Upload, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +19,7 @@ interface MixFitCheckProps {
 }
 
 export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCheckProps = {}) {
+  const { user } = useAuth();
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
   const { list, save, remove } = useMixProjectStorage();
 
@@ -180,13 +182,13 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
   , [projectId, title, notes, mixes, markerStart, markerEnd]);
 
   useEffect(() => {
-    if (!autosaveData || !projectId) return;
+    if (!autosaveData || !projectId || !user) return;
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
       saveProject(false);
     }, 2000);
     return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
-  }, [autosaveData, projectId, saveProject]);
+  }, [autosaveData, projectId, saveProject, user]);
 
   const updateMix = useCallback((id: string, updates: Partial<AudioMix>) => {
     setMixes((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
@@ -226,7 +228,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {lastSavedAt && (
+          {user && lastSavedAt && (
             <span className="text-xs text-muted-foreground">Saved {lastSavedAt}</span>
           )}
         </div>
