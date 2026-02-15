@@ -1,51 +1,112 @@
-import { useState } from "react";
-import { DreamToolsComposer } from "./DreamToolsComposer";
-import { DreamToolsFeed } from "./DreamToolsFeed";
-import { Sparkles } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Loader2, User } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
+import { DreamToolCard } from "./DreamToolCard";
+import { DreamComments } from "./DreamComments";
+import { DreamInlineComposer } from "./DreamInlineComposer";
+import type { Dream } from "./types";
 
 export function DreamFitTab() {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [showComposer, setShowComposer] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [dreams, setDreams] = useState<Dream[]>([]);
+  const [backedIds, setBackedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [commentDreamId, setCommentDreamId] = useState<string | null>(null);
+
+  const fetchDreams = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("dream_tools")
+      .select("*, profiles:user_id(display_name, avatar_url)")
+      .order("trending_score", { ascending: false })
+      .limit(50);
+    setDreams((data as any) || []);
+    setLoading(false);
+  }, []);
+
+  const fetchBacked = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("dream_backers")
+      .select("dream_id")
+      .eq("user_id", user.id);
+    setBackedIds(new Set((data || []).map((d: any) => d.dream_id)));
+  }, [user]);
+
+  useEffect(() => {
+    fetchDreams();
+    fetchBacked();
+  }, [fetchDreams, fetchBacked]);
+
+  const handleRefresh = () => {
+    setTimeout(() => {
+      fetchDreams();
+      fetchBacked();
+    }, 300);
+  };
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-6">
-      {/* Hero */}
-      {!showComposer && (
-        <div className="text-center space-y-3 py-4">
-          <h1 className="text-xl font-bold text-foreground">
-            What tool do you wish existed?
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            If it's annoying you, it's annoying someone else too.
-          </p>
-          <button
-            onClick={() => setShowComposer(true)}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity glow-primary"
-          >
-            <Sparkles size={16} />
-            Post a Dream
-          </button>
-        </div>
-      )}
+    <div className="w-full max-w-[470px] mx-auto">
+      {/* Header */}
+      <div className="px-4 pt-4 pb-2">
+        <p className="text-xs text-muted-foreground">Let's build the next Fit together.</p>
+      </div>
 
       {/* Composer */}
-      {showComposer && (
-        <div className="space-y-2">
-          <DreamToolsComposer onCreated={() => {
-            setRefreshKey((k) => k + 1);
-            setShowComposer(false);
-          }} />
-          <button
-            onClick={() => setShowComposer(false)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            ← Back to feed
-          </button>
+      {user ? (
+        <DreamInlineComposer onCreated={() => { fetchDreams(); }} />
+      ) : (
+        <div
+          className="border-b border-border/40 cursor-pointer"
+          onClick={() => navigate("/auth?mode=signup")}
+        >
+          <div className="flex gap-3 px-4 pt-3 pb-3">
+            <div className="h-10 w-10 rounded-full bg-muted border border-border shrink-0 mt-1 flex items-center justify-center">
+              <User size={16} className="text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0 flex items-center">
+              <span className="text-base text-muted-foreground/60">Sign Up to post a dream</span>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Feed */}
-      <DreamToolsFeed refreshKey={refreshKey} />
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <Loader2 size={24} className="animate-spin text-muted-foreground" />
+        </div>
+      ) : dreams.length === 0 ? (
+        <div className="text-center py-16 space-y-3">
+          <p className="text-muted-foreground text-sm">No dreams yet. Be the first to ask for something.</p>
+        </div>
+      ) : (
+        <div>
+          {dreams.map((dream) => (
+            <DreamToolCard
+              key={dream.id}
+              dream={dream}
+              isBacked={backedIds.has(dream.id)}
+              onToggleBack={handleRefresh}
+              onOpenComments={setCommentDreamId}
+              onRefresh={handleRefresh}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Comments Sheet */}
+      <DreamComments
+        dreamId={commentDreamId}
+        onClose={() => setCommentDreamId(null)}
+        onCommentAdded={async (id) => {
+          const { data } = await supabase.from("dream_tools").select("comments_count").eq("id", id).maybeSingle();
+          if (data) setDreams(prev => prev.map(d => d.id === id ? { ...d, comments_count: data.comments_count } : d));
+        }}
+      />
     </div>
   );
 }
