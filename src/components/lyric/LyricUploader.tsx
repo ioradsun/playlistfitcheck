@@ -47,6 +47,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">{siteCopy.tools.lyric?.heading || "Get Perfectly Timed Lyrics For Every Drop"}</h2>
+        {siteCopy.tools.lyric?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.lyric.subheading}</p>}
       </div>
 
       <div className="glass-card rounded-xl p-4 space-y-3 text-left">

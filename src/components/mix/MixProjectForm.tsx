@@ -45,6 +45,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">{siteCopy.tools.mix?.heading || "Compare Mix Versions And Choose The Best Fit"}</h2>
+        {siteCopy.tools.mix?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.mix.subheading}</p>}
       </div>
 
       <div className="glass-card rounded-xl p-4 space-y-3 text-left">
