@@ -224,6 +224,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
     <div className="w-full max-w-2xl mx-auto space-y-4">
       <div className="text-center space-y-1">
         <h1 className="text-xl font-semibold text-foreground">{siteCopy.tools.playlist?.heading || "Check Playlist Health And Match Your Song"}</h1>
+        {siteCopy.tools.playlist?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.playlist.subheading}</p>}
       </div>
 
       <div className="space-y-4">

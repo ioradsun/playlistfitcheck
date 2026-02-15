@@ -120,6 +120,7 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
       {/* Heading */}
       <div className="text-center space-y-1">
         <h2 className="text-xl font-semibold">{siteCopy.tools.profit?.heading || "Turn Your Spotify Data Into A Revenue Strategy"}</h2>
+        {siteCopy.tools.profit?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.profit.subheading}</p>}
       </div>
 
       {/* Artist Search */}

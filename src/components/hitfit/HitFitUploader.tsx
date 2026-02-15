@@ -71,6 +71,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
     <div className="w-full max-w-2xl mx-auto space-y-4">
       <div className="text-center space-y-1">
         <h1 className="text-xl font-semibold text-foreground">{siteCopy.tools.hitfit?.heading || "Compare Your Track to Your Target Sound"}</h1>
+        {siteCopy.tools.hitfit?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.hitfit.subheading}</p>}
       </div>
 
       <div className="space-y-3">
