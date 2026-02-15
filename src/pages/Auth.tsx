@@ -238,14 +238,14 @@ const Auth = () => {
                 </Button>
               </form>
               <p className="text-center text-sm text-muted-foreground">
-                <button onClick={() => setIsForgot(false)} className="text-primary hover:underline">Back to sign in</button>
+                <button onClick={() => setIsForgot(false)} className="text-primary hover:underline">Back to log in</button>
               </p>
             </>
           ) : (
             <Tabs value={activeTab} onValueChange={v => setActiveTab(v)} className="w-full">
               <TabsList className="w-full">
                 <TabsTrigger value="signup" className="flex-1">Sign Up</TabsTrigger>
-                <TabsTrigger value="signin" className="flex-1">Sign In</TabsTrigger>
+                <TabsTrigger value="signin" className="flex-1">Log In</TabsTrigger>
               </TabsList>
 
               <TabsContent value="signup">
@@ -254,7 +254,7 @@ const Auth = () => {
                   {emailPasswordFields}
                   <Button type="submit" className="w-full gap-2" disabled={loading}>
                     <Mail size={16} />
-                    {loading ? "Loading…" : "Sign up"}
+                    {loading ? "Loading…" : "Sign Up for Free"}
                   </Button>
                   <p className="text-center text-xs text-muted-foreground">
                     By signing up, you agree to the{" "}
@@ -268,7 +268,7 @@ const Auth = () => {
                   {emailPasswordFields}
                   <Button type="submit" className="w-full gap-2" disabled={loading}>
                     <Mail size={16} />
-                    {loading ? "Loading…" : "Sign in"}
+                    {loading ? "Loading…" : "Log In"}
                   </Button>
                 </form>
                 <p className="text-center mt-3">

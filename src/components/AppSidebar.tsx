@@ -248,17 +248,10 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
         {!authLoading && !user && (
           <div className="px-2 mt-2 space-y-1">
             <button
-              onClick={() => { navigate("/auth?mode=signup"); closeMobileIfNeeded(); }}
+              onClick={() => { navigate("/auth"); closeMobileIfNeeded(); }}
               className="w-full px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
             >
-              {collapsed ? <UserPlus size={14} className="mx-auto" /> : "Sign Up For Free"}
-            </button>
-            <button
-              onClick={() => { navigate("/auth"); closeMobileIfNeeded(); }}
-              className="flex items-center justify-center gap-2 w-full px-2 py-1.5 rounded-md text-xs font-medium hover:bg-sidebar-accent transition-colors"
-            >
-              <User size={14} />
-              {!collapsed && <span>Log in</span>}
+              {collapsed ? <UserPlus size={14} className="mx-auto" /> : "Sign Up / Log In"}
             </button>
           </div>
         )}
