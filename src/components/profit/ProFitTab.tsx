@@ -93,19 +93,25 @@ export const ProFitTab = ({ initialArtistUrl, onProjectSaved }: ProFitTabProps =
 
   if (view === "report" && report) {
     return (
-      <ProFitReport
-        artist={report.artist}
-        blueprint={report.blueprint}
-        reportId={report.reportId}
-        shareToken={report.shareToken}
-        onBack={() => { setReport(null); setView("landing"); }}
-        onOpenChat={() => setView("chat")}
-      />
+      <div className="px-4 py-6">
+        <ProFitReport
+          artist={report.artist}
+          blueprint={report.blueprint}
+          reportId={report.reportId}
+          shareToken={report.shareToken}
+          onBack={() => { setReport(null); setView("landing"); }}
+          onOpenChat={() => setView("chat")}
+        />
+      </div>
     );
   }
 
-  return <ProFitLanding onAnalyze={handleAnalyze} onLoadReport={(r: any) => {
-    const artistUrl = `https://open.spotify.com/artist/${r.profit_artists?.spotify_artist_id}`;
-    handleAnalyze(artistUrl);
-  }} loading={loading} />;
+  return (
+    <div className="flex-1 flex items-center justify-center px-4 py-8">
+      <ProFitLanding onAnalyze={handleAnalyze} onLoadReport={(r: any) => {
+        const artistUrl = `https://open.spotify.com/artist/${r.profit_artists?.spotify_artist_id}`;
+        handleAnalyze(artistUrl);
+      }} loading={loading} />
+    </div>
+  );
 };
