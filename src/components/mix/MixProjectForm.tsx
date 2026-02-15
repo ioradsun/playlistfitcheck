@@ -43,7 +43,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
         <div className="border-t border-border" />
 
         <div className="flex items-center justify-between mb-1">
-          <span className="text-sm font-medium">Mixes</span>
+          <span className="text-sm font-medium">Add up to 6 Mixes</span>
           <Tooltip>
             <TooltipTrigger asChild>
               <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
@@ -54,7 +54,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
           </Tooltip>
         </div>
         <AudioUploadZone
-          label="Upload Up to 6 Mixes"
+          label="Upload"
           files={files}
           onChange={setFiles}
           maxFiles={MAX_MIXES}
