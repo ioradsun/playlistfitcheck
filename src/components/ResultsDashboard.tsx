@@ -10,6 +10,7 @@ import { PitchDraftCard } from "@/components/PitchDraftCard";
 
 import type { HealthOutput } from "@/lib/playlistHealthEngine";
 import type { PlaylistInput } from "@/lib/playlistHealthEngine";
+import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 
 interface Props {
   result: HealthOutput;
@@ -337,6 +338,7 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
         <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} playlistName={playlistName} />
       )}
 
+      <SignUpToSaveBanner />
     </motion.div>
   );
 }
