@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Music, Mail, Loader2, X } from "lucide-react";
+import { Music, Mail, Loader2, X, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 
 interface SpotifyArtistResult {
   id: string;
@@ -28,6 +29,7 @@ const Auth = () => {
     setActiveTab(searchParams.get("mode") === "signup" ? "signup" : "signin");
   }, [searchParams]);
 
+  const [checkEmail, setCheckEmail] = useState(false);
   const [isForgot, setIsForgot] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -147,7 +149,7 @@ const Auth = () => {
           },
         });
         if (error) throw error;
-        toast.success("Check your email to confirm your account!");
+        setCheckEmail(true);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -240,7 +242,35 @@ const Auth = () => {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isForgot ? (
+          {checkEmail ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="text-center space-y-5 py-4"
+            >
+              <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                <CheckCircle2 className="text-primary" size={28} />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold">check your email</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
+                  we sent a confirmation link to <span className="text-foreground font-medium">{email}</span>. tap it to activate your account.
+                </p>
+              </div>
+              <div className="pt-2 space-y-3">
+                <p className="text-xs text-muted-foreground">didn't get it? check your spam folder.</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-muted-foreground hover:text-primary"
+                  onClick={() => { setCheckEmail(false); setActiveTab("signin"); }}
+                >
+                  back to log in
+                </Button>
+              </div>
+            </motion.div>
+          ) : isForgot ? (
             <>
               <h3 className="text-lg font-semibold text-center">Reset password</h3>
               <p className="text-sm text-muted-foreground text-center">Enter your email and we'll send a reset link</p>
