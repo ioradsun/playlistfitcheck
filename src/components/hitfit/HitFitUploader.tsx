@@ -66,7 +66,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
   ];
 
   return (
-    <div className="w-full max-w-xl mx-auto space-y-4">
+    <div className="w-full max-w-2xl mx-auto space-y-4">
       <div className="text-center space-y-2">
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
           Upload your master(s) and a reference track. AI will analyze and compare the sonics, telling you exactly how to bridge the gap.
