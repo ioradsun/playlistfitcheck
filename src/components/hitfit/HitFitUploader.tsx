@@ -84,7 +84,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
                         <Info size={13} />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">{slot.desc}</TooltipContent>
+                    <TooltipContent side="top" className="text-xs max-w-[220px]">{slot.desc} · MP3, WAV, M4A · 75 MB max · Not saved or stored</TooltipContent>
                   </Tooltip>
                 </div>
               </div>
@@ -114,7 +114,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
                       <Info size={13} />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">A released track with the sound you're targeting</TooltipContent>
+                  <TooltipContent side="top" className="text-xs max-w-[220px]">A released track with the sound you're targeting · MP3, WAV, M4A · 75 MB max · Not saved or stored</TooltipContent>
                 </Tooltip>
               </div>
             </div>

@@ -46,6 +46,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
           onChange={setFiles}
           maxFiles={MAX_MIXES}
         />
+        <p className="text-xs text-muted-foreground text-center">MP3, WAV, M4A · 75 MB max each · Not saved or stored</p>
       </div>
 
       <Button

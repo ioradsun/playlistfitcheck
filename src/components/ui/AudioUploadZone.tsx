@@ -1,21 +1,15 @@
 import { useRef } from "react";
-import { Upload, Music, X, Info } from "lucide-react";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Upload, Music, X } from "lucide-react";
 import { toast } from "sonner";
 
 const ACCEPTED_EXTENSIONS = /\.(mp3|wav|m4a|ogg|flac|aac|aiff|wma)$/i;
 const MAX_SIZE = 75 * 1024 * 1024;
 
 interface AudioUploadZoneProps {
-  /** Label shown on the upload button, e.g. "Upload Song" */
   label: string;
-  /** Currently selected file(s) */
   files: File[];
-  /** Called when files change */
   onChange: (files: File[]) => void;
-  /** Max number of files allowed (default 1) */
   maxFiles?: number;
-  /** Whether interaction is disabled */
   disabled?: boolean;
 }
 
@@ -67,7 +61,6 @@ export function AudioUploadZone({
         disabled={disabled}
       />
 
-      {/* Selected file chips */}
       {files.length > 0 && (
         <div className="space-y-1.5">
           {files.map((file, i) => (
@@ -89,31 +82,18 @@ export function AudioUploadZone({
         </div>
       )}
 
-      {/* Upload button with info icon */}
       {files.length < maxFiles && (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
-            disabled={disabled}
-          >
-            <Upload size={14} />
-            {maxFiles > 1 && files.length > 0
-              ? `Add more (${files.length}/${maxFiles})`
-              : label}
-          </button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" className="shrink-0 p-2 rounded-lg text-muted-foreground hover:text-foreground transition-colors">
-                <Info size={14} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs max-w-[200px]">
-              MP3, WAV, M4A · 75 MB max each · Not saved or stored
-            </TooltipContent>
-          </Tooltip>
-        </div>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+          disabled={disabled}
+        >
+          <Upload size={14} />
+          {maxFiles > 1 && files.length > 0
+            ? `Add more (${files.length}/${maxFiles})`
+            : label}
+        </button>
       )}
     </div>
   );
