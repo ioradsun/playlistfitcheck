@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-
-import { Search, Zap, Loader2, Music } from "lucide-react";
+import { Search, Zap, Loader2, Music, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -78,19 +77,57 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
   const [playlistFocused, setPlaylistFocused] = useState(false);
   const [songFocused, setSongFocused] = useState(false);
   const songInputRef = useRef<HTMLInputElement>(null);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<PlaylistResult | null>(null);
+  const [selectedTrack, setSelectedTrack] = useState<TrackResult | null>(null);
+  const [playlistFetching, setPlaylistFetching] = useState(false);
+  const [trackFetching, setTrackFetching] = useState(false);
 
   const { results: playlistResults, loading: playlistSearching, clear: clearPlaylist } =
     useSpotifySearch<PlaylistResult>("playlist", url);
   const { results: songResults, loading: songSearching, clear: clearSong } =
     useSpotifySearch<TrackResult>("track", songUrl);
 
+  const fetchPlaylistMeta = useCallback(async (pastedUrl: string) => {
+    const match = pastedUrl.match(/playlist\/([a-zA-Z0-9]+)/);
+    if (!match) return;
+    setPlaylistFetching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("spotify-search", {
+        body: { query: match[1], type: "playlist" },
+      });
+      if (!error && data?.results?.length > 0) {
+        setSelectedPlaylist(data.results[0]);
+      }
+    } catch {} finally {
+      setPlaylistFetching(false);
+    }
+  }, []);
+
+  const fetchTrackMeta = useCallback(async (pastedUrl: string) => {
+    const match = pastedUrl.match(/track\/([a-zA-Z0-9]+)/);
+    if (!match) return;
+    setTrackFetching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("spotify-search", {
+        body: { query: match[1], type: "track" },
+      });
+      if (!error && data?.results?.length > 0) {
+        setSelectedTrack(data.results[0]);
+      }
+    } catch {} finally {
+      setTrackFetching(false);
+    }
+  }, []);
+
   const handlePlaylistPaste = (e: React.ClipboardEvent) => {
     const pasted = e.clipboardData.getData("text");
     if (pasted.includes("spotify.com/playlist/")) {
       e.preventDefault();
-      setUrl(pasted.trim());
+      const trimmed = pasted.trim();
+      setUrl(trimmed);
       clearPlaylist();
       setPlaylistFocused(false);
+      fetchPlaylistMeta(trimmed);
       setTimeout(() => songInputRef.current?.focus(), 100);
     }
   };
@@ -99,9 +136,11 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
     const pasted = e.clipboardData.getData("text");
     if (pasted.includes("spotify.com/track/")) {
       e.preventDefault();
-      setSongUrl(pasted.trim());
+      const trimmed = pasted.trim();
+      setSongUrl(trimmed);
       clearSong();
       setSongFocused(false);
+      fetchTrackMeta(trimmed);
     }
   };
 
@@ -153,6 +192,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
 
   const selectPlaylist = (p: PlaylistResult) => {
     setUrl(p.url);
+    setSelectedPlaylist(p);
     clearPlaylist();
     setPlaylistFocused(false);
     setTimeout(() => songInputRef.current?.focus(), 100);
@@ -160,12 +200,23 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
 
   const selectTrack = (t: TrackResult) => {
     setSongUrl(t.url);
+    setSelectedTrack(t);
     clearSong();
     setSongFocused(false);
   };
 
-  const showPlaylistDropdown = playlistFocused && playlistResults.length > 0;
-  const showSongDropdown = songFocused && songResults.length > 0;
+  const clearSelectedPlaylist = () => {
+    setSelectedPlaylist(null);
+    setUrl("");
+  };
+
+  const clearSelectedTrack = () => {
+    setSelectedTrack(null);
+    setSongUrl("");
+  };
+
+  const showPlaylistDropdown = playlistFocused && playlistResults.length > 0 && !selectedPlaylist;
+  const showSongDropdown = songFocused && songResults.length > 0 && !selectedTrack;
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
@@ -174,90 +225,128 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
         {/* Combined URL inputs */}
         <div className="glass-card rounded-xl p-4 space-y-3 relative z-50" style={{ overflow: 'visible' }}>
           {/* Playlist input with search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
-            <Input
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              placeholder="Search or paste Spotify playlist URL..."
-              className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
-              onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
-              onPaste={handlePlaylistPaste}
-              onFocus={() => setPlaylistFocused(true)}
-              onBlur={() => setTimeout(() => setPlaylistFocused(false), 200)}
-              disabled={loading}
-            />
-            {playlistSearching && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
-            )}
-            {showPlaylistDropdown && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
-                {playlistResults.map((p) => (
-                  <button
-                    key={p.id}
-                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors text-left"
-                    onMouseDown={() => selectPlaylist(p)}
-                  >
-                    {p.image ? (
-                      <img src={p.image} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
-                    ) : (
-                      <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                        <Search size={12} className="text-muted-foreground" />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{p.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">by {p.owner} · {p.tracks} tracks</p>
-                    </div>
-                  </button>
-                ))}
+          {selectedPlaylist ? (
+            <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50">
+              {selectedPlaylist.image ? (
+                <img src={selectedPlaylist.image} alt="" className="w-9 h-9 rounded object-cover shrink-0" />
+              ) : (
+                <div className="w-9 h-9 rounded bg-muted flex items-center justify-center shrink-0">
+                  <Search size={14} className="text-muted-foreground" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{selectedPlaylist.name}</p>
+                <p className="text-xs text-muted-foreground truncate">by {selectedPlaylist.owner} · {selectedPlaylist.tracks} tracks</p>
               </div>
-            )}
-          </div>
+              <button type="button" onClick={clearSelectedPlaylist} className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors" disabled={loading}>
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
+              <Input
+                value={url}
+                onChange={e => { setUrl(e.target.value); setSelectedPlaylist(null); }}
+                placeholder="Search or paste Spotify playlist URL..."
+                className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+                onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
+                onPaste={handlePlaylistPaste}
+                onFocus={() => setPlaylistFocused(true)}
+                onBlur={() => setTimeout(() => setPlaylistFocused(false), 200)}
+                disabled={loading}
+              />
+              {(playlistSearching || playlistFetching) && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
+              )}
+              {showPlaylistDropdown && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
+                  {playlistResults.map((p) => (
+                    <button
+                      key={p.id}
+                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors text-left"
+                      onMouseDown={() => selectPlaylist(p)}
+                    >
+                      {p.image ? (
+                        <img src={p.image} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                          <Search size={12} className="text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{p.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">by {p.owner} · {p.tracks} tracks</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="border-t border-border" />
 
           {/* Song input with search */}
-          <div className="relative">
-            <Music className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
-            <Input
-              ref={songInputRef}
-              value={songUrl}
-              onChange={e => setSongUrl(e.target.value)}
-              placeholder="Search or paste Spotify song URL (optional)..."
-              className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
-              onPaste={handleSongPaste}
-              onFocus={() => setSongFocused(true)}
-              onBlur={() => setTimeout(() => setSongFocused(false), 200)}
-              disabled={loading}
-            />
-            {songSearching && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
-            )}
-            {showSongDropdown && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
-                {songResults.map((t) => (
-                  <button
-                    key={t.id}
-                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors text-left"
-                    onMouseDown={() => selectTrack(t)}
-                  >
-                    {t.image ? (
-                      <img src={t.image} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
-                    ) : (
-                      <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                        <Music size={12} className="text-muted-foreground" />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{t.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{t.artists}</p>
-                    </div>
-                  </button>
-                ))}
+          {selectedTrack ? (
+            <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50">
+              {selectedTrack.image ? (
+                <img src={selectedTrack.image} alt="" className="w-9 h-9 rounded object-cover shrink-0" />
+              ) : (
+                <div className="w-9 h-9 rounded bg-muted flex items-center justify-center shrink-0">
+                  <Music size={14} className="text-muted-foreground" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{selectedTrack.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{selectedTrack.artists}</p>
               </div>
-            )}
-          </div>
+              <button type="button" onClick={clearSelectedTrack} className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors" disabled={loading}>
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <Music className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={18} />
+              <Input
+                ref={songInputRef}
+                value={songUrl}
+                onChange={e => { setSongUrl(e.target.value); setSelectedTrack(null); }}
+                placeholder="Search or paste Spotify song URL (optional)..."
+                className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+                onPaste={handleSongPaste}
+                onFocus={() => setSongFocused(true)}
+                onBlur={() => setTimeout(() => setSongFocused(false), 200)}
+                disabled={loading}
+              />
+              {(songSearching || trackFetching) && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" size={16} />
+              )}
+              {showSongDropdown && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-[100] overflow-hidden max-h-80 overflow-y-auto">
+                  {songResults.map((t) => (
+                    <button
+                      key={t.id}
+                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors text-left"
+                      onMouseDown={() => selectTrack(t)}
+                    >
+                      {t.image ? (
+                        <img src={t.image} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                          <Music size={12} className="text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{t.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{t.artists}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="pt-1">
             <Button onClick={handleAnalyze} className="w-full glow-primary" size="lg" disabled={loading}>
