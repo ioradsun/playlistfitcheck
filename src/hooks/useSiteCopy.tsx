@@ -29,6 +29,9 @@ const DEFAULT_COPY: SiteCopy = {
     about_subtitle: "What we built and why.",
     auth_title: "tools fmly",
   },
+  features: {
+    crypto_tipping: false,
+  },
 };
 
 export interface ToolCopy {
@@ -64,6 +67,9 @@ export interface SiteCopy {
     about_title: string;
     about_subtitle: string;
     auth_title: string;
+  };
+  features: {
+    crypto_tipping: boolean;
   };
 }
 

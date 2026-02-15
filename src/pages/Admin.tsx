@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, Music2, MousePointerClick, FileText } from "lucide-react";
+import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, Music2, MousePointerClick, FileText, Coins } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { CopyEditor } from "@/components/admin/CopyEditor";
+import { Switch } from "@/components/ui/switch";
 
 interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
 interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
@@ -43,7 +44,8 @@ export default function Admin() {
   const [widgetTitle, setWidgetTitle] = useState("");
   const [embedUrl, setEmbedUrl] = useState("");
   const [savingWidget, setSavingWidget] = useState(false);
-
+  const [cryptoEnabled, setCryptoEnabled] = useState(false);
+  const [savingCrypto, setSavingCrypto] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
   const fetchUsers = async () => {
@@ -81,6 +83,13 @@ export default function Admin() {
           if (r?.config?.widget_title) setWidgetTitle(r.config.widget_title);
           if (r?.config?.embed_url) setEmbedUrl(r.config.embed_url);
         });
+      // Fetch crypto toggle from site_copy
+      supabase.from("site_copy").select("copy_json").limit(1).single()
+        .then(({ data: r }) => {
+          if (r?.copy_json && (r.copy_json as any).features?.crypto_tipping) {
+            setCryptoEnabled(true);
+          }
+        });
     }
   }, [tab, dataLoaded, isAdmin]);
 
@@ -97,6 +106,25 @@ export default function Admin() {
       window.dispatchEvent(new CustomEvent("widget-config-updated"));
     } catch (e) { toast.error("Failed to save widget config"); }
     finally { setSavingWidget(false); }
+  };
+
+  const handleToggleCrypto = async (enabled: boolean) => {
+    setCryptoEnabled(enabled);
+    setSavingCrypto(true);
+    try {
+      const { data: existing } = await supabase.from("site_copy").select("id, copy_json").limit(1).single();
+      if (existing) {
+        const updated = { ...(existing.copy_json as any), features: { ...((existing.copy_json as any).features || {}), crypto_tipping: enabled } };
+        await supabase.functions.invoke("admin-dashboard", { body: { action: "update_site_copy", copy_json: updated } });
+        window.dispatchEvent(new CustomEvent("site-copy-updated"));
+      }
+      toast.success(enabled ? "Crypto tipping enabled" : "Crypto tipping disabled");
+    } catch (e) {
+      setCryptoEnabled(!enabled);
+      toast.error("Failed to update");
+    } finally {
+      setSavingCrypto(false);
+    }
   };
 
   const handleRefresh = async () => {
@@ -336,6 +364,25 @@ export default function Admin() {
                     {savingWidget ? "Saving..." : "Save Config"}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+
+            {/* Crypto Tipping Toggle */}
+            <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                <Coins size={14} className="text-purple-400" />
+                <span className="text-sm font-mono font-medium">Crypto Tipping</span>
+              </div>
+              <div className="px-4 py-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">$DEGEN tipping on CrowdFit</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Show tip button on all posts (Base chain)</p>
+                </div>
+                <Switch
+                  checked={cryptoEnabled}
+                  onCheckedChange={handleToggleCrypto}
+                  disabled={savingCrypto}
+                />
               </div>
             </motion.div>
           </TabsContent>
