@@ -416,7 +416,7 @@ const Index = () => {
           </div>
         );
       case "mix":
-        return <div className="flex-1 px-4 py-6"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex flex-col px-4 py-6"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} /></div>;
       case "lyric":
         return <div className="flex-1 flex items-center justify-center px-4 py-8"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
       case "hitfit":

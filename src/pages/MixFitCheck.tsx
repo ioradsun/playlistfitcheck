@@ -208,8 +208,10 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
   // If no project created yet, show form + saved projects
   if (!projectId) {
     return (
-      <div className="w-full max-w-2xl mx-auto space-y-4">
-        <MixProjectForm onSubmit={handleCreate} />
+      <div className="w-full max-w-2xl mx-auto flex-1 flex items-center justify-center">
+        <div className="w-full space-y-4">
+          <MixProjectForm onSubmit={handleCreate} />
+        </div>
       </div>
     );
   }
