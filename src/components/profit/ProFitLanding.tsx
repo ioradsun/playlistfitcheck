@@ -175,13 +175,14 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
             </div>
           )}
         </div>
-        <div className="flex items-center justify-center gap-4 text-xs">
-          <button
+        <div className="flex items-center justify-center">
+          <Button
             onClick={() => onAnalyze(EXAMPLE_URL)}
-            className="text-primary hover:underline underline-offset-2"
+            className="w-full glow-primary"
+            size="lg"
           >
             Generate My Plan
-          </button>
+          </Button>
         </div>
       </div>
 
