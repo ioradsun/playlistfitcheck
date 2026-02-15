@@ -9,21 +9,13 @@ export default function OurStory() {
         animate={{ opacity: 1, y: 0 }}
       >
         <p className="text-sm text-muted-foreground leading-relaxed">
-          <a
-            href="https://open.spotify.com/artist/1PlkAOmfFYqBYFpN8jDj4v?si=ZKcGkrQ2RgGnKN-IRsIXEA"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline underline-offset-2 font-semibold"
-          >
-            ajan
-          </a>{" "}
-          makes music, so he knows the 3am doubt — is the mix ready, should you pitch it, is it actually good? His dad builds tech. Instead of adding more opinions to the noise, they built tools for clarity.
+          I make music, so I know the 3am doubt—is the mix ready, is it actually good? My dad builds tech. So we built tools to try and answer those questions.
         </p>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          No gatekeepers. No hype. No secrets. Just answers to the questions you're asking yourself at 2am.
+          We're trying everything. Some will work. Some won't. That's how music works too. But at least we're not guessing alone.
         </p>
         <p className="text-sm text-primary font-semibold leading-relaxed">
-          tools.fm: less guessing, more answers.
+          tools.fm: experiments to find answers.
         </p>
       </motion.div>
 
