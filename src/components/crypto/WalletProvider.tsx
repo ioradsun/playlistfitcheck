@@ -1,32 +1,27 @@
 import { type ReactNode } from "react";
-import { OnchainKitProvider } from "@coinbase/onchainkit";
-import { base } from "viem/chains";
-import { http, createConfig, WagmiProvider } from "wagmi";
-import { coinbaseWallet, metaMask, injected } from "wagmi/connectors";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WagmiConfig, createConfig, configureChains } from "wagmi";
+import { base } from "wagmi/chains";
+import { publicProvider } from "wagmi/providers/public";
+import { InjectedConnector } from "wagmi/connectors/injected";
+import { CoinbaseWalletConnector } from "wagmi/connectors/coinbaseWallet";
+import { MetaMaskConnector } from "wagmi/connectors/metaMask";
 
-const wagmiConfig = createConfig({
-  chains: [base],
+const { chains, publicClient, webSocketPublicClient } = configureChains(
+  [base],
+  [publicProvider()]
+);
+
+const config = createConfig({
+  autoConnect: true,
   connectors: [
-    coinbaseWallet({ appName: "tools.fm" }),
-    metaMask(),
-    injected(),
+    new CoinbaseWalletConnector({ chains, options: { appName: "tools.fm" } }),
+    new MetaMaskConnector({ chains }),
+    new InjectedConnector({ chains, options: { name: "Browser Wallet" } }),
   ],
-  transports: {
-    [base.id]: http(),
-  },
+  publicClient,
+  webSocketPublicClient,
 });
 
-const queryClient = new QueryClient();
-
 export function WalletProvider({ children }: { children: ReactNode }) {
-  return (
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
-        <OnchainKitProvider chain={base}>
-          {children}
-        </OnchainKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
-  );
+  return <WagmiConfig config={config}>{children}</WagmiConfig>;
 }

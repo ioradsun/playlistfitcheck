@@ -13,7 +13,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@coinbase/onchainkit": "^1.1.2",
     "@hookform/resolvers": "^3.10.0",
     "@lovable.dev/cloud-auth-js": "^0.0.3",
     "@radix-ui/react-accordion": "^1.2.11",
@@ -65,8 +64,8 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
-    "viem": "^2.46.0",
-    "wagmi": "^3.4.3",
+    "viem": "^1.21.4",
+    "wagmi": "^1.4.13",
     "zod": "^3.25.76"
   },
   "devDependencies": {

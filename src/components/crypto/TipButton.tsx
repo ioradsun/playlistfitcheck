@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useAccount, useConnect, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseUnits, encodeFunctionData } from "viem";
+import { useAccount, useConnect, useContractWrite, useWaitForTransaction } from "wagmi";
+import { parseUnits } from "viem";
 import { Coins, Loader2, Wallet } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,13 @@ const DEGEN_CONTRACT = "0x4ed4e862860bed51a9570b96d89af5e1b0efefed" as const;
 const ERC20_ABI = [
   {
     name: "transfer",
-    type: "function",
-    stateMutability: "nonpayable",
+    type: "function" as const,
+    stateMutability: "nonpayable" as const,
     inputs: [
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
+      { name: "to", type: "address" as const },
+      { name: "amount", type: "uint256" as const },
     ],
-    outputs: [{ name: "", type: "bool" }],
+    outputs: [{ name: "", type: "bool" as const }],
   },
 ] as const;
 
@@ -33,31 +33,30 @@ export function TipButton({ recipientAddress, recipientName }: TipButtonProps) {
   const { user } = useAuth();
   const { isConnected } = useAccount();
   const { connect, connectors } = useConnect();
-  const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
   const [open, setOpen] = useState(false);
+  const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
+
+  const { write, data, isLoading: isPending } = useContractWrite({
+    address: DEGEN_CONTRACT,
+    abi: ERC20_ABI,
+    functionName: "transfer" as any,
+    onSuccess: () => {
+      toast.success(`Tipped ${selectedAmount} $DEGEN to ${recipientName || "author"}!`);
+      setOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(err.message?.slice(0, 80) || "Transaction failed");
+    },
+  } as any);
+
+  const { isLoading: isConfirming } = useWaitForTransaction({ hash: data?.hash });
 
   const handleTip = (amount: number) => {
-    if (!recipientAddress) return;
-    writeContract(
-      {
-        address: DEGEN_CONTRACT,
-        abi: ERC20_ABI,
-        functionName: "transfer",
-        args: [recipientAddress as `0x${string}`, parseUnits(amount.toString(), 18)],
-        chain: undefined as any,
-        account: undefined as any,
-      },
-      {
-        onSuccess: () => {
-          toast.success(`Tipped ${amount} $DEGEN to ${recipientName || "author"}!`);
-          setOpen(false);
-        },
-        onError: (err) => {
-          toast.error(err.message?.slice(0, 80) || "Transaction failed");
-        },
-      }
-    );
+    if (!recipientAddress || !write) return;
+    setSelectedAmount(amount);
+    (write as any)({
+      args: [recipientAddress as `0x${string}`, parseUnits(amount.toString(), 18)],
+    });
   };
 
   // No wallet address on author
@@ -102,14 +101,14 @@ export function TipButton({ recipientAddress, recipientName }: TipButtonProps) {
             <p className="text-[11px] text-muted-foreground">Connect your wallet to tip</p>
             {connectors.slice(0, 3).map((c) => (
               <Button
-                key={c.uid}
+                key={c.id}
                 variant="outline"
                 size="sm"
                 className="w-full gap-1.5 text-xs"
                 onClick={() => connect({ connector: c })}
               >
                 <Wallet size={12} />
-                {c.name === "Injected" ? "Browser Wallet" : c.name}
+                {c.name}
               </Button>
             ))}
           </div>
@@ -136,9 +135,6 @@ export function TipButton({ recipientAddress, recipientName }: TipButtonProps) {
             <p className="text-[10px] text-muted-foreground text-center">
               on Base · gas {"<"} $0.01
             </p>
-            {isSuccess && (
-              <p className="text-[10px] text-primary text-center font-medium">✓ Tip sent!</p>
-            )}
           </div>
         )}
       </PopoverContent>
