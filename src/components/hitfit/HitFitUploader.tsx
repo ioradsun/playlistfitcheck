@@ -92,11 +92,17 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
                   {!slot.required && (
                     <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Optional</span>
                   )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                        <Info size={13} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">{slot.desc}</TooltipContent>
+                  </Tooltip>
                 </div>
-                {slot.file ? (
+                {slot.file && (
                   <p className="text-xs text-muted-foreground truncate">{slot.file.name}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">{slot.desc}</p>
                 )}
               </div>
               {slot.file ? (
@@ -132,8 +138,17 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
               <Music size={18} className="text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold">Reference Track</p>
-              <p className="text-xs text-muted-foreground">A released track with the sound you're targeting</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold">Reference Track</p>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                      <Info size={13} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">A released track with the sound you're targeting</TooltipContent>
+                </Tooltip>
+              </div>
             </div>
             {hasReference && (
               <Button variant="ghost" size="icon" className="shrink-0" onClick={clearRef}>
