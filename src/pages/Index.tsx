@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
 import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
@@ -62,28 +63,17 @@ const PATH_TO_TAB: Record<string, string> = {
   "/DreamFit": "dreamfit",
 };
 
-const TAB_LABELS: Record<string, string> = {
-  songfit: "CrowdFit",
-  profit: "ProFit",
-  playlist: "PlaylistFit",
-  mix: "MixFit",
-  lyric: "LyricFit",
-  hitfit: "HitFit",
-  dreamfit: "DreamFit",
-};
-
-const TAB_SUBTITLES: Record<string, string> = {
-  songfit: "See how your song fits listeners.",
-  profit: "See how you can profit from your Spotify",
-  playlist: "See if your song fits playlists.",
-  mix: "See which mix fits best.",
-  lyric: "Fit your lyrics inside captions.",
-  hitfit: "See if your song fits the Top 10.",
-  dreamfit: "Let's build the next Fit together.",
-};
+// Labels and subtitles are now driven by useSiteCopy in the component below
 
 const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
+  const siteCopy = useSiteCopy();
+  const TAB_LABELS: Record<string, string> = Object.fromEntries(
+    Object.entries(siteCopy.tools).map(([k, v]) => [k, v.label])
+  );
+  const TAB_SUBTITLES: Record<string, string> = Object.fromEntries(
+    Object.entries(siteCopy.tools).map(([k, v]) => [k, v.pill])
+  );
   const location = useLocation();
   const navigate = useNavigate();
   const autoRunRef = useRef(false);

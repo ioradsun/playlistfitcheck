@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { useNotifications } from "@/hooks/useNotifications";
 import { supabase } from "@/integrations/supabase/client";
@@ -92,6 +93,7 @@ export interface AppSidebarProps {
 export { TOOLS };
 
 export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }: AppSidebarProps) {
+  const siteCopy = useSiteCopy();
   const { user, loading: authLoading, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -244,7 +246,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
         <div className="flex items-center gap-2 px-2 py-1">
           <Music size={18} className="text-primary shrink-0" />
           {!collapsed && (
-            <span className="font-mono text-sm font-bold text-primary">tools.fm</span>
+            <span className="font-mono text-sm font-bold text-primary">{siteCopy.sidebar.brand}</span>
           )}
         </div>
         {!authLoading && !user && (
@@ -276,11 +278,11 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   <SidebarMenuItem key={tool.value}>
                     <SidebarMenuButton
                       isActive={isActive}
-                      tooltip={tool.label}
+                      tooltip={siteCopy.tools[tool.value]?.label || tool.label}
                       onClick={() => handleToolClick(tool)}
                     >
                       <tool.icon size={16} />
-                      <span>{tool.label}</span>
+                      <span>{siteCopy.tools[tool.value]?.label || tool.label}</span>
                     </SidebarMenuButton>
 
                     {!collapsed && isActive && recents.length > 0 && (
@@ -371,12 +373,12 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="tools.fm story"
+                  tooltip={siteCopy.sidebar.story_link}
                   isActive={location.pathname === "/about"}
                   onClick={() => { navigate("/about"); closeMobileIfNeeded(); }}
                 >
                   <Info size={16} />
-                  <span>tools.fm story</span>
+                  <span>{siteCopy.sidebar.story_link}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>

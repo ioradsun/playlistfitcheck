@@ -60,6 +60,18 @@ serve(async (req) => {
     }
 
 
+    if (body.action === "update_site_copy" && body.copy_json) {
+      const { data: existing } = await supabase.from("site_copy").select("id").limit(1).single();
+      if (existing) {
+        await supabase.from("site_copy").update({ copy_json: body.copy_json, updated_at: new Date().toISOString() }).eq("id", existing.id);
+      } else {
+        await supabase.from("site_copy").insert({ copy_json: body.copy_json });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (body.action === "update_widget_config") {
       const { data: existing } = await supabase.from("widget_config").select("id").limit(1).single();
       if (existing) {

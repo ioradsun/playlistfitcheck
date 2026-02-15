@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 
 import { Search, Zap, Loader2, Music, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,7 @@ function useSpotifySearch<T>(type: "playlist" | "track", query: string) {
 }
 
 export function PlaylistInputSection({ onAnalyze }: Props) {
+  const siteCopy = useSiteCopy();
   const [url, setUrl] = useState("");
   const [songUrl, setSongUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -221,7 +223,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
       <div className="text-center space-y-1">
-        <h1 className="text-xl font-semibold text-foreground">Check Playlist Health And Match Your Song</h1>
+        <h1 className="text-xl font-semibold text-foreground">{siteCopy.tools.playlist?.heading || "Check Playlist Health And Match Your Song"}</h1>
       </div>
 
       <div className="space-y-4">
@@ -358,7 +360,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
               ) : (
                 <Zap size={16} className="mr-1" />
               )}
-              {loading ? "Fetching..." : "Analyze Playlist"}
+              {loading ? "Fetching..." : (siteCopy.tools.playlist?.cta || "Analyze Playlist")}
             </Button>
           </div>
         </div>

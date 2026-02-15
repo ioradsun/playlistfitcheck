@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +15,7 @@ interface MixProjectFormProps {
 const MAX_MIXES = 6;
 
 export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
+  const siteCopy = useSiteCopy();
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -42,7 +44,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
       <div className="space-y-1">
-        <h2 className="text-xl font-semibold">Compare Mix Versions And Choose The Best Fit</h2>
+        <h2 className="text-xl font-semibold">{siteCopy.tools.mix?.heading || "Compare Mix Versions And Choose The Best Fit"}</h2>
       </div>
 
       <div className="glass-card rounded-xl p-4 space-y-3 text-left">
@@ -115,7 +117,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
         className="w-full glow-primary"
         size="lg"
       >
-        Start Comparing
+        {siteCopy.tools.mix?.cta || "Start Comparing"}
       </Button>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 
 import { Upload, X, Disc3, Music, Loader2, Link, Youtube } from "lucide-react";
 
@@ -18,6 +19,7 @@ interface Props {
 type RefMode = "upload" | "youtube" | "spotify";
 
 export function HitFitUploader({ onAnalyze, loading }: Props) {
+  const siteCopy = useSiteCopy();
   const [master1, setMaster1] = useState<File | null>(null);
   const [master2, setMaster2] = useState<File | null>(null);
   const [refMode, setRefMode] = useState<RefMode>("upload");
@@ -68,7 +70,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
       <div className="text-center space-y-1">
-        <h1 className="text-xl font-semibold text-foreground">Compare Your Track to Your Target Sound</h1>
+        <h1 className="text-xl font-semibold text-foreground">{siteCopy.tools.hitfit?.heading || "Compare Your Track to Your Target Sound"}</h1>
       </div>
 
       <div className="space-y-3">
