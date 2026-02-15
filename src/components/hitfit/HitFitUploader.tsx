@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 
-import { Upload, X, Disc3, Music, Loader2, Link, Youtube } from "lucide-react";
+import { Upload, X, Disc3, Music, Loader2, Link, Youtube, Info } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -216,9 +217,18 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
         )}
       </Button>
 
-      <p className="text-[10px] text-center text-muted-foreground">
-        Audio files up to 75 MB each · MP3, WAV, M4A, FLAC supported · Spotify & YouTube links for reference
-      </p>
+      <div className="flex justify-center">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button className="text-muted-foreground hover:text-foreground transition-colors">
+              <Info size={16} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs text-xs">
+            Audio files up to 75 MB each · MP3, WAV, M4A, FLAC supported · Spotify & YouTube links for reference
+          </TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   );
 }
