@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, Music2, MousePointerClick } from "lucide-react";
+import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, Music2, MousePointerClick, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -13,6 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { CopyEditor } from "@/components/admin/CopyEditor";
 
 interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
 interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
@@ -141,10 +142,11 @@ export default function Admin() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-md grid-cols-4">
             <TabsTrigger value="users" className="gap-1.5"><Users size={14} /> Users</TabsTrigger>
             <TabsTrigger value="data" className="gap-1.5"><Database size={14} /> Data</TabsTrigger>
             <TabsTrigger value="widget" className="gap-1.5"><Music2 size={14} /> Widget</TabsTrigger>
+            <TabsTrigger value="copy" className="gap-1.5"><FileText size={14} /> Copy</TabsTrigger>
           </TabsList>
 
           {/* ── USERS TAB ── */}
@@ -336,6 +338,11 @@ export default function Admin() {
                 </div>
               </div>
             </motion.div>
+          </TabsContent>
+
+          {/* ── COPY TAB ── */}
+          <TabsContent value="copy" className="mt-4">
+            <CopyEditor />
           </TabsContent>
         </Tabs>
       </div>

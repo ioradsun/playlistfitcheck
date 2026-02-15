@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -23,6 +24,7 @@ interface ProFitLandingProps {
 const EXAMPLE_URL = "https://open.spotify.com/artist/6qqNVTkY8uBg9cP3Jd7DAH";
 
 export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
+  const siteCopy = useSiteCopy();
   const [artistQuery, setArtistQuery] = useState("");
   const [artistResults, setArtistResults] = useState<SpotifyArtistResult[]>([]);
   const [artistSearching, setArtistSearching] = useState(false);
@@ -117,7 +119,7 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
 
       {/* Heading */}
       <div className="text-center space-y-1">
-        <h2 className="text-xl font-semibold">Turn Your Spotify Data Into A Revenue Strategy</h2>
+        <h2 className="text-xl font-semibold">{siteCopy.tools.profit?.heading || "Turn Your Spotify Data Into A Revenue Strategy"}</h2>
       </div>
 
       {/* Artist Search */}
@@ -180,7 +182,7 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
             className="w-full glow-primary"
             size="lg"
           >
-            Generate My Plan
+            {siteCopy.tools.profit?.cta || "Generate My Plan"}
           </Button>
         </div>
       </div>

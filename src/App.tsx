@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { PageLayout } from "@/components/PageLayout";
 import Index from "./pages/Index";
@@ -28,6 +29,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <SiteCopyProvider>
           <SidebarProvider defaultOpen={true}>
             <Routes>
               <Route path="/" element={<Index />} />
@@ -50,6 +52,7 @@ const App = () => (
               <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
             </Routes>
           </SidebarProvider>
+          </SiteCopyProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { Upload, Music, Loader2, FileAudio, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -13,6 +14,7 @@ const ACCEPTED_TYPES = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "
 const MAX_SIZE = 75 * 1024 * 1024;
 
 export function LyricUploader({ onTranscribe, loading }: Props) {
+  const siteCopy = useSiteCopy();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -44,7 +46,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
       <div className="space-y-1">
-        <h2 className="text-xl font-semibold">Get Perfectly Timed Lyrics For Every Drop</h2>
+        <h2 className="text-xl font-semibold">{siteCopy.tools.lyric?.heading || "Get Perfectly Timed Lyrics For Every Drop"}</h2>
       </div>
 
       <div className="glass-card rounded-xl p-4 space-y-3 text-left">
@@ -98,7 +100,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
         ) : (
           <FileAudio size={16} className="mr-1" />
         )}
-        {loading ? "Syncing..." : "Sync Lyrics"}
+        {loading ? "Syncing..." : (siteCopy.tools.lyric?.cta || "Sync Lyrics")}
       </Button>
     </div>
   );

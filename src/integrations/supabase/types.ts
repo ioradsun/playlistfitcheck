@@ -580,6 +580,24 @@ export type Database = {
         }
         Relationships: []
       }
+      site_copy: {
+        Row: {
+          copy_json: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          copy_json?: Json
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          copy_json?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       songfit_blocks: {
         Row: {
           blocked_user_id: string
