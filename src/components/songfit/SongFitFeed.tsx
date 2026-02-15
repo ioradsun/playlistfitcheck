@@ -21,7 +21,7 @@ export function SongFitFeed() {
     setLoading(true);
     let query = supabase
       .from("songfit_posts")
-      .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id)")
+      .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address)")
       .limit(50)
       .order("created_at", { ascending: false });
 

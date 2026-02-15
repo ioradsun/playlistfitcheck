@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Pencil, Camera, X, Check, Loader2, Music } from "lucide-react";
+import { Pencil, Camera, X, Check, Loader2, Music, Wallet } from "lucide-react";
+import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 
 
 const Profile = () => {
@@ -159,6 +160,17 @@ const Profile = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Wallet connection */}
+        <Card className="glass-card border-border">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2"><Wallet size={18} /> Crypto Wallet</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-xs text-muted-foreground">Connect your wallet to receive $DEGEN tips from the community.</p>
+            <ConnectWalletButton />
+          </CardContent>
+        </Card>
 
         {/* Spotify embed for artists (outside edit view) */}
         {!editing && spotifyUrl && (

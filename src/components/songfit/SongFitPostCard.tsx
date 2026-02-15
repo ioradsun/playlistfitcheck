@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check } from "lucide-react";
+import { TipButton } from "@/components/crypto/TipButton";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -195,6 +196,10 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
             <MessageCircle size={22} className="text-foreground" />
             {post.comments_count > 0 && <span className="text-xs text-muted-foreground">{post.comments_count}</span>}
           </button>
+          <TipButton
+            recipientAddress={(post.profiles as any)?.wallet_address}
+            recipientName={displayName}
+          />
         </div>
       </div>
 
