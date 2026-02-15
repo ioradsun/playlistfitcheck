@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { SongFitPost } from "./types";
@@ -24,6 +25,8 @@ interface Props {
 
 export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }: Props) {
   const { user } = useAuth();
+  const siteCopy = useSiteCopy();
+  const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
   const navigate = useNavigate();
   const [liked, setLiked] = useState(post.user_has_liked ?? false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
@@ -197,17 +200,21 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
             <MessageCircle size={22} className="text-foreground" />
             {post.comments_count > 0 && <span className="text-xs text-muted-foreground">{post.comments_count}</span>}
           </button>
-          <TipButton
-            recipientAddress={(post.profiles as any)?.wallet_address}
-            recipientName={displayName}
-            postId={post.id}
-            recipientUserId={post.user_id}
-            onTipLogged={(amount) => setTipsTotal(t => t + amount)}
-          />
-          {tipsTotal > 0 && (
-            <span className="text-xs text-muted-foreground font-mono -ml-1">
-              {tipsTotal.toLocaleString()} $DEGEN
-            </span>
+          {cryptoEnabled && (
+            <>
+              <TipButton
+                recipientAddress={(post.profiles as any)?.wallet_address}
+                recipientName={displayName}
+                postId={post.id}
+                recipientUserId={post.user_id}
+                onTipLogged={(amount) => setTipsTotal(t => t + amount)}
+              />
+              {tipsTotal > 0 && (
+                <span className="text-xs text-muted-foreground font-mono -ml-1">
+                  {tipsTotal.toLocaleString()} $DEGEN
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>
