@@ -236,11 +236,13 @@ const Auth = () => {
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md glass-card border-border">
-        <CardHeader className="text-center pb-2">
-          <div className="mx-auto mb-2 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <Music className="text-primary" size={24} />
-          </div>
-        </CardHeader>
+        {!checkEmail && (
+          <CardHeader className="text-center pb-2">
+            <div className="mx-auto mb-2 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Music className="text-primary" size={24} />
+            </div>
+          </CardHeader>
+        )}
         <CardContent className="space-y-4">
           {checkEmail ? (
             <motion.div
