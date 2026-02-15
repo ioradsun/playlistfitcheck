@@ -336,7 +336,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
       )}
 
       {/* Results Summary Table */}
-      {activeMixes.length > 0 && (
+      {mixes.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-muted-foreground">Results</h3>
           <div className="rounded-md border border-border overflow-hidden">
@@ -349,7 +349,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
                 </tr>
               </thead>
               <tbody>
-                {[...activeMixes]
+                {[...mixes]
                   .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
                   .map((m) => (
                     <tr key={m.id} className="border-b border-border last:border-0">
