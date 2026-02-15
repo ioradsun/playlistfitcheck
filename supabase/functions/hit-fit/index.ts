@@ -1,10 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+async function fetchPrompt(slug: string, fallback: string): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(url, key);
+    const { data } = await sb.from("ai_prompts").select("prompt").eq("slug", slug).single();
+    return data?.prompt || fallback;
+  } catch { return fallback; }
+}
 
 function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -93,10 +104,7 @@ Since you cannot play URLs directly, use your extensive knowledge of this track'
       trackLabels = `Audio 1 = "${master1Name}" (your master). Reference = "${referenceName}" (provided via URL)`;
     }
 
-    const systemPrompt = `You are a world-class mastering engineer and mix analyst. You have perfect ears and deep knowledge of audio production, EQ, dynamics, stereo imaging, loudness standards (LUFS), harmonic balance, and genre-specific sonics.
-
-You will receive ${totalAudioCount} audio file(s):
-${trackLabels}${referenceContext}
+    const defaultHitFitPrompt = `You are a world-class mastering engineer and mix analyst. You have perfect ears and deep knowledge of audio production, EQ, dynamics, stereo imaging, loudness standards (LUFS), harmonic balance, and genre-specific sonics.
 
 Your job is to analyze and compare the masters against the reference track, providing actionable feedback to help the artist achieve the sonic quality of the reference.
 
@@ -136,6 +144,14 @@ Output this exact JSON structure:
     "reason": "1-2 sentences explaining why"
   }
 }`;
+
+    const dbPrompt = await fetchPrompt("hit-fit", defaultHitFitPrompt);
+
+    // Inject dynamic context into the prompt
+    const systemPrompt = `${dbPrompt}
+
+You will receive ${totalAudioCount} audio file(s):
+${trackLabels}${referenceContext}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

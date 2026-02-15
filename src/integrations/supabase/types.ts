@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_prompts: {
+        Row: {
+          label: string
+          prompt: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          label: string
+          prompt: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          label?: string
+          prompt?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       dream_backers: {
         Row: {
           created_at: string

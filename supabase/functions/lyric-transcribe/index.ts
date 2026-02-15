@@ -1,10 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+async function fetchPrompt(slug: string, fallback: string): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(url, key);
+    const { data } = await sb.from("ai_prompts").select("prompt").eq("slug", slug).single();
+    return data?.prompt || fallback;
+  } catch { return fallback; }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -32,7 +43,7 @@ serve(async (req) => {
     // Determine MIME type
     const mimeType = audioFile.type || "audio/mpeg";
 
-    const systemPrompt = `You are a professional lyrics transcription engine. Your job is to transcribe song lyrics from audio with precise timestamps.
+    const defaultLyricPrompt = `You are a professional lyrics transcription engine. Your job is to transcribe song lyrics from audio with precise timestamps.
 
 CRITICAL RULES:
 1. Transcribe ONLY the sung/spoken lyrics — no descriptions of instrumentals or sounds
@@ -51,6 +62,8 @@ Output this exact JSON structure:
     {"start": 3.5, "end": 7.2, "text": "Second lyric line"}
   ]
 }`;
+
+    const systemPrompt = await fetchPrompt("lyric-transcribe", defaultLyricPrompt);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

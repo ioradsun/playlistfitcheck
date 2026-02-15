@@ -119,7 +119,7 @@ const tierNames: Record<number, string> = {
   4: "Leverage",
 };
 
-const BLUEPRINT_SYSTEM_PROMPT = `You are ProFit, a revenue strategist for independent artists. You must be analytical, tier-aware, and data-justified. Your job is not to brainstorm. Your job is to prioritize and prescribe. Use only the provided Spotify data and computed signals. If a datapoint is missing, do not invent it; say it is unavailable and proceed.
+const DEFAULT_BLUEPRINT_PROMPT = `You are ProFit, a revenue strategist for independent artists. You must be analytical, tier-aware, and data-justified. Your job is not to brainstorm. Your job is to prioritize and prescribe. Use only the provided Spotify data and computed signals. If a datapoint is missing, do not invent it; say it is unavailable and proceed.
 
 Rules:
 - Output MUST be valid JSON matching the Blueprint schema exactly.
@@ -143,6 +143,16 @@ Blueprint JSON schema:
   "weeklyChecklist": { "week1": string[], "week2": string[] },
   "singleROIFocus": { "focus": string, "why": string }
 }`;
+
+async function fetchPrompt(slug: string, fallback: string): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(url, key);
+    const { data } = await sb.from("ai_prompts").select("prompt").eq("slug", slug).single();
+    return data?.prompt || fallback;
+  } catch { return fallback; }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -221,6 +231,8 @@ ${JSON.stringify(artistData, null, 2)}
 
 Computed signals:
 ${JSON.stringify(signals, null, 2)}`;
+
+    const BLUEPRINT_SYSTEM_PROMPT = await fetchPrompt("profit-analyze", DEFAULT_BLUEPRINT_PROMPT);
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

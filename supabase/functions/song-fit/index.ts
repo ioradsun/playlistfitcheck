@@ -1,10 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+async function fetchPrompt(slug: string, fallback: string): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(url, key);
+    const { data } = await sb.from("ai_prompts").select("prompt").eq("slug", slug).single();
+    return data?.prompt || fallback;
+  } catch { return fallback; }
+}
 
 function validateTrackList(trackList: unknown): trackList is { name: string; artists: string }[] {
   if (!Array.isArray(trackList)) return false;
@@ -101,7 +112,7 @@ serve(async (req) => {
       .map(([k, v]) => `  ${k}: ${v}`)
       .join("\n") : "Not available";
 
-    const systemPrompt = `You are a music industry analyst specializing in Spotify playlist curation and song-to-playlist fit analysis. You are given:
+    const defaultSongFitPrompt = `You are a music industry analyst specializing in Spotify playlist curation and song-to-playlist fit analysis. You are given:
 1. A song URL and its inferred sonic character
 2. A playlist's track list
 3. The playlist's structural health metrics (algorithmic scores for activity, curation quality, reach, etc.)
@@ -131,6 +142,8 @@ Scoring guide for blendedScore:
 - 0-29: POOR_FIT — fundamentally wrong fit or problematic playlist
 
 Be honest, specific, and reference actual patterns from the track list. The strengths and concerns should cover BOTH sonic fit and playlist quality factors.`;
+
+    const systemPrompt = await fetchPrompt("song-fit", defaultSongFitPrompt);
 
     const userPrompt = `Analyze this song's fit for the playlist, considering both sonic compatibility and playlist quality:
 
