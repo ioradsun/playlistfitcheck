@@ -388,7 +388,7 @@ const Index = () => {
     // Input/form pages: centered with padding
     switch (activeTab) {
       case "songfit":
-        return <div className="flex-1 px-4 py-6"><SongFitTab /></div>;
+        return <div className="flex-1 overflow-y-auto px-4 py-6"><SongFitTab /></div>;
       case "profit":
         return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} onProjectSaved={refreshSidebar} /></div>;
       case "playlist":
@@ -416,13 +416,13 @@ const Index = () => {
           </div>
         );
       case "mix":
-        return <div className="flex-1 flex flex-col px-4 py-6"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} /></div>;
       case "lyric":
-        return <div className="flex-1 flex flex-col min-h-0"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
       case "hitfit":
         return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><HitFitTab /></div>;
       case "dreamfit":
-        return <div className="flex-1 px-4 py-6"><DreamFitTab /></div>;
+        return <div className="flex-1 overflow-y-auto px-4 py-6"><DreamFitTab /></div>;
       default:
         return null;
     }
@@ -431,7 +431,7 @@ const Index = () => {
   return (
     <>
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} onLoadProject={handleLoadProject} refreshKey={sidebarRefreshKey} />
-      <SidebarInset>
+      <SidebarInset className="h-svh !min-h-0 overflow-hidden">
         {/* Minimal top header with pill badge */}
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
           <SidebarTrigger />
