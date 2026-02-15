@@ -88,7 +88,7 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
     <div className="w-full max-w-2xl mx-auto flex flex-col items-center gap-6">
 
       {/* Artist Search */}
-      <div className="w-full max-w-lg space-y-3">
+      <div className="w-full max-w-2xl space-y-3">
         {selectedArtist ? (
           <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50">
             {selectedArtist.image ? (
