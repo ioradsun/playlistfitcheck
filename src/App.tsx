@@ -37,6 +37,7 @@ const App = () => (
               <Route path="/MixFit" element={<Index />} />
               <Route path="/LyricFit" element={<Index />} />
               <Route path="/HitFit" element={<Index />} />
+              <Route path="/DreamFit" element={<Index />} />
               <Route path="/how-scoring-works" element={<PageLayout title="How Scoring Works"><HowScoringWorks /></PageLayout>} />
               <Route path="/about" element={<PageLayout title="tools.fm story" subtitle="What we built and why."><About /></PageLayout>} />
               <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />

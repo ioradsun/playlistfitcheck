@@ -16,6 +16,7 @@ import { LyricFitTab } from "@/components/lyric/LyricFitTab";
 import { HitFitTab } from "@/components/hitfit/HitFitTab";
 import { ProFitTab } from "@/components/profit/ProFitTab";
 import { SongFitTab } from "@/components/songfit/SongFitTab";
+import { DreamFitTab } from "@/components/dreamfit/DreamFitTab";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Music } from "lucide-react";
@@ -58,6 +59,7 @@ const PATH_TO_TAB: Record<string, string> = {
   "/MixFit": "mix",
   "/LyricFit": "lyric",
   "/HitFit": "hitfit",
+  "/DreamFit": "dreamfit",
 };
 
 const TAB_LABELS: Record<string, string> = {
@@ -67,6 +69,7 @@ const TAB_LABELS: Record<string, string> = {
   mix: "MixFit",
   lyric: "LyricFit",
   hitfit: "HitFit",
+  dreamfit: "DreamFit",
 };
 
 const TAB_SUBTITLES: Record<string, string> = {
@@ -76,6 +79,7 @@ const TAB_SUBTITLES: Record<string, string> = {
   mix: "See which mix fits best.",
   lyric: "Make sure your lyrics fit captions.",
   hitfit: "See if your song fits a hit.",
+  dreamfit: "The incubator for the next Fit.",
 };
 
 const Index = () => {
@@ -417,6 +421,8 @@ const Index = () => {
         return <div className="flex-1 flex items-start justify-center px-4 py-8"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
       case "hitfit":
         return <div className="flex-1 flex items-start justify-center px-4 py-8"><HitFitTab /></div>;
+      case "dreamfit":
+        return <div className="flex-1 px-4 py-6"><DreamFitTab /></div>;
       default:
         return null;
     }
