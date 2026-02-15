@@ -94,8 +94,9 @@ export function SongFitFeed() {
       <SongFitComments
         postId={commentPostId}
         onClose={() => setCommentPostId(null)}
-        onCommentAdded={(pid) => {
-          setPosts(prev => prev.map(p => p.id === pid ? { ...p, comments_count: p.comments_count + 1 } : p));
+        onCommentAdded={async (pid) => {
+          const { data } = await supabase.from("songfit_posts").select("comments_count").eq("id", pid).maybeSingle();
+          if (data) setPosts(prev => prev.map(p => p.id === pid ? { ...p, comments_count: data.comments_count } : p));
         }}
       />
       <SongFitLikesList postId={likesPostId} onClose={() => setLikesPostId(null)} />

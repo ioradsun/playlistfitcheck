@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { User, Send, Loader2, CornerDownRight, Smile } from "lucide-react";
+import { User, Send, Loader2, CornerDownRight, Smile, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -40,15 +40,20 @@ function CommentItem({
   comment,
   depth,
   onReply,
+  onDelete,
+  currentUserId,
 }: {
   comment: SongFitComment;
   depth: number;
   onReply: (commentId: string, displayName: string) => void;
+  onDelete: (commentId: string) => void;
+  currentUserId?: string;
 }) {
   const displayName = comment.profiles?.display_name || "Anonymous";
+  const isOwn = currentUserId === comment.user_id;
   return (
     <div style={{ paddingLeft: depth > 0 ? 20 : 0 }}>
-      <div className="flex gap-2.5 py-2">
+      <div className="flex gap-2.5 py-2 group">
         <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
           {comment.profiles?.avatar_url ? (
             <img src={comment.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -71,13 +76,21 @@ function CommentItem({
             >
               Reply
             </button>
+            {isOwn && (
+              <button
+                onClick={() => onDelete(comment.id)}
+                className="text-[11px] text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <Trash2 size={11} />
+              </button>
+            )}
           </div>
         </div>
       </div>
       {comment.replies && comment.replies.length > 0 && (
         <div className="border-l border-border/30 ml-3.5">
           {comment.replies.map(reply => (
-            <CommentItem key={reply.id} comment={reply} depth={depth + 1} onReply={onReply} />
+            <CommentItem key={reply.id} comment={reply} depth={depth + 1} onReply={onReply} onDelete={onDelete} currentUserId={currentUserId} />
           ))}
         </div>
       )}
@@ -159,6 +172,17 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     inputRef.current?.focus();
   };
 
+  const handleDelete = async (commentId: string) => {
+    try {
+      const { error } = await supabase.from("songfit_comments").delete().eq("id", commentId);
+      if (error) throw error;
+      await fetchComments();
+      if (postId) onCommentAdded?.(postId); // reuse to decrement in parent
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete");
+    }
+  };
+
   const tree = buildTree(comments);
 
   return (
@@ -178,7 +202,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
             <p className="text-sm text-muted-foreground text-center py-12">No comments yet — be the first!</p>
           ) : (
             tree.map(c => (
-              <CommentItem key={c.id} comment={c} depth={0} onReply={handleReply} />
+              <CommentItem key={c.id} comment={c} depth={0} onReply={handleReply} onDelete={handleDelete} currentUserId={user?.id} />
             ))
           )}
         </div>
