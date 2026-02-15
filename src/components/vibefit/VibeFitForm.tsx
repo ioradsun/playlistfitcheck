@@ -49,11 +49,6 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-lg space-y-5">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold">VibeFit</h1>
-        <p className="text-sm text-muted-foreground">Art & captions that fit your song.</p>
-      </div>
-
       <div className="space-y-3">
         <Input
           placeholder="Song title"
