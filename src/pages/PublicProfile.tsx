@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Music, ExternalLink, Pencil, Wallet } from "lucide-react";
+import { MusicEmbed } from "@/components/MusicEmbed";
+import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 
 interface PublicProfile {
   display_name: string | null;
@@ -53,9 +55,8 @@ const PublicProfile = () => {
   }, [userId, isOwner, navigate]);
 
   const isArtist = roles.includes("artist");
-  const embedUrl = profile?.spotify_embed_url
-    ? profile.spotify_embed_url.replace("open.spotify.com/", "open.spotify.com/embed/")
-    : null;
+  const hasMusic = profile?.spotify_embed_url && isMusicUrl(profile.spotify_embed_url);
+  const embedUrl = profile?.spotify_embed_url ?? null;
   const initials = (profile?.display_name ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
   if (notFound) {
@@ -96,21 +97,12 @@ const PublicProfile = () => {
           </div>
         </div>
 
-        {/* Spotify embed */}
-        {isArtist && embedUrl && (
+        {/* Music embed */}
+        {hasMusic && embedUrl && (
           <Card className="glass-card border-border overflow-hidden">
             <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Music size={18} /> Music</CardTitle></CardHeader>
             <CardContent>
-              <iframe
-                src={embedUrl}
-                width="100%"
-                height="352"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                className="rounded-lg"
-                title="Spotify embed"
-              />
+              <MusicEmbed url={embedUrl} title={`${getPlatformLabel(embedUrl)} embed`} />
             </CardContent>
           </Card>
         )}
