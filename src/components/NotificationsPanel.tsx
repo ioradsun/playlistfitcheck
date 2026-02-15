@@ -21,8 +21,7 @@ function NotificationRow({ n, onClose }: { n: Notification; onClose: () => void 
 
   const handleClick = () => {
     onClose();
-    if (n.type === "follow") navigate(`/u/${n.actor ? "" : ""}`);
-    // For like/comment, could navigate to post in future
+    navigate(`/u/${n.actor_user_id}`);
   };
 
   return (
