@@ -471,6 +471,16 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   <span>tools.fm story</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Terms"
+                  isActive={location.pathname === "/terms"}
+                  onClick={() => { navigate("/terms"); closeMobileIfNeeded(); }}
+                >
+                  <FileText size={16} />
+                  <span>Terms</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
