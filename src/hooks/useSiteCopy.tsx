@@ -34,6 +34,7 @@ const DEFAULT_COPY: SiteCopy = {
 export interface ToolCopy {
   label: string;
   pill: string;
+  subheading?: string;
   heading?: string;
   cta?: string;
 }
