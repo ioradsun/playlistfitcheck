@@ -14,9 +14,9 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
       <div className="space-y-2">
-        <h2 className="text-xl font-semibold">New Song Project</h2>
+        <h2 className="text-xl font-semibold">Start a Mix Comparison</h2>
         <p className="text-sm text-muted-foreground">
-          Create a project to compare mix versions side by side
+          Compare your mix versions side by side and choose the best fit.
         </p>
       </div>
 
@@ -24,14 +24,14 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Song Title *"
+          placeholder="Song Title"
           className="h-11 bg-transparent border-0 focus-visible:ring-0"
         />
         <div className="border-t border-border" />
         <Textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Session notes (optional)"
+          placeholder="Session Notes (optional)"
           className="bg-transparent border-0 focus-visible:ring-0 min-h-[80px] resize-none"
         />
       </div>
@@ -42,7 +42,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
         className="w-full glow-primary"
         size="lg"
       >
-        Create Project
+        Start Comparing
       </Button>
     </div>
   );
