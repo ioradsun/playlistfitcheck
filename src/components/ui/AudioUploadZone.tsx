@@ -89,35 +89,32 @@ export function AudioUploadZone({
         </div>
       )}
 
-      {/* Upload button */}
+      {/* Upload button with info icon */}
       {files.length < maxFiles && (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
-          disabled={disabled}
-        >
-          <Upload size={14} />
-          {maxFiles > 1 && files.length > 0
-            ? `Add more (${files.length}/${maxFiles})`
-            : label}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+            disabled={disabled}
+          >
+            <Upload size={14} />
+            {maxFiles > 1 && files.length > 0
+              ? `Add more (${files.length}/${maxFiles})`
+              : label}
+          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="shrink-0 p-2 rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+                <Info size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs max-w-[200px]">
+              MP3, WAV, M4A · 75 MB max each · Not saved or stored
+            </TooltipContent>
+          </Tooltip>
+        </div>
       )}
-
-      {/* Standardized note with info icon */}
-      <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
-              <Info size={12} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            Supported formats: MP3, WAV, M4A, OGG, FLAC, AAC, AIFF
-          </TooltipContent>
-        </Tooltip>
-        MP3, WAV, M4A · 75 MB max each · Not saved or stored
-      </p>
     </div>
   );
 }

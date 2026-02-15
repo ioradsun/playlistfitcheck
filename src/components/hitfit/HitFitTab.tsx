@@ -92,5 +92,9 @@ export function HitFitTab({ initialAnalysis, onProjectSaved }: HitFitTabProps = 
     return <HitFitResults analysis={analysis} onBack={handleBack} />;
   }
 
-  return <HitFitUploader onAnalyze={handleAnalyze} loading={loading} />;
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <HitFitUploader onAnalyze={handleAnalyze} loading={loading} />
+    </div>
+  );
 }
