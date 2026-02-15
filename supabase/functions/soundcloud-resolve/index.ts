@@ -15,6 +15,26 @@ serve(async (req) => {
   try {
     const clientId = Deno.env.get("SOUNDCLOUD_CLIENT_ID");
     if (!clientId) throw new Error("SOUNDCLOUD_CLIENT_ID is not configured");
+    const clientSecret = Deno.env.get("SOUNDCLOUD_CLIENT_SECRET");
+    if (!clientSecret) throw new Error("SOUNDCLOUD_CLIENT_SECRET is not configured");
+
+    // Get OAuth2 token
+    const tokenResp = await fetch("https://secure.soundcloud.com/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+    if (!tokenResp.ok) {
+      const err = await tokenResp.text();
+      console.error("SoundCloud token error:", tokenResp.status, err);
+      throw new Error("Failed to obtain SoundCloud access token");
+    }
+    const { access_token } = await tokenResp.json();
+    const authHeader = { Authorization: `OAuth ${access_token}` };
 
     const { url } = await req.json();
 
@@ -33,7 +53,8 @@ serve(async (req) => {
     }
 
     const resolveResp = await fetch(
-      `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(url.trim())}&client_id=${clientId}`
+      `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(url.trim())}`,
+      { headers: authHeader }
     );
 
     if (!resolveResp.ok) {
