@@ -9,7 +9,6 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { WalletProvider } from "@/components/crypto/WalletProvider";
 import { PageLayout } from "@/components/PageLayout";
 import Index from "./pages/Index";
-import HowScoringWorks from "./pages/HowScoringWorks";
 
 import About from "./pages/About";
 
@@ -43,7 +42,6 @@ const App = () => (
               <Route path="/LyricFit" element={<Index />} />
               <Route path="/HitFit" element={<Index />} />
               <Route path="/DreamFit" element={<Index />} />
-              <Route path="/how-scoring-works" element={<PageLayout title="How Scoring Works"><HowScoringWorks /></PageLayout>} />
               <Route path="/about" element={<PageLayout title="tools.fm story" subtitle="What we built and why."><About /></PageLayout>} />
               <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />
               <Route path="/auth" element={<PageLayout title="tools fmly"><Auth /></PageLayout>} />
