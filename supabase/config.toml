@@ -44,3 +44,9 @@ verify_jwt = false
 
 [functions.songfit-populate]
 verify_jwt = false
+
+[functions.soundcloud-search]
+verify_jwt = false
+
+[functions.soundcloud-resolve]
+verify_jwt = false
