@@ -390,10 +390,10 @@ const Index = () => {
       case "songfit":
         return <div className="flex-1 px-4 py-6"><SongFitTab /></div>;
       case "profit":
-        return <div className="flex-1 flex items-center justify-center px-4 py-8"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} onProjectSaved={refreshSidebar} /></div>;
       case "playlist":
         return (
-           <div className="flex-1 flex items-center justify-center px-4 py-8">
+           <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
             {result && !isFullyLoaded ? (
               <AnalysisLoadingScreen hasSong={!!result?.songUrl} />
             ) : result && isFullyLoaded ? (
@@ -418,9 +418,9 @@ const Index = () => {
       case "mix":
         return <div className="flex-1 flex flex-col px-4 py-6"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} /></div>;
       case "lyric":
-        return <div className="flex-1 flex items-center justify-center px-4 py-8"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
       case "hitfit":
-        return <div className="flex-1 flex items-center justify-center px-4 py-8"><HitFitTab /></div>;
+        return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><HitFitTab /></div>;
       case "dreamfit":
         return <div className="flex-1 px-4 py-6"><DreamFitTab /></div>;
       default:
@@ -444,7 +444,7 @@ const Index = () => {
             </span>
           )}
         </header>
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           {renderTabContent()}
         </div>
       </SidebarInset>
