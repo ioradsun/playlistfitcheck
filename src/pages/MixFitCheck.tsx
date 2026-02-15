@@ -278,6 +278,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
             <Upload size={14} className="mr-1" />
             Upload Mix{activeMixes.length > 0 ? "" : "es"} ({activeMixes.length}/{MAX_MIXES})
           </Button>
+          <span className="text-xs text-muted-foreground">Your audio files aren't saved or stored.</span>
         </div>
       )}
 
