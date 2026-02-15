@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, X, Music } from "lucide-react";
@@ -42,14 +42,21 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   const [publishing, setPublishing] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
+  const captionRef = useRef<HTMLTextAreaElement>(null);
 
   const initials = (profile?.display_name ?? user?.email ?? "?")
     .split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
   const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || undefined;
 
+  // Auto-focus caption when track is selected
   useEffect(() => {
-    if (selectedTrack) return;
+    if (selectedTrack) {
+      setTimeout(() => captionRef.current?.focus(), 100);
+    }
+  }, [selectedTrack]);
+
+  useEffect(() => {
     if (!query.trim() || query.includes("spotify.com")) {
       setResults([]);
       return;
@@ -224,6 +231,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
           {selectedTrack && (
             <div className="mt-2">
               <textarea
+                ref={captionRef}
                 value={caption}
                 onChange={e => setCaption(e.target.value.slice(0, CAPTION_MAX))}
                 placeholder="Tell us why you made this song."
