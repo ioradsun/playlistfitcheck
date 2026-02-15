@@ -1,11 +1,10 @@
 import { useState, useRef } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
-
-import { Upload, X, Disc3, Music, Loader2, Link, Youtube, Info } from "lucide-react";
+import { Upload, X, Music, Loader2, Link, Youtube, Info } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AudioUploadZone } from "@/components/ui/AudioUploadZone";
 
 export type ReferenceSource =
   | { type: "file"; file: File }
@@ -21,13 +20,11 @@ type RefMode = "upload" | "youtube" | "spotify";
 
 export function HitFitUploader({ onAnalyze, loading }: Props) {
   const siteCopy = useSiteCopy();
-  const [master1, setMaster1] = useState<File | null>(null);
-  const [master2, setMaster2] = useState<File | null>(null);
+  const [master1Files, setMaster1Files] = useState<File[]>([]);
+  const [master2Files, setMaster2Files] = useState<File[]>([]);
   const [refMode, setRefMode] = useState<RefMode>("upload");
   const [refFile, setRefFile] = useState<File | null>(null);
   const [refUrl, setRefUrl] = useState("");
-  const master1Ref = useRef<HTMLInputElement>(null);
-  const master2Ref = useRef<HTMLInputElement>(null);
   const refFileRef = useRef<HTMLInputElement>(null);
 
   const hasReference =
@@ -35,10 +32,10 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
     (refMode === "youtube" && refUrl.trim().length > 0) ||
     (refMode === "spotify" && refUrl.trim().length > 0);
 
-  const canSubmit = master1 && hasReference && !loading;
+  const canSubmit = master1Files.length > 0 && hasReference && !loading;
 
   const handleSubmit = () => {
-    if (!master1 || !hasReference) return;
+    if (!master1Files[0] || !hasReference) return;
     let ref: ReferenceSource;
     if (refMode === "upload" && refFile) {
       ref = { type: "file", file: refFile };
@@ -47,7 +44,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
     } else {
       ref = { type: "spotify", url: refUrl.trim() };
     }
-    onAnalyze(master1, master2, ref);
+    onAnalyze(master1Files[0], master2Files[0] || null, ref);
   };
 
   const clearRef = () => {
@@ -56,11 +53,6 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
   };
 
   const acceptTypes = ".mp3,.wav,.m4a,.aac,.ogg,.flac,.aiff,.wma";
-
-  const masterSlots: { label: string; desc: string; file: File | null; setFile: (f: File | null) => void; inputRef: React.RefObject<HTMLInputElement | null>; required: boolean }[] = [
-    { label: "Master A", desc: "Your primary mastered track", file: master1, setFile: setMaster1, inputRef: master1Ref, required: true },
-    { label: "Master B", desc: "Optional second master to compare", file: master2, setFile: setMaster2, inputRef: master2Ref, required: false },
-  ];
 
   const refModes: { mode: RefMode; label: string; icon: React.ReactNode }[] = [
     { mode: "upload", label: "Upload", icon: <Upload size={12} /> },
@@ -76,60 +68,30 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
       </div>
 
       <div className="space-y-3">
-        {/* Master slots */}
-        {masterSlots.map((slot, i) => (
-          <div
-            key={i}
-            className={`glass-card rounded-xl p-4 transition-all ${slot.file ? "border-primary/30" : "border-border"}`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <Disc3 size={18} className="text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold">{slot.label}</p>
-                  {!slot.required && (
-                    <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Optional</span>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
-                        <Info size={13} />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">{slot.desc}</TooltipContent>
-                  </Tooltip>
-                </div>
-                {slot.file && (
-                  <p className="text-xs text-muted-foreground truncate">{slot.file.name}</p>
-                )}
-              </div>
-              {slot.file ? (
-                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => slot.setFile(null)}>
-                  <X size={16} />
-                </Button>
-              ) : (
-                <>
-                  <input
-                    ref={slot.inputRef}
-                    type="file"
-                    accept={acceptTypes}
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) slot.setFile(f);
-                      e.target.value = "";
-                    }}
-                  />
-                  <Button variant="secondary" size="sm" className="shrink-0 gap-1.5" onClick={() => slot.inputRef.current?.click()}>
-                    <Upload size={14} /> Choose
-                  </Button>
-                </>
-              )}
-            </div>
+        {/* Master A */}
+        <div className="glass-card rounded-xl p-4">
+          <AudioUploadZone
+            label="Upload Master A"
+            files={master1Files}
+            onChange={setMaster1Files}
+            maxFiles={1}
+            disabled={loading}
+          />
+        </div>
+
+        {/* Master B (optional) */}
+        <div className="glass-card rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Optional</span>
           </div>
-        ))}
+          <AudioUploadZone
+            label="Upload Master B"
+            files={master2Files}
+            onChange={setMaster2Files}
+            maxFiles={1}
+            disabled={loading}
+          />
+        </div>
 
         {/* Reference slot */}
         <div className={`glass-card rounded-xl p-4 transition-all ${hasReference ? "border-primary/30" : "border-border"}`}>
@@ -231,19 +193,6 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
           <>Analyze</>
         )}
       </Button>
-
-      <div className="flex justify-center">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button className="text-muted-foreground hover:text-foreground transition-colors">
-              <Info size={16} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-xs text-xs">
-            Audio files up to 75 MB each · MP3, WAV, M4A, FLAC supported · Spotify & YouTube links for reference
-          </TooltipContent>
-        </Tooltip>
-      </div>
     </div>
   );
 }
