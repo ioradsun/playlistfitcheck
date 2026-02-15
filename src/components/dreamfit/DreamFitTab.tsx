@@ -50,11 +50,6 @@ export function DreamFitTab() {
 
   return (
     <div className="w-full max-w-[470px] mx-auto">
-      {/* Header */}
-      <div className="px-4 pt-4 pb-2">
-        <p className="text-xs text-muted-foreground">Let's build the next Fit together.</p>
-      </div>
-
       {/* Composer */}
       {user ? (
         <DreamInlineComposer onCreated={() => { fetchDreams(); }} />
