@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink } from "lucide-react";
+import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -29,8 +29,40 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
   const [isFollowing, setIsFollowing] = useState<boolean | null>(null);
   const [followChecked, setFollowChecked] = useState(false);
   const [captionExpanded, setCaptionExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editCaption, setEditCaption] = useState(post.caption || "");
+  const [localCaption, setLocalCaption] = useState(post.caption || "");
+  const [saving, setSaving] = useState(false);
 
   const isOwnPost = user?.id === post.user_id;
+
+  const CAPTION_MAX = 300;
+
+  const handleSaveEdit = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("songfit_posts").update({ caption: editCaption.trim() }).eq("id", post.id);
+      if (error) throw error;
+      setLocalCaption(editCaption.trim());
+      setEditing(false);
+      toast.success("Post updated");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeletePost = async () => {
+    try {
+      const { error } = await supabase.from("songfit_posts").delete().eq("id", post.id);
+      if (error) throw error;
+      toast.success("Post deleted");
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete");
+    }
+  };
 
   const toggleLike = async () => {
     if (!user) { toast.error("Sign in to like posts"); return; }
@@ -119,6 +151,18 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
                 )}
               </DropdownMenuItem>
             )}
+            {isOwnPost && (
+              <>
+                <DropdownMenuItem onClick={() => { setEditCaption(localCaption); setEditing(true); }}>
+                  <Pencil size={14} className="mr-2" />
+                  Edit Caption
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDeletePost}>
+                  <Trash2 size={14} className="mr-2" />
+                  Delete Post
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -155,17 +199,40 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
       </div>
 
       {/* Caption - Instagram style */}
-      {post.caption && post.caption.trim() && (
+      {editing ? (
+        <div className="px-3 pb-2.5 space-y-2">
+          <textarea
+            value={editCaption}
+            onChange={e => setEditCaption(e.target.value.slice(0, CAPTION_MAX))}
+            rows={3}
+            className="w-full bg-muted/60 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none resize-none rounded-lg p-2 border border-border/50"
+            autoFocus
+          />
+          <div className="flex items-center justify-between">
+            <span className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-destructive" : "text-muted-foreground/50"}`}>
+              {editCaption.length}/{CAPTION_MAX}
+            </span>
+            <div className="flex gap-1.5">
+              <button onClick={() => setEditing(false)} className="p-1.5 rounded-full hover:bg-accent/50 text-muted-foreground">
+                <X size={14} />
+              </button>
+              <button onClick={handleSaveEdit} disabled={saving} className="p-1.5 rounded-full hover:bg-accent/50 text-primary">
+                <Check size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : localCaption && localCaption.trim() ? (
         <div className="px-3 pb-2.5">
-          {post.caption.length <= 125 || captionExpanded ? (
+          {localCaption.length <= 125 || captionExpanded ? (
             <p className="text-sm leading-snug">
               <span className="font-semibold mr-1.5">{displayName}</span>
-              {post.caption}
+              {localCaption}
             </p>
           ) : (
             <p className="text-sm leading-snug">
               <span className="font-semibold mr-1.5">{displayName}</span>
-              {post.caption.slice(0, 125).trimEnd()}
+              {localCaption.slice(0, 125).trimEnd()}
               <span className="text-muted-foreground">… </span>
               <button
                 onClick={() => setCaptionExpanded(true)}
@@ -176,7 +243,7 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
             </p>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
