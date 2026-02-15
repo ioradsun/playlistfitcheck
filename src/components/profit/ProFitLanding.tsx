@@ -77,11 +77,18 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
     }
   }, [artistQuery]);
 
-  const handleAnalyze = () => {
+  const handleAnalyze = useCallback(() => {
     if (selectedArtist) {
       onAnalyze(selectedArtist.url || `https://open.spotify.com/artist/${selectedArtist.id}`);
     }
-  };
+  }, [selectedArtist, onAnalyze]);
+
+  // Auto-analyze when artist is selected
+  useEffect(() => {
+    if (selectedArtist && !loading) {
+      handleAnalyze();
+    }
+  }, [selectedArtist]);
 
   const showArtistDropdown = artistFocused && artistResults.length > 0 && !selectedArtist;
 
@@ -100,14 +107,7 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
               </div>
             )}
             <span className="text-sm font-medium truncate flex-1">{selectedArtist.name}</span>
-            <Button
-              size="sm"
-              onClick={handleAnalyze}
-              disabled={loading}
-              className="h-8 px-4"
-            >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
-            </Button>
+            {loading && <Loader2 size={14} className="animate-spin text-muted-foreground shrink-0" />}
             <button
               type="button"
               onClick={() => setSelectedArtist(null)}
