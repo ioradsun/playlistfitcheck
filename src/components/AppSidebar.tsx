@@ -456,7 +456,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
           </SidebarGroup>
         )}
 
-        <SidebarSeparator />
 
         <SidebarGroup>
           <SidebarGroupContent>
