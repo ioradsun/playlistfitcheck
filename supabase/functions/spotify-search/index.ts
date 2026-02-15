@@ -63,52 +63,75 @@ serve(async (req) => {
     }
 
     const token = await getSpotifyToken(clientId, clientSecret);
-
     const searchType = type;
-    const resp = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${searchType}&limit=8`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      console.error("Spotify search error:", resp.status, errText);
-      return new Response(
-        JSON.stringify({ error: "Search failed. Please try again later." }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const data = await resp.json();
+    // Check if query looks like a Spotify ID (direct lookup)
+    const isSpotifyId = /^[a-zA-Z0-9]{22}$/.test(query.trim());
 
     let results: any[] = [];
 
-    if (searchType === "playlist") {
-      results = (data.playlists?.items || []).filter((p: any) => p != null).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        owner: p.owner?.display_name || "",
-        tracks: p.tracks?.total || 0,
-        image: p.images?.[0]?.url || null,
-        url: p.external_urls?.spotify || `https://open.spotify.com/playlist/${p.id}`,
-      }));
-    } else if (searchType === "artist") {
-      results = (data.artists?.items || []).filter((a: any) => a != null).map((a: any) => ({
-        id: a.id,
-        name: a.name,
-        image: a.images?.[0]?.url || a.images?.[1]?.url || null,
-        url: a.external_urls?.spotify || `https://open.spotify.com/artist/${a.id}`,
-        genres: (a.genres || []).slice(0, 5),
-        followers: a.followers?.total || 0,
-      }));
-    } else {
-      results = (data.tracks?.items || []).filter((t: any) => t != null).map((t: any) => ({
-        id: t.id,
-        name: t.name,
-        artists: t.artists?.map((a: any) => a.name).join(", ") || "Unknown",
-        image: t.album?.images?.[2]?.url || t.album?.images?.[0]?.url || null,
-        url: t.external_urls?.spotify || `https://open.spotify.com/track/${t.id}`,
-      }));
+    if (isSpotifyId && searchType === "artist") {
+      const resp = await fetch(
+        `https://api.spotify.com/v1/artists/${query.trim()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (resp.ok) {
+        const a = await resp.json();
+        results = [{
+          id: a.id,
+          name: a.name,
+          image: a.images?.[0]?.url || a.images?.[1]?.url || null,
+          url: a.external_urls?.spotify || `https://open.spotify.com/artist/${a.id}`,
+          genres: (a.genres || []).slice(0, 5),
+          followers: a.followers?.total || 0,
+        }];
+      }
+    }
+
+    if (results.length === 0) {
+      const resp = await fetch(
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${searchType}&limit=8`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error("Spotify search error:", resp.status, errText);
+        return new Response(
+          JSON.stringify({ error: "Search failed. Please try again later." }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const data = await resp.json();
+
+      if (searchType === "playlist") {
+        results = (data.playlists?.items || []).filter((p: any) => p != null).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          owner: p.owner?.display_name || "",
+          tracks: p.tracks?.total || 0,
+          image: p.images?.[0]?.url || null,
+          url: p.external_urls?.spotify || `https://open.spotify.com/playlist/${p.id}`,
+        }));
+      } else if (searchType === "artist") {
+        results = (data.artists?.items || []).filter((a: any) => a != null).map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          image: a.images?.[0]?.url || a.images?.[1]?.url || null,
+          url: a.external_urls?.spotify || `https://open.spotify.com/artist/${a.id}`,
+          genres: (a.genres || []).slice(0, 5),
+          followers: a.followers?.total || 0,
+        }));
+      } else {
+        results = (data.tracks?.items || []).filter((t: any) => t != null).map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          artists: t.artists?.map((a: any) => a.name).join(", ") || "Unknown",
+          image: t.album?.images?.[2]?.url || t.album?.images?.[0]?.url || null,
+          url: t.external_urls?.spotify || `https://open.spotify.com/track/${t.id}`,
+        }));
+      }
     }
 
     return new Response(JSON.stringify({ results }), {
