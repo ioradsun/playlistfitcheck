@@ -1,9 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+async function fetchPrompt(slug: string, fallback: string): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(url, key);
+    const { data } = await sb.from("ai_prompts").select("prompt").eq("slug", slug).single();
+    return data?.prompt || fallback;
+  } catch { return fallback; }
+}
 
 const PLAN_PROMPTS: Record<string, string> = {
   "7day": "Create a detailed 7-day execution plan with specific daily tasks.",
@@ -37,7 +48,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const systemPrompt = `You are ProFit, a revenue strategist for independent artists. Based on the artist's existing blueprint and signals, generate a focused plan variant. Be analytical, tier-aware, data-justified. No fluff. No invented numbers.
+    const defaultFocusPlanPrompt = `You are ProFit, a revenue strategist for independent artists. Based on the artist's existing blueprint and signals, generate a focused plan variant. Be analytical, tier-aware, data-justified. No fluff. No invented numbers.
 
 Output MUST be valid JSON with this schema:
 {
@@ -49,6 +60,8 @@ Output MUST be valid JSON with this schema:
 }
 
 Return ONLY valid JSON, no markdown.`;
+
+    const systemPrompt = await fetchPrompt("profit-focus-plan", defaultFocusPlanPrompt);
 
     const userPrompt = `${focusPrompt}
 

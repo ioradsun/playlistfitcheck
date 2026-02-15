@@ -1,10 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+async function fetchPrompt(slug: string, fallback: string): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(url, key);
+    const { data } = await sb.from("ai_prompts").select("prompt").eq("slug", slug).single();
+    return data?.prompt || fallback;
+  } catch { return fallback; }
+}
 
 function validateTrackList(trackList: unknown): trackList is { name: string; artists: string }[] {
   if (!Array.isArray(trackList)) return false;
@@ -59,7 +70,7 @@ serve(async (req) => {
       .map((t: { name: string; artists: string }, i: number) => `${i + 1}. "${t.name}" by ${t.artists}`)
       .join("\n");
 
-    const systemPrompt = `You are a music industry analyst specializing in Spotify playlist curation. Given a playlist's track list, analyze the overall vibe and provide actionable insights for artists considering submitting music.
+    const defaultVibePrompt = `You are a music industry analyst specializing in Spotify playlist curation. Given a playlist's track list, analyze the overall vibe and provide actionable insights for artists considering submitting music.
 
 Your response MUST be valid JSON with this exact structure:
 {
@@ -72,6 +83,8 @@ Your response MUST be valid JSON with this exact structure:
 }
 
 Be specific and actionable. Reference actual patterns you see in the track list.`;
+
+    const systemPrompt = await fetchPrompt("playlist-vibe", defaultVibePrompt);
 
     const userPrompt = `Analyze this playlist:
 Name: ${(playlistName || "Unknown").slice(0, 200)}

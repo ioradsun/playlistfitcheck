@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Coins } from "lucide-react";
+import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Coins, Bot } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { CopyEditor } from "@/components/admin/CopyEditor";
 import { Switch } from "@/components/ui/switch";
+import { AiPromptsEditor } from "@/components/admin/AiPromptsEditor";
 
 interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
 interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
@@ -144,10 +145,11 @@ export default function Admin() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-lg grid-cols-4">
             <TabsTrigger value="users" className="gap-1.5"><Users size={14} /> Users</TabsTrigger>
             <TabsTrigger value="data" className="gap-1.5"><Database size={14} /> Data</TabsTrigger>
             <TabsTrigger value="copy" className="gap-1.5"><FileText size={14} /> Copy</TabsTrigger>
+            <TabsTrigger value="prompts" className="gap-1.5"><Bot size={14} /> AI Prompts</TabsTrigger>
           </TabsList>
 
           {/* ── USERS TAB ── */}
@@ -303,6 +305,11 @@ export default function Admin() {
                 />
               </div>
             </motion.div>
+          </TabsContent>
+
+          {/* ── AI PROMPTS TAB ── */}
+          <TabsContent value="prompts" className="mt-4">
+            <AiPromptsEditor />
           </TabsContent>
         </Tabs>
       </div>

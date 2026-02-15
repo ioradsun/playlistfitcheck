@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const CHAT_SYSTEM_PROMPT = `You are ProFit Strategy Chat. You must produce short, structured, tier-aware responses. You must not ramble. You must not brainstorm endlessly. You must give a recommendation, justification tied to signals, a checklist, pitfalls, and end with one action-focused question.
+const DEFAULT_CHAT_PROMPT = `You are ProFit Strategy Chat. You must produce short, structured, tier-aware responses. You must not ramble. You must not brainstorm endlessly. You must give a recommendation, justification tied to signals, a checklist, pitfalls, and end with one action-focused question.
 
 Output MUST be valid JSON matching this schema:
 {
@@ -17,6 +18,16 @@ Output MUST be valid JSON matching this schema:
 }
 
 Return ONLY valid JSON, no markdown fences, no extra text.`;
+
+async function fetchPrompt(slug: string, fallback: string): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(url, key);
+    const { data } = await sb.from("ai_prompts").select("prompt").eq("slug", slug).single();
+    return data?.prompt || fallback;
+  } catch { return fallback; }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -49,6 +60,8 @@ Artist: ${artistData.name} | Genres: ${(artistData.genres || []).join(", ")}
 
 User request:
 ${message}`;
+
+    const CHAT_SYSTEM_PROMPT = await fetchPrompt("profit-chat", DEFAULT_CHAT_PROMPT);
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
