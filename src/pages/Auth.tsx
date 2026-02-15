@@ -48,29 +48,6 @@ const Auth = () => {
     if (user) navigate("/", { state: { returnTab } });
   }, [user, navigate, returnTab]);
 
-  // Spotify artist search
-  useEffect(() => {
-    if (selectedArtist) return;
-    if (!artistQuery.trim() || artistQuery.includes("spotify.com")) {
-      setArtistResults([]);
-      return;
-    }
-    clearTimeout(artistDebounce.current);
-    artistDebounce.current = setTimeout(async () => {
-      setArtistSearching(true);
-      try {
-        const { data, error } = await supabase.functions.invoke("spotify-search", {
-          body: { query: artistQuery.trim(), type: "artist" },
-        });
-        if (!error && data?.results) {
-          setArtistResults(data.results.slice(0, 5));
-        }
-      } catch {}
-      setArtistSearching(false);
-    }, 350);
-    return () => clearTimeout(artistDebounce.current);
-  }, [artistQuery, selectedArtist]);
-
   const handlePasteArtistUrl = useCallback(async () => {
     if (!artistQuery.includes("spotify.com/artist/")) return;
     const match = artistQuery.match(/artist\/([a-zA-Z0-9]+)/);
@@ -93,6 +70,37 @@ const Auth = () => {
       setArtistSearching(false);
     }
   }, [artistQuery]);
+
+  // Auto-fetch pasted Spotify artist URL
+  useEffect(() => {
+    if (selectedArtist) return;
+    if (artistQuery.includes("spotify.com/artist/")) {
+      handlePasteArtistUrl();
+    }
+  }, [artistQuery, selectedArtist, handlePasteArtistUrl]);
+
+  // Spotify artist search
+  useEffect(() => {
+    if (selectedArtist) return;
+    if (!artistQuery.trim() || artistQuery.includes("spotify.com")) {
+      setArtistResults([]);
+      return;
+    }
+    clearTimeout(artistDebounce.current);
+    artistDebounce.current = setTimeout(async () => {
+      setArtistSearching(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("spotify-search", {
+          body: { query: artistQuery.trim(), type: "artist" },
+        });
+        if (!error && data?.results) {
+          setArtistResults(data.results.slice(0, 5));
+        }
+      } catch {}
+      setArtistSearching(false);
+    }, 350);
+    return () => clearTimeout(artistDebounce.current);
+  }, [artistQuery, selectedArtist]);
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
