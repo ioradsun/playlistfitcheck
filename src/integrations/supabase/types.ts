@@ -14,6 +14,147 @@ export type Database = {
   }
   public: {
     Tables: {
+      dream_backers: {
+        Row: {
+          created_at: string
+          dream_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dream_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dream_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dream_backers_dream_id_fkey"
+            columns: ["dream_id"]
+            isOneToOne: false
+            referencedRelation: "dream_tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dream_backers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dream_comments: {
+        Row: {
+          content: string
+          created_at: string
+          dream_id: string
+          id: string
+          parent_comment_id: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          dream_id: string
+          id?: string
+          parent_comment_id?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          dream_id?: string
+          id?: string
+          parent_comment_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dream_comments_dream_id_fkey"
+            columns: ["dream_id"]
+            isOneToOne: false
+            referencedRelation: "dream_tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dream_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "dream_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dream_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dream_tools: {
+        Row: {
+          backers_count: number
+          comments_count: number
+          created_at: string
+          dream_type: string
+          frustration: string
+          id: string
+          status: string
+          status_note: string | null
+          target_fit: string | null
+          title: string
+          transformation: string
+          trending_score: number
+          user_id: string
+        }
+        Insert: {
+          backers_count?: number
+          comments_count?: number
+          created_at?: string
+          dream_type?: string
+          frustration: string
+          id?: string
+          status?: string
+          status_note?: string | null
+          target_fit?: string | null
+          title: string
+          transformation: string
+          trending_score?: number
+          user_id: string
+        }
+        Update: {
+          backers_count?: number
+          comments_count?: number
+          created_at?: string
+          dream_type?: string
+          frustration?: string
+          id?: string
+          status?: string
+          status_note?: string | null
+          target_fit?: string | null
+          title?: string
+          transformation?: string
+          trending_score?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dream_tools_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mix_projects: {
         Row: {
           created_at: string

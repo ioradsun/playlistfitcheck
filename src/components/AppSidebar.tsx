@@ -26,6 +26,7 @@ import {
   Sliders,
   FileText,
   Target,
+  Sparkles,
   Bell,
   LogOut,
   User,
@@ -63,6 +64,7 @@ const TOOLS: ToolItem[] = [
   { value: "mix", label: "MixFit", path: "/MixFit", icon: Sliders },
   { value: "lyric", label: "LyricFit", path: "/LyricFit", icon: FileText },
   { value: "hitfit", label: "HitFit", path: "/HitFit", icon: Target },
+  { value: "dreamfit", label: "DreamFit", path: "/DreamFit", icon: Sparkles },
 ];
 
 const NOTI_ICON_MAP = {
