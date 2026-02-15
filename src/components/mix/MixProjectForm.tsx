@@ -1,15 +1,33 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Upload, X, Music } from "lucide-react";
 
 interface MixProjectFormProps {
-  onSubmit: (title: string, notes: string) => void;
+  onSubmit: (title: string, notes: string, files: File[]) => void;
 }
+
+const MAX_MIXES = 6;
 
 export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = e.target.files;
+    if (!newFiles) return;
+    const remaining = MAX_MIXES - files.length;
+    const toAdd = Array.from(newFiles).slice(0, remaining);
+    setFiles((prev) => [...prev, ...toAdd]);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
@@ -34,11 +52,59 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
           placeholder="Session Notes (optional)"
           className="bg-transparent border-0 focus-visible:ring-0 min-h-[80px] resize-none"
         />
+        <div className="border-t border-border" />
+
+        {/* File upload area */}
+        <div className="space-y-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a"
+            multiple
+            className="hidden"
+            onChange={handleFiles}
+          />
+
+          {files.length > 0 && (
+            <div className="space-y-1.5">
+              {files.map((file, i) => (
+                <div key={`${file.name}-${i}`} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Music size={14} className="shrink-0 text-primary" />
+                  <span className="truncate flex-1">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    className="shrink-0 p-0.5 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {files.length < MAX_MIXES && (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+            >
+              <Upload size={14} />
+              {files.length === 0
+                ? "Upload Mixes (MP3, WAV, M4A)"
+                : `Add more (${files.length}/${MAX_MIXES})`}
+            </button>
+          )}
+
+          <p className="text-xs text-muted-foreground text-center">
+            Your audio files aren't saved or stored.
+          </p>
+        </div>
       </div>
 
       <Button
-        onClick={() => onSubmit(title.trim(), notes.trim())}
-        disabled={!title.trim()}
+        onClick={() => onSubmit(title.trim(), notes.trim(), files)}
+        disabled={!title.trim() || files.length === 0}
         className="w-full glow-primary"
         size="lg"
       >
