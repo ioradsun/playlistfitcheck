@@ -221,8 +221,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
       <div className="text-center space-y-1">
-        <h1 className="text-xl font-semibold text-foreground">Check the fit before you pitch</h1>
-        <p className="text-sm text-muted-foreground">Paste a playlist link to check its health and match your song.</p>
+        <h1 className="text-xl font-semibold text-foreground">Paste a playlist link to check its health and match your song</h1>
       </div>
 
       <div className="space-y-4">
