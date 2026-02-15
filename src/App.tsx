@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { WalletProvider } from "@/components/crypto/WalletProvider";
 import { PageLayout } from "@/components/PageLayout";
 import Index from "./pages/Index";
 import HowScoringWorks from "./pages/HowScoringWorks";
@@ -30,6 +31,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <SiteCopyProvider>
+          <WalletProvider>
           <SidebarProvider defaultOpen={true}>
             <Routes>
               <Route path="/" element={<Index />} />
@@ -53,6 +55,7 @@ const App = () => (
               <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
             </Routes>
           </SidebarProvider>
+          </WalletProvider>
           </SiteCopyProvider>
         </AuthProvider>
       </BrowserRouter>

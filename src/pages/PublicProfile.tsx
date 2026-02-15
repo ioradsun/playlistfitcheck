@@ -5,13 +5,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Music, ExternalLink, Pencil } from "lucide-react";
+import { Music, ExternalLink, Pencil, Wallet } from "lucide-react";
 
 interface PublicProfile {
   display_name: string | null;
   bio: string | null;
   avatar_url: string | null;
   spotify_embed_url: string | null;
+  wallet_address: string | null;
 }
 
 interface PublicSearch {
@@ -39,7 +40,7 @@ const PublicProfile = () => {
     // If viewing own profile, redirect to /profile
     if (isOwner) { navigate("/profile"); return; }
 
-    supabase.from("profiles").select("display_name, bio, avatar_url, spotify_embed_url").eq("id", userId).single()
+    supabase.from("profiles").select("display_name, bio, avatar_url, spotify_embed_url, wallet_address").eq("id", userId).single()
       .then(({ data, error }) => {
         if (error || !data) { setNotFound(true); return; }
         setProfile(data as PublicProfile);
@@ -86,6 +87,12 @@ const PublicProfile = () => {
             <h1 className="text-2xl font-bold truncate">{profile.display_name || "User"}</h1>
             <p className="text-sm text-muted-foreground capitalize">{roles[0] ?? "user"}</p>
             {profile.bio && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
+            {profile.wallet_address && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 font-mono">
+                <Wallet size={12} />
+                {profile.wallet_address.slice(0, 6)}…{profile.wallet_address.slice(-4)}
+              </p>
+            )}
           </div>
         </div>
 

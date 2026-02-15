@@ -299,6 +299,7 @@ export type Database = {
           instagram_url: string | null
           spotify_artist_id: string | null
           spotify_embed_url: string | null
+          wallet_address: string | null
           website_url: string | null
           youtube_url: string | null
         }
@@ -311,6 +312,7 @@ export type Database = {
           instagram_url?: string | null
           spotify_artist_id?: string | null
           spotify_embed_url?: string | null
+          wallet_address?: string | null
           website_url?: string | null
           youtube_url?: string | null
         }
@@ -323,6 +325,7 @@ export type Database = {
           instagram_url?: string | null
           spotify_artist_id?: string | null
           spotify_embed_url?: string | null
+          wallet_address?: string | null
           website_url?: string | null
           youtube_url?: string | null
         }

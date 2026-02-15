@@ -9,6 +9,7 @@ interface ProfileData {
   bio: string | null;
   spotify_embed_url: string | null;
   spotify_artist_id: string | null;
+  wallet_address: string | null;
 }
 
 interface AuthContextType {
@@ -100,7 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = useCallback(() => {
     if (!user) { setProfile(null); return; }
-    supabase.from("profiles").select("display_name, avatar_url, bio, spotify_embed_url, spotify_artist_id").eq("id", user.id).single()
+    supabase.from("profiles").select("display_name, avatar_url, bio, spotify_embed_url, spotify_artist_id, wallet_address").eq("id", user.id).single()
       .then(({ data }) => { if (data) setProfile(data as ProfileData); });
   }, [user]);
 
