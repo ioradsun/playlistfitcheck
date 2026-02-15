@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
+import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AudioUploadZone } from "@/components/ui/AudioUploadZone";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 interface MixProjectFormProps {
   onSubmit: (title: string, notes: string, files: File[]) => void;
@@ -40,13 +42,23 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
         />
         <div className="border-t border-border" />
 
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-medium">Mixes</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                <Info size={13} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs max-w-[220px]">MP3, WAV, M4A · 75 MB max each · Not saved or stored</TooltipContent>
+          </Tooltip>
+        </div>
         <AudioUploadZone
           label="Upload Up to 6 Mixes"
           files={files}
           onChange={setFiles}
           maxFiles={MAX_MIXES}
         />
-        <p className="text-xs text-muted-foreground text-center">MP3, WAV, M4A · 75 MB max each · Not saved or stored</p>
       </div>
 
       <Button
