@@ -40,17 +40,3 @@ export const STATUS_CONFIG: Record<string, { label: string; emoji: string; class
   not_a_fit: { label: "Not a Fit", emoji: "❌", className: "bg-destructive/10 text-destructive" },
 };
 
-export const CATEGORY_FILTERS = [
-  { value: "all", label: "All" },
-  { value: "feature", label: "🧩 Feature" },
-  { value: "new_fit", label: "🚀 New Fit" },
-];
-
-export const FIT_OPTIONS = [
-  { value: "PlaylistFit", label: "PlaylistFit" },
-  { value: "MixFit", label: "MixFit" },
-  { value: "CrowdFit", label: "CrowdFit" },
-  { value: "ProFit", label: "ProFit" },
-  { value: "LyricFit", label: "LyricFit" },
-  { value: "HitFit", label: "HitFit" },
-];
