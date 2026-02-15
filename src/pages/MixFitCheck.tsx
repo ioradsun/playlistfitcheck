@@ -6,8 +6,9 @@ import { GlobalTimeline } from "@/components/mix/GlobalTimeline";
 
 import { useAudioEngine, type AudioMix } from "@/hooks/useAudioEngine";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
-import { Upload, Save, ArrowLeft } from "lucide-react";
+import { Upload, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 
 const MAX_MIXES = 6;
 
@@ -228,10 +229,6 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
           {lastSavedAt && (
             <span className="text-xs text-muted-foreground">Saved {lastSavedAt}</span>
           )}
-          <Button variant="outline" size="sm" onClick={() => saveProject(true)} disabled={saving}>
-            <Save size={14} className="mr-1" />
-            {saving ? "Saving..." : "Save"}
-          </Button>
         </div>
       </div>
 
@@ -354,6 +351,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
           Upload your first mix to get started
         </div>
       )}
+
+      <SignUpToSaveBanner />
     </div>
   );
 }
