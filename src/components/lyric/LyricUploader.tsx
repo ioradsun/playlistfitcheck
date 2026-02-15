@@ -30,7 +30,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
         {siteCopy.tools.lyric?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.lyric.subheading}</p>}
       </div>
 
-      <div className="glass-card rounded-xl p-4">
+      <div className="glass-card rounded-xl p-4 space-y-2">
         <AudioUploadZone
           label="Upload Song"
           files={files}
@@ -38,6 +38,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
           maxFiles={1}
           disabled={loading}
         />
+        <p className="text-xs text-muted-foreground text-center">MP3, WAV, M4A · 75 MB max · Not saved or stored</p>
       </div>
 
       <Button
