@@ -5,6 +5,7 @@ import { Coins, Loader2, Wallet } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -27,9 +28,12 @@ const TIP_AMOUNTS = [10, 50, 100];
 interface TipButtonProps {
   recipientAddress?: string | null;
   recipientName?: string;
+  postId: string;
+  recipientUserId: string;
+  onTipLogged?: (amount: number) => void;
 }
 
-export function TipButton({ recipientAddress, recipientName }: TipButtonProps) {
+export function TipButton({ recipientAddress, recipientName, postId, recipientUserId, onTipLogged }: TipButtonProps) {
   const { user } = useAuth();
   const { isConnected } = useAccount();
   const { connect, connectors } = useConnect();
@@ -40,8 +44,22 @@ export function TipButton({ recipientAddress, recipientName }: TipButtonProps) {
     address: DEGEN_CONTRACT,
     abi: ERC20_ABI,
     functionName: "transfer" as any,
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(`Tipped ${selectedAmount} $DEGEN to ${recipientName || "author"}!`);
+      // Log tip to database
+      if (selectedAmount && user) {
+        try {
+          await supabase.from("songfit_tips").insert({
+            post_id: postId,
+            tipper_user_id: user.id,
+            recipient_user_id: recipientUserId,
+            amount: selectedAmount,
+          });
+          onTipLogged?.(selectedAmount);
+        } catch (e) {
+          console.error("Failed to log tip:", e);
+        }
+      }
       setOpen(false);
     },
     onError: (err: any) => {

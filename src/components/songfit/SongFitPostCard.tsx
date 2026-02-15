@@ -27,6 +27,7 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
   const navigate = useNavigate();
   const [liked, setLiked] = useState(post.user_has_liked ?? false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
+  const [tipsTotal, setTipsTotal] = useState(post.tips_total || 0);
   const [isFollowing, setIsFollowing] = useState<boolean | null>(null);
   const [followChecked, setFollowChecked] = useState(false);
   const [captionExpanded, setCaptionExpanded] = useState(false);
@@ -199,7 +200,15 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
           <TipButton
             recipientAddress={(post.profiles as any)?.wallet_address}
             recipientName={displayName}
+            postId={post.id}
+            recipientUserId={post.user_id}
+            onTipLogged={(amount) => setTipsTotal(t => t + amount)}
           />
+          {tipsTotal > 0 && (
+            <span className="text-xs text-muted-foreground font-mono -ml-1">
+              {tipsTotal.toLocaleString()} $DEGEN
+            </span>
+          )}
         </div>
       </div>
 
