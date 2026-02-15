@@ -89,8 +89,8 @@ const Index = () => {
   useEffect(() => {
     const t = PATH_TO_TAB[location.pathname];
     if (t && t !== activeTab) setActiveTabState(t);
-    // Redirect bare "/" or legacy "/SongFit" to "/CrowdFit"
-    if (location.pathname === "/" && !location.state) {
+    // Redirect bare "/" to "/CrowdFit" — but NOT if there's a code/token in the URL (auth callback)
+    if (location.pathname === "/" && !location.state && !location.search && !window.location.hash) {
       navigate("/CrowdFit", { replace: true });
     }
     if (location.pathname === "/SongFit") {
