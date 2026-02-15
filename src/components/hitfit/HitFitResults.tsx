@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Trophy, Target, AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 
 interface Dimension {
   score: number;
@@ -193,6 +194,7 @@ export function HitFitResults({ analysis, onBack }: Props) {
           </p>
         </div>
       )}
+      <SignUpToSaveBanner />
     </motion.div>
   );
 }

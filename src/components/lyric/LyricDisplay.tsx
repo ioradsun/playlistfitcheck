@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 
 export interface LyricLine {
   start: number;
@@ -361,6 +362,7 @@ export function LyricDisplay({ data, audioFile, savedId, onBack, onSaved }: Prop
           </div>
         </div>
       )}
+      <SignUpToSaveBanner />
     </motion.div>
   );
 }

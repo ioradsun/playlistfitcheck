@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import type { ArtistData, Blueprint, PlanVariantType } from "./types";
 import { supabase } from "@/integrations/supabase/client";
+import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 
 interface ProFitReportProps {
   artist: ArtistData;
@@ -378,6 +379,7 @@ ${bp.singleROIFocus.why}`;
           <MessageSquare size={16} /> Refine This Strategy
         </Button>
       </div>
+      <SignUpToSaveBanner />
     </motion.div>
   );
 };
