@@ -29,9 +29,12 @@ interface Props {
   onPostCreated: () => void;
 }
 
+const CAPTION_MAX = 300;
+
 export function SongFitInlineComposer({ onPostCreated }: Props) {
   const { user, profile } = useAuth();
   const [query, setQuery] = useState("");
+  const [caption, setCaption] = useState("");
   const [results, setResults] = useState<TrackResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -125,12 +128,13 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
         album_art_url: selectedTrack.albumArt,
         release_date: selectedTrack.releaseDate,
         preview_url: selectedTrack.previewUrl,
-        caption: "",
+        caption: caption.trim(),
         tags_json: [] as any,
       });
       if (error) throw error;
       toast.success("Posted!");
       setQuery("");
+      setCaption("");
       setSelectedTrack(null);
       onPostCreated();
     } catch (e: any) {
@@ -142,6 +146,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
 
   const clear = () => {
     setQuery("");
+    setCaption("");
     setSelectedTrack(null);
     setResults([]);
     inputRef.current?.focus();
@@ -214,6 +219,25 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
               {publishing ? <Loader2 size={14} className="animate-spin" /> : "Post"}
             </Button>
           </div>
+
+          {/* Caption - shown after track is selected */}
+          {selectedTrack && (
+            <div className="mt-2">
+              <textarea
+                value={caption}
+                onChange={e => setCaption(e.target.value.slice(0, CAPTION_MAX))}
+                placeholder="Tell us why you made this song."
+                rows={2}
+                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none resize-none leading-relaxed"
+                disabled={publishing}
+              />
+              <div className="flex justify-end">
+                <span className={`text-[10px] ${caption.length >= CAPTION_MAX ? "text-destructive" : "text-muted-foreground/50"}`}>
+                  {caption.length}/{CAPTION_MAX}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Search dropdown */}
           {showDropdown && (
