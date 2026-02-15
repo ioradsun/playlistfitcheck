@@ -97,7 +97,12 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
 
       {/* Artist Search */}
       <div className="w-full max-w-2xl space-y-3">
-        {selectedArtist ? (
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <Loader2 size={24} className="animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Analyzing {selectedArtist?.name || "artist"}…</p>
+          </div>
+        ) : selectedArtist ? (
           <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50">
             {selectedArtist.image ? (
               <img src={selectedArtist.image} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
@@ -107,12 +112,10 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
               </div>
             )}
             <span className="text-sm font-medium truncate flex-1">{selectedArtist.name}</span>
-            {loading && <Loader2 size={14} className="animate-spin text-muted-foreground shrink-0" />}
             <button
               type="button"
               onClick={() => setSelectedArtist(null)}
               className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors"
-              disabled={loading}
             >
               <X size={14} />
             </button>
