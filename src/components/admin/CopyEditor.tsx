@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Save, FileText } from "lucide-react";
+import { Loader2, Save, FileText, Download, Upload } from "lucide-react";
+import { useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ export function CopyEditor() {
   const [copy, setCopy] = useState<SiteCopy | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -101,8 +103,61 @@ export function CopyEditor() {
 
   return (
     <div className="space-y-6">
-      {/* Save button */}
-      <div className="flex justify-end">
+      {/* Action buttons */}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => {
+              const blob = new Blob([JSON.stringify(copy, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `site-copy-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success("Copy exported");
+            }}
+          >
+            <Download size={14} /> Export
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={14} /> Import
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                try {
+                  const parsed = JSON.parse(ev.target?.result as string);
+                  if (parsed.tools && parsed.about && parsed.sidebar && parsed.pages) {
+                    setCopy(parsed);
+                    toast.success("Copy imported — click Save to apply");
+                  } else {
+                    toast.error("Invalid copy JSON structure");
+                  }
+                } catch {
+                  toast.error("Failed to parse JSON file");
+                }
+              };
+              reader.readAsText(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
         <Button onClick={handleSave} disabled={saving} className="gap-2">
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           {saving ? "Saving..." : "Save All Changes"}
