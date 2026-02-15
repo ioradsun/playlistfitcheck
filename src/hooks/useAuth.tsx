@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, createContext, useContext, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface ProfileData {
@@ -62,9 +63,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // If this is a SIGNED_IN event (e.g. from email verification), ensure loading is false
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setLoading(false);
-          // Clean up auth params from URL after verification
+          // Clean up auth params from URL after verification and show welcome toast
           if (window.location.search?.includes('code=') || window.location.hash?.includes('access_token')) {
             window.history.replaceState({}, '', '/CrowdFit');
+            if (event === 'SIGNED_IN') {
+              toast.success("Welcome to the tools.fm fmly ♫");
+            }
           }
         }
       }

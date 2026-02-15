@@ -102,16 +102,8 @@ const Index = () => {
     setActiveTabState(tab);
   }, []);
   
-  // Auto-switch to ProFit tab on first login if user has a Spotify artist linked
-  useEffect(() => {
-    if (profitAutoRef.current || !profile?.spotify_artist_id) return;
-    const state = location.state as any;
-    if (state?.reportData || state?.autoRun || state?.loadMixProject || state?.loadLyric) return;
-    if (location.pathname !== "/") return;
-    profitAutoRef.current = true;
-    setActiveTabState("profit");
-    navigate("/ProFit", { replace: true });
-  }, [profile, location.state, location.pathname, navigate]);
+  // profitAutoRef kept for other auto-run logic
+  
   const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
