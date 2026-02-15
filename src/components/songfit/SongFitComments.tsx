@@ -137,7 +137,8 @@ export function SongFitComments({ postId, onClose }: Props) {
       setText("");
       setReplyTo(null);
       setShowEmoji(false);
-      fetchComments();
+      await fetchComments();
+      inputRef.current?.focus();
     } catch (e: any) {
       toast.error(e.message || "Failed to comment");
     } finally {
