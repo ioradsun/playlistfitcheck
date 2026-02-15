@@ -184,6 +184,16 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
               placeholder={refMode === "spotify" ? "Paste Spotify track URL…" : "Paste YouTube URL…"}
               value={refUrl}
               onChange={(e) => setRefUrl(e.target.value)}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData("text");
+                if (
+                  (refMode === "spotify" && pasted.includes("spotify.com/track/")) ||
+                  (refMode === "youtube" && (pasted.includes("youtube.com/") || pasted.includes("youtu.be/")))
+                ) {
+                  e.preventDefault();
+                  setRefUrl(pasted.trim());
+                }
+              }}
               className="h-11 bg-transparent border-0 focus-visible:ring-0 text-sm"
             />
           )}

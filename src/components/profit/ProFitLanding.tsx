@@ -53,9 +53,10 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
     return () => clearTimeout(artistDebounce.current);
   }, [artistQuery, selectedArtist]);
 
-  const handlePasteArtistUrl = useCallback(async () => {
-    if (!artistQuery.includes("spotify.com/artist/")) return;
-    const match = artistQuery.match(/artist\/([a-zA-Z0-9]+)/);
+  const handlePasteArtistUrl = useCallback(async (pastedUrl?: string) => {
+    const urlToCheck = pastedUrl || artistQuery;
+    if (!urlToCheck.includes("spotify.com/artist/")) return;
+    const match = urlToCheck.match(/artist\/([a-zA-Z0-9]+)/);
     if (!match) return;
     setArtistSearching(true);
     setArtistQuery("");
@@ -67,10 +68,10 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
         const a = data.results[0];
         setSelectedArtist({ id: a.id, name: a.name, image: a.image, url: a.url, genres: a.genres });
       } else {
-        setSelectedArtist({ id: match[1], name: match[1], image: null, url: artistQuery.trim() });
+        setSelectedArtist({ id: match[1], name: match[1], image: null, url: urlToCheck.trim() });
       }
     } catch {
-      setSelectedArtist({ id: match[1], name: match[1], image: null, url: artistQuery.trim() });
+      setSelectedArtist({ id: match[1], name: match[1], image: null, url: urlToCheck.trim() });
     } finally {
       setArtistSearching(false);
     }
@@ -121,20 +122,28 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
             <div className="glass-card rounded-xl p-4">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Search artist or paste Spotify link…"
-                  value={artistQuery}
-                  onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
-                  onKeyDown={e => {
-                    if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) {
-                      e.preventDefault();
-                      handlePasteArtistUrl();
-                    }
-                  }}
-                  onFocus={() => setArtistFocused(true)}
-                  onBlur={() => setTimeout(() => setArtistFocused(false), 200)}
-                  className="flex-1 h-11 text-base bg-transparent border-0 focus-visible:ring-0"
-                  disabled={loading}
-                />
+                   placeholder="Search artist or paste Spotify link…"
+                   value={artistQuery}
+                   onChange={e => { setArtistQuery(e.target.value); setSelectedArtist(null); }}
+                   onKeyDown={e => {
+                     if (e.key === "Enter" && artistQuery.includes("spotify.com/artist/")) {
+                       e.preventDefault();
+                       handlePasteArtistUrl();
+                     }
+                   }}
+                   onPaste={e => {
+                     const pasted = e.clipboardData.getData("text");
+                     if (pasted.includes("spotify.com/artist/")) {
+                       e.preventDefault();
+                       setArtistQuery(pasted.trim());
+                       handlePasteArtistUrl(pasted.trim());
+                     }
+                   }}
+                   onFocus={() => setArtistFocused(true)}
+                   onBlur={() => setTimeout(() => setArtistFocused(false), 200)}
+                   className="flex-1 h-11 text-base bg-transparent border-0 focus-visible:ring-0"
+                   disabled={loading}
+                 />
               </div>
             </div>
             {artistSearching && (

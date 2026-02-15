@@ -83,6 +83,26 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
   const { results: songResults, loading: songSearching, clear: clearSong } =
     useSpotifySearch<TrackResult>("track", songUrl);
 
+  const handlePlaylistPaste = (e: React.ClipboardEvent) => {
+    const pasted = e.clipboardData.getData("text");
+    if (pasted.includes("spotify.com/playlist/")) {
+      e.preventDefault();
+      setUrl(pasted.trim());
+      clearPlaylist();
+      setPlaylistFocused(false);
+    }
+  };
+
+  const handleSongPaste = (e: React.ClipboardEvent) => {
+    const pasted = e.clipboardData.getData("text");
+    if (pasted.includes("spotify.com/track/")) {
+      e.preventDefault();
+      setSongUrl(pasted.trim());
+      clearSong();
+      setSongFocused(false);
+    }
+  };
+
   const handleAnalyze = async () => {
     const trimmedUrl = url.trim();
     if (!trimmedUrl) {
@@ -159,6 +179,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
               placeholder="Search or paste Spotify playlist URL..."
               className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
               onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
+              onPaste={handlePlaylistPaste}
               onFocus={() => setPlaylistFocused(true)}
               onBlur={() => setTimeout(() => setPlaylistFocused(false), 200)}
               disabled={loading}
@@ -201,6 +222,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
               onChange={e => setSongUrl(e.target.value)}
               placeholder="Search or paste Spotify song URL (optional)..."
               className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+              onPaste={handleSongPaste}
               onFocus={() => setSongFocused(true)}
               onBlur={() => setTimeout(() => setSongFocused(false), 200)}
               disabled={loading}
