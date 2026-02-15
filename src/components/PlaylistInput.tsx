@@ -157,7 +157,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
               value={url}
               onChange={e => setUrl(e.target.value)}
               placeholder="Search or paste Spotify playlist URL..."
-              className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+              className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
               onKeyDown={e => e.key === "Enter" && !loading && handleAnalyze()}
               onFocus={() => setPlaylistFocused(true)}
               onBlur={() => setTimeout(() => setPlaylistFocused(false), 200)}
@@ -200,7 +200,7 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
               value={songUrl}
               onChange={e => setSongUrl(e.target.value)}
               placeholder="Search or paste Spotify song URL (optional)..."
-              className="pl-10 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+              className="pl-10 h-11 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
               onFocus={() => setSongFocused(true)}
               onBlur={() => setTimeout(() => setSongFocused(false), 200)}
               disabled={loading}
@@ -233,8 +233,8 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
             )}
           </div>
 
-          <div className="flex justify-end">
-            <Button onClick={handleAnalyze} className="glow-primary" disabled={loading}>
+          <div className="pt-1">
+            <Button onClick={handleAnalyze} className="w-full glow-primary" size="lg" disabled={loading}>
               {loading ? (
                 <Loader2 size={16} className="mr-1 animate-spin" />
               ) : (

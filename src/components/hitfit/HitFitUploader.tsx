@@ -184,14 +184,14 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
               placeholder={refMode === "spotify" ? "Paste Spotify track URL…" : "Paste YouTube URL…"}
               value={refUrl}
               onChange={(e) => setRefUrl(e.target.value)}
-              className="text-sm"
+              className="h-11 bg-transparent border-0 focus-visible:ring-0 text-sm"
             />
           )}
         </div>
       </div>
 
       <Button
-        className="w-full gap-2"
+        className="w-full gap-2 glow-primary"
         size="lg"
         disabled={!canSubmit}
         onClick={handleSubmit}
