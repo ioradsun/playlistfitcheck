@@ -70,21 +70,24 @@ serve(async (req) => {
 
     let results: any[] = [];
 
-    if (isSpotifyId && searchType === "artist") {
-      const resp = await fetch(
-        `https://api.spotify.com/v1/artists/${query.trim()}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (resp.ok) {
-        const a = await resp.json();
-        results = [{
-          id: a.id,
-          name: a.name,
-          image: a.images?.[0]?.url || a.images?.[1]?.url || null,
-          url: a.external_urls?.spotify || `https://open.spotify.com/artist/${a.id}`,
-          genres: (a.genres || []).slice(0, 5),
-          followers: a.followers?.total || 0,
-        }];
+    if (isSpotifyId) {
+      let endpoint = "";
+      if (searchType === "artist") endpoint = `https://api.spotify.com/v1/artists/${query.trim()}`;
+      else if (searchType === "playlist") endpoint = `https://api.spotify.com/v1/playlists/${query.trim()}?fields=id,name,images,owner,tracks.total,external_urls`;
+      else if (searchType === "track") endpoint = `https://api.spotify.com/v1/tracks/${query.trim()}`;
+
+      if (endpoint) {
+        const resp = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
+        if (resp.ok) {
+          const d = await resp.json();
+          if (searchType === "artist") {
+            results = [{ id: d.id, name: d.name, image: d.images?.[0]?.url || null, url: d.external_urls?.spotify || `https://open.spotify.com/artist/${d.id}`, genres: (d.genres || []).slice(0, 5), followers: d.followers?.total || 0 }];
+          } else if (searchType === "playlist") {
+            results = [{ id: d.id, name: d.name, owner: d.owner?.display_name || "", tracks: d.tracks?.total || 0, image: d.images?.[0]?.url || null, url: d.external_urls?.spotify || `https://open.spotify.com/playlist/${d.id}` }];
+          } else {
+            results = [{ id: d.id, name: d.name, artists: d.artists?.map((a: any) => a.name).join(", ") || "Unknown", image: d.album?.images?.[2]?.url || d.album?.images?.[0]?.url || null, url: d.external_urls?.spotify || `https://open.spotify.com/track/${d.id}` }];
+          }
+        }
       }
     }
 
