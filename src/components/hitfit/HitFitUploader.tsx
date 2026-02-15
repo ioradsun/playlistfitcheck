@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
-import { Upload, X, Music, Loader2, Link, Youtube, Info } from "lucide-react";
+import { Upload, X, Music, Loader2, Youtube, Info, Disc3 } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,12 +23,11 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
   const [master1Files, setMaster1Files] = useState<File[]>([]);
   const [master2Files, setMaster2Files] = useState<File[]>([]);
   const [refMode, setRefMode] = useState<RefMode>("upload");
-  const [refFile, setRefFile] = useState<File | null>(null);
+  const [refFiles, setRefFiles] = useState<File[]>([]);
   const [refUrl, setRefUrl] = useState("");
-  const refFileRef = useRef<HTMLInputElement>(null);
 
   const hasReference =
-    (refMode === "upload" && refFile) ||
+    (refMode === "upload" && refFiles.length > 0) ||
     (refMode === "youtube" && refUrl.trim().length > 0) ||
     (refMode === "spotify" && refUrl.trim().length > 0);
 
@@ -37,8 +36,8 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
   const handleSubmit = () => {
     if (!master1Files[0] || !hasReference) return;
     let ref: ReferenceSource;
-    if (refMode === "upload" && refFile) {
-      ref = { type: "file", file: refFile };
+    if (refMode === "upload" && refFiles[0]) {
+      ref = { type: "file", file: refFiles[0] };
     } else if (refMode === "youtube") {
       ref = { type: "youtube", url: refUrl.trim() };
     } else {
@@ -47,17 +46,15 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
     onAnalyze(master1Files[0], master2Files[0] || null, ref);
   };
 
-  const clearRef = () => {
-    setRefFile(null);
-    setRefUrl("");
-  };
-
-  const acceptTypes = ".mp3,.wav,.m4a,.aac,.ogg,.flac,.aiff,.wma";
-
   const refModes: { mode: RefMode; label: string; icon: React.ReactNode }[] = [
     { mode: "upload", label: "Upload", icon: <Upload size={12} /> },
     { mode: "spotify", label: "Spotify", icon: <Music size={12} /> },
     { mode: "youtube", label: "YouTube", icon: <Youtube size={12} /> },
+  ];
+
+  const slots = [
+    { label: "Master A", desc: "Your primary mastered track", icon: Disc3, files: master1Files, onChange: setMaster1Files, required: true },
+    { label: "Master B", desc: "Optional second master to compare", icon: Disc3, files: master2Files, onChange: setMaster2Files, required: false },
   ];
 
   return (
@@ -68,30 +65,39 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
       </div>
 
       <div className="space-y-3">
-        {/* Master A */}
-        <div className="glass-card rounded-xl p-4">
-          <AudioUploadZone
-            label="Upload Master A"
-            files={master1Files}
-            onChange={setMaster1Files}
-            maxFiles={1}
-            disabled={loading}
-          />
-        </div>
-
-        {/* Master B (optional) */}
-        <div className="glass-card rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Optional</span>
+        {/* Master A & B */}
+        {slots.map((slot, i) => (
+          <div key={i} className={`glass-card rounded-xl p-4 transition-all ${slot.files.length > 0 ? "border-primary/30" : "border-border"}`}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <slot.icon size={18} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold">{slot.label}</p>
+                  {!slot.required && (
+                    <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Optional</span>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                        <Info size={13} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">{slot.desc}</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
+            <AudioUploadZone
+              label="Upload"
+              files={slot.files}
+              onChange={slot.onChange}
+              maxFiles={1}
+              disabled={loading}
+            />
           </div>
-          <AudioUploadZone
-            label="Upload Master B"
-            files={master2Files}
-            onChange={setMaster2Files}
-            maxFiles={1}
-            disabled={loading}
-          />
-        </div>
+        ))}
 
         {/* Reference slot */}
         <div className={`glass-card rounded-xl p-4 transition-all ${hasReference ? "border-primary/30" : "border-border"}`}>
@@ -112,11 +118,6 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
                 </Tooltip>
               </div>
             </div>
-            {hasReference && (
-              <Button variant="ghost" size="icon" className="shrink-0" onClick={clearRef}>
-                <X size={16} />
-              </Button>
-            )}
           </div>
 
           {/* Mode tabs */}
@@ -129,7 +130,7 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
                     ? "bg-background text-foreground shadow-sm font-medium"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
-                onClick={() => { setRefMode(mode); clearRef(); }}
+                onClick={() => { setRefMode(mode); setRefFiles([]); setRefUrl(""); }}
               >
                 {icon} {label}
               </button>
@@ -138,26 +139,13 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
 
           {/* Mode content */}
           {refMode === "upload" ? (
-            refFile ? (
-              <p className="text-xs text-muted-foreground truncate px-1">{refFile.name}</p>
-            ) : (
-              <>
-                <input
-                  ref={refFileRef}
-                  type="file"
-                  accept={acceptTypes}
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) setRefFile(f);
-                    e.target.value = "";
-                  }}
-                />
-                <Button variant="secondary" size="sm" className="w-full gap-1.5" onClick={() => refFileRef.current?.click()}>
-                  <Upload size={14} /> Choose audio file
-                </Button>
-              </>
-            )
+            <AudioUploadZone
+              label="Upload"
+              files={refFiles}
+              onChange={setRefFiles}
+              maxFiles={1}
+              disabled={loading}
+            />
           ) : (
             <Input
               placeholder={refMode === "spotify" ? "Paste Spotify track URL…" : "Paste YouTube URL…"}
