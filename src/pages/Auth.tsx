@@ -38,6 +38,7 @@ const Auth = () => {
   const [selectedArtist, setSelectedArtist] = useState<SpotifyArtistResult | null>(null);
   const [artistFocused, setArtistFocused] = useState(false);
   const artistDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const emailRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -47,6 +48,13 @@ const Auth = () => {
   useEffect(() => {
     if (user) navigate("/", { state: { returnTab } });
   }, [user, navigate, returnTab]);
+
+  // Auto-focus email after artist is selected
+  useEffect(() => {
+    if (selectedArtist && activeTab === "signup") {
+      setTimeout(() => emailRef.current?.focus(), 100);
+    }
+  }, [selectedArtist, activeTab]);
 
   const handlePasteArtistUrl = useCallback(async () => {
     if (!artistQuery.includes("spotify.com/artist/")) return;
@@ -158,7 +166,7 @@ const Auth = () => {
     <>
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" required placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+        <Input id="email" ref={emailRef} type="email" required placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
