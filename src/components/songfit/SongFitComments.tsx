@@ -116,6 +116,7 @@ export function SongFitComments({ postId, onClose }: Props) {
       setReplyTo(null);
       setShowEmoji(false);
       fetchComments();
+      setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [postId]);
 
