@@ -12,7 +12,7 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
   return (
     <>
       <AppSidebar />
-      <SidebarInset className="flex flex-col min-h-svh">
+      <SidebarInset className="flex flex-col h-svh overflow-hidden">
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
           <SidebarTrigger />
           {title && (
@@ -24,7 +24,7 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
             </span>
           )}
         </header>
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col overflow-y-auto" style={{ paddingBottom: 120 }}>
           {children}
         </div>
       </SidebarInset>
