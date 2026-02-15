@@ -390,7 +390,7 @@ const Index = () => {
       case "songfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><SongFitTab /></div>;
       case "profit":
-        return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} onProjectSaved={refreshSidebar} /></div>;
       case "playlist":
         return (
            <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
