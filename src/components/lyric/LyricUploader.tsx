@@ -43,11 +43,8 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
-      <div className="space-y-2">
+      <div className="space-y-1">
         <h2 className="text-xl font-semibold">Make your lyrics caption-ready</h2>
-        <p className="text-sm text-muted-foreground">
-          Generate synced lyrics you can edit and export.
-        </p>
       </div>
 
       <div className="glass-card rounded-xl p-4 space-y-3 text-left">

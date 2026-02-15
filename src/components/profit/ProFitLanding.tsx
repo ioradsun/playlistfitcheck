@@ -117,8 +117,7 @@ export const ProFitLanding = ({ onAnalyze, loading }: ProFitLandingProps) => {
 
       {/* Heading */}
       <div className="text-center space-y-1">
-        <h2 className="text-xl font-semibold">Build your Spotify Money Plan</h2>
-        <p className="text-sm text-muted-foreground">Get a personalized revenue strategy based on your performance.</p>
+        <h2 className="text-xl font-semibold">See how you can profit from your Spotify</h2>
       </div>
 
       {/* Artist Search */}

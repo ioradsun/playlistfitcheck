@@ -41,11 +41,8 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
-      <div className="space-y-2">
-        <h2 className="text-xl font-semibold">Start a Mix Comparison</h2>
-        <p className="text-sm text-muted-foreground">
-          Compare your mix versions side by side and choose the best fit.
-        </p>
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold">Compare your mix versions side by side and choose the best fit</h2>
       </div>
 
       <div className="glass-card rounded-xl p-4 space-y-3 text-left">
