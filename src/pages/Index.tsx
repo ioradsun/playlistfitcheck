@@ -77,7 +77,7 @@ const TAB_SUBTITLES: Record<string, string> = {
   profit: "See how your Spotify fits making money.",
   playlist: "See if your song fits playlists.",
   mix: "See which mix fits best.",
-  lyric: "Make sure your lyrics fit captions.",
+  lyric: "Make your lyrics fit.",
   hitfit: "See if your song fits a hit.",
   dreamfit: "Let's build the next Fit together.",
 };
@@ -418,7 +418,7 @@ const Index = () => {
       case "mix":
         return <div className="flex-1 flex flex-col px-4 py-6"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} /></div>;
       case "lyric":
-        return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex flex-col min-h-0"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
       case "hitfit":
         return <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><HitFitTab /></div>;
       case "dreamfit":
