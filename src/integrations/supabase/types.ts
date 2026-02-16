@@ -409,6 +409,7 @@ export type Database = {
           instagram_url: string | null
           invite_code: string | null
           is_unlimited: boolean
+          is_verified: boolean
           spotify_artist_id: string | null
           spotify_embed_url: string | null
           theme: string
@@ -426,6 +427,7 @@ export type Database = {
           instagram_url?: string | null
           invite_code?: string | null
           is_unlimited?: boolean
+          is_verified?: boolean
           spotify_artist_id?: string | null
           spotify_embed_url?: string | null
           theme?: string
@@ -443,6 +445,7 @@ export type Database = {
           instagram_url?: string | null
           invite_code?: string | null
           is_unlimited?: boolean
+          is_verified?: boolean
           spotify_artist_id?: string | null
           spotify_embed_url?: string | null
           theme?: string
@@ -1285,6 +1288,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      verification_requests: {
+        Row: {
+          created_at: string
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          screenshot_url: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          screenshot_url: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          screenshot_url?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       widget_config: {
         Row: {

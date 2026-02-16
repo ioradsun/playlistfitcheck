@@ -28,7 +28,7 @@ export function SongFitFeed() {
       // Recent: live submissions, chronological
       const { data } = await supabase
         .from("songfit_posts")
-        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address)")
+        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
         .eq("status", "live")
         .limit(50)
         .order("created_at", { ascending: false });
@@ -40,7 +40,7 @@ export function SongFitFeed() {
       // Billboard mode
       const { data } = await supabase
         .from("songfit_posts")
-        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address)")
+        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
         .eq("status", "live")
         .limit(50)
         .order("engagement_score", { ascending: false });

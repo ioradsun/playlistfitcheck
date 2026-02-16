@@ -45,6 +45,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  BadgeCheck,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -53,6 +54,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
+import { VerificationModal } from "@/components/VerificationModal";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
@@ -114,6 +118,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   const [profileExpanded, setProfileExpanded] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [showVerify, setShowVerify] = useState(false);
   
 
   const fetchRecents = useCallback(async () => {
@@ -484,10 +489,15 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
               </div>
               {!collapsed && (
                 <>
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span className="text-xs font-medium truncate text-left">
                       {profile?.display_name ?? user.email?.split("@")[0]}
                     </span>
+                    {(profile as any)?.is_verified && (
+                      <TooltipProvider delayDuration={350}>
+                        <VerifiedBadge size={13} />
+                      </TooltipProvider>
+                    )}
                     {isBlazer && pioneerNumber && (
                       <span
                         className="shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold leading-none bg-primary text-primary-foreground border border-primary cursor-default"
@@ -573,6 +583,15 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   <User size={14} />
                   <span>Profile</span>
                 </button>
+                {!(profile as any)?.is_verified && (
+                  <button
+                    onClick={() => setShowVerify(true)}
+                    className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                  >
+                    <BadgeCheck size={14} />
+                    <span>Get Verified</span>
+                  </button>
+                )}
                 {ADMIN_EMAILS.includes(user.email ?? "") && (
                   <button
                     onClick={() => { navigate("/admin"); closeMobileIfNeeded(); }}
@@ -607,6 +626,8 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
           </div>
         ) : null}
       </SidebarFooter>
+
+      <VerificationModal open={showVerify} onOpenChange={setShowVerify} />
     </Sidebar>
   );
 }

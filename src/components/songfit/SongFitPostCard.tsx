@@ -12,6 +12,7 @@ import type { SongFitPost } from "./types";
 import { formatDistanceToNow } from "date-fns";
 import { ProfileHoverCard } from "./ProfileHoverCard";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent, logImpression } from "@/lib/engagementTracking";
 import {
@@ -193,7 +194,14 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
+                  {(post.profiles as any)?.is_verified && (
+                    <TooltipProvider delayDuration={350}>
+                      <VerifiedBadge size={14} />
+                    </TooltipProvider>
+                  )}
+                </div>
                 <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
               </div>
             </div>

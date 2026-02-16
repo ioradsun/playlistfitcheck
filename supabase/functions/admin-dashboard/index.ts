@@ -87,6 +87,79 @@ serve(async (req) => {
       });
     }
 
+    // ── VERIFICATION REQUESTS ──
+    if (body.action === "get_verification_requests") {
+      const { data: requests } = await supabase
+        .from("verification_requests")
+        .select("id, user_id, screenshot_url, status, created_at, reviewed_at")
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      // Fetch profiles for each request
+      const userIds = [...new Set((requests || []).map((r: any) => r.user_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, display_name, avatar_url")
+        .in("id", userIds);
+      const profileMap: Record<string, any> = {};
+      for (const p of profiles || []) profileMap[p.id] = p;
+
+      const enriched = (requests || []).map((r: any) => ({
+        ...r,
+        profile: profileMap[r.user_id] || null,
+      }));
+
+      return new Response(JSON.stringify({ requests: enriched }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (body.action === "review_verification" && body.request_id && body.decision) {
+      const decision = body.decision as string;
+      if (!["approve", "reject"].includes(decision)) {
+        return new Response(JSON.stringify({ error: "Invalid decision" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Get the request
+      const { data: req } = await supabase
+        .from("verification_requests")
+        .select("id, user_id, status")
+        .eq("id", body.request_id)
+        .single();
+
+      if (!req) {
+        return new Response(JSON.stringify({ error: "Request not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Update request status
+      await supabase.from("verification_requests").update({
+        status: decision === "approve" ? "approved" : "rejected",
+        reviewed_by: user.email,
+        reviewed_at: new Date().toISOString(),
+      }).eq("id", body.request_id);
+
+      // If approved, set is_verified on profile
+      if (decision === "approve") {
+        await supabase.from("profiles").update({ is_verified: true }).eq("id", req.user_id);
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (body.action === "get_verification_screenshot_url" && body.path) {
+      const { data } = await supabase.storage
+        .from("verification-screenshots")
+        .createSignedUrl(body.path, 300);
+      return new Response(JSON.stringify({ url: data?.signedUrl || null }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // ── USERS section ──
     if (section === "users") {
