@@ -204,7 +204,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             </div>
           </ProfileHoverCard>
           <TrailblazerBadge userId={post.user_id} compact />
-          <SubmissionBadge status={post.status} expiresAt={post.expires_at} cooldownUntil={post.cooldown_until} compact />
+          
         </div>
 
         {/* 3-dot menu */}
