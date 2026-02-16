@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Copy, Download, RefreshCw, Check, Image, MessageSquare, Hash } from "lucide-react";
 import { toast } from "sonner";
+import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 
 export interface VibeFitOutput {
   captions: {
@@ -204,6 +205,8 @@ export function VibeFitResults({ result, songTitle, onBack, onRegenerate, regene
           </Button>
         </motion.section>
       )}
+
+      <SignUpToSaveBanner />
     </div>
   );
 }
