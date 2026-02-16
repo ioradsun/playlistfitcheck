@@ -1,12 +1,18 @@
 import type { BillboardMode, FeedView } from "./types";
 import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
+import { Flame, Trophy, Target, Crown, SlidersHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface Props {
   view: FeedView;
@@ -15,14 +21,17 @@ interface Props {
   onModeChange: (m: BillboardMode) => void;
 }
 
-const modeLabels: Record<BillboardMode, string> = {
-  trending: "Trending",
-  top: "Top",
-  best_fit: "Best Fit",
-  all_time: "All-Time",
-};
+const modes: { key: BillboardMode; label: string; icon: typeof Flame; tip: string }[] = [
+  { key: "trending", label: "Trending", icon: Flame, tip: "Hottest posts by recent engagement velocity" },
+  { key: "top", label: "Top", icon: Trophy, tip: "Highest engagement score this cycle" },
+  { key: "best_fit", label: "Best Fit", icon: Target, tip: "Best sonic match to your taste" },
+  { key: "all_time", label: "All-Time", icon: Crown, tip: "Legendary posts across all cycles" },
+];
 
 export function BillboardToggle({ view, onViewChange, billboardMode, onModeChange }: Props) {
+  const activeMode = modes.find(m => m.key === billboardMode) || modes[0];
+  const ActiveIcon = activeMode.icon;
+
   return (
     <div className="border-b border-border/40">
       <div className="flex">
@@ -38,7 +47,6 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
           Recent
         </button>
 
-        {/* Billboard with inline dropdown */}
         <div className="flex-1 flex items-center justify-center">
           <button
             onClick={() => onViewChange("billboard")}
@@ -52,25 +60,43 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
             Billboard
           </button>
           {view === "billboard" && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="ml-1 flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-2.5">
-                  <span className="text-primary font-medium">{modeLabels[billboardMode]}</span>
-                  <ChevronDown size={14} />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="w-36">
-                {(Object.keys(modeLabels) as BillboardMode[]).map(key => (
-                  <DropdownMenuItem
-                    key={key}
-                    onClick={() => onModeChange(key)}
-                    className={cn(billboardMode === key && "text-primary font-semibold")}
-                  >
-                    {modeLabels[key]}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <TooltipProvider delayDuration={300}>
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <button className="ml-1.5 flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors py-2.5 px-1">
+                        <ActiveIcon size={15} className="text-primary" />
+                      </button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {activeMode.tip}
+                  </TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="center" className="w-44">
+                  {modes.map(({ key, label, icon: Icon, tip }) => (
+                    <Tooltip key={key}>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuItem
+                          onClick={() => onModeChange(key)}
+                          className={cn(
+                            "flex items-center gap-2",
+                            billboardMode === key && "text-primary font-semibold"
+                          )}
+                        >
+                          <Icon size={15} />
+                          <span>{label}</span>
+                        </DropdownMenuItem>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="text-xs">
+                        {tip}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TooltipProvider>
           )}
         </div>
       </div>
