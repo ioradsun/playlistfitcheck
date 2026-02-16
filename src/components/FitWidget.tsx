@@ -120,7 +120,7 @@ export function FitWidget() {
         style={{
           bottom: 16 - pos.y,
           right: 16 - pos.x,
-          maxWidth: 280,
+          width: 280,
           touchAction: "none",
         }}
       >
