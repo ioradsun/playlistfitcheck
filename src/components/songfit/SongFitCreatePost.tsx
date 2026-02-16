@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Music, X, Plus } from "lucide-react";
+import { Loader2, Music, X, Plus, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -33,6 +33,40 @@ export function SongFitCreatePost({ onPostCreated, onCancel }: Props) {
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+
+  // Extract track ID from URL for real-time dupe check
+  const extractTrackId = (input: string): string | null => {
+    const m = input.match(/spotify\.com\/track\/([A-Za-z0-9]{22})/);
+    return m ? m[1] : null;
+  };
+
+  // Real-time duplicate detection on URL change
+  useEffect(() => {
+    const trackId = extractTrackId(url);
+    if (!trackId) { setDuplicateWarning(null); return; }
+
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("songfit_posts")
+        .select("id, track_title, user_id")
+        .eq("spotify_track_id", trackId)
+        .limit(1);
+      if (cancelled) return;
+      if (data && data.length > 0) {
+        const isOwn = data[0].user_id === user?.id;
+        setDuplicateWarning(
+          isOwn
+            ? `You already posted "${data[0].track_title}"`
+            : `"${data[0].track_title}" was already shared by another artist`
+        );
+      } else {
+        setDuplicateWarning(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [url, user?.id]);
 
   const fetchTrack = async () => {
     if (!url.includes("spotify.com/track/")) {
@@ -53,7 +87,6 @@ export function SongFitCreatePost({ onPostCreated, onCancel }: Props) {
       setFetching(false);
     }
   };
-
   const addTag = () => {
     const t = tagInput.trim().replace(/^#/, "");
     if (t && !tags.includes(t) && tags.length < 5) {
@@ -112,6 +145,14 @@ export function SongFitCreatePost({ onPostCreated, onCancel }: Props) {
           {fetching ? <Loader2 size={16} className="animate-spin" /> : "Fetch"}
         </Button>
       </div>
+
+      {/* Duplicate warning */}
+      {duplicateWarning && (
+        <div className="flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-200">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-yellow-400" />
+          <span>{duplicateWarning}</span>
+        </div>
+      )}
 
       {/* Track Preview */}
       {trackData && (
