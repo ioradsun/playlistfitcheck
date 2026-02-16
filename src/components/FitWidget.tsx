@@ -221,6 +221,8 @@ export function FitWidget() {
           <TooltipContent side="left" className="text-xs max-w-[220px] space-y-0.5">
             {tier === "unlimited" ? (
               <p>toolsFM — Unlimited ⚡</p>
+            ) : tier === "limited" ? (
+              <p>Invite to unlock one</p>
             ) : (
               <>
                 <p className="font-semibold">Get your Badge.</p>
