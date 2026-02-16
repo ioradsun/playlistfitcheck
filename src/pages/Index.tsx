@@ -300,6 +300,26 @@ const Index = () => {
   const [loadedVibeFitResult, setLoadedVibeFitResult] = useState<any>(null);
   const [vibeFitLoadKey, setVibeFitLoadKey] = useState(0);
 
+  // Reset all tool state when user logs out
+  const prevUserRef = useRef(user);
+  useEffect(() => {
+    if (prevUserRef.current && !user && !authLoading) {
+      setResult(null);
+      setVibeAnalysis(null);
+      setSongFitAnalysis(null);
+      setLoadedMixProject(null);
+      setLoadedLyric(null);
+      setProfitArtistUrl(null);
+      setProfitSavedReport(null);
+      setLoadedHitFitAnalysis(null);
+      setLoadedVibeFitResult(null);
+      setProfitLoadKey(k => k + 1);
+      setVibeFitLoadKey(k => k + 1);
+      setSidebarRefreshKey(k => k + 1);
+    }
+    prevUserRef.current = user;
+  }, [user, authLoading]);
+
   const handleNewProject = useCallback(() => {
     // No-op: we always default to new project state
   }, []);
