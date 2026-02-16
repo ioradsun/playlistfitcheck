@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
@@ -36,6 +37,8 @@ import {
   Shield,
   Info,
   Heart,
+  Moon,
+  Sun,
   MessageCircle,
   UserPlus,
   ChevronDown,
@@ -104,6 +107,8 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   const collapsed = sidebarState === "collapsed";
   const { notifications, unreadCount, loading: notiLoading, markAllRead, refetch: refetchNotifications } = useNotifications();
   const { number: pioneerNumber, isBlazer } = useTrailblazer(user?.id);
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === "dark";
 
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [profileExpanded, setProfileExpanded] = useState(false);
@@ -574,6 +579,19 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                     <span>Admin</span>
                   </button>
                 )}
+                <button
+                  onClick={() => {
+                    const next = isDark ? "light" : "dark";
+                    setTheme(next);
+                    if (user) {
+                      supabase.from("profiles").update({ theme: next }).eq("id", user.id).then(() => {});
+                    }
+                  }}
+                  className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                >
+                  {isDark ? <Sun size={14} /> : <Moon size={14} />}
+                  <span>{isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}</span>
+                </button>
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-destructive hover:bg-sidebar-accent transition-colors"
