@@ -11,6 +11,7 @@ import type { SongFitAnalysis } from "@/components/SongFitCard";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useUsageQuota } from "@/hooks/useUsageQuota";
 import MixFitCheck from "@/pages/MixFitCheck";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 import { LyricFitTab } from "@/components/lyric/LyricFitTab";
@@ -82,6 +83,7 @@ const Index = () => {
   const navigate = useNavigate();
   const autoRunRef = useRef(false);
   const profitAutoRef = useRef(false);
+  const playlistQuota = useUsageQuota("playlist");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   
   // Derive active tab from URL path
@@ -200,6 +202,10 @@ const Index = () => {
   }, [user]);
 
   const handleAnalyze = useCallback((data: PlaylistInput & { _trackList?: { name: string; artists: string }[]; _songUrl?: string }) => {
+    if (!playlistQuota.canUse) {
+      toast.error(playlistQuota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
+      return;
+    }
     const trackList = data._trackList;
     const songUrl = data._songUrl;
     const output = computePlaylistHealth(data);
@@ -209,13 +215,14 @@ const Index = () => {
     setSongFitLoading(false);
     setResult({ output, input: data, name: data.playlistName, key: Date.now(), trackList, songUrl });
     saveSearch(data, output, songUrl);
+    playlistQuota.increment();
     if (trackList && trackList.length > 0) {
       fetchVibeAnalysis(data, trackList);
       if (songUrl) {
         fetchSongFitAnalysis(songUrl, data, trackList, output);
       }
     }
-  }, [fetchVibeAnalysis, fetchSongFitAnalysis, saveSearch]);
+  }, [fetchVibeAnalysis, fetchSongFitAnalysis, saveSearch, playlistQuota]);
 
   useEffect(() => {
     if (!isFullyLoaded || !result || !savedSearchIdRef.current) return;

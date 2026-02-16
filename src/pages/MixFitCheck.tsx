@@ -6,6 +6,7 @@ import { GlobalTimeline } from "@/components/mix/GlobalTimeline";
 
 import { useAudioEngine, type AudioMix } from "@/hooks/useAudioEngine";
 import { useAuth } from "@/hooks/useAuth";
+import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
 import { Upload, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ interface MixFitCheckProps {
 
 export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCheckProps = {}) {
   const { user } = useAuth();
+  const mixQuota = useUsageQuota("mix");
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
   const { list, save, remove } = useMixProjectStorage();
 
@@ -78,6 +80,10 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
   }, [stop]);
 
   const handleCreate = useCallback(async (t: string, n: string, files: File[]) => {
+    if (!mixQuota.canUse) {
+      toast.error(mixQuota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
+      return;
+    }
     setProjectId(crypto.randomUUID());
     setTitle(t);
     setNotes(n);
@@ -104,7 +110,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
         toast.error(`Failed to decode ${file.name}`);
       }
     }
-  }, [decodeFile]);
+    await mixQuota.increment();
+  }, [decodeFile, mixQuota]);
 
   const handleLoadProject = useCallback((project: MixProjectData) => {
     stop();
