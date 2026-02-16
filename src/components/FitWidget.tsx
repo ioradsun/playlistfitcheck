@@ -124,73 +124,44 @@ export function FitWidget() {
           touchAction: "none",
         }}
       >
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
-              className="mb-2 rounded-xl border border-border bg-background/80 backdrop-blur-xl shadow-2xl overflow-hidden"
-            >
-              {/* Header */}
-              <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Music size={14} className="text-primary" />
-                </div>
-                {user ? (
-                  <TrailblazerBadge userId={user.id} compact />
-                ) : tier !== "unlimited" ? (
-                  <Badge variant="default" className="text-[10px] h-5 bg-muted-foreground/80 text-white">Guest</Badge>
-                ) : null}
+        {/* Panel — always mounted so iframe stays alive; hidden via CSS when collapsed */}
+        <div
+          className={`mb-2 rounded-xl border bg-background/80 backdrop-blur-xl shadow-2xl overflow-hidden transition-all duration-200 origin-bottom ${
+            collapsed
+              ? "max-h-0 opacity-0 pointer-events-none border-transparent shadow-none !mb-0"
+              : "max-h-[600px] opacity-100 border-border"
+          }`}
+        >
+          {/* Header */}
+          <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Music size={14} className="text-primary" />
+            </div>
+            {user ? (
+              <TrailblazerBadge userId={user.id} compact />
+            ) : tier !== "unlimited" ? (
+              <Badge variant="default" className="text-[10px] h-5 bg-muted-foreground/80 text-white">Guest</Badge>
+            ) : null}
+          </div>
+
+          {tier !== "unlimited" ? (
+            <>
+              <div className="px-3 py-3 space-y-2.5">
+                {TOOLS.map((t) => (
+                  <ToolUsageBar key={t} tool={t} forceUnlimited={false} />
+                ))}
               </div>
-
-              {tier !== "unlimited" ? (
-                <>
-                  {/* Usage bars */}
-                  <div className="px-3 py-3 space-y-2.5">
-                    {TOOLS.map((t) => (
-                      <ToolUsageBar key={t} tool={t} forceUnlimited={false} />
-                    ))}
-                  </div>
-
-                  {/* CTA */}
-                  <div className="px-3 pb-3 space-y-2">
-                    {!user ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full gap-1.5 text-xs h-8"
-                        onClick={() => navigate("/auth")}
-                      >
-                        Sign Up
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full gap-1.5 text-xs h-8"
-                        onClick={() => setShowInvite(true)}
-                      >
-                        <Users size={12} />
-                        Invite Artist
-                      </Button>
-                    )}
-                  </div>
-                </>
-              ) : (
-              <div className="px-3 py-3 space-y-2">
-                  <div className="rounded-lg overflow-hidden" style={{ backgroundColor: "#121212" }}>
-                    <iframe
-                      src="https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=0"
-                      width="100%"
-                      height={152}
-                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                      loading="lazy"
-                      className="border-0 block"
-                      title="toolsFM Playlist"
-                    />
-                  </div>
+              <div className="px-3 pb-3 space-y-2">
+                {!user ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full gap-1.5 text-xs h-8"
+                    onClick={() => navigate("/auth")}
+                  >
+                    Sign Up
+                  </Button>
+                ) : (
                   <Button
                     size="sm"
                     variant="outline"
@@ -200,11 +171,34 @@ export function FitWidget() {
                     <Users size={12} />
                     Invite Artist
                   </Button>
-                </div>
-              )}
-            </motion.div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="px-3 py-3 space-y-2">
+              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: "#121212" }}>
+                <iframe
+                  src="https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=0"
+                  width="100%"
+                  height={152}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  loading="lazy"
+                  className="border-0 block"
+                  title="toolsFM Playlist"
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full gap-1.5 text-xs h-8"
+                onClick={() => setShowInvite(true)}
+              >
+                <Users size={12} />
+                Invite Artist
+              </Button>
+            </div>
           )}
-        </AnimatePresence>
+        </div>
 
         {/* Floating bubble toggle */}
         <Tooltip>
