@@ -154,8 +154,8 @@ export function FitWidget() {
                       className="w-full gap-1.5 text-xs h-8"
                       onClick={() => navigate("/auth")}
                     >
-                      <UserPlus size={12} />
-                      Sign up for {siteCopy.features.growth_quotas?.limited ?? 10} uses per tool
+                      <Users size={12} />
+                      Invite another artist for Unlimited
                     </Button>
                   ) : (
                     <>
