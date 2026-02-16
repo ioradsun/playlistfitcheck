@@ -11,7 +11,7 @@ const Profile = () => {
     if (!user) {
       navigate("/auth", { replace: true });
     } else {
-      navigate(`/u/${user.id}`, { replace: true });
+      navigate(`/u/${user.id}`, { replace: true, state: { fromMenu: true } });
     }
   }, [user, loading, navigate]);
 

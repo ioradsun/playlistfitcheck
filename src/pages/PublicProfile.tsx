@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -45,7 +45,9 @@ const PublicProfile = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user, profile: authProfile, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { features } = useSiteCopy();
+  const fromMenu = !!(location.state as any)?.fromMenu;
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<SongFitPost[]>([]);
@@ -206,9 +208,11 @@ const PublicProfile = () => {
     <div className="px-4 py-6">
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
-            <ArrowLeft size={20} />
-          </Button>
+          {!(isOwner && fromMenu) && (
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
+              <ArrowLeft size={20} />
+            </Button>
+          )}
           <h1 className="text-xl font-semibold truncate">{profile.display_name || "User"}</h1>
           {isOwner && (
             <Button
