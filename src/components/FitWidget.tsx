@@ -137,7 +137,6 @@ export function FitWidget() {
               <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Music size={14} className="text-primary" />
-                  <span className="text-xs font-semibold">toolsFM</span>
                 </div>
                 {user ? (
                   <TrailblazerBadge userId={user.id} compact />
