@@ -222,11 +222,11 @@ export function FitWidget() {
             {tier === "unlimited" ? (
               <p>toolsFM — Unlimited ⚡</p>
             ) : tier === "limited" ? (
-              <p>Invite to unlock one</p>
+              <p>Invite 1 other artist to unlock Unlimited</p>
             ) : (
               <>
                 <p className="font-semibold">Get your Badge.</p>
-                <p>Join {pioneerTotal} early pioneers with Unlimited Usage. <em>(max 1,000)</em></p>
+                <p>Join {pioneerTotal} early pioneers. <em>(max 1,000)</em></p>
               </>
             )}
           </TooltipContent>
