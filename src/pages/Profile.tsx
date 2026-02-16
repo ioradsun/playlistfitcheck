@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTheme } from "next-themes";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Pencil, Camera, X, Check, Loader2, Music, Wallet, ExternalLink, Bookmark, Sun, Moon } from "lucide-react";
+import { Pencil, Camera, X, Check, Loader2, Music, Wallet, ExternalLink, Bookmark } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
@@ -33,8 +32,8 @@ interface SavedPost {
 const Profile = () => {
   const { user, loading: authLoading, roles, profile, refreshProfile } = useAuth();
   const { features } = useSiteCopy();
-  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
+  
   
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -209,30 +208,6 @@ const Profile = () => {
           </Card>
         )}
 
-        {/* Theme */}
-        <Card className="glass-card border-border">
-          <CardContent className="flex items-center justify-between py-4">
-            <div className="flex items-center gap-2">
-              {theme === "dark" ? <Moon size={18} /> : <Sun size={18} />}
-              <span className="text-sm font-medium">{theme === "dark" ? "Dark" : "Light"} mode</span>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={async () => {
-                const next = theme === "dark" ? "light" : "dark";
-                setTheme(next);
-                if (user) {
-                  await supabase.from("profiles").update({ theme: next } as any).eq("id", user.id);
-                }
-              }}
-            >
-              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-              Switch to {theme === "dark" ? "light" : "dark"}
-            </Button>
-          </CardContent>
-        </Card>
 
         {/* Wallet connection */}
         {features.crypto_tipping && (
