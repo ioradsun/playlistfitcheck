@@ -481,8 +481,13 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                     {initials}
                   </AvatarFallback>
                 </Avatar>
+                {(profile as any)?.is_verified && (
+                  <span className="absolute -bottom-0.5 -right-0.5">
+                    <VerifiedBadge size={12} />
+                  </span>
+                )}
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-[9px] font-bold text-primary-foreground ring-2 ring-sidebar">
+                  <span className="absolute -top-0.5 -left-0.5 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-[9px] font-bold text-primary-foreground ring-2 ring-sidebar">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -493,11 +498,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                     <span className="text-xs font-medium truncate text-left">
                       {profile?.display_name ?? user.email?.split("@")[0]}
                     </span>
-                    {(profile as any)?.is_verified && (
-                      <TooltipProvider delayDuration={350}>
-                        <VerifiedBadge size={13} />
-                      </TooltipProvider>
-                    )}
                     {isBlazer && pioneerNumber && (
                       <span
                         className="shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold leading-none bg-primary text-primary-foreground border border-primary cursor-default"
