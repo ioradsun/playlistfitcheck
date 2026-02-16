@@ -1,7 +1,26 @@
-import { useRef, useState, useEffect, memo } from "react";
+import { useRef, useState, useEffect, memo, createContext, useContext } from "react";
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
+
+// Feed-level counter: first N embeds load eagerly
+const EagerCountContext = createContext<{ claim: () => number }>({
+  claim: () => 999,
+});
+
+const EAGER_LIMIT = 2;
+
+export function EagerEmbedProvider({ children }: { children: React.ReactNode }) {
+  const counterRef = useRef(0);
+  const claim = () => ++counterRef.current;
+  // Reset counter when feed re-mounts (e.g. tab switch)
+  useEffect(() => { counterRef.current = 0; }, []);
+  return (
+    <EagerCountContext.Provider value={{ claim }}>
+      {children}
+    </EagerCountContext.Provider>
+  );
+}
 
 interface Props {
   trackId: string;
@@ -12,14 +31,17 @@ interface Props {
   artistName?: string;
 }
 
-function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArtUrl, artistName }: Props) {
+function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
   const { user } = useAuth();
+  const { claim } = useContext(EagerCountContext);
+  const [isEager] = useState(() => claim() <= EAGER_LIMIT);
+  const [visible, setVisible] = useState(isEager);
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
 
   useEffect(() => {
+    if (isEager) return; // already visible
     const el = ref.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -29,11 +51,11 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
           observer.disconnect();
         }
       },
-      { rootMargin: "600px" }
+      { rootMargin: "400px" }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [isEager]);
 
   const handleClick = () => {
     if (user && postId) {
@@ -55,7 +77,7 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
           width="100%"
           height={height}
           allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
+          loading={isEager ? "eager" : "lazy"}
           className="border-0 block"
           title={`Play ${trackTitle}`}
           scrolling={platform === "soundcloud" ? "no" : undefined}

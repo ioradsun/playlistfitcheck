@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import type { SongFitPost, FeedView, BillboardMode } from "./types";
 import { SongFitPostCard } from "./SongFitPostCard";
+import { EagerEmbedProvider } from "./LazySpotifyEmbed";
 import { SongFitComments } from "./SongFitComments";
 import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
@@ -181,18 +182,20 @@ export function SongFitFeed() {
           </p>
         </div>
       ) : (
-        <div>
-          {posts.map((post, idx) => (
-            <SongFitPostCard
-              key={post.id}
-              post={post}
-              rank={feedView === "billboard" ? idx + 1 : undefined}
-              onOpenComments={setCommentPostId}
-              onOpenLikes={setLikesPostId}
-              onRefresh={fetchPosts}
-            />
-          ))}
-        </div>
+        <EagerEmbedProvider>
+          <div>
+            {posts.map((post, idx) => (
+              <SongFitPostCard
+                key={post.id}
+                post={post}
+                rank={feedView === "billboard" ? idx + 1 : undefined}
+                onOpenComments={setCommentPostId}
+                onOpenLikes={setLikesPostId}
+                onRefresh={fetchPosts}
+              />
+            ))}
+          </div>
+        </EagerEmbedProvider>
       )}
 
       <SongFitComments
