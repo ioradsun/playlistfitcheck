@@ -21,7 +21,7 @@ import { SongFitTab } from "@/components/songfit/SongFitTab";
 import { DreamFitTab } from "@/components/dreamfit/DreamFitTab";
 import { VibeFitTab } from "@/components/vibefit/VibeFitTab";
 import { AppSidebar } from "@/components/AppSidebar";
-import { FitWidget } from "@/components/FitWidget";
+
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Music } from "lucide-react";
 
@@ -499,7 +499,7 @@ const Index = () => {
           {renderTabContent()}
         </div>
       </SidebarInset>
-      <FitWidget />
+      
     </>
   );
 };
