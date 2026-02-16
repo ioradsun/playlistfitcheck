@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Music, ExternalLink, Pencil, Wallet } from "lucide-react";
+import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { MusicEmbed } from "@/components/MusicEmbed";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 
@@ -86,7 +87,10 @@ const PublicProfile = () => {
           </Avatar>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold truncate">{profile.display_name || "User"}</h1>
-            <p className="text-sm text-muted-foreground capitalize">{roles[0] ?? "user"}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-muted-foreground capitalize">{roles[0] ?? "user"}</p>
+              <TrailblazerBadge userId={userId} showCounter />
+            </div>
             {profile.bio && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
             {profile.wallet_address && (
               <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 font-mono">

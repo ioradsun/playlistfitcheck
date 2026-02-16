@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import type { SongFitPost } from "./types";
 import { formatDistanceToNow } from "date-fns";
 import { ProfileHoverCard } from "./ProfileHoverCard";
+import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -130,7 +131,10 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
               )}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
+                <TrailblazerBadge userId={post.user_id} compact />
+              </div>
               <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
             </div>
           </div>
