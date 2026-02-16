@@ -50,7 +50,7 @@ const App = () => (
               <Route path="/terms" element={<PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout>} />
               <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
               <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
-              <Route path="/u/:userId" element={<PageLayout><PublicProfile /></PageLayout>} />
+              <Route path="/u/:userId" element={<PageLayout title="Artist Profile" subtitle="Fit for greatness"><PublicProfile /></PageLayout>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
             </Routes>
