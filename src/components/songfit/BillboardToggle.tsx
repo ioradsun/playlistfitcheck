@@ -7,13 +7,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-
 interface Props {
   view: FeedView;
   onViewChange: (v: FeedView) => void;
@@ -59,46 +52,38 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
           >
             Billboard
           </button>
-          <TooltipProvider delayDuration={350}>
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className={cn(
-                        "ml-1 flex items-center gap-0.5 transition-colors py-2.5 px-1 rounded",
-                        view === "billboard"
-                          ? "text-primary hover:text-primary/80"
-                          : "text-muted-foreground/50 hover:text-muted-foreground"
-                      )}
-                    >
-                      <ActiveIcon size={14} />
-                      <ChevronDown size={10} className="opacity-60" />
-                    </button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
-                  {activeMode.tip}
-                </TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="center" className="w-44">
-                {modes.map(({ key, label, icon: Icon, tip }) => (
-                  <DropdownMenuItem
-                    key={key}
-                    onClick={() => { onModeChange(key); onViewChange("billboard"); }}
-                    title={tip}
-                    className={cn(
-                      "flex items-center gap-2",
-                      billboardMode === key && "text-primary font-semibold"
-                    )}
-                  >
-                    <Icon size={15} />
-                    <span>{label}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </TooltipProvider>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                title={activeMode.tip}
+                className={cn(
+                  "ml-1 flex items-center gap-0.5 transition-colors py-2.5 px-1 rounded",
+                  view === "billboard"
+                    ? "text-primary hover:text-primary/80"
+                    : "text-muted-foreground/50 hover:text-muted-foreground"
+                )}
+              >
+                <ActiveIcon size={14} />
+                <ChevronDown size={10} className="opacity-60" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-44">
+              {modes.map(({ key, label, icon: Icon, tip }) => (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => { onModeChange(key); onViewChange("billboard"); }}
+                  title={tip}
+                  className={cn(
+                    "flex items-center gap-2",
+                    billboardMode === key && "text-primary font-semibold"
+                  )}
+                >
+                  <Icon size={15} />
+                  <span>{label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>
