@@ -1,13 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 
 const DEFAULT_PROMPT = `You are a professional lyrics transcription engine. Your job is to transcribe song lyrics from audio with precise timestamps.
 
@@ -53,22 +50,20 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const formData = await req.formData();
-    const audioFile = formData.get("audio") as File;
-    if (!audioFile) throw new Error("No audio file provided");
+    // Client sends pre-encoded base64 audio as JSON
+    const { audioBase64, format } = await req.json();
+    if (!audioBase64) throw new Error("No audio data provided");
 
-    if (audioFile.size > MAX_SIZE) {
+    // Rough size check on base64 string (~0.75 bytes per char)
+    const estimatedBytes = audioBase64.length * 0.75;
+    if (estimatedBytes > 20 * 1024 * 1024) {
       return new Response(
-        JSON.stringify({ error: `File too large (${(audioFile.size / 1024 / 1024).toFixed(0)} MB). Max is 20 MB.` }),
+        JSON.stringify({ error: `File too large (~${(estimatedBytes / 1024 / 1024).toFixed(0)} MB). Max is 20 MB.` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Processing: ${audioFile.name} (${(audioFile.size / 1024 / 1024).toFixed(1)} MB)`);
-
-    // Convert to base64 — read buffer then release it via scoped encoding
-    const audioBase64 = base64Encode(new Uint8Array(await audioFile.arrayBuffer()));
-    const format = (audioFile.type || "").includes("wav") ? "wav" : "mp3";
+    console.log(`Processing audio: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${format || "mp3"}`);
 
     const systemPrompt = await fetchPrompt();
 
@@ -85,7 +80,7 @@ serve(async (req) => {
           {
             role: "user",
             content: [
-              { type: "input_audio", input_audio: { data: audioBase64, format } },
+              { type: "input_audio", input_audio: { data: audioBase64, format: format || "wav" } },
               { type: "text", text: "Transcribe the lyrics from this song with precise timestamps. Return ONLY valid JSON." },
             ],
           },

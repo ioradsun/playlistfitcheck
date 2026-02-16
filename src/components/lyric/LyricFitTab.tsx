@@ -56,10 +56,21 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
       if (uploadFile !== file) {
         toast.info(`Compressed ${(file.size / 1024 / 1024).toFixed(0)} MB → ${(uploadFile.size / 1024 / 1024).toFixed(1)} MB`);
       }
-      setLoadingMsg("Syncing…");
-      const formData = new FormData();
-      formData.append("audio", uploadFile);
 
+      // Encode to base64 on the client to avoid edge function memory issues
+      setLoadingMsg("Encoding…");
+      const arrayBuffer = await uploadFile.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+      let binary = "";
+      // Encode in chunks to avoid call stack limits
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+      }
+      const audioBase64 = btoa(binary);
+      const format = (uploadFile.type || "").includes("wav") ? "wav" : "mp3";
+
+      setLoadingMsg("Syncing…");
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
         {
@@ -67,8 +78,9 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
           headers: {
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            "Content-Type": "application/json",
           },
-          body: formData,
+          body: JSON.stringify({ audioBase64, format }),
         }
       );
 
