@@ -53,9 +53,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
         setLoading(false);
         return;
       }
-      if (uploadFile !== file) {
-        toast.info(`Compressed ${(file.size / 1024 / 1024).toFixed(0)} MB → ${(uploadFile.size / 1024 / 1024).toFixed(1)} MB`);
-      }
+      // Compression happens silently — no need to notify the user
 
       // Encode to base64 on the client to avoid edge function memory issues
       setLoadingMsg("Encoding…");
