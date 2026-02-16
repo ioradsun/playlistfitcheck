@@ -10,6 +10,7 @@ import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { FitWidgetInviteModal } from "./FitWidgetInviteModal";
+import { useTrailblazer } from "@/hooks/useTrailblazer";
 import { useNavigate } from "react-router-dom";
 
 const TOOLS = ["hitfit", "vibefit", "profit", "playlist", "mix", "lyric"] as const;
@@ -63,6 +64,7 @@ export function FitWidget() {
   const tier = !user ? "anonymous" : isUnlimited ? "unlimited" : "limited";
   const inviteCode = (profile as any)?.invite_code ?? null;
   const navigate = useNavigate();
+  const { total: pioneerTotal } = useTrailblazer();
 
   // Listen for social share unlock
   useEffect(() => {
@@ -156,20 +158,14 @@ export function FitWidget() {
                   {/* CTA */}
                   <div className="px-3 pb-3 space-y-2">
                     {!user ? (
-                      <>
-                        <p className="text-[11px] text-muted-foreground text-center">
-                          Invite another artist for Unlimited
-                        </p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full gap-1.5 text-xs h-8"
-                          onClick={() => navigate("/auth")}
-                        >
-                          <Users size={12} />
-                          Sign Up to Invite
-                        </Button>
-                      </>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-1.5 text-xs h-8"
+                        onClick={() => navigate("/auth")}
+                      >
+                        Sign Up
+                      </Button>
                     ) : (
                       <Button
                         size="sm"
@@ -225,7 +221,7 @@ export function FitWidget() {
           <TooltipContent side="left" className="text-xs">
             {tier === "unlimited"
               ? "toolsFM — Unlimited ⚡"
-              : "Invite a friend → unlock unlimited usage"}
+              : `Join ${pioneerTotal} other pioneers with Unlimited Usage`}
           </TooltipContent>
         </Tooltip>
       </div>
