@@ -149,14 +149,20 @@ export function FitWidget() {
               {tier !== "unlimited" ? (
                 <div className="px-3 pb-3 space-y-2">
                   {!user ? (
-                    <Button
-                      size="sm"
-                      className="w-full gap-1.5 text-xs h-8"
-                      onClick={() => navigate("/auth")}
-                    >
-                      <Users size={12} />
-                      Invite another artist for Unlimited
-                    </Button>
+                    <>
+                      <p className="text-[11px] text-muted-foreground text-center">
+                        Invite another artist for Unlimited
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-1.5 text-xs h-8"
+                        onClick={() => navigate("/auth")}
+                      >
+                        <Users size={12} />
+                        Sign Up to Invite
+                      </Button>
+                    </>
                   ) : (
                     <>
                       <p className="text-[11px] text-muted-foreground text-center">
