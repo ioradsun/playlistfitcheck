@@ -51,6 +51,17 @@ serve(async (req) => {
       });
     }
 
+    // ── TOGGLE UNLIMITED action ──
+    if (body.action === "toggle_unlimited" && body.user_id) {
+      const { data: profile } = await supabase.from("profiles").select("is_unlimited").eq("id", body.user_id).single();
+      const newValue = !(profile?.is_unlimited ?? false);
+      const { error: updErr } = await supabase.from("profiles").update({ is_unlimited: newValue }).eq("id", body.user_id);
+      if (updErr) throw updErr;
+      return new Response(JSON.stringify({ success: true, is_unlimited: newValue }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── WIDGET CONFIG actions ──
     if (body.action === "get_widget_config") {
       const { data: cfg } = await supabase.from("widget_config").select("*").limit(1).single();
@@ -166,7 +177,7 @@ serve(async (req) => {
       const { data: { users: authUsers }, error: authErr } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
       if (authErr) throw authErr;
 
-      const { data: profiles } = await supabase.from("profiles").select("id, display_name, avatar_url, created_at");
+      const { data: profiles } = await supabase.from("profiles").select("id, display_name, avatar_url, created_at, is_unlimited");
       const { data: roles } = await supabase.from("user_roles").select("user_id, role");
       const { data: savedSearches } = await supabase.from("saved_searches").select("user_id");
 
@@ -211,6 +222,7 @@ serve(async (req) => {
         last_sign_in_at: u.last_sign_in_at,
         provider: u.app_metadata?.provider || "email",
         engagement: { total: userEngagementMap[u.id] || 0 },
+        is_unlimited: profileMap[u.id]?.is_unlimited ?? false,
       }));
 
       // Add anonymous pseudo-user if there are anonymous engagements

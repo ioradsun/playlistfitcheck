@@ -23,7 +23,7 @@ interface DashboardData { totalEngagements: number; totalSearches: number; check
 interface AdminUser {
   id: string; email: string; display_name: string | null; avatar_url: string | null;
   role: string; fit_checks: number; created_at: string; last_sign_in_at: string | null; provider: string;
-  engagement: { total: number };
+  engagement: { total: number }; is_unlimited: boolean;
 }
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
@@ -193,10 +193,11 @@ export default function Admin() {
               </div>
 
               {/* Table header */}
-              <div className="hidden sm:grid grid-cols-[1fr_1fr_70px_60px_70px_90px_36px] gap-2 px-4 py-2 border-b border-border text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+              <div className="hidden sm:grid grid-cols-[1fr_1fr_70px_60px_60px_70px_90px_36px] gap-2 px-4 py-2 border-b border-border text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
                 <span>User</span>
                 <span>Email</span>
                 <span>Role</span>
+                <span>Tier</span>
                 <span>Fits</span>
                 <span>Clicks</span>
                 <span>Joined</span>
@@ -211,7 +212,7 @@ export default function Admin() {
 
                   return (
                     <div key={u.id}>
-                      <div className="px-4 py-3 flex flex-col sm:grid sm:grid-cols-[1fr_1fr_70px_60px_70px_90px_36px] gap-2 sm:items-center transition-colors group hover:bg-muted/30">
+                      <div className="px-4 py-3 flex flex-col sm:grid sm:grid-cols-[1fr_1fr_70px_60px_60px_70px_90px_36px] gap-2 sm:items-center transition-colors group hover:bg-muted/30">
                         {/* User */}
                         <div className="flex items-center gap-2 min-w-0">
                           <Avatar className="h-7 w-7 flex-shrink-0">
@@ -231,6 +232,33 @@ export default function Admin() {
                         <Badge variant={u.role === "artist" ? "default" : u.role === "curator" ? "secondary" : "outline"} className="text-[10px] w-fit capitalize">
                           {u.role}
                         </Badge>
+
+                        {/* Tier (unlimited toggle) */}
+                        {u.id !== "__anonymous__" ? (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const prev = u.is_unlimited;
+                              setUsers((p) => p.map((x) => x.id === u.id ? { ...x, is_unlimited: !prev } : x));
+                              try {
+                                const { data: result, error: fnErr } = await supabase.functions.invoke("admin-dashboard", {
+                                  body: { action: "toggle_unlimited", user_id: u.id },
+                                });
+                                if (fnErr || result?.error) throw fnErr || new Error(result.error);
+                                toast.success(result.is_unlimited ? "Set to unlimited" : "Set to limited");
+                              } catch {
+                                setUsers((p) => p.map((x) => x.id === u.id ? { ...x, is_unlimited: prev } : x));
+                                toast.error("Failed to update tier");
+                              }
+                            }}
+                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded cursor-pointer transition-colors ${u.is_unlimited ? "bg-primary/20 text-primary font-semibold" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                            title={u.is_unlimited ? "Click to set limited" : "Click to set unlimited"}
+                          >
+                            {u.is_unlimited ? "∞" : "ltd"}
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
 
                         {/* PlaylistFit checks */}
                         <span className="text-sm font-mono">{u.fit_checks}</span>
