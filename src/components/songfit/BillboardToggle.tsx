@@ -82,25 +82,27 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                 </TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="center" className="w-44">
-                {modes.map(({ key, label, icon: Icon, tip }) => (
-                  <Tooltip key={key}>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuItem
-                        onClick={() => { onModeChange(key); onViewChange("billboard"); }}
-                        className={cn(
-                          "flex items-center gap-2",
-                          billboardMode === key && "text-primary font-semibold"
-                        )}
-                      >
-                        <Icon size={15} />
-                        <span>{label}</span>
-                      </DropdownMenuItem>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="text-xs">
-                      {tip}
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
+                <TooltipProvider delayDuration={200}>
+                  {modes.map(({ key, label, icon: Icon, tip }) => (
+                    <Tooltip key={key}>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuItem
+                          onClick={() => { onModeChange(key); onViewChange("billboard"); }}
+                          className={cn(
+                            "flex items-center gap-2",
+                            billboardMode === key && "text-primary font-semibold"
+                          )}
+                        >
+                          <Icon size={15} />
+                          <span>{label}</span>
+                        </DropdownMenuItem>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="text-xs">
+                        {tip}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </TooltipProvider>
               </DropdownMenuContent>
             </DropdownMenu>
           </TooltipProvider>
