@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy } from "lucide-react";
+import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2 } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { SubmissionBadge } from "./SubmissionBadge";
@@ -43,6 +43,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const [editCaption, setEditCaption] = useState(post.caption || "");
   const [localCaption, setLocalCaption] = useState(post.caption || "");
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(post.user_has_saved ?? false);
   const impressionRef = useRef<HTMLDivElement>(null);
   const impressionLogged = useRef(false);
 
@@ -143,6 +144,33 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
     navigate(`/u/${post.user_id}`);
   };
 
+  const toggleSave = async () => {
+    if (!user) { toast.error("Sign in to save posts"); return; }
+    const wasSaved = saved;
+    setSaved(!wasSaved);
+    try {
+      if (wasSaved) {
+        await supabase.from("songfit_saves").delete().eq("post_id", post.id).eq("user_id", user.id);
+      } else {
+        await supabase.from("songfit_saves").insert({ post_id: post.id, user_id: user.id });
+        logEngagementEvent(post.id, user.id, "save");
+      }
+    } catch {
+      setSaved(wasSaved);
+    }
+  };
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/song/${post.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied!");
+      if (user) logEngagementEvent(post.id, user.id, "share");
+    } catch {
+      toast.error("Failed to copy link");
+    }
+  };
+
   const displayName = post.profiles?.display_name || "Anonymous";
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
 
@@ -223,8 +251,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       {/* Music Embed Player */}
       <LazySpotifyEmbed trackId={post.spotify_track_id} trackTitle={post.track_title} trackUrl={post.spotify_track_url} postId={post.id} />
 
-      {/* Action Row */}
-      <div className="flex items-center px-3 pt-1 pb-1">
+      <div className="flex items-center justify-between px-3 pt-1 pb-1">
         <div className="flex items-center -ml-1">
           <button onClick={toggleLike} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <Heart size={22} className={liked ? "fill-red-500 text-red-500" : "text-foreground"} />
@@ -240,6 +267,9 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           }} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <MessageCircle size={22} className="text-foreground" />
             {post.comments_count > 0 && <span className="text-xs text-muted-foreground">{post.comments_count}</span>}
+          </button>
+          <button onClick={handleShare} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
+            <Share2 size={22} className="text-foreground" />
           </button>
           {cryptoEnabled && (
             <>
@@ -259,13 +289,18 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           )}
         </div>
 
-        {/* Engagement score display */}
-        {post.engagement_score > 0 && (
-          <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-            <Trophy size={12} />
-            <span className="font-mono">{Math.round(post.engagement_score)}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          {/* Engagement score display */}
+          {post.engagement_score > 0 && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mr-1">
+              <Trophy size={12} />
+              <span className="font-mono">{Math.round(post.engagement_score)}</span>
+            </div>
+          )}
+          <button onClick={toggleSave} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
+            <Bookmark size={22} className={saved ? "fill-foreground text-foreground" : "text-foreground"} />
+          </button>
+        </div>
       </div>
 
       {/* Caption - Instagram style */}
