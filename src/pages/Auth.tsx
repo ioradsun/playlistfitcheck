@@ -23,12 +23,15 @@ interface SpotifyArtistResult {
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get("mode") === "signin" ? "signin" : "signup";
   const refCode = searchParams.get("ref") || null;
+  const modeParam = searchParams.get("mode");
+  const hasVisited = localStorage.getItem("tfm_has_account") === "1";
+  const initialTab = modeParam ? (modeParam === "signin" ? "signin" : "signup") : (hasVisited ? "signin" : "signup");
   const [activeTab, setActiveTab] = useState(initialTab);
 
   useEffect(() => {
-    setActiveTab(searchParams.get("mode") === "signin" ? "signin" : "signup");
+    const m = searchParams.get("mode");
+    if (m) setActiveTab(m === "signin" ? "signin" : "signup");
   }, [searchParams]);
 
   const [checkEmail, setCheckEmail] = useState(false);
@@ -164,10 +167,12 @@ const Auth = () => {
           },
         });
         if (error) throw error;
+        localStorage.setItem("tfm_has_account", "1");
         setCheckEmail(true);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        localStorage.setItem("tfm_has_account", "1");
         navigate("/", { state: { returnTab } });
       }
     } catch (err: any) {
