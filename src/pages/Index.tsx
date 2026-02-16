@@ -490,7 +490,7 @@ const Index = () => {
             {TAB_LABELS[activeTab] || "toolsFM"}
           </span>
           {TAB_SUBTITLES[activeTab] && (
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-medium">
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium">
               {TAB_SUBTITLES[activeTab]}
             </span>
           )}
