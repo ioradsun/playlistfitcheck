@@ -89,7 +89,7 @@ const PublicProfile = () => {
             <h1 className="text-2xl font-bold truncate">{profile.display_name || "User"}</h1>
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground capitalize">{roles[0] ?? "user"}</p>
-              <TrailblazerBadge userId={userId} showCounter />
+              <TrailblazerBadge userId={userId} />
             </div>
             {profile.bio && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
             {profile.wallet_address && (

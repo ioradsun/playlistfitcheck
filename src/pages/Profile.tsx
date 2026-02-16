@@ -128,7 +128,7 @@ const Profile = () => {
             <h1 className="text-2xl font-bold truncate">{profile?.display_name || "Your Profile"}</h1>
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground capitalize">{currentRole}</p>
-              <TrailblazerBadge userId={user.id} showCounter />
+              <TrailblazerBadge userId={user.id} />
             </div>
             {profile?.bio && !editing && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
           </div>
