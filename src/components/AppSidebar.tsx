@@ -61,12 +61,12 @@ interface ToolItem {
 
 const TOOLS: ToolItem[] = [
   { value: "songfit", label: "CrowdFit", path: "/CrowdFit", icon: Users },
+  { value: "hitfit", label: "HitFit", path: "/HitFit", icon: Target },
   { value: "vibefit", label: "VibeFit", path: "/VibeFit", icon: AudioWaveform },
   { value: "profit", label: "ProFit", path: "/ProFit", icon: BarChart3 },
   { value: "playlist", label: "PlaylistFit", path: "/PlaylistFit", icon: ListMusic },
   { value: "mix", label: "MixFit", path: "/MixFit", icon: Sliders },
   { value: "lyric", label: "LyricFit", path: "/LyricFit", icon: FileText },
-  { value: "hitfit", label: "HitFit", path: "/HitFit", icon: Target },
   { value: "dreamfit", label: "DreamFit", path: "/DreamFit", icon: Sparkles },
 ];
 
