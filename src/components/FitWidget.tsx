@@ -138,7 +138,7 @@ export function FitWidget() {
                   <span className="text-xs font-semibold">toolsFM</span>
                 </div>
                 {user ? (
-                  <TrailblazerBadge userId={user.id} compact showCounter />
+                  <TrailblazerBadge userId={user.id} compact />
                 ) : tier !== "unlimited" ? (
                   <Badge variant="outline" className="text-[10px] h-5">Guest</Badge>
                 ) : null}
