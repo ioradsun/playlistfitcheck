@@ -79,10 +79,13 @@ const PublicProfile = () => {
   return (
     <div className="px-4 py-6">
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Back button - matches results pattern */}
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft size={20} />
-        </Button>
+        {/* Back + artist name - matches results pattern */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
+            <ArrowLeft size={20} />
+          </Button>
+          <h1 className="text-xl font-semibold truncate">{profile.display_name || "User"}</h1>
+        </div>
 
         {/* Header */}
         <div className="flex items-start gap-4">
@@ -91,7 +94,6 @@ const PublicProfile = () => {
             <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">{initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold truncate">{profile.display_name || "User"}</h1>
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground capitalize">{roles[0] ?? "user"}</p>
               <TrailblazerBadge userId={userId} />
