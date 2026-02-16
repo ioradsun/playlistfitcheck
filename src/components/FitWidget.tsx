@@ -181,7 +181,7 @@ export function FitWidget() {
               </>
             ) : (
               <>
-                <div className="px-3 pt-3 pb-2 shrink-0">
+                <div className="px-0 pt-1 pb-2 shrink-0">
                   <div className="w-full rounded-lg overflow-hidden" style={{ backgroundColor: resolvedTheme === "dark" ? "#121212" : "#f5f5f5" }}>
                     <iframe
                       src={`https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=${resolvedTheme === "dark" ? "0" : "1"}`}
