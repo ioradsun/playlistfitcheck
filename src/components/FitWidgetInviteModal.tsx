@@ -147,6 +147,9 @@ function ShareTab({ onClose }: { onClose: () => void }) {
       colors: ["#39FF14", "#ffffff", "#22c55e"],
     });
 
+    // Notify widget to switch to unlimited
+    window.dispatchEvent(new CustomEvent("social-share-unlocked"));
+
     setTimeout(() => {
       onClose();
     }, 1800);

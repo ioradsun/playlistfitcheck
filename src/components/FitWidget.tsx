@@ -22,9 +22,9 @@ const TOOL_LABELS: Record<string, string> = {
   lyric: "LyricFit",
 };
 
-function ToolUsageBar({ tool }: { tool: string }) {
+function ToolUsageBar({ tool, forceUnlimited }: { tool: string; forceUnlimited?: boolean }) {
   const { used, limit, tier } = useUsageQuota(tool);
-  const isUnlimited = tier === "unlimited";
+  const isUnlimited = forceUnlimited || tier === "unlimited";
   const pct = isUnlimited ? 100 : limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
   const isNearLimit = !isUnlimited && limit > 0 && used >= limit * 0.8;
 
@@ -49,6 +49,7 @@ export function FitWidget() {
   const { user, profile } = useAuth();
   const [collapsed, setCollapsed] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
+  const [socialUnlocked, setSocialUnlocked] = useState(false);
   const [shouldPulse, setShouldPulse] = useState(false);
 
   // Draggable state
@@ -57,10 +58,17 @@ export function FitWidget() {
   const dragStart = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
 
-  const isUnlimited = !!(profile as any)?.is_unlimited;
+  const isUnlimited = !!(profile as any)?.is_unlimited || socialUnlocked;
   const tier = !user ? "anonymous" : isUnlimited ? "unlimited" : "limited";
   const inviteCode = (profile as any)?.invite_code ?? null;
   const navigate = useNavigate();
+
+  // Listen for social share unlock
+  useEffect(() => {
+    const handler = () => setSocialUnlocked(true);
+    window.addEventListener("social-share-unlocked", handler);
+    return () => window.removeEventListener("social-share-unlocked", handler);
+  }, []);
 
   // Pulse when near limit on any tool
   useEffect(() => {
@@ -68,7 +76,6 @@ export function FitWidget() {
       setShouldPulse(false);
       return;
     }
-    // Pulse periodically for non-unlimited users as a gentle nudge
     const interval = setInterval(() => {
       setShouldPulse(true);
       setTimeout(() => setShouldPulse(false), 2000);
@@ -141,7 +148,7 @@ export function FitWidget() {
               {/* Usage bars */}
               <div className="px-3 py-3 space-y-2.5">
                 {TOOLS.map((t) => (
-                  <ToolUsageBar key={t} tool={t} />
+                  <ToolUsageBar key={t} tool={t} forceUnlimited={socialUnlocked} />
                 ))}
               </div>
 
@@ -165,9 +172,6 @@ export function FitWidget() {
                     </>
                   ) : (
                     <>
-                      <p className="text-[11px] text-muted-foreground text-center">
-                        Invite 1 artist → unlock unlimited ✅
-                      </p>
                       <Button
                         size="sm"
                         variant="outline"
@@ -175,7 +179,7 @@ export function FitWidget() {
                         onClick={() => setShowInvite(true)}
                       >
                         <Users size={12} />
-                        Invite Collaborator
+                        Invite Artist
                       </Button>
                     </>
                   )}
