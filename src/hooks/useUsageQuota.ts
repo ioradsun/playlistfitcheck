@@ -4,10 +4,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { getSessionId } from "@/lib/sessionId";
 
-const ANON_LIMIT = 5;
-const FREE_LIMIT = 10;
+const DEFAULT_ANON_LIMIT = 5;
+const DEFAULT_FREE_LIMIT = 10;
 
-type Tier = "anonymous" | "free" | "unlimited";
+type Tier = "anonymous" | "limited" | "unlimited";
 
 interface UsageQuota {
   canUse: boolean;
@@ -27,8 +27,11 @@ export function useUsageQuota(tool: string): UsageQuota {
   const [loading, setLoading] = useState(true);
 
   const isUnlimited = !!(profile as any)?.is_unlimited;
-  const tier: Tier = !user ? "anonymous" : isUnlimited ? "unlimited" : "free";
-  const limit = tier === "unlimited" ? Infinity : tier === "free" ? FREE_LIMIT : ANON_LIMIT;
+  const tier: Tier = !user ? "anonymous" : isUnlimited ? "unlimited" : "limited";
+  const quotas = siteCopy.features.growth_quotas;
+  const anonLimit = quotas?.guest ?? DEFAULT_ANON_LIMIT;
+  const freeLimit = quotas?.limited ?? DEFAULT_FREE_LIMIT;
+  const limit = tier === "unlimited" ? Infinity : tier === "limited" ? freeLimit : anonLimit;
 
   // Fetch current usage count
   useEffect(() => {

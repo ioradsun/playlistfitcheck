@@ -44,6 +44,9 @@ export default function Admin() {
   const [savingCrypto, setSavingCrypto] = useState(false);
   const [growthEnabled, setGrowthEnabled] = useState(false);
   const [savingGrowth, setSavingGrowth] = useState(false);
+  const [guestQuota, setGuestQuota] = useState(5);
+  const [limitedQuota, setLimitedQuota] = useState(10);
+  const [savingQuotas, setSavingQuotas] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
   const fetchUsers = async () => {
@@ -81,6 +84,9 @@ export default function Admin() {
           if (r?.copy_json) {
             if ((r.copy_json as any).features?.crypto_tipping) setCryptoEnabled(true);
             if ((r.copy_json as any).features?.growth_flow) setGrowthEnabled(true);
+            const q = (r.copy_json as any).features?.growth_quotas;
+            if (q?.guest) setGuestQuota(q.guest);
+            if (q?.limited) setLimitedQuota(q.limited);
           }
         });
     }
@@ -337,7 +343,7 @@ export default function Admin() {
               <div className="px-4 py-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">Usage quotas + invite-to-unlock</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Anon: 5 uses · Free: 10 uses · Invite → unlimited</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">ShareFit widget with usage tracking</p>
                 </div>
                 <Switch
                   checked={growthEnabled}
@@ -345,6 +351,68 @@ export default function Admin() {
                   disabled={savingGrowth}
                 />
               </div>
+
+              {/* Quota settings */}
+              {growthEnabled && (
+                <div className="px-4 pb-4 pt-1 border-t border-border space-y-3">
+                  <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Quotas (uses per tool)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Guest</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={guestQuota}
+                        onChange={(e) => setGuestQuota(Number(e.target.value))}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Limited (signed up)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={limitedQuota}
+                        onChange={(e) => setLimitedQuota(Number(e.target.value))}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[11px] text-muted-foreground flex-1">Unlimited = invite converts</p>
+                    <button
+                      onClick={async () => {
+                        setSavingQuotas(true);
+                        try {
+                          const { data: existing } = await supabase.from("site_copy").select("id, copy_json").limit(1).single();
+                          if (existing) {
+                            const updated = {
+                              ...(existing.copy_json as any),
+                              features: {
+                                ...((existing.copy_json as any).features || {}),
+                                growth_quotas: { guest: guestQuota, limited: limitedQuota },
+                              },
+                            };
+                            await supabase.functions.invoke("admin-dashboard", { body: { action: "update_site_copy", copy_json: updated } });
+                            window.dispatchEvent(new CustomEvent("site-copy-updated"));
+                          }
+                          toast.success("Quotas saved");
+                        } catch {
+                          toast.error("Failed to save quotas");
+                        } finally {
+                          setSavingQuotas(false);
+                        }
+                      }}
+                      disabled={savingQuotas}
+                      className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    >
+                      {savingQuotas ? "Saving…" : "Save Quotas"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </TabsContent>
 
