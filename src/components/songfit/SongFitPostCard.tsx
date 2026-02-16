@@ -251,28 +251,51 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       {/* Music Embed Player */}
       <LazySpotifyEmbed trackId={post.spotify_track_id} trackTitle={post.track_title} trackUrl={post.spotify_track_url} postId={post.id} />
 
-      <div className="flex items-center justify-between px-3 pt-1 pb-1">
-        <div className="flex items-center -ml-1">
-          <button onClick={toggleLike} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
-            <Heart size={22} className={liked ? "fill-red-500 text-red-500" : "text-foreground"} />
+      {/* Action Row — X-style metrics toolbar */}
+      <div className="flex items-center justify-between px-1 py-0.5">
+        {/* Left group: comment, share, like */}
+        <div className="flex items-center flex-1">
+          <button
+            onClick={() => {
+              onOpenComments(post.id);
+              if (user) logEngagementEvent(post.id, user.id, "comment");
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
+          >
+            <MessageCircle size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
+            {post.comments_count > 0 && (
+              <span className="text-xs text-muted-foreground group-hover:text-primary">{post.comments_count}</span>
+            )}
           </button>
-          {likesCount > 0 && (
-            <button onClick={() => onOpenLikes(post.id)} className="text-xs text-muted-foreground hover:text-foreground transition-colors -ml-1 mr-2">
-              {likesCount}
-            </button>
+
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
+          >
+            <Share2 size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
+          </button>
+
+          <button
+            onClick={toggleLike}
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-red-500/10 transition-colors group"
+          >
+            <Heart size={18} className={liked ? "fill-red-500 text-red-500" : "text-muted-foreground group-hover:text-red-500 transition-colors"} />
+            {likesCount > 0 && (
+              <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-xs text-muted-foreground group-hover:text-red-500">
+                {likesCount}
+              </button>
+            )}
+          </button>
+
+          {post.engagement_score > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-2 text-muted-foreground">
+              <Trophy size={14} />
+              <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
+            </div>
           )}
-          <button onClick={() => {
-            onOpenComments(post.id);
-            if (user) logEngagementEvent(post.id, user.id, "comment");
-          }} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
-            <MessageCircle size={22} className="text-foreground" />
-            {post.comments_count > 0 && <span className="text-xs text-muted-foreground">{post.comments_count}</span>}
-          </button>
-          <button onClick={handleShare} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
-            <Share2 size={22} className="text-foreground" />
-          </button>
+
           {cryptoEnabled && (
-            <>
+            <div className="flex items-center">
               <TipButton
                 recipientAddress={(post.profiles as any)?.wallet_address}
                 recipientName={displayName}
@@ -282,25 +305,17 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
               />
               {tipsTotal > 0 && (
                 <span className="text-xs text-muted-foreground font-mono -ml-1">
-                  {tipsTotal.toLocaleString()} $DEGEN
+                  {tipsTotal.toLocaleString()}
                 </span>
               )}
-            </>
+            </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1">
-          {/* Engagement score display */}
-          {post.engagement_score > 0 && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mr-1">
-              <Trophy size={12} />
-              <span className="font-mono">{Math.round(post.engagement_score)}</span>
-            </div>
-          )}
-          <button onClick={toggleSave} className="p-2.5 hover:opacity-70 active:scale-90 transition-all">
-            <Bookmark size={22} className={saved ? "fill-foreground text-foreground" : "text-foreground"} />
-          </button>
-        </div>
+        {/* Right: bookmark */}
+        <button onClick={toggleSave} className="px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group">
+          <Bookmark size={18} className={saved ? "fill-primary text-primary" : "text-muted-foreground group-hover:text-primary transition-colors"} />
+        </button>
       </div>
 
       {/* Caption - Instagram style */}
