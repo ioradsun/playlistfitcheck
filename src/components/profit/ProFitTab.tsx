@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { toast } from "sonner";
 import { ProFitLanding } from "./ProFitLanding";
 import { ProFitReport } from "./ProFitReport";
@@ -27,9 +28,14 @@ export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportState | null>(null);
   const { profile } = useAuth();
+  const quota = useUsageQuota("profit");
   const autoRanRef = useRef(false);
 
   const handleAnalyze = useCallback(async (url: string) => {
+    if (!quota.canUse) {
+      toast.error(quota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
+      return;
+    }
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("profit-analyze", {
@@ -45,6 +51,7 @@ export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved
         shareToken: data.shareToken,
       });
       setView("report");
+      await quota.increment();
       onProjectSaved?.();
       // Save to localStorage history
       try {

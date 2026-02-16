@@ -35,6 +35,38 @@ export type Database = {
         }
         Relationships: []
       }
+      collab_points: {
+        Row: {
+          badge: string | null
+          id: string
+          points: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          badge?: string | null
+          id?: string
+          points?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          badge?: string | null
+          id?: string
+          points?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collab_points_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dream_backers: {
         Row: {
           created_at: string
@@ -170,6 +202,48 @@ export type Database = {
           {
             foreignKeyName: "dream_tools_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invites: {
+        Row: {
+          converted_at: string | null
+          created_at: string
+          id: string
+          invite_code: string
+          invitee_user_id: string | null
+          inviter_user_id: string
+        }
+        Insert: {
+          converted_at?: string | null
+          created_at?: string
+          id?: string
+          invite_code: string
+          invitee_user_id?: string | null
+          inviter_user_id: string
+        }
+        Update: {
+          converted_at?: string | null
+          created_at?: string
+          id?: string
+          invite_code?: string
+          invitee_user_id?: string | null
+          inviter_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invites_invitee_user_id_fkey"
+            columns: ["invitee_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invites_inviter_user_id_fkey"
+            columns: ["inviter_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -318,6 +392,8 @@ export type Database = {
           display_name: string | null
           id: string
           instagram_url: string | null
+          invite_code: string | null
+          is_unlimited: boolean
           spotify_artist_id: string | null
           spotify_embed_url: string | null
           wallet_address: string | null
@@ -331,6 +407,8 @@ export type Database = {
           display_name?: string | null
           id: string
           instagram_url?: string | null
+          invite_code?: string | null
+          is_unlimited?: boolean
           spotify_artist_id?: string | null
           spotify_embed_url?: string | null
           wallet_address?: string | null
@@ -344,6 +422,8 @@ export type Database = {
           display_name?: string | null
           id?: string
           instagram_url?: string | null
+          invite_code?: string | null
+          is_unlimited?: boolean
           spotify_artist_id?: string | null
           spotify_embed_url?: string | null
           wallet_address?: string | null
@@ -1031,6 +1111,44 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      usage_tracking: {
+        Row: {
+          count: number
+          id: string
+          period: string
+          session_id: string | null
+          tool: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          count?: number
+          id?: string
+          period?: string
+          session_id?: string | null
+          tool: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          count?: number
+          id?: string
+          period?: string
+          session_id?: string | null
+          tool?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_tracking_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

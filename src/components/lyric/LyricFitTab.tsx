@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData } from "./LyricDisplay";
@@ -14,6 +16,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const { user } = useAuth();
+  const quota = useUsageQuota("lyric");
 
   // Load saved lyric from dashboard navigation
   useEffect(() => {
@@ -31,6 +35,10 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
   }, [initialLyric, lyricData]);
 
   const handleTranscribe = useCallback(async (file: File) => {
+    if (!quota.canUse) {
+      toast.error(quota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
+      return;
+    }
     setLoading(true);
     try {
       const formData = new FormData();
@@ -61,6 +69,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
       setLyricData(data as LyricData);
       setAudioFile(file);
       setSavedId(null);
+      await quota.increment();
     } catch (e) {
       console.error("Transcription error:", e);
       toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");

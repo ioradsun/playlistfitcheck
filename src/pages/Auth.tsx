@@ -24,6 +24,7 @@ interface SpotifyArtistResult {
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get("mode") === "signup" ? "signup" : "signin";
+  const refCode = searchParams.get("ref") || null;
   const [activeTab, setActiveTab] = useState(initialTab);
 
   useEffect(() => {
@@ -50,8 +51,20 @@ const Auth = () => {
   const returnTab = (location.state as any)?.returnTab;
 
   useEffect(() => {
-    if (user) navigate("/", { state: { returnTab } });
-  }, [user, navigate, returnTab]);
+    if (user) {
+      // If user just signed up with a ref code, convert invite
+      if (refCode) {
+        supabase.functions.invoke("convert-invite", { body: { inviteCode: refCode } })
+          .then(({ data }) => {
+            if (data?.success) {
+              toast.success("Invite accepted! Your inviter unlocked unlimited access.");
+            }
+          })
+          .catch(console.error);
+      }
+      navigate("/", { state: { returnTab } });
+    }
+  }, [user, navigate, returnTab, refCode]);
 
   // Auto-focus email after artist is selected
   useEffect(() => {

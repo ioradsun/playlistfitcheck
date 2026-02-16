@@ -20,6 +20,7 @@ import { SongFitTab } from "@/components/songfit/SongFitTab";
 import { DreamFitTab } from "@/components/dreamfit/DreamFitTab";
 import { VibeFitTab } from "@/components/vibefit/VibeFitTab";
 import { AppSidebar } from "@/components/AppSidebar";
+import { FitWidget } from "@/components/FitWidget";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Music } from "lucide-react";
 
@@ -92,6 +93,12 @@ const Index = () => {
     const t = PATH_TO_TAB[location.pathname];
     if (t && t !== activeTab) setActiveTabState(t);
     // Redirect bare "/" to "/CrowdFit" — but NOT if there's a code/token in the URL (auth callback)
+    // If there's a ref param, redirect to signup
+    const refParam = new URLSearchParams(location.search).get("ref");
+    if (location.pathname === "/" && refParam) {
+      navigate(`/auth?mode=signup&ref=${refParam}`, { replace: true });
+      return;
+    }
     if (location.pathname === "/" && !location.state && !location.search && !window.location.hash) {
       navigate("/CrowdFit", { replace: true });
     }
@@ -485,6 +492,7 @@ const Index = () => {
           {renderTabContent()}
         </div>
       </SidebarInset>
+      <FitWidget />
     </>
   );
 };

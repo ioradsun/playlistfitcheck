@@ -15,11 +15,13 @@ export type ReferenceSource =
 interface Props {
   onAnalyze: (master1: File, master2: File | null, reference: ReferenceSource) => void;
   loading: boolean;
+  disabled?: boolean;
+  disabledMessage?: string;
 }
 
 type RefMode = "upload" | "youtube" | "spotify";
 
-export function HitFitUploader({ onAnalyze, loading }: Props) {
+export function HitFitUploader({ onAnalyze, loading, disabled, disabledMessage }: Props) {
   const siteCopy = useSiteCopy();
   const [master1Files, setMaster1Files] = useState<File[]>([]);
   const [master2Files, setMaster2Files] = useState<File[]>([]);
@@ -171,20 +173,29 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
         </div>
       </div>
 
-      <Button
-        className="w-full gap-2 glow-primary"
-        size="lg"
-        disabled={!canSubmit}
-        onClick={handleSubmit}
-      >
-        {loading ? (
-          <>
-            <Loader2 size={18} className="animate-spin" /> Analyzing…
-          </>
-        ) : (
-          <>Analyze</>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div>
+            <Button
+              className="w-full gap-2 glow-primary"
+              size="lg"
+              disabled={!canSubmit || disabled}
+              onClick={handleSubmit}
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" /> Analyzing…
+                </>
+              ) : (
+                <>Analyze</>
+              )}
+            </Button>
+          </div>
+        </TooltipTrigger>
+        {disabled && disabledMessage && (
+          <TooltipContent>{disabledMessage}</TooltipContent>
         )}
-      </Button>
+      </Tooltip>
     </div>
   );
 }
