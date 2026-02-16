@@ -203,15 +203,15 @@ export function FitWidget() {
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
-              className={`ml-auto flex items-center justify-center w-12 h-12 rounded-full border border-border bg-background/80 backdrop-blur-xl shadow-lg cursor-grab active:cursor-grabbing transition-shadow ${
+              className={`ml-auto flex items-center justify-center w-12 h-12 rounded-full border-none bg-primary shadow-lg cursor-grab active:cursor-grabbing transition-shadow ${
                 shouldPulse ? "animate-pulse glow-primary" : ""
               }`}
               whileTap={{ scale: 0.93 }}
               style={{ userSelect: "none" }}
             >
               <div className="flex items-center gap-0.5">
-                <Music size={16} className="text-primary" />
-                <ArrowRight size={10} className="text-primary/60" />
+                <Music size={16} className="text-primary-foreground" />
+                <ArrowRight size={10} className="text-primary-foreground/60" />
               </div>
               {tier === "unlimited" && (
                 <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-primary border-2 border-background" />

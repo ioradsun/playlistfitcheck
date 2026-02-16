@@ -148,8 +148,8 @@ export function SongFitCreatePost({ onPostCreated, onCancel }: Props) {
 
       {/* Duplicate warning */}
       {duplicateWarning && (
-        <div className="flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-200">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-yellow-400" />
+         <div className="flex items-start gap-2 rounded-lg border-none bg-amber-600 px-3 py-2 text-sm text-white">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-white" />
           <span>{duplicateWarning}</span>
         </div>
       )}

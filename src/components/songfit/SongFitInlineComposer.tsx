@@ -343,15 +343,15 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
 
           {/* Duplicate warning — replaces caption area */}
           {duplicateWarning && (
-            <div className="mt-2 flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-200">
-              <AlertTriangle size={15} className="shrink-0 text-yellow-400" />
+             <div className="mt-2 flex items-center gap-2 rounded-lg border-none bg-amber-600 px-3 py-2 text-sm text-white">
+              <AlertTriangle size={15} className="shrink-0 text-white" />
               <span className="flex-1">
                 {duplicateWarning}{" "}
-                <button onClick={() => duplicatePostId && navigate(`/song/${duplicatePostId}`)} className="text-yellow-400 underline hover:text-yellow-200 transition-colors">
+                <button onClick={() => duplicatePostId && navigate(`/song/${duplicatePostId}`)} className="text-white underline hover:text-white/80 transition-colors">
                   View Submission
                 </button>
               </span>
-              <button onClick={clear} className="p-0.5 rounded hover:bg-yellow-500/20 text-yellow-400 hover:text-yellow-200 transition-colors">
+              <button onClick={clear} className="p-0.5 rounded hover:bg-white/20 text-white hover:text-white/80 transition-colors">
                 <X size={14} />
               </button>
             </div>
