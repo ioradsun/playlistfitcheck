@@ -37,7 +37,7 @@ export function CategoryBar({ label, description, dataLabel, score, max, delay =
           {indicator && <span className="text-xs">{indicator}</span>}
           {label}
           {description && (
-            <TooltipProvider delayDuration={0}>
+            <TooltipProvider delayDuration={350}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">

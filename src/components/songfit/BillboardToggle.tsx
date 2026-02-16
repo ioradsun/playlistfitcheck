@@ -59,7 +59,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
           >
             Billboard
           </button>
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={350}>
             <DropdownMenu>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -83,7 +83,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
               </Tooltip>
               <DropdownMenuContent align="center" className="w-44">
                 {modes.map(({ key, label, icon: Icon, tip }) => (
-                  <TooltipProvider key={key} delayDuration={200}>
+                  <TooltipProvider key={key} delayDuration={350}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <DropdownMenuItem
