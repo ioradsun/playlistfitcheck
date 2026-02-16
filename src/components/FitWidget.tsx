@@ -218,10 +218,15 @@ export function FitWidget() {
               )}
             </motion.div>
           </TooltipTrigger>
-          <TooltipContent side="left" className="text-xs">
-            {tier === "unlimited"
-              ? "toolsFM — Unlimited ⚡"
-              : `Join ${pioneerTotal} other pioneers with Unlimited Usage`}
+          <TooltipContent side="left" className="text-xs max-w-[220px] space-y-0.5">
+            {tier === "unlimited" ? (
+              <p>toolsFM — Unlimited ⚡</p>
+            ) : (
+              <>
+                <p className="font-semibold">Get your Badge.</p>
+                <p>Join {pioneerTotal} other early pioneers with Unlimited Usage. <em>(max 1,000)</em></p>
+              </>
+            )}
           </TooltipContent>
         </Tooltip>
       </div>
