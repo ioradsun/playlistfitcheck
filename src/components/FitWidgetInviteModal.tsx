@@ -63,7 +63,6 @@ function InviteTab({ inviteUrl, inviteCode }: { inviteUrl: string; inviteCode: s
     <div className="space-y-4 pt-1">
       <p className="text-sm text-muted-foreground leading-relaxed">
         Know another artist? Invite them to join. When they sign up, you both get unlimited usage.
-        Every artist they invite can do the same — grow your network and level up together!
       </p>
 
       <div className="flex gap-2">
