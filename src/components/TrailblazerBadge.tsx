@@ -24,8 +24,7 @@ export function TrailblazerBadge({ userId, compact = false }: TrailblazerBadgePr
           transition={{ duration: 0.2 }}
         >
           <Star size={compact ? 8 : 11} className="fill-primary" />
-          Pioneer
-          <span className="text-primary/60 font-mono ml-0.5">#{number}/{total}</span>
+          <span className="text-primary/60 font-mono">#{number}/1,000</span>
         </motion.span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs max-w-[240px]">
