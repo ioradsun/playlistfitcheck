@@ -179,18 +179,20 @@ export function FitWidget() {
               </>
             ) : (
               <>
-                <div className="px-3 pt-3 flex-1 rounded-lg overflow-hidden" style={{ backgroundColor: "#121212" }}>
-                  <iframe
-                    src="https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=0"
-                    width="100%"
-                    height="100%"
-                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                    loading="lazy"
-                    className="border-0 block"
-                    title="toolsFM Playlist"
-                  />
+                <div className="flex-1 min-h-0 p-3 pb-2">
+                  <div className="w-full h-full rounded-lg overflow-hidden" style={{ backgroundColor: "#121212" }}>
+                    <iframe
+                      src="https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=0"
+                      width="100%"
+                      height="100%"
+                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                      loading="lazy"
+                      className="border-0 block w-full h-full"
+                      title="toolsFM Playlist"
+                    />
+                  </div>
                 </div>
-                <div className="px-3 pb-3 pt-2 shrink-0">
+                <div className="px-3 pb-3 shrink-0">
                   <Button
                     size="sm"
                     variant="outline"
