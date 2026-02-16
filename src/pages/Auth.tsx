@@ -325,8 +325,8 @@ const Auth = () => {
                     {loading ? "Loading…" : "Sign Up for Free"}
                   </Button>
                   <p className="text-center text-xs text-muted-foreground">
-                    By signing up, you agree to the{" "}
-                    <Link to="/terms" className="text-primary hover:underline">terms</Link>.
+                    By signing up, you are agreeing to{" "}
+                    <Link to="/terms" className="text-primary hover:underline">this</Link>.
                   </p>
                 </form>
               </TabsContent>
