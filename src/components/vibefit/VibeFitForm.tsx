@@ -2,16 +2,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles } from "lucide-react";
 
-const GENRES = ["Hip-Hop", "Pop", "Indie", "R&B", "EDM", "Rock", "Other"];
 const MOODS = ["Dark", "Emotional", "Euphoric", "Aggressive", "Romantic", "Dreamy", "Chill", "Energetic", "Sad", "Mysterious"];
 
 export interface VibeFitInput {
   songTitle: string;
-  genre: string;
   moods: string[];
   lyrics: string;
   composerNotes: string;
@@ -26,7 +23,6 @@ interface VibeFitFormProps {
 
 export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: VibeFitFormProps) {
   const [songTitle, setSongTitle] = useState("");
-  const [genre, setGenre] = useState("");
   const [moods, setMoods] = useState<string[]>([]);
   const [lyrics, setLyrics] = useState("");
   const [composerNotes, setComposerNotes] = useState("");
@@ -37,12 +33,12 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
     );
   };
 
-  const canSubmit = songTitle.trim() && genre && moods.length > 0 && !loading && !disabled;
+  const canSubmit = songTitle.trim() && moods.length > 0 && !loading && !disabled;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
-    onSubmit({ songTitle, genre, moods, lyrics, composerNotes });
+    onSubmit({ songTitle, moods, lyrics, composerNotes });
   };
 
   return (
@@ -54,16 +50,6 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
           onChange={(e) => setSongTitle(e.target.value)}
           maxLength={200}
         />
-        <Select value={genre} onValueChange={setGenre}>
-          <SelectTrigger>
-            <SelectValue placeholder="Genre" />
-          </SelectTrigger>
-          <SelectContent>
-            {GENRES.map((g) => (
-              <SelectItem key={g} value={g}>{g}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mood / Vibe</label>

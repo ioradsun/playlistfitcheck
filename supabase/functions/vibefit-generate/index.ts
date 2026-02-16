@@ -27,16 +27,11 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const body = await req.json();
-    const { songTitle, genre, moods, lyrics, composerNotes } = body;
+    const { songTitle, moods, lyrics, composerNotes } = body;
 
     // Validate inputs
     if (!songTitle || typeof songTitle !== "string" || songTitle.length > 200) {
       return new Response(JSON.stringify({ error: "Song title is required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (!genre || typeof genre !== "string") {
-      return new Response(JSON.stringify({ error: "Genre is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -63,7 +58,6 @@ Include a light CTA like 'stream now' or 'link in bio'. Match tone to mood. Be a
 
     const userPrompt = `Generate captions for this song:
 Song Title: ${songTitle.slice(0, 200)}
-Genre: ${genre}
 Mood/Vibe: ${moods.join(", ")}
 ${composerNotes ? `Composer Notes: ${(composerNotes as string).slice(0, 500)}` : ""}
 ${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}`;
@@ -109,7 +103,7 @@ ${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}`;
         instagram: ["Check out my new track 🎵", "New music dropping now", "This one's different"],
         tiktok: ["POV: when the beat hits different", "New track alert 🔥"],
         storytelling: captionContent.slice(0, 300),
-        hashtags: ["newmusic", "independent", genre.toLowerCase().replace(/[^a-z]/g, "")],
+        hashtags: ["newmusic", "independent", moods[0]?.toLowerCase().replace(/[^a-z]/g, "") || "vibes"],
       };
     }
 
@@ -119,7 +113,6 @@ ${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}`;
     const artSystemPrompt = await fetchPrompt("vibefit-art", defaultArtPrompt);
 
     const artPromptBase = `${artSystemPrompt}
-Genre: ${genre}
 Mood: ${moods.join(", ")}
 ${composerNotes ? `Artist direction: ${(composerNotes as string).slice(0, 500)}` : ""}
 ${lyrics ? `Key lyrical themes: ${(lyrics as string).slice(0, 200)}` : ""}`;
