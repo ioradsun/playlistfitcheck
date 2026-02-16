@@ -249,7 +249,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     setResults([]);
     setDuplicateWarning(null);
     setDuplicatePostId(null);
-    inputRef.current?.focus();
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const showDropdown = focused && results.length > 0 && !selectedTrack;
