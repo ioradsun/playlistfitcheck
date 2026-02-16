@@ -126,14 +126,15 @@ export function FitWidget() {
       >
         {/* Panel — always mounted so iframe stays alive; hidden via CSS when collapsed */}
         <div
-          className={`mb-2 rounded-xl border bg-background/80 backdrop-blur-xl shadow-2xl overflow-hidden transition-all duration-200 origin-bottom ${
+          className={`mb-2 rounded-xl border bg-background/80 backdrop-blur-xl shadow-2xl overflow-hidden transition-all duration-200 origin-bottom flex flex-col ${
             collapsed
               ? "max-h-0 opacity-0 pointer-events-none border-transparent shadow-none !mb-0"
-              : "max-h-[600px] opacity-100 border-border"
+              : "opacity-100 border-border"
           }`}
+          style={{ height: collapsed ? 0 : 320 }}
         >
           {/* Header */}
-          <div className="px-3 py-2.5 border-b border-border flex items-center justify-between cursor-pointer" onClick={() => setCollapsed(true)}>
+          <div className="px-3 py-2.5 border-b border-border flex items-center justify-between cursor-pointer shrink-0" onClick={() => setCollapsed(true)}>
             <div className="flex items-center gap-2">
               <Music size={14} className="text-primary" />
             </div>
@@ -144,24 +145,52 @@ export function FitWidget() {
             ) : null}
           </div>
 
-          {tier !== "unlimited" ? (
-            <>
-              <div className="px-3 py-3 space-y-2.5">
-                {TOOLS.map((t) => (
-                  <ToolUsageBar key={t} tool={t} forceUnlimited={false} />
-                ))}
-              </div>
-              <div className="px-3 pb-3 space-y-2">
-                {!user ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full gap-1.5 text-xs h-8"
-                    onClick={() => navigate("/auth")}
-                  >
-                    Sign Up
-                  </Button>
-                ) : (
+          {/* Body — flex-1 fills remaining space */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {tier !== "unlimited" ? (
+              <>
+                <div className="px-3 py-3 space-y-2.5 flex-1 overflow-y-auto">
+                  {TOOLS.map((t) => (
+                    <ToolUsageBar key={t} tool={t} forceUnlimited={false} />
+                  ))}
+                </div>
+                <div className="px-3 pb-3 pt-1 shrink-0">
+                  {!user ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full gap-1.5 text-xs h-8"
+                      onClick={() => navigate("/auth")}
+                    >
+                      Sign Up
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full gap-1.5 text-xs h-8"
+                      onClick={() => setShowInvite(true)}
+                    >
+                      <Users size={12} />
+                      Invite Artist
+                    </Button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="px-3 pt-3 flex-1 rounded-lg overflow-hidden" style={{ backgroundColor: "#121212" }}>
+                  <iframe
+                    src="https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=0"
+                    width="100%"
+                    height="100%"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy"
+                    className="border-0 block"
+                    title="toolsFM Playlist"
+                  />
+                </div>
+                <div className="px-3 pb-3 pt-2 shrink-0">
                   <Button
                     size="sm"
                     variant="outline"
@@ -171,33 +200,10 @@ export function FitWidget() {
                     <Users size={12} />
                     Invite Artist
                   </Button>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="px-3 py-3 space-y-2">
-              <div className="rounded-lg overflow-hidden" style={{ backgroundColor: "#121212" }}>
-                <iframe
-                  src="https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=0"
-                  width="100%"
-                  height={152}
-                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                  loading="lazy"
-                  className="border-0 block"
-                  title="toolsFM Playlist"
-                />
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full gap-1.5 text-xs h-8"
-                onClick={() => setShowInvite(true)}
-              >
-                <Users size={12} />
-                Invite Artist
-              </Button>
-            </div>
-          )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Floating bubble toggle */}
