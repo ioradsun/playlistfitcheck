@@ -144,8 +144,7 @@ function ShareTab() {
   return (
     <div className="space-y-4 pt-1">
       <p className="text-sm text-muted-foreground leading-relaxed">
-        No collaborators? No problem. Share your unique link to tools.fm and tap "I Shared" to
-        unlock unlimited usage. Simple, no pressure, and you help other artists discover the tools.
+        No artist friends? Unlock unlimited usage by sharing your unique link and tapping "I Shared." It's an honor system.
       </p>
 
       <div className="flex gap-2">
