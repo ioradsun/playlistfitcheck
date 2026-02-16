@@ -119,26 +119,26 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
     <div className="border-b border-border/40">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5">
-        <ProfileHoverCard userId={post.user_id}>
-          <div className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
-            onClick={() => navigate(`/u/${post.user_id}`)}
-          >
-            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20 shrink-0">
-              {post.profiles?.avatar_url ? (
-                <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <User size={16} className="text-muted-foreground" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
-                <TrailblazerBadge userId={post.user_id} compact />
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <ProfileHoverCard userId={post.user_id}>
+            <div className="flex items-center gap-3 cursor-pointer min-w-0"
+              onClick={() => navigate(`/u/${post.user_id}`)}
+            >
+              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20 shrink-0">
+                {post.profiles?.avatar_url ? (
+                  <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User size={16} className="text-muted-foreground" />
+                )}
               </div>
-              <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
+                <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
+              </div>
             </div>
-          </div>
-        </ProfileHoverCard>
+          </ProfileHoverCard>
+          <TrailblazerBadge userId={post.user_id} compact />
+        </div>
 
         {/* 3-dot menu */}
         <DropdownMenu onOpenChange={(open) => { if (open) checkFollow(); }}>
