@@ -40,7 +40,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
                 <Info size={13} />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs max-w-[220px]">MP3, WAV, M4A · 75 MB max · Not saved or stored</TooltipContent>
+            <TooltipContent side="top" className="text-xs max-w-[220px]">MP3 recommended · WAV/M4A supported · 25 MB max · Not saved or stored</TooltipContent>
           </Tooltip>
         </div>
         <AudioUploadZone

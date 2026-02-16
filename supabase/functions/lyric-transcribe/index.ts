@@ -30,6 +30,15 @@ serve(async (req) => {
     const audioFile = formData.get("audio") as File;
     if (!audioFile) throw new Error("No audio file provided");
 
+    // Reject files over 25MB to avoid CPU/memory limits
+    const MAX_SIZE = 25 * 1024 * 1024;
+    if (audioFile.size > MAX_SIZE) {
+      return new Response(
+        JSON.stringify({ error: "File too large. Please use an MP3 under 25MB (WAV files are very large — convert to MP3 first)." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Convert audio to base64 using built-in btoa (chunked to avoid stack overflow)
     const audioBuffer = await audioFile.arrayBuffer();
     const bytes = new Uint8Array(audioBuffer);
@@ -111,7 +120,7 @@ Output this exact JSON structure:
       }
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw new Error("Transcription failed. If using a WAV file, try converting to MP3 first.");
     }
 
     const aiResponse = await response.json();
