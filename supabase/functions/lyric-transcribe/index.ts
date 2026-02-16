@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -39,15 +40,9 @@ serve(async (req) => {
       );
     }
 
-    // Convert audio to base64 using built-in btoa (chunked to avoid stack overflow)
+    // Convert audio to base64 using Deno's native encoder (much faster & less memory)
     const audioBuffer = await audioFile.arrayBuffer();
-    const bytes = new Uint8Array(audioBuffer);
-    let binary = "";
-    const chunkSize = 8192;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-    }
-    const audioBase64 = btoa(binary);
+    const audioBase64 = base64Encode(audioBuffer);
 
     // Determine MIME type
     const mimeType = audioFile.type || "audio/mpeg";
