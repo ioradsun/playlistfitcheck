@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, X, Music } from "lucide-react";
+import { Loader2, X, Music, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -43,6 +43,8 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   const [focused, setFocused] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<TrackData | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [duplicatePostId, setDuplicatePostId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
   const captionRef = useRef<HTMLTextAreaElement>(null);
@@ -80,10 +82,35 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     return () => clearTimeout(debounceRef.current);
   }, [query, selectedTrack]);
 
+  const checkDupe = useCallback(async (trackId: string) => {
+    const { data } = await supabase
+      .from("songfit_posts")
+      .select("id, track_title, user_id, status")
+      .eq("spotify_track_id", trackId)
+      .in("status", ["live", "cooldown"])
+      .limit(1);
+    if (data && data.length > 0) {
+      const isOwn = data[0].user_id === user?.id;
+      setDuplicatePostId(data[0].id);
+      setDuplicateWarning(
+        data[0].status === "cooldown"
+          ? `"${data[0].track_title}" is in cooldown`
+          : isOwn
+            ? `You already have "${data[0].track_title}" live`
+            : `"${data[0].track_title}" is already live from another artist`
+      );
+    } else {
+      setDuplicateWarning(null);
+      setDuplicatePostId(null);
+    }
+  }, [user?.id]);
+
   const selectTrack = useCallback(async (track: TrackResult) => {
     setQuery("");
     setResults([]);
     setFocused(false);
+    setDuplicateWarning(null);
+    setDuplicatePostId(null);
     try {
       const { data, error } = await supabase.functions.invoke("songfit-track", {
         body: { trackUrl: track.url },
@@ -91,14 +118,17 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setSelectedTrack(data as TrackData);
+      await checkDupe((data as TrackData).trackId);
     } catch (e: any) {
       toast.error(e.message || "Failed to fetch track");
     }
-  }, []);
+  }, [checkDupe]);
 
   const fetchTrackByUrl = useCallback(async (url: string) => {
     if (!url.includes("spotify.com/track/")) return;
     setSearching(true);
+    setDuplicateWarning(null);
+    setDuplicatePostId(null);
     try {
       const { data, error } = await supabase.functions.invoke("songfit-track", {
         body: { trackUrl: url.trim() },
@@ -107,12 +137,13 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       if (data?.error) throw new Error(data.error);
       setSelectedTrack(data as TrackData);
       setQuery("");
+      await checkDupe((data as TrackData).trackId);
     } catch (e: any) {
       toast.error(e.message || "Failed to fetch track");
     } finally {
       setSearching(false);
     }
-  }, []);
+  }, [checkDupe]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const pasted = e.clipboardData.getData("text");
@@ -218,6 +249,8 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     setCaption("");
     setSelectedTrack(null);
     setResults([]);
+    setDuplicateWarning(null);
+    setDuplicatePostId(null);
     inputRef.current?.focus();
   };
 
@@ -283,7 +316,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
             <Button
               size="sm"
               className="h-9 px-5 rounded-full text-xs font-bold shrink-0"
-              disabled={!selectedTrack || publishing}
+              disabled={!selectedTrack || publishing || !!duplicateWarning}
               onClick={publish}
             >
               {publishing ? <Loader2 size={14} className="animate-spin" /> : "Post"}
@@ -310,7 +343,18 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
             </div>
           )}
 
-          {/* Search dropdown */}
+          {/* Duplicate warning */}
+          {duplicateWarning && (
+            <button
+              onClick={() => duplicatePostId && navigate(`/song/${duplicatePostId}`)}
+              className="mt-2 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-200 hover:bg-yellow-500/15 transition-colors w-full text-left"
+            >
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-yellow-400" />
+              <span>{duplicateWarning} — <span className="underline">view it</span></span>
+            </button>
+          )}
+
+
           {showDropdown && (
             <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-[100] overflow-hidden max-h-72 overflow-y-auto"
               style={{ position: "relative" }}
