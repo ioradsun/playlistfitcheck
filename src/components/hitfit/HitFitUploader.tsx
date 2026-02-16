@@ -89,7 +89,7 @@ export function HitFitUploader({ onAnalyze, loading, disabled, disabledMessage }
                         <Info size={13} />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs max-w-[220px]">{slot.desc} · MP3, WAV, M4A · 60 MB max · Large files auto-compressed</TooltipContent>
+                    <TooltipContent side="top" className="text-xs max-w-[220px]">{slot.desc} · MP3, WAV, M4A · 75 MB max · Large files auto-compressed</TooltipContent>
                   </Tooltip>
                 </div>
               </div>
@@ -120,7 +120,7 @@ export function HitFitUploader({ onAnalyze, loading, disabled, disabledMessage }
                       <Info size={13} />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs max-w-[220px]">A released track with the sound you're targeting · MP3, WAV, M4A · 60 MB max · Large files auto-compressed</TooltipContent>
+                  <TooltipContent side="top" className="text-xs max-w-[220px]">A released track with the sound you're targeting · MP3, WAV, M4A · 75 MB max · Large files auto-compressed</TooltipContent>
                 </Tooltip>
               </div>
             </div>
