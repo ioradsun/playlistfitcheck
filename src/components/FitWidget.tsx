@@ -136,42 +136,46 @@ export function FitWidget() {
                   <Music size={14} className="text-primary" />
                   <span className="text-xs font-semibold">toolsFM</span>
                 </div>
-                <Badge
-                  variant={tier === "unlimited" ? "default" : "outline"}
-                  className="text-[10px] h-5"
-                >
-                  {tier === "unlimited" && <Crown size={10} className="mr-1" />}
-                  {tier === "anonymous" ? "Guest" : tier === "limited" ? "Limited" : "Unlimited"}
-                </Badge>
+                {tier !== "unlimited" && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] h-5"
+                  >
+                    {tier === "anonymous" ? "Guest" : "Limited"}
+                  </Badge>
+                )}
+                {tier === "unlimited" && (
+                  <span className="text-[10px] font-semibold text-foreground">Unlimited</span>
+                )}
               </div>
 
-              {/* Usage bars */}
-              <div className="px-3 py-3 space-y-2.5">
-                {TOOLS.map((t) => (
-                  <ToolUsageBar key={t} tool={t} forceUnlimited={socialUnlocked} />
-                ))}
-              </div>
-
-              {/* CTA */}
               {tier !== "unlimited" ? (
-                <div className="px-3 pb-3 space-y-2">
-                  {!user ? (
-                    <>
-                      <p className="text-[11px] text-muted-foreground text-center">
-                        Invite another artist for Unlimited
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full gap-1.5 text-xs h-8"
-                        onClick={() => navigate("/auth")}
-                      >
-                        <Users size={12} />
-                        Sign Up to Invite
-                      </Button>
-                    </>
-                  ) : (
-                    <>
+                <>
+                  {/* Usage bars */}
+                  <div className="px-3 py-3 space-y-2.5">
+                    {TOOLS.map((t) => (
+                      <ToolUsageBar key={t} tool={t} forceUnlimited={false} />
+                    ))}
+                  </div>
+
+                  {/* CTA */}
+                  <div className="px-3 pb-3 space-y-2">
+                    {!user ? (
+                      <>
+                        <p className="text-[11px] text-muted-foreground text-center">
+                          Invite another artist for Unlimited
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full gap-1.5 text-xs h-8"
+                          onClick={() => navigate("/auth")}
+                        >
+                          <Users size={12} />
+                          Sign Up to Invite
+                        </Button>
+                      </>
+                    ) : (
                       <Button
                         size="sm"
                         variant="outline"
@@ -181,15 +185,20 @@ export function FitWidget() {
                         <Users size={12} />
                         Invite Artist
                       </Button>
-                    </>
-                  )}
-                </div>
+                    )}
+                  </div>
+                </>
               ) : (
-                <div className="px-3 pb-3">
-                  <p className="text-[11px] text-primary text-center flex items-center justify-center gap-1">
-                    <Zap size={10} />
-                    Unlimited unlocked! 🎉
-                  </p>
+                <div className="px-3 py-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full gap-1.5 text-xs h-8"
+                    onClick={() => setShowInvite(true)}
+                  >
+                    <Users size={12} />
+                    Invite Artist
+                  </Button>
                 </div>
               )}
             </motion.div>
