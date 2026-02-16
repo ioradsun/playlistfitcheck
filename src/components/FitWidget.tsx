@@ -224,7 +224,7 @@ export function FitWidget() {
             ) : (
               <>
                 <p className="font-semibold">Get your Badge.</p>
-                <p>Join {pioneerTotal} other early pioneers with Unlimited Usage. <em>(max 1,000)</em></p>
+                <p>Join {pioneerTotal} early pioneers with Unlimited Usage. <em>(max 1,000)</em></p>
               </>
             )}
           </TooltipContent>
