@@ -83,25 +83,18 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
               </Tooltip>
               <DropdownMenuContent align="center" className="w-44">
                 {modes.map(({ key, label, icon: Icon, tip }) => (
-                  <TooltipProvider key={key} delayDuration={350}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <DropdownMenuItem
-                          onClick={() => { onModeChange(key); onViewChange("billboard"); }}
-                          className={cn(
-                            "flex items-center gap-2",
-                            billboardMode === key && "text-primary font-semibold"
-                          )}
-                        >
-                          <Icon size={15} />
-                          <span>{label}</span>
-                        </DropdownMenuItem>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="text-xs">
-                        {tip}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <DropdownMenuItem
+                    key={key}
+                    onClick={() => { onModeChange(key); onViewChange("billboard"); }}
+                    title={tip}
+                    className={cn(
+                      "flex items-center gap-2",
+                      billboardMode === key && "text-primary font-semibold"
+                    )}
+                  >
+                    <Icon size={15} />
+                    <span>{label}</span>
+                  </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
