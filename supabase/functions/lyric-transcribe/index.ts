@@ -31,11 +31,11 @@ serve(async (req) => {
     const audioFile = formData.get("audio") as File;
     if (!audioFile) throw new Error("No audio file provided");
 
-    // Reject files over 25MB to avoid CPU/memory limits
-    const MAX_SIZE = 25 * 1024 * 1024;
+    // Reject files over 75MB to match client-side limit
+    const MAX_SIZE = 75 * 1024 * 1024;
     if (audioFile.size > MAX_SIZE) {
       return new Response(
-        JSON.stringify({ error: "File too large. Please use an MP3 under 25MB (WAV files are very large — convert to MP3 first)." }),
+        JSON.stringify({ error: "File too large. Please use an audio file under 75MB." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
