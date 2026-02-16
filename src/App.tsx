@@ -46,7 +46,7 @@ const App = () => (
               <Route path="/VibeFit" element={<Index />} />
               <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
               <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />
-              <Route path="/auth" element={<PageLayout title="toolsFM fmly"><Auth /></PageLayout>} />
+              <Route path="/auth" element={<PageLayout title="Join the FMly"><Auth /></PageLayout>} />
               <Route path="/terms" element={<PageLayout title="Terms"><Terms /></PageLayout>} />
               <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
               <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
