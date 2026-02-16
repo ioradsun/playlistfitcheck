@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTheme } from "next-themes";
 import { Music, ChevronDown, ChevronUp, Users, Zap, Crown, ArrowRight, UserPlus } from "lucide-react";
 import { TrailblazerBadge } from "./TrailblazerBadge";
 import { Progress } from "@/components/ui/progress";
@@ -49,6 +50,7 @@ function ToolUsageBar({ tool, forceUnlimited }: { tool: string; forceUnlimited?:
 export function FitWidget() {
   const siteCopy = useSiteCopy();
   const { user, profile } = useAuth();
+  const { resolvedTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [socialUnlocked, setSocialUnlocked] = useState(false);
@@ -180,9 +182,9 @@ export function FitWidget() {
             ) : (
               <>
                 <div className="px-3 pt-3 pb-2 shrink-0">
-                  <div className="w-full rounded-lg overflow-hidden" style={{ backgroundColor: "#121212" }}>
+                  <div className="w-full rounded-lg overflow-hidden" style={{ backgroundColor: resolvedTheme === "dark" ? "#121212" : "#f5f5f5" }}>
                     <iframe
-                      src="https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=0"
+                      src={`https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=${resolvedTheme === "dark" ? "0" : "1"}`}
                       width="100%"
                       height={152}
                       allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
