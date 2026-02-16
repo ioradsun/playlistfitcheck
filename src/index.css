@@ -6,6 +6,59 @@
 
 @layer base {
   :root {
+    --background: 0 0% 98%;
+    --foreground: 240 10% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+
+    --primary: 152 70% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 5% 92%;
+    --secondary-foreground: 240 10% 20%;
+
+    --muted: 240 5% 94%;
+    --muted-foreground: 215 10% 45%;
+
+    --accent: 152 40% 92%;
+    --accent-foreground: 152 60% 25%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 6% 88%;
+    --input: 240 6% 88%;
+    --ring: 152 70% 38%;
+
+    --radius: 0.75rem;
+
+    /* Custom tokens */
+    --glow-primary: 0 0 20px hsl(152 70% 38% / 0.15);
+    --glow-strong: 0 0 40px hsl(152 70% 38% / 0.2);
+    --surface-glass: hsl(0 0% 100% / 0.7);
+
+    /* Score colors */
+    --score-excellent: 152 70% 38%;
+    --score-strong: 152 55% 45%;
+    --score-ok: 45 90% 45%;
+    --score-weak: 25 90% 45%;
+    --score-bad: 0 72% 51%;
+
+    --sidebar-background: 0 0% 97%;
+    --sidebar-foreground: 240 10% 20%;
+    --sidebar-primary: 152 70% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 5% 92%;
+    --sidebar-accent-foreground: 240 10% 20%;
+    --sidebar-border: 240 6% 88%;
+    --sidebar-ring: 152 70% 38%;
+  }
+
+  .dark {
     --background: 240 15% 4%;
     --foreground: 210 20% 92%;
 
@@ -34,14 +87,10 @@
     --input: 240 10% 16%;
     --ring: 152 70% 45%;
 
-    --radius: 0.75rem;
-
-    /* Custom tokens */
     --glow-primary: 0 0 20px hsl(152 70% 45% / 0.3);
     --glow-strong: 0 0 40px hsl(152 70% 45% / 0.4);
     --surface-glass: hsl(240 12% 8% / 0.6);
 
-    /* Score colors */
     --score-excellent: 152 70% 45%;
     --score-strong: 152 55% 55%;
     --score-ok: 45 90% 55%;
