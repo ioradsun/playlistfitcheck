@@ -27,7 +27,28 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const body = await req.json();
-    const { songTitle, moods, lyrics, composerNotes } = body;
+    const { songTitle, moods, lyrics, composerNotes, hitfitAnalysis } = body;
+
+    // Build HitFit context string if available
+    let hitfitContext = "";
+    if (hitfitAnalysis && typeof hitfitAnalysis === "object") {
+      const parts: string[] = [];
+      if (hitfitAnalysis.overallVerdict) parts.push(`Sonic verdict: ${hitfitAnalysis.overallVerdict}`);
+      if (hitfitAnalysis.hitPotential?.label) parts.push(`Hit potential: ${hitfitAnalysis.hitPotential.label} (${hitfitAnalysis.hitPotential.score}/100)`);
+      if (hitfitAnalysis.shortFormPotential?.label) parts.push(`Short-form potential: ${hitfitAnalysis.shortFormPotential.label} (${hitfitAnalysis.shortFormPotential.score}/100)`);
+      const master = hitfitAnalysis.masters?.[0];
+      if (master) {
+        parts.push(`Sonic score: ${master.score}/100 — ${master.summary}`);
+        if (master.performanceInsights) {
+          const pi = master.performanceInsights;
+          if (pi.hookStrength) parts.push(`Hook strength: ${pi.hookStrength.score}/100`);
+          if (pi.energyCurve) parts.push(`Energy curve: ${pi.energyCurve.score}/100`);
+        }
+      }
+      if (parts.length > 0) {
+        hitfitContext = `\n\nHitFit Analysis (sonic insights from the actual track):\n${parts.join("\n")}`;
+      }
+    }
 
     // Validate inputs
     if (!songTitle || typeof songTitle !== "string" || songTitle.length > 200) {
@@ -60,7 +81,7 @@ Include a light CTA like 'stream now' or 'link in bio'. Match tone to mood. Be a
 Song Title: ${songTitle.slice(0, 200)}
 Mood/Vibe: ${moods.join(", ")}
 ${composerNotes ? `Composer Notes: ${(composerNotes as string).slice(0, 500)}` : ""}
-${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}`;
+${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}${hitfitContext}`;
 
     const captionResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -115,7 +136,7 @@ ${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}`;
     const artPromptBase = `${artSystemPrompt}
 Mood: ${moods.join(", ")}
 ${composerNotes ? `Artist direction: ${(composerNotes as string).slice(0, 500)}` : ""}
-${lyrics ? `Key lyrical themes: ${(lyrics as string).slice(0, 200)}` : ""}`;
+${lyrics ? `Key lyrical themes: ${(lyrics as string).slice(0, 200)}` : ""}${hitfitContext}`;
 
     const artVariations = [
       `${artPromptBase}\nStyle: Abstract and atmospheric, focus on color and texture.`,

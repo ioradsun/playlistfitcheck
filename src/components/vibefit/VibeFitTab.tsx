@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
@@ -60,10 +60,24 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
   const [result, setResult] = useState<VibeFitOutput | null>(initialResult?.result || null);
   const [lastInput, setLastInput] = useState<VibeFitInput | null>(initialResult?.input || null);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [hitfitContext, setHitfitContext] = useState<Record<string, any> | null>(null);
   const { user } = useAuth();
 
-  const usage = getUsageToday();
-  const atLimit = usage >= DAILY_LIMIT;
+  // Auto-detect latest HitFit analysis for the user
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("saved_hitfit")
+      .select("analysis_json, filename")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (data?.[0]?.analysis_json) {
+          setHitfitContext(data[0].analysis_json as Record<string, any>);
+        }
+      });
+  }, [user]);
 
   const generate = useCallback(async (input: VibeFitInput) => {
     if (getUsageToday() >= DAILY_LIMIT) {
@@ -76,7 +90,7 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
     setResult(null); // Hide form, show loading
     try {
       const { data, error } = await supabase.functions.invoke("vibefit-generate", {
-        body: input,
+        body: { ...input, hitfitAnalysis: hitfitContext || undefined },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -147,8 +161,8 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
         <VibeFitForm
           onSubmit={generate}
           loading={loading}
-          disabled={atLimit}
-          disabledMessage={atLimit ? "Daily limit reached. Upgrade for unlimited fits." : undefined}
+          disabled={getUsageToday() >= DAILY_LIMIT}
+          disabledMessage={getUsageToday() >= DAILY_LIMIT ? "Daily limit reached. Upgrade for unlimited fits." : undefined}
         />
       </div>
 
