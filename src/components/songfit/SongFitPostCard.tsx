@@ -212,11 +212,11 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onClick={handleProfileClick}>
               <ExternalLink size={14} className="mr-2" />
-              View Profile
+              Artist Profile
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate(`/song/${post.id}`)}>
               <Trophy size={14} className="mr-2" />
-              Song Details
+              Song Record
             </DropdownMenuItem>
             {!isOwnPost && user && (
               <DropdownMenuItem onClick={toggleFollow}>
