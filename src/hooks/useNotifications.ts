@@ -75,7 +75,7 @@ export function useNotifications() {
       .eq("user_id", user.id)
       .eq("is_read", false);
     setUnreadCount(0);
-    setNotifications([]);
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   }, [user]);
 
   useEffect(() => { fetch(); }, [fetch]);
