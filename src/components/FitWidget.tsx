@@ -133,7 +133,7 @@ export function FitWidget() {
           }`}
         >
           {/* Header */}
-          <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
+          <div className="px-3 py-2.5 border-b border-border flex items-center justify-between cursor-pointer" onClick={() => setCollapsed(true)}>
             <div className="flex items-center gap-2">
               <Music size={14} className="text-primary" />
             </div>
