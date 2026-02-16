@@ -131,6 +131,7 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
     return (
       <VibeFitResults
         result={result}
+        songTitle={lastInput?.songTitle}
         onBack={handleBack}
         onRegenerate={handleRegenerate}
         regenerating={loading}

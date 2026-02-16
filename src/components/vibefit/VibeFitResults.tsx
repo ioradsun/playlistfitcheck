@@ -17,6 +17,7 @@ export interface VibeFitOutput {
 
 interface VibeFitResultsProps {
   result: VibeFitOutput;
+  songTitle?: string;
   onBack: () => void;
   onRegenerate: () => void;
   regenerating: boolean;
@@ -52,7 +53,7 @@ function downloadImage(dataUrl: string, index: number) {
   document.body.removeChild(link);
 }
 
-export function VibeFitResults({ result, onBack, onRegenerate, regenerating }: VibeFitResultsProps) {
+export function VibeFitResults({ result, songTitle, onBack, onRegenerate, regenerating }: VibeFitResultsProps) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-8">
       {/* Header */}
@@ -60,10 +61,7 @@ export function VibeFitResults({ result, onBack, onRegenerate, regenerating }: V
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
           <ArrowLeft size={18} />
         </Button>
-        <div>
-          <h1 className="text-xl font-semibold">Your Vibe</h1>
-          <p className="text-sm text-muted-foreground">Cover art & captions, fitted to your song.</p>
-        </div>
+        <h1 className="text-xl font-semibold">{songTitle || "Your Vibe"}</h1>
       </div>
 
       {/* Cover Art */}
