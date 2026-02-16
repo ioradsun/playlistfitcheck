@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (window.location.search?.includes('code=') || window.location.hash?.includes('access_token')) {
             window.history.replaceState({}, '', '/CrowdFit');
             if (event === 'SIGNED_IN') {
-              toast.success("Welcome to the tools.fm fmly ♫");
+              toast.success("Welcome to the toolsFM fmly ♫");
             }
           }
         }

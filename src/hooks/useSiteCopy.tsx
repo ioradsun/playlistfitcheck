@@ -16,19 +16,19 @@ const DEFAULT_COPY: SiteCopy = {
   about: {
     origin_intro: "",
     origin_body: "",
-    origin_tagline: "tools.fm: experiments to find answers.",
+    origin_tagline: "toolsFM: experiments to find answers.",
     listen_label: "Listen to what started it all.",
     tools_intro: "",
     products: [],
   },
   sidebar: {
-    brand: "tools.fm",
-    story_link: "tools.fm story",
+    brand: "toolsFM",
+    story_link: "toolsFM story",
   },
   pages: {
-    about_title: "tools.fm story",
+    about_title: "toolsFM story",
     about_subtitle: "What we built and why.",
-    auth_title: "tools fmly",
+    auth_title: "toolsFM fmly",
   },
   features: {
     crypto_tipping: false,

@@ -43,9 +43,9 @@ const App = () => (
               <Route path="/HitFit" element={<Index />} />
               <Route path="/DreamFit" element={<Index />} />
               <Route path="/VibeFit" element={<Index />} />
-              <Route path="/about" element={<PageLayout title="tools.fm story" subtitle="What we built and why."><About /></PageLayout>} />
+              <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
               <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />
-              <Route path="/auth" element={<PageLayout title="tools fmly"><Auth /></PageLayout>} />
+              <Route path="/auth" element={<PageLayout title="toolsFM fmly"><Auth /></PageLayout>} />
               <Route path="/terms" element={<PageLayout title="Terms"><Terms /></PageLayout>} />
               <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
               <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
