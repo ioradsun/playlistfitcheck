@@ -34,39 +34,51 @@ export function useUsageQuota(tool: string): UsageQuota {
   const limit = tier === "unlimited" ? Infinity : tier === "limited" ? freeLimit : anonLimit;
 
   // Fetch current usage count
+  const fetchUsage = useCallback(async () => {
+    if (!growthEnabled) return;
+    setLoading(true);
+    try {
+      const period = "lifetime";
+      let query = supabase
+        .from("usage_tracking")
+        .select("count")
+        .eq("tool", tool)
+        .eq("period", period);
+
+      if (user) {
+        query = query.eq("user_id", user.id);
+      } else {
+        query = query.eq("session_id", getSessionId());
+      }
+
+      const { data } = await query.maybeSingle();
+      setUsed(data?.count ?? 0);
+    } catch (e) {
+      console.error("Failed to fetch usage:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [tool, user, growthEnabled]);
+
   useEffect(() => {
     if (!growthEnabled) {
       setLoading(false);
       return;
     }
+    fetchUsage();
+  }, [fetchUsage, growthEnabled]);
 
-    const fetchUsage = async () => {
-      setLoading(true);
-      try {
-        const period = "lifetime";
-        let query = supabase
-          .from("usage_tracking")
-          .select("count")
-          .eq("tool", tool)
-          .eq("period", period);
-
-        if (user) {
-          query = query.eq("user_id", user.id);
-        } else {
-          query = query.eq("session_id", getSessionId());
-        }
-
-        const { data } = await query.maybeSingle();
-        setUsed(data?.count ?? 0);
-      } catch (e) {
-        console.error("Failed to fetch usage:", e);
-      } finally {
-        setLoading(false);
+  // Listen for quota changes from other components
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || detail.tool === tool) {
+        fetchUsage();
       }
     };
-
-    fetchUsage();
-  }, [tool, user, growthEnabled]);
+    window.addEventListener("quota-updated", handler);
+    return () => window.removeEventListener("quota-updated", handler);
+  }, [fetchUsage, tool]);
 
   const increment = useCallback(async () => {
     if (!growthEnabled) return;
@@ -79,7 +91,6 @@ export function useUsageQuota(tool: string): UsageQuota {
       const sessionId = getSessionId();
 
       if (user) {
-        // Upsert for authenticated user
         const { data: existing } = await supabase
           .from("usage_tracking")
           .select("id, count")
@@ -99,7 +110,6 @@ export function useUsageQuota(tool: string): UsageQuota {
             .insert({ user_id: user.id, tool, count: 1, period });
         }
       } else {
-        // Upsert for anonymous
         const { data: existing } = await supabase
           .from("usage_tracking")
           .select("id, count")
@@ -119,6 +129,9 @@ export function useUsageQuota(tool: string): UsageQuota {
             .insert({ session_id: sessionId, tool, count: 1, period });
         }
       }
+
+      // Notify other useUsageQuota instances (e.g. the FitWidget)
+      window.dispatchEvent(new CustomEvent("quota-updated", { detail: { tool } }));
     } catch (e) {
       console.error("Failed to increment usage:", e);
     }

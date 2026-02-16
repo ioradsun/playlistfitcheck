@@ -101,9 +101,9 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       incrementUsage();
-      await quota.increment();
       const output = data as VibeFitOutput;
       setResult(output);
+      await quota.increment();
 
       // Save for authenticated users
       if (user) {
