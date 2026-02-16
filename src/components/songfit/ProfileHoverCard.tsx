@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { User, Loader2 } from "lucide-react";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,6 +13,7 @@ interface ProfilePreview {
   avatar_url: string | null;
   bio: string | null;
   spotify_artist_id: string | null;
+  is_verified: boolean;
 }
 
 interface Props {
@@ -38,7 +40,7 @@ export function ProfileHoverCard({ userId, children }: Props) {
     if (profile) return;
     setLoading(true);
     const [profileRes, followersRes, postsRes] = await Promise.all([
-      supabase.from("profiles").select("id, display_name, avatar_url, bio, spotify_artist_id").eq("id", userId).maybeSingle(),
+      supabase.from("profiles").select("id, display_name, avatar_url, bio, spotify_artist_id, is_verified").eq("id", userId).maybeSingle(),
       supabase.from("songfit_follows").select("id", { count: "exact", head: true }).eq("followed_user_id", userId),
       supabase.from("songfit_posts").select("id", { count: "exact", head: true }).eq("user_id", userId),
     ]);
@@ -115,18 +117,27 @@ export function ProfileHoverCard({ userId, children }: Props) {
                   className="flex items-center gap-3 cursor-pointer"
                   onClick={() => navigate(`/u/${userId}`)}
                 >
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-primary/20">
-                    {profile.avatar_url ? (
-                      <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <User size={20} className="text-muted-foreground" />
+                  <div className="relative shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
+                      {profile.avatar_url ? (
+                        <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={20} className="text-muted-foreground" />
+                      )}
+                    </div>
+                    {profile.is_verified && (
+                      <span className="absolute -bottom-0.5 -right-0.5">
+                        <VerifiedBadge size={16} />
+                      </span>
                     )}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold truncate leading-tight">{displayName}</p>
-                    {profile.spotify_artist_id && (
+                    {profile.is_verified ? (
+                      <p className="text-[11px] text-blue-500 font-medium">Verified Artist</p>
+                    ) : profile.spotify_artist_id ? (
                       <p className="text-[11px] text-primary font-medium">Artist</p>
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 {!isOwnProfile && following !== null && (
