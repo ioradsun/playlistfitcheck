@@ -9,10 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Pencil, Camera, X, Check, Loader2, Music, Wallet } from "lucide-react";
+import { Pencil, Camera, X, Check, Loader2, Music, Wallet, ExternalLink } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
-import { MusicEmbed } from "@/components/MusicEmbed";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 
@@ -133,6 +132,18 @@ const Profile = () => {
               <TrailblazerBadge userId={user.id} />
             </div>
             {profile?.bio && !editing && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
+            {!editing && spotifyUrl && isMusicUrl(spotifyUrl) && (
+              <a
+                href={spotifyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-1"
+              >
+                <Music size={14} />
+                My {getPlatformLabel(spotifyUrl)}
+                <ExternalLink size={12} />
+              </a>
+            )}
           </div>
           <div className="flex gap-2 shrink-0">
             <Button variant={editing ? "secondary" : "outline"} size="sm" className="gap-1.5" onClick={() => setEditing(!editing)}>
@@ -182,15 +193,6 @@ const Profile = () => {
           </Card>
         )}
 
-        {/* Music embed for artists (outside edit view) */}
-        {!editing && spotifyUrl && isMusicUrl(spotifyUrl) && (
-          <Card className="glass-card border-border overflow-hidden">
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Music size={18} /> My Music</CardTitle></CardHeader>
-            <CardContent>
-              <MusicEmbed url={spotifyUrl} title={`${getPlatformLabel(spotifyUrl)} embed`} />
-            </CardContent>
-          </Card>
-        )}
 
       </div>
     </div>

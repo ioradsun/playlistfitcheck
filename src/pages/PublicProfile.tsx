@@ -3,11 +3,9 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Music, ExternalLink, Pencil, Wallet, ArrowLeft } from "lucide-react";
+import { ExternalLink, Pencil, Wallet, ArrowLeft, Music } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
-import { MusicEmbed } from "@/components/MusicEmbed";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 
@@ -19,15 +17,6 @@ interface PublicProfile {
   wallet_address: string | null;
 }
 
-interface PublicSearch {
-  id: string;
-  playlist_name: string | null;
-  playlist_url: string | null;
-  health_score: number | null;
-  health_label: string | null;
-  created_at: string;
-}
-
 const PublicProfile = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user } = useAuth();
@@ -35,7 +24,6 @@ const PublicProfile = () => {
   const { features } = useSiteCopy();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
-  const [searches, setSearches] = useState<PublicSearch[]>([]);
   const [notFound, setNotFound] = useState(false);
 
   const isOwner = user?.id === userId;
@@ -50,14 +38,9 @@ const PublicProfile = () => {
       });
     supabase.from("user_roles").select("role").eq("user_id", userId)
       .then(({ data }) => { setRoles(data?.map((r: any) => r.role) ?? []); });
-    supabase.from("saved_searches").select("id, playlist_name, playlist_url, health_score, health_label, created_at")
-      .eq("user_id", userId).order("created_at", { ascending: false }).limit(20)
-      .then(({ data }) => { if (data) setSearches(data as PublicSearch[]); });
-  }, [userId, isOwner, navigate]);
+  }, [userId]);
 
-  const isArtist = roles.includes("artist");
   const hasMusic = profile?.spotify_embed_url && isMusicUrl(profile.spotify_embed_url);
-  const embedUrl = profile?.spotify_embed_url ?? null;
   const initials = (profile?.display_name ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
   if (notFound) {
@@ -79,7 +62,6 @@ const PublicProfile = () => {
   return (
     <div className="px-4 py-6">
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Back + artist name - matches results pattern */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft size={20} />
@@ -92,7 +74,6 @@ const PublicProfile = () => {
           )}
         </div>
 
-        {/* Header */}
         <div className="flex items-start gap-4">
           <Avatar className="h-20 w-20 border-2 border-border">
             <AvatarImage src={profile.avatar_url ?? undefined} />
@@ -104,6 +85,18 @@ const PublicProfile = () => {
               <TrailblazerBadge userId={userId} />
             </div>
             {profile.bio && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
+            {hasMusic && (
+              <a
+                href={profile.spotify_embed_url!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-1"
+              >
+                <Music size={14} />
+                My {getPlatformLabel(profile.spotify_embed_url!)}
+                <ExternalLink size={12} />
+              </a>
+            )}
             {features.crypto_tipping && profile.wallet_address && (
               <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 font-mono">
                 <Wallet size={12} />
@@ -112,43 +105,6 @@ const PublicProfile = () => {
             )}
           </div>
         </div>
-
-        {/* Music embed */}
-        {hasMusic && embedUrl && (
-          <Card className="glass-card border-border overflow-hidden">
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Music size={18} /> Music</CardTitle></CardHeader>
-            <CardContent>
-              <MusicEmbed url={embedUrl} title={`${getPlatformLabel(embedUrl)} embed`} />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Recent searches */}
-        {searches.length > 0 && (
-          <Card className="glass-card border-border">
-            <CardHeader><CardTitle className="text-lg">Recent PlaylistFit Checks</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {searches.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{s.playlist_name || "Untitled"}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString()}</p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-sm font-mono font-bold text-primary">{s.health_score ?? "—"}</span>
-                      {s.playlist_url && (
-                        <a href={s.playlist_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
-                          <ExternalLink size={14} />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );
