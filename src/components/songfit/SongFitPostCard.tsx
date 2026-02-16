@@ -6,6 +6,7 @@ import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { supabase } from "@/integrations/supabase/client";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import type { SongFitPost } from "./types";
 import { formatDistanceToNow } from "date-fns";
@@ -307,25 +308,46 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         </div>
 
         {/* Right: game mechanics */}
-        <div className="flex items-center gap-2 text-muted-foreground">
-          {post.engagement_score > 0 && (
-            <div className="flex items-center gap-1" title="Engagement score — weighted total of likes, comments, saves, shares & clicks">
-              <Trophy size={14} />
-              <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
-            </div>
-          )}
-          {post.status === "live" && post.expires_at && (
-            <div className="flex items-center gap-1" title="Days remaining in this submission cycle">
-              <Clock size={14} />
-              <span className="text-xs font-mono">
-                {Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d
-              </span>
-            </div>
-          )}
-          {rank && rank <= 50 && (
-            <span className="text-xs font-bold text-primary font-mono" title="Billboard rank">#{rank}</span>
-          )}
-        </div>
+        <TooltipProvider delayDuration={300}>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            {post.engagement_score > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 cursor-default">
+                    <Trophy size={14} />
+                    <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs max-w-48">
+                  Engagement score — weighted total of likes, comments, saves, shares &amp; clicks
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {post.status === "live" && post.expires_at && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 cursor-default">
+                    <Clock size={14} />
+                    <span className="text-xs font-mono">
+                      {Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs max-w-48">
+                  Days remaining in this submission cycle
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {rank && rank <= 50 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs font-bold text-primary font-mono cursor-default">#{rank}</span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">Billboard rank</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TooltipProvider>
       </div>
 
       {/* Caption - Instagram style */}
