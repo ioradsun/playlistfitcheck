@@ -11,7 +11,7 @@ export function VerifiedBadge({ size = 14, className = "" }: Props) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span className={`inline-flex items-center shrink-0 ${className}`}>
-          <BadgeCheck size={size} className="text-blue-500 fill-blue-500" />
+          <BadgeCheck size={size} className="text-white fill-blue-500" />
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
