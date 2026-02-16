@@ -3,14 +3,16 @@ import { motion } from "framer-motion";
 import { Users, BarChart3, ListMusic, Sliders, FileText, Target, Sparkles, AudioWaveform } from "lucide-react";
 import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
+const TOOL_ORDER = ["songfit", "hitfit", "vibefit", "profit", "playlist", "mix", "lyric", "dreamfit"];
+
 const TOOL_ICON_MAP: Record<string, any> = {
   songfit: Users,
+  hitfit: Target,
   vibefit: AudioWaveform,
   profit: BarChart3,
   playlist: ListMusic,
   mix: Sliders,
   lyric: FileText,
-  hitfit: Target,
   dreamfit: Sparkles,
 };
 
@@ -100,7 +102,9 @@ export default function About() {
             {about.tools_intro || "Six tools. One goal: give independent artists the clarity they deserve. No gatekeeping, no vague advice. Just data, context, and a little taste."}
           </p>
 
-          {Object.entries(siteCopy.tools).map(([key, tool]: [string, ToolCopy], i) => {
+          {TOOL_ORDER.map((key, i) => {
+            const tool = siteCopy.tools[key] as ToolCopy;
+            if (!tool) return null;
             const Icon = TOOL_ICON_MAP[key] || Target;
             const product = about.products.find((p) => p.name === tool.label);
             return (
