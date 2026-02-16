@@ -5,6 +5,8 @@ import { Loader2, X, Music } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { checkDuplicateSubmission, checkEligibleForReentry, reenterSubmission } from "@/lib/engagementTracking";
+import { useNavigate } from "react-router-dom";
 
 interface TrackResult {
   id: string;
@@ -33,6 +35,7 @@ const CAPTION_MAX = 300;
 
 export function SongFitInlineComposer({ onPostCreated }: Props) {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [caption, setCaption] = useState("");
   const [results, setResults] = useState<TrackResult[]>([]);
@@ -134,6 +137,53 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     if (!user || !selectedTrack) return;
     setPublishing(true);
     try {
+      // Check for duplicate submissions
+      const duplicate = await checkDuplicateSubmission(user.id, selectedTrack.trackId);
+      if (duplicate) {
+        if (duplicate.status === "live") {
+          toast.error("This song is already live.", {
+            description: "You can only have one active submission per song.",
+            action: {
+              label: "View Submission",
+              onClick: () => navigate(`/song/${duplicate.post.id}`),
+            },
+          });
+          setPublishing(false);
+          return;
+        }
+        if (duplicate.status === "cooldown") {
+          const cooldownDate = duplicate.post.cooldown_until
+            ? new Date(duplicate.post.cooldown_until).toLocaleDateString()
+            : "soon";
+          toast.error("This song is in cooldown.", {
+            description: `You can re-enter after ${cooldownDate}.`,
+            action: {
+              label: "View Previous",
+              onClick: () => navigate(`/song/${duplicate.post.id}`),
+            },
+          });
+          setPublishing(false);
+          return;
+        }
+      }
+
+      // Check for re-entry eligible
+      const eligible = await checkEligibleForReentry(user.id, selectedTrack.trackId);
+      if (eligible) {
+        const { error: reError } = await reenterSubmission(eligible.id, eligible.engagement_score);
+        if (reError) throw reError;
+        toast.success("🎯 Song re-entered the arena!");
+        setQuery("");
+        setCaption("");
+        setSelectedTrack(null);
+        onPostCreated();
+        setPublishing(false);
+        return;
+      }
+
+      // New submission
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
       const { error } = await supabase.from("songfit_posts").insert({
         user_id: user.id,
         spotify_track_url: selectedTrack.spotifyUrl,
@@ -146,9 +196,12 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
         preview_url: selectedTrack.previewUrl,
         caption: caption.trim(),
         tags_json: [] as any,
+        status: "live",
+        submitted_at: now.toISOString(),
+        expires_at: expiresAt.toISOString(),
       });
       if (error) throw error;
-      toast.success("Posted!");
+      toast.success("🔥 Submission is live!");
       setQuery("");
       setCaption("");
       setSelectedTrack(null);

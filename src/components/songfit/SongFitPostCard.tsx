@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
+import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +12,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ProfileHoverCard } from "./ProfileHoverCard";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { useNavigate } from "react-router-dom";
+import { logEngagementEvent, logImpression } from "@/lib/engagementTracking";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,12 +22,13 @@ import {
 
 interface Props {
   post: SongFitPost;
+  rank?: number;
   onOpenComments: (postId: string) => void;
   onOpenLikes: (postId: string) => void;
   onRefresh: () => void;
 }
 
-export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }: Props) {
+export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRefresh }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
@@ -40,10 +43,29 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
   const [editCaption, setEditCaption] = useState(post.caption || "");
   const [localCaption, setLocalCaption] = useState(post.caption || "");
   const [saving, setSaving] = useState(false);
+  const impressionRef = useRef<HTMLDivElement>(null);
+  const impressionLogged = useRef(false);
 
   const isOwnPost = user?.id === post.user_id;
-
   const CAPTION_MAX = 300;
+
+  // Impression tracking via IntersectionObserver
+  useEffect(() => {
+    const el = impressionRef.current;
+    if (!el || impressionLogged.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !impressionLogged.current) {
+          impressionLogged.current = true;
+          logImpression(post.id);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [post.id]);
 
   const handleSaveEdit = async () => {
     setSaving(true);
@@ -81,6 +103,7 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
         await supabase.from("songfit_likes").delete().eq("post_id", post.id).eq("user_id", user.id);
       } else {
         await supabase.from("songfit_likes").insert({ post_id: post.id, user_id: user.id });
+        logEngagementEvent(post.id, user.id, "like");
       }
     } catch {
       setLiked(wasLiked);
@@ -106,23 +129,38 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
         await supabase.from("songfit_follows").insert({ follower_user_id: user.id, followed_user_id: post.user_id });
         setIsFollowing(true);
         toast.success("Following!");
+        logEngagementEvent(post.id, user.id, "follow_from_post");
       }
     } catch (e: any) {
       toast.error(e.message || "Failed");
     }
   };
 
+  const handleProfileClick = () => {
+    if (user && user.id !== post.user_id) {
+      logEngagementEvent(post.id, user.id, "profile_visit");
+    }
+    navigate(`/u/${post.user_id}`);
+  };
+
   const displayName = post.profiles?.display_name || "Anonymous";
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
 
   return (
-    <div className="border-b border-border/40">
+    <div ref={impressionRef} className="border-b border-border/40">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {/* Billboard rank */}
+          {rank && rank <= 50 && (
+            <span className="text-xs font-bold text-primary tabular-nums w-6 text-right shrink-0">
+              #{rank}
+            </span>
+          )}
+
           <ProfileHoverCard userId={post.user_id}>
             <div className="flex items-center gap-3 cursor-pointer min-w-0"
-              onClick={() => navigate(`/u/${post.user_id}`)}
+              onClick={handleProfileClick}
             >
               <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20 shrink-0">
                 {post.profiles?.avatar_url ? (
@@ -138,6 +176,7 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
             </div>
           </ProfileHoverCard>
           <TrailblazerBadge userId={post.user_id} compact />
+          <SubmissionBadge status={post.status} expiresAt={post.expires_at} cooldownUntil={post.cooldown_until} compact />
         </div>
 
         {/* 3-dot menu */}
@@ -148,9 +187,13 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate(`/u/${post.user_id}`)}>
+            <DropdownMenuItem onClick={handleProfileClick}>
               <ExternalLink size={14} className="mr-2" />
               View Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate(`/song/${post.id}`)}>
+              <Trophy size={14} className="mr-2" />
+              Song Details
             </DropdownMenuItem>
             {!isOwnPost && user && (
               <DropdownMenuItem onClick={toggleFollow}>
@@ -178,7 +221,7 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
       </div>
 
       {/* Music Embed Player */}
-      <LazySpotifyEmbed trackId={post.spotify_track_id} trackTitle={post.track_title} trackUrl={post.spotify_track_url} />
+      <LazySpotifyEmbed trackId={post.spotify_track_id} trackTitle={post.track_title} trackUrl={post.spotify_track_url} postId={post.id} />
 
       {/* Action Row */}
       <div className="flex items-center px-3 pt-1 pb-1">
@@ -191,7 +234,10 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
               {likesCount}
             </button>
           )}
-          <button onClick={() => onOpenComments(post.id)} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
+          <button onClick={() => {
+            onOpenComments(post.id);
+            if (user) logEngagementEvent(post.id, user.id, "comment");
+          }} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
             <MessageCircle size={22} className="text-foreground" />
             {post.comments_count > 0 && <span className="text-xs text-muted-foreground">{post.comments_count}</span>}
           </button>
@@ -212,6 +258,14 @@ export function SongFitPostCard({ post, onOpenComments, onOpenLikes, onRefresh }
             </>
           )}
         </div>
+
+        {/* Engagement score display */}
+        {post.engagement_score > 0 && (
+          <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+            <Trophy size={12} />
+            <span className="font-mono">{Math.round(post.engagement_score)}</span>
+          </div>
+        )}
       </div>
 
       {/* Caption - Instagram style */}

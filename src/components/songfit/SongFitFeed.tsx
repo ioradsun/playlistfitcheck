@@ -3,11 +3,12 @@ import { Loader2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-import type { SongFitPost } from "./types";
+import type { SongFitPost, FeedView, BillboardMode } from "./types";
 import { SongFitPostCard } from "./SongFitPostCard";
 import { SongFitComments } from "./SongFitComments";
 import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
+import { BillboardToggle } from "./BillboardToggle";
 
 export function SongFitFeed() {
   const navigate = useNavigate();
@@ -16,36 +17,109 @@ export function SongFitFeed() {
   const [loading, setLoading] = useState(true);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [likesPostId, setLikesPostId] = useState<string | null>(null);
+  const [feedView, setFeedView] = useState<FeedView>("recent");
+  const [billboardMode, setBillboardMode] = useState<BillboardMode>("trending");
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
-    let query = supabase
-      .from("songfit_posts")
-      .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address)")
-      .limit(50)
-      .order("created_at", { ascending: false });
 
-    const { data } = await query;
-    let enriched = (data || []) as unknown as SongFitPost[];
+    if (feedView === "recent") {
+      // Recent: live submissions, chronological
+      const { data } = await supabase
+        .from("songfit_posts")
+        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address)")
+        .eq("status", "live")
+        .limit(50)
+        .order("created_at", { ascending: false });
 
-    if (user && enriched.length > 0) {
-      const postIds = enriched.map(p => p.id);
-      const [likesRes, savesRes] = await Promise.all([
-        supabase.from("songfit_likes").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-        supabase.from("songfit_saves").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-      ]);
-      const likedSet = new Set((likesRes.data || []).map(l => l.post_id));
-      const savedSet = new Set((savesRes.data || []).map(s => s.post_id));
-      enriched = enriched.map(p => ({
-        ...p,
-        user_has_liked: likedSet.has(p.id),
-        user_has_saved: savedSet.has(p.id),
-      }));
+      let enriched = (data || []) as unknown as SongFitPost[];
+      enriched = await enrichWithUserData(enriched);
+      setPosts(enriched);
+    } else {
+      // Billboard mode
+      const { data } = await supabase
+        .from("songfit_posts")
+        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address)")
+        .eq("status", "live")
+        .limit(50)
+        .order("engagement_score", { ascending: false });
+
+      let enriched = (data || []) as unknown as SongFitPost[];
+      enriched = await enrichWithUserData(enriched);
+      enriched = applyBillboardRanking(enriched, billboardMode);
+      setPosts(enriched);
     }
 
-    setPosts(enriched);
     setLoading(false);
-  }, [user]);
+  }, [user, feedView, billboardMode]);
+
+  const enrichWithUserData = async (posts: SongFitPost[]) => {
+    if (!user || posts.length === 0) return posts;
+    const postIds = posts.map(p => p.id);
+    const [likesRes, savesRes] = await Promise.all([
+      supabase.from("songfit_likes").select("post_id").eq("user_id", user.id).in("post_id", postIds),
+      supabase.from("songfit_saves").select("post_id").eq("user_id", user.id).in("post_id", postIds),
+    ]);
+    const likedSet = new Set((likesRes.data || []).map(l => l.post_id));
+    const savedSet = new Set((savesRes.data || []).map(s => s.post_id));
+    return posts.map(p => ({
+      ...p,
+      user_has_liked: likedSet.has(p.id),
+      user_has_saved: savedSet.has(p.id),
+    }));
+  };
+
+  const applyBillboardRanking = (posts: SongFitPost[], mode: BillboardMode): SongFitPost[] => {
+    let ranked = [...posts];
+
+    switch (mode) {
+      case "trending": {
+        // Velocity: sort by engagement_score with recency boost
+        ranked.sort((a, b) => {
+          const ageA = (Date.now() - new Date(a.submitted_at).getTime()) / (1000 * 60 * 60);
+          const ageB = (Date.now() - new Date(b.submitted_at).getTime()) / (1000 * 60 * 60);
+          const velocityA = a.engagement_score / Math.max(ageA / 24, 0.1);
+          const velocityB = b.engagement_score / Math.max(ageB / 24, 0.1);
+          return velocityB - velocityA;
+        });
+        break;
+      }
+      case "top": {
+        // Top with time decay
+        ranked.sort((a, b) => {
+          const scoreA = a.engagement_score * getDecayMultiplier(a.submitted_at);
+          const scoreB = b.engagement_score * getDecayMultiplier(b.submitted_at);
+          return scoreB - scoreA;
+        });
+        break;
+      }
+      case "best_fit": {
+        // Engagement rate = score / impressions (min 50 impressions)
+        ranked = ranked.filter(p => p.impressions >= 50);
+        ranked.sort((a, b) => {
+          const rateA = a.engagement_score / Math.max(a.impressions, 1);
+          const rateB = b.engagement_score / Math.max(b.impressions, 1);
+          return rateB - rateA;
+        });
+        break;
+      }
+      case "all_time": {
+        // Just by raw engagement_score
+        ranked.sort((a, b) => b.engagement_score - a.engagement_score);
+        break;
+      }
+    }
+
+    return ranked.map((p, i) => ({ ...p, current_rank: i + 1 }));
+  };
+
+  const getDecayMultiplier = (submittedAt: string): number => {
+    const days = (Date.now() - new Date(submittedAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (days <= 3) return 1.0;
+    if (days <= 10) return 0.8;
+    if (days <= 21) return 0.6;
+    return 0.4;
+  };
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
@@ -69,20 +143,32 @@ export function SongFitFeed() {
         </div>
       )}
 
+      <BillboardToggle
+        view={feedView}
+        onViewChange={setFeedView}
+        billboardMode={billboardMode}
+        onModeChange={setBillboardMode}
+      />
+
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 size={24} className="animate-spin text-muted-foreground" />
         </div>
       ) : posts.length === 0 ? (
         <div className="text-center py-16 space-y-3">
-          <p className="text-muted-foreground text-sm">No posts yet. Share what you're listening to!</p>
+          <p className="text-muted-foreground text-sm">
+            {feedView === "billboard" && billboardMode === "best_fit"
+              ? "No submissions with enough impressions yet."
+              : "No live submissions yet. Be the first!"}
+          </p>
         </div>
       ) : (
         <div>
-          {posts.map(post => (
+          {posts.map((post, idx) => (
             <SongFitPostCard
               key={post.id}
               post={post}
+              rank={feedView === "billboard" ? idx + 1 : undefined}
               onOpenComments={setCommentPostId}
               onOpenLikes={setLikesPostId}
               onRefresh={fetchPosts}

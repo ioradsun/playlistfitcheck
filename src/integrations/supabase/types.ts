@@ -208,6 +208,21 @@ export type Database = {
           },
         ]
       }
+      engagement_weights: {
+        Row: {
+          event_type: string
+          weight: number
+        }
+        Insert: {
+          event_type: string
+          weight?: number
+        }
+        Update: {
+          event_type?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       invites: {
         Row: {
           converted_at: string | null
@@ -851,6 +866,76 @@ export type Database = {
           },
         ]
       }
+      songfit_cycle_history: {
+        Row: {
+          cycle_number: number
+          ended_at: string
+          final_engagement_score: number
+          id: string
+          peak_rank: number | null
+          post_id: string
+          started_at: string
+        }
+        Insert: {
+          cycle_number: number
+          ended_at: string
+          final_engagement_score?: number
+          id?: string
+          peak_rank?: number | null
+          post_id: string
+          started_at: string
+        }
+        Update: {
+          cycle_number?: number
+          ended_at?: string
+          final_engagement_score?: number
+          id?: string
+          peak_rank?: number | null
+          post_id?: string
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songfit_cycle_history_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      songfit_engagement_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songfit_engagement_events_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       songfit_follows: {
         Row: {
           created_at: string
@@ -914,13 +999,22 @@ export type Database = {
           album_title: string | null
           caption: string | null
           comments_count: number
+          cooldown_until: string | null
           created_at: string
+          cycle_number: number
+          engagement_score: number
+          expires_at: string | null
           id: string
+          impressions: number
+          legacy_boost: number
           likes_count: number
+          peak_rank: number | null
           preview_url: string | null
           release_date: string | null
           spotify_track_id: string
           spotify_track_url: string
+          status: string
+          submitted_at: string
           tags_json: Json
           tips_total: number
           track_artists_json: Json
@@ -932,13 +1026,22 @@ export type Database = {
           album_title?: string | null
           caption?: string | null
           comments_count?: number
+          cooldown_until?: string | null
           created_at?: string
+          cycle_number?: number
+          engagement_score?: number
+          expires_at?: string | null
           id?: string
+          impressions?: number
+          legacy_boost?: number
           likes_count?: number
+          peak_rank?: number | null
           preview_url?: string | null
           release_date?: string | null
           spotify_track_id: string
           spotify_track_url: string
+          status?: string
+          submitted_at?: string
           tags_json?: Json
           tips_total?: number
           track_artists_json?: Json
@@ -950,13 +1053,22 @@ export type Database = {
           album_title?: string | null
           caption?: string | null
           comments_count?: number
+          cooldown_until?: string | null
           created_at?: string
+          cycle_number?: number
+          engagement_score?: number
+          expires_at?: string | null
           id?: string
+          impressions?: number
+          legacy_boost?: number
           likes_count?: number
+          peak_rank?: number | null
           preview_url?: string | null
           release_date?: string | null
           spotify_track_id?: string
           spotify_track_url?: string
+          status?: string
+          submitted_at?: string
           tags_json?: Json
           tips_total?: number
           track_artists_json?: Json
@@ -1216,6 +1328,9 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_cycle_number: { Args: { _post_id: string }; Returns: undefined }
+      increment_impressions: { Args: { _post_id: string }; Returns: undefined }
+      update_submission_statuses: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "artist" | "curator" | "user"
