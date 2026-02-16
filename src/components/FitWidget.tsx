@@ -239,6 +239,7 @@ export function FitWidget() {
         open={showInvite}
         onOpenChange={setShowInvite}
         inviteCode={inviteCode}
+        isUnlimited={tier === "unlimited"}
       />
     </TooltipProvider>
   );
