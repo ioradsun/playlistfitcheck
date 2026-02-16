@@ -343,7 +343,7 @@ export default function Admin() {
               <div className="px-4 py-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">Usage quotas + invite-to-unlock</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">ShareFit widget with usage tracking</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">toolsFM widget with usage tracking</p>
                 </div>
                 <Switch
                   checked={growthEnabled}
