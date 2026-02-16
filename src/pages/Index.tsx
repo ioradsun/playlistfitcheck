@@ -437,7 +437,7 @@ const Index = () => {
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><DreamFitTab /></div>;
       case "vibefit":
-        return <div className="flex-1 overflow-y-auto px-4 py-6"><VibeFitTab key={loadedVibeFitResult ? "loaded" : "new"} initialResult={loadedVibeFitResult} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><VibeFitTab key={loadedVibeFitResult ? "loaded" : "new"} initialResult={loadedVibeFitResult} onProjectSaved={refreshSidebar} /></div>;
       default:
         return null;
     }
