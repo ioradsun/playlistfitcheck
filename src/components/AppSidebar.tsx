@@ -489,7 +489,10 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                       {profile?.display_name ?? user.email?.split("@")[0]}
                     </span>
                     {isBlazer && pioneerNumber && (
-                      <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold leading-none bg-primary text-primary-foreground border border-primary">
+                      <span
+                        className="shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold leading-none bg-primary text-primary-foreground border border-primary cursor-default"
+                        title={`🌟 Pioneer #${pioneerNumber} of 1,000 — One of the first artists shaping the future of toolsFM.`}
+                      >
                         #{pioneerNumber}
                       </span>
                     )}
