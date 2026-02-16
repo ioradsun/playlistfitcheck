@@ -9,11 +9,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Pencil, Camera, X, Check, Loader2, Music, Wallet, ExternalLink } from "lucide-react";
+import { Pencil, Camera, X, Check, Loader2, Music, Wallet, ExternalLink, Bookmark } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
+
+interface SavedPost {
+  id: string;
+  post_id: string;
+  created_at: string;
+  songfit_posts: {
+    id: string;
+    track_title: string;
+    spotify_track_url: string;
+    album_art_url: string | null;
+    track_artists_json: { name: string }[];
+  } | null;
+}
 
 
 const Profile = () => {
@@ -32,6 +45,7 @@ const Profile = () => {
 
   const currentRole = roles[0] ?? "user";
   const isArtist = roles.includes("artist");
+  const [savedPosts, setSavedPosts] = useState<SavedPost[]>([]);
 
   // Google avatar fallback
   const googleAvatar = user?.user_metadata?.avatar_url ?? user?.user_metadata?.picture;
@@ -48,6 +62,19 @@ const Profile = () => {
       setSpotifyUrl(profile.spotify_embed_url ?? "");
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("songfit_saves")
+      .select("id, post_id, created_at, songfit_posts(id, track_title, spotify_track_url, album_art_url, track_artists_json)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        if (data) setSavedPosts(data as unknown as SavedPost[]);
+      });
+  }, [user]);
 
 
 
@@ -193,6 +220,36 @@ const Profile = () => {
           </Card>
         )}
 
+        {/* Saved Songs */}
+        {savedPosts.length > 0 && (
+          <Card className="glass-card border-border">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Bookmark size={18} /> Saved Songs</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {savedPosts.map(s => {
+                const p = s.songfit_posts;
+                if (!p) return null;
+                const artists = (p.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || "";
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => navigate(`/song/${p.id}`)}
+                    className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 cursor-pointer transition-colors"
+                  >
+                    {p.album_art_url && (
+                      <img src={p.album_art_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{p.track_title}</p>
+                      {artists && <p className="text-xs text-muted-foreground truncate">{artists}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
 
       </div>
     </div>
