@@ -9,6 +9,7 @@ import { Music, ExternalLink, Pencil, Wallet, ArrowLeft } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { MusicEmbed } from "@/components/MusicEmbed";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 
 interface PublicProfile {
   display_name: string | null;
@@ -31,6 +32,7 @@ const PublicProfile = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { features } = useSiteCopy();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [searches, setSearches] = useState<PublicSearch[]>([]);
@@ -102,7 +104,7 @@ const PublicProfile = () => {
               <TrailblazerBadge userId={userId} />
             </div>
             {profile.bio && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
-            {profile.wallet_address && (
+            {features.crypto_tipping && profile.wallet_address && (
               <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 font-mono">
                 <Wallet size={12} />
                 {profile.wallet_address.slice(0, 6)}…{profile.wallet_address.slice(-4)}
