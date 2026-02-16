@@ -47,7 +47,7 @@ const App = () => (
               <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
               <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />
               <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="For artists by artists"><Auth /></PageLayout>} />
-              <Route path="/terms" element={<PageLayout title="Terms"><Terms /></PageLayout>} />
+              <Route path="/terms" element={<PageLayout title="Let's agree"><Terms /></PageLayout>} />
               <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
               <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
               <Route path="/u/:userId" element={<PageLayout><PublicProfile /></PageLayout>} />
