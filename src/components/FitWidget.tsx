@@ -186,7 +186,7 @@ export function FitWidget() {
                     <iframe
                       src={`https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=${resolvedTheme === "dark" ? "0" : "1"}`}
                       width="100%"
-                      height={152}
+                      height={232}
                       allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                       loading="lazy"
                       className="border-0 block"
@@ -223,10 +223,7 @@ export function FitWidget() {
               whileTap={{ scale: 0.93 }}
               style={{ userSelect: "none" }}
             >
-              <div className="flex items-center gap-0.5">
-                <Music size={16} className="text-primary-foreground" />
-                <ArrowRight size={10} className="text-primary-foreground/60" />
-              </div>
+              <Music size={16} className="text-primary-foreground" />
               {tier === "unlimited" && (
                 <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-primary border-2 border-background" />
               )}
