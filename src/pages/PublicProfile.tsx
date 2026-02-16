@@ -79,10 +79,9 @@ const PublicProfile = () => {
   return (
     <div className="px-4 py-6">
       <div className="max-w-2xl mx-auto space-y-6">
-        {/* Back button */}
-        <Button variant="ghost" size="sm" className="gap-1.5 -ml-2 text-muted-foreground hover:text-foreground" onClick={() => navigate(-1)}>
-          <ArrowLeft size={16} />
-          Back
+        {/* Back button - matches results pattern */}
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
+          <ArrowLeft size={20} />
         </Button>
 
         {/* Header */}
