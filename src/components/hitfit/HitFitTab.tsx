@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { HitFitUploader, type ReferenceSource } from "./HitFitUploader";
 import { HitFitResults, type HitFitAnalysis } from "./HitFitResults";
 
@@ -14,6 +15,7 @@ export function HitFitTab({ initialAnalysis, onProjectSaved }: HitFitTabProps = 
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<HitFitAnalysis | null>(initialAnalysis || null);
   const { user } = useAuth();
+  const quota = useUsageQuota("hitfit");
 
   // Sync if initialAnalysis changes (loaded from sidebar)
   useEffect(() => {
@@ -62,6 +64,7 @@ export function HitFitTab({ initialAnalysis, onProjectSaved }: HitFitTabProps = 
 
       const result = data as HitFitAnalysis;
       setAnalysis(result);
+      await quota.increment();
 
       // Save to DB for authenticated users
       if (user) {
@@ -94,7 +97,18 @@ export function HitFitTab({ initialAnalysis, onProjectSaved }: HitFitTabProps = 
 
   return (
     <div className="flex-1 flex items-center justify-center">
-      <HitFitUploader onAnalyze={handleAnalyze} loading={loading} />
+      <HitFitUploader
+        onAnalyze={handleAnalyze}
+        loading={loading}
+        disabled={!quota.canUse}
+        disabledMessage={
+          !quota.canUse
+            ? quota.tier === "anonymous"
+              ? "Sign up for more uses"
+              : "Invite an artist to unlock unlimited"
+            : undefined
+        }
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Coins, Bot } from "lucide-react";
+import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Coins, Bot, Rocket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -42,6 +42,8 @@ export default function Admin() {
   const [deleting, setDeleting] = useState(false);
   const [cryptoEnabled, setCryptoEnabled] = useState(false);
   const [savingCrypto, setSavingCrypto] = useState(false);
+  const [growthEnabled, setGrowthEnabled] = useState(false);
+  const [savingGrowth, setSavingGrowth] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
   const fetchUsers = async () => {
@@ -76,8 +78,9 @@ export default function Admin() {
     if (tab === "copy" && isAdmin) {
       supabase.from("site_copy").select("copy_json").limit(1).single()
         .then(({ data: r }) => {
-          if (r?.copy_json && (r.copy_json as any).features?.crypto_tipping) {
-            setCryptoEnabled(true);
+          if (r?.copy_json) {
+            if ((r.copy_json as any).features?.crypto_tipping) setCryptoEnabled(true);
+            if ((r.copy_json as any).features?.growth_flow) setGrowthEnabled(true);
           }
         });
     }
@@ -99,6 +102,25 @@ export default function Admin() {
       toast.error("Failed to update");
     } finally {
       setSavingCrypto(false);
+    }
+  };
+
+  const handleToggleGrowth = async (enabled: boolean) => {
+    setGrowthEnabled(enabled);
+    setSavingGrowth(true);
+    try {
+      const { data: existing } = await supabase.from("site_copy").select("id, copy_json").limit(1).single();
+      if (existing) {
+        const updated = { ...(existing.copy_json as any), features: { ...((existing.copy_json as any).features || {}), growth_flow: enabled } };
+        await supabase.functions.invoke("admin-dashboard", { body: { action: "update_site_copy", copy_json: updated } });
+        window.dispatchEvent(new CustomEvent("site-copy-updated"));
+      }
+      toast.success(enabled ? "Growth flow enabled" : "Growth flow disabled");
+    } catch (e) {
+      setGrowthEnabled(!enabled);
+      toast.error("Failed to update");
+    } finally {
+      setSavingGrowth(false);
     }
   };
 
@@ -302,6 +324,25 @@ export default function Admin() {
                   checked={cryptoEnabled}
                   onCheckedChange={handleToggleCrypto}
                   disabled={savingCrypto}
+                />
+              </div>
+            </motion.div>
+
+            {/* Product-Led Growth Toggle */}
+            <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                <Rocket size={14} className="text-primary" />
+                <span className="text-sm font-mono font-medium">Product-Led Growth</span>
+              </div>
+              <div className="px-4 py-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Usage quotas + invite-to-unlock</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Anon: 5 uses · Free: 10 uses · Invite → unlimited</p>
+                </div>
+                <Switch
+                  checked={growthEnabled}
+                  onCheckedChange={handleToggleGrowth}
+                  disabled={savingGrowth}
                 />
               </div>
             </motion.div>

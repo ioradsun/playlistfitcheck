@@ -32,6 +32,7 @@ const DEFAULT_COPY: SiteCopy = {
   },
   features: {
     crypto_tipping: false,
+    growth_flow: false,
   },
 };
 
@@ -71,6 +72,7 @@ export interface SiteCopy {
   };
   features: {
     crypto_tipping: boolean;
+    growth_flow: boolean;
   };
 }
 

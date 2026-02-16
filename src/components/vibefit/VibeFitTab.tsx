@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { VibeFitForm, type VibeFitInput } from "./VibeFitForm";
 import { VibeFitResults, type VibeFitOutput } from "./VibeFitResults";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -62,6 +63,7 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [hitfitContext, setHitfitContext] = useState<Record<string, any> | null>(null);
   const { user } = useAuth();
+  const quota = useUsageQuota("vibefit");
 
   // Auto-detect latest HitFit analysis for the user
   useEffect(() => {
@@ -80,6 +82,10 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
   }, [user]);
 
   const generate = useCallback(async (input: VibeFitInput) => {
+    if (!quota.canUse) {
+      setShowUpgrade(true);
+      return;
+    }
     if (getUsageToday() >= DAILY_LIMIT) {
       setShowUpgrade(true);
       return;
@@ -95,6 +101,7 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       incrementUsage();
+      await quota.increment();
       const output = data as VibeFitOutput;
       setResult(output);
 
