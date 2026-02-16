@@ -1,11 +1,11 @@
 import type { HealthOutput } from "@/lib/playlistHealthEngine";
 
 const CONFIG: Record<HealthOutput["summary"]["pitchSuitability"], { label: string; className: string }> = {
-  WORTH_PITCHING: { label: "Worth Pitching", className: "bg-primary/15 text-primary border-primary/30" },
-  LOW_PRIORITY: { label: "Low Priority", className: "bg-score-weak/15 text-score-weak border-score-weak/30" },
-  ACCEPTS_SUBMISSIONS: { label: "Accepts Submissions", className: "bg-score-strong/15 text-score-strong border-score-strong/30" },
-  HIGH_RISK: { label: "⚠ High Risk", className: "bg-score-bad/15 text-score-bad border-score-bad/30" },
-  SPOTIFY_EDITORIAL: { label: "Spotify Editorial — Use S4A", className: "bg-score-ok/15 text-score-ok border-score-ok/30" },
+  WORTH_PITCHING: { label: "Worth Pitching", className: "bg-primary text-primary-foreground border-primary" },
+  LOW_PRIORITY: { label: "Low Priority", className: "bg-score-weak text-white border-score-weak" },
+  ACCEPTS_SUBMISSIONS: { label: "Accepts Submissions", className: "bg-score-strong text-white border-score-strong" },
+  HIGH_RISK: { label: "⚠ High Risk", className: "bg-score-bad text-white border-score-bad" },
+  SPOTIFY_EDITORIAL: { label: "Spotify Editorial — Use S4A", className: "bg-score-ok text-white border-score-ok" },
 };
 
 export function PitchBadge({ suitability }: { suitability: HealthOutput["summary"]["pitchSuitability"] }) {

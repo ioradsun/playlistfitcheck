@@ -17,11 +17,11 @@ export interface SongFitAnalysis {
 }
 
 const FIT_CONFIG: Record<string, { emoji: string; text: string; className: string }> = {
-  PERFECT_FIT: { emoji: "🎯", text: "Perfect Fit", className: "bg-score-excellent/15 text-score-excellent border-score-excellent/30" },
-  STRONG_FIT: { emoji: "🔥", text: "Strong Fit", className: "bg-score-excellent/15 text-score-excellent border-score-excellent/30" },
-  DECENT_FIT: { emoji: "👍", text: "Decent Fit", className: "bg-score-ok/15 text-score-ok border-score-ok/30" },
-  WEAK_FIT: { emoji: "⚠️", text: "Weak Fit", className: "bg-score-bad/15 text-score-bad border-score-bad/30" },
-  POOR_FIT: { emoji: "❌", text: "Poor Fit", className: "bg-score-bad/15 text-score-bad border-score-bad/30" },
+  PERFECT_FIT: { emoji: "🎯", text: "Perfect Fit", className: "bg-score-excellent text-white border-score-excellent" },
+  STRONG_FIT: { emoji: "🔥", text: "Strong Fit", className: "bg-score-excellent text-white border-score-excellent" },
+  DECENT_FIT: { emoji: "👍", text: "Decent Fit", className: "bg-score-ok text-white border-score-ok" },
+  WEAK_FIT: { emoji: "⚠️", text: "Weak Fit", className: "bg-score-bad text-white border-score-bad" },
+  POOR_FIT: { emoji: "❌", text: "Poor Fit", className: "bg-score-bad text-white border-score-bad" },
 };
 
 export { FIT_CONFIG };

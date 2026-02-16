@@ -12,10 +12,10 @@ export interface VibeAnalysis {
 }
 
 const ENERGY_CONFIG = {
-  low: { label: "Low Energy", className: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
-  medium: { label: "Medium Energy", className: "bg-score-ok/15 text-score-ok border-score-ok/30" },
-  high: { label: "High Energy", className: "bg-score-excellent/15 text-score-excellent border-score-excellent/30" },
-  mixed: { label: "Mixed Energy", className: "bg-primary/15 text-primary border-primary/30" },
+  low: { label: "Low Energy", className: "bg-blue-600 text-white border-blue-700" },
+  medium: { label: "Medium Energy", className: "bg-score-ok text-white border-score-ok" },
+  high: { label: "High Energy", className: "bg-score-excellent text-white border-score-excellent" },
+  mixed: { label: "Mixed Energy", className: "bg-primary text-primary-foreground border-primary" },
 };
 
 export function VibeCard({ analysis, loading, playlistName }: { analysis: VibeAnalysis | null; loading: boolean; playlistName?: string }) {
