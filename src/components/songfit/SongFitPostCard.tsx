@@ -244,7 +244,14 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       </div>
 
       {/* Music Embed Player */}
-      <LazySpotifyEmbed trackId={post.spotify_track_id} trackTitle={post.track_title} trackUrl={post.spotify_track_url} postId={post.id} />
+      <LazySpotifyEmbed
+        trackId={post.spotify_track_id}
+        trackTitle={post.track_title}
+        trackUrl={post.spotify_track_url}
+        postId={post.id}
+        albumArtUrl={post.album_art_url}
+        artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
+      />
 
       {/* Action Row — X-style metrics toolbar */}
       <div className="flex items-center justify-between px-1 py-0.5">
