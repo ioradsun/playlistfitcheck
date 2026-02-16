@@ -131,7 +131,7 @@ export function FitWidget() {
               ? "max-h-0 opacity-0 pointer-events-none border-transparent shadow-none !mb-0"
               : "opacity-100 border-border"
           }`}
-          style={{ height: collapsed ? 0 : 260 }}
+          style={{ height: collapsed ? 0 : "auto" }}
         >
           {/* Header */}
           <div className="px-3 py-2.5 border-b border-border flex items-center justify-between cursor-pointer shrink-0" onClick={() => setCollapsed(true)}>
@@ -179,15 +179,15 @@ export function FitWidget() {
               </>
             ) : (
               <>
-                <div className="flex-1 min-h-0 p-3 pb-2">
-                  <div className="w-full h-full rounded-lg overflow-hidden" style={{ backgroundColor: "#121212" }}>
+                <div className="px-3 pt-3 pb-2 shrink-0">
+                  <div className="w-full rounded-lg overflow-hidden" style={{ backgroundColor: "#121212" }}>
                     <iframe
                       src="https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=0"
                       width="100%"
-                      height="100%"
+                      height={152}
                       allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                       loading="lazy"
-                      className="border-0 block w-full h-full"
+                      className="border-0 block"
                       title="toolsFM Playlist"
                     />
                   </div>
