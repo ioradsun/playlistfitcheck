@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
+import confetti from "canvas-confetti";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -123,7 +124,7 @@ function InviteTab({ inviteUrl, inviteCode }: { inviteUrl: string; inviteCode: s
   );
 }
 
-function ShareTab() {
+function ShareTab({ onClose }: { onClose: () => void }) {
   const [shared, setShared] = useState(false);
   const [showSparkle, setShowSparkle] = useState(false);
 
@@ -138,8 +139,18 @@ function ShareTab() {
     setShared(true);
     setShowSparkle(true);
     toast.success("Thanks for sharing! Unlimited unlocked 🎉");
-    setTimeout(() => setShowSparkle(false), 2000);
-  }, []);
+
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ["#39FF14", "#ffffff", "#22c55e"],
+    });
+
+    setTimeout(() => {
+      onClose();
+    }, 1800);
+  }, [onClose]);
 
   return (
     <div className="space-y-4 pt-1">
@@ -242,7 +253,7 @@ export function FitWidgetInviteModal({ open, onOpenChange, inviteCode }: FitWidg
             </TabsContent>
 
             <TabsContent value="share" className="mt-0">
-              <ShareTab />
+              <ShareTab onClose={() => onOpenChange(false)} />
             </TabsContent>
           </div>
         </Tabs>
