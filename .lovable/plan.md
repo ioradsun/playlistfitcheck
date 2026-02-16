@@ -1,29 +1,47 @@
 
+# CrowdFit Competitive Submission Arena — Implemented v1.1
 
-# Remove Recent Searches + Replace Music Embed with Link
+## Completed
 
-## Changes
+### Database Schema
+- Added lifecycle columns to `songfit_posts`: status, submitted_at, expires_at, cooldown_until, cycle_number, engagement_score, peak_rank, impressions, legacy_boost
+- Created `engagement_weights` table (configurable scoring weights)
+- Created `songfit_engagement_events` table (unique per user/event/post)
+- Created `songfit_cycle_history` table (archived cycle stats)
+- Trigger: auto-recompute engagement_score on new event
+- Functions: `update_submission_statuses()`, `increment_impressions()`, `increment_cycle_number()`
+- Backfilled existing posts with lifecycle states
+- Cron job: runs lifecycle transitions every 15 minutes
 
-### 1. Public Profile (`src/pages/PublicProfile.tsx`)
+### Submission Lifecycle
+- 21-day live → 21-day cooldown → eligible
+- Duplicate submission detection with contextual toasts
+- Re-entry with 15% legacy boost (decays after 48h)
+- Status badges on all post cards (Live/Expired/Cooldown/Eligible)
 
-**Remove "Recent PlaylistFit Checks" section**
-- Delete the `searches` state, the `saved_searches` query in useEffect, and the `PublicSearch` interface
-- Remove the entire "Recent searches" card block (lines 127-151)
-- Clean up unused imports (`ExternalLink`)
+### Billboard System
+- Feed toggle: Recent / Billboard
+- Billboard modes: Trending, Top (decay-weighted), Best Fit (rate-based), All-Time
+- Rank display on cards
 
-**Replace Music embed with a "My Spotify" link in the bio area**
-- Remove the Music embed card (lines 117-124)
-- Instead, show a simple inline link below the bio: "My Spotify" (or "My SoundCloud") with an external link icon, pointing to the user's `spotify_embed_url`
-- Remove `MusicEmbed` import and unused `Music` import from lucide
+### Engagement Tracking
+- Events logged: like, comment, save, spotify_click, follow_from_post, profile_visit
+- Impression tracking via IntersectionObserver
+- Weighted scoring via configurable `engagement_weights` table
 
-### 2. Private Profile (`src/pages/Profile.tsx`)
+### Song Detail Page
+- Route: /song/:postId
+- Current cycle stats, lifetime impact, cycle history, peak rank
 
-**Replace Music embed card with inline link**
-- Remove the "My Music" embed card (lines 186-193)
-- Show a "My Spotify" / "My SoundCloud" link below the bio in the header area (similar to public profile)
-- Remove `MusicEmbed` import; keep the edit form input for setting the URL
+### Competitive Artist Profile
+- 6-stat summary grid (Peak Rank, Best Score, Impact, Cycles, Avg Rank, Songs)
+- Active submission spotlight
+- Full submission record with status badges
 
-### Result
-
-Both profile pages will show the music URL as a simple styled link (e.g. with a Music icon + "My Spotify") in the bio section rather than a large embedded player, and the public profile will no longer display recent PlaylistFit check history.
-
+## Deferred to Phase 2
+- Native audio preview hosting
+- Completion/skip/replay rate tracking
+- Verified artist weighting
+- AI Fit Score clustering
+- Achievement badges
+- Advanced anti-gaming (beyond unique constraints)

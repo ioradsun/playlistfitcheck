@@ -15,10 +15,23 @@ export interface SongFitPost {
   comments_count: number;
   tips_total: number;
   created_at: string;
+  // Submission lifecycle
+  status: 'draft' | 'live' | 'expired' | 'cooldown' | 'eligible';
+  submitted_at: string;
+  expires_at: string | null;
+  cooldown_until: string | null;
+  cycle_number: number;
+  engagement_score: number;
+  peak_rank: number | null;
+  impressions: number;
+  legacy_boost: number;
   // joined
-  profiles?: { display_name: string | null; avatar_url: string | null; spotify_artist_id: string | null };
+  profiles?: { display_name: string | null; avatar_url: string | null; spotify_artist_id: string | null; wallet_address?: string | null };
   user_has_liked?: boolean;
   user_has_saved?: boolean;
+  // computed at query time for billboard
+  billboard_score?: number;
+  current_rank?: number;
 }
 
 export interface SongFitComment {
@@ -31,3 +44,16 @@ export interface SongFitComment {
   profiles?: { display_name: string | null; avatar_url: string | null };
   replies?: SongFitComment[];
 }
+
+export interface CycleHistory {
+  id: string;
+  post_id: string;
+  cycle_number: number;
+  final_engagement_score: number;
+  peak_rank: number | null;
+  started_at: string;
+  ended_at: string;
+}
+
+export type BillboardMode = 'trending' | 'top' | 'best_fit' | 'all_time';
+export type FeedView = 'recent' | 'billboard';
