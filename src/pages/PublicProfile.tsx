@@ -5,7 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Music, ExternalLink, Pencil, Wallet } from "lucide-react";
+import { Music, ExternalLink, Pencil, Wallet, ArrowLeft } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { MusicEmbed } from "@/components/MusicEmbed";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
@@ -79,6 +80,17 @@ const PublicProfile = () => {
   return (
     <div className="min-h-screen bg-background pt-20 px-4 pb-12">
       <div className="max-w-2xl mx-auto space-y-6">
+        {/* Back button + Page title */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => navigate(-1)}>
+            <ArrowLeft size={18} />
+          </Button>
+          <h2 className="text-xl font-bold">Artist Profile</h2>
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[hsl(142,70%,45%)]/15 text-[hsl(142,70%,45%)] border border-[hsl(142,70%,45%)]/30">
+            Fit for greatness
+          </span>
+        </div>
+
         {/* Header */}
         <div className="flex items-start gap-4">
           <Avatar className="h-20 w-20 border-2 border-border">
