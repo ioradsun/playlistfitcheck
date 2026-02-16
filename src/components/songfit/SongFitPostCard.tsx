@@ -308,7 +308,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         </div>
 
         {/* Right: game mechanics */}
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider delayDuration={350}>
           <div className="flex items-center gap-2 text-muted-foreground">
             {post.engagement_score > 0 && (
               <Tooltip>
