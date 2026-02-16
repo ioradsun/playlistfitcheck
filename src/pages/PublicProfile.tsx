@@ -14,6 +14,7 @@ import {
   RotateCcw, TrendingUp, Star, Target, Camera, X, Check, Loader2, Bookmark,
 } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { SubmissionBadge } from "@/components/songfit/SubmissionBadge";
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
@@ -26,6 +27,7 @@ interface PublicProfileData {
   avatar_url: string | null;
   spotify_embed_url: string | null;
   wallet_address: string | null;
+  is_verified: boolean;
 }
 
 interface SavedPost {
@@ -69,7 +71,7 @@ const PublicProfile = () => {
   useEffect(() => {
     if (!userId) return;
 
-    supabase.from("profiles").select("display_name, bio, avatar_url, spotify_embed_url, wallet_address").eq("id", userId).single()
+    supabase.from("profiles").select("display_name, bio, avatar_url, spotify_embed_url, wallet_address, is_verified").eq("id", userId).single()
       .then(({ data, error }) => {
         if (error || !data) { setNotFound(true); return; }
         setProfile(data as PublicProfileData);
@@ -214,6 +216,7 @@ const PublicProfile = () => {
             </Button>
           )}
           <h1 className="text-xl font-semibold truncate">{profile.display_name || "User"}</h1>
+          {profile.is_verified && <VerifiedBadge size={18} />}
           {isOwner && (
             <Button
               variant={editing ? "secondary" : "outline"}
