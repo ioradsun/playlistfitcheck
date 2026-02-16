@@ -131,7 +131,7 @@ export function FitWidget() {
               ? "max-h-0 opacity-0 pointer-events-none border-transparent shadow-none !mb-0"
               : "opacity-100 border-border"
           }`}
-          style={{ height: collapsed ? 0 : 320 }}
+          style={{ height: collapsed ? 0 : 260 }}
         >
           {/* Header */}
           <div className="px-3 py-2.5 border-b border-border flex items-center justify-between cursor-pointer shrink-0" onClick={() => setCollapsed(true)}>
