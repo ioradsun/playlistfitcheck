@@ -16,7 +16,7 @@ export function FitWidgetInviteModal({ open, onOpenChange, inviteCode }: FitWidg
 
   const baseUrl = window.location.hostname === "localhost"
     ? window.location.origin
-    : "https://tribes.fm";
+    : "https://tools.fm";
   const inviteUrl = inviteCode
     ? `${baseUrl}/?ref=${inviteCode}`
     : "";
