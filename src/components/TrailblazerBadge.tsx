@@ -1,5 +1,4 @@
 import { motion } from "framer-motion";
-import { Star } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTrailblazer } from "@/hooks/useTrailblazer";
 
@@ -23,12 +22,12 @@ export function TrailblazerBadge({ userId, compact = false }: TrailblazerBadgePr
           whileHover={{ scale: 1.08, boxShadow: "0 0 12px hsl(var(--primary) / 0.4)" }}
           transition={{ duration: 0.2 }}
         >
-          <Star size={compact ? 8 : 11} className="fill-primary" />
+          <span className="text-primary/60 font-mono">#{number}</span>
           <span className="text-primary/60 font-mono">#{number}</span>
         </motion.span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs max-w-[240px] space-y-1">
-        <p className="font-semibold">🌟 Pioneer #{number}/1,000</p>
+        <p className="font-semibold">🌟 Pioneer #{number} of 1,000</p>
         <p>One of the first artists shaping the future of toolsFM.</p>
       </TooltipContent>
     </Tooltip>
