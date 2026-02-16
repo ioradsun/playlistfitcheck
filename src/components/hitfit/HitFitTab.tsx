@@ -34,7 +34,7 @@ export function HitFitTab({ initialAnalysis, onProjectSaved }: HitFitTabProps = 
       if (reference.type === "file") {
         formData.append("reference", reference.file);
         formData.append("referenceName", reference.file.name);
-      } else {
+      } else if (reference.type !== "none") {
         formData.append("referenceType", reference.type);
         formData.append("referenceUrl", reference.url);
         formData.append("referenceName", reference.url);

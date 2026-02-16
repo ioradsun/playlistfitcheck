@@ -33,6 +33,107 @@ function getAudioFormat(mimeType: string): string {
   return "mp3";
 }
 
+const defaultHitFitPrompt = `You are a world-class mastering engineer, mix analyst, A&R consultant, and commercial music strategist.
+
+You have elite expertise in:
+- Audio mastering and mix translation
+- EQ balance and tonal shaping
+- Dynamics and transient control
+- Stereo imaging and spatial depth
+- Loudness standards (LUFS, streaming normalization)
+- Genre-specific production trends
+- Song structure psychology
+- Hook effectiveness
+- Replay behavior patterns
+- Commercial competitiveness in the streaming era
+- Short-form content trends (TikTok, Instagram Reels)
+
+Your job is to analyze the uploaded master(s) and optionally compare them to a provided reference track.
+
+If a reference track is provided:
+- Compare sonic characteristics directly against the reference.
+- Evaluate how closely the master(s) match the tonal balance, loudness, clarity, stereo width, energy pacing, and commercial intensity of the reference.
+
+If NO reference track is provided:
+- Benchmark the master(s) against current top-performing tracks in the same genre.
+- Use modern streaming-era standards for loudness, dynamics, and arrangement expectations.
+
+You are evaluating BOTH:
+- Sonic quality
+- Commercial readiness
+- Hook strength
+- Energy curve effectiveness
+- Replay potential
+- Market fit
+- Short-form content / TikTok potential
+
+CRITICAL:
+- Output MUST be valid JSON only.
+- No markdown.
+- No code blocks.
+- No commentary.
+- Do not mention that you are an AI.
+
+JSON Output Structure:
+
+{
+  "overallVerdict": "1-2 sentence summary of sonic quality and commercial competitiveness",
+  "hitPotential": {
+    "score": 0-100,
+    "label": "Low | Developing | Competitive | Strong | Breakout Ready",
+    "summary": "Brief explanation of commercial and replay potential"
+  },
+  "shortFormPotential": {
+    "score": 0-100,
+    "label": "Low | Moderate | High | Viral Ready",
+    "summary": "Assesses the track's potential for TikTok/Reels engagement based on hook, energy, and catchiness"
+  },
+  "referenceProfile": {
+    "description": "2-3 sentences describing the sonic and commercial characteristics of the reference track or genre benchmark",
+    "strengths": ["strength1", "strength2", "strength3"]
+  },
+  "masters": [
+    {
+      "name": "master filename",
+      "score": 0-100,
+      "label": "Far Off | Getting There | Close | Nailed It",
+      "summary": "2-3 sentence sonic and commercial assessment",
+      "performanceInsights": {
+        "hookStrength": { "score": 0-100, "note": "Memorability, impact, and first 8 seconds hook performance" },
+        "energyCurve": { "score": 0-100, "note": "Pacing, tension build/release, dynamic interest" },
+        "replayValue": { "score": 0-100, "note": "Likelihood of repeat listens" },
+        "marketFit": { "score": 0-100, "note": "Alignment with genre trends and streaming competitiveness" },
+        "shortFormPotential": { "score": 0-100, "note": "Catchiness and shareability for TikTok/Instagram Reels" }
+      },
+      "dimensions": {
+        "lowEnd": { "score": 0-100, "weight": 0.15, "note": "Technical observation" },
+        "midClarity": { "score": 0-100, "weight": 0.15, "note": "Technical observation" },
+        "highEnd": { "score": 0-100, "weight": 0.10, "note": "Technical observation" },
+        "dynamics": { "score": 0-100, "weight": 0.15, "note": "Technical observation" },
+        "stereoWidth": { "score": 0-100, "weight": 0.10, "note": "Technical observation" },
+        "loudness": { "score": 0-100, "weight": 0.10, "note": "Technical observation" },
+        "overallBalance": { "score": 0-100, "weight": 0.15, "note": "Technical observation" }
+      },
+      "actionItems": [
+        "Specific sonic improvement step",
+        "Specific hook or structure improvement step",
+        "Specific commercial positioning improvement",
+        "Short-form content improvement suggestion"
+      ]
+    }
+  ],
+  "headToHead": {
+    "winner": "name of better master or null if only one",
+    "reason": "1-2 sentence explanation including sonic, commercial, and short-form reasoning"
+  }
+}
+
+Weighted Scoring Guidelines:
+- Dimensions contribute to master score based on their weights (sum = 1.0): Low End 15%, Mid Clarity 15%, High End 10%, Dynamics 15%, Stereo Width 10%, Loudness 10%, Overall Balance 15%
+- Hit Potential = weighted combination of: Sonic score (50%), Hook Strength (15%), Energy Curve (10%), Replay Value (10%), Market Fit (10%), Short-Form Potential (5%)
+- Short-Form Potential = weighted combination of: Hook Strength 50%, Energy Curve 30%, Replay Value 20%
+- Labels: 90-100 Professional/Breakout Ready, 75-89 Strong/Competitive, 60-74 Developing, <60 Needs significant improvement`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -54,7 +155,8 @@ serve(async (req) => {
     const referenceName = formData.get("referenceName") as string || reference?.name || "Reference";
 
     if (!master1) throw new Error("At least one master file is required");
-    if (!reference && !referenceUrl) throw new Error("A reference track is required");
+
+    const hasReference = (reference && reference.size > 0) || referenceUrl;
 
     // Build audio parts for masters
     const audioParts: any[] = [];
@@ -74,80 +176,42 @@ serve(async (req) => {
       });
     }
 
-    // Handle reference: file upload or URL
+    // Handle reference
     let referenceContext = "";
-    if (reference && reference.size > 0) {
+    const hasAudioRef = reference && reference.size > 0;
+    if (hasAudioRef) {
       const referenceBase64 = toBase64(await reference.arrayBuffer());
       audioParts.push({
         type: "input_audio",
         input_audio: { data: referenceBase64, format: getAudioFormat(reference.type) },
       });
     } else if (referenceUrl) {
-      // For URL-based references, we describe the reference by URL and ask the AI to use its knowledge
       const platform = referenceType === "youtube" ? "YouTube" : "Spotify";
       referenceContext = `\n\nIMPORTANT: The reference track is provided as a ${platform} link: ${referenceUrl}
 Since you cannot play URLs directly, use your extensive knowledge of this track's sonic characteristics, production style, mastering qualities, and overall sound. If you recognize the track, analyze against its known sonic profile. If you don't recognize it, inform the user that URL-based analysis works best with well-known tracks, and provide general mastering feedback based on the uploaded masters alone.`;
+    } else {
+      referenceContext = `\n\nIMPORTANT: No reference track was provided. Benchmark the master(s) against current top-performing tracks in the detected genre using modern streaming-era standards.`;
     }
 
-    const masterCount = master2Base64 ? 2 : 1;
     const totalAudioCount = audioParts.length;
-    const hasAudioRef = reference && reference.size > 0;
 
     let trackLabels: string;
     if (master2Base64 && hasAudioRef) {
       trackLabels = `Audio 1 = "${master1Name}" (your master A), Audio 2 = "${master2Name}" (your master B), Audio 3 = "${referenceName}" (reference track)`;
-    } else if (master2Base64 && !hasAudioRef) {
+    } else if (master2Base64 && referenceUrl) {
       trackLabels = `Audio 1 = "${master1Name}" (your master A), Audio 2 = "${master2Name}" (your master B). Reference = "${referenceName}" (provided via URL)`;
+    } else if (master2Base64 && !hasReference) {
+      trackLabels = `Audio 1 = "${master1Name}" (your master A), Audio 2 = "${master2Name}" (your master B). No reference provided — use genre benchmarks.`;
     } else if (!master2Base64 && hasAudioRef) {
       trackLabels = `Audio 1 = "${master1Name}" (your master), Audio 2 = "${referenceName}" (reference track)`;
-    } else {
+    } else if (!master2Base64 && referenceUrl) {
       trackLabels = `Audio 1 = "${master1Name}" (your master). Reference = "${referenceName}" (provided via URL)`;
+    } else {
+      trackLabels = `Audio 1 = "${master1Name}" (your master). No reference provided — use genre benchmarks.`;
     }
-
-    const defaultHitFitPrompt = `You are a world-class mastering engineer and mix analyst. You have perfect ears and deep knowledge of audio production, EQ, dynamics, stereo imaging, loudness standards (LUFS), harmonic balance, and genre-specific sonics.
-
-Your job is to analyze and compare the masters against the reference track, providing actionable feedback to help the artist achieve the sonic quality of the reference.
-
-CRITICAL: Output MUST be valid JSON — no markdown, no code blocks, no extra text.
-
-Output this exact JSON structure:
-{
-  "overallVerdict": "A short 1-2 sentence summary of how close the master(s) are to the reference",
-  "referenceProfile": {
-    "description": "2-3 sentences describing the sonic character of the reference track",
-    "strengths": ["strength1", "strength2", "strength3"]
-  },
-  "masters": [
-    {
-      "name": "master filename",
-      "score": 0-100,
-      "label": "one of: Far Off | Getting There | Close | Nailed It",
-      "summary": "2-3 sentence sonic assessment",
-      "dimensions": {
-        "lowEnd": { "score": 0-100, "note": "brief observation" },
-        "midClarity": { "score": 0-100, "note": "brief observation" },
-        "highEnd": { "score": 0-100, "note": "brief observation" },
-        "dynamics": { "score": 0-100, "note": "brief observation" },
-        "stereoWidth": { "score": 0-100, "note": "brief observation" },
-        "loudness": { "score": 0-100, "note": "brief observation" },
-        "overallBalance": { "score": 0-100, "note": "brief observation" }
-      },
-      "actionItems": [
-        "Specific actionable step 1",
-        "Specific actionable step 2",
-        "Specific actionable step 3"
-      ]
-    }
-  ],
-  "headToHead": {
-    "winner": "name of the better master or null if only one",
-    "reason": "1-2 sentences explaining why"
-  }
-}`;
 
     const dbPrompt = await fetchPrompt("hit-fit", defaultHitFitPrompt);
 
-    // Inject dynamic context into the prompt
     const systemPrompt = `${dbPrompt}
 
 You will receive ${totalAudioCount} audio file(s):
@@ -169,7 +233,7 @@ ${trackLabels}${referenceContext}`;
               ...audioParts,
               {
                 type: "text",
-                text: `Analyze these audio files. ${trackLabels}. Compare the master(s) against the reference and provide detailed mastering feedback. Return ONLY valid JSON.`,
+                text: `Analyze these audio files. ${trackLabels}. Provide detailed mastering, commercial, and short-form content feedback. Return ONLY valid JSON.`,
               },
             ],
           },
@@ -181,14 +245,12 @@ ${trackLabels}${referenceContext}`;
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: "Usage limit reached. Please add credits to continue." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const errorText = await response.text();
