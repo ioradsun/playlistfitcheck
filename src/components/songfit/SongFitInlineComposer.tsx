@@ -95,8 +95,8 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       const daysLeft = post.expires_at
         ? Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
         : null;
-      const dayStr = daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? "s" : ""} before it can be posted again.` : "";
-      setDuplicateWarning(`${post.track_title} is live. ${dayStr}`);
+      const dayStr = daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left this cycle.` : "";
+      setDuplicateWarning(`"${post.track_title}" is live. ${dayStr}`);
     } else {
       setDuplicateWarning(null);
       setDuplicatePostId(null);
@@ -343,14 +343,14 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
 
           {/* Duplicate warning — replaces caption area */}
           {duplicateWarning && (
-            <div className="mt-2 flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-200">
-              <AlertTriangle size={15} className="shrink-0 text-yellow-400" />
-              <span className="flex-1">
-                {duplicateWarning}{" "}
-                <button onClick={() => duplicatePostId && navigate(`/song/${duplicatePostId}`)} className="underline hover:text-yellow-100 transition-colors">
-                  View
+            <div className="mt-2 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2.5 text-sm text-yellow-200">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-yellow-400" />
+              <div className="flex-1 space-y-1">
+                <p>{duplicateWarning}</p>
+                <button onClick={() => duplicatePostId && navigate(`/song/${duplicatePostId}`)} className="text-xs text-yellow-400 underline hover:text-yellow-200 transition-colors">
+                  View Submission
                 </button>
-              </span>
+              </div>
               <button onClick={clear} className="p-0.5 rounded hover:bg-yellow-500/20 text-yellow-400 hover:text-yellow-200 transition-colors">
                 <X size={14} />
               </button>
