@@ -1,7 +1,7 @@
 const Terms = () => {
   return (
     <div className="max-w-2xl mx-auto px-4 py-10 space-y-8">
-      <h1 className="text-2xl font-bold">Terms of Use</h1>
+      
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">What toolsFM is</h2>
