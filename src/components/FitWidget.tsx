@@ -142,7 +142,7 @@ export function FitWidget() {
                 {user ? (
                   <TrailblazerBadge userId={user.id} compact />
                 ) : tier !== "unlimited" ? (
-                  <Badge variant="outline" className="text-[10px] h-5">Guest</Badge>
+                  <Badge variant="default" className="text-[10px] h-5 bg-muted-foreground/80 text-white">Guest</Badge>
                 ) : null}
               </div>
 
