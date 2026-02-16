@@ -103,7 +103,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = useCallback(() => {
     if (!user) { setProfile(null); return; }
-    supabase.from("profiles").select("display_name, avatar_url, bio, spotify_embed_url, spotify_artist_id, wallet_address, invite_code, is_unlimited, theme").eq("id", user.id).single()
+    supabase.from("profiles").select("display_name, avatar_url, bio, spotify_embed_url, spotify_artist_id, wallet_address, invite_code, is_unlimited, is_verified, theme").eq("id", user.id).single()
       .then(({ data }) => {
         if (data) {
           setProfile(data as ProfileData);
