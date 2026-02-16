@@ -27,7 +27,7 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const body = await req.json();
-    const { songTitle, genre, moods, lyrics } = body;
+    const { songTitle, genre, moods, lyrics, composerNotes } = body;
 
     // Validate inputs
     if (!songTitle || typeof songTitle !== "string" || songTitle.length > 200) {
@@ -65,6 +65,7 @@ Include a light CTA like 'stream now' or 'link in bio'. Match tone to mood. Be a
 Song Title: ${songTitle.slice(0, 200)}
 Genre: ${genre}
 Mood/Vibe: ${moods.join(", ")}
+${composerNotes ? `Composer Notes: ${(composerNotes as string).slice(0, 500)}` : ""}
 ${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}`;
 
     const captionResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -120,6 +121,7 @@ ${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}`;
     const artPromptBase = `${artSystemPrompt}
 Genre: ${genre}
 Mood: ${moods.join(", ")}
+${composerNotes ? `Artist direction: ${(composerNotes as string).slice(0, 500)}` : ""}
 ${lyrics ? `Key lyrical themes: ${(lyrics as string).slice(0, 200)}` : ""}`;
 
     const artVariations = [
