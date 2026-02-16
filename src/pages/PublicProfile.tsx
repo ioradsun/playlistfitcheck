@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -40,8 +40,6 @@ const PublicProfile = () => {
 
   useEffect(() => {
     if (!userId) return;
-    // If viewing own profile, redirect to /profile
-    if (isOwner) { navigate("/profile"); return; }
 
     supabase.from("profiles").select("display_name, bio, avatar_url, spotify_embed_url, wallet_address").eq("id", userId).single()
       .then(({ data, error }) => {
@@ -85,6 +83,11 @@ const PublicProfile = () => {
             <ArrowLeft size={20} />
           </Button>
           <h1 className="text-xl font-semibold truncate">{profile.display_name || "User"}</h1>
+          {isOwner && (
+            <Button variant="outline" size="sm" className="gap-1.5 ml-auto" asChild>
+              <Link to="/profile"><Pencil size={14} /> Edit</Link>
+            </Button>
+          )}
         </div>
 
         {/* Header */}
