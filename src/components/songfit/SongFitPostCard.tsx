@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2 } from "lucide-react";
+import { Heart, MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { SubmissionBadge } from "./SubmissionBadge";
@@ -179,12 +179,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {/* Billboard rank */}
-          {rank && rank <= 50 && (
-            <span className="text-xs font-bold text-primary tabular-nums w-6 text-right shrink-0">
-              #{rank}
-            </span>
-          )}
 
           <ProfileHoverCard userId={post.user_id}>
             <div className="flex items-center gap-3 cursor-pointer min-w-0"
@@ -253,8 +247,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
 
       {/* Action Row — X-style metrics toolbar */}
       <div className="flex items-center justify-between px-1 py-0.5">
-        {/* Left group: comment, share, like */}
-        <div className="flex items-center flex-1">
+        {/* Left group: comment, share, like, bookmark */}
+        <div className="flex items-center">
           <button
             onClick={() => {
               onOpenComments(post.id);
@@ -287,12 +281,9 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             )}
           </button>
 
-          {post.engagement_score > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-2 text-muted-foreground">
-              <Trophy size={14} />
-              <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
-            </div>
-          )}
+          <button onClick={toggleSave} className="px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group">
+            <Bookmark size={18} className={saved ? "fill-primary text-primary" : "text-muted-foreground group-hover:text-primary transition-colors"} />
+          </button>
 
           {cryptoEnabled && (
             <div className="flex items-center">
@@ -312,10 +303,26 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           )}
         </div>
 
-        {/* Right: bookmark */}
-        <button onClick={toggleSave} className="px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group">
-          <Bookmark size={18} className={saved ? "fill-primary text-primary" : "text-muted-foreground group-hover:text-primary transition-colors"} />
-        </button>
+        {/* Right: game mechanics */}
+        <div className="flex items-center gap-2 text-muted-foreground">
+          {post.engagement_score > 0 && (
+            <div className="flex items-center gap-1">
+              <Trophy size={14} />
+              <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
+            </div>
+          )}
+          {post.status === "live" && post.expires_at && (
+            <div className="flex items-center gap-1">
+              <Clock size={14} />
+              <span className="text-xs font-mono">
+                {Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d
+              </span>
+            </div>
+          )}
+          {rank && rank <= 50 && (
+            <span className="text-xs font-bold text-primary font-mono">#{rank}</span>
+          )}
+        </div>
       </div>
 
       {/* Caption - Instagram style */}
