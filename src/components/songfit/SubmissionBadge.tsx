@@ -19,7 +19,7 @@ export function SubmissionBadge({ status, expiresAt, cooldownUntil, compact }: P
     case 'live': {
       const days = daysLeft(expiresAt);
       return (
-        <Badge variant="default" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1 text-[10px] font-semibold">
+        <Badge variant="default" className="bg-emerald-600 text-white border-emerald-700 gap-1 text-[10px] font-semibold">
           <Flame size={10} />
           {compact ? `${days}d` : `Live • ${days}d left`}
         </Badge>
@@ -27,7 +27,7 @@ export function SubmissionBadge({ status, expiresAt, cooldownUntil, compact }: P
     }
     case 'expired':
       return (
-        <Badge variant="secondary" className="bg-muted/60 text-muted-foreground gap-1 text-[10px]">
+        <Badge variant="secondary" className="bg-muted-foreground/80 text-white gap-1 text-[10px]">
           <Clock size={10} />
           Expired
         </Badge>
@@ -35,7 +35,7 @@ export function SubmissionBadge({ status, expiresAt, cooldownUntil, compact }: P
     case 'cooldown': {
       const days = daysLeft(cooldownUntil);
       return (
-        <Badge variant="secondary" className="bg-amber-500/15 text-amber-400 border-amber-500/30 gap-1 text-[10px]">
+        <Badge variant="secondary" className="bg-amber-600 text-white border-amber-700 gap-1 text-[10px]">
           <Clock size={10} />
           {compact ? `CD ${days}d` : `Cooldown • ${days}d`}
         </Badge>
@@ -43,7 +43,7 @@ export function SubmissionBadge({ status, expiresAt, cooldownUntil, compact }: P
     }
     case 'eligible':
       return (
-        <Badge variant="secondary" className="bg-blue-500/15 text-blue-400 border-blue-500/30 gap-1 text-[10px]">
+        <Badge variant="secondary" className="bg-blue-600 text-white border-blue-700 gap-1 text-[10px]">
           <RotateCcw size={10} />
           Re-Enter
         </Badge>
