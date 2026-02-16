@@ -14,6 +14,7 @@ interface Props {
 
 export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState("Syncing...");
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -43,12 +44,21 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
     setLoading(true);
     try {
       // Compress large files client-side before uploading
-      const compressed = await compressAudioFile(file);
-      if (compressed !== file) {
-        toast.info(`Compressed ${(file.size / 1024 / 1024).toFixed(0)} MB → ${(compressed.size / 1024 / 1024).toFixed(1)} MB`);
+      setLoadingMsg("Compressing…");
+      let uploadFile: File;
+      try {
+        uploadFile = await compressAudioFile(file);
+      } catch (compErr) {
+        toast.error(compErr instanceof Error ? compErr.message : "Compression failed");
+        setLoading(false);
+        return;
       }
+      if (uploadFile !== file) {
+        toast.info(`Compressed ${(file.size / 1024 / 1024).toFixed(0)} MB → ${(uploadFile.size / 1024 / 1024).toFixed(1)} MB`);
+      }
+      setLoadingMsg("Syncing…");
       const formData = new FormData();
-      formData.append("audio", compressed);
+      formData.append("audio", uploadFile);
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
@@ -111,7 +121,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
         setSavedId(l.id);
         const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
         setAudioFile(dummyFile);
-      }} loading={loading} />
+      }} loading={loading} loadingMsg={loadingMsg} />
     </div>
   );
 }

@@ -5,6 +5,7 @@
  */
 
 const TARGET_SAMPLE_RATE = 22050;
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB hard cap for edge function safety
 
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
@@ -41,22 +42,26 @@ function encodeWav(samples: Float32Array, sampleRate: number): Blob {
 
 /**
  * Compress an audio File to a smaller mono WAV.
- * Returns the original file if it's already small enough or compression fails.
+ * Throws if compression fails or result is still too large.
  */
 export async function compressAudioFile(
   file: File,
-  thresholdBytes = 20 * 1024 * 1024
+  thresholdBytes = MAX_UPLOAD_BYTES
 ): Promise<File> {
   // Skip compression for small files
   if (file.size <= thresholdBytes) return file;
 
-  try {
-    const ctx = new OfflineAudioContext(1, 1, TARGET_SAMPLE_RATE);
-    const arrayBuffer = await file.arrayBuffer();
-    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+  console.log(`[compressAudio] Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)…`);
 
-    // Mix down to mono
-    const numChannels = audioBuffer.numberOfChannels;
+  // Use standard AudioContext for decoding (OfflineAudioContext(1,1,rate) can't decode properly)
+  const audioCtx = new AudioContext();
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+    console.log(`[compressAudio] Decoded: ${audioBuffer.duration.toFixed(1)}s, ${audioBuffer.numberOfChannels}ch, ${audioBuffer.sampleRate}Hz`);
+
+    // Render to mono at target sample rate
     const length = Math.ceil(audioBuffer.duration * TARGET_SAMPLE_RATE);
     const offlineCtx = new OfflineAudioContext(1, length, TARGET_SAMPLE_RATE);
     const source = offlineCtx.createBufferSource();
@@ -69,9 +74,19 @@ export async function compressAudioFile(
 
     const wavBlob = encodeWav(monoSamples, TARGET_SAMPLE_RATE);
     const baseName = file.name.replace(/\.[^.]+$/, "");
-    return new File([wavBlob], `${baseName}_compressed.wav`, { type: "audio/wav" });
-  } catch (e) {
-    console.warn("Audio compression failed, using original file:", e);
-    return file;
+    const compressed = new File([wavBlob], `${baseName}_compressed.wav`, { type: "audio/wav" });
+
+    console.log(`[compressAudio] Result: ${(compressed.size / 1024 / 1024).toFixed(1)} MB`);
+
+    // Safety check: if still too large, throw
+    if (compressed.size > MAX_UPLOAD_BYTES) {
+      throw new Error(
+        `File is too long — compressed to ${(compressed.size / 1024 / 1024).toFixed(0)} MB but max is ${(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(0)} MB. Try a shorter clip.`
+      );
+    }
+
+    return compressed;
+  } finally {
+    await audioCtx.close();
   }
 }

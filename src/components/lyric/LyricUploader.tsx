@@ -10,9 +10,10 @@ interface Props {
   onTranscribe: (file: File) => void;
   onLoadSaved?: (lyric: any) => void;
   loading: boolean;
+  loadingMsg?: string;
 }
 
-export function LyricUploader({ onTranscribe, loading }: Props) {
+export function LyricUploader({ onTranscribe, loading, loadingMsg }: Props) {
   const siteCopy = useSiteCopy();
   const [files, setFiles] = useState<File[]>([]);
 
@@ -63,7 +64,7 @@ export function LyricUploader({ onTranscribe, loading }: Props) {
         ) : (
           <FileAudio size={16} className="mr-1" />
         )}
-        {loading ? "Syncing..." : (siteCopy.tools.lyric?.cta || "Sync Lyrics")}
+        {loading ? (loadingMsg || "Syncing...") : (siteCopy.tools.lyric?.cta || "Sync Lyrics")}
       </Button>
     </div>
   );
