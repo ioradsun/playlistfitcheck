@@ -186,22 +186,22 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             <div className="flex items-center gap-3 cursor-pointer min-w-0"
               onClick={handleProfileClick}
             >
-              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20 shrink-0">
-                {post.profiles?.avatar_url ? (
-                  <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <User size={16} className="text-muted-foreground" />
+              <div className="relative shrink-0">
+                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
+                  {post.profiles?.avatar_url ? (
+                    <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={16} className="text-muted-foreground" />
+                  )}
+                </div>
+                {(post.profiles as any)?.is_verified && (
+                  <span className="absolute -bottom-0.5 -right-0.5">
+                    <VerifiedBadge size={14} />
+                  </span>
                 )}
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1">
-                  <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
-                  {(post.profiles as any)?.is_verified && (
-                    <TooltipProvider delayDuration={350}>
-                      <VerifiedBadge size={14} />
-                    </TooltipProvider>
-                  )}
-                </div>
+                <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
                 <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
               </div>
             </div>
