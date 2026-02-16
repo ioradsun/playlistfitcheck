@@ -46,7 +46,7 @@ export function LazySpotifyEmbed({ trackId, trackTitle, trackUrl, postId }: Prop
   const height = platform === "soundcloud" ? 166 : 352;
 
   return (
-    <div ref={ref} className="w-full" style={{ minHeight: height }} onClick={handleClick}>
+    <div ref={ref} className="w-full rounded-xl overflow-hidden" style={{ minHeight: height }} onClick={handleClick}>
       {visible ? (
         <iframe
           src={embedSrc}
