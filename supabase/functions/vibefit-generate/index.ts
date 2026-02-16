@@ -113,7 +113,11 @@ ${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}`;
     }
 
     // --- Step 2: Generate 3 cover art images ---
-    const artPromptBase = `Create a modern, high-quality album cover art. Square format (1:1 ratio). Spotify-ready aesthetic. NO TEXT on the image. Style should match current streaming platform trends.
+    const defaultArtPrompt = `Create a modern, high-quality album cover art. Square format (1:1 ratio). Spotify-ready aesthetic. NO TEXT on the image. Style should match current streaming platform trends.`;
+
+    const artSystemPrompt = await fetchPrompt("vibefit-art", defaultArtPrompt);
+
+    const artPromptBase = `${artSystemPrompt}
 Genre: ${genre}
 Mood: ${moods.join(", ")}
 ${lyrics ? `Key lyrical themes: ${(lyrics as string).slice(0, 200)}` : ""}`;

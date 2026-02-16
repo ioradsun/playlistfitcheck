@@ -141,7 +141,8 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
   // Input form
   return (
     <>
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6">
+        <h1 className="text-xl font-semibold text-center">Art & Captions for your song</h1>
         <VibeFitForm
           onSubmit={generate}
           loading={loading}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Users, BarChart3, ListMusic, Sliders, FileText, Target, Sparkles } from "lucide-react";
+import { Users, BarChart3, ListMusic, Sliders, FileText, Target, Sparkles, AudioWaveform } from "lucide-react";
 import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
 const TOOL_ICON_MAP: Record<string, any> = {
@@ -11,6 +11,7 @@ const TOOL_ICON_MAP: Record<string, any> = {
   lyric: FileText,
   hitfit: Target,
   dreamfit: Sparkles,
+  vibefit: AudioWaveform,
 };
 
 const TABS = ["Origin Story", "The Tools"] as const;
