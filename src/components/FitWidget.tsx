@@ -186,7 +186,7 @@ export function FitWidget() {
                     <iframe
                       src={`https://open.spotify.com/embed/playlist/6dBswlpXDtfUBLLoCh5U9p?utm_source=generator&theme=${resolvedTheme === "dark" ? "0" : "1"}`}
                       width="100%"
-                      height={232}
+                      height={152}
                       allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                       loading="lazy"
                       className="border-0 block"
