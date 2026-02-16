@@ -23,12 +23,12 @@ interface SpotifyArtistResult {
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get("mode") === "signup" ? "signup" : "signin";
+  const initialTab = searchParams.get("mode") === "signin" ? "signin" : "signup";
   const refCode = searchParams.get("ref") || null;
   const [activeTab, setActiveTab] = useState(initialTab);
 
   useEffect(() => {
-    setActiveTab(searchParams.get("mode") === "signup" ? "signup" : "signin");
+    setActiveTab(searchParams.get("mode") === "signin" ? "signin" : "signup");
   }, [searchParams]);
 
   const [checkEmail, setCheckEmail] = useState(false);
