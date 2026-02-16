@@ -25,6 +25,7 @@ interface TrackData {
   releaseDate: string | null;
   previewUrl: string | null;
   spotifyUrl: string;
+  genres?: string[];
 }
 
 interface Props {
@@ -224,7 +225,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
         release_date: selectedTrack.releaseDate,
         preview_url: selectedTrack.previewUrl,
         caption: caption.trim(),
-        tags_json: [] as any,
+        tags_json: (selectedTrack.genres?.slice(0, 3) ?? []) as any,
         status: "live",
         submitted_at: now.toISOString(),
         expires_at: expiresAt.toISOString(),

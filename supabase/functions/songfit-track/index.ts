@@ -62,6 +62,21 @@ serve(async (req) => {
 
     const track = await trackRes.json();
 
+    // Fetch artist genres from the first artist
+    let genres: string[] = [];
+    const firstArtistId = track.artists?.[0]?.id;
+    if (firstArtistId) {
+      try {
+        const artistRes = await fetch(`https://api.spotify.com/v1/artists/${firstArtistId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (artistRes.ok) {
+          const artist = await artistRes.json();
+          genres = artist.genres || [];
+        }
+      } catch { /* swallow – genres are optional */ }
+    }
+
     const result = {
       trackId: track.id,
       title: track.name,
@@ -75,6 +90,7 @@ serve(async (req) => {
       releaseDate: track.album?.release_date || null,
       previewUrl: track.preview_url || null,
       spotifyUrl: track.external_urls?.spotify,
+      genres,
     };
 
     return new Response(JSON.stringify(result), {

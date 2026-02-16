@@ -251,6 +251,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         postId={post.id}
         albumArtUrl={post.album_art_url}
         artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
+        genre={((post.tags_json as any[]) || [])[0] || null}
       />
 
       {/* Action Row — X-style metrics toolbar */}

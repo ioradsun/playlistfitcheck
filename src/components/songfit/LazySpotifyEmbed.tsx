@@ -29,9 +29,10 @@ interface Props {
   postId?: string;
   albumArtUrl?: string | null;
   artistName?: string;
+  genre?: string | null;
 }
 
-function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArtUrl }: Props) {
+function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArtUrl, genre }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { claim } = useContext(EagerCountContext);
@@ -104,6 +105,13 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
           scrolling={platform === "soundcloud" ? "no" : undefined}
           onLoad={() => setIframeLoaded(true)}
         />
+      )}
+
+      {/* Genre pill overlay */}
+      {genre && iframeLoaded && (
+        <span className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-white capitalize leading-tight">
+          {genre}
+        </span>
       )}
     </div>
   );
