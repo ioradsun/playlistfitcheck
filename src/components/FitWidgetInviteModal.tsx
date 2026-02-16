@@ -120,9 +120,6 @@ function InviteTab({ inviteUrl, inviteCode }: { inviteUrl: string; inviteCode: s
         </AnimatePresence>
       </div>
 
-      <p className="text-[11px] text-muted-foreground/60 text-center">
-        Chain reaction — each artist they invite unlocks it for another
-      </p>
     </div>
   );
 }
