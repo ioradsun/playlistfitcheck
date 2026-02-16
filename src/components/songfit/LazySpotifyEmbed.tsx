@@ -66,7 +66,7 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
 
   const embedSrc = platform === "soundcloud" && trackUrl
     ? toSoundCloudEmbedUrl(trackUrl)
-    : `https://open.spotify.com/embed/track/${trackId}?utm_source=generator&theme=1&autoplay=1`;
+    : `https://open.spotify.com/embed/track/${trackId}?utm_source=generator&theme=1`;
 
   const height = platform === "soundcloud" ? 166 : 352;
 
