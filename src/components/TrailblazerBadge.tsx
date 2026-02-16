@@ -26,11 +26,11 @@ export function TrailblazerBadge({ userId, compact = false, showCounter = false 
         <TooltipTrigger asChild>
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground/50 cursor-default grayscale">
             <Star size={10} />
-            Trailblazer
+            Pioneer
           </span>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs max-w-[220px]">
-          Be one of the first 1,000 artists to claim your Trailblazer badge!
+          Be one of the first 1,000 artists to claim your Pioneer badge!
         </TooltipContent>
       </Tooltip>
     );
@@ -49,14 +49,14 @@ export function TrailblazerBadge({ userId, compact = false, showCounter = false 
           transition={{ duration: 0.2 }}
         >
           <Star size={compact ? 8 : 11} className="fill-primary" />
-          Trailblazer
+          Pioneer
           {showCounter && (
             <span className="text-primary/60 font-mono ml-0.5">#{number}</span>
           )}
         </motion.span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs max-w-[260px] space-y-1">
-        <p className="font-semibold">🌟 Trailblazer #{number} / 1,000</p>
+        <p className="font-semibold">🌟 Pioneer #{number} / 1,000</p>
         <p>It's early. You're one of {total} artists shaping the future of toolsFM. Your feedback builds the tools.</p>
       </TooltipContent>
     </Tooltip>
