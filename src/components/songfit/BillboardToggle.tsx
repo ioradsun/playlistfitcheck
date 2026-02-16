@@ -1,6 +1,6 @@
 import type { BillboardMode, FeedView } from "./types";
 import { cn } from "@/lib/utils";
-import { Flame, Trophy, Target, Crown, SlidersHorizontal } from "lucide-react";
+import { Flame, Trophy, Target, Crown, ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,45 +59,51 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
           >
             Billboard
           </button>
-          {view === "billboard" && (
-            <TooltipProvider delayDuration={300}>
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <button className="ml-1.5 flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors py-2.5 px-1">
-                        <ActiveIcon size={15} className="text-primary" />
-                      </button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">
-                    {activeMode.tip}
-                  </TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="center" className="w-44">
-                  {modes.map(({ key, label, icon: Icon, tip }) => (
-                    <Tooltip key={key}>
-                      <TooltipTrigger asChild>
-                        <DropdownMenuItem
-                          onClick={() => onModeChange(key)}
-                          className={cn(
-                            "flex items-center gap-2",
-                            billboardMode === key && "text-primary font-semibold"
-                          )}
-                        >
-                          <Icon size={15} />
-                          <span>{label}</span>
-                        </DropdownMenuItem>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="text-xs">
-                        {tip}
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TooltipProvider>
-          )}
+          <TooltipProvider delayDuration={200}>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className={cn(
+                        "ml-1 flex items-center gap-0.5 transition-colors py-2.5 px-1 rounded",
+                        view === "billboard"
+                          ? "text-primary hover:text-primary/80"
+                          : "text-muted-foreground/50 hover:text-muted-foreground"
+                      )}
+                    >
+                      <ActiveIcon size={14} />
+                      <ChevronDown size={10} className="opacity-60" />
+                    </button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {activeMode.tip}
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="center" className="w-44">
+                {modes.map(({ key, label, icon: Icon, tip }) => (
+                  <Tooltip key={key}>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuItem
+                        onClick={() => { onModeChange(key); onViewChange("billboard"); }}
+                        className={cn(
+                          "flex items-center gap-2",
+                          billboardMode === key && "text-primary font-semibold"
+                        )}
+                      >
+                        <Icon size={15} />
+                        <span>{label}</span>
+                      </DropdownMenuItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="text-xs">
+                      {tip}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </TooltipProvider>
         </div>
       </div>
     </div>
