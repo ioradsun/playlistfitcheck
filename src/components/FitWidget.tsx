@@ -144,9 +144,6 @@ export function FitWidget() {
                     {tier === "anonymous" ? "Guest" : "Limited"}
                   </Badge>
                 )}
-                {tier === "unlimited" && (
-                  <span className="text-[10px] font-semibold text-foreground">Unlimited</span>
-                )}
               </div>
 
               {tier !== "unlimited" ? (
