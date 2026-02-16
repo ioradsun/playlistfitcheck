@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Music, ChevronDown, ChevronUp, Users, Zap, Crown, ArrowRight } from "lucide-react";
+import { Music, ChevronDown, ChevronUp, Users, Zap, Crown, ArrowRight, UserPlus } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { FitWidgetInviteModal } from "./FitWidgetInviteModal";
+import { useNavigate } from "react-router-dom";
 
 const TOOLS = ["hitfit", "vibefit", "profit", "playlist", "mix", "lyric"] as const;
 
@@ -57,8 +58,9 @@ export function FitWidget() {
   const widgetRef = useRef<HTMLDivElement>(null);
 
   const isUnlimited = !!(profile as any)?.is_unlimited;
-  const tier = !user ? "anonymous" : isUnlimited ? "unlimited" : "free";
+  const tier = !user ? "anonymous" : isUnlimited ? "unlimited" : "limited";
   const inviteCode = (profile as any)?.invite_code ?? null;
+  const navigate = useNavigate();
 
   // Pulse when near limit on any tool
   useEffect(() => {
@@ -132,7 +134,7 @@ export function FitWidget() {
                   className="text-[10px] h-5"
                 >
                   {tier === "unlimited" && <Crown size={10} className="mr-1" />}
-                  {tier === "anonymous" ? "Guest" : tier === "free" ? "Free" : "Unlimited"}
+                  {tier === "anonymous" ? "Guest" : tier === "limited" ? "Limited" : "Unlimited"}
                 </Badge>
               </div>
 
@@ -146,21 +148,30 @@ export function FitWidget() {
               {/* CTA */}
               {tier !== "unlimited" ? (
                 <div className="px-3 pb-3 space-y-2">
-                  <p className="text-[11px] text-muted-foreground text-center">
-                    {!user
-                      ? "Sign up for 10 uses per tool"
-                      : "Invite 1 artist → unlock unlimited ✅"}
-                  </p>
-                  {user && (
+                  {!user ? (
                     <Button
                       size="sm"
-                      variant="outline"
                       className="w-full gap-1.5 text-xs h-8"
-                      onClick={() => setShowInvite(true)}
+                      onClick={() => navigate("/auth")}
                     >
-                      <Users size={12} />
-                      Invite Collaborator
+                      <UserPlus size={12} />
+                      Sign up for {siteCopy.features.growth_quotas?.limited ?? 10} uses per tool
                     </Button>
+                  ) : (
+                    <>
+                      <p className="text-[11px] text-muted-foreground text-center">
+                        Invite 1 artist → unlock unlimited ✅
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-1.5 text-xs h-8"
+                        onClick={() => setShowInvite(true)}
+                      >
+                        <Users size={12} />
+                        Invite Collaborator
+                      </Button>
+                    </>
                   )}
                 </div>
               ) : (
