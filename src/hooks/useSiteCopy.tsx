@@ -28,7 +28,7 @@ const DEFAULT_COPY: SiteCopy = {
   pages: {
     about_title: "toolsFM story",
     about_subtitle: "What we built and why.",
-    auth_title: "toolsFM fmly",
+    auth_title: "Join the FMly",
   },
   features: {
     crypto_tipping: false,
