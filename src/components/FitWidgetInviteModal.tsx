@@ -12,6 +12,7 @@ interface FitWidgetInviteModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   inviteCode: string | null;
+  isUnlimited?: boolean;
 }
 
 function ProgressRing({ progress, size = 48, stroke = 3 }: { progress: number; size?: number; stroke?: number }) {
@@ -124,7 +125,7 @@ function InviteTab({ inviteUrl, inviteCode }: { inviteUrl: string; inviteCode: s
   );
 }
 
-function ShareTab({ onClose }: { onClose: () => void }) {
+function ShareTab({ onClose, isUnlimited }: { onClose: () => void; isUnlimited?: boolean }) {
   const [shared, setShared] = useState(false);
   const [showSparkle, setShowSparkle] = useState(false);
 
@@ -147,13 +148,31 @@ function ShareTab({ onClose }: { onClose: () => void }) {
       colors: ["#39FF14", "#ffffff", "#22c55e"],
     });
 
-    // Notify widget to switch to unlimited
     window.dispatchEvent(new CustomEvent("social-share-unlocked"));
 
     setTimeout(() => {
       onClose();
     }, 1800);
   }, [onClose]);
+
+  if (isUnlimited) {
+    return (
+      <div className="space-y-4 pt-1">
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Share toolsFM on social and help grow the community.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full gap-2 text-xs h-9 hover:border-primary/50 transition-colors"
+          onClick={handleCopyLink}
+        >
+          <ExternalLink size={13} />
+          Copy Link
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pt-1">
@@ -168,10 +187,7 @@ function ShareTab({ onClose }: { onClose: () => void }) {
           className="flex-1 gap-2 text-xs h-9 hover:border-primary/50 transition-colors"
           onClick={handleCopyLink}
         >
-          <motion.div
-            whileHover={{ x: 3 }}
-            transition={{ duration: 0.2 }}
-          >
+          <motion.div whileHover={{ x: 3 }} transition={{ duration: 0.2 }}>
             <ExternalLink size={13} />
           </motion.div>
           Copy Link
@@ -198,7 +214,6 @@ function ShareTab({ onClose }: { onClose: () => void }) {
         </motion.div>
       </div>
 
-      {/* Sparkle celebration */}
       <div className="flex items-center justify-center h-8">
         <AnimatePresence>
           {showSparkle && (
@@ -219,7 +234,7 @@ function ShareTab({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function FitWidgetInviteModal({ open, onOpenChange, inviteCode }: FitWidgetInviteModalProps) {
+export function FitWidgetInviteModal({ open, onOpenChange, inviteCode, isUnlimited }: FitWidgetInviteModalProps) {
   const baseUrl = window.location.hostname === "localhost"
     ? window.location.origin
     : "https://tools.fm";
@@ -230,14 +245,12 @@ export function FitWidgetInviteModal({ open, onOpenChange, inviteCode }: FitWidg
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm p-0 overflow-hidden gap-0">
-        {/* Header */}
         <DialogHeader className="px-5 pt-5 pb-3">
           <DialogTitle className="text-base font-semibold tracking-tight">
-            Unlock Unlimited Usage
+            {isUnlimited ? "Invite & Share" : "Unlock Unlimited Usage"}
           </DialogTitle>
         </DialogHeader>
 
-        {/* Tabs */}
         <Tabs defaultValue="invite" className="px-5 pb-5">
           <TabsList className="w-full mb-3 h-9 bg-muted/50">
             <TabsTrigger value="invite" className="flex-1 gap-1.5 text-xs data-[state=active]:shadow-sm">
@@ -256,7 +269,7 @@ export function FitWidgetInviteModal({ open, onOpenChange, inviteCode }: FitWidg
             </TabsContent>
 
             <TabsContent value="share" className="mt-0">
-              <ShareTab onClose={() => onOpenChange(false)} />
+              <ShareTab onClose={() => onOpenChange(false)} isUnlimited={isUnlimited} />
             </TabsContent>
           </div>
         </Tabs>
