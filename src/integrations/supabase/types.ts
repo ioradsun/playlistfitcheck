@@ -411,6 +411,7 @@ export type Database = {
           is_unlimited: boolean
           spotify_artist_id: string | null
           spotify_embed_url: string | null
+          theme: string
           trailblazer_number: number | null
           wallet_address: string | null
           website_url: string | null
@@ -427,6 +428,7 @@ export type Database = {
           is_unlimited?: boolean
           spotify_artist_id?: string | null
           spotify_embed_url?: string | null
+          theme?: string
           trailblazer_number?: number | null
           wallet_address?: string | null
           website_url?: string | null
@@ -443,6 +445,7 @@ export type Database = {
           is_unlimited?: boolean
           spotify_artist_id?: string | null
           spotify_embed_url?: string | null
+          theme?: string
           trailblazer_number?: number | null
           wallet_address?: string | null
           website_url?: string | null

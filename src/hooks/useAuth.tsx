@@ -103,8 +103,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = useCallback(() => {
     if (!user) { setProfile(null); return; }
-    supabase.from("profiles").select("display_name, avatar_url, bio, spotify_embed_url, spotify_artist_id, wallet_address, invite_code, is_unlimited").eq("id", user.id).single()
-      .then(({ data }) => { if (data) setProfile(data as ProfileData); });
+    supabase.from("profiles").select("display_name, avatar_url, bio, spotify_embed_url, spotify_artist_id, wallet_address, invite_code, is_unlimited, theme").eq("id", user.id).single()
+      .then(({ data }) => {
+        if (data) {
+          setProfile(data as ProfileData);
+          // Apply saved theme
+          const savedTheme = (data as any).theme;
+          if (savedTheme && (savedTheme === "light" || savedTheme === "dark")) {
+            localStorage.setItem("tfm-theme", savedTheme);
+            document.documentElement.classList.toggle("dark", savedTheme === "dark");
+            document.documentElement.classList.toggle("light", savedTheme === "light");
+          }
+        }
+      });
   }, [user]);
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
