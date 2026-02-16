@@ -4,9 +4,9 @@ const Terms = () => {
       <h1 className="text-2xl font-bold">Terms of Use</h1>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">What tools.fm is</h2>
+        <h2 className="text-lg font-semibold">What toolsFM is</h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          tools.fm is a set of experimental music tools built for artists, songwriters, and curious music people.
+          toolsFM is a set of experimental music tools built for artists, songwriters, and curious music people.
           Everything here is provided as-is — we're building in public, iterating fast, and shipping things we think are useful.
           Some tools will stick around. Some might change. That's the deal.
         </p>
