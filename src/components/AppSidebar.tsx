@@ -439,12 +439,12 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Terms"
+                  tooltip="Let's agree"
                   isActive={location.pathname === "/terms"}
                   onClick={() => { navigate("/terms"); closeMobileIfNeeded(); }}
                 >
                   <FileText size={16} />
-                  <span>Terms</span>
+                  <span>Let's agree</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
