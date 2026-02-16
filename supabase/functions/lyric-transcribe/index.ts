@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,46 +7,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function fetchPrompt(slug: string, fallback: string): Promise<string> {
-  try {
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const sb = createClient(url, key);
-    const { data } = await sb.from("ai_prompts").select("prompt").eq("slug", slug).single();
-    return data?.prompt || fallback;
-  } catch { return fallback; }
-}
+const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
-    const formData = await req.formData();
-    const audioFile = formData.get("audio") as File;
-    if (!audioFile) throw new Error("No audio file provided");
-
-    // Reject files over 75MB to match client-side limit
-    const MAX_SIZE = 25 * 1024 * 1024;
-    if (audioFile.size > MAX_SIZE) {
-      return new Response(
-        JSON.stringify({ error: "File too large. Please use an audio file under 25 MB." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Convert audio to base64 using Deno's native encoder (much faster & less memory)
-    const audioBuffer = await audioFile.arrayBuffer();
-    const audioBase64 = base64Encode(audioBuffer);
-
-    // Determine MIME type
-    const mimeType = audioFile.type || "audio/mpeg";
-
-    const defaultLyricPrompt = `You are a professional lyrics transcription engine. Your job is to transcribe song lyrics from audio with precise timestamps.
+const DEFAULT_PROMPT = `You are a professional lyrics transcription engine. Your job is to transcribe song lyrics from audio with precise timestamps.
 
 CRITICAL RULES:
 1. Transcribe ONLY the sung/spoken lyrics — no descriptions of instrumentals or sounds
@@ -67,7 +29,48 @@ Output this exact JSON structure:
   ]
 }`;
 
-    const systemPrompt = await fetchPrompt("lyric-transcribe", defaultLyricPrompt);
+async function fetchPrompt(): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const res = await fetch(
+      `${url}/rest/v1/ai_prompts?slug=eq.lyric-transcribe&select=prompt`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } }
+    );
+    const rows = await res.json();
+    return rows?.[0]?.prompt || DEFAULT_PROMPT;
+  } catch {
+    return DEFAULT_PROMPT;
+  }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    const formData = await req.formData();
+    const audioFile = formData.get("audio") as File;
+    if (!audioFile) throw new Error("No audio file provided");
+
+    if (audioFile.size > MAX_SIZE) {
+      return new Response(
+        JSON.stringify({ error: `File too large (${(audioFile.size / 1024 / 1024).toFixed(0)} MB). Max is 20 MB.` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Processing: ${audioFile.name} (${(audioFile.size / 1024 / 1024).toFixed(1)} MB)`);
+
+    // Convert to base64 — read buffer then release it via scoped encoding
+    const audioBase64 = base64Encode(new Uint8Array(await audioFile.arrayBuffer()));
+    const format = (audioFile.type || "").includes("wav") ? "wav" : "mp3";
+
+    const systemPrompt = await fetchPrompt();
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -82,17 +85,8 @@ Output this exact JSON structure:
           {
             role: "user",
             content: [
-              {
-                type: "input_audio",
-                input_audio: {
-                  data: audioBase64,
-                  format: mimeType.includes("wav") ? "wav" : "mp3",
-                },
-              },
-              {
-                type: "text",
-                text: "Transcribe the lyrics from this song with precise timestamps. Return ONLY valid JSON.",
-              },
+              { type: "input_audio", input_audio: { data: audioBase64, format } },
+              { type: "text", text: "Transcribe the lyrics from this song with precise timestamps. Return ONLY valid JSON." },
             ],
           },
         ],
@@ -103,29 +97,23 @@ Output this exact JSON structure:
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Usage limit reached. Please add credits to continue." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ error: "Usage limit reached." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error("Transcription failed. If using a WAV file, try converting to MP3 first.");
+      throw new Error("Transcription failed");
     }
 
     const aiResponse = await response.json();
     const content = aiResponse.choices?.[0]?.message?.content;
+    if (!content) throw new Error("No response from AI");
 
-    if (!content) {
-      throw new Error("No response from AI");
-    }
-
-    // Parse the JSON from the AI response (strip markdown code blocks if present)
     let cleanContent = content.trim();
     if (cleanContent.startsWith("```")) {
       cleanContent = cleanContent.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
