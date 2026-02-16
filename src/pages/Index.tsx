@@ -297,6 +297,7 @@ const Index = () => {
   const [profitSavedReport, setProfitSavedReport] = useState<any>(null);
   const [profitLoadKey, setProfitLoadKey] = useState(0);
   const [loadedHitFitAnalysis, setLoadedHitFitAnalysis] = useState<any>(null);
+  const [loadedVibeFitResult, setLoadedVibeFitResult] = useState<any>(null);
 
   const handleNewProject = useCallback(() => {
     // No-op: we always default to new project state
@@ -311,6 +312,7 @@ const Index = () => {
     setProfitArtistUrl(null);
     setProfitSavedReport(null);
     setLoadedHitFitAnalysis(null);
+    setLoadedVibeFitResult(null);
 
     switch (type) {
       case "profit": {
@@ -383,6 +385,12 @@ const Index = () => {
         }
         break;
       }
+      case "vibefit": {
+        if (data) {
+          setLoadedVibeFitResult(data);
+        }
+        break;
+      }
     }
   }, [handleAnalyze]);
 
@@ -429,7 +437,7 @@ const Index = () => {
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><DreamFitTab /></div>;
       case "vibefit":
-        return <div className="flex-1 overflow-y-auto px-4 py-6"><VibeFitTab /></div>;
+        return <div className="flex-1 overflow-y-auto px-4 py-6"><VibeFitTab key={loadedVibeFitResult ? "loaded" : "new"} initialResult={loadedVibeFitResult} onProjectSaved={refreshSidebar} /></div>;
       default:
         return null;
     }

@@ -609,6 +609,47 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_vibefit: {
+        Row: {
+          created_at: string
+          genre: string
+          id: string
+          moods: string[]
+          result_json: Json
+          song_title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          genre?: string
+          id?: string
+          moods?: string[]
+          result_json: Json
+          song_title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          genre?: string
+          id?: string
+          moods?: string[]
+          result_json?: Json
+          song_title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_vibefit_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       search_logs: {
         Row: {
           created_at: string

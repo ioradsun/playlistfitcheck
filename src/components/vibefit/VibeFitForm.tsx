@@ -11,11 +11,9 @@ const MOODS = ["Dark", "Emotional", "Euphoric", "Aggressive", "Romantic", "Dream
 
 export interface VibeFitInput {
   songTitle: string;
-  artistName: string;
   genre: string;
   moods: string[];
   lyrics: string;
-  description: string;
 }
 
 interface VibeFitFormProps {
@@ -27,11 +25,9 @@ interface VibeFitFormProps {
 
 export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: VibeFitFormProps) {
   const [songTitle, setSongTitle] = useState("");
-  const [artistName, setArtistName] = useState("");
   const [genre, setGenre] = useState("");
   const [moods, setMoods] = useState<string[]>([]);
   const [lyrics, setLyrics] = useState("");
-  const [description, setDescription] = useState("");
 
   const toggleMood = (mood: string) => {
     setMoods((prev) =>
@@ -39,12 +35,12 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
     );
   };
 
-  const canSubmit = songTitle.trim() && artistName.trim() && genre && moods.length > 0 && !loading && !disabled;
+  const canSubmit = songTitle.trim() && genre && moods.length > 0 && !loading && !disabled;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
-    onSubmit({ songTitle, artistName, genre, moods, lyrics, description });
+    onSubmit({ songTitle, genre, moods, lyrics });
   };
 
   return (
@@ -54,12 +50,6 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
           placeholder="Song title"
           value={songTitle}
           onChange={(e) => setSongTitle(e.target.value)}
-          maxLength={200}
-        />
-        <Input
-          placeholder="Artist name"
-          value={artistName}
-          onChange={(e) => setArtistName(e.target.value)}
           maxLength={200}
         />
         <Select value={genre} onValueChange={setGenre}>
@@ -96,13 +86,6 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
           maxLength={2000}
           className="min-h-[80px]"
         />
-        <Textarea
-          placeholder="Short description of the song (optional)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          maxLength={500}
-          className="min-h-[60px]"
-        />
       </div>
 
       {disabled && disabledMessage && (
@@ -114,15 +97,9 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
         className="w-full"
         disabled={!canSubmit}
       >
-        {loading ? (
-          <span className="flex items-center gap-2">
-            <Sparkles size={14} className="animate-pulse" /> Generating Your Vibe…
-          </span>
-        ) : (
-          <span className="flex items-center gap-2">
-            <Sparkles size={14} /> Fit My Vibe
-          </span>
-        )}
+        <span className="flex items-center gap-2">
+          <Sparkles size={14} /> Fit My Vibe
+        </span>
       </Button>
     </form>
   );

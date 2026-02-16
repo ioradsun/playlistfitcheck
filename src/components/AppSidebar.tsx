@@ -216,6 +216,24 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       });
     }
 
+    const { data: vibefits } = await supabase
+      .from("saved_vibefit")
+      .select("id, song_title, updated_at, result_json")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(5);
+    if (vibefits) {
+      vibefits.forEach((v: any) => {
+        items.push({
+          id: v.id,
+          label: v.song_title || "VibeFit",
+          meta: formatDistanceToNow(new Date(v.updated_at), { addSuffix: true }),
+          type: "vibefit",
+          rawData: v.result_json,
+        });
+      });
+    }
+
     setRecentItems(items);
   }, [user]);
 
@@ -247,6 +265,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
     else if (item.type === "mix") await supabase.from("mix_projects").delete().eq("id", item.id);
     else if (item.type === "lyric") await supabase.from("saved_lyrics").delete().eq("id", item.id);
     else if (item.type === "hitfit") await supabase.from("saved_hitfit").delete().eq("id", item.id);
+    else if (item.type === "vibefit") await supabase.from("saved_vibefit").delete().eq("id", item.id);
     setRecentItems((prev) => prev.filter((i) => i.id !== item.id));
   };
 

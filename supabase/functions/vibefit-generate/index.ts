@@ -27,16 +27,11 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const body = await req.json();
-    const { songTitle, artistName, genre, moods, lyrics, description } = body;
+    const { songTitle, genre, moods, lyrics } = body;
 
     // Validate inputs
     if (!songTitle || typeof songTitle !== "string" || songTitle.length > 200) {
       return new Response(JSON.stringify({ error: "Song title is required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (!artistName || typeof artistName !== "string" || artistName.length > 200) {
-      return new Response(JSON.stringify({ error: "Artist name is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -68,11 +63,9 @@ Include a light CTA like 'stream now' or 'link in bio'. Match tone to mood. Be a
 
     const userPrompt = `Generate captions for this song:
 Song Title: ${songTitle.slice(0, 200)}
-Artist: ${artistName.slice(0, 200)}
 Genre: ${genre}
 Mood/Vibe: ${moods.join(", ")}
-${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}
-${description ? `Description: ${(description as string).slice(0, 500)}` : ""}`;
+${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}`;
 
     const captionResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -123,7 +116,6 @@ ${description ? `Description: ${(description as string).slice(0, 500)}` : ""}`;
     const artPromptBase = `Create a modern, high-quality album cover art. Square format (1:1 ratio). Spotify-ready aesthetic. NO TEXT on the image. Style should match current streaming platform trends.
 Genre: ${genre}
 Mood: ${moods.join(", ")}
-${description ? `Song description: ${(description as string).slice(0, 300)}` : ""}
 ${lyrics ? `Key lyrical themes: ${(lyrics as string).slice(0, 200)}` : ""}`;
 
     const artVariations = [
