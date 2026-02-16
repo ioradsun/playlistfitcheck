@@ -3,7 +3,7 @@ import { Upload, Music, X } from "lucide-react";
 import { toast } from "sonner";
 
 const ACCEPTED_EXTENSIONS = /\.(mp3|wav|m4a|ogg|flac|aac|aiff|wma)$/i;
-const MAX_SIZE = 75 * 1024 * 1024;
+const MAX_SIZE = 25 * 1024 * 1024;
 
 interface AudioUploadZoneProps {
   label: string;
@@ -33,7 +33,7 @@ export function AudioUploadZone({
         continue;
       }
       if (file.size > MAX_SIZE) {
-        toast.error(`${file.name} exceeds 75 MB limit.`);
+        toast.error(`${file.name} exceeds 25 MB limit.`);
         continue;
       }
       toAdd.push(file);
