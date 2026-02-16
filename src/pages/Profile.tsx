@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { Pencil, Camera, X, Check, Loader2, Music, Wallet } from "lucide-react";
+import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { MusicEmbed } from "@/components/MusicEmbed";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
@@ -125,7 +126,10 @@ const Profile = () => {
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold truncate">{profile?.display_name || "Your Profile"}</h1>
-            <p className="text-sm text-muted-foreground capitalize">{currentRole}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-muted-foreground capitalize">{currentRole}</p>
+              <TrailblazerBadge userId={user.id} showCounter />
+            </div>
             {profile?.bio && !editing && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
           </div>
           <div className="flex gap-2 shrink-0">

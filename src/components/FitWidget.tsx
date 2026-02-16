@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Music, ChevronDown, ChevronUp, Users, Zap, Crown, ArrowRight, UserPlus } from "lucide-react";
+import { TrailblazerBadge } from "./TrailblazerBadge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -136,14 +137,11 @@ export function FitWidget() {
                   <Music size={14} className="text-primary" />
                   <span className="text-xs font-semibold">toolsFM</span>
                 </div>
-                {tier !== "unlimited" && (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] h-5"
-                  >
-                    {tier === "anonymous" ? "Guest" : "Limited"}
-                  </Badge>
-                )}
+                {user ? (
+                  <TrailblazerBadge userId={user.id} compact showCounter />
+                ) : tier !== "unlimited" ? (
+                  <Badge variant="outline" className="text-[10px] h-5">Guest</Badge>
+                ) : null}
               </div>
 
               {tier !== "unlimited" ? (
