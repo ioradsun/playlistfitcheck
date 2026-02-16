@@ -31,17 +31,18 @@ interface Props {
   artistName?: string;
 }
 
-function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId }: Props) {
+function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArtUrl }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { claim } = useContext(EagerCountContext);
   const [isEager] = useState(() => claim() <= EAGER_LIMIT);
   const [visible, setVisible] = useState(isEager);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
 
   useEffect(() => {
-    if (isEager) return; // already visible
+    if (isEager) return;
     const el = ref.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -70,20 +71,39 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId }: Props)
   const height = platform === "soundcloud" ? 166 : 352;
 
   return (
-    <div ref={ref} className="w-full rounded-xl overflow-hidden" style={{ minHeight: height }} onClick={handleClick}>
-      {visible ? (
+    <div
+      ref={ref}
+      className="w-full rounded-xl overflow-hidden relative"
+      style={{ minHeight: height, backgroundColor: "#121212" }}
+      onClick={handleClick}
+    >
+      {/* Album art backdrop while iframe loads */}
+      {visible && !iframeLoaded && albumArtUrl && (
+        <img
+          src={albumArtUrl}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm"
+        />
+      )}
+
+      {/* Skeleton pulse when not yet in viewport */}
+      {!visible && (
+        <div className="w-full rounded-xl animate-pulse" style={{ height, backgroundColor: "#1a1a1a" }} />
+      )}
+
+      {visible && (
         <iframe
           src={embedSrc}
           width="100%"
           height={height}
           allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
           loading={isEager ? "eager" : "lazy"}
-          className="border-0 block"
+          className="border-0 block relative z-10 transition-opacity duration-300"
+          style={{ opacity: iframeLoaded ? 1 : 0 }}
           title={`Play ${trackTitle}`}
           scrolling={platform === "soundcloud" ? "no" : undefined}
+          onLoad={() => setIframeLoaded(true)}
         />
-      ) : (
-        <div className="w-full bg-muted/30 animate-pulse rounded-xl" style={{ height }} />
       )}
     </div>
   );
