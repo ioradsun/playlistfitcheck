@@ -313,10 +313,10 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             {post.engagement_score > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1 cursor-default">
+                  <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-muted/60 transition-colors cursor-help">
                     <Trophy size={14} />
                     <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
-                  </div>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs max-w-48">
                   Engagement score — weighted total of likes, comments, saves, shares &amp; clicks
@@ -326,12 +326,12 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             {post.status === "live" && post.expires_at && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1 cursor-default">
+                  <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-muted/60 transition-colors cursor-help">
                     <Clock size={14} />
                     <span className="text-xs font-mono">
                       {Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d
                     </span>
-                  </div>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs max-w-48">
                   Days remaining in this submission cycle
@@ -341,7 +341,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             {rank && rank <= 50 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="text-xs font-bold text-primary font-mono cursor-default">#{rank}</span>
+                  <button type="button" className="text-xs font-bold text-primary font-mono px-2 py-1.5 rounded-full hover:bg-primary/10 transition-colors cursor-help">#{rank}</button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">Billboard rank</TooltipContent>
               </Tooltip>
