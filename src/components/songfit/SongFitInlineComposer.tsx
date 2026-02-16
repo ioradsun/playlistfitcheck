@@ -95,8 +95,8 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       const daysLeft = post.expires_at
         ? Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
         : null;
-      const dayStr = daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left this cycle.` : "";
-      setDuplicateWarning(`"${post.track_title}" is live. ${dayStr}`);
+      const dayStr = daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? "s" : ""} remaining this cycle.` : "";
+      setDuplicateWarning(`${post.track_title} is live. ${dayStr}`);
     } else {
       setDuplicateWarning(null);
       setDuplicatePostId(null);
