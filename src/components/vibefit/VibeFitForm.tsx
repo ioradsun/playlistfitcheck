@@ -14,6 +14,7 @@ export interface VibeFitInput {
   genre: string;
   moods: string[];
   lyrics: string;
+  composerNotes: string;
 }
 
 interface VibeFitFormProps {
@@ -28,6 +29,7 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
   const [genre, setGenre] = useState("");
   const [moods, setMoods] = useState<string[]>([]);
   const [lyrics, setLyrics] = useState("");
+  const [composerNotes, setComposerNotes] = useState("");
 
   const toggleMood = (mood: string) => {
     setMoods((prev) =>
@@ -40,7 +42,7 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
-    onSubmit({ songTitle, genre, moods, lyrics });
+    onSubmit({ songTitle, genre, moods, lyrics, composerNotes });
   };
 
   return (
@@ -78,6 +80,14 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
             ))}
           </div>
         </div>
+
+        <Textarea
+          placeholder="Composer notes — any ideas or direction for the art & captions"
+          value={composerNotes}
+          onChange={(e) => setComposerNotes(e.target.value)}
+          maxLength={500}
+          className="min-h-[70px]"
+        />
 
         <Textarea
           placeholder="Lyrics (optional — helps match vibe)"
