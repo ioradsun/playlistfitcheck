@@ -8,6 +8,7 @@ import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { WalletProvider } from "@/components/crypto/WalletProvider";
 import { PageLayout } from "@/components/PageLayout";
+import { FitWidget } from "@/components/FitWidget";
 import Index from "./pages/Index";
 
 import About from "./pages/About";
@@ -54,6 +55,7 @@ const App = () => (
               <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
             </Routes>
           </SidebarProvider>
+          <FitWidget />
           </WalletProvider>
           </SiteCopyProvider>
         </AuthProvider>
