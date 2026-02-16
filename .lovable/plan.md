@@ -1,82 +1,180 @@
-Let's keep this feature with enable/disable functionality in admin.
 
-# Crypto Tipping with $DEGEN on CrowdFit
+
+# Product-Led Growth System for toolsFM
 
 ## Overview
+Build a usage quota + invite-to-unlock growth system with an admin toggle (like the existing crypto tipping toggle), a floating "Fit Widget," and a gamified collab points system. This is a large feature set -- here is a phased plan starting with the core MVP.
 
-Add a $DEGEN (Base chain ERC-20) tipping button to every CrowdFit post using Coinbase OnchainKit. Users connect their crypto wallet, and can tip post authors directly on-chain.
+---
 
-## How It Works
+## Phase 1: Database Schema (New Tables + Columns)
 
-1. Users connect a crypto wallet (MetaMask, Coinbase Wallet, etc.) via an OnchainKit provider
-2. A small tip icon appears on each post card (next to like/comment)
-3. Clicking it opens a tipping modal where the user picks an amount and confirms the on-chain $DEGEN transfer
-4. The tip goes directly to the post author's wallet address (stored in their profile)
+### New table: `usage_tracking`
+Tracks per-user, per-tool usage counts (reset-able by period or permanent).
 
-## Implementation Steps
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | PK |
+| user_id | uuid | nullable (null = anonymous, keyed by session) |
+| session_id | text | for anonymous tracking |
+| tool | text | e.g. "hitfit", "vibefit", "profit" |
+| count | integer | default 0 |
+| period | text | e.g. "lifetime" or "2026-02" |
+| updated_at | timestamptz | |
 
-### Step 1: Database - Add wallet address to profiles
+### New table: `invites`
+Tracks invite links and conversions.
 
-- Add a `wallet_address` column (text, nullable) to the `profiles` table
-- Update RLS to allow public read of wallet addresses (already permissive for profiles)
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | PK |
+| inviter_user_id | uuid | who sent |
+| invite_code | text | unique shareable code |
+| invitee_user_id | uuid | nullable, filled on conversion |
+| converted_at | timestamptz | nullable |
+| created_at | timestamptz | |
 
-### Step 2: Install Dependencies
+### New table: `collab_points`
+Tracks gamification points and badges.
 
-- `@coinbase/onchainkit` - React components for wallet connection, token transfers
-- `wagmi` + `viem` - Ethereum interaction libraries (OnchainKit peer dependencies)
-- `@tanstack/react-query` is already installed
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | PK |
+| user_id | uuid | |
+| points | integer | default 0 |
+| badge | text | e.g. "collab_starter", "chain_builder" |
+| updated_at | timestamptz | |
 
-### Step 3: Wallet Provider Setup
+### Add to `profiles` table
+- `invite_code` (text, unique) -- each user gets a permanent invite code
+- `is_unlimited` (boolean, default false) -- unlocked via invite conversion
 
-- Create a `WalletProvider` wrapper in `src/components/crypto/WalletProvider.tsx`
-- Configure OnchainKit with Base chain and the $DEGEN token contract (`0x4ed4e862860bed51a9570b96d89af5e1b0efefed`)
-- Wrap the app in this provider (in `App.tsx`)
+---
 
-### Step 4: Wallet Connection UI
+## Phase 2: Admin Toggle (Copy Tab)
 
-- Add a "Connect Wallet" button in the user's Profile page to link their wallet
-- Save the connected wallet address to the `profiles.wallet_address` column
-- Show wallet status in the navbar or profile area
+Following the exact pattern of the crypto tipping toggle:
 
-### Step 5: Tip Button on Post Cards
+- Add `growth_flow` boolean to `site_copy.copy_json.features`
+- Add a new toggle card in the Admin Copy tab: "Product-Led Growth" with description "Usage quotas + invite-to-unlock flow"
+- Wire it identically to `handleToggleCrypto` -- reads/writes `features.growth_flow`
+- Update `SiteCopy` TypeScript interface to include `growth_flow: boolean`
 
-- Add a small coin/tip icon to `SongFitPostCard.tsx` action row (next to heart and comment)
-- Clicking opens a small modal/popover with preset tip amounts (e.g., 10, 50, 100 $DEGEN)
-- Uses OnchainKit's transaction components to execute the ERC-20 transfer on Base
-- If the post author has no wallet address set, show a disabled state with "Author hasn't connected a wallet"
+---
 
-### Step 6: Profile Page Updates
+## Phase 3: Usage Quota Hook
 
-- Add wallet connection/disconnection on the Profile settings page
-- Display wallet address (truncated) on public profiles for transparency
+Create `src/hooks/useUsageQuota.ts`:
+
+- Reads the `growth_flow` feature flag from site copy
+- If disabled, all tools are unlimited (no restrictions)
+- If enabled:
+  - Anonymous: 5 uses per tool
+  - Signed-in (no invite conversion): 10 uses per tool
+  - Unlimited (invited someone who converted): unlimited
+- Exposes: `{ canUse: boolean, remaining: number, tier: "anonymous" | "free" | "unlimited", increment: () => void }`
+- Each tool tab calls `increment()` on analysis run
+- Anonymous tracking uses `sessionId` from `src/lib/sessionId.ts`
+
+---
+
+## Phase 4: Floating Fit Widget
+
+Create `src/components/FitWidget.tsx`:
+
+- Only renders when `features.growth_flow` is enabled
+- Floating, draggable, collapsible button in bottom-right corner
+- Collapsed state: small icon with usage indicator ring
+- Expanded state shows:
+  - Per-tool usage bars (e.g. "HitFit: 3/10")
+  - Tier badge ("Free" / "Unlimited")
+  - If not unlimited: "Invite 1 artist -> unlock unlimited" CTA
+  - [Invite Collaborator] button opens invite modal
+- Invite modal: shows shareable link (`playlistfitcheck.lovable.app/?ref=CODE`), copy button
+- Placed in `Index.tsx` layout (visible on all tool pages)
+- Semi-transparent glass design, dark mode compatible
+
+---
+
+## Phase 5: Invite Flow
+
+- On signup, generate unique `invite_code` on `profiles` table (via DB trigger)
+- Shareable link: `/?ref=CODE`
+- When a new user signs up with a `ref` param:
+  - Record conversion in `invites` table
+  - Set inviter's `is_unlimited = true`
+  - Award collab points to inviter
+  - Optional: confetti animation on next inviter login
+- Each converted invitee also gets their own invite code (chain reaction)
+
+---
+
+## Phase 6: Collab Points + Badges
+
+- Points awarded for: invite conversion (+100), invitee uses a tool (+10)
+- Badge tiers: "Collab Starter" (1 invite), "Chain Builder" (3+), "Growth Engine" (10+)
+- Displayed in Fit Widget and on public profile
+- Non-blocking -- purely cosmetic rewards
+
+---
+
+## Phase 7: Tool Integration
+
+Each tool tab (HitFit, VibeFit, ProFit, etc.) gets a small guard:
+
+```text
+Before running analysis:
+  1. Call useUsageQuota("hitfit")
+  2. If !canUse -> show gentle nudge (not blocking UI, but disabling the submit button with a tooltip: "Sign up for more uses" or "Invite an artist to unlock unlimited")
+  3. If canUse -> run analysis, then call increment()
+```
+
+Anonymous users can still browse, view results, and explore -- the quota only gates new analysis runs.
+
+---
 
 ## Technical Details
 
-### $DEGEN Token Info
+### Files to create:
+- `src/hooks/useUsageQuota.ts` -- quota logic hook
+- `src/components/FitWidget.tsx` -- floating widget component
+- `src/components/FitWidgetInviteModal.tsx` -- invite modal
 
-- Chain: Base (chainId 8453)
-- Contract: `0x4ed4e862860bed51a9570b96d89af5e1b0efefed`
-- Decimals: 18
-- Symbol: DEGEN
+### Files to modify:
+- `src/hooks/useSiteCopy.tsx` -- add `growth_flow` to features interface + default
+- `src/pages/Admin.tsx` -- add toggle card (copy tab)
+- `src/pages/Index.tsx` -- render FitWidget
+- `src/components/hitfit/HitFitTab.tsx` -- add quota guard
+- `src/components/vibefit/VibeFitTab.tsx` -- add quota guard
+- `src/components/profit/ProFitTab.tsx` -- add quota guard
+- `src/components/lyric/LyricFitTab.tsx` -- add quota guard
+- `src/pages/MixFitCheck.tsx` -- add quota guard
+- `src/pages/Auth.tsx` -- capture `ref` param on signup
 
-### Key Files to Create/Modify
+### Database migrations:
+- Create `usage_tracking`, `invites`, `collab_points` tables with RLS
+- Add `invite_code` and `is_unlimited` columns to `profiles`
+- Create trigger to auto-generate invite codes on profile creation
 
-- **New**: `src/components/crypto/WalletProvider.tsx` - OnchainKit + wagmi config
-- **New**: `src/components/crypto/TipButton.tsx` - Tip icon + modal with transfer logic
-- **New**: `src/components/crypto/ConnectWalletButton.tsx` - Wallet connection component
-- **Modified**: `App.tsx` - Wrap with WalletProvider
-- **Modified**: `SongFitPostCard.tsx` - Add TipButton to action row
-- **Modified**: `Profile.tsx` - Add wallet connection section
-- **Modified**: `PublicProfile.tsx` - Show wallet address if set
-- **Migration**: Add `wallet_address` column to profiles
+### Edge function (optional, Phase 5):
+- `convert-invite` -- validates invite code, marks conversion, awards points (uses service role for cross-user updates)
 
-### Requirements
+---
 
-- A **WalletConnect Project ID** (free from cloud.walletconnect.com) will be needed and stored as a `VITE_` env variable since it's a public/publishable key
-- Users need a Base-compatible wallet with $DEGEN tokens to tip
+## What This Does NOT Do (kept out of MVP):
+- Project system (tracks + collaborators) -- can be added later
+- Community feed integration -- CrowdFit already exists
+- Remix suggestions -- future feature
+- Cover art bonus styles from collab points -- future feature
 
-### Limitations
+---
 
-- Tips are on-chain transactions requiring gas fees (small on Base, typically less than $0.01)
-- No off-chain tipping or points system - all transfers are real token movements
-- Users without wallets can still use CrowdFit normally; tipping is optional
+## Implementation Order
+1. DB migrations (tables + columns + triggers)
+2. Admin toggle (quick win, follows existing pattern)
+3. Usage quota hook
+4. Tool tab guards (all tools)
+5. Floating Fit Widget UI
+6. Invite flow (signup capture + conversion logic)
+7. Collab points + badges
+
