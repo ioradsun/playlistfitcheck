@@ -90,7 +90,7 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
           await supabase.from("saved_vibefit").insert({
             user_id: user.id,
             song_title: input.songTitle,
-            genre: input.genre,
+            genre: "",
             moods: input.moods,
             result_json: { input, result: output } as any,
           });
