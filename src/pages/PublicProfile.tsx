@@ -216,7 +216,6 @@ const PublicProfile = () => {
             </Button>
           )}
           <h1 className="text-xl font-semibold truncate">{profile.display_name || "User"}</h1>
-          {profile.is_verified && <VerifiedBadge size={18} />}
           {isOwner && (
             <Button
               variant={editing ? "secondary" : "outline"}
@@ -235,6 +234,11 @@ const PublicProfile = () => {
               <AvatarImage src={avatarSrc} />
               <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">{initials}</AvatarFallback>
             </Avatar>
+            {profile.is_verified && (
+              <span className="absolute -bottom-0.5 -right-0.5">
+                <VerifiedBadge size={20} />
+              </span>
+            )}
             {isOwner && (
               <>
                 <button
