@@ -54,15 +54,33 @@ export function SongFitFeed() {
   }, [user, feedView, billboardMode]);
 
   const enrichWithUserData = async (posts: SongFitPost[]) => {
-    if (!user || posts.length === 0) return posts;
+    if (posts.length === 0) return posts;
     const postIds = posts.map(p => p.id);
+
+    // Fetch saves counts for all posts
+    const savesCountRes = await supabase
+      .from("songfit_saves")
+      .select("post_id")
+      .in("post_id", postIds);
+    const savesCountMap = new Map<string, number>();
+    (savesCountRes.data || []).forEach(s => {
+      savesCountMap.set(s.post_id, (savesCountMap.get(s.post_id) || 0) + 1);
+    });
+
+    let enriched = posts.map(p => ({
+      ...p,
+      saves_count: savesCountMap.get(p.id) || 0,
+    }));
+
+    if (!user) return enriched;
+
     const [likesRes, savesRes] = await Promise.all([
       supabase.from("songfit_likes").select("post_id").eq("user_id", user.id).in("post_id", postIds),
       supabase.from("songfit_saves").select("post_id").eq("user_id", user.id).in("post_id", postIds),
     ]);
     const likedSet = new Set((likesRes.data || []).map(l => l.post_id));
     const savedSet = new Set((savesRes.data || []).map(s => s.post_id));
-    return posts.map(p => ({
+    return enriched.map(p => ({
       ...p,
       user_has_liked: likedSet.has(p.id),
       user_has_saved: savedSet.has(p.id),

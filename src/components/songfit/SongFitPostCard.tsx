@@ -281,8 +281,11 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             )}
           </button>
 
-          <button onClick={toggleSave} className="px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group">
+          <button onClick={toggleSave} className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group">
             <Bookmark size={18} className={saved ? "fill-primary text-primary" : "text-muted-foreground group-hover:text-primary transition-colors"} />
+            {(post as any).saves_count > 0 && (
+              <span className="text-xs text-muted-foreground group-hover:text-primary">{(post as any).saves_count}</span>
+            )}
           </button>
 
           {cryptoEnabled && (
@@ -306,13 +309,13 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         {/* Right: game mechanics */}
         <div className="flex items-center gap-2 text-muted-foreground">
           {post.engagement_score > 0 && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1" title="Engagement score — weighted total of likes, comments, saves, shares & clicks">
               <Trophy size={14} />
               <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
             </div>
           )}
           {post.status === "live" && post.expires_at && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1" title="Days remaining in this submission cycle">
               <Clock size={14} />
               <span className="text-xs font-mono">
                 {Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d
@@ -320,7 +323,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             </div>
           )}
           {rank && rank <= 50 && (
-            <span className="text-xs font-bold text-primary font-mono">#{rank}</span>
+            <span className="text-xs font-bold text-primary font-mono" title="Billboard rank">#{rank}</span>
           )}
         </div>
       </div>
