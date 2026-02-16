@@ -238,7 +238,7 @@ export function FitWidgetInviteModal({ open, onOpenChange, inviteCode }: FitWidg
             </TabsTrigger>
           </TabsList>
 
-          <div className="min-h-[220px]">
+          <div className="min-h-[190px]">
             <TabsContent value="invite" className="mt-0">
               <InviteTab inviteUrl={inviteUrl} inviteCode={inviteCode} />
             </TabsContent>
