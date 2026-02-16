@@ -302,7 +302,7 @@ const Auth = () => {
                 <form onSubmit={e => handleEmailAuth(e, "signup")} className="space-y-4 mt-4">
                   {artistField}
                   {emailPasswordFields}
-                  <Button type="submit" className="w-full gap-2" disabled={loading}>
+                  <Button type="submit" className="w-full gap-2" disabled={loading || !email.trim() || password.length < 6}>
                     <Mail size={16} />
                     {loading ? "Loading…" : "Sign Up for Free"}
                   </Button>
@@ -320,7 +320,7 @@ const Auth = () => {
                     <Checkbox id="remember" checked={rememberMe} onCheckedChange={(v) => setRememberMe(v === true)} />
                     <Label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer select-none">Remember Me</Label>
                   </div>
-                  <Button type="submit" className="w-full gap-2" disabled={loading}>
+                  <Button type="submit" className="w-full gap-2" disabled={loading || !email.trim() || password.length < 6}>
                     <Mail size={16} />
                     {loading ? "Loading…" : "Log In"}
                   </Button>
