@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
+import { compressAudioFile } from "@/lib/compressAudio";
 import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData } from "./LyricDisplay";
@@ -41,8 +42,13 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
     }
     setLoading(true);
     try {
+      // Compress large files client-side before uploading
+      const compressed = await compressAudioFile(file);
+      if (compressed !== file) {
+        toast.info(`Compressed ${(file.size / 1024 / 1024).toFixed(0)} MB → ${(compressed.size / 1024 / 1024).toFixed(1)} MB`);
+      }
       const formData = new FormData();
-      formData.append("audio", file);
+      formData.append("audio", compressed);
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,

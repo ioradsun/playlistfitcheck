@@ -50,7 +50,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
                 <Info size={13} />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs max-w-[220px]">MP3, WAV, M4A · 25 MB max each · Not saved or stored</TooltipContent>
+            <TooltipContent side="top" className="text-xs max-w-[220px]">MP3, WAV, M4A · 60 MB max each · Large files auto-compressed</TooltipContent>
           </Tooltip>
         </div>
         <AudioUploadZone
