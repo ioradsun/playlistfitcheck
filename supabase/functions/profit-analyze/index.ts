@@ -234,40 +234,67 @@ ${JSON.stringify(signals, null, 2)}`;
 
     const BLUEPRINT_SYSTEM_PROMPT = await fetchPrompt("profit-analyze", DEFAULT_BLUEPRINT_PROMPT);
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: BLUEPRINT_SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
+    let blueprint: any = null;
+    const MAX_RETRIES = 2;
 
-    if (!aiResp.ok) {
-      const status = aiResp.status;
-      if (status === 429) return new Response(JSON.stringify({ error: "Rate limited. Try again in a minute." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (status === 402) return new Response(JSON.stringify({ error: "AI credits exhausted." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      throw new Error(`AI gateway error: ${status}`);
-    }
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          max_tokens: 4096,
+          messages: [
+            { role: "system", content: BLUEPRINT_SYSTEM_PROMPT },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
 
-    const aiData = await aiResp.json();
-    let blueprintText = aiData.choices?.[0]?.message?.content || "";
-    
-    // Strip markdown fences if present
-    blueprintText = blueprintText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      if (!aiResp.ok) {
+        const status = aiResp.status;
+        if (status === 429) return new Response(JSON.stringify({ error: "Rate limited. Try again in a minute." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        if (status === 402) return new Response(JSON.stringify({ error: "AI credits exhausted." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        throw new Error(`AI gateway error: ${status}`);
+      }
 
-    let blueprint;
-    try {
-      blueprint = JSON.parse(blueprintText);
-    } catch {
-      console.error("AI returned invalid JSON:", blueprintText.substring(0, 500));
-      throw new Error("AI returned invalid blueprint format. Please try again.");
+      const aiData = await aiResp.json();
+      let blueprintText = aiData.choices?.[0]?.message?.content || "";
+
+      // Strip markdown fences if present
+      blueprintText = blueprintText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+
+      try {
+        blueprint = JSON.parse(blueprintText);
+        break; // success
+      } catch {
+        console.warn(`Attempt ${attempt + 1}: AI returned invalid JSON (len=${blueprintText.length}):`, blueprintText.substring(0, 300));
+        if (attempt === MAX_RETRIES - 1) {
+          // Try to repair truncated JSON by closing open brackets
+          try {
+            let repaired = blueprintText;
+            const openBraces = (repaired.match(/{/g) || []).length;
+            const closeBraces = (repaired.match(/}/g) || []).length;
+            const openBrackets = (repaired.match(/\[/g) || []).length;
+            const closeBrackets = (repaired.match(/]/g) || []).length;
+            // Remove trailing comma or partial content after last complete value
+            repaired = repaired.replace(/,\s*$/, "");
+            // Remove incomplete string at end
+            repaired = repaired.replace(/,\s*"[^"]*$/, "");
+            for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += "]";
+            for (let i = 0; i < openBraces - closeBraces; i++) repaired += "}";
+            blueprint = JSON.parse(repaired);
+            console.log("Repaired truncated JSON successfully");
+            break;
+          } catch {
+            console.error("JSON repair also failed");
+            throw new Error("AI returned invalid blueprint format. Please try again.");
+          }
+        }
+      }
     }
 
     // Save to DB
@@ -293,7 +320,7 @@ ${JSON.stringify(signals, null, 2)}`;
       artist_id: dbArtist!.id,
       blueprint_json: blueprint,
       signals_json: signals,
-      model_info: "google/gemini-3-flash-preview",
+      model_info: "google/gemini-2.5-flash",
     }).select("id, share_token").single();
 
     return new Response(JSON.stringify({
