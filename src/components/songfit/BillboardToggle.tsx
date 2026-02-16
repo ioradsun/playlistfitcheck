@@ -1,7 +1,12 @@
-import { useState } from "react";
 import type { BillboardMode, FeedView } from "./types";
 import { cn } from "@/lib/utils";
-import { Flame, Trophy, Target, TrendingUp } from "lucide-react";
+import { ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Props {
   view: FeedView;
@@ -10,17 +15,16 @@ interface Props {
   onModeChange: (m: BillboardMode) => void;
 }
 
-const modes: { key: BillboardMode; label: string; icon: React.ReactNode }[] = [
-  { key: "trending", label: "Trending", icon: <Flame size={13} /> },
-  { key: "top", label: "Top", icon: <Trophy size={13} /> },
-  { key: "best_fit", label: "Best Fit", icon: <Target size={13} /> },
-  { key: "all_time", label: "All-Time", icon: <TrendingUp size={13} /> },
-];
+const modeLabels: Record<BillboardMode, string> = {
+  trending: "Trending",
+  top: "Top",
+  best_fit: "Best Fit",
+  all_time: "All-Time",
+};
 
 export function BillboardToggle({ view, onViewChange, billboardMode, onModeChange }: Props) {
   return (
     <div className="border-b border-border/40">
-      {/* Main toggle */}
       <div className="flex">
         <button
           onClick={() => onViewChange("recent")}
@@ -33,39 +37,43 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
         >
           Recent
         </button>
-        <button
-          onClick={() => onViewChange("billboard")}
-          className={cn(
-            "flex-1 py-2.5 text-sm font-semibold text-center transition-colors border-b-2",
-            view === "billboard"
-              ? "border-primary text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          )}
-        >
-          Billboard
-        </button>
-      </div>
 
-      {/* Billboard sub-modes */}
-      {view === "billboard" && (
-        <div className="flex gap-1 px-3 py-2 overflow-x-auto scrollbar-none">
-          {modes.map(m => (
-            <button
-              key={m.key}
-              onClick={() => onModeChange(m.key)}
-              className={cn(
-                "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
-                billboardMode === m.key
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted/60 text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {m.icon}
-              {m.label}
-            </button>
-          ))}
+        {/* Billboard with inline dropdown */}
+        <div className="flex-1 flex items-center justify-center">
+          <button
+            onClick={() => onViewChange("billboard")}
+            className={cn(
+              "py-2.5 text-sm font-semibold transition-colors border-b-2",
+              view === "billboard"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Billboard
+          </button>
+          {view === "billboard" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="ml-1 flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-2.5">
+                  <span className="text-primary font-medium">{modeLabels[billboardMode]}</span>
+                  <ChevronDown size={14} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-36">
+                {(Object.keys(modeLabels) as BillboardMode[]).map(key => (
+                  <DropdownMenuItem
+                    key={key}
+                    onClick={() => onModeChange(key)}
+                    className={cn(billboardMode === key && "text-primary font-semibold")}
+                  >
+                    {modeLabels[key]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
