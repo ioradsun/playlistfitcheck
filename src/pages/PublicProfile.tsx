@@ -1,13 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy, Flame, RotateCcw, TrendingUp, Star, Target } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import {
+  ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy, Flame,
+  RotateCcw, TrendingUp, Star, Target, Camera, X, Check, Loader2, Bookmark,
+} from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { SubmissionBadge } from "@/components/songfit/SubmissionBadge";
+import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import type { SongFitPost } from "@/components/songfit/types";
@@ -20,9 +28,22 @@ interface PublicProfileData {
   wallet_address: string | null;
 }
 
+interface SavedPost {
+  id: string;
+  post_id: string;
+  created_at: string;
+  songfit_posts: {
+    id: string;
+    track_title: string;
+    spotify_track_url: string;
+    album_art_url: string | null;
+    track_artists_json: { name: string }[];
+  } | null;
+}
+
 const PublicProfile = () => {
   const { userId } = useParams<{ userId: string }>();
-  const { user } = useAuth();
+  const { user, profile: authProfile, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const { features } = useSiteCopy();
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
@@ -31,6 +52,17 @@ const PublicProfile = () => {
   const [notFound, setNotFound] = useState(false);
 
   const isOwner = user?.id === userId;
+
+  // Owner editing state
+  const [editing, setEditing] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
+  const [spotifyUrl, setSpotifyUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [savedPosts, setSavedPosts] = useState<SavedPost[]>([]);
 
   useEffect(() => {
     if (!userId) return;
@@ -50,8 +82,93 @@ const PublicProfile = () => {
       .then(({ data }) => { if (data) setSubmissions(data as unknown as SongFitPost[]); });
   }, [userId]);
 
+  // Owner: load saved posts & init edit fields
+  useEffect(() => {
+    if (!isOwner || !user) return;
+    supabase
+      .from("songfit_saves")
+      .select("id, post_id, created_at, songfit_posts(id, track_title, spotify_track_url, album_art_url, track_artists_json)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        if (data) setSavedPosts(data as unknown as SavedPost[]);
+      });
+  }, [isOwner, user]);
+
+  useEffect(() => {
+    if (isOwner && profile) {
+      setDisplayName(profile.display_name ?? "");
+      setBio(profile.bio ?? "");
+      setSpotifyUrl(profile.spotify_embed_url ?? "");
+    }
+  }, [isOwner, profile]);
+
+  // Auto-save for owner
+  const autoSave = useCallback((fields: { display_name?: string; bio?: string; spotify_embed_url?: string }) => {
+    if (!user) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setAutoSaveStatus("saving");
+    saveTimerRef.current = setTimeout(async () => {
+      const { error } = await supabase.from("profiles").update(fields).eq("id", user.id);
+      if (error) { toast.error(error.message); setAutoSaveStatus("idle"); }
+      else {
+        setAutoSaveStatus("saved");
+        refreshProfile();
+        // Update local state too
+        setProfile(prev => prev ? { ...prev, ...fields } : prev);
+        setTimeout(() => setAutoSaveStatus("idle"), 1500);
+      }
+    }, 800);
+  }, [user, refreshProfile]);
+
+  const handleDisplayNameChange = (val: string) => {
+    setDisplayName(val);
+    autoSave({ display_name: val, bio, spotify_embed_url: spotifyUrl || undefined });
+  };
+  const handleBioChange = (val: string) => {
+    setBio(val);
+    autoSave({ display_name: displayName, bio: val, spotify_embed_url: spotifyUrl || undefined });
+  };
+  const handleSpotifyUrlChange = (val: string) => {
+    setSpotifyUrl(val);
+    autoSave({ display_name: displayName, bio, spotify_embed_url: val });
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error("Image must be under 2MB"); return; }
+
+    setUploading(true);
+    const ext = file.name.split(".").pop();
+    const path = `${user.id}/avatar.${ext}`;
+
+    const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+    if (uploadErr) { toast.error(uploadErr.message); setUploading(false); return; }
+
+    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+    const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+    const { error: updateErr } = await supabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", user.id);
+    setUploading(false);
+    if (updateErr) toast.error(updateErr.message);
+    else {
+      toast.success("Avatar updated!");
+      refreshProfile();
+      setProfile(prev => prev ? { ...prev, avatar_url: avatarUrl } : prev);
+    }
+  };
+
   const hasMusic = profile?.spotify_embed_url && isMusicUrl(profile.spotify_embed_url);
   const initials = (profile?.display_name ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
+  // Google avatar fallback for owner
+  const googleAvatar = user?.user_metadata?.avatar_url ?? user?.user_metadata?.picture;
+  const avatarSrc = isOwner
+    ? (profile?.avatar_url || googleAvatar || undefined)
+    : (profile?.avatar_url ?? undefined);
 
   // Competitive stats
   const liveSubmission = submissions.find(s => s.status === "live");
@@ -94,24 +211,43 @@ const PublicProfile = () => {
           </Button>
           <h1 className="text-xl font-semibold truncate">{profile.display_name || "User"}</h1>
           {isOwner && (
-            <Button variant="outline" size="sm" className="gap-1.5 ml-auto" asChild>
-              <Link to="/profile"><Pencil size={14} /> Edit</Link>
+            <Button
+              variant={editing ? "secondary" : "outline"}
+              size="sm"
+              className="gap-1.5 ml-auto"
+              onClick={() => setEditing(!editing)}
+            >
+              {editing ? <><X size={14} /> Cancel</> : <><Pencil size={14} /> Edit</>}
             </Button>
           )}
         </div>
 
         <div className="flex items-start gap-4">
-          <Avatar className="h-20 w-20 border-2 border-border">
-            <AvatarImage src={profile.avatar_url ?? undefined} />
-            <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">{initials}</AvatarFallback>
-          </Avatar>
+          <div className="relative group">
+            <Avatar className="h-20 w-20 border-2 border-border">
+              <AvatarImage src={avatarSrc} />
+              <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">{initials}</AvatarFallback>
+            </Avatar>
+            {isOwner && (
+              <>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="absolute inset-0 rounded-full bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                >
+                  <Camera size={20} className="text-foreground" />
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+              </>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground capitalize">{roles[0] ?? "user"}</p>
               <TrailblazerBadge userId={userId} />
             </div>
-            {profile.bio && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
-            {hasMusic && (
+            {profile.bio && !editing && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
+            {hasMusic && !editing && (
               <a
                 href={profile.spotify_embed_url!}
                 target="_blank"
@@ -123,7 +259,7 @@ const PublicProfile = () => {
                 <ExternalLink size={12} />
               </a>
             )}
-            {features.crypto_tipping && profile.wallet_address && (
+            {features.crypto_tipping && profile.wallet_address && !editing && (
               <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 font-mono">
                 <Wallet size={12} />
                 {profile.wallet_address.slice(0, 6)}…{profile.wallet_address.slice(-4)}
@@ -131,6 +267,47 @@ const PublicProfile = () => {
             )}
           </div>
         </div>
+
+        {/* Edit form (owner only) */}
+        {isOwner && editing && (
+          <Card className="glass-card border-border">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Edit Profile</CardTitle>
+                {autoSaveStatus === "saving" && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Saving…</span>}
+                {autoSaveStatus === "saved" && <span className="text-xs text-primary flex items-center gap-1"><Check size={12} /> Saved</span>}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Display name</Label>
+                <Input value={displayName} onChange={e => handleDisplayNameChange(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Bio</Label>
+                <Textarea value={bio} onChange={e => handleBioChange(e.target.value)} placeholder="Tell us about yourself" rows={3} />
+              </div>
+              <div className="space-y-2">
+                <Label>Music Profile URL</Label>
+                <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="Spotify or SoundCloud URL..." />
+                <p className="text-xs text-muted-foreground">Your Spotify or SoundCloud profile link</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Wallet connection (owner only) */}
+        {isOwner && features.crypto_tipping && (
+          <Card className="glass-card border-border">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Wallet size={18} /> Crypto Wallet</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">Connect your wallet to receive $DEGEN tips from the community.</p>
+              <ConnectWalletButton />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Competitive Summary */}
         {submissions.length > 0 && (
@@ -228,6 +405,37 @@ const PublicProfile = () => {
                   </div>
                 </button>
               ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Saved Songs (owner only) */}
+        {isOwner && savedPosts.length > 0 && (
+          <Card className="glass-card border-border">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Bookmark size={18} /> Saved Songs</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {savedPosts.map(s => {
+                const p = s.songfit_posts;
+                if (!p) return null;
+                const artists = (p.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || "";
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => navigate(`/song/${p.id}`)}
+                    className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 cursor-pointer transition-colors"
+                  >
+                    {p.album_art_url && (
+                      <img src={p.album_art_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{p.track_title}</p>
+                      {artists && <p className="text-xs text-muted-foreground truncate">{artists}</p>}
+                    </div>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         )}
