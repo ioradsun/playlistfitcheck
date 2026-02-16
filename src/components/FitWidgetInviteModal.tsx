@@ -14,8 +14,11 @@ interface FitWidgetInviteModalProps {
 export function FitWidgetInviteModal({ open, onOpenChange, inviteCode }: FitWidgetInviteModalProps) {
   const [copied, setCopied] = useState(false);
 
+  const baseUrl = window.location.hostname === "localhost"
+    ? window.location.origin
+    : "https://tribes.fm";
   const inviteUrl = inviteCode
-    ? `${window.location.origin}/?ref=${inviteCode}`
+    ? `${baseUrl}/?ref=${inviteCode}`
     : "";
 
   const handleCopy = useCallback(() => {
