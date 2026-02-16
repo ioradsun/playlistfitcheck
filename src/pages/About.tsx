@@ -5,13 +5,13 @@ import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
 const TOOL_ICON_MAP: Record<string, any> = {
   songfit: Users,
+  vibefit: AudioWaveform,
   profit: BarChart3,
   playlist: ListMusic,
   mix: Sliders,
   lyric: FileText,
   hitfit: Target,
   dreamfit: Sparkles,
-  vibefit: AudioWaveform,
 };
 
 const TABS = ["Origin Story", "The Tools"] as const;
