@@ -498,9 +498,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   )}
                   {notiLoading ? (
                     <p className="text-[11px] text-muted-foreground py-1">Loading...</p>
-                  ) : notifications.filter(n => !n.is_read).length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground py-1">No notifications</p>
-                  ) : (
+                  ) : notifications.filter(n => !n.is_read).length === 0 ? null : (
                     <div className="space-y-0.5 max-h-40 overflow-y-auto">
                       {notifications.filter(n => !n.is_read).slice(0, 6).map((n) => {
                         const { icon: NIcon, className: nClass } = NOTI_ICON_MAP[n.type as keyof typeof NOTI_ICON_MAP] || NOTI_ICON_MAP.like;
