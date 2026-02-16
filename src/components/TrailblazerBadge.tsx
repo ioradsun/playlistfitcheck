@@ -27,8 +27,9 @@ export function TrailblazerBadge({ userId, compact = false }: TrailblazerBadgePr
           <span className="text-primary/60 font-mono">#{number}</span>
         </motion.span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs max-w-[240px]">
-        One of the first artists shaping the future of toolsFM.
+      <TooltipContent side="top" className="text-xs max-w-[240px] space-y-1">
+        <p className="font-semibold">🌟 Pioneer #{number}/1,000</p>
+        <p>One of the first artists shaping the future of toolsFM.</p>
       </TooltipContent>
     </Tooltip>
   );
