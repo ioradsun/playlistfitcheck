@@ -238,13 +238,15 @@ export function FitWidgetInviteModal({ open, onOpenChange, inviteCode }: FitWidg
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="invite" className="mt-0">
-            <InviteTab inviteUrl={inviteUrl} inviteCode={inviteCode} />
-          </TabsContent>
+          <div className="min-h-[220px]">
+            <TabsContent value="invite" className="mt-0">
+              <InviteTab inviteUrl={inviteUrl} inviteCode={inviteCode} />
+            </TabsContent>
 
-          <TabsContent value="share" className="mt-0">
-            <ShareTab />
-          </TabsContent>
+            <TabsContent value="share" className="mt-0">
+              <ShareTab />
+            </TabsContent>
+          </div>
         </Tabs>
       </DialogContent>
     </Dialog>
