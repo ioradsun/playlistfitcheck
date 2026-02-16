@@ -14,10 +14,12 @@ import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { MusicEmbed } from "@/components/MusicEmbed";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 
 
 const Profile = () => {
   const { user, loading: authLoading, roles, profile, refreshProfile } = useAuth();
+  const { features } = useSiteCopy();
   const navigate = useNavigate();
   
   const [editing, setEditing] = useState(false);
@@ -168,15 +170,17 @@ const Profile = () => {
         )}
 
         {/* Wallet connection */}
-        <Card className="glass-card border-border">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2"><Wallet size={18} /> Crypto Wallet</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-xs text-muted-foreground">Connect your wallet to receive $DEGEN tips from the community.</p>
-            <ConnectWalletButton />
-          </CardContent>
-        </Card>
+        {features.crypto_tipping && (
+          <Card className="glass-card border-border">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Wallet size={18} /> Crypto Wallet</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">Connect your wallet to receive $DEGEN tips from the community.</p>
+              <ConnectWalletButton />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Music embed for artists (outside edit view) */}
         {!editing && spotifyUrl && isMusicUrl(spotifyUrl) && (
