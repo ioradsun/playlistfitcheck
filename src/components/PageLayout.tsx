@@ -19,7 +19,7 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
             <span className="text-sm font-semibold text-foreground">{title}</span>
           )}
           {subtitle && (
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-medium">
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-medium">
               {subtitle}
             </span>
           )}
