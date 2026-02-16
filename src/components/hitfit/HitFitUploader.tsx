@@ -9,7 +9,8 @@ import { AudioUploadZone } from "@/components/ui/AudioUploadZone";
 export type ReferenceSource =
   | { type: "file"; file: File }
   | { type: "youtube"; url: string }
-  | { type: "spotify"; url: string };
+  | { type: "spotify"; url: string }
+  | { type: "none" };
 
 interface Props {
   onAnalyze: (master1: File, master2: File | null, reference: ReferenceSource) => void;
@@ -31,17 +32,19 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
     (refMode === "youtube" && refUrl.trim().length > 0) ||
     (refMode === "spotify" && refUrl.trim().length > 0);
 
-  const canSubmit = master1Files.length > 0 && hasReference && !loading;
+  const canSubmit = master1Files.length > 0 && !loading;
 
   const handleSubmit = () => {
-    if (!master1Files[0] || !hasReference) return;
+    if (!master1Files[0]) return;
     let ref: ReferenceSource;
     if (refMode === "upload" && refFiles[0]) {
       ref = { type: "file", file: refFiles[0] };
-    } else if (refMode === "youtube") {
+    } else if (refMode === "youtube" && refUrl.trim()) {
       ref = { type: "youtube", url: refUrl.trim() };
-    } else {
+    } else if (refMode === "spotify" && refUrl.trim()) {
       ref = { type: "spotify", url: refUrl.trim() };
+    } else {
+      ref = { type: "none" };
     }
     onAnalyze(master1Files[0], master2Files[0] || null, ref);
   };
@@ -108,7 +111,8 @@ export function HitFitUploader({ onAnalyze, loading }: Props) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold">Reference Track</p>
-                <Tooltip>
+                 <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Optional</span>
+                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
                       <Info size={13} />
