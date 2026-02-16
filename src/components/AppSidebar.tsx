@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useTrailblazer } from "@/hooks/useTrailblazer";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Sidebar,
@@ -102,6 +103,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   const { state: sidebarState, setOpenMobile, isMobile } = useSidebar();
   const collapsed = sidebarState === "collapsed";
   const { notifications, unreadCount, loading: notiLoading, markAllRead, refetch: refetchNotifications } = useNotifications();
+  const { number: pioneerNumber, isBlazer } = useTrailblazer(user?.id);
 
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [profileExpanded, setProfileExpanded] = useState(false);
@@ -477,10 +479,17 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
               </div>
               {!collapsed && (
                 <>
-                  <span className="text-xs font-medium truncate flex-1 text-left">
-                    {profile?.display_name ?? user.email?.split("@")[0]}
-                  </span>
-                  <ChevronDown size={14} className={`text-muted-foreground transition-transform ${profileExpanded ? "rotate-180" : ""}`} />
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span className="text-xs font-medium truncate text-left">
+                      {profile?.display_name ?? user.email?.split("@")[0]}
+                    </span>
+                    {isBlazer && pioneerNumber && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold leading-none bg-[hsl(142,70%,45%)]/15 text-[hsl(142,70%,45%)] border border-[hsl(142,70%,45%)]/30">
+                        #{pioneerNumber}
+                      </span>
+                    )}
+                  </div>
+                  <ChevronDown size={14} className={`text-muted-foreground transition-transform shrink-0 ${profileExpanded ? "rotate-180" : ""}`} />
                 </>
               )}
             </button>
