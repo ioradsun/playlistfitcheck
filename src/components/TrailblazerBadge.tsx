@@ -23,7 +23,6 @@ export function TrailblazerBadge({ userId, compact = false }: TrailblazerBadgePr
           transition={{ duration: 0.2 }}
         >
           <span className="text-primary/60 font-mono">#{number}</span>
-          <span className="text-primary/60 font-mono">#{number}</span>
         </motion.span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs max-w-[240px] space-y-1">
