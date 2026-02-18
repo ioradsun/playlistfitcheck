@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { SubmissionBadge } from "@/components/songfit/SubmissionBadge";
+
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -175,7 +175,6 @@ const PublicProfile = () => {
     : (profile?.avatar_url ?? undefined);
 
   // Competitive stats
-  const liveSubmission = submissions.find(s => s.status === "live");
   const bestPeakRank = submissions.reduce((best, s) => {
     const rank = s.peak_rank;
     if (rank && (best === null || rank < best)) return rank;
@@ -328,38 +327,11 @@ const PublicProfile = () => {
           </div>
         )}
 
-        {/* Active Submission Spotlight */}
-        {liveSubmission && (
-          <Card className="glass-card border-primary/30 bg-primary/5">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  {liveSubmission.album_art_url && (
-                    <img src={liveSubmission.album_art_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{liveSubmission.track_title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <SubmissionBadge status="live" expiresAt={liveSubmission.expires_at} compact />
-                      {liveSubmission.peak_rank && (
-                        <span className="text-xs text-muted-foreground">Rank #{liveSubmission.peak_rank}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => navigate(`/song/${liveSubmission.id}`)}>
-                  View
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Submission Record */}
+        {/* My Songs on CrowdFit */}
         {submissions.length > 0 && (
           <Card className="glass-card border-border">
             <CardHeader>
-              <CardTitle className="text-base">Submission Record</CardTitle>
+              <CardTitle className="text-base">My Songs on CrowdFit</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {submissions.map(s => (
@@ -374,10 +346,7 @@ const PublicProfile = () => {
                     )}
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{s.track_title}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <SubmissionBadge status={s.status} expiresAt={s.expires_at} cooldownUntil={s.cooldown_until} compact />
-                        <span className="text-[10px] text-muted-foreground">Cycle {s.cycle_number}</span>
-                      </div>
+                      <p className="text-[10px] text-muted-foreground capitalize mt-0.5">{s.status}</p>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
