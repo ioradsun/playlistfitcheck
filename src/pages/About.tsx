@@ -102,7 +102,10 @@ export default function About() {
             {about.tools_intro || "Six tools. One goal: give independent artists the clarity they deserve. No gatekeeping, no vague advice. Just data, context, and a little taste."}
           </p>
 
-          {TOOL_ORDER.map((key, i) => {
+          {TOOL_ORDER.filter((key) => {
+            const enabled = siteCopy.features?.tools_enabled?.[key];
+            return enabled === undefined || enabled === true;
+          }).map((key, i) => {
             const tool = siteCopy.tools[key] as ToolCopy;
             if (!tool) return null;
             const Icon = TOOL_ICON_MAP[key] || Target;
