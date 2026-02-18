@@ -408,7 +408,7 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
       {/* Two-column layout */}
       <div className="flex gap-4 items-start">
 
-        {/* ── LEFT: Waveform + Lyrics ── */}
+        {/* ── LEFT: Waveform + Lyrics + Export ── */}
         <div className="flex-1 min-w-0 space-y-3">
 
           {/* Waveform */}
@@ -431,7 +431,7 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
               {activeLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   {activeVersion === "fmly"
-                    ? "Generate FMLY Friendly version using the panel →"
+                    ? "Click \"Make FMLY Friendly\" above to generate the clean version."
                     : "No lyrics detected — this may be an instrumental track."}
                 </p>
               ) : (
@@ -478,6 +478,34 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
               )}
             </div>
           </div>
+
+          {/* Export — below lyrics */}
+          {activeLines.length > 0 && (
+            <div className="glass-card rounded-xl p-4">
+              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">
+                Export · {versionSuffix}
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                {EXPORT_OPTIONS.map(({ format, label, icon, desc }) => (
+                  <div key={format} className="space-y-1.5">
+                    <div className="flex items-center gap-1">
+                      {icon}
+                      <span className="text-xs font-semibold">{label}</span>
+                      <span className="text-[10px] text-muted-foreground">· {desc}</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="secondary" size="sm" className="flex-1 text-xs h-7" onClick={() => handleCopy(format)}>
+                        {copied === format ? <Check size={12} className="mr-1" /> : <Copy size={12} className="mr-1" />}Copy
+                      </Button>
+                      <Button variant="secondary" size="sm" className="flex-1 text-xs h-7" onClick={() => handleDownload(format)}>
+                        <Download size={12} className="mr-1" />Save
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── RIGHT: Controls panel ── */}
@@ -492,6 +520,17 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
               hasFmly={fmlyLines !== null}
               onChange={setActiveVersion}
             />
+            {/* FMLY generate button — only shown on FMLY tab */}
+            {activeVersion === "fmly" && (
+              <div className="mt-3 pt-3 border-t border-border/40">
+                <FmlyFriendlyPanel
+                  hasFmly={fmlyLines !== null}
+                  report={fmlyReport}
+                  onGenerate={handleGenerateFmly}
+                  onSeek={seekTo}
+                />
+              </div>
+            )}
           </div>
 
           {/* Format controls */}
@@ -506,42 +545,6 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
               onStrictnessChange={(v) => setFmlyMeta((m) => ({ ...m, strictness: v }))}
             />
           </div>
-
-          {/* FMLY Friendly panel */}
-          <div className="glass-card rounded-xl p-3">
-            <FmlyFriendlyPanel
-              hasFmly={fmlyLines !== null}
-              report={fmlyReport}
-              onGenerate={handleGenerateFmly}
-              onSeek={seekTo}
-            />
-          </div>
-
-          {/* Export */}
-          {activeLines.length > 0 && (
-            <div className="glass-card rounded-xl p-3 space-y-2">
-              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Export · {versionSuffix}</p>
-              <div className="space-y-2">
-                {EXPORT_OPTIONS.map(({ format, label, icon, desc }) => (
-                  <div key={format} className="space-y-1">
-                    <div className="flex items-center gap-1">
-                      {icon}
-                      <span className="text-[11px] font-semibold">{label}</span>
-                      <span className="text-[10px] text-muted-foreground">· {desc}</span>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="secondary" size="sm" className="flex-1 text-[10px] h-6" onClick={() => handleCopy(format)}>
-                        {copied === format ? <Check size={10} className="mr-1" /> : <Copy size={10} className="mr-1" />}Copy
-                      </Button>
-                      <Button variant="secondary" size="sm" className="flex-1 text-[10px] h-6" onClick={() => handleDownload(format)}>
-                        <Download size={10} className="mr-1" />Save
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -549,3 +552,4 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
     </motion.div>
   );
 }
+
