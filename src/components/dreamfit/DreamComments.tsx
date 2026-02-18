@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { User, Send, Loader2, CornerDownRight, Smile, Trash2 } from "lucide-react";
+import { User, Send, Loader2, CornerDownRight, Smile, Trash2, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import type { DreamComment } from "./types";
 import { formatDistanceToNow } from "date-fns";
+import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -41,16 +42,23 @@ function CommentItem({
   depth,
   onReply,
   onDelete,
+  onToggleLike,
   currentUserId,
+  likedSet,
 }: {
   comment: DreamComment & { replies?: DreamComment[] };
   depth: number;
   onReply: (commentId: string, displayName: string) => void;
   onDelete: (commentId: string) => void;
+  onToggleLike: (commentId: string, liked: boolean) => void;
   currentUserId?: string;
+  likedSet: Set<string>;
 }) {
   const displayName = comment.profiles?.display_name || "Anonymous";
   const isOwn = currentUserId === comment.user_id;
+  const liked = likedSet.has(comment.id);
+  const likesCount = (comment as any).likes_count ?? 0;
+
   return (
     <div style={{ paddingLeft: depth > 0 ? 20 : 0 }}>
       <div className="flex gap-2.5 py-2 group">
@@ -86,11 +94,37 @@ function CommentItem({
             )}
           </div>
         </div>
+        {/* Heart like button */}
+        <button
+          onClick={() => currentUserId && onToggleLike(comment.id, liked)}
+          className="flex flex-col items-center gap-0.5 shrink-0 ml-1 mt-0.5"
+          title={currentUserId ? (liked ? "Unlike" : "Like") : "Sign in to like"}
+        >
+          <Heart
+            size={13}
+            className={cn(
+              "transition-all",
+              liked ? "fill-destructive text-destructive" : "text-muted-foreground hover:text-destructive"
+            )}
+          />
+          {likesCount > 0 && (
+            <span className="text-[10px] text-muted-foreground leading-none">{likesCount}</span>
+          )}
+        </button>
       </div>
       {comment.replies && comment.replies.length > 0 && (
         <div className="border-l border-border/30 ml-3.5">
           {comment.replies.map(reply => (
-            <CommentItem key={reply.id} comment={reply as any} depth={depth + 1} onReply={onReply} onDelete={onDelete} currentUserId={currentUserId} />
+            <CommentItem
+              key={reply.id}
+              comment={reply as any}
+              depth={depth + 1}
+              onReply={onReply}
+              onDelete={onDelete}
+              onToggleLike={onToggleLike}
+              currentUserId={currentUserId}
+              likedSet={likedSet}
+            />
           ))}
         </div>
       )}
@@ -106,6 +140,7 @@ export function DreamComments({ dreamId, onClose, onCommentAdded }: Props) {
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -114,11 +149,25 @@ export function DreamComments({ dreamId, onClose, onCommentAdded }: Props) {
     setLoading(true);
     const { data } = await supabase
       .from("dream_comments")
-      .select("*, profiles:user_id(display_name, avatar_url)")
+      .select("*, profiles:user_id(display_name, avatar_url), likes_count")
       .eq("dream_id", dreamId)
       .order("created_at", { ascending: true })
       .limit(200);
-    setComments((data as any) || []);
+    const fetched = ((data as any) || []) as DreamComment[];
+    setComments(fetched);
+
+    if (user && fetched.length > 0) {
+      const ids = fetched.map(c => c.id);
+      const { data: liked } = await supabase
+        .from("dream_comment_likes")
+        .select("comment_id")
+        .eq("user_id", user.id)
+        .in("comment_id", ids);
+      setLikedSet(new Set((liked || []).map((l: any) => l.comment_id)));
+    } else {
+      setLikedSet(new Set());
+    }
+
     setLoading(false);
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }), 100);
   };
@@ -134,18 +183,36 @@ export function DreamComments({ dreamId, onClose, onCommentAdded }: Props) {
     }
   }, [dreamId]);
 
+  const handleToggleLike = async (commentId: string, alreadyLiked: boolean) => {
+    if (!user) { toast.error("Sign in to like"); return; }
+    setLikedSet(prev => {
+      const next = new Set(prev);
+      alreadyLiked ? next.delete(commentId) : next.add(commentId);
+      return next;
+    });
+    setComments(prev => prev.map(c =>
+      c.id === commentId
+        ? { ...c, likes_count: ((c as any).likes_count ?? 0) + (alreadyLiked ? -1 : 1) } as any
+        : c
+    ));
+    try {
+      if (alreadyLiked) {
+        await supabase.from("dream_comment_likes").delete().eq("comment_id", commentId).eq("user_id", user.id);
+      } else {
+        await supabase.from("dream_comment_likes").insert({ comment_id: commentId, user_id: user.id });
+      }
+    } catch {
+      fetchComments();
+    }
+  };
+
   const submitComment = async () => {
     if (!user) { toast.error("Sign in to comment"); return; }
     if (!text.trim() || !dreamId) return;
     setSending(true);
     try {
-      const insertData: any = {
-        dream_id: dreamId,
-        user_id: user.id,
-        content: text.trim(),
-      };
+      const insertData: any = { dream_id: dreamId, user_id: user.id, content: text.trim() };
       if (replyTo) insertData.parent_comment_id = replyTo.id;
-
       const { error } = await supabase.from("dream_comments").insert(insertData);
       if (error) throw error;
       setText("");
@@ -201,7 +268,16 @@ export function DreamComments({ dreamId, onClose, onCommentAdded }: Props) {
             <p className="text-sm text-muted-foreground text-center py-12">No comments yet — be the first!</p>
           ) : (
             tree.map(c => (
-              <CommentItem key={c.id} comment={c} depth={0} onReply={handleReply} onDelete={handleDelete} currentUserId={user?.id} />
+              <CommentItem
+                key={c.id}
+                comment={c}
+                depth={0}
+                onReply={handleReply}
+                onDelete={handleDelete}
+                onToggleLike={handleToggleLike}
+                currentUserId={user?.id}
+                likedSet={likedSet}
+              />
             ))
           )}
         </div>
@@ -214,7 +290,6 @@ export function DreamComments({ dreamId, onClose, onCommentAdded }: Props) {
               <button onClick={() => setReplyTo(null)} className="ml-auto text-muted-foreground hover:text-foreground">✕</button>
             </div>
           )}
-
           {showEmoji && (
             <div className="flex items-center gap-1 px-4 pt-2 pb-1 flex-wrap">
               {QUICK_EMOJIS.map(e => (
@@ -222,7 +297,6 @@ export function DreamComments({ dreamId, onClose, onCommentAdded }: Props) {
               ))}
             </div>
           )}
-
           <div className="flex items-center gap-2 px-4 py-3">
             <button
               onClick={() => setShowEmoji(!showEmoji)}
