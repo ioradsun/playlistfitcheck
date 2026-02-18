@@ -19,7 +19,7 @@ export function SongFitFeed() {
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [likesPostId, setLikesPostId] = useState<string | null>(null);
   const [feedView, setFeedView] = useState<FeedView>("recent");
-  const [billboardMode, setBillboardMode] = useState<BillboardMode>("weekly");
+  const [billboardMode, setBillboardMode] = useState<BillboardMode>("this_week");
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -39,11 +39,14 @@ export function SongFitFeed() {
     } else {
       // FMLY 40: filter by time window based on mode
       let cutoff: string | null = null;
-      if (billboardMode === "weekly") {
+      let ceiling: string | null = null;
+      if (billboardMode === "this_week") {
         cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      } else if (billboardMode === "monthly") {
-        cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      } else if (billboardMode === "last_week") {
+        cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+        ceiling = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       }
+      // all_time: no cutoff
 
       let query = supabase
         .from("songfit_posts")
@@ -53,6 +56,7 @@ export function SongFitFeed() {
         .order("engagement_score", { ascending: false });
 
       if (cutoff) query = query.gte("submitted_at", cutoff);
+      if (ceiling) query = query.lte("submitted_at", ceiling);
 
       const { data } = await query;
       let enriched = (data || []) as unknown as SongFitPost[];

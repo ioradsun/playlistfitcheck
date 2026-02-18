@@ -9,9 +9,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const modes: { key: BillboardMode; label: string }[] = [
-  { key: "weekly", label: "Weekly Top 40" },
-  { key: "monthly", label: "Monthly Top 40" },
-  { key: "all_time", label: "All Time Top 40" },
+  { key: "this_week", label: "This Week" },
+  { key: "last_week", label: "Last Week" },
+  { key: "all_time", label: "All-Time" },
 ];
 
 interface Props {
