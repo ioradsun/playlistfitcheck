@@ -55,5 +55,5 @@ export interface CycleHistory {
   ended_at: string;
 }
 
-export type BillboardMode = 'weekly' | 'monthly' | 'all_time';
+export type BillboardMode = 'this_week' | 'last_week' | 'all_time';
 export type FeedView = 'recent' | 'billboard';
