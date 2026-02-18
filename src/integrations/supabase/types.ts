@@ -672,31 +672,37 @@ export type Database = {
           artist: string
           created_at: string
           filename: string | null
+          fmly_lines: Json | null
           id: string
           lines: Json
           title: string
           updated_at: string
           user_id: string
+          version_meta: Json | null
         }
         Insert: {
           artist?: string
           created_at?: string
           filename?: string | null
+          fmly_lines?: Json | null
           id?: string
           lines?: Json
           title?: string
           updated_at?: string
           user_id: string
+          version_meta?: Json | null
         }
         Update: {
           artist?: string
           created_at?: string
           filename?: string | null
+          fmly_lines?: Json | null
           id?: string
           lines?: Json
           title?: string
           updated_at?: string
           user_id?: string
+          version_meta?: Json | null
         }
         Relationships: []
       }
