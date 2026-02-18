@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Play, Pause, Info } from "lucide-react";
+import { Play, Pause, Info, SkipBack } from "lucide-react";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
 interface GlobalTimelineProps {
@@ -15,6 +15,7 @@ interface GlobalTimelineProps {
   onMarkersChangeEnd?: (start: number, end: number) => void;
   onPlay: () => void;
   onStop: () => void;
+  onRestart: () => void;
 }
 
 function formatTime(s: number) {
@@ -44,7 +45,7 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[]) {
 
 export function GlobalTimeline({
   waveform, referenceName, markerStart, markerEnd, isPlaying, playheadPct,
-  onMarkersChange, onMarkersChangeEnd, onPlay, onStop,
+  onMarkersChange, onMarkersChangeEnd, onPlay, onStop, onRestart,
 }: GlobalTimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -110,6 +111,15 @@ export function GlobalTimeline({
             onClick={isPlaying ? onStop : onPlay}
           >
             {isPlaying ? <Pause size={12} /> : <Play size={12} />}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={onRestart}
+            title="Restart from first marker"
+          >
+            <SkipBack size={12} />
           </Button>
           <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Loop Zone
