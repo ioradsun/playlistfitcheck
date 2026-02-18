@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { User, Send, Loader2, CornerDownRight, Smile, Trash2 } from "lucide-react";
+import { User, Send, Loader2, CornerDownRight, Smile, Trash2, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import type { SongFitComment } from "./types";
 import { formatDistanceToNow } from "date-fns";
+import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -41,16 +42,23 @@ function CommentItem({
   depth,
   onReply,
   onDelete,
+  onToggleLike,
   currentUserId,
+  likedSet,
 }: {
   comment: SongFitComment;
   depth: number;
   onReply: (commentId: string, displayName: string) => void;
   onDelete: (commentId: string) => void;
+  onToggleLike: (commentId: string, liked: boolean) => void;
   currentUserId?: string;
+  likedSet: Set<string>;
 }) {
   const displayName = comment.profiles?.display_name || "Anonymous";
   const isOwn = currentUserId === comment.user_id;
+  const liked = likedSet.has(comment.id);
+  const likesCount = (comment as any).likes_count ?? 0;
+
   return (
     <div style={{ paddingLeft: depth > 0 ? 20 : 0 }}>
       <div className="flex gap-2.5 py-2 group">
@@ -86,11 +94,37 @@ function CommentItem({
             )}
           </div>
         </div>
+        {/* Heart like button */}
+        <button
+          onClick={() => currentUserId && onToggleLike(comment.id, liked)}
+          className="flex flex-col items-center gap-0.5 shrink-0 ml-1 mt-0.5"
+          title={currentUserId ? (liked ? "Unlike" : "Like") : "Sign in to like"}
+        >
+          <Heart
+            size={13}
+            className={cn(
+              "transition-all",
+              liked ? "fill-destructive text-destructive" : "text-muted-foreground hover:text-destructive"
+            )}
+          />
+          {likesCount > 0 && (
+            <span className="text-[10px] text-muted-foreground leading-none">{likesCount}</span>
+          )}
+        </button>
       </div>
       {comment.replies && comment.replies.length > 0 && (
         <div className="border-l border-border/30 ml-3.5">
           {comment.replies.map(reply => (
-            <CommentItem key={reply.id} comment={reply} depth={depth + 1} onReply={onReply} onDelete={onDelete} currentUserId={currentUserId} />
+            <CommentItem
+              key={reply.id}
+              comment={reply}
+              depth={depth + 1}
+              onReply={onReply}
+              onDelete={onDelete}
+              onToggleLike={onToggleLike}
+              currentUserId={currentUserId}
+              likedSet={likedSet}
+            />
           ))}
         </div>
       )}
@@ -106,6 +140,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -114,11 +149,26 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     setLoading(true);
     const { data } = await supabase
       .from("songfit_comments")
-      .select("*, profiles!songfit_comments_user_id_profiles_fkey(display_name, avatar_url)")
+      .select("*, profiles!songfit_comments_user_id_profiles_fkey(display_name, avatar_url), likes_count")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
       .limit(200);
-    setComments((data || []) as unknown as SongFitComment[]);
+    const fetched = (data || []) as unknown as SongFitComment[];
+    setComments(fetched);
+
+    // Fetch which ones the current user has liked
+    if (user && fetched.length > 0) {
+      const ids = fetched.map(c => c.id);
+      const { data: liked } = await supabase
+        .from("songfit_comment_likes")
+        .select("comment_id")
+        .eq("user_id", user.id)
+        .in("comment_id", ids);
+      setLikedSet(new Set((liked || []).map((l: any) => l.comment_id)));
+    } else {
+      setLikedSet(new Set());
+    }
+
     setLoading(false);
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }), 100);
   };
@@ -134,18 +184,38 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     }
   }, [postId]);
 
+  const handleToggleLike = async (commentId: string, alreadyLiked: boolean) => {
+    if (!user) { toast.error("Sign in to like"); return; }
+    // Optimistic update
+    setLikedSet(prev => {
+      const next = new Set(prev);
+      alreadyLiked ? next.delete(commentId) : next.add(commentId);
+      return next;
+    });
+    setComments(prev => prev.map(c =>
+      c.id === commentId
+        ? { ...c, likes_count: ((c as any).likes_count ?? 0) + (alreadyLiked ? -1 : 1) } as any
+        : c
+    ));
+    try {
+      if (alreadyLiked) {
+        await supabase.from("songfit_comment_likes").delete().eq("comment_id", commentId).eq("user_id", user.id);
+      } else {
+        await supabase.from("songfit_comment_likes").insert({ comment_id: commentId, user_id: user.id });
+      }
+    } catch {
+      // Revert on error
+      fetchComments();
+    }
+  };
+
   const submitComment = async () => {
     if (!user) { toast.error("Sign in to comment"); return; }
     if (!text.trim() || !postId) return;
     setSending(true);
     try {
-      const insertData: any = {
-        post_id: postId,
-        user_id: user.id,
-        content: text.trim(),
-      };
+      const insertData: any = { post_id: postId, user_id: user.id, content: text.trim() };
       if (replyTo) insertData.parent_comment_id = replyTo.id;
-
       const { error } = await supabase.from("songfit_comments").insert(insertData);
       if (error) throw error;
       setText("");
@@ -177,7 +247,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
       const { error } = await supabase.from("songfit_comments").delete().eq("id", commentId);
       if (error) throw error;
       await fetchComments();
-      if (postId) onCommentAdded?.(postId); // reuse to decrement in parent
+      if (postId) onCommentAdded?.(postId);
     } catch (e: any) {
       toast.error(e.message || "Failed to delete");
     }
@@ -192,7 +262,6 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
           <SheetTitle className="text-base">Comments</SheetTitle>
         </SheetHeader>
 
-        {/* Comments list */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-2">
           {loading ? (
             <div className="flex justify-center py-12">
@@ -202,14 +271,21 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
             <p className="text-sm text-muted-foreground text-center py-12">No comments yet — be the first!</p>
           ) : (
             tree.map(c => (
-              <CommentItem key={c.id} comment={c} depth={0} onReply={handleReply} onDelete={handleDelete} currentUserId={user?.id} />
+              <CommentItem
+                key={c.id}
+                comment={c}
+                depth={0}
+                onReply={handleReply}
+                onDelete={handleDelete}
+                onToggleLike={handleToggleLike}
+                currentUserId={user?.id}
+                likedSet={likedSet}
+              />
             ))
           )}
         </div>
 
-        {/* Input pinned at bottom */}
         <div className="shrink-0 border-t border-border bg-background">
-          {/* Reply indicator */}
           {replyTo && (
             <div className="flex items-center gap-2 px-4 pt-2 text-xs text-muted-foreground">
               <CornerDownRight size={12} />
@@ -217,22 +293,13 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
               <button onClick={() => setReplyTo(null)} className="ml-auto text-muted-foreground hover:text-foreground">✕</button>
             </div>
           )}
-
-          {/* Emoji quick-pick */}
           {showEmoji && (
             <div className="flex items-center gap-1 px-4 pt-2 pb-1 flex-wrap">
               {QUICK_EMOJIS.map(e => (
-                <button
-                  key={e}
-                  onClick={() => insertEmoji(e)}
-                  className="text-lg hover:scale-125 transition-transform p-1"
-                >
-                  {e}
-                </button>
+                <button key={e} onClick={() => insertEmoji(e)} className="text-lg hover:scale-125 transition-transform p-1">{e}</button>
               ))}
             </div>
           )}
-
           <div className="flex items-center gap-2 px-4 py-3">
             <button
               onClick={() => setShowEmoji(!showEmoji)}

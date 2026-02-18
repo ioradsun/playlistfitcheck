@@ -103,12 +103,42 @@ export type Database = {
           },
         ]
       }
+      dream_comment_likes: {
+        Row: {
+          comment_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dream_comment_likes_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "dream_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dream_comments: {
         Row: {
           content: string
           created_at: string
           dream_id: string
           id: string
+          likes_count: number
           parent_comment_id: string | null
           user_id: string
         }
@@ -117,6 +147,7 @@ export type Database = {
           created_at?: string
           dream_id: string
           id?: string
+          likes_count?: number
           parent_comment_id?: string | null
           user_id: string
         }
@@ -125,6 +156,7 @@ export type Database = {
           created_at?: string
           dream_id?: string
           id?: string
+          likes_count?: number
           parent_comment_id?: string | null
           user_id?: string
         }
@@ -823,11 +855,41 @@ export type Database = {
         }
         Relationships: []
       }
+      songfit_comment_likes: {
+        Row: {
+          comment_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songfit_comment_likes_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       songfit_comments: {
         Row: {
           content: string
           created_at: string
           id: string
+          likes_count: number
           parent_comment_id: string | null
           post_id: string
           user_id: string
@@ -836,6 +898,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          likes_count?: number
           parent_comment_id?: string | null
           post_id: string
           user_id: string
@@ -844,6 +907,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          likes_count?: number
           parent_comment_id?: string | null
           post_id?: string
           user_id?: string
