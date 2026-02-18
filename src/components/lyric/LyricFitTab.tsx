@@ -18,6 +18,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
+  const [versionMeta, setVersionMeta] = useState<any | null>(null);
   const { user } = useAuth();
   const quota = useUsageQuota("lyric");
 
@@ -30,6 +32,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
         lines: initialLyric.lines as any[],
       });
       setSavedId(initialLyric.id);
+      setFmlyLines((initialLyric as any).fmly_lines ?? null);
+      setVersionMeta((initialLyric as any).version_meta ?? null);
       // Create a dummy file for the display component (no actual audio)
       const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
       setAudioFile(dummyFile);
@@ -108,6 +112,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
     setLyricData(null);
     setAudioFile(null);
     setSavedId(null);
+    setFmlyLines(null);
+    setVersionMeta(null);
   }, []);
 
   if (lyricData && audioFile) {
@@ -117,6 +123,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
           data={lyricData}
           audioFile={audioFile}
           savedId={savedId}
+          fmlyLines={fmlyLines}
+          versionMeta={versionMeta}
           onBack={handleBack}
           onSaved={(id) => { setSavedId(id); onProjectSaved?.(); }}
         />
@@ -129,6 +137,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
       <LyricUploader onTranscribe={handleTranscribe} onLoadSaved={(l: any) => {
         setLyricData({ title: l.title, artist: l.artist, lines: l.lines as any[] });
         setSavedId(l.id);
+        setFmlyLines((l as any).fmly_lines ?? null);
+        setVersionMeta((l as any).version_meta ?? null);
         const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
         setAudioFile(dummyFile);
       }} loading={loading} loadingMsg={loadingMsg} />
