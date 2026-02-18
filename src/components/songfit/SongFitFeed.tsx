@@ -36,12 +36,14 @@ export function SongFitFeed() {
       enriched = await enrichWithUserData(enriched);
       setPosts(enriched);
     } else {
-      // FMLY 40: ranked by raw engagement score
+      // FMLY 40: highest engagement from the past 7 days
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data } = await supabase
         .from("songfit_posts")
         .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
         .eq("status", "live")
-        .limit(50)
+        .gte("submitted_at", weekAgo)
+        .limit(40)
         .order("engagement_score", { ascending: false });
 
       let enriched = (data || []) as unknown as SongFitPost[];
