@@ -3,7 +3,7 @@ import { Loader2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-import type { SongFitPost, FeedView } from "./types";
+import type { SongFitPost, FeedView, BillboardMode } from "./types";
 import { SongFitPostCard } from "./SongFitPostCard";
 import { EagerEmbedProvider } from "./LazySpotifyEmbed";
 import { SongFitComments } from "./SongFitComments";
@@ -19,6 +19,7 @@ export function SongFitFeed() {
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [likesPostId, setLikesPostId] = useState<string | null>(null);
   const [feedView, setFeedView] = useState<FeedView>("recent");
+  const [billboardMode, setBillboardMode] = useState<BillboardMode>("weekly");
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -36,16 +37,24 @@ export function SongFitFeed() {
       enriched = await enrichWithUserData(enriched);
       setPosts(enriched);
     } else {
-      // FMLY 40: highest engagement from the past 7 days
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { data } = await supabase
+      // FMLY 40: filter by time window based on mode
+      let cutoff: string | null = null;
+      if (billboardMode === "weekly") {
+        cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      } else if (billboardMode === "monthly") {
+        cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      let query = supabase
         .from("songfit_posts")
         .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
         .eq("status", "live")
-        .gte("submitted_at", weekAgo)
         .limit(40)
         .order("engagement_score", { ascending: false });
 
+      if (cutoff) query = query.gte("submitted_at", cutoff);
+
+      const { data } = await query;
       let enriched = (data || []) as unknown as SongFitPost[];
       enriched = await enrichWithUserData(enriched);
       enriched = enriched.map((p, i) => ({ ...p, current_rank: i + 1 }));
@@ -53,7 +62,7 @@ export function SongFitFeed() {
     }
 
     setLoading(false);
-  }, [user, feedView]);
+  }, [user, feedView, billboardMode]);
 
   const enrichWithUserData = async (posts: SongFitPost[]) => {
     if (posts.length === 0) return posts;
@@ -118,6 +127,8 @@ export function SongFitFeed() {
       <BillboardToggle
         view={feedView}
         onViewChange={setFeedView}
+        billboardMode={billboardMode}
+        onModeChange={setBillboardMode}
       />
 
       {loading ? (
