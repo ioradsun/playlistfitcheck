@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { HitFitUploader, type ReferenceSource } from "./HitFitUploader";
 import { HitFitResults, type HitFitAnalysis } from "./HitFitResults";
+import { compressAudioFile } from "@/lib/compressAudio";
 
 interface HitFitTabProps {
   initialAnalysis?: HitFitAnalysis | null;
@@ -25,18 +26,25 @@ export function HitFitTab({ initialAnalysis, onProjectSaved }: HitFitTabProps = 
   const handleAnalyze = useCallback(async (master1: File, master2: File | null, reference: ReferenceSource) => {
     setLoading(true);
     try {
+      // Compress all uploaded audio files before sending
+      const [compressedMaster1, compressedMaster2, compressedRef] = await Promise.all([
+        compressAudioFile(master1).catch((e) => { throw new Error(`Master A: ${e.message}`); }),
+        master2 ? compressAudioFile(master2).catch((e) => { throw new Error(`Master B: ${e.message}`); }) : Promise.resolve(null),
+        reference.type === "file" ? compressAudioFile(reference.file).catch((e) => { throw new Error(`Reference: ${e.message}`); }) : Promise.resolve(null),
+      ]);
+
       const formData = new FormData();
-      formData.append("master1", master1);
+      formData.append("master1", compressedMaster1);
       formData.append("master1Name", master1.name);
-      if (master2) {
-        formData.append("master2", master2);
-        formData.append("master2Name", master2.name);
+      if (compressedMaster2) {
+        formData.append("master2", compressedMaster2);
+        formData.append("master2Name", master2!.name);
       }
 
-      if (reference.type === "file") {
-        formData.append("reference", reference.file);
+      if (reference.type === "file" && compressedRef) {
+        formData.append("reference", compressedRef);
         formData.append("referenceName", reference.file.name);
-      } else if (reference.type !== "none") {
+      } else if (reference.type === "youtube" || reference.type === "spotify") {
         formData.append("referenceType", reference.type);
         formData.append("referenceUrl", reference.url);
         formData.append("referenceName", reference.url);
