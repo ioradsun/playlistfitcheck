@@ -288,6 +288,11 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
           setMarkerStart(s);
           setMarkerEnd(e);
         }}
+        onMarkersChangeEnd={(s, e) => {
+          if (!playingId) return;
+          const playingMix = activeMixes.find((m) => m.id === playingId) || activeMixes[0];
+          if (playingMix) play(playingMix.id, playingMix.buffer, s, e);
+        }}
         onPlay={() => {
           const first = activeMixes[0];
           if (first) play(first.id, first.buffer, markerStartRef.current, markerEndRef.current);
@@ -331,7 +336,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
               markerStartPct={(markerStart / referenceDuration) * 100}
               markerEndPct={(markerEnd / referenceDuration) * 100}
               playheadPct={playingId === mix.id ? (playheadTime / referenceDuration) * 100 : 0}
-              onPlay={() => play(mix.id, mix.buffer, 0, mix.waveform.duration)}
+              onPlay={() => play(mix.id, mix.buffer, markerStartRef.current, markerEndRef.current)}
               onStop={stop}
               onNameChange={(name) => updateMix(mix.id, { name })}
               onRankChange={(rank) => updateMix(mix.id, { rank })}

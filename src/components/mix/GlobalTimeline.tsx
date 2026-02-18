@@ -12,6 +12,7 @@ interface GlobalTimelineProps {
   isPlaying: boolean;
   playheadPct: number;
   onMarkersChange: (start: number, end: number) => void;
+  onMarkersChangeEnd?: (start: number, end: number) => void;
   onPlay: () => void;
   onStop: () => void;
 }
@@ -43,7 +44,7 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[]) {
 
 export function GlobalTimeline({
   waveform, referenceName, markerStart, markerEnd, isPlaying, playheadPct,
-  onMarkersChange, onPlay, onStop,
+  onMarkersChange, onMarkersChangeEnd, onPlay, onStop,
 }: GlobalTimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +84,10 @@ export function GlobalTimeline({
         onMarkersChange(markerStart, Math.min(duration, Math.max(time, markerStart + 0.5)));
       }
     };
-    const onUp = () => setDragging(null);
+    const onUp = () => {
+      setDragging(null);
+      onMarkersChangeEnd?.(markerStart, markerEnd);
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
