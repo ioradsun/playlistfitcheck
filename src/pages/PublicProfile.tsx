@@ -10,8 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-  ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy, Flame,
-  RotateCcw, TrendingUp, Star, Target, Camera, X, Check, Loader2, Bookmark,
+  ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy,
+  Camera, X, Check, Loader2, Bookmark,
 } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -176,19 +176,11 @@ const PublicProfile = () => {
 
   // Competitive stats
   const liveSubmission = submissions.find(s => s.status === "live");
-  const totalCycles = submissions.reduce((sum, s) => sum + (s.cycle_number || 1), 0);
   const bestPeakRank = submissions.reduce((best, s) => {
     const rank = s.peak_rank;
     if (rank && (best === null || rank < best)) return rank;
     return best;
   }, null as number | null);
-  const bestCycleScore = Math.max(0, ...submissions.map(s => s.engagement_score || 0));
-  const lifetimeImpact = submissions.reduce((sum, s) => sum + (s.engagement_score || 0), 0);
-  const avgRank = (() => {
-    const ranked = submissions.filter(s => s.peak_rank);
-    if (ranked.length === 0) return null;
-    return Math.round(ranked.reduce((sum, s) => sum + (s.peak_rank || 0), 0) / ranked.length);
-  })();
 
   if (notFound) {
     return (
@@ -322,36 +314,16 @@ const PublicProfile = () => {
 
         {/* Competitive Summary */}
         {submissions.length > 0 && (
-          <div className="grid grid-cols-3 gap-2">
-            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <Trophy size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-sm font-bold">{bestPeakRank ? `#${bestPeakRank}` : "—"}</p>
-              <p className="text-[10px] text-muted-foreground">Peak Rank</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="text-center p-4 rounded-xl bg-secondary/50 border border-border">
+              <Trophy size={16} className="mx-auto mb-1.5 text-primary" />
+              <p className="text-lg font-bold">{bestPeakRank ? `#${bestPeakRank}` : "—"}</p>
+              <p className="text-xs text-muted-foreground">Peak Rank</p>
             </div>
-            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <Flame size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-sm font-bold">{Math.round(bestCycleScore)}</p>
-              <p className="text-[10px] text-muted-foreground">Best Score</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <TrendingUp size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-sm font-bold">{Math.round(lifetimeImpact)}</p>
-              <p className="text-[10px] text-muted-foreground">Impact</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <RotateCcw size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-sm font-bold">{totalCycles}</p>
-              <p className="text-[10px] text-muted-foreground">Cycles</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <Star size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-sm font-bold">{avgRank ? `#${avgRank}` : "—"}</p>
-              <p className="text-[10px] text-muted-foreground">Avg Rank</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <Target size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-sm font-bold">{submissions.length}</p>
-              <p className="text-[10px] text-muted-foreground">Songs</p>
+            <div className="text-center p-4 rounded-xl bg-secondary/50 border border-border">
+              <Music size={16} className="mx-auto mb-1.5 text-primary" />
+              <p className="text-lg font-bold">{submissions.length}</p>
+              <p className="text-xs text-muted-foreground">Songs in FMLY 40</p>
             </div>
           </div>
         )}
@@ -409,10 +381,10 @@ const PublicProfile = () => {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-mono font-bold text-primary">{Math.round(s.engagement_score)}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {s.peak_rank ? `Peak #${s.peak_rank}` : "—"}
+                    <p className="text-sm font-mono font-bold text-primary">
+                      {s.peak_rank ? `#${s.peak_rank}` : "—"}
                     </p>
+                    <p className="text-[10px] text-muted-foreground">Peak Rank</p>
                   </div>
                 </button>
               ))}
