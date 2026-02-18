@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Play, Pause, X, SkipBack } from "lucide-react";
+import { Play, Pause, X } from "lucide-react";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
 interface MixCardProps {
@@ -20,7 +20,6 @@ interface MixCardProps {
   markerEndPct: number;
   playheadPct: number;
   onPlay: () => void;
-  onRestart: () => void;
   onStop: () => void;
   onNameChange: (name: string) => void;
   onRankChange: (rank: number | null) => void;
@@ -63,7 +62,6 @@ export function MixCard({
   markerEndPct,
   playheadPct,
   onPlay,
-  onRestart,
   onStop,
   onNameChange,
   onRankChange,
@@ -146,15 +144,6 @@ export function MixCard({
             onClick={isPlaying ? onStop : onPlay}
           >
             {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={onRestart}
-            title="Restart from first marker"
-          >
-            <SkipBack size={14} />
           </Button>
 
           <Select
