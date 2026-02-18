@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy,
-  Camera, X, Check, Loader2, Bookmark,
+  Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle,
 } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -53,6 +53,7 @@ const PublicProfile = () => {
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<SongFitPost[]>([]);
+  const [saveCounts, setSaveCounts] = useState<Record<string, number>>({});
   const [notFound, setNotFound] = useState(false);
 
   const isOwner = user?.id === userId;
@@ -82,8 +83,24 @@ const PublicProfile = () => {
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(20)
-      .then(({ data }) => { if (data) setSubmissions(data as unknown as SongFitPost[]); });
+      .limit(50)
+      .then(({ data }) => {
+        if (!data) return;
+        const posts = data as unknown as SongFitPost[];
+        setSubmissions(posts);
+        // Fetch save counts for all posts
+        const postIds = posts.map(p => p.id);
+        if (postIds.length === 0) return;
+        supabase.from("songfit_saves")
+          .select("post_id")
+          .in("post_id", postIds)
+          .then(({ data: saves }) => {
+            if (!saves) return;
+            const counts: Record<string, number> = {};
+            saves.forEach((s: any) => { counts[s.post_id] = (counts[s.post_id] ?? 0) + 1; });
+            setSaveCounts(counts);
+          });
+      });
   }, [userId]);
 
   // Owner: load saved posts & init edit fields
@@ -180,6 +197,9 @@ const PublicProfile = () => {
     if (rank && (best === null || rank < best)) return rank;
     return best;
   }, null as number | null);
+  const totalLikes = submissions.reduce((sum, s) => sum + (s.likes_count || 0), 0);
+  const totalComments = submissions.reduce((sum, s) => sum + (s.comments_count || 0), 0);
+  const totalSaves = Object.values(saveCounts).reduce((sum, c) => sum + c, 0);
 
   if (notFound) {
     return (
@@ -313,16 +333,31 @@ const PublicProfile = () => {
 
         {/* Competitive Summary */}
         {submissions.length > 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-4 rounded-xl bg-secondary/50 border border-border">
-              <Trophy size={16} className="mx-auto mb-1.5 text-primary" />
-              <p className="text-lg font-bold">{bestPeakRank ? `#${bestPeakRank}` : "—"}</p>
-              <p className="text-xs text-muted-foreground">Peak Rank</p>
+          <div className="grid grid-cols-5 gap-2">
+            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border col-span-1">
+              <Trophy size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{bestPeakRank ? `#${bestPeakRank}` : "—"}</p>
+              <p className="text-[10px] text-muted-foreground">Peak</p>
             </div>
-            <div className="text-center p-4 rounded-xl bg-secondary/50 border border-border">
-              <Music size={16} className="mx-auto mb-1.5 text-primary" />
-              <p className="text-lg font-bold">{submissions.length}</p>
-              <p className="text-xs text-muted-foreground">Songs in FMLY 40</p>
+            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border col-span-1">
+              <Music size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{submissions.length}</p>
+              <p className="text-[10px] text-muted-foreground">Songs</p>
+            </div>
+            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border col-span-1">
+              <Heart size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{totalLikes}</p>
+              <p className="text-[10px] text-muted-foreground">Likes</p>
+            </div>
+            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border col-span-1">
+              <MessageCircle size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{totalComments}</p>
+              <p className="text-[10px] text-muted-foreground">Comments</p>
+            </div>
+            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border col-span-1">
+              <Bookmark size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{totalSaves}</p>
+              <p className="text-[10px] text-muted-foreground">Saves</p>
             </div>
           </div>
         )}
@@ -346,14 +381,25 @@ const PublicProfile = () => {
                     )}
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{s.track_title}</p>
-                      <p className="text-[10px] text-muted-foreground capitalize mt-0.5">{s.status}</p>
+                      <div className="flex items-center gap-2.5 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
+                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                          <Heart size={9} /> {s.likes_count ?? 0}
+                        </span>
+                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                          <MessageCircle size={9} /> {s.comments_count ?? 0}
+                        </span>
+                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                          <Bookmark size={9} /> {saveCounts[s.id] ?? 0}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-mono font-bold text-primary">
                       {s.peak_rank ? `#${s.peak_rank}` : "—"}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">Peak Rank</p>
+                    <p className="text-[10px] text-muted-foreground">Peak</p>
                   </div>
                 </button>
               ))}
