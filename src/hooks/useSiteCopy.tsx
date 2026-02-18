@@ -78,6 +78,7 @@ export interface SiteCopy {
       guest: number;
       limited: number;
     };
+    tools_enabled?: Record<string, boolean>;
   };
 }
 

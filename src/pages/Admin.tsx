@@ -1,22 +1,22 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Coins, Bot, Rocket, CheckCircle2 } from "lucide-react";
+import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { CopyEditor } from "@/components/admin/CopyEditor";
-import { Switch } from "@/components/ui/switch";
 import { AiPromptsEditor } from "@/components/admin/AiPromptsEditor";
 import { PendingVerifications } from "@/components/admin/PendingVerifications";
+import { ToolsEditor } from "@/components/admin/ToolsEditor";
+
 interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
 interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
 
@@ -40,13 +40,6 @@ export default function Admin() {
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [cryptoEnabled, setCryptoEnabled] = useState(false);
-  const [savingCrypto, setSavingCrypto] = useState(false);
-  const [growthEnabled, setGrowthEnabled] = useState(false);
-  const [savingGrowth, setSavingGrowth] = useState(false);
-  const [guestQuota, setGuestQuota] = useState(5);
-  const [limitedQuota, setLimitedQuota] = useState(10);
-  const [savingQuotas, setSavingQuotas] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
   const fetchUsers = async () => {
@@ -78,57 +71,7 @@ export default function Admin() {
       setRefreshing(true);
       fetchData().then((d) => { setData(d); setDataLoaded(true); }).catch(console.error).finally(() => setRefreshing(false));
     }
-    if (tab === "copy" && isAdmin) {
-      supabase.from("site_copy").select("copy_json").limit(1).single()
-        .then(({ data: r }) => {
-          if (r?.copy_json) {
-            if ((r.copy_json as any).features?.crypto_tipping) setCryptoEnabled(true);
-            if ((r.copy_json as any).features?.growth_flow) setGrowthEnabled(true);
-            const q = (r.copy_json as any).features?.growth_quotas;
-            if (q?.guest) setGuestQuota(q.guest);
-            if (q?.limited) setLimitedQuota(q.limited);
-          }
-        });
-    }
   }, [tab, dataLoaded, isAdmin]);
-
-  const handleToggleCrypto = async (enabled: boolean) => {
-    setCryptoEnabled(enabled);
-    setSavingCrypto(true);
-    try {
-      const { data: existing } = await supabase.from("site_copy").select("id, copy_json").limit(1).single();
-      if (existing) {
-        const updated = { ...(existing.copy_json as any), features: { ...((existing.copy_json as any).features || {}), crypto_tipping: enabled } };
-        await supabase.functions.invoke("admin-dashboard", { body: { action: "update_site_copy", copy_json: updated } });
-        window.dispatchEvent(new CustomEvent("site-copy-updated"));
-      }
-      toast.success(enabled ? "Crypto tipping enabled" : "Crypto tipping disabled");
-    } catch (e) {
-      setCryptoEnabled(!enabled);
-      toast.error("Failed to update");
-    } finally {
-      setSavingCrypto(false);
-    }
-  };
-
-  const handleToggleGrowth = async (enabled: boolean) => {
-    setGrowthEnabled(enabled);
-    setSavingGrowth(true);
-    try {
-      const { data: existing } = await supabase.from("site_copy").select("id, copy_json").limit(1).single();
-      if (existing) {
-        const updated = { ...(existing.copy_json as any), features: { ...((existing.copy_json as any).features || {}), growth_flow: enabled } };
-        await supabase.functions.invoke("admin-dashboard", { body: { action: "update_site_copy", copy_json: updated } });
-        window.dispatchEvent(new CustomEvent("site-copy-updated"));
-      }
-      toast.success(enabled ? "Growth flow enabled" : "Growth flow disabled");
-    } catch (e) {
-      setGrowthEnabled(!enabled);
-      toast.error("Failed to update");
-    } finally {
-      setSavingGrowth(false);
-    }
-  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -173,12 +116,13 @@ export default function Admin() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full max-w-xl grid-cols-5">
+          <TabsList className="grid w-full max-w-2xl grid-cols-6">
             <TabsTrigger value="users" className="gap-1.5"><Users size={14} /> Users</TabsTrigger>
             <TabsTrigger value="verify" className="gap-1.5"><CheckCircle2 size={14} /> Verify</TabsTrigger>
             <TabsTrigger value="data" className="gap-1.5"><Database size={14} /> Data</TabsTrigger>
+            <TabsTrigger value="tools" className="gap-1.5"><Wrench size={14} /> Tools</TabsTrigger>
             <TabsTrigger value="copy" className="gap-1.5"><FileText size={14} /> Copy</TabsTrigger>
-            <TabsTrigger value="prompts" className="gap-1.5"><Bot size={14} /> AI Prompts</TabsTrigger>
+            <TabsTrigger value="prompts" className="gap-1.5"><Bot size={14} /> AI</TabsTrigger>
           </TabsList>
 
           {/* ── USERS TAB ── */}
@@ -299,6 +243,11 @@ export default function Admin() {
             </div>
           </TabsContent>
 
+          {/* ── VERIFY TAB ── */}
+          <TabsContent value="verify" className="mt-4">
+            <PendingVerifications />
+          </TabsContent>
+
           {/* ── DATA TAB ── */}
           <TabsContent value="data" className="mt-4 space-y-6">
             {refreshing && !data ? (
@@ -340,114 +289,14 @@ export default function Admin() {
             )}
           </TabsContent>
 
+          {/* ── TOOLS TAB ── */}
+          <TabsContent value="tools" className="mt-4">
+            <ToolsEditor />
+          </TabsContent>
+
           {/* ── COPY TAB ── */}
           <TabsContent value="copy" className="mt-4 space-y-6">
             <CopyEditor />
-
-            {/* Crypto Tipping Toggle */}
-            <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                <Coins size={14} className="text-purple-400" />
-                <span className="text-sm font-mono font-medium">Crypto Tipping</span>
-              </div>
-              <div className="px-4 py-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">$DEGEN tipping on CrowdFit</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Show tip button on all posts (Base chain)</p>
-                </div>
-                <Switch
-                  checked={cryptoEnabled}
-                  onCheckedChange={handleToggleCrypto}
-                  disabled={savingCrypto}
-                />
-              </div>
-            </motion.div>
-
-            {/* Product-Led Growth Toggle */}
-            <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                <Rocket size={14} className="text-primary" />
-                <span className="text-sm font-mono font-medium">Product-Led Growth</span>
-              </div>
-              <div className="px-4 py-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Usage quotas + invite-to-unlock</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">toolsFM widget with usage tracking</p>
-                </div>
-                <Switch
-                  checked={growthEnabled}
-                  onCheckedChange={handleToggleGrowth}
-                  disabled={savingGrowth}
-                />
-              </div>
-
-              {/* Quota settings */}
-              {growthEnabled && (
-                <div className="px-4 pb-4 pt-1 border-t border-border space-y-3">
-                  <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Quotas (uses per tool)</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Guest</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={guestQuota}
-                        onChange={(e) => setGuestQuota(Number(e.target.value))}
-                        className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm font-mono"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Limited (signed up)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={limitedQuota}
-                        onChange={(e) => setLimitedQuota(Number(e.target.value))}
-                        className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm font-mono"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[11px] text-muted-foreground flex-1">Unlimited = invite converts</p>
-                    <button
-                      onClick={async () => {
-                        setSavingQuotas(true);
-                        try {
-                          const { data: existing } = await supabase.from("site_copy").select("id, copy_json").limit(1).single();
-                          if (existing) {
-                            const updated = {
-                              ...(existing.copy_json as any),
-                              features: {
-                                ...((existing.copy_json as any).features || {}),
-                                growth_quotas: { guest: guestQuota, limited: limitedQuota },
-                              },
-                            };
-                            await supabase.functions.invoke("admin-dashboard", { body: { action: "update_site_copy", copy_json: updated } });
-                            window.dispatchEvent(new CustomEvent("site-copy-updated"));
-                          }
-                          toast.success("Quotas saved");
-                        } catch {
-                          toast.error("Failed to save quotas");
-                        } finally {
-                          setSavingQuotas(false);
-                        }
-                      }}
-                      disabled={savingQuotas}
-                      className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-                    >
-                      {savingQuotas ? "Saving…" : "Save Quotas"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          </TabsContent>
-
-          {/* ── VERIFY TAB ── */}
-          <TabsContent value="verify" className="mt-4">
-            <PendingVerifications />
           </TabsContent>
 
           {/* ── AI PROMPTS TAB ── */}
