@@ -3,7 +3,7 @@ import { Loader2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-import type { SongFitPost, FeedView, BillboardMode } from "./types";
+import type { SongFitPost, FeedView } from "./types";
 import { SongFitPostCard } from "./SongFitPostCard";
 import { EagerEmbedProvider } from "./LazySpotifyEmbed";
 import { SongFitComments } from "./SongFitComments";
@@ -19,7 +19,6 @@ export function SongFitFeed() {
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [likesPostId, setLikesPostId] = useState<string | null>(null);
   const [feedView, setFeedView] = useState<FeedView>("recent");
-  const [billboardMode, setBillboardMode] = useState<BillboardMode>("trending");
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -37,7 +36,7 @@ export function SongFitFeed() {
       enriched = await enrichWithUserData(enriched);
       setPosts(enriched);
     } else {
-      // Billboard mode
+      // FMLY 40: ranked by raw engagement score
       const { data } = await supabase
         .from("songfit_posts")
         .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
@@ -47,12 +46,12 @@ export function SongFitFeed() {
 
       let enriched = (data || []) as unknown as SongFitPost[];
       enriched = await enrichWithUserData(enriched);
-      enriched = applyBillboardRanking(enriched, billboardMode);
+      enriched = enriched.map((p, i) => ({ ...p, current_rank: i + 1 }));
       setPosts(enriched);
     }
 
     setLoading(false);
-  }, [user, feedView, billboardMode]);
+  }, [user, feedView]);
 
   const enrichWithUserData = async (posts: SongFitPost[]) => {
     if (posts.length === 0) return posts;
@@ -88,57 +87,9 @@ export function SongFitFeed() {
     }));
   };
 
-  const applyBillboardRanking = (posts: SongFitPost[], mode: BillboardMode): SongFitPost[] => {
-    let ranked = [...posts];
+  // Commented out - previously used for multi-mode billboard ranking
+  // const applyBillboardRanking = ...
 
-    switch (mode) {
-      case "trending": {
-        // Velocity: sort by engagement_score with recency boost
-        ranked.sort((a, b) => {
-          const ageA = (Date.now() - new Date(a.submitted_at).getTime()) / (1000 * 60 * 60);
-          const ageB = (Date.now() - new Date(b.submitted_at).getTime()) / (1000 * 60 * 60);
-          const velocityA = a.engagement_score / Math.max(ageA / 24, 0.1);
-          const velocityB = b.engagement_score / Math.max(ageB / 24, 0.1);
-          return velocityB - velocityA;
-        });
-        break;
-      }
-      case "top": {
-        // Top with time decay
-        ranked.sort((a, b) => {
-          const scoreA = a.engagement_score * getDecayMultiplier(a.submitted_at);
-          const scoreB = b.engagement_score * getDecayMultiplier(b.submitted_at);
-          return scoreB - scoreA;
-        });
-        break;
-      }
-      case "best_fit": {
-        // Engagement rate = score / impressions (min 50 impressions)
-        ranked = ranked.filter(p => p.impressions >= 50);
-        ranked.sort((a, b) => {
-          const rateA = a.engagement_score / Math.max(a.impressions, 1);
-          const rateB = b.engagement_score / Math.max(b.impressions, 1);
-          return rateB - rateA;
-        });
-        break;
-      }
-      case "all_time": {
-        // Just by raw engagement_score
-        ranked.sort((a, b) => b.engagement_score - a.engagement_score);
-        break;
-      }
-    }
-
-    return ranked.map((p, i) => ({ ...p, current_rank: i + 1 }));
-  };
-
-  const getDecayMultiplier = (submittedAt: string): number => {
-    const days = (Date.now() - new Date(submittedAt).getTime()) / (1000 * 60 * 60 * 24);
-    if (days <= 3) return 1.0;
-    if (days <= 10) return 0.8;
-    if (days <= 21) return 0.6;
-    return 0.4;
-  };
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
@@ -165,8 +116,6 @@ export function SongFitFeed() {
       <BillboardToggle
         view={feedView}
         onViewChange={setFeedView}
-        billboardMode={billboardMode}
-        onModeChange={setBillboardMode}
       />
 
       {loading ? (
@@ -176,9 +125,7 @@ export function SongFitFeed() {
       ) : posts.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <p className="text-muted-foreground text-sm">
-            {feedView === "billboard" && billboardMode === "best_fit"
-              ? "No submissions with enough impressions yet."
-              : "No live submissions yet. Be the first!"}
+            No live submissions yet. Be the first!
           </p>
         </div>
       ) : (
