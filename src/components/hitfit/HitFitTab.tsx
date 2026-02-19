@@ -10,9 +10,10 @@ import { compressAudioFile } from "@/lib/compressAudio";
 interface HitFitTabProps {
   initialAnalysis?: HitFitAnalysis | null;
   onProjectSaved?: () => void;
+  onNewProject?: () => void;
 }
 
-export function HitFitTab({ initialAnalysis, onProjectSaved }: HitFitTabProps = {}) {
+export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject }: HitFitTabProps = {}) {
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<HitFitAnalysis | null>(initialAnalysis || null);
   const { user } = useAuth();
@@ -97,7 +98,8 @@ export function HitFitTab({ initialAnalysis, onProjectSaved }: HitFitTabProps = 
 
   const handleBack = useCallback(() => {
     setAnalysis(null);
-  }, []);
+    onNewProject?.();
+  }, [onNewProject]);
 
   if (analysis) {
     return <HitFitResults analysis={analysis} onBack={handleBack} />;
