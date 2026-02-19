@@ -248,7 +248,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       {step === "skip_cta" && (
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-medium text-muted-foreground tracking-wide">→| Noted — anything to add?</p>
+            <p className="text-[11px] font-medium text-muted-foreground tracking-wide">→| Real talk: What's missing?</p>
             <button
               onClick={() => setStep(2)}
               className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
@@ -262,7 +262,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               value={contextNote}
               onChange={e => setContextNote(e.target.value)}
               onKeyDown={handleContextKeyDown}
-              placeholder="Real talk: What's missing? (Optional)..."
+              placeholder="The missing piece... (Optional but helpful)"
               rows={2}
               className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
             />
