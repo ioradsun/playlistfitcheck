@@ -18,8 +18,8 @@ export function TrailblazerBadge({ userId, compact = false }: TrailblazerBadgePr
     <Tooltip>
       <TooltipTrigger asChild>
         <motion.span
-          className={`inline-flex items-center font-mono rounded border-[0.5px] border-green-500/50 bg-transparent text-green-500/70 cursor-default tracking-wider ${
-            compact ? "px-1.5 py-0 text-[9px]" : "px-2 py-0.5 text-[10px]"
+          className={`inline-flex items-center font-mono rounded-sm border-[0.5px] border-foreground/20 bg-transparent text-foreground/80 cursor-default tracking-tighter ${
+            compact ? "px-1.5 py-0.5 text-[9px]" : "px-1.5 py-0.5 text-[10px]"
           }`}
           whileHover={{ scale: 1.05 }}
           transition={{ duration: 0.15 }}
