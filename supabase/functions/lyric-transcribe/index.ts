@@ -67,9 +67,10 @@ serve(async (req) => {
 
     const systemPrompt = await fetchPrompt();
 
-    // The gateway only supports OpenAI-compat /v1/chat/completions.
-    // openai/gpt-5 (gpt-4o-audio) supports input_audio; format must be "wav" or "mp3".
-    const audioFormat = format === "wav" ? "wav" : "mp3";
+    // Gateway only accepts "text" or "image_url" content block types.
+    // We pass audio as a base64 data URI via image_url — Gemini handles audio mime types.
+    const mimeType = format === "wav" ? "audio/wav" : format === "m4a" ? "audio/mp4" : "audio/mpeg";
+    const audioDataUri = `data:${mimeType};base64,${audioBase64}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -78,15 +79,15 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           {
             role: "user",
             content: [
               {
-                type: "input_audio",
-                input_audio: { data: audioBase64, format: audioFormat },
+                type: "image_url",
+                image_url: { url: audioDataUri },
               },
               {
                 type: "text",
