@@ -449,7 +449,7 @@ const PublicProfile = () => {
               <div className="flex items-center gap-1.5">
                 <BarChart2 size={14} className="text-primary" />
                 <span className="text-xs font-bold tracking-widest uppercase text-primary">
-                  {isHookMode ? "HookFit" : "CrowdFit"}
+                  CrowdFit
                 </span>
               </div>
             </div>
