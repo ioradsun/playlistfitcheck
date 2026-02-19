@@ -433,11 +433,7 @@ const Index = () => {
   }, [handleAnalyze]);
 
   const renderTabContent = () => {
-    // Feed/results pages: top-aligned, no vertical centering
-    // Input/form pages: centered with padding
     switch (activeTab) {
-      case "songfit":
-        return <div id="songfit-scroll-container" className="flex-1 overflow-y-auto px-4 py-6"><SongFitTab /></div>;
       case "profit":
         return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onProjectSaved={refreshSidebar} /></div>;
       case "playlist":
@@ -502,7 +498,14 @@ const Index = () => {
           )}
         </header>
         <div className="flex-1 flex flex-col min-h-0">
-          {renderTabContent()}
+          {/* SongFitTab stays mounted to preserve feed state — hidden when not active */}
+          <div
+            id="songfit-scroll-container"
+            className={`flex-1 overflow-y-auto px-4 py-6 ${activeTab === "songfit" ? "" : "hidden"}`}
+          >
+            <SongFitTab />
+          </div>
+          {activeTab !== "songfit" && renderTabContent()}
         </div>
       </SidebarInset>
       
