@@ -25,6 +25,7 @@ export function SongFitFeed() {
   const [composerUnlocked, setComposerUnlocked] = useState(false);
   const [showFloatingAnchor, setShowFloatingAnchor] = useState(false);
   const [hasPosted, setHasPosted] = useState(false);
+  const [hasEverPosted, setHasEverPosted] = useState<boolean | null>(null);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -105,6 +106,20 @@ export function SongFitFeed() {
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
+  // Check if user has ever posted — first-timers skip the gate
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("songfit_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .then(({ count }) => {
+        const everPosted = (count ?? 0) > 0;
+        setHasEverPosted(everPosted);
+        if (!everPosted) setComposerUnlocked(true); // first-timer: skip gate
+      });
+  }, [user]);
+
   // Fetch user vote count on mount
   useEffect(() => {
     if (!user) return;
@@ -132,9 +147,10 @@ export function SongFitFeed() {
     return () => window.removeEventListener("crowdfit:vote", handler);
   }, []);
 
-  // Re-lock on post-created event (circular economy)
+  // Re-lock on post-created event (circular economy) — gate activates after first post
   useEffect(() => {
     const handler = () => {
+      setHasEverPosted(true); // now they've posted, future drops need 3 signals
       setComposerUnlocked(false);
       setUserVoteCount(0);
       setHasPosted(true);
@@ -172,7 +188,7 @@ export function SongFitFeed() {
           <div className="animate-fade-in">
             <SongFitInlineComposer onPostCreated={fetchPosts} />
           </div>
-        ) : (
+        ) : hasEverPosted === null ? null : (
           <StagePresence
             currentVotes={userVoteCount ?? 0}
             onUnlocked={() => setComposerUnlocked(true)}
