@@ -18,9 +18,10 @@ const MAX_MIXES = 6;
 interface MixFitCheckProps {
   initialProject?: MixProjectData | null;
   onProjectSaved?: () => void;
+  onNewProject?: () => void;
 }
 
-export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCheckProps = {}) {
+export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject }: MixFitCheckProps = {}) {
   const { user } = useAuth();
   const mixQuota = useUsageQuota("mix");
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
@@ -78,7 +79,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
     setMarkerStart(0);
     setMarkerEnd(10);
     setNeedsReupload(false);
-  }, [stop]);
+    onNewProject?.();
+  }, [stop, onNewProject]);
 
   const handleCreate = useCallback(async (t: string, n: string, files: File[]) => {
     if (!mixQuota.canUse) {

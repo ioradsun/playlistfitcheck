@@ -10,9 +10,10 @@ import { LyricDisplay, type LyricData } from "./LyricDisplay";
 interface Props {
   initialLyric?: any;
   onProjectSaved?: () => void;
+  onNewProject?: () => void;
 }
 
-export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
+export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Syncing...");
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
@@ -127,7 +128,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
     setSavedId(null);
     setFmlyLines(null);
     setVersionMeta(null);
-  }, []);
+    onNewProject?.();
+  }, [onNewProject]);
 
   if (lyricData && audioFile) {
     return (
