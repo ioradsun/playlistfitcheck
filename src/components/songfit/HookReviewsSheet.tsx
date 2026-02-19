@@ -46,6 +46,13 @@ const RATING_LABEL: Record<string, string> = {
   hit: "Hit",
 };
 
+const RATING_ICON: Record<string, string> = {
+  missed: "○",
+  almost: "◐",
+  solid: "●",
+  hit: "✦",
+};
+
 const RATING_COLOR: Record<string, string> = {
   missed: "text-destructive/80",
   almost: "text-yellow-500",
@@ -334,15 +341,19 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
               : 0;
             const replayPct = Math.round((rows.filter(r => r.would_replay).length / rows.length) * 100);
             return (
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">{rows.length}</span>{" "}
-                  {rows.length === 1 ? "review" : "reviews"}
-                </p>
+              <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-muted-foreground">
+                <span className="font-semibold text-foreground text-xs not-italic">{rows.length} {rows.length === 1 ? "review" : "reviews"}</span>
                 <span className="text-muted-foreground/30">·</span>
-                <span className="text-xs font-medium text-primary">{topPct}% {topRating}</span>
-                <span className="text-muted-foreground/30">·</span>
-                <span className="text-xs font-medium text-foreground/60">{replayPct}% replay</span>
+                <span className="inline-flex items-center gap-1.5 bg-foreground/[0.05] border border-border/40 rounded-full px-2.5 py-0.5 leading-none">
+                  <span className="text-sm text-foreground/80">{RATING_ICON[topRating ?? ""] ?? ""}</span>
+                  <span className="font-semibold text-foreground">{topPct}%</span>
+                  <span>{topRating}</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 bg-foreground/[0.05] border border-border/40 rounded-full px-2.5 py-0.5 leading-none">
+                  <span className="text-sm text-foreground/80">↺</span>
+                  <span className="font-semibold text-foreground">{replayPct}%</span>
+                  <span>replay</span>
+                </span>
               </div>
             );
           })()}
@@ -380,12 +391,14 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
                         {/* Name + badges */}
                         <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                           <span className="text-sm font-semibold leading-none">{name}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${RATING_COLOR[row.hook_rating] ?? "text-muted-foreground"} ${RATING_BG[row.hook_rating] ?? "bg-muted/40"}`}>
-                            {RATING_LABEL[row.hook_rating] ?? row.hook_rating}
-                          </span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${row.would_replay ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted/60"}`}>
-                            {row.would_replay ? "Replay" : "Skip"}
-                          </span>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${RATING_COLOR[row.hook_rating] ?? "text-muted-foreground"} ${RATING_BG[row.hook_rating] ?? "bg-muted/40"}`}>
+                             <span className="text-[11px] leading-none">{RATING_ICON[row.hook_rating] ?? ""}</span>
+                             {RATING_LABEL[row.hook_rating] ?? row.hook_rating}
+                           </span>
+                           <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${row.would_replay ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted/60"}`}>
+                             <span className="text-[11px] leading-none">{row.would_replay ? "↺" : "→|"}</span>
+                             {row.would_replay ? "Replay" : "Skip"}
+                           </span>
                         </div>
 
                         {row.context_note && (
