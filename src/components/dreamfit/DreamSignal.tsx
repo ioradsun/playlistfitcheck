@@ -9,10 +9,12 @@ interface Props {
   dreamId: string;
   backersCount: number;
   greenlightCount: number;
+  commentsCount: number;
   onRefresh: () => void;
+  onOpenComments: (dreamId: string) => void;
 }
 
-export function DreamSignal({ dreamId, backersCount, greenlightCount, onRefresh }: Props) {
+export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCount, onRefresh, onOpenComments }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
 
@@ -90,7 +92,6 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, onRefresh 
     const { error } = await (supabase.from("dream_backers") as any).insert(payload);
 
     if (!error) {
-      // Optimistic update
       setLocalBackers((c) => c + 1);
       if (signalType === "greenlight") setLocalGreenlight((c) => c + 1);
       setStep("done");
@@ -102,6 +103,9 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, onRefresh 
 
   const submitLabel = contextNote.length > 0 ? "Submit Signal" : "Send Signal";
 
+  // Shared signals + comments footer line
+  const signalsLabel = localBackers === 1 ? "1 signal" : `${localBackers} signals`;
+
   // ── Done state ──────────────────────────────────────────────
   if (step === "done") {
     const pct = localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
@@ -112,13 +116,18 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, onRefresh 
 
     return (
       <div>
-        {/* Ghost separator */}
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2 space-y-0.5">
           <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Demand Strength: {pct}% · {localBackers} signal{localBackers !== 1 ? "s" : ""}
+            Demand Strength: {pct}%
+            {" · "}
+            <button
+              onClick={() => onOpenComments(dreamId)}
+              className="hover:text-foreground transition-colors"
+            >
+              {signalsLabel}
+            </button>
           </p>
-          {/* Human conclusion — Geist Sans, higher opacity */}
           <p className="text-[11px] text-foreground/70 font-sans">{summaryLine}</p>
         </div>
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
@@ -132,7 +141,6 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, onRefresh 
       <div>
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2.5">
-          {/* Textarea row */}
           <div className="flex flex-col gap-2">
             <div className="flex items-start gap-2">
               <textarea
@@ -145,7 +153,6 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, onRefresh 
                 rows={2}
                 className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
               />
-              {/* Cancel */}
               <button
                 onClick={handleCancel}
                 className="shrink-0 text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors mt-0.5"
@@ -153,8 +160,6 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, onRefresh 
                 ✕
               </button>
             </div>
-
-            {/* Counter + Submit row */}
             <div className="flex items-center justify-between">
               <span className="font-mono text-[10px] text-muted-foreground/40">
                 {contextNote.length}/280
@@ -177,19 +182,23 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, onRefresh 
   // ── Idle state ───────────────────────────────────────────────
   return (
     <div>
-      {/* Top ghost separator */}
       <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
 
-      {/* Demand Strength row */}
+      {/* Demand Strength row — signals count is tappable to open comments */}
       <div className="px-3 py-1.5">
         <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
           Demand Strength:{" "}
-          {localBackers > 0 ? `${demandStrength}%` : "—"}{" "}
-          · {localBackers} signal{localBackers !== 1 ? "s" : ""}
+          {localBackers > 0 ? `${demandStrength}%` : "—"}
+          {" · "}
+          <button
+            onClick={() => onOpenComments(dreamId)}
+            className="hover:text-foreground transition-colors"
+          >
+            {signalsLabel}
+          </button>
         </p>
       </div>
 
-      {/* Bottom ghost separator */}
       <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
 
       {/* Greenlight / Shelve buttons */}

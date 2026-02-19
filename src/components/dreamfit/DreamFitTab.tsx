@@ -82,6 +82,7 @@ export function DreamFitTab() {
       {/* Comments Sheet */}
       <DreamComments
         dreamId={commentDreamId}
+        dream={dreams.find(d => d.id === commentDreamId) ?? null}
         onClose={() => setCommentDreamId(null)}
         onCommentAdded={async (id) => {
           const { data } = await supabase.from("dream_tools").select("comments_count").eq("id", id).maybeSingle();
