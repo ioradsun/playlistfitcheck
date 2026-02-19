@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
+import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AudioSlot } from "@/components/ui/AudioSlot";
+import { AudioUploadZone } from "@/components/ui/AudioUploadZone";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
 interface Props {
@@ -30,15 +32,26 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg }: Props) {
         {siteCopy.tools.lyric?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.lyric.subheading}</p>}
       </div>
 
-      <AudioSlot
-        label="Song"
-        hint="MP3, WAV, M4A · 75 MB max · Large files auto-compressed"
-        files={files}
-        onChange={setFiles}
-        maxFiles={1}
-        disabled={loading}
-        active={files.length > 0}
-      />
+      <div className="glass-card rounded-xl p-4 space-y-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-medium">Song</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                <Info size={13} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs max-w-[220px]">MP3, WAV, M4A · 75 MB max · Large files auto-compressed</TooltipContent>
+          </Tooltip>
+        </div>
+        <AudioUploadZone
+          label="Upload"
+          files={files}
+          onChange={setFiles}
+          maxFiles={1}
+          disabled={loading}
+        />
+      </div>
 
       <Button
         onClick={handleSubmit}
