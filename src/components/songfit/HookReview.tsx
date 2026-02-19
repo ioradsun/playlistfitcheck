@@ -47,8 +47,8 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
 
-  const [step, setStep] = useState<Step>(1);
-  const [hookRating, setHookRating] = useState<HookRating | null>(null);
+  const [step, setStep] = useState<Step>(2);
+  const [hookRating, setHookRating] = useState<HookRating | null>("solid");
   const [wouldReplay, setWouldReplay] = useState<boolean | null>(null);
   const [contextNote, setContextNote] = useState("");
   const [alreadyChecked, setAlreadyChecked] = useState(false);
@@ -179,43 +179,7 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
         );
       })()}
 
-      {/* Step 1: Did the hook land? */}
-      {step === 1 && (
-        <div className="space-y-2.5">
-          {/* <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Did the hook land?</p> */}
-          <div className="flex gap-2">
-            {HOOK_OPTIONS.map(({ value, label, icon }) => {
-              const selected = hookRating === value;
-              return (
-                <button
-                  key={value}
-                  onClick={() => { setHookRating(value); setStep(2); }}
-                  className={[
-                    "flex-1 flex flex-col items-center gap-1 py-2.5 px-1 rounded-lg border transition-all duration-[120ms]",
-                    selected
-                      ? "border-foreground/20 bg-foreground/[0.06]"
-                      : "border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03]",
-                  ].join(" ")}
-                  style={{ transform: selected ? "scale(1.02)" : "scale(1)" }}
-                >
-                  <span className={[
-                    "text-[13px] leading-none transition-colors duration-[120ms]",
-                    selected ? "text-foreground/70" : "text-muted-foreground/40",
-                  ].join(" ")}>
-                    {icon}
-                  </span>
-                  <span className={[
-                    "text-[11px] leading-none transition-all duration-[120ms]",
-                    selected ? "font-semibold text-foreground" : "font-medium text-muted-foreground",
-                  ].join(" ")}>
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Step 1 removed — flow starts at Step 2 */}
 
       {/* Step 2: Would you replay this? */}
       {step === 2 && (
