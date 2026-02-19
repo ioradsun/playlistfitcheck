@@ -41,7 +41,7 @@ function drawCardWaveform(canvas: HTMLCanvasElement, peaks: number[], isPlaying:
     const barH = Math.max(peak * ch * 0.85, 1);
     ctx.fillStyle = isPlaying
       ? "hsl(var(--primary) / 0.7)"
-      : "hsl(var(--muted-foreground) / 0.25)";
+      : "hsl(var(--muted-foreground) / 0.5)";
     ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - barGap, 1), barH);
   });
 }
