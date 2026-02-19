@@ -1,51 +1,51 @@
+## Three Changes Across Two Files
 
-## Collapse to a Single-Step Review UI
+### Files to edit
 
-### What's Changing
-
-Right now the flow is:
-1. Step 2 — Pick "Run it back" or "Skip" → advances to Step 3
-2. Step 3 — Optional comment textarea + Submit button
-
-The request is to **combine these into one step**: show the replay buttons, the optional comment textarea, and the Submit button all at once. Picking a replay option no longer auto-advances; the user fills in an optional comment and hits Submit whenever ready.
+- `src/components/songfit/HookReview.tsx` — feed card results display
+- `src/components/songfit/HookReviewsSheet.tsx` — review panel header + per-row badges
 
 ---
 
-### Implementation Plan
+### Change 1 — Feed card: "done" results block (`HookReview.tsx`)
 
-**File: `src/components/songfit/HookReview.tsx`**
+Replace the current single-line pill (↺ 75% replay · 2 reviews) with a two-line typographic block:
 
-1. **Remove Step 3** — delete the separate Step 3 render block entirely.
+- **Line 1 — Replay Signal:** `Replay Signal: 75%` in small, weight-medium type.
+- **Line 2 — Affirmative Sentiment:**
+  - **Majority (≥ 50%):** `75% of the FMLY would run it back.`
+  - **Minority (< 50%):** `25% are feeling this.`
+- **Signal Count:** The `{N} signals` count replaces "N reviews." If the user is the owner, the signal count remains clickable to open the Sheet.
+- **Styling:** No pill, no icons, no color coding—pure typography.
 
-2. **Merge into Step 2** — update the Step 2 block to include:
-   - The "Would you replay this?" prompt + the two replay buttons (unchanged styling, but clicking them now only sets `wouldReplay` state instead of also calling `setStep(3)`)
-   - Below the buttons: the comment `<textarea>` (same placeholder, same Enter-to-submit key handler)
-   - Below the textarea: the "Shift+Enter for new line" hint on the left and the **Submit** button on the right
+**Example output:**
 
-3. **Submit button behavior** — Submit remains disabled-looking (muted) until a replay option is selected (`wouldReplay !== null`), then becomes active. This prevents accidental empty submissions.
-
-4. **Type cleanup** — Remove `3` from the `Step` type union (becomes `1 | 2 | "revealing" | "done"`) since Step 3 no longer exists as a distinct state.
-
-5. **Remove the `useEffect` that focused the textarea on Step 3** — no longer needed since the textarea is always visible in Step 2.
-
----
-
-### Visual Layout (Step 2 — combined)
-
-```text
-Would you replay this?
-[ ↺ Run it back ]  [ →| Skip ]
-
-┌─────────────────────────────────────┐
-│ What made you choose that? (optional)│
-└─────────────────────────────────────┘
-Shift+Enter for new line          [Submit]
-```
-
-Submit is visually muted until a replay button is selected, then brightens to indicate it's ready.
+> Replay Signal: 75%
+>
+> 75% of the FMLY would run it back. • 2 signals
 
 ---
 
-### No Database or Backend Changes
+### Change 2 — Per-row vote badge in the Sheet (`HookReviewsSheet.tsx`)
 
-The same `handleSubmit` function is used unchanged — it already accepts `wouldReplay` from state. No schema changes needed.
+Replace the current colored pills (↺ Replay / →| Skip) with a minimal, neutral text pill:
+
+- **Labels:** `Would replay` or `Would skip`
+- **Styling:** `text-[10px] border border-border/30 rounded-full px-2 py-0.5 text-muted-foreground/60`
+- **Cleanup:** Remove all conditional color classes (primary/muted backgrounds) and icon spans. The intent is a light, neutral border tag that feels like a footnote.
+
+---
+
+### Change 3 — Panel header: "reviews" → "signals" + "Replay Signal" (`HookReviewsSheet.tsx`)
+
+- **Count label:** Change `{rows.length} review(s)` → `{rows.length} signal(s)`
+- **Stat display:** Replace the current `↺ 75% replay` pill with plain text: `Replay Signal: 75%`.
+- **Styling:** Align with the feed card—no icon, no background, using the existing small mono/muted style.
+
+---
+
+### Technical notes
+
+- **Data:** No schema changes. `would_replay` boolean is the source of truth.
+- **Logic:** `replayPct` calculation remains as is; only the string templates and CSS classes are updated.
+- **Cleanup:** Remove unused constants `RATING_LABEL`, `RATING_ICON`, `RATING_COLOR`, and `RATING_BG` from `HookReviewsSheet.tsx` to ensure the codebase remains lean and purposeful.
