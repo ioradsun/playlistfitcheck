@@ -266,20 +266,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         genre={((post.tags_json as any[]) || [])[0] || null}
       />
 
-      {/* Action Row — conditional on crowdfit mode */}
-      {crowdfitMode === "hook_review" ? (
-        <>
-          <HookReview
-            postId={post.id}
-            isOwner={isOwnPost}
-            onOpenReviews={isOwnPost ? () => setReviewsSheetPostId(post.id) : undefined}
-          />
-          <HookReviewsSheet
-            postId={reviewsSheetPostId}
-            onClose={() => setReviewsSheetPostId(null)}
-          />
-        </>
-      ) : (
+      {/* Action Row — reactions mode only here */}
+      {crowdfitMode !== "hook_review" && (
         <div className="flex items-center justify-between px-1 py-0.5">
           {/* Left group: comment, share, like, bookmark */}
           <div className="flex items-center">
@@ -430,6 +418,21 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           )}
         </div>
       ) : null}
+
+      {/* Hook Review — after caption */}
+      {crowdfitMode === "hook_review" && (
+        <>
+          <HookReview
+            postId={post.id}
+            isOwner={isOwnPost}
+            onOpenReviews={isOwnPost ? () => setReviewsSheetPostId(post.id) : undefined}
+          />
+          <HookReviewsSheet
+            postId={reviewsSheetPostId}
+            onClose={() => setReviewsSheetPostId(null)}
+          />
+        </>
+      )}
     </div>
   );
 }

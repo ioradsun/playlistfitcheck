@@ -153,15 +153,15 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
         const replayIcon = REPLAY_OPTIONS[0].icon;
         return (
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-mono">
-            <span className="flex items-center gap-1">
-              <span className="text-muted-foreground/50">{topIcon}</span>
-              <span className="text-foreground font-medium">{topEntry.pct}%</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-base leading-none text-foreground/70">{topIcon}</span>
+              <span className="text-foreground font-semibold">{topEntry.pct}%</span>
               <span>{topEntry.label}</span>
             </span>
             <span className="text-muted-foreground/30">·</span>
-            <span className="flex items-center gap-1">
-              <span className="text-muted-foreground/50">{replayIcon}</span>
-              <span className="text-foreground font-medium">{replayPct}%</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-base leading-none text-foreground/70">{replayIcon}</span>
+              <span className="text-foreground font-semibold">{replayPct}%</span>
               <span>replay</span>
             </span>
             <span className="text-muted-foreground/30">·</span>
