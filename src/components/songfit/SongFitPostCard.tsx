@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock } from "lucide-react";
+import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { SubmissionBadge } from "./SubmissionBadge";
@@ -293,11 +293,11 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
 
             <button
               onClick={toggleLike}
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-orange-500/10 transition-colors group"
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
             >
-              <span className={`text-lg leading-none transition-all ${liked ? "scale-125" : "opacity-60 group-hover:opacity-100 group-hover:scale-110"}`}>🔥</span>
+              <Flame size={18} className={liked ? "fill-primary text-primary" : "text-muted-foreground group-hover:text-primary transition-colors"} />
               {likesCount > 0 && (
-                <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-xs text-muted-foreground group-hover:text-red-500">
+                <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-xs text-muted-foreground group-hover:text-primary">
                   {likesCount}
                 </button>
               )}
