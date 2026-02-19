@@ -482,23 +482,23 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
           {/* Export — below lyrics */}
           {activeLines.length > 0 && (
             <div className="glass-card rounded-xl p-4">
-              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">
+              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">
                 Export · {versionSuffix}
               </p>
-              <div className="flex">
+              <div className="space-y-0">
                 {EXPORT_OPTIONS.map(({ format, label, desc }, idx) => (
-                  <div key={format} className={`flex-1 space-y-1.5 ${idx > 0 ? "border-l border-border/40 pl-3" : ""} ${idx < EXPORT_OPTIONS.length - 1 ? "pr-3" : ""}`}>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs font-mono font-medium text-foreground">{label}</span>
-                      <span className="text-[10px] text-muted-foreground">· {desc}</span>
+                  <div key={format} className={`flex items-center justify-between py-2 ${idx > 0 ? "border-t border-border/30" : ""}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-medium text-foreground w-7">{label}</span>
+                      <span className="text-[10px] text-muted-foreground">{desc}</span>
                     </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide text-muted-foreground hover:text-foreground px-1" onClick={() => handleCopy(format)}>
-                        {copied === format ? "✓" : "Copy"}
-                      </Button>
-                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide text-muted-foreground hover:text-foreground px-1" onClick={() => handleDownload(format)}>
+                    <div className="flex items-center gap-3">
+                      <button className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors" onClick={() => handleCopy(format)}>
+                        {copied === format ? "✓ Copied" : "Copy"}
+                      </button>
+                      <button className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors" onClick={() => handleDownload(format)}>
                         Save
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 ))}
