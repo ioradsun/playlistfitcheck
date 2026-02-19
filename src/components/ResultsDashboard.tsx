@@ -39,11 +39,11 @@ const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string;
 ];
 
 function getScoreIndicator(score: number | null, max: number): { icon: string; color: string } {
-  if (score === null) return { icon: "—", color: "text-muted-foreground" };
+  if (score === null) return { icon: "○", color: "text-muted-foreground" };
   const pct = (score / max) * 100;
-  if (pct >= 75) return { icon: "✅", color: "text-score-excellent" };
-  if (pct >= 45) return { icon: "⚠️", color: "text-score-ok" };
-  return { icon: "❌", color: "text-score-bad" };
+  if (pct >= 75) return { icon: "●", color: "text-foreground" };
+  if (pct >= 45) return { icon: "◐", color: "text-muted-foreground" };
+  return { icon: "○", color: "text-muted-foreground/50" };
 }
 
 function getDataLabel(key: string, input?: PlaylistInput): string | undefined {
