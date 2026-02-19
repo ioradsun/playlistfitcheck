@@ -57,9 +57,21 @@ serve(async (req) => {
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
 
-    // Normalize to wav or mp3 (both well-supported by Whisper)
-    const ext = format === "wav" ? "wav" : "mp3";
-    const mimeType = ext === "wav" ? "audio/wav" : "audio/mpeg";
+    // Map format → MIME type (all Whisper-supported formats)
+    const mimeMap: Record<string, string> = {
+      wav: "audio/wav",
+      mp3: "audio/mpeg",
+      mpga: "audio/mpeg",
+      mpeg: "audio/mpeg",
+      m4a: "audio/mp4",
+      mp4: "audio/mp4",
+      flac: "audio/flac",
+      ogg: "audio/ogg",
+      oga: "audio/ogg",
+      webm: "audio/webm",
+    };
+    const ext = (format && mimeMap[format]) ? format : "mp3";
+    const mimeType = mimeMap[ext] || "audio/mpeg";
 
     const { body, contentType } = buildMultipart(
       { model: "whisper-1", response_format: "verbose_json", "timestamp_granularities[]": "segment" },
