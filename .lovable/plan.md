@@ -1,123 +1,51 @@
 
-## CrowdFit Hook Review — Feature Plan
+## Collapse to a Single-Step Review UI
 
-### Overview
+### What's Changing
 
-This adds a **"Hook Review" interaction mode** to CrowdFit posts, toggled on/off from the Admin Tools panel. When enabled, the standard 🔥 / comment / share action bar is replaced by a frictionless 2-tap structured review panel inline under each Spotify embed.
+Right now the flow is:
+1. Step 2 — Pick "Run it back" or "Skip" → advances to Step 3
+2. Step 3 — Optional comment textarea + Submit button
+
+The request is to **combine these into one step**: show the replay buttons, the optional comment textarea, and the Submit button all at once. Picking a replay option no longer auto-advances; the user fills in an optional comment and hits Submit whenever ready.
 
 ---
 
-### What Gets Built
+### Implementation Plan
 
-**1. Admin Toggle (ToolsEditor.tsx)**
+**File: `src/components/songfit/HookReview.tsx`**
 
-A new section in the Admin → Tools panel:
+1. **Remove Step 3** — delete the separate Step 3 render block entirely.
+
+2. **Merge into Step 2** — update the Step 2 block to include:
+   - The "Would you replay this?" prompt + the two replay buttons (unchanged styling, but clicking them now only sets `wouldReplay` state instead of also calling `setStep(3)`)
+   - Below the buttons: the comment `<textarea>` (same placeholder, same Enter-to-submit key handler)
+   - Below the textarea: the "Shift+Enter for new line" hint on the left and the **Submit** button on the right
+
+3. **Submit button behavior** — Submit remains disabled-looking (muted) until a replay option is selected (`wouldReplay !== null`), then becomes active. This prevents accidental empty submissions.
+
+4. **Type cleanup** — Remove `3` from the `Step` type union (becomes `1 | 2 | "revealing" | "done"`) since Step 3 no longer exists as a distinct state.
+
+5. **Remove the `useEffect` that focused the textarea on Step 3** — no longer needed since the textarea is always visible in Step 2.
+
+---
+
+### Visual Layout (Step 2 — combined)
 
 ```text
-┌─────────────────────────────────────────────┐
-│ 🎯  CrowdFit Mode                           │
-├─────────────────────────────────────────────┤
-│  Standard reactions (🔥, 💬, share)  ●  ○  │
-│  Hook Review (structured 2-tap panel)  ○  ●  │
-└─────────────────────────────────────────────┘
+Would you replay this?
+[ ↺ Run it back ]  [ →| Skip ]
+
+┌─────────────────────────────────────┐
+│ What made you choose that? (optional)│
+└─────────────────────────────────────┘
+Shift+Enter for new line          [Submit]
 ```
 
-This writes `features.crowdfit_mode: "reactions" | "hook_review"` to `site_copy` in the database, the same pattern already used for `crypto_tipping` and `growth_flow`.
-
-**2. New Component: `HookReview.tsx`**
-
-A self-contained inline panel rendered directly under the Spotify embed, replacing the action bar when `crowdfit_mode === "hook_review"`. Stores state in a new `songfit_hook_reviews` database table.
-
-Layout (single-screen, no modals):
-
-```text
-──────────────────────────────────────────
-  Did the hook land?
-  [ Missed ]  [ Almost ]  [ Solid ]  [ Hit ]
-──────────────────────────────────────────
-  Would you replay this?
-  [   🔁 Yes   ]        [   ⏭ No   ]
-──────────────────────────────────────────
-  ▸ Add context (optional)
-──────────────────────────────────────────
-  "Your reaction was recorded."   ✓
-──────────────────────────────────────────
-```
-
-**3. Database Migration**
-
-New table `songfit_hook_reviews`:
-
-| Column | Type | Notes |
-|---|---|---|
-| `id` | uuid PK | |
-| `post_id` | uuid | FK to songfit_posts |
-| `user_id` | uuid | nullable (guest reviews allowed) |
-| `session_id` | text | for guest dedup |
-| `hook_rating` | text | `missed`, `almost`, `solid`, `hit` |
-| `would_replay` | boolean | true = yes, false = no |
-| `context_note` | text | nullable, optional |
-| `created_at` | timestamptz | |
-
-RLS policies:
-- SELECT: public (aggregates visible)
-- INSERT: authenticated users only with `auth.uid() = user_id`, or guest with `user_id IS NULL AND session_id IS NOT NULL`
-- No UPDATE or DELETE
-
-**4. SongFitPostCard.tsx — Conditional Rendering**
-
-The post card will read `crowdfit_mode` from `useSiteCopy()`. When it equals `"hook_review"`:
-- Hide the existing action bar (🔥, 💬, Share, Bookmark)
-- Render `<HookReview postId={post.id} />` beneath the embed
-
-When in standard mode, behavior is unchanged.
-
-**5. SiteCopy Interface Update**
-
-Add `crowdfit_mode?: "reactions" | "hook_review"` to the `features` object in `useSiteCopy.tsx` and the `DEFAULT_COPY`.
+Submit is visually muted until a replay button is selected, then brightens to indicate it's ready.
 
 ---
 
-### Interaction Design
+### No Database or Backend Changes
 
-**Hook Rating** — 4 pill buttons, single select, required:
-- `Missed` · `Almost` · `Solid` · `Hit`
-- Selected state: filled background with primary color
-- Cultural framing, no numbers
-
-**Replay Intent** — 2 wide buttons, single select, required:
-- `🔁 Yes` · `⏭ No`
-- Equal weight, clear visual confirmation
-
-**Context Field** — collapsed by default, one chevron tap expands:
-- Single textarea, placeholder: *"What made you choose that?"*
-- No character minimum, no validation blocking submit
-
-**Completion State:**
-- After both required fields selected, auto-submit triggers (no separate submit button needed — submits when 2nd required selection is made)
-- Shows: `"Your reaction was recorded."` with a subtle checkmark
-- Shows progress: `1 of N reviews complete` (count from local session)
-- No animations, no modals
-
-**Deduplication**: One review per `user_id` + `post_id` (or `session_id` + `post_id` for guests). If already reviewed, show the completed state immediately on mount.
-
----
-
-### Files to Create/Modify
-
-| File | Change |
-|---|---|
-| `src/components/songfit/HookReview.tsx` | **New** — the full review panel component |
-| `src/components/songfit/SongFitPostCard.tsx` | Conditional render: action bar vs. HookReview |
-| `src/components/admin/ToolsEditor.tsx` | Add CrowdFit Mode toggle section |
-| `src/hooks/useSiteCopy.tsx` | Add `crowdfit_mode` to `features` type + default |
-| Database migration | Create `songfit_hook_reviews` table with RLS |
-
----
-
-### Technical Notes
-
-- The `HookReview` component manages its own local state for the two selections and context text.
-- Auto-submit fires when `hook_rating` AND `would_replay` are both set, inserting a row into `songfit_hook_reviews`.
-- The session-review count (for "1 of N reviews") is tracked in component state using a simple `sessionStorage` counter key `crowdfit_reviews_this_session`.
-- The existing 🔥 like system, comments, saves, and share remain in the database and are simply hidden from the UI in Hook Review mode — no data is lost, the mode can be toggled back.
+The same `handleSubmit` function is used unchanged — it already accepts `wouldReplay` from state. No schema changes needed.
