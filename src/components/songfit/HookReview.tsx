@@ -19,11 +19,16 @@ interface Results {
   replay_no: number;
 }
 
-const HOOK_OPTIONS: { value: HookRating; label: string }[] = [
-  { value: "missed", label: "Missed" },
-  { value: "almost", label: "Almost" },
-  { value: "solid", label: "Solid" },
-  { value: "hit", label: "Hit" },
+const HOOK_OPTIONS: { value: HookRating; label: string; icon: string }[] = [
+  { value: "missed", label: "Missed",  icon: "○" },
+  { value: "almost", label: "Almost",  icon: "◐" },
+  { value: "solid",  label: "Solid",   icon: "●" },
+  { value: "hit",    label: "Hit",     icon: "✦" },
+];
+
+const REPLAY_OPTIONS: { value: boolean; label: string; icon: string }[] = [
+  { value: true,  label: "Run it back", icon: "↺" },
+  { value: false, label: "Skip",        icon: "→|" },
 ];
 
 const SESSION_COUNT_KEY = "crowdfit_reviews_this_session";
@@ -45,7 +50,6 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
   const [hookRating, setHookRating] = useState<HookRating | null>(null);
   const [wouldReplay, setWouldReplay] = useState<boolean | null>(null);
   const [contextNote, setContextNote] = useState("");
-  const [reviewCount, setReviewCount] = useState(getSessionReviewCount());
   const [alreadyChecked, setAlreadyChecked] = useState(false);
   const [results, setResults] = useState<Results | null>(null);
   const [dots, setDots] = useState(".");
@@ -61,7 +65,6 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
       }
       const { data } = await query.maybeSingle();
       if (data) {
-        // Already reviewed — fetch results and jump straight to done
         fetchResults().then(r => { setResults(r); setStep("done"); });
       }
       setAlreadyChecked(true);
@@ -69,14 +72,10 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
     checkExisting();
   }, [postId, user, sessionId]);
 
-  // Auto-focus textarea when step 3 appears
   useEffect(() => {
-    if (step === 3) {
-      setTimeout(() => textareaRef.current?.focus(), 50);
-    }
+    if (step === 3) setTimeout(() => textareaRef.current?.focus(), 50);
   }, [step]);
 
-  // Animated dots while revealing
   useEffect(() => {
     if (step !== "revealing") return;
     const interval = setInterval(() => {
@@ -93,15 +92,13 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
 
     const rows = data || [];
     const hook: Record<HookRating, number> = { missed: 0, almost: 0, solid: 0, hit: 0 };
-    let replay_yes = 0;
-    let replay_no = 0;
+    let replay_yes = 0, replay_no = 0;
 
     for (const row of rows) {
       if (row.hook_rating in hook) hook[row.hook_rating as HookRating]++;
       if (row.would_replay === true) replay_yes++;
       else if (row.would_replay === false) replay_no++;
     }
-
     return { total: rows.length, hook, replay_yes, replay_no };
   };
 
@@ -113,21 +110,14 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
         would_replay: wouldReplay,
         context_note: note.trim() || null,
       };
-      if (user) {
-        payload.user_id = user.id;
-      } else {
-        payload.session_id = sessionId;
-      }
+      if (user) payload.user_id = user.id;
+      else payload.session_id = sessionId;
       await supabase.from("songfit_hook_reviews").insert(payload);
-    } catch {
-      // ignore unique constraint
-    }
+    } catch { /* ignore unique constraint */ }
 
     incrementSessionReviewCount();
-    setReviewCount(getSessionReviewCount());
     setStep("revealing");
 
-    // After 3 seconds, fetch and show results
     setTimeout(async () => {
       const r = await fetchResults();
       setResults(r);
@@ -147,14 +137,12 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
   return (
     <div className="border-t border-border/30 px-4 py-3 min-h-[72px] flex flex-col justify-center">
 
-      {/* Revealing state */}
+      {/* Revealing */}
       {step === "revealing" && (
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Tallying results{dots}</span>
-        </div>
+        <span className="text-xs text-muted-foreground">Tallying results{dots}</span>
       )}
 
-      {/* Done: show results */}
+      {/* Done */}
       {step === "done" && results && (() => {
         const topEntry = HOOK_OPTIONS.reduce((best, { value, label }) => {
           const pct = results.total > 0 ? Math.round((results.hook[value] / results.total) * 100) : 0;
@@ -183,44 +171,82 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
 
       {/* Step 1: Did the hook land? */}
       {step === 1 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-medium text-muted-foreground">Did the hook land?</p>
-          <div className="flex gap-1.5">
-            {HOOK_OPTIONS.map(({ value, label }) => (
-              <button
-                key={value}
-                onClick={() => { setHookRating(value); setStep(2); }}
-                className="flex-1 py-1.5 px-1 text-xs font-medium rounded-md border border-border/50 text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5 transition-all"
-              >
-                {label}
-              </button>
-            ))}
+        <div className="space-y-2.5">
+          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Did the hook land?</p>
+          <div className="flex gap-2">
+            {HOOK_OPTIONS.map(({ value, label, icon }) => {
+              const selected = hookRating === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => { setHookRating(value); setStep(2); }}
+                  className={[
+                    "flex-1 flex flex-col items-center gap-1 py-2.5 px-1 rounded-lg border transition-all duration-[120ms]",
+                    selected
+                      ? "border-foreground/20 bg-foreground/[0.06]"
+                      : "border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03]",
+                  ].join(" ")}
+                  style={{ transform: selected ? "scale(1.02)" : "scale(1)" }}
+                >
+                  <span className={[
+                    "text-[13px] leading-none transition-colors duration-[120ms]",
+                    selected ? "text-foreground/70" : "text-muted-foreground/40",
+                  ].join(" ")}>
+                    {icon}
+                  </span>
+                  <span className={[
+                    "text-[11px] leading-none transition-all duration-[120ms]",
+                    selected ? "font-semibold text-foreground" : "font-medium text-muted-foreground",
+                  ].join(" ")}>
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Step 2: Would you replay this? */}
       {step === 2 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-medium text-muted-foreground">Would you replay this?</p>
+        <div className="space-y-2.5">
+          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Would you replay this?</p>
           <div className="flex gap-2">
-            {[
-              { value: true, label: "Yes" },
-              { value: false, label: "No" },
-            ].map(({ value, label }) => (
-              <button
-                key={String(value)}
-                onClick={() => { setWouldReplay(value); setStep(3); }}
-                className="flex-1 py-1.5 text-sm font-medium rounded-md border border-border/50 text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5 transition-all"
-              >
-                {label}
-              </button>
-            ))}
+            {REPLAY_OPTIONS.map(({ value, label, icon }) => {
+              const selected = wouldReplay === value;
+              return (
+                <button
+                  key={String(value)}
+                  onClick={() => { setWouldReplay(value); setStep(3); }}
+                  className={[
+                    "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border transition-all duration-[120ms]",
+                    selected
+                      ? "border-foreground/20 bg-foreground/[0.06]"
+                      : "border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03]",
+                  ].join(" ")}
+                >
+                  <span className={[
+                    "text-[13px] leading-none transition-colors duration-[120ms]",
+                    selected ? "text-foreground/70" : "text-muted-foreground/40",
+                  ].join(" ")}>
+                    {icon}
+                  </span>
+                  <span className={[
+                    "text-[12px] leading-none transition-all duration-[120ms]",
+                    selected
+                      ? "font-semibold text-foreground underline underline-offset-2 decoration-foreground/30"
+                      : "font-medium text-muted-foreground",
+                  ].join(" ")}>
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Step 3: Optional context + submit */}
+      {/* Step 3: Optional context */}
       {step === 3 && (
         <div className="space-y-1.5">
           <textarea
