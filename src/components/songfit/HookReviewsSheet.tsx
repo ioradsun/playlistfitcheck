@@ -317,9 +317,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
               className="w-full text-left rounded-xl bg-muted/40 border border-border/50 px-3 py-2.5 hover:bg-muted/60 transition-colors group"
             >
               <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-                  Hook Lyrics
-                </p>
                 <ChevronDown
                   size={13}
                   className={`text-muted-foreground/40 transition-transform duration-200 group-hover:text-muted-foreground/70 ${lyricsExpanded ? "rotate-180" : ""}`}
