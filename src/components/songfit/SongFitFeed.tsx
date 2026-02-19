@@ -151,22 +151,36 @@ export function SongFitFeed() {
     return () => window.removeEventListener("crowdfit:post-created", handler);
   }, []);
 
-  // Floating anchor: show when composer is unlocked and user scrolled > 600px
+  // Floating anchor: show when composer is unlocked and user scrolled > 300px
   useEffect(() => {
     if (!composerUnlocked) {
       setShowFloatingAnchor(false);
       return;
     }
-    const scrollEl = document.getElementById("page-scroll-container");
-    if (!scrollEl) return;
 
-    const handleScroll = () => {
-      setShowFloatingAnchor(scrollEl.scrollTop > 600);
+    let scrollEl: HTMLElement | null = null;
+
+    const attachListener = () => {
+      scrollEl = document.getElementById("page-scroll-container");
+      if (!scrollEl) return;
+
+      const handleScroll = () => {
+        setShowFloatingAnchor(scrollEl!.scrollTop > 300);
+      };
+
+      scrollEl.addEventListener("scroll", handleScroll, { passive: true });
+      handleScroll(); // check immediately in case already scrolled
+
+      return () => scrollEl?.removeEventListener("scroll", handleScroll);
     };
 
-    scrollEl.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-    return () => scrollEl.removeEventListener("scroll", handleScroll);
+    // Defer slightly to ensure DOM is stable after state change
+    const t = setTimeout(() => {
+      const cleanup = attachListener();
+      return cleanup;
+    }, 50);
+
+    return () => clearTimeout(t);
   }, [composerUnlocked]);
 
   return (
