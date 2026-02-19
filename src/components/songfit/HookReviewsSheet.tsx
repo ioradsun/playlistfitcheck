@@ -199,6 +199,11 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
     })();
   }, [postId]);
 
+  const removeReview = useCallback(async (reviewId: string) => {
+    await supabase.from("songfit_hook_reviews").delete().eq("id", reviewId);
+    setRows(prev => prev.filter(r => r.id !== reviewId));
+  }, []);
+
   const toggleLike = useCallback((reviewId: string) => {
     setRows(prev => prev.map(r =>
       r.id === reviewId
@@ -416,13 +421,21 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
                             </span>
                           )}
                           {user && (
-                            <button
-                              onClick={() => openReplyInput(row.id)}
-                              className="text-xs font-semibold text-muted-foreground/60 hover:text-foreground transition-colors"
-                            >
-                              Reply
-                            </button>
-                          )}
+                             <button
+                               onClick={() => openReplyInput(row.id)}
+                               className="text-xs font-semibold text-muted-foreground/60 hover:text-foreground transition-colors"
+                             >
+                               Reply
+                             </button>
+                           )}
+                           {user && user.id === row.user_id && (
+                             <button
+                               onClick={() => removeReview(row.id)}
+                               className="text-[11px] text-muted-foreground/30 hover:text-destructive/70 transition-colors"
+                             >
+                               Remove
+                             </button>
+                           )}
                         </div>
                       </div>
 
