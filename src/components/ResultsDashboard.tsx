@@ -102,7 +102,7 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
 
   return (
     <motion.div
-      className="w-full max-w-3xl mx-auto space-y-8"
+      className="w-full max-w-3xl mx-auto space-y-8 pb-24"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
