@@ -323,7 +323,7 @@ export default function ArtistStage() {
         )}
 
         {/* Hero content area */}
-        <div className="relative z-10 px-5 pb-6 pt-16">
+        <div className="relative z-10 px-5 pb-8 pt-16 max-w-5xl mx-auto w-full">
           {/* Two-column when hero content selected */}
           <div className={`flex ${heroYtId ? "gap-4 flex-col md:flex-row items-end" : "flex-col"}`}>
             <div className="flex-1 min-w-0">
@@ -420,7 +420,7 @@ export default function ArtistStage() {
           borderColor: `rgba(${accentRgb}, 0.15)`,
         }}
       >
-        <div className="max-w-2xl mx-auto px-4 flex gap-1">
+        <div className="max-w-5xl mx-auto px-4 flex gap-1">
           {tabs.map(t => (
             <button
               key={t.key}
@@ -443,7 +443,7 @@ export default function ArtistStage() {
       </div>
 
       {/* ======== TAB CONTENT ======== */}
-      <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
+      <div className="max-w-5xl mx-auto px-4 py-6 pb-28">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -633,7 +633,7 @@ export default function ArtistStage() {
               backdropFilter: "blur(20px)",
             }}
           >
-            <div className="max-w-2xl mx-auto px-5 py-5 space-y-6 pb-8">
+            <div className="max-w-5xl mx-auto px-5 py-5 space-y-6 pb-8">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold uppercase tracking-widest text-white/60">Stage Settings</h3>
                 <div className="flex gap-2">
@@ -801,7 +801,7 @@ export default function ArtistStage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed bottom-4 inset-x-4 z-40 rounded-2xl px-4 py-3 flex items-center gap-3 border"
+            className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-2xl z-40 rounded-2xl px-4 py-3 flex items-center gap-3 border"
             style={{
               background: "rgba(12,12,12,0.95)",
               borderColor: `rgba(${accentRgb}, 0.3)`,
