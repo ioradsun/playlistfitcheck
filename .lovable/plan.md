@@ -1,167 +1,182 @@
-## FMLY 40 — Resolved Card Architecture
+## DreamFit Signal Bar — Replacing the 🔥 Back Button with a CrowdFit-Style Vote Flow
 
 ### What's Changing
 
-The FMLY 40 view gets a dedicated card layout. Instead of the Signal Strength appearing only after voting, it shows upfront as a read-only "data bar" — giving each ranked entry a scoreboard feel before the user interacts.
+The current DreamFit card has a minimal action row with a comment button and a 🔥 "back" toggle. This gets replaced with a proper **Demand Signal** system that mirrors CrowdFit's HookReview interaction pattern — two action buttons (Greenlight / Shelve) that expand into a feedback module with a comment prompt and a final "Submit Signal" button.
 
-The architecture is:
-
-```text
-[ Artist header ]
-[ Spotify embed ]
-[ Caption (if any) ]
-─────────────────────── (hairline: border-t border-border/30)
-[ Signal Row: Signal Strength: 85% · Standing: #01 · 842 signals ]
-─────────────────────── (hairline: border-t border-border/30)
-[ Action Row: Run it back | Skip ]
-```
-
-In the Recent feed, cards remain unchanged — the Signal Strength only appears after the user votes, as before.
-
----
-
-### Files to Change
-
-**1. `src/components/songfit/HookReview.tsx**`
-
-Add a new prop `preloadedResults` and a `billboardMode` flag (or simply `showResolvedView: boolean`).
-
-- When `showResolvedView` is `true` (i.e. we're in FMLY 40 view), skip the vote-check query and immediately render the "resolved" layout using pre-fetched aggregate data.
-- The resolved layout becomes a new named sub-component `ResolvedSignalRow` — a single line reading:
-  ```
-  Signal Strength: 85%  ·  Standing: #01  ·  842 signals
-  ```
-  Styled: `text-[10px] uppercase tracking-wider text-muted-foreground font-mono`
-- Below that hairline sits the existing `Run it back / Skip` buttons (step 2), always visible — the vote CTA still works normally from this state.
-- After voting, the flow continues as normal (replay_cta → skip_cta → revealing → done).
-
-**2. `src/components/songfit/SongFitFeed.tsx**`
-
-- After fetching billboard posts (the `else` branch in `fetchPosts`), fetch aggregate signal data for all returned post IDs in one query:
-  ```sql
-  SELECT post_id, COUNT(*) as total, 
-         SUM(CASE WHEN would_replay THEN 1 ELSE 0 END) as replay_yes
-  FROM songfit_hook_reviews
-  WHERE post_id IN (...)
-  GROUP BY post_id
-  ```
-  This is a single round-trip using `.select()` with the post IDs.
-- Store the signal map in state: `signalMap: Record<string, { total: number; replay_yes: number }>`.
-- Pass `signalData` and `isBillboard` props down to `SongFitPostCard`.
-
-**3. `src/components/songfit/SongFitPostCard.tsx**`
-
-- Accept two new optional props: `isBillboard?: boolean` and `signalData?: { total: number; replay_yes: number }`.
-- When `crowdfitMode === "hook_review"` AND `isBillboard` is true, render a different card footer:
-  - Hairline divider
-  - Signal Row (pre-computed from `signalData`)
-  - Hairline divider
-  - Run it back / Skip buttons (always visible, not gated by existing vote check)
-
-**4. `src/components/songfit/HookReview.tsx` — prop additions**
-
-Add `showPreResolved?: boolean` and `preResolved?: { total: number; replay_yes: number }` props. When both are present, skip the `alreadyChecked` loading gate and directly show the resolved signal row + step 2 buttons stacked.
-
----
-
-### Visual Detail — The Signal Row
-
-```
-Signal Strength: 85%  ·  Standing: #01  ·  842 signals
-```
-
-- Font: `text-[10px] font-mono uppercase tracking-wider text-muted-foreground`
-- Standing coordinate = the rank passed as `rank` prop (zero-padded to 2 digits: `01`, `02`, etc.)
-- Signals count = `signalData.total`
-- Signal Strength % = `Math.round((replay_yes / total) * 100)`
-
-If `total === 0`: show `Signal Strength: — · Standing: #01 · 0 signals`
-
----
-
-### Data Flow Summary
+### Interaction Flow
 
 ```text
-SongFitFeed
-  └── fetchPosts (billboard) 
-        ├── fetch top 40 posts
-        └── fetch hook_reviews aggregate for those post IDs
-              └── build signalMap { [postId]: { total, replay_yes } }
-  └── SongFitPostCard (isBillboard=true, signalData=signalMap[post.id])
-        └── HookReview (showPreResolved=true, preResolved=signalData)
-              ├── [Hairline]
-              ├── [Signal Row: Strength · Standing · Count]
-              ├── [Hairline]
-              └── [Run it back | Skip]  ← vote still works normally
+INITIAL STATE (not yet voted):
+─────────────────────── (border-t border-border/30)
+[ Demand Strength: 72% · 14 signals ]
+─────────────────────── (border-t border-border/30)
+[ Greenlight ]  [ Shelve ]
+
+AFTER CLICKING GREENLIGHT:
+[ Why does the FMLY need this? (optional textarea) ]  [ ✕ cancel ]
+[ character counter (Geist Mono, bottom-right)     ]  [ SUBMIT SIGNAL ]
+
+AFTER CLICKING SHELVE:
+[ Why does the FMLY need this? (optional textarea) ]  [ ✕ cancel ]
+[ character counter (Geist Mono, bottom-right)     ]  [ SUBMIT SIGNAL ]
+
+DONE STATE (after submitting):
+[ Demand Strength: 72% · 14 signals ]
+[ 72% of the FMLY greenlighted this. ]
 ```
+
+The `SUBMIT SIGNAL` button text appears once the user starts typing (before that it reads `Send Signal`). The textarea is non-mandatory — users can click `Send Signal` / `Submit Signal` without typing anything.
+
+---
+
+### Database Changes Required
+
+The `dream_backers` table currently only stores `dream_id + user_id` (a simple toggle). We need to extend it to track:
+
+- `signal_type`: `"greenlight"` or `"shelve"` (replaces the binary backed/not-backed model)
+- `context_note`: optional text comment from the voter
+- `session_id`: for anonymous voting (matching CrowdFit's pattern)
+- Make `user_id` nullable to support anonymous voters
+
+We also need a `greenlight_count` column on `dream_tools` (alongside the existing `backers_count`) so Demand Strength can be computed as `greenlight_count / backers_count`.
+
+Migration SQL:
+
+```sql
+-- Add signal_type and context_note to dream_backers
+ALTER TABLE public.dream_backers
+  ADD COLUMN signal_type TEXT NOT NULL DEFAULT 'greenlight'
+    CHECK (signal_type IN ('greenlight', 'shelve')),
+  ADD COLUMN context_note TEXT,
+  ADD COLUMN session_id TEXT;
+
+-- Make user_id nullable for anonymous signals
+ALTER TABLE public.dream_backers ALTER COLUMN user_id DROP NOT NULL;
+
+-- Add greenlight_count to dream_tools
+ALTER TABLE public.dream_tools ADD COLUMN greenlight_count INTEGER NOT NULL DEFAULT 0;
+
+-- Backfill: assume all existing backers are greenlights
+UPDATE public.dream_tools dt
+SET greenlight_count = (
+  SELECT COUNT(*) FROM dream_backers db WHERE db.dream_id = dt.id
+);
+```
+
+---
+
+### Files to Create / Modify
+
+**1. New component: `src/components/dreamfit/DreamSignal.tsx**`
+
+A self-contained component mirroring `HookReview.tsx` but for DreamFit. It handles:
+
+- Checking if the current user/session has already voted (query `dream_backers` on mount)
+- Rendering the Demand Strength row (always visible, pre-vote and post-vote)
+- Rendering the Greenlight / Shelve buttons (pre-vote)
+- Rendering the feedback textarea + Send Signal / Submit Signal button (post-button-click)
+- Submitting the insert to `dream_backers` and dispatching a refresh event
+
+Key state machine:
+
+```
+idle → greenlit | shelved → done
+```
+
+Demand Strength formula:
+
+```
+Math.round((greenlight_count / backers_count) * 100)
+```
+
+Where `greenlight_count` and `backers_count` come from `dream_tools` row (passed as props, refreshed after vote).
+
+**2. Modified: `src/components/dreamfit/DreamToolCard.tsx**`
+
+- Remove the current `<div className="flex items-center px-1 pt-1 pb-1">` action row (🔥 button + comment icon).
+- Keep the comment button (it opens the comments sheet — this stays).
+- Add `<DreamSignal>` below the content block, passing `dream.id`, `dream.backers_count`, `dream.greenlight_count`, and `onRefresh`.
+- The comment button moves to a small secondary row above the signal bar, or stays as a ghost icon in the header area.
+
+**3. Modified: `src/components/dreamfit/types.ts**`
+
+Add `greenlight_count: number` to the `Dream` interface.
+
+**4. Modified: `src/components/dreamfit/DreamFitTab.tsx**`
+
+The feed query already selects `*` from `dream_tools` — no query change needed. The `greenlight_count` column will be included automatically once the migration runs.
+
+---
+
+### Visual Detail — The Signal Bar
+
+```
+─────────────────────── border-t border-border/30
+Demand Strength: 72% · 14 signals
+─────────────────────── border-t border-border/30
+[ Greenlight ]   [ Shelve ]
+```
+
+Signal row typography: `text-[10px] font-mono uppercase tracking-wider text-muted-foreground`
+
+Button styling (matching HookReview exactly):
+
+```
+flex-1 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent
+hover:border-foreground/15 hover:bg-foreground/[0.03]
+text-[12px] font-medium text-muted-foreground
+```
+
+Feedback textarea after vote:
+
+```
+placeholder="Why does the FMLY need this?"
+className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+```
+
+Character counter (Geist Mono, bottom-right):
+
+```
+<span className="font-mono text-[10px] text-muted-foreground/40">{contextNote.length}/280</span>
+```
+
+Submit button — text changes dynamically:
+
+- Default (no text entered): `Send Signal`
+- Once user starts typing: `Submit Signal`
+- Both: `shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md`
+
+Done state:
+
+```
+Demand Strength: 72%
+72% of the FMLY greenlighted this.   ← if greenlight_count >= 50%
+Only 28% greenlighted this.           ← if greenlight_count < 50%
+```
+
+---
+
+### Anonymous Voting
+
+Matching the CrowdFit pattern: import `getSessionId` from `@/lib/sessionId` and use it to check for existing votes when the user is not logged in. Unauthenticated users who click Greenlight/Shelve are **not** redirected — they can signal anonymously (consistent with the "community request board" ethos of DreamFit). If they are logged in, `user_id` is stored; otherwise `session_id` is stored.
+
+---
+
+### No Edge Functions Needed
+
+All logic is client-side Supabase queries — the same pattern as `dream_backers` insert/delete today.
 
 ---
 
 ### Technical Notes
 
-- The aggregate query uses a `.select()` on `songfit_hook_reviews` grouped by `post_id`. Since Supabase PostgREST doesn't support raw `GROUP BY`, this will be done client-side: fetch all rows for the batch of post IDs and reduce in JS (same pattern already used in `fetchResults()` in `HookReview.tsx`).
-- The `alreadyChecked` gate in `HookReview` is bypassed in pre-resolved mode — we go straight to the resolved view without the per-post vote-check query, saving N database calls.
-- After a user votes in FMLY 40 view, the flow transitions naturally through `replay_cta → revealing → done`, which will then show the live updated results (a fresh `fetchResults()` call), replacing the pre-loaded data.
-- No schema changes required.
+- The `dream_backers` unique constraint currently prevents duplicate votes per user per dream. After making `user_id` nullable, we need to ensure uniqueness is still enforced. We'll add a partial unique index: `UNIQUE (dream_id, user_id) WHERE user_id IS NOT NULL` and `UNIQUE (dream_id, session_id) WHERE user_id IS NULL`.
+- The existing 🔥 toggle logic in `DreamToolCard` (optimistic UI with `setBacked`) will be fully replaced by `DreamSignal`'s self-contained state.
+- The `backers_count` column continues to count total signals (greenlight + shelve) via the existing trigger (or we add one). `greenlight_count` is maintained by a new trigger on `dream_backers`.
 
-This architecture is **spot on**. It perfectly balances the editorial "Mastering Log" aesthetic we discussed with the technical necessity of batching database calls to keep the feed snappy.
+Before the devs start coding, ensure these three hardware-inspired details are included:
 
-By moving the **Signal Row** into a dedicated, hairline-bordered section, you’ve solved the collision issue while making the **FMLY 40** feel like an official "Resolution View." It’s no longer a social post; it’s a **record**.
-
----
-
-### Critical Refinement: The "Post-Vote" Transition
-
-Your logic for Step 4 is excellent, but we should be very precise about the **Visual Dissolve** after the user clicks "Send Signal" in billboard mode.
-
-- **The Transition:** When the user is in `showPreResolved` mode, they see the *Historical* Signal Row.
-- **The Update:** Once they click "Send Signal," the component should transition to its "Done" state.
-- **The "Ive" Logic:** Don't just show the same row again. The **"Done"** state should replace the buttons with the *Live* updated results.
-  - *Before:* `[Signal Row] + [Divider] + [Buttons]`
-  - *After:* `[Signal Row (Updated)] + [Confirmation Message]` (e.g., "Signal Sent.")
-
-### Technical Polish for `SongFitFeed.tsx`
-
-Since you noted that PostgREST doesn't support raw `GROUP BY`, your client-side reduction is the right move for 40 posts. To keep it clean:
-
-TypeScript
-
-```
-// Performance tip for the JS reduce
-const signalMap = allReviews.reduce((acc, review) => {
-  if (!acc[review.post_id]) {
-    acc[review.post_id] = { total: 0, replay_yes: 0 };
-  }
-  acc[review.post_id].total++;
-  if (review.would_replay) acc[review.post_id].replay_yes++;
-  return acc;
-}, {} as Record<string, { total: number; replay_yes: number }>);
-
-```
-
----
-
-### Final "Mastering" Check
-
-
-|                    |               |                                                                         |
-| ------------------ | ------------- | ----------------------------------------------------------------------- |
-| **Requirement**    | **Status**    | **The "Ive" Verdict**                                                   |
-| **Zero Collision** | **Resolved**  | The dual hairline dividers create a "technical bay" for data.           |
-| **Performance**    | **Optimized** | Bypassing the `alreadyChecked` gate saves up to 40 DB calls.            |
-| **Typography**     | **Perfect**   | `font-mono` and `text-[10px]` maintain the studio log feel.             |
-| **User Flow**      | **Seamless**  | The FMLY 40 becomes an active "voting chart" rather than a static list. |
-
-
-### Minor Aesthetic Tweak
-
-In the **Signal Row**, consider using the vertical bar divider (`|`) or the middle dot (`·`) consistently.
-
-- *Recommended:* `SIGNAL STRENGTH: 85% · STANDING: 01 · 842 SIGNALS`
-- The middle dot feels lighter and more editorial than the vertical bar.
-
-### Next Step
-
-This spec is ready for implementation. It is tight, performant, and visually disciplined.
-
-**Would you like me to write the specific CSS/Tailwind classes for the** `ResolvedSignalRow` **sub-component to ensure the hairline borders and mono-spacing are pixel-perfect?**
+1. **The "Ghost" Separator:** Ensure the `border-t border-border/30` lines are hairline thin (0.5px). They should look like scored lines on a brushed metal surface.
+2. **Cancel Logic:** The `[ ✕ cancel ]` button should be styled as a simple, low-opacity text trigger (`text-muted-foreground/40`) so it doesn't compete with the `SUBMIT SIGNAL` action.
+3. **The "Done" Summary:** The post-submission summary (e.g., *"72% of the FMLY greenlighted this"*) should be rendered in **Geist Sans** but with a slightly higher opacity than the raw data to feel like a "Human Conclusion."
