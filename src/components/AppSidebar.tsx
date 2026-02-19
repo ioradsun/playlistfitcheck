@@ -519,10 +519,10 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                     </span>
                     {isBlazer && pioneerNumber && (
                       <span
-                        className="shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold leading-none bg-primary text-primary-foreground border border-primary cursor-default"
-                        title={`🌟 Pioneer #${pioneerNumber} of 1,000 — One of the first artists shaping the future of toolsFM.`}
+                        className="shrink-0 font-mono px-1.5 py-0.5 rounded-sm border-[0.5px] border-foreground/20 bg-transparent text-foreground/80 text-[9px] tracking-tighter leading-none cursor-default"
+                        title={`Pioneer · Unit ${String(pioneerNumber).padStart(4, "0")}`}
                       >
-                        #{pioneerNumber}
+                        {String(pioneerNumber).padStart(4, "0")}
                       </span>
                     )}
                   </div>
