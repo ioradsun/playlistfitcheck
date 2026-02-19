@@ -39,10 +39,7 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: nu
 
   const dark = isDarkMode();
   const playedColor = getCssHsl("--primary", 0.9);
-  // In dark mode use a much higher opacity so bars are clearly visible
-  const unplayedColor = dark
-    ? getCssHsl("--foreground", 0.3)
-    : getCssHsl("--muted-foreground", 0.4);
+  const unplayedColor = dark ? "rgba(150,150,150,0.6)" : "rgba(120,120,120,0.35)";
 
   const barW = Math.max(cw / peaks.length, 1);
   const gap = 1;
