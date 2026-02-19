@@ -230,7 +230,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               value={contextNote}
               onChange={e => setContextNote(e.target.value)}
               onKeyDown={handleContextKeyDown}
-              placeholder="What hit? (Optional)..."
+              placeholder="What hit? (Optional but helpful)"
               rows={2}
               className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
             />
