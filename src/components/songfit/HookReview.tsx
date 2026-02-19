@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
@@ -36,6 +37,16 @@ function incrementSessionReviewCount(): number {
 export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
+  const navigate = useNavigate();
+
+  const handleVoteClick = (replay: boolean) => {
+    if (!user) {
+      navigate("/Auth", { state: { returnTab: "crowdfit" } });
+      return;
+    }
+    setWouldReplay(replay);
+    setStep(replay ? "replay_cta" : "skip_cta");
+  };
 
   const [step, setStep] = useState<Step>(2);
   const [wouldReplay, setWouldReplay] = useState<boolean | null>(null);
@@ -158,14 +169,14 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       {step === 2 && (
         <div className="flex gap-2">
           <button
-            onClick={() => { setWouldReplay(true); setStep("replay_cta"); }}
+            onClick={() => handleVoteClick(true)}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
             <span className="text-[13px] leading-none text-muted-foreground/40">↺</span>
             <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
           </button>
           <button
-            onClick={() => { setWouldReplay(false); setStep("skip_cta"); }}
+            onClick={() => handleVoteClick(false)}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
             <span className="text-[13px] leading-none text-muted-foreground/40">→|</span>
