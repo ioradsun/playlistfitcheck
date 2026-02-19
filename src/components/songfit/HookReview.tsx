@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { ChevronDown, ChevronUp, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 
 type HookRating = "missed" | "almost" | "solid" | "hit";
+type Step = 1 | 2 | 3 | "done";
 
 interface Props {
   postId: string;
@@ -22,7 +22,6 @@ const SESSION_COUNT_KEY = "crowdfit_reviews_this_session";
 function getSessionReviewCount(): number {
   return parseInt(sessionStorage.getItem(SESSION_COUNT_KEY) || "0", 10);
 }
-
 function incrementSessionReviewCount(): number {
   const next = getSessionReviewCount() + 1;
   sessionStorage.setItem(SESSION_COUNT_KEY, String(next));
@@ -33,172 +32,145 @@ export function HookReview({ postId }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
 
+  const [step, setStep] = useState<Step>(1);
   const [hookRating, setHookRating] = useState<HookRating | null>(null);
   const [wouldReplay, setWouldReplay] = useState<boolean | null>(null);
-  const [contextExpanded, setContextExpanded] = useState(false);
   const [contextNote, setContextNote] = useState("");
-  const [completed, setCompleted] = useState(false);
   const [reviewCount, setReviewCount] = useState(getSessionReviewCount());
-  const [submitting, setSubmitting] = useState(false);
   const [alreadyChecked, setAlreadyChecked] = useState(false);
-
-  // Auto-submit when both required fields filled
-  const submitRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    // Check if user already reviewed this post
     const checkExisting = async () => {
-      let query = supabase
-        .from("songfit_hook_reviews")
-        .select("id")
-        .eq("post_id", postId);
-
+      let query = supabase.from("songfit_hook_reviews").select("id").eq("post_id", postId);
       if (user) {
         query = query.eq("user_id", user.id);
       } else {
         query = query.eq("session_id", sessionId).is("user_id", null);
       }
-
       const { data } = await query.maybeSingle();
-      if (data) {
-        setCompleted(true);
-      }
+      if (data) setStep("done");
       setAlreadyChecked(true);
     };
-
     checkExisting();
   }, [postId, user, sessionId]);
 
+  // Auto-focus textarea when step 3 appears
   useEffect(() => {
-    if (hookRating !== null && wouldReplay !== null && !submitRef.current && !completed && alreadyChecked) {
-      submitRef.current = true;
-      handleSubmit();
+    if (step === 3) {
+      setTimeout(() => textareaRef.current?.focus(), 50);
     }
-  }, [hookRating, wouldReplay, completed, alreadyChecked]);
+  }, [step]);
 
-  const handleSubmit = async () => {
-    if (submitting || completed) return;
-    setSubmitting(true);
+  const handleSubmit = async (note: string) => {
     try {
       const payload: any = {
         post_id: postId,
         hook_rating: hookRating,
         would_replay: wouldReplay,
-        context_note: contextNote.trim() || null,
+        context_note: note.trim() || null,
       };
-
       if (user) {
         payload.user_id = user.id;
       } else {
         payload.session_id = sessionId;
       }
+      await supabase.from("songfit_hook_reviews").insert(payload);
+    } catch {
+      // ignore unique constraint
+    }
+    const count = incrementSessionReviewCount();
+    setReviewCount(count);
+    setStep("done");
+  };
 
-      const { error } = await supabase.from("songfit_hook_reviews").insert(payload);
-      if (error && error.code !== "23505") throw error; // ignore unique constraint (already reviewed)
-
-      const count = incrementSessionReviewCount();
-      setReviewCount(count);
-      setCompleted(true);
-    } catch (e: any) {
-      // If unique constraint, still show complete state
-      if (e?.code === "23505") {
-        setCompleted(true);
-      }
-    } finally {
-      setSubmitting(false);
+  const handleContextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(contextNote);
     }
   };
 
   if (!alreadyChecked) return null;
 
-  if (completed) {
-    return (
-      <div className="px-4 py-3 border-t border-border/30 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <div className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center">
-            <Check size={10} className="text-primary" />
-          </div>
-          <span className="text-xs">Your reaction was recorded.</span>
-        </div>
-        {reviewCount > 0 && (
-          <span className="text-[10px] font-mono text-muted-foreground/50">
-            {reviewCount} {reviewCount === 1 ? "review" : "reviews"} this session
-          </span>
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="border-t border-border/30 px-4 py-3 space-y-3">
-      {/* Section 1: Hook Strength */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Did the hook land?</p>
-        <div className="flex gap-1.5">
-          {HOOK_OPTIONS.map(({ value, label }) => {
-            const selected = hookRating === value;
-            return (
+    <div className="border-t border-border/30 px-4 py-3 min-h-[72px] flex flex-col justify-center">
+
+      {/* Done state */}
+      {step === "done" && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Your take was recorded.</span>
+          {reviewCount > 0 && (
+            <span className="text-[10px] font-mono text-muted-foreground/40">
+              {reviewCount} {reviewCount === 1 ? "review" : "reviews"} this session
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Step 1: Did the hook land? */}
+      {step === 1 && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium text-muted-foreground">Did the hook land?</p>
+          <div className="flex gap-1.5">
+            {HOOK_OPTIONS.map(({ value, label }) => (
               <button
                 key={value}
-                onClick={() => setHookRating(value)}
-                className={`flex-1 py-1.5 px-1 text-xs font-medium rounded-md border transition-all ${
-                  selected
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-muted-foreground border-border/50 hover:border-primary/40 hover:text-foreground"
-                }`}
+                onClick={() => { setHookRating(value); setStep(2); }}
+                className="flex-1 py-1.5 px-1 text-xs font-medium rounded-md border border-border/50 text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5 transition-all"
               >
                 {label}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Section 2: Replay Intent */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Would you replay this?</p>
-        <div className="flex gap-2">
-          {[
-            { value: true, label: "🔁 Yes" },
-            { value: false, label: "⏭ No" },
-          ].map(({ value, label }) => {
-            const selected = wouldReplay === value;
-            return (
+      {/* Step 2: Would you replay this? */}
+      {step === 2 && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium text-muted-foreground">Would you replay this?</p>
+          <div className="flex gap-2">
+            {[
+              { value: true, label: "Yes" },
+              { value: false, label: "No" },
+            ].map(({ value, label }) => (
               <button
                 key={String(value)}
-                onClick={() => setWouldReplay(value)}
-                className={`flex-1 py-2 text-sm font-medium rounded-md border transition-all ${
-                  selected
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-muted-foreground border-border/50 hover:border-primary/40 hover:text-foreground"
-                }`}
+                onClick={() => { setWouldReplay(value); setStep(3); }}
+                className="flex-1 py-1.5 text-sm font-medium rounded-md border border-border/50 text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5 transition-all"
               >
                 {label}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Section 3: Context (optional, collapsed) */}
-      <div>
-        <button
-          onClick={() => setContextExpanded(v => !v)}
-          className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-        >
-          {contextExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          Add context (optional)
-        </button>
-        {contextExpanded && (
+      {/* Step 3: Optional context + submit */}
+      {step === 3 && (
+        <div className="space-y-1.5">
           <textarea
+            ref={textareaRef}
             value={contextNote}
             onChange={e => setContextNote(e.target.value)}
-            placeholder="What made you choose that?"
+            onKeyDown={handleContextKeyDown}
+            placeholder="What made you choose that? (optional) — press Enter to submit"
             rows={2}
-            className="mt-2 w-full bg-muted/40 text-xs text-foreground placeholder:text-muted-foreground/40 outline-none resize-none rounded-md p-2 border border-border/40 focus:border-border"
+            className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
           />
-        )}
-      </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground/40">Shift+Enter for new line</span>
+            <button
+              onClick={() => handleSubmit(contextNote)}
+              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Submit
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
