@@ -71,7 +71,9 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
         binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
       }
       const audioBase64 = btoa(binary);
-      const format = (uploadFile.type || "").includes("wav") ? "wav" : "mp3";
+      // compressAudioFile always outputs WAV; otherwise detect from MIME/name
+      const isWav = (uploadFile.type || "").includes("wav") || uploadFile.name.endsWith(".wav");
+      const format = isWav ? "wav" : "mp3";
 
       setLoadingMsg("Syncing…");
       const response = await fetch(
