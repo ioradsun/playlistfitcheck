@@ -397,12 +397,12 @@ const PublicProfile = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-mono font-bold text-primary">
-                      {s.peak_rank ? `#${s.peak_rank}` : "—"}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">Peak</p>
-                  </div>
+                  {s.peak_rank && (
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-mono font-bold text-primary">#{s.peak_rank}</p>
+                      <p className="text-[10px] text-muted-foreground">Peak</p>
+                    </div>
+                  )}
                 </button>
               ))}
             </CardContent>
