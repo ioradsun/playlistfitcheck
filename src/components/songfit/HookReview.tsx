@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 
 type HookRating = "missed" | "almost" | "solid" | "hit";
-type Step = 1 | 2 | "replay_cta" | "skip_cta" | "revealing" | "done";
+type Step = 2 | "replay_cta" | "skip_cta" | "revealing" | "done";
 
 interface Props {
   postId: string;
@@ -22,18 +22,6 @@ interface Results {
   replay_no: number;
 }
 
-const HOOK_OPTIONS: { value: HookRating; label: string; icon: string }[] = [
-  { value: "missed", label: "Missed",  icon: "○" },
-  { value: "almost", label: "Almost",  icon: "◐" },
-  { value: "solid",  label: "Solid",   icon: "●" },
-  { value: "hit",    label: "Hit",     icon: "✦" },
-];
-
-const REPLAY_OPTIONS: { value: boolean; label: string; icon: string }[] = [
-  { value: true,  label: "Run it back", icon: "↺" },
-  { value: false, label: "Skip",        icon: "→|" },
-];
-
 const SESSION_COUNT_KEY = "crowdfit_reviews_this_session";
 
 function getSessionReviewCount(): number {
@@ -50,7 +38,6 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   const sessionId = getSessionId();
 
   const [step, setStep] = useState<Step>(2);
-  const [hookRating, setHookRating] = useState<HookRating | null>("solid");
   const [wouldReplay, setWouldReplay] = useState<boolean | null>(null);
   const [contextNote, setContextNote] = useState("");
   const [alreadyChecked, setAlreadyChecked] = useState(false);
@@ -106,7 +93,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
     try {
       const payload: any = {
         post_id: postId,
-        hook_rating: hookRating,
+        hook_rating: "solid",
         would_replay: replayValue,
         context_note: note.trim() || null,
       };
@@ -147,7 +134,6 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
         const replayPct = results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0;
         return (
           <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground font-mono">
-            {/* Replay pill */}
             <span className="inline-flex items-center gap-1.5 bg-foreground/[0.05] border border-border/40 rounded-full px-2.5 py-1 leading-none">
               <span className="text-sm text-foreground/80">↺</span>
               <span className="font-semibold text-foreground">{replayPct}%</span>
@@ -168,35 +154,29 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
         );
       })()}
 
-      {/* Step 1 removed — flow starts at Step 2 */}
-
-      {/* Step 2: Would you replay this? */}
+      {/* Step 2: Run it back / Skip */}
       {step === 2 && (
-        <div className="space-y-2.5">
-          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Would you replay this?</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => { setWouldReplay(true); setStep("replay_cta"); }}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
-            >
-              <span className="text-[13px] leading-none text-muted-foreground/40">↺</span>
-              <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
-            </button>
-            <button
-              onClick={() => { setWouldReplay(false); setStep("skip_cta"); }}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
-            >
-              <span className="text-[13px] leading-none text-muted-foreground/40">→|</span>
-              <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
-            </button>
-          </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setWouldReplay(true); setStep("replay_cta"); }}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+          >
+            <span className="text-[13px] leading-none text-muted-foreground/40">↺</span>
+            <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
+          </button>
+          <button
+            onClick={() => { setWouldReplay(false); setStep("skip_cta"); }}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+          >
+            <span className="text-[13px] leading-none text-muted-foreground/40">→|</span>
+            <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
+          </button>
         </div>
       )}
 
       {/* replay_cta: Spotify CTAs + comment + submit */}
       {step === "replay_cta" && (
         <div className="space-y-2.5">
-          
           <div className="flex gap-2 flex-wrap">
             {artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
               <a
