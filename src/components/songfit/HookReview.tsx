@@ -144,7 +144,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
 
       {/* Revealing */}
       {step === "revealing" && (
-        <span className="text-xs text-muted-foreground">Tallying results{dots}</span>
+        <span className="text-xs text-muted-foreground">Summing Signals{dots}</span>
       )}
 
       {/* Done */}
@@ -153,7 +153,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
         const signalLabel = results.total === 1 ? "signal" : "signals";
         return (
           <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium text-foreground">Replay Signal: {replayPct}%</span>
+            <span className="text-[11px] font-medium text-foreground">Signal Strength: {replayPct}%</span>
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
               <span>
                 {replayPct >= 50
