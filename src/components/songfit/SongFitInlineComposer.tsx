@@ -32,7 +32,7 @@ interface Props {
   onPostCreated: () => void;
 }
 
-const CAPTION_MAX = 300;
+const CAPTION_MAX = 500;
 
 export function SongFitInlineComposer({ onPostCreated }: Props) {
   const { user, profile } = useAuth();
@@ -51,6 +51,14 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   const postedTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
   const captionRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize the textarea to fit its content
+  const autoResize = () => {
+    const el = captionRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
 
   const initials = (profile?.display_name ?? user?.email ?? "?")
     .split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -352,21 +360,29 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
 
           {/* Hook lyrics — required after track is selected */}
           {selectedTrack && !duplicateWarning && (
-            <div className="mt-2">
+            <div className="mt-3 rounded-xl border border-border/60 bg-muted/30 overflow-hidden">
+              <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                  Hook Lyrics
+                </span>
+                <span className={`text-[10px] tabular-nums ${caption.length >= CAPTION_MAX ? "text-destructive font-medium" : "text-muted-foreground/40"}`}>
+                  {CAPTION_MAX - caption.length} left
+                </span>
+              </div>
               <textarea
                 ref={captionRef}
                 value={caption}
-                onChange={e => setCaption(e.target.value.slice(0, CAPTION_MAX))}
-                placeholder="Paste your hook lyrics..."
-                rows={2}
-                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none resize-none leading-relaxed"
+                onChange={e => {
+                  setCaption(e.target.value.slice(0, CAPTION_MAX));
+                  autoResize();
+                }}
+                onInput={autoResize}
+                placeholder="Paste your hook lyrics here..."
+                rows={4}
+                style={{ minHeight: "96px", height: "auto" }}
+                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none resize-none leading-relaxed px-3 pb-3"
                 disabled={publishing}
               />
-              <div className="flex justify-end">
-                <span className={`text-[10px] ${caption.length >= CAPTION_MAX ? "text-destructive" : "text-muted-foreground/50"}`}>
-                  {caption.length}/{CAPTION_MAX}
-                </span>
-              </div>
             </div>
           )}
 
