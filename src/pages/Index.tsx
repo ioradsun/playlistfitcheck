@@ -464,8 +464,6 @@ const Index = () => {
         );
       case "mix":
         return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} /></div>;
-      case "lyric":
-        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
       case "hitfit":
         return loadedHitFitAnalysis ? (
           <div className="flex-1 overflow-y-auto px-4 py-6"><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} /></div>
@@ -502,7 +500,11 @@ const Index = () => {
           >
             <SongFitTab />
           </div>
-          {activeTab !== "songfit" && renderTabContent()}
+          {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
+          <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
+            <LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} />
+          </div>
+          {activeTab !== "songfit" && activeTab !== "lyric" && renderTabContent()}
         </div>
       </SidebarInset>
       
