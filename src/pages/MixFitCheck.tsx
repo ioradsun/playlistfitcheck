@@ -248,32 +248,26 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto py-6 px-4 space-y-6">
+    <div className="w-full max-w-5xl mx-auto py-6 px-4 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={resetProject}>
-            <ArrowLeft size={18} strokeWidth={1.5} />
-          </Button>
-          <div>
-            <h1 className="text-lg font-semibold">{title}</h1>
-            {notes && <p className="text-xs text-muted-foreground">{notes}</p>}
-          </div>
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={resetProject}>
+          <ArrowLeft size={18} strokeWidth={1.5} />
+        </Button>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-semibold truncate">{title}</h2>
+          {notes && <p className="text-[10px] text-muted-foreground">{notes}</p>}
         </div>
-        <div className="flex items-center gap-2">
-          {user && lastSavedAt && (
-            <span className="text-xs text-muted-foreground">Saved {lastSavedAt}</span>
-          )}
-        </div>
+        {user && lastSavedAt && (
+          <span className="text-[10px] text-muted-foreground shrink-0">✓ Saved {lastSavedAt}</span>
+        )}
       </div>
 
       {/* Re-upload prompt */}
       {needsReupload && (
-        <div className="rounded-md border border-primary/30 bg-primary/5 p-4 text-sm text-center space-y-2">
-          <p>Re-upload your audio files to resume playback.</p>
-          <p className="text-xs text-muted-foreground">
-            Filenames, rankings, and notes have been restored.
-          </p>
+        <div className="glass-card rounded-xl p-4 text-center space-y-1">
+          <p className="text-[11px] font-mono text-muted-foreground">No audio — re-upload your files to resume playback</p>
+          <p className="text-[10px] text-muted-foreground/60">Filenames, rankings and notes have been restored.</p>
         </div>
       )}
 
@@ -285,10 +279,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
         referenceName={activeMixes[0]?.name}
         isPlaying={!!playingId}
         playheadPct={playingId ? (playheadTime / (firstWaveform?.duration || 1)) * 100 : 0}
-        onMarkersChange={(s, e) => {
-          setMarkerStart(s);
-          setMarkerEnd(e);
-        }}
+        onMarkersChange={(s, e) => { setMarkerStart(s); setMarkerEnd(e); }}
         onMarkersChangeEnd={(s, e) => {
           if (!playingId) return;
           const playingMix = activeMixes.find((m) => m.id === playingId) || activeMixes[0];
@@ -312,10 +303,13 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
             className="hidden"
             onChange={handleUpload}
           />
-          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-            Upload Mix{activeMixes.length > 0 ? "" : "es"} ({activeMixes.length}/{MAX_MIXES})
-          </Button>
-          <span className="text-xs text-muted-foreground">Audio files aren't saved or stored.</span>
+          <button
+            className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors border border-border/30 rounded px-2 py-1"
+            onClick={() => fileRef.current?.click()}
+          >
+            + Add Mix ({activeMixes.length}/{MAX_MIXES})
+          </button>
+          <span className="text-[10px] text-muted-foreground/60 font-mono">Audio files aren't saved or stored.</span>
         </div>
       )}
 
@@ -347,49 +341,26 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
         </div>
       )}
 
-      {/* Results Summary Table */}
+      {/* Results Summary */}
       {mixes.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium text-muted-foreground">Results</h3>
-          <div className="rounded-md border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Rank</th>
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Filename</th>
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...mixes]
-                  .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
-                  .map((m) => (
-                    <tr key={m.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2">
-                        {m.rank != null ? (
-                          <span className={`font-mono font-bold ${m.rank === 1 ? "text-primary" : "text-foreground/70"}`}>
-                            #{m.rank}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-foreground truncate max-w-[200px]">{m.name}</td>
-                      <td className="px-3 py-2 text-muted-foreground truncate max-w-[200px] italic">
-                        {m.comments || "—"}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="glass-card rounded-xl p-4">
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">Results</p>
+          {[...mixes]
+            .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
+            .map((m, idx) => (
+              <div key={m.id} className={`flex items-center gap-4 py-2 ${idx > 0 ? "border-t border-border/30" : ""}`}>
+                <span className="font-mono text-xs text-muted-foreground w-6 shrink-0">
+                  {m.rank != null ? `#${m.rank}` : "—"}
+                </span>
+                <span className="text-xs text-foreground flex-1 truncate">{m.name}</span>
+                <span className="text-[10px] text-muted-foreground truncate max-w-[180px] italic">{m.comments || ""}</span>
+              </div>
+            ))}
         </div>
       )}
 
       {activeMixes.length === 0 && !needsReupload && mixes.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground text-sm">
-          Upload your first mix to get started
-        </div>
+        <p className="text-center py-12 text-[11px] font-mono text-muted-foreground">Upload your first mix to get started</p>
       )}
 
       <SignUpToSaveBanner />
