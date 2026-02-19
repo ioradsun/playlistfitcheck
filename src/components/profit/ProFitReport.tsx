@@ -109,7 +109,7 @@ ${bp.singleROIFocus.why}`;
     >
       {/* Top bar */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={onBack}>Back</Button>
+        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft size={18} strokeWidth={1.5} /></Button>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={copyBlueprint}>Copy</Button>
           <Button variant="outline" size="sm" onClick={onOpenChat}>Refine Strategy</Button>

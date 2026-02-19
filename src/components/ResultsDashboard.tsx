@@ -109,8 +109,8 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
     >
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={onBack} className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft size={20} />
+        <Button variant="ghost" size="icon" onClick={onBack}>
+          <ArrowLeft size={18} strokeWidth={1.5} />
         </Button>
         <div>
           <h2 className="text-xl font-bold">

@@ -269,8 +269,8 @@ const PublicProfile = () => {
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
           {!(isOwner && fromMenu) && (
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
-              <ArrowLeft size={20} />
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft size={18} strokeWidth={1.5} />
             </Button>
           )}
           <h1 className="text-xl font-semibold truncate">{profile.display_name || "User"}</h1>

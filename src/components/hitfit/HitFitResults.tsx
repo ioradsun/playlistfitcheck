@@ -223,8 +223,8 @@ export function HitFitResults({ analysis, onBack }: Props) {
     >
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack} className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft size={20} />
+        <Button variant="ghost" size="icon" onClick={onBack}>
+          <ArrowLeft size={18} strokeWidth={1.5} />
         </Button>
         <div className="flex-1">
           <h2 className="text-lg font-semibold">HitFit Analysis</h2>
