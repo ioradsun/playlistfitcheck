@@ -157,18 +157,16 @@ export function SongFitFeed() {
       setShowFloatingAnchor(false);
       return;
     }
-    // Listen on the scrollable parent container, not window (body/html overflow is hidden)
-    const scrollEl = document.querySelector("[data-scroll-area-viewport]") as HTMLElement | null;
-    const target = scrollEl ?? window;
+    const scrollEl = document.getElementById("page-scroll-container");
+    if (!scrollEl) return;
 
     const handleScroll = () => {
-      const scrollY = scrollEl ? scrollEl.scrollTop : window.scrollY;
-      setShowFloatingAnchor(scrollY > 600);
+      setShowFloatingAnchor(scrollEl.scrollTop > 600);
     };
 
-    target.addEventListener("scroll", handleScroll, { passive: true } as EventListenerOptions);
+    scrollEl.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
-    return () => target.removeEventListener("scroll", handleScroll, { passive: true } as EventListenerOptions);
+    return () => scrollEl.removeEventListener("scroll", handleScroll);
   }, [composerUnlocked]);
 
   return (
@@ -248,11 +246,9 @@ export function SongFitFeed() {
       {showFloatingAnchor && (
         <button
           onClick={() => {
-            const scrollEl = document.querySelector("[data-scroll-area-viewport]") as HTMLElement | null;
+            const scrollEl = document.getElementById("page-scroll-container");
             if (scrollEl) {
               scrollEl.scrollTo({ top: 0, behavior: "smooth" });
-            } else {
-              window.scrollTo({ top: 0, behavior: "smooth" });
             }
           }}
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 border border-border/50 bg-background text-foreground/70 hover:text-foreground hover:border-border text-[11px] font-mono tracking-wide px-5 py-2 rounded-full shadow-sm transition-all duration-200"
