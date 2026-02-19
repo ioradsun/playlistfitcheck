@@ -1,9 +1,18 @@
-import { useEffect, useState } from "react";
-import { User, Music } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { User, Music, Heart, CornerDownRight, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Loader2 } from "lucide-react";
+
+interface Reply {
+  id: string;
+  content: string;
+  created_at: string;
+  user_id: string | null;
+  profiles: { display_name: string | null; avatar_url: string | null } | null;
+}
 
 interface ReviewRow {
   id: string;
@@ -14,6 +23,11 @@ interface ReviewRow {
   user_id: string | null;
   session_id: string | null;
   profiles: { display_name: string | null; avatar_url: string | null } | null;
+  // client-side
+  likes: number;
+  liked: boolean;
+  replies: Reply[];
+  showReply: boolean;
 }
 
 interface PostMeta {
@@ -50,9 +64,12 @@ interface Props {
 }
 
 export function HookReviewsSheet({ postId, onClose }: Props) {
+  const { user, profile } = useAuth();
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [post, setPost] = useState<PostMeta | null>(null);
   const [loading, setLoading] = useState(true);
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+  const [replySubmitting, setReplySubmitting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!postId) return;
@@ -61,7 +78,6 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
     setPost(null);
 
     (async () => {
-      // Fetch post meta + reviews in parallel
       const [postRes, reviewsRes] = await Promise.all([
         supabase
           .from("songfit_posts")
@@ -108,13 +124,90 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
         }
       }
 
+      // Fetch replies (comments where parent_comment_id maps to review id — stored as context on the post)
+      // Replies are stored as songfit_comments with content prefixed by review id tag
+      const reviewIds = reviews.map(r => r.id);
+      const { data: repliesData } = await supabase
+        .from("songfit_comments")
+        .select("id, content, created_at, user_id, parent_comment_id")
+        .in("parent_comment_id", reviewIds)
+        .order("created_at", { ascending: true });
+
+      const replyProfileIds = [...new Set((repliesData ?? []).filter(r => r.user_id).map(r => r.user_id!))];
+      let replyProfileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = { ...profileMap };
+      const newIds = replyProfileIds.filter(id => !replyProfileMap[id]);
+      if (newIds.length > 0) {
+        const { data: rp } = await supabase.from("profiles").select("id, display_name, avatar_url").in("id", newIds);
+        for (const p of rp || []) replyProfileMap[p.id] = { display_name: p.display_name, avatar_url: p.avatar_url };
+      }
+
+      const replyMap: Record<string, Reply[]> = {};
+      for (const reply of repliesData ?? []) {
+        const pid = reply.parent_comment_id!;
+        if (!replyMap[pid]) replyMap[pid] = [];
+        replyMap[pid].push({
+          id: reply.id,
+          content: reply.content,
+          created_at: reply.created_at,
+          user_id: reply.user_id,
+          profiles: reply.user_id ? (replyProfileMap[reply.user_id] ?? null) : null,
+        });
+      }
+
       setRows(reviews.map(r => ({
         ...r,
         profiles: r.user_id ? (profileMap[r.user_id] ?? null) : null,
+        likes: 0,
+        liked: false,
+        replies: replyMap[r.id] ?? [],
+        showReply: false,
       })) as ReviewRow[]);
       setLoading(false);
     })();
   }, [postId]);
+
+  const toggleLike = useCallback((reviewId: string) => {
+    setRows(prev => prev.map(r =>
+      r.id === reviewId
+        ? { ...r, liked: !r.liked, likes: r.liked ? r.likes - 1 : r.likes + 1 }
+        : r
+    ));
+  }, []);
+
+  const toggleReply = useCallback((reviewId: string) => {
+    setRows(prev => prev.map(r =>
+      r.id === reviewId ? { ...r, showReply: !r.showReply } : r
+    ));
+  }, []);
+
+  const submitReply = useCallback(async (reviewId: string) => {
+    const text = (replyTexts[reviewId] ?? "").trim();
+    if (!text || !user || !postId) return;
+    setReplySubmitting(prev => ({ ...prev, [reviewId]: true }));
+    try {
+      const { data, error } = await supabase.from("songfit_comments").insert({
+        post_id: postId,
+        user_id: user.id,
+        content: text,
+        parent_comment_id: reviewId,
+      }).select("id, content, created_at, user_id").single();
+      if (error) throw error;
+      const newReply: Reply = {
+        id: data.id,
+        content: data.content,
+        created_at: data.created_at,
+        user_id: data.user_id,
+        profiles: { display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null },
+      };
+      setRows(prev => prev.map(r =>
+        r.id === reviewId
+          ? { ...r, replies: [...r.replies, newReply], showReply: false }
+          : r
+      ));
+      setReplyTexts(prev => ({ ...prev, [reviewId]: "" }));
+    } catch {}
+    setReplySubmitting(prev => ({ ...prev, [reviewId]: false }));
+  }, [replyTexts, user, postId, profile]);
 
   const artistNames = post?.track_artists_json.map(a => a.name).join(", ") ?? "";
 
@@ -123,42 +216,44 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0">
 
         {/* ── Song identity header ── */}
-        <div className="shrink-0 px-5 pt-5 pb-4 border-b border-border/40 space-y-4">
+        <div className="shrink-0 px-5 pt-5 pb-4 border-b border-border/40 space-y-3">
           {/* Track identity */}
           <div className="flex items-center gap-3">
             {post?.album_art_url ? (
               <img
                 src={post.album_art_url}
-                alt={post.track_title}
-                className="w-14 h-14 rounded-xl object-cover shrink-0 shadow-sm"
+                alt={post?.track_title}
+                className="w-12 h-12 rounded-xl object-cover shrink-0 shadow-sm"
               />
             ) : (
-              <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                <Music size={20} className="text-muted-foreground" />
+              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                <Music size={18} className="text-muted-foreground" />
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-0.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-0.5">
                 Hook Reviews
               </p>
-              <h2 className="text-base font-bold leading-tight truncate">
+              <h2 className="text-sm font-bold leading-tight truncate">
                 {post?.track_title ?? "Loading…"}
               </h2>
               {artistNames && (
-                <p className="text-sm text-muted-foreground truncate mt-0.5">{artistNames}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{artistNames}</p>
               )}
             </div>
           </div>
 
-          {/* Hook lyrics block */}
+          {/* Hook lyrics — capped height, scrollable */}
           {post?.caption && (
-            <div className="rounded-xl bg-muted/40 border border-border/50 px-4 py-3">
+            <div className="rounded-xl bg-muted/40 border border-border/50 px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-1.5">
                 Hook
               </p>
-              <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
-                {post.caption}
-              </p>
+              <div className="max-h-20 overflow-y-auto pr-1">
+                <p className="text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap">
+                  {post.caption}
+                </p>
+              </div>
             </div>
           )}
 
@@ -172,7 +267,7 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
         </div>
 
         {/* ── Reviews list ── */}
-        <div className="flex-1 overflow-y-auto px-5 py-3">
+        <div className="flex-1 overflow-y-auto px-4 py-3">
           {loading ? (
             <div className="flex justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted-foreground" />
@@ -180,39 +275,135 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-16">No reviews yet.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {rows.map((row) => {
                 const name = row.profiles?.display_name || (row.user_id ? "User" : "Anonymous");
                 const avatar = row.profiles?.avatar_url;
                 return (
-                  <div key={row.id} className="flex items-start gap-3 rounded-xl bg-muted/20 px-3 py-3">
-                    {/* Avatar */}
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
-                      {avatar ? (
-                        <img src={avatar} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <User size={14} className="text-muted-foreground" />
-                      )}
+                  <div key={row.id} className="rounded-xl bg-muted/20 px-3 py-3 space-y-2">
+                    {/* Row: avatar + content */}
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
+                        {avatar ? (
+                          <img src={avatar} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <User size={13} className="text-muted-foreground" />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        {/* Name + rating badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <span className="text-sm font-semibold leading-none">{name}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${RATING_COLOR[row.hook_rating] ?? "text-muted-foreground"} ${RATING_BG[row.hook_rating] ?? "bg-muted/40"}`}>
+                            {RATING_LABEL[row.hook_rating] ?? row.hook_rating}
+                          </span>
+                          {/* Replay: plain indicator, not interactive-looking */}
+                          <span className="text-[10px] text-muted-foreground/50">·</span>
+                          <span className="text-[10px] text-muted-foreground/60 select-none">
+                            {row.would_replay ? "Would replay" : "Wouldn't replay"}
+                          </span>
+                        </div>
+
+                        {row.context_note && (
+                          <p className="text-xs text-foreground/75 leading-snug">{row.context_note}</p>
+                        )}
+
+                        {/* Actions row */}
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <p className="text-[10px] text-muted-foreground/40 flex-1">
+                            {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
+                          </p>
+                          {/* Like */}
+                          <button
+                            onClick={() => toggleLike(row.id)}
+                            className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-rose-500 transition-colors group"
+                          >
+                            <Heart
+                              size={12}
+                              className={row.liked ? "fill-rose-500 text-rose-500" : "group-hover:text-rose-500"}
+                            />
+                            {row.likes > 0 && <span className={row.liked ? "text-rose-500" : ""}>{row.likes}</span>}
+                          </button>
+                          {/* Reply */}
+                          {user && (
+                            <button
+                              onClick={() => toggleReply(row.id)}
+                              className="text-[11px] text-muted-foreground/60 hover:text-primary transition-colors"
+                            >
+                              Reply
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="text-sm font-semibold">{name}</span>
-                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${RATING_COLOR[row.hook_rating] ?? "text-muted-foreground"} ${RATING_BG[row.hook_rating] ?? "bg-muted/40"}`}>
-                          {RATING_LABEL[row.hook_rating] ?? row.hook_rating}
-                        </span>
-                        <span className={`text-[11px] font-medium ${row.would_replay ? "text-primary" : "text-muted-foreground/60"}`}>
-                          {row.would_replay ? "↩ Replay" : "Skip"}
-                        </span>
+                    {/* Replies */}
+                    {row.replies.length > 0 && (
+                      <div className="ml-10 space-y-2 border-l-2 border-border/30 pl-3">
+                        {row.replies.map(reply => {
+                          const rName = reply.profiles?.display_name || "User";
+                          const rAvatar = reply.profiles?.avatar_url;
+                          return (
+                            <div key={reply.id} className="flex items-start gap-2">
+                              <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
+                                {rAvatar ? (
+                                  <img src={rAvatar} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <User size={10} className="text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[11px] font-semibold">{rName}</span>
+                                <span className="text-[10px] text-muted-foreground/40 ml-1.5">
+                                  {formatDistanceToNow(new Date(reply.created_at), { addSuffix: true })}
+                                </span>
+                                <p className="text-xs text-foreground/75 leading-snug mt-0.5">{reply.content}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      {row.context_note && (
-                        <p className="text-xs text-foreground/80 leading-snug mb-1">{row.context_note}</p>
-                      )}
-                      <p className="text-[10px] text-muted-foreground/40">
-                        {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
-                      </p>
-                    </div>
+                    )}
+
+                    {/* Reply composer */}
+                    {row.showReply && user && (
+                      <div className="ml-10 flex items-start gap-2">
+                        <CornerDownRight size={12} className="text-muted-foreground/40 mt-2 shrink-0" />
+                        <div className="flex-1 flex items-end gap-2 rounded-lg bg-muted/40 border border-border/50 px-2.5 py-1.5">
+                          <textarea
+                            autoFocus
+                            value={replyTexts[row.id] ?? ""}
+                            onChange={e => setReplyTexts(prev => ({ ...prev, [row.id]: e.target.value }))}
+                            onKeyDown={e => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                submitReply(row.id);
+                              }
+                              if (e.key === "Escape") toggleReply(row.id);
+                            }}
+                            placeholder="Write a reply…"
+                            rows={1}
+                            className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/50 outline-none resize-none leading-relaxed"
+                          />
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => toggleReply(row.id)}
+                              className="p-0.5 text-muted-foreground/50 hover:text-foreground transition-colors"
+                            >
+                              <X size={11} />
+                            </button>
+                            <button
+                              onClick={() => submitReply(row.id)}
+                              disabled={replySubmitting[row.id] || !(replyTexts[row.id] ?? "").trim()}
+                              className="text-[11px] font-semibold text-primary hover:text-primary/80 disabled:opacity-40 transition-colors"
+                            >
+                              {replySubmitting[row.id] ? <Loader2 size={11} className="animate-spin" /> : "Post"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
