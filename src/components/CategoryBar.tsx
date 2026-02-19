@@ -12,18 +12,12 @@ interface CategoryBarProps {
   indicator?: string;
 }
 
-function getBarColor(score: number, max: number): string {
-  const pct = (score / max) * 100;
-  if (pct >= 85) return "bg-score-excellent";
-  if (pct >= 65) return "bg-score-strong";
-  if (pct >= 45) return "bg-score-ok";
-  if (pct >= 25) return "bg-score-weak";
-  return "bg-score-bad";
-}
-
 export function CategoryBar({ label, description, dataLabel, score, max, delay = 0, indicator }: CategoryBarProps) {
   const isNull = score === null;
   const pct = isNull ? 0 : (score / max) * 100;
+
+  // Neutral opacity-based fill: full score = full foreground opacity
+  const opacity = isNull ? 0 : Math.max(0.25, pct / 100);
 
   return (
     <motion.div
@@ -34,7 +28,11 @@ export function CategoryBar({ label, description, dataLabel, score, max, delay =
     >
       <div className="flex justify-between items-center text-sm">
         <span className="flex items-center gap-1.5 text-secondary-foreground">
-          {indicator && <span className="text-xs">{indicator}</span>}
+          {indicator && (
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {indicator === "✅" ? "●" : indicator === "⚠️" ? "◐" : "○"}
+            </span>
+          )}
           {label}
           {description && (
             <TooltipProvider delayDuration={350}>
@@ -51,21 +49,22 @@ export function CategoryBar({ label, description, dataLabel, score, max, delay =
             </TooltipProvider>
           )}
         </span>
-        <span className="font-mono text-foreground">
+        <span className="font-mono text-foreground text-sm">
           {isNull ? (
             <span className="text-muted-foreground text-xs">N/A</span>
           ) : (
-            <>{score}<span className="text-muted-foreground">/{max}</span></>
+            <>{score}<span className="text-muted-foreground text-xs">/{max}</span></>
           )}
         </span>
       </div>
       {dataLabel && (
-        <p className="text-[11px] font-mono text-primary/70 leading-snug">{dataLabel}</p>
+        <p className="text-[10px] font-mono text-muted-foreground leading-snug">{dataLabel}</p>
       )}
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
+      <div className="h-[3px] bg-border/40 overflow-hidden">
         {!isNull && (
           <motion.div
-            className={`h-full rounded-full ${getBarColor(score, max)}`}
+            className="h-full bg-foreground"
+            style={{ opacity }}
             initial={{ width: 0 }}
             animate={{ width: `${pct}%` }}
             transition={{ delay: delay + 0.2, duration: 0.8, ease: "easeOut" }}

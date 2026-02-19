@@ -8,20 +8,11 @@ interface ScoreGaugeProps {
   hideLabel?: boolean;
 }
 
-function getScoreColor(score: number): string {
-  if (score >= 85) return "hsl(var(--score-excellent))";
-  if (score >= 75) return "hsl(var(--score-strong))";
-  if (score >= 60) return "hsl(var(--score-ok))";
-  if (score >= 40) return "hsl(var(--score-weak))";
-  return "hsl(var(--score-bad))";
-}
-
 export function ScoreGauge({ score, label, size = 200, hideLabel = false }: ScoreGaugeProps) {
-  const strokeWidth = 10;
+  const strokeWidth = 8;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = (score / 100) * circumference;
-  const color = getScoreColor(score);
   const fitDisplay = getFitLabelDisplay(label);
 
   return (
@@ -41,7 +32,7 @@ export function ScoreGauge({ score, label, size = 200, hideLabel = false }: Scor
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke={color}
+            stroke="hsl(var(--foreground))"
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             strokeDasharray={circumference}
@@ -52,8 +43,7 @@ export function ScoreGauge({ score, label, size = 200, hideLabel = false }: Scor
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <motion.span
-            className="text-5xl font-bold font-mono"
-            style={{ color }}
+            className="text-5xl font-bold font-mono text-foreground"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
@@ -67,13 +57,12 @@ export function ScoreGauge({ score, label, size = 200, hideLabel = false }: Scor
       </div>
       {!hideLabel && (
         <motion.span
-          className="text-sm font-semibold uppercase tracking-[0.2em] font-mono"
-          style={{ color }}
+          className="font-mono text-[11px] tracking-widest uppercase border border-border/40 px-3 py-1 rounded-sm text-foreground"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}
         >
-          {fitDisplay.emoji} {fitDisplay.text}
+          {fitDisplay.text}
         </motion.span>
       )}
     </div>
