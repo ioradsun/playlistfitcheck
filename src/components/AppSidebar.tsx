@@ -520,7 +520,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                     {isBlazer && pioneerNumber && (
                       <span
                         className="shrink-0 font-mono px-1.5 py-0.5 rounded-sm border-[0.5px] border-foreground/20 bg-transparent text-foreground/80 text-[9px] tracking-tighter leading-none cursor-default"
-                        title={`Pioneer · Unit ${String(pioneerNumber).padStart(4, "0")}`}
+                        title={`FMLY · Unit ${String(pioneerNumber).padStart(4, "0")}`}
                       >
                         {String(pioneerNumber).padStart(4, "0")}
                       </span>
