@@ -70,6 +70,7 @@ const RATING_BG: Record<string, string> = {
 interface Props {
   postId: string | null;
   onClose: () => void;
+  onRemoved?: () => void;
 }
 
 function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name: string; size?: number }) {
@@ -88,7 +89,7 @@ function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name
   );
 }
 
-export function HookReviewsSheet({ postId, onClose }: Props) {
+export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
   const { user, profile } = useAuth();
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [post, setPost] = useState<PostMeta | null>(null);
@@ -202,7 +203,8 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
   const removeReview = useCallback(async (reviewId: string) => {
     await supabase.from("songfit_hook_reviews").delete().eq("id", reviewId);
     setRows(prev => prev.filter(r => r.id !== reviewId));
-  }, []);
+    onRemoved?.();
+  }, [onRemoved]);
 
   const toggleLike = useCallback((reviewId: string) => {
     setRows(prev => prev.map(r =>

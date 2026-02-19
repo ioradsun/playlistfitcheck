@@ -52,6 +52,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const impressionRef = useRef<HTMLDivElement>(null);
   const impressionLogged = useRef(false);
   const [reviewsSheetPostId, setReviewsSheetPostId] = useState<string | null>(null);
+  const [hookReviewKey, setHookReviewKey] = useState(0);
 
   const isOwnPost = user?.id === post.user_id;
   const CAPTION_MAX = 300;
@@ -425,6 +426,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       {crowdfitMode === "hook_review" && (
         <>
           <HookReview
+            key={hookReviewKey}
             postId={post.id}
             isOwner={isOwnPost}
             onOpenReviews={isOwnPost ? () => setReviewsSheetPostId(post.id) : undefined}
@@ -432,6 +434,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           <HookReviewsSheet
             postId={reviewsSheetPostId}
             onClose={() => setReviewsSheetPostId(null)}
+            onRemoved={() => setHookReviewKey(k => k + 1)}
           />
         </>
       )}

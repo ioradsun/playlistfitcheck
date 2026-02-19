@@ -10,6 +10,7 @@ interface Props {
   postId: string;
   isOwner?: boolean;
   onOpenReviews?: () => void;
+  onReviewRemoved?: () => void;
 }
 
 interface Results {
