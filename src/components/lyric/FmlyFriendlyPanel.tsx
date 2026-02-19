@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { ShieldCheck, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -13,7 +13,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { ProfanityReport } from "@/lib/profanityFilter";
-import { formatDistanceToNow } from "date-fns";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -42,25 +41,13 @@ export function FmlyFriendlyPanel({ hasFmly, report, onGenerate, onSeek }: FmlyF
 
   return (
     <div className="space-y-3">
-      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">FMLY Friendly</p>
-
       <Button
         onClick={handleClick}
         size="sm"
         variant={hasFmly ? "outline" : "default"}
-        className="w-full gap-1.5 h-8 text-xs"
+        className="w-full h-8 text-xs"
       >
-        {hasFmly ? (
-          <>
-            <RefreshCw size={12} />
-            Regenerate
-          </>
-        ) : (
-          <>
-            <ShieldCheck size={12} />
-            Make FMLY Friendly
-          </>
-        )}
+        {hasFmly ? "Regenerate" : "FMLY VERSION"}
       </Button>
 
       {report && (
