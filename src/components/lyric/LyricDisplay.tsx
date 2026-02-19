@@ -490,15 +490,14 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
                   <div key={format} className="space-y-1.5">
                     <div className="flex items-center gap-1">
                       <span className="text-xs font-mono font-medium text-foreground">{label}</span>
-                      <span className="text-xs font-semibold">{label}</span>
                       <span className="text-[10px] text-muted-foreground">· {desc}</span>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="secondary" size="sm" className="flex-1 text-xs h-7" onClick={() => handleCopy(format)}>
-                        {copied === format ? "Copied" : "Copy"}
+                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide" onClick={() => handleCopy(format)}>
+                        {copied === format ? "✓" : "Copy"}
                       </Button>
-                      <Button variant="secondary" size="sm" className="flex-1 text-xs h-7" onClick={() => handleDownload(format)}>
-                        Save
+                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide" onClick={() => handleDownload(format)}>
+                        ↓
                       </Button>
                     </div>
                   </div>
