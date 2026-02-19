@@ -35,13 +35,16 @@ serve(async (req) => {
       bytes[i] = binaryStr.charCodeAt(i);
     }
 
-    const mimeType = format === "wav" ? "audio/wav" : format === "m4a" ? "audio/mp4" : "audio/mpeg";
-    const ext = format === "wav" ? "wav" : format === "m4a" ? "m4a" : "mp3";
+    // Whisper requires a proper file extension it recognises.
+    // WAV and MP3 are universally supported; treat m4a as mp3 (already compressed/decoded).
+    const ext = format === "wav" ? "wav" : "mp3";
+    const mimeType = ext === "wav" ? "audio/wav" : "audio/mpeg";
     const audioBlob = new Blob([bytes], { type: mimeType });
+    const audioFile = new File([audioBlob], `audio.${ext}`, { type: mimeType });
 
     // Call Whisper with verbose_json to get segment-level timestamps
     const formData = new FormData();
-    formData.append("file", audioBlob, `audio.${ext}`);
+    formData.append("file", audioFile, `audio.${ext}`);
     formData.append("model", "whisper-1");
     formData.append("response_format", "verbose_json");
     formData.append("timestamp_granularities[]", "segment");
