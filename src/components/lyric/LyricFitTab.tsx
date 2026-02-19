@@ -17,6 +17,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
   const [loadingMsg, setLoadingMsg] = useState("Syncing...");
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
@@ -34,9 +35,9 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
       setSavedId(initialLyric.id);
       setFmlyLines((initialLyric as any).fmly_lines ?? null);
       setVersionMeta((initialLyric as any).version_meta ?? null);
-      // Create a dummy file for the display component (no actual audio)
       const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
       setAudioFile(dummyFile);
+      setHasRealAudio(false);
     }
   }, [initialLyric, lyricData]);
 
@@ -98,6 +99,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
 
       setLyricData(data as LyricData);
       setAudioFile(file);
+      setHasRealAudio(true);
       setSavedId(null);
       await quota.increment();
     } catch (e) {
@@ -111,6 +113,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
   const handleBack = useCallback(() => {
     setLyricData(null);
     setAudioFile(null);
+    setHasRealAudio(false);
     setSavedId(null);
     setFmlyLines(null);
     setVersionMeta(null);
@@ -122,11 +125,13 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
         <LyricDisplay
           data={lyricData}
           audioFile={audioFile}
+          hasRealAudio={hasRealAudio}
           savedId={savedId}
           fmlyLines={fmlyLines}
           versionMeta={versionMeta}
           onBack={handleBack}
           onSaved={(id) => { setSavedId(id); onProjectSaved?.(); }}
+          onReuploadAudio={(file) => { setAudioFile(file); setHasRealAudio(true); }}
         />
       </div>
     );
@@ -141,6 +146,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved }: Props) {
         setVersionMeta((l as any).version_meta ?? null);
         const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
         setAudioFile(dummyFile);
+        setHasRealAudio(false);
       }} loading={loading} loadingMsg={loadingMsg} />
     </div>
   );
