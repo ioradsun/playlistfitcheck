@@ -58,6 +58,7 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 
 const PATH_TO_TAB: Record<string, string> = {
   "/CrowdFit": "songfit",
+  "/HookFit": "songfit",
   "/SongFit": "songfit", // legacy redirect support
   "/ProFit": "profit",
   "/PlaylistFit": "playlist",
@@ -101,11 +102,12 @@ const Index = () => {
       navigate(`/auth?mode=signup&ref=${refParam}`, { replace: true });
       return;
     }
+    const defaultPath = siteCopy.features?.crowdfit_mode === "hook_review" ? "/HookFit" : "/CrowdFit";
     if (location.pathname === "/" && !location.state && !location.search && !window.location.hash) {
-      navigate("/CrowdFit", { replace: true });
+      navigate(defaultPath, { replace: true });
     }
-    if (location.pathname === "/SongFit") {
-      navigate("/CrowdFit", { replace: true });
+    if (location.pathname === "/SongFit" || location.pathname === "/CrowdFit") {
+      navigate(defaultPath, { replace: true });
     }
   }, [location.pathname]);
 
@@ -257,9 +259,10 @@ const Index = () => {
     if (autoRunRef.current) return;
     
     if (state?.returnTab) {
-      const TAB_TO_PATH: Record<string, string> = { songfit: "/CrowdFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
+      const crowdfitPath = siteCopy.features?.crowdfit_mode === "hook_review" ? "/HookFit" : "/CrowdFit";
+      const TAB_TO_PATH: Record<string, string> = { songfit: crowdfitPath, profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
       setActiveTab(state.returnTab);
-      navigate(TAB_TO_PATH[state.returnTab] || "/CrowdFit", { replace: true });
+      navigate(TAB_TO_PATH[state.returnTab] || crowdfitPath, { replace: true });
       if (!state.reportData && !state.autoRun && !state.loadMixProject && !state.loadLyric) return;
     }
 
