@@ -361,10 +361,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
           {/* Hook lyrics — required after track is selected */}
           {selectedTrack && !duplicateWarning && (
             <div className="mt-3 rounded-xl border border-border/60 bg-muted/30 overflow-hidden">
-              <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-                  Hook Lyrics
-                </span>
+              <div className="flex items-center justify-end px-3 pt-2.5 pb-1">
                 <span className={`text-[10px] tabular-nums ${caption.length >= CAPTION_MAX ? "text-destructive font-medium" : "text-muted-foreground/40"}`}>
                   {CAPTION_MAX - caption.length} left
                 </span>
@@ -377,7 +374,8 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
                   autoResize();
                 }}
                 onInput={autoResize}
-                placeholder="Paste your hook lyrics here..."
+                autoFocus
+                placeholder="What's the story behind this one..."
                 rows={4}
                 style={{ minHeight: "96px", height: "auto" }}
                 className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none resize-none leading-relaxed px-3 pb-3"
