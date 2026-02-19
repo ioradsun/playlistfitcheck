@@ -46,8 +46,8 @@ export function DreamInlineComposer({ onCreated }: Props) {
 
   return (
     <div className="border-b border-border/40 transition-colors">
-      <div className="flex gap-3 px-4 pt-3 pb-2">
-        <Avatar className="h-10 w-10 border border-border shrink-0 mt-1">
+      <div className="flex gap-3 px-4 pt-2.5 pb-1">
+        <Avatar className="h-8 w-8 border border-border shrink-0 mt-0.5">
           <AvatarImage src={avatarUrl} alt={profile?.display_name ?? "You"} />
           <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
             {initials}
@@ -60,26 +60,26 @@ export function DreamInlineComposer({ onCreated }: Props) {
             value={text}
             onChange={e => setText(e.target.value.slice(0, MAX_LENGTH))}
             placeholder="What's frustrating you?"
-            rows={3}
-            className="w-full bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none resize-none py-2 leading-relaxed"
+            rows={2}
+            className="w-full bg-transparent text-foreground text-sm placeholder:text-muted-foreground/60 outline-none resize-none pt-1.5 leading-relaxed"
             disabled={publishing}
           />
         </div>
-      </div>
 
-      {/* Action row below the textarea — no cramping */}
-      <div className="flex items-center justify-between px-4 pb-3">
-        <span className={`text-[10px] ${text.length >= MAX_LENGTH ? "text-destructive" : "text-muted-foreground/40"} ${text.length === 0 ? "invisible" : ""}`}>
-          {text.length}/{MAX_LENGTH}
-        </span>
         <Button
           size="sm"
-          className="h-8 px-5 rounded-full text-xs font-bold"
+          className="h-7 px-4 rounded-full text-xs font-bold shrink-0 self-start mt-0.5"
           disabled={!text.trim() || publishing}
           onClick={publish}
         >
-          {publishing ? <Loader2 size={14} className="animate-spin" /> : "Make This Real"}
+          {publishing ? <Loader2 size={12} className="animate-spin" /> : "Make This Real"}
         </Button>
+      </div>
+
+      <div className="flex justify-end px-4 pb-2">
+        <span className={`text-[10px] ${text.length >= MAX_LENGTH ? "text-destructive" : "text-muted-foreground/40"} ${text.length === 0 ? "invisible" : ""}`}>
+          {text.length}/{MAX_LENGTH}
+        </span>
       </div>
     </div>
   );
