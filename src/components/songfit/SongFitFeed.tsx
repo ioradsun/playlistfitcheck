@@ -10,6 +10,7 @@ import { SongFitComments } from "./SongFitComments";
 import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
+import { StagePresence } from "./StagePresence";
 
 export function SongFitFeed() {
   const navigate = useNavigate();
@@ -20,6 +21,8 @@ export function SongFitFeed() {
   const [likesPostId, setLikesPostId] = useState<string | null>(null);
   const [feedView, setFeedView] = useState<FeedView>("recent");
   const [billboardMode, setBillboardMode] = useState<BillboardMode>("this_week");
+  const [userVoteCount, setUserVoteCount] = useState<number | null>(null);
+  const [composerUnlocked, setComposerUnlocked] = useState(false);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -108,10 +111,46 @@ export function SongFitFeed() {
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
+  // Fetch user vote count on mount
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("songfit_hook_reviews")
+      .select("id")
+      .eq("user_id", user.id)
+      .then(({ data }) => {
+        const count = (data || []).length;
+        setUserVoteCount(count);
+        if (count >= 3) setComposerUnlocked(true);
+      });
+  }, [user]);
+
+  // Listen for vote events from HookReview
+  useEffect(() => {
+    const handler = () => {
+      setUserVoteCount(prev => {
+        const next = (prev ?? 0) + 1;
+        if (next >= 3) setComposerUnlocked(true);
+        return next;
+      });
+    };
+    window.addEventListener("crowdfit:vote", handler);
+    return () => window.removeEventListener("crowdfit:vote", handler);
+  }, []);
+
   return (
     <div className="w-full max-w-[470px] mx-auto">
       {user ? (
-        <SongFitInlineComposer onPostCreated={fetchPosts} />
+        composerUnlocked ? (
+          <div className="animate-fade-in">
+            <SongFitInlineComposer onPostCreated={fetchPosts} />
+          </div>
+        ) : (
+          <StagePresence
+            currentVotes={userVoteCount ?? 0}
+            onUnlocked={() => setComposerUnlocked(true)}
+          />
+        )
       ) : (
         <div
           className="border-b border-border/40 cursor-pointer"
