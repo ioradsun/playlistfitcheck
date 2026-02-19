@@ -493,11 +493,11 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
                       <span className="text-[10px] text-muted-foreground">· {desc}</span>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide" onClick={() => handleCopy(format)}>
+                      <Button variant="outline" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide border border-foreground/80 rounded-sm" onClick={() => handleCopy(format)}>
                         {copied === format ? "✓" : "Copy"}
                       </Button>
-                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide" onClick={() => handleDownload(format)}>
-                        ↓
+                      <Button variant="outline" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide border border-foreground/80 rounded-sm" onClick={() => handleDownload(format)}>
+                        Save
                       </Button>
                     </div>
                   </div>
