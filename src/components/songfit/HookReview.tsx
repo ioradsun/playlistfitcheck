@@ -165,16 +165,14 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
         <div className="border-t border-border/30 px-4 py-3 flex gap-2">
           <button
             onClick={() => handleVoteClick(true)}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+            className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[13px] leading-none text-muted-foreground/40">↺</span>
             <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
           </button>
           <button
             onClick={() => handleVoteClick(false)}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+            className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[13px] leading-none text-muted-foreground/40">→|</span>
             <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
           </button>
         </div>
@@ -223,16 +221,14 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
         <div className="flex gap-2">
           <button
             onClick={() => handleVoteClick(true)}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+            className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[13px] leading-none text-muted-foreground/40">↺</span>
             <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
           </button>
           <button
             onClick={() => handleVoteClick(false)}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+            className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[13px] leading-none text-muted-foreground/40">→|</span>
             <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
           </button>
         </div>
@@ -248,10 +244,9 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   href={artistsJson[0].spotifyUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
                 >
-                  <span>♫</span>
-                  <span>Follow {artistsJson[0].name}</span>
+                  Follow {artistsJson[0].name}
                 </a>
               )}
               {spotifyTrackUrl && (
@@ -259,10 +254,9 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   href={spotifyTrackUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
                 >
-                  <span>+</span>
-                  <span>Save track</span>
+                  Save track
                 </a>
               )}
             </div>
@@ -298,7 +292,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       {step === "skip_cta" && (
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-medium text-muted-foreground tracking-wide">→| Real talk: What's missing?</p>
+            <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Real talk: What's missing?</p>
             <button
               onClick={() => setStep(2)}
               className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
