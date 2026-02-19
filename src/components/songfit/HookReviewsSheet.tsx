@@ -306,10 +306,8 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${RATING_COLOR[row.hook_rating] ?? "text-muted-foreground"} ${RATING_BG[row.hook_rating] ?? "bg-muted/40"}`}>
                             {RATING_LABEL[row.hook_rating] ?? row.hook_rating}
                           </span>
-                          {/* Replay: plain indicator, not interactive-looking */}
-                          <span className="text-[10px] text-muted-foreground/50">·</span>
-                          <span className="text-[10px] text-muted-foreground/60 select-none">
-                            {row.would_replay ? "Would replay" : "Wouldn't replay"}
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md select-none ${row.would_replay ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted/60"}`}>
+                            {row.would_replay ? "Replay" : "Skip"}
                           </span>
                         </div>
 
