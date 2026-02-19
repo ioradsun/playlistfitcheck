@@ -35,6 +35,69 @@ export type Database = {
         }
         Relationships: []
       }
+      artist_pages: {
+        Row: {
+          accent_color: string
+          created_at: string
+          featured_track_art: string | null
+          featured_track_id: string | null
+          featured_track_title: string | null
+          featured_track_url: string | null
+          hero_content_type: string | null
+          hero_content_url: string | null
+          id: string
+          instagram_url: string | null
+          merch_url: string | null
+          sonic_identity: string | null
+          theme: string
+          tiktok_url: string | null
+          updated_at: string
+          user_id: string
+          website_url: string | null
+          youtube_url: string | null
+        }
+        Insert: {
+          accent_color?: string
+          created_at?: string
+          featured_track_art?: string | null
+          featured_track_id?: string | null
+          featured_track_title?: string | null
+          featured_track_url?: string | null
+          hero_content_type?: string | null
+          hero_content_url?: string | null
+          id?: string
+          instagram_url?: string | null
+          merch_url?: string | null
+          sonic_identity?: string | null
+          theme?: string
+          tiktok_url?: string | null
+          updated_at?: string
+          user_id: string
+          website_url?: string | null
+          youtube_url?: string | null
+        }
+        Update: {
+          accent_color?: string
+          created_at?: string
+          featured_track_art?: string | null
+          featured_track_id?: string | null
+          featured_track_title?: string | null
+          featured_track_url?: string | null
+          hero_content_type?: string | null
+          hero_content_url?: string | null
+          id?: string
+          instagram_url?: string | null
+          merch_url?: string | null
+          sonic_identity?: string | null
+          theme?: string
+          tiktok_url?: string | null
+          updated_at?: string
+          user_id?: string
+          website_url?: string | null
+          youtube_url?: string | null
+        }
+        Relationships: []
+      }
       collab_points: {
         Row: {
           badge: string | null
