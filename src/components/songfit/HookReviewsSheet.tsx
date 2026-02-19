@@ -44,15 +44,40 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
     setLoading(true);
     setRows([]);
 
-    supabase
-      .from("songfit_hook_reviews")
-      .select("id, hook_rating, would_replay, context_note, created_at, user_id, session_id, profiles(display_name, avatar_url)")
-      .eq("post_id", postId)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setRows((data || []) as unknown as ReviewRow[]);
+    (async () => {
+      // 1. Fetch reviews without join (no FK defined to profiles)
+      const { data: reviews } = await supabase
+        .from("songfit_hook_reviews")
+        .select("id, hook_rating, would_replay, context_note, created_at, user_id, session_id")
+        .eq("post_id", postId)
+        .order("created_at", { ascending: false });
+
+      if (!reviews || reviews.length === 0) {
+        setRows([]);
         setLoading(false);
-      });
+        return;
+      }
+
+      // 2. Fetch profiles for any non-null user_ids
+      const userIds = [...new Set(reviews.filter(r => r.user_id).map(r => r.user_id!))] ;
+      let profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
+
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", userIds);
+        for (const p of profiles || []) {
+          profileMap[p.id] = { display_name: p.display_name, avatar_url: p.avatar_url };
+        }
+      }
+
+      setRows(reviews.map(r => ({
+        ...r,
+        profiles: r.user_id ? (profileMap[r.user_id] ?? null) : null,
+      })) as ReviewRow[]);
+      setLoading(false);
+    })();
   }, [postId]);
 
   return (
