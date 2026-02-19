@@ -16,7 +16,7 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
           <SidebarTrigger />
           {subtitle && (
-            <span className="font-mono text-[11px] tracking-widest text-muted-foreground">
+            <span className="font-mono text-[9px] tracking-widest text-primary">
               {subtitle}
             </span>
           )}
