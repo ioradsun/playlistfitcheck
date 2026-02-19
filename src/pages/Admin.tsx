@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench } from "lucide-react";
+import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +16,7 @@ import { CopyEditor } from "@/components/admin/CopyEditor";
 import { AiPromptsEditor } from "@/components/admin/AiPromptsEditor";
 import { PendingVerifications } from "@/components/admin/PendingVerifications";
 import { ToolsEditor } from "@/components/admin/ToolsEditor";
+import { FmlyArtists } from "@/components/admin/FmlyArtists";
 
 interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
 interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
@@ -116,8 +117,9 @@ export default function Admin() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full max-w-2xl grid-cols-6">
+          <TabsList className="grid w-full max-w-3xl grid-cols-7">
             <TabsTrigger value="users" className="gap-1.5"><Users size={14} /> Users</TabsTrigger>
+            <TabsTrigger value="artists" className="gap-1.5"><Music size={14} /> Artists</TabsTrigger>
             <TabsTrigger value="verify" className="gap-1.5"><CheckCircle2 size={14} /> Verify</TabsTrigger>
             <TabsTrigger value="data" className="gap-1.5"><Database size={14} /> Data</TabsTrigger>
             <TabsTrigger value="tools" className="gap-1.5"><Wrench size={14} /> Tools</TabsTrigger>
@@ -241,6 +243,11 @@ export default function Admin() {
                 })}
               </div>
             </div>
+          </TabsContent>
+
+          {/* ── ARTISTS TAB ── */}
+          <TabsContent value="artists" className="mt-4">
+            <FmlyArtists />
           </TabsContent>
 
           {/* ── VERIFY TAB ── */}

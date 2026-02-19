@@ -553,42 +553,51 @@ export type Database = {
       }
       profit_artists: {
         Row: {
+          artist_url: string | null
           created_at: string
           followers_total: number | null
           genres_json: Json | null
           id: string
           image_url: string | null
+          last_synced_at: string | null
           name: string
           popularity: number | null
           raw_artist_json: Json | null
           signals_json: Json | null
           spotify_artist_id: string
+          top_tracks_json: Json | null
           updated_at: string
         }
         Insert: {
+          artist_url?: string | null
           created_at?: string
           followers_total?: number | null
           genres_json?: Json | null
           id?: string
           image_url?: string | null
+          last_synced_at?: string | null
           name: string
           popularity?: number | null
           raw_artist_json?: Json | null
           signals_json?: Json | null
           spotify_artist_id: string
+          top_tracks_json?: Json | null
           updated_at?: string
         }
         Update: {
+          artist_url?: string | null
           created_at?: string
           followers_total?: number | null
           genres_json?: Json | null
           id?: string
           image_url?: string | null
+          last_synced_at?: string | null
           name?: string
           popularity?: number | null
           raw_artist_json?: Json | null
           signals_json?: Json | null
           spotify_artist_id?: string
+          top_tracks_json?: Json | null
           updated_at?: string
         }
         Relationships: []
