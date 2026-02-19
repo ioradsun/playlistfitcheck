@@ -5,61 +5,157 @@ import { useState } from "react";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 
 interface Dimension {
-  score: number;
-  weight?: number;
-  note: string;
-}
-
-interface PerformanceInsight {
-  score: number;
-  note: string;
-}
-
-interface MasterAnalysis {
   name: string;
   score: number;
   label: string;
+  feedback: string;
+}
+
+interface PerformanceInsight {
+  type: string;
+  title: string;
+  description: string;
+}
+
+interface MasterAnalysis {
+  filename: string;
+  overallScore: number;
+  overallLabel: string;
   summary: string;
-  performanceInsights?: {
-    hookStrength: PerformanceInsight;
-    energyCurve: PerformanceInsight;
-    replayValue: PerformanceInsight;
-    marketFit: PerformanceInsight;
-    shortFormPotential: PerformanceInsight;
-  };
-  dimensions: {
-    lowEnd: Dimension;
-    midClarity: Dimension;
-    highEnd: Dimension;
-    dynamics: Dimension;
-    stereoWidth: Dimension;
-    loudness: Dimension;
-    overallBalance: Dimension;
-  };
-  actionItems: string[];
+  dimensions: Dimension[];
+  performanceInsights?: PerformanceInsight[];
+  topStrength: string;
+  mainWeakness: string;
+  actionableNote: string;
 }
 
 export interface HitFitAnalysis {
   overallVerdict: string;
-  hitPotential?: {
-    score: number;
-    label: string;
-    summary: string;
-  };
-  shortFormPotential?: {
-    score: number;
-    label: string;
-    summary: string;
-  };
-  referenceProfile: {
-    description: string;
-    strengths: string[];
-  };
+  hitPotential?: { score: number; label: string; summary: string };
+  shortFormPotential?: { score: number; label: string; summary: string };
+  referenceProfile: { description: string; strengths: string[]; gaps: string[] };
   masters: MasterAnalysis[];
-  headToHead: {
-    winner: string | null;
-    reason: string;
-  };
+  headToHead: { winner: string | null; reason: string };
+}
+
+const dimensionLabels: Record<string, string> = {
+  hookStrength: "Hook Strength",
+  productionQuality: "Production Quality",
+  vocalPerformance: "Vocal Performance",
+  genreAlignment: "Genre Alignment",
+  dynamicRange: "Dynamic Range",
+  commercialViability: "Commercial Viability",
+  structureClarity: "Structure Clarity",
+  emotionalImpact: "Emotional Impact",
+};
+
+const performanceLabels: Record<string, { label: string }> = {
+  streaming: { label: "Streaming" },
+  sync: { label: "Sync Licensing" },
+  radio: { label: "Radio" },
+  live: { label: "Live" },
+  social: { label: "Social / Short-Form" },
+};
+
+function getScoreColor(score: number): string {
+  if (score >= 80) return "text-score-excellent";
+  if (score >= 65) return "text-score-strong";
+  if (score >= 50) return "text-score-ok";
+  if (score >= 35) return "text-score-weak";
+  return "text-score-bad";
+}
+
+function ScorePill({ score, label }: { score: number; label: string }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className={`font-mono text-2xl font-semibold ${getScoreColor(score)}`}>{score}</span>
+      <span className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">{label}</span>
+    </div>
+  );
+}
+
+function MasterCard({ master, index }: { master: MasterAnalysis; index: number }) {
+  const [open, setOpen] = useState(index === 0);
+
+  return (
+    <div className="border-b border-border/30 last:border-0">
+      <button
+        className="w-full flex items-center justify-between py-5 text-left gap-3"
+        onClick={() => setOpen(!open)}
+      >
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Master {index + 1}</p>
+          <p className="text-sm font-semibold truncate">{master.filename}</p>
+        </div>
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="text-right">
+            <p className={`font-mono text-xl font-semibold ${getScoreColor(master.overallScore)}`}>{master.overallScore}</p>
+            <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">{master.overallLabel}</p>
+          </div>
+          <ChevronDown size={14} className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} strokeWidth={1.5} />
+        </div>
+      </button>
+
+      {open && (
+        <div className="pb-6 space-y-6">
+          <p className="text-sm text-foreground leading-relaxed">{master.summary}</p>
+
+          {/* Dimensions */}
+          <div className="space-y-3">
+            <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Dimensions</p>
+            {master.dimensions.map((dim) => (
+              <div key={dim.name} className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-foreground">{dimensionLabels[dim.name] || dim.name}</span>
+                  <span className={`font-mono text-xs font-semibold ${getScoreColor(dim.score)}`}>{dim.score}</span>
+                </div>
+                <div className="h-[1px] bg-border/30 w-full relative">
+                  <div
+                    className="absolute top-0 left-0 h-full bg-foreground/20"
+                    style={{ width: `${dim.score}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">{dim.feedback}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Performance Insights */}
+          {master.performanceInsights && master.performanceInsights.length > 0 && (
+            <div className="space-y-3">
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Platform Fit</p>
+              <div className="space-y-2">
+                {master.performanceInsights.map((insight) => (
+                  <div key={insight.type} className="flex items-start gap-3">
+                    <span className="font-mono text-[11px] text-muted-foreground/60 w-24 shrink-0 pt-0.5">
+                      {performanceLabels[insight.type]?.label || insight.type}
+                    </span>
+                    <p className="text-[11px] text-foreground leading-snug">{insight.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Strength / Weakness / Note */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-border/20 pt-4">
+            <div className="space-y-1">
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Top Strength</p>
+              <p className="text-[11px] text-foreground">{master.topStrength}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Main Gap</p>
+              <p className="text-[11px] text-foreground">{master.mainWeakness}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Action</p>
+              <p className="text-[11px] text-foreground">{master.actionableNote}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface Props {
@@ -67,240 +163,95 @@ interface Props {
   onBack: () => void;
 }
 
-const dimensionLabels: Record<string, string> = {
-  lowEnd: "Low End",
-  midClarity: "Mid Clarity",
-  highEnd: "High End",
-  dynamics: "Dynamics",
-  stereoWidth: "Stereo Width",
-  loudness: "Loudness",
-  overallBalance: "Overall Balance",
-};
-
-const performanceLabels: Record<string, { label: string; icon: React.ReactNode }> = {
-  hookStrength: { label: "Hook Strength", icon: <Zap size={12} className="text-yellow-500" /> },
-  energyCurve: { label: "Energy Curve", icon: <TrendingUp size={12} className="text-orange-500" /> },
-  replayValue: { label: "Replay Value", icon: <Radio size={12} className="text-blue-500" /> },
-  marketFit: { label: "Market Fit", icon: <Target size={12} className="text-green-500" /> },
-  shortFormPotential: { label: "Short-Form", icon: <Flame size={12} className="text-pink-500" /> },
-};
-
-function getScoreColor(score: number) {
-  if (score >= 80) return "text-green-500";
-  if (score >= 60) return "text-yellow-500";
-  if (score >= 40) return "text-orange-500";
-  return "text-red-500";
-}
-
-function getScoreBg(score: number) {
-  if (score >= 80) return "bg-green-500";
-  if (score >= 60) return "bg-yellow-500";
-  if (score >= 40) return "bg-orange-500";
-  return "bg-red-500";
-}
-
-function getLabelIcon(label: string) {
-  switch (label) {
-    case "Nailed It": return <CheckCircle2 size={16} className="text-green-500" />;
-    case "Close": return <Target size={16} className="text-yellow-500" />;
-    case "Getting There": return <AlertTriangle size={16} className="text-orange-500" />;
-    default: return <AlertTriangle size={16} className="text-red-500" />;
-  }
-}
-
-function ScorePill({ score, label }: { score: number; label: string }) {
+export function HitFitResults({ analysis, onBack }: Props) {
   return (
-    <div className="flex items-center gap-2">
-      <span className={`text-2xl font-mono font-bold ${getScoreColor(score)}`}>{score}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
-    </div>
-  );
-}
+    <div className="w-full max-w-2xl mx-auto pb-24 divide-y divide-border/30">
 
-function MasterCard({ master, index }: { master: MasterAnalysis; index: number }) {
-  const [expanded, setExpanded] = useState(true);
-  const dims = Object.entries(master.dimensions) as [string, Dimension][];
-  const perfInsights = master.performanceInsights
-    ? (Object.entries(master.performanceInsights) as [string, PerformanceInsight][])
-    : [];
-
-  return (
-    <motion.div
-      className="glass-card rounded-xl overflow-hidden"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 * (index + 1) }}
-    >
       {/* Header */}
-      <button
-        className="w-full p-4 flex items-center gap-3 text-left"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="w-12 h-12 rounded-lg bg-primary/10 flex flex-col items-center justify-center shrink-0">
-          <span className={`text-lg font-mono font-bold ${getScoreColor(master.score)}`}>{master.score}</span>
-        </div>
+      <div className="flex items-center gap-3 pb-6">
+        <Button variant="ghost" size="icon" onClick={onBack}>
+          <ArrowLeft size={18} strokeWidth={1.5} />
+        </Button>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            {getLabelIcon(master.label)}
-            <p className="text-sm font-semibold truncate">{master.name}</p>
-          </div>
-          <p className="text-xs text-muted-foreground">{master.label} · {master.summary}</p>
+          <h1 className="text-[18px] font-semibold tracking-tight">Hit Potential Analysis</h1>
+          <p className="font-mono text-[11px] text-muted-foreground mt-0.5 leading-snug">{analysis.overallVerdict}</p>
         </div>
-        <ChevronDown size={16} className={`text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
+      </div>
 
-      {expanded && (
-        <div className="px-4 pb-4 space-y-4">
-          {/* Performance Insights */}
-          {perfInsights.length > 0 && (
+      {/* Hit + Short-Form Potential */}
+      {(analysis.hitPotential || analysis.shortFormPotential) && (
+        <div className="py-8 grid grid-cols-1 sm:grid-cols-2 gap-8">
+          {analysis.hitPotential && (
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Performance</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {perfInsights.map(([key, insight]) => {
-                  const meta = performanceLabels[key];
-                  if (!meta) return null;
-                  return (
-                    <div key={key} className="bg-secondary/50 rounded-lg p-2.5 space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        {meta.icon}
-                        <span className="text-[10px] font-medium text-muted-foreground">{meta.label}</span>
-                      </div>
-                      <span className={`text-sm font-mono font-bold ${getScoreColor(insight.score)}`}>{insight.score}</span>
-                      <p className="text-[10px] text-muted-foreground leading-tight">{insight.note}</p>
-                    </div>
-                  );
-                })}
-              </div>
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Hit Potential</p>
+              <ScorePill score={analysis.hitPotential.score} label={analysis.hitPotential.label} />
+              <p className="text-[11px] text-muted-foreground leading-snug">{analysis.hitPotential.summary}</p>
             </div>
           )}
-
-          {/* Dimension bars */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sonic Dimensions</p>
-            {dims.map(([key, dim]) => (
-              <div key={key} className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {dimensionLabels[key] || key}
-                    {dim.weight != null && <span className="text-[10px] ml-1 opacity-50">({Math.round(dim.weight * 100)}%)</span>}
-                  </span>
-                  <span className={`text-xs font-mono font-semibold ${getScoreColor(dim.score)}`}>{dim.score}</span>
-                </div>
-                <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${getScoreBg(dim.score)} transition-all`} style={{ width: `${dim.score}%` }} />
-                </div>
-                <p className="text-[10px] text-muted-foreground">{dim.note}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Action items */}
-          {master.actionItems.length > 0 && (
+          {analysis.shortFormPotential && (
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-primary">Action Items</p>
-              <ul className="space-y-1.5">
-                {master.actionItems.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <span className="text-primary mt-0.5 shrink-0">→</span>
-                    <span>{item}</span>
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Short-Form Potential</p>
+              <ScorePill score={analysis.shortFormPotential.score} label={analysis.shortFormPotential.label} />
+              <p className="text-[11px] text-muted-foreground leading-snug">{analysis.shortFormPotential.summary}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Reference Profile */}
+      <div className="py-8 space-y-4">
+        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Reference Profile</p>
+        <p className="text-sm text-foreground leading-relaxed">{analysis.referenceProfile.description}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {analysis.referenceProfile.strengths.length > 0 && (
+            <div className="space-y-2">
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Strengths</p>
+              <ul className="space-y-1">
+                {analysis.referenceProfile.strengths.map((s, i) => (
+                  <li key={i} className="text-[11px] text-foreground flex items-start gap-2">
+                    <span className="text-score-excellent shrink-0">✓</span> {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {analysis.referenceProfile.gaps.length > 0 && (
+            <div className="space-y-2">
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Gaps</p>
+              <ul className="space-y-1">
+                {analysis.referenceProfile.gaps.map((g, i) => (
+                  <li key={i} className="text-[11px] text-foreground flex items-start gap-2">
+                    <span className="text-score-ok shrink-0">—</span> {g}
                   </li>
                 ))}
               </ul>
             </div>
           )}
         </div>
-      )}
-    </motion.div>
-  );
-}
-
-export function HitFitResults({ analysis, onBack }: Props) {
-  return (
-    <motion.div
-      className="w-full max-w-2xl mx-auto space-y-6 pb-24"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft size={18} strokeWidth={1.5} />
-        </Button>
-        <div className="flex-1">
-          <h2 className="text-lg font-semibold">HitFit Analysis</h2>
-          <p className="text-sm text-muted-foreground">{analysis.overallVerdict}</p>
-        </div>
-      </div>
-
-      {/* Hit Potential + Short-Form Potential */}
-      {(analysis.hitPotential || analysis.shortFormPotential) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {analysis.hitPotential && (
-            <motion.div
-              className="glass-card rounded-xl p-4 space-y-2"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-            >
-              <div className="flex items-center gap-2">
-                <Flame size={14} className="text-orange-500" />
-                <p className="text-xs font-semibold">Hit Potential</p>
-              </div>
-              <ScorePill score={analysis.hitPotential.score} label={analysis.hitPotential.label} />
-              <p className="text-xs text-muted-foreground">{analysis.hitPotential.summary}</p>
-            </motion.div>
-          )}
-          {analysis.shortFormPotential && (
-            <motion.div
-              className="glass-card rounded-xl p-4 space-y-2"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <div className="flex items-center gap-2">
-                <Zap size={14} className="text-pink-500" />
-                <p className="text-xs font-semibold">Short-Form Potential</p>
-              </div>
-              <ScorePill score={analysis.shortFormPotential.score} label={analysis.shortFormPotential.label} />
-              <p className="text-xs text-muted-foreground">{analysis.shortFormPotential.summary}</p>
-            </motion.div>
-          )}
-        </div>
-      )}
-
-      {/* Reference Profile */}
-      <div className="glass-card rounded-xl p-4 space-y-2">
-        <div className="flex items-center gap-2">
-          <Trophy size={14} className="text-primary" />
-          <p className="text-xs font-semibold">Reference Profile</p>
-        </div>
-        <p className="text-sm text-muted-foreground">{analysis.referenceProfile.description}</p>
-        <div className="flex flex-wrap gap-1.5">
-          {analysis.referenceProfile.strengths.map((s, i) => (
-            <span key={i} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">{s}</span>
-          ))}
-        </div>
       </div>
 
       {/* Master Cards */}
-      {analysis.masters.map((master, i) => (
-        <MasterCard key={i} master={master} index={i} />
-      ))}
+      <div className="py-8 space-y-0">
+        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase mb-2">Masters</p>
+        {analysis.masters.map((master, i) => (
+          <MasterCard key={i} master={master} index={i} />
+        ))}
+      </div>
 
       {/* Head to Head */}
       {analysis.masters.length > 1 && analysis.headToHead.winner && (
-        <div className="glass-card rounded-xl p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <Trophy size={14} className="text-yellow-500" />
-            <p className="text-xs font-semibold">Head to Head</p>
-          </div>
-          <p className="text-sm">
-            <span className="font-semibold text-primary">{analysis.headToHead.winner}</span>{" "}
-            <span className="text-muted-foreground">— {analysis.headToHead.reason}</span>
+        <div className="py-8 space-y-3">
+          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Head to Head</p>
+          <p className="text-sm text-foreground">
+            <span className="font-semibold">{analysis.headToHead.winner}</span>
+            <span className="text-muted-foreground"> — {analysis.headToHead.reason}</span>
           </p>
         </div>
       )}
-      <SignUpToSaveBanner />
-    </motion.div>
+
+      <div className="pt-8">
+        <SignUpToSaveBanner />
+      </div>
+    </div>
   );
 }

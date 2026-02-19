@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, Info, MessageSquare, ArrowRight, Target, ThumbsUp, AlertTriangle, Lightbulb } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { CategoryBar } from "@/components/CategoryBar";
@@ -28,7 +28,6 @@ function fmt(n: number | undefined): string {
   return n.toLocaleString();
 }
 
-// Priority order per spec: Song Activity, Focus Level, Curator Type, Recent Activity, Reach Per Song, Rotation Style, Song Placement
 const CATEGORY_META: { key: keyof HealthOutput["scoreBreakdown"]; label: string; max: number; description: string }[] = [
   { key: "songActivity", label: "Song Activity", max: 20, description: "Are the songs on this playlist generally active on Spotify? Active songs usually indicate real listener demand." },
   { key: "focusLevel", label: "Focus Level", max: 20, description: "Is it a niche fit or a crowded playlist? Focused playlists tend to drive deeper engagement per track." },
@@ -85,7 +84,6 @@ function getDataLabel(key: string, input?: PlaylistInput): string | undefined {
 export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis, vibeLoading, songFitAnalysis, songFitLoading, onBack }: Props) {
   const hasBlendedScore = !!songFitAnalysis;
 
-  // Map blended labels to health labels for the ScoreGauge
   const BLENDED_TO_HEALTH: Record<string, HealthOutput["summary"]["healthLabel"]> = {
     PERFECT_FIT: "GREAT_FIT",
     STRONG_FIT: "GOOD_FIT",
@@ -101,73 +99,56 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
   const fit = hasBlendedScore ? (FIT_CONFIG[songFitAnalysis.blendedLabel] || FIT_CONFIG.DECENT_FIT) : null;
 
   return (
-    <motion.div
-      className="w-full max-w-3xl mx-auto space-y-8 pb-24"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-    >
+    <div className="w-full max-w-3xl mx-auto space-y-0 pb-24 divide-y divide-border/30">
+
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 pb-6">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft size={18} strokeWidth={1.5} />
         </Button>
-        <div>
-          <h2 className="text-xl font-bold">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[18px] font-semibold tracking-tight truncate">
             {hasBlendedScore && songFitAnalysis.songName
-              ? `${songFitAnalysis.songName}${songFitAnalysis.artistName ? ` by ${songFitAnalysis.artistName}` : ""} × ${playlistName || "Playlist"}`
+              ? `${songFitAnalysis.songName}${songFitAnalysis.artistName ? ` · ${songFitAnalysis.artistName}` : ""}`
               : playlistName || "Playlist Analysis"}
-          </h2>
-          <p className="text-xs text-muted-foreground font-mono truncate max-w-md">
-            {result.input.playlistUrl}
-          </p>
+          </h1>
+          {hasBlendedScore && playlistName && (
+            <p className="text-[11px] font-mono text-muted-foreground tracking-wide mt-0.5">vs {playlistName}</p>
+          )}
+          {!hasBlendedScore && (
+            <p className="text-[11px] font-mono text-muted-foreground/60 truncate mt-0.5">{result.input.playlistUrl}</p>
+          )}
         </div>
       </div>
 
-      {/* Top section: Score + Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <motion.div
-          className="glass-card rounded-2xl p-8 flex flex-col items-center justify-center"
-          initial={{ scale: 0.95 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.1 }}
-        >
+      {/* Score + Breakdown */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-8">
+        <div className="flex flex-col items-center justify-center gap-4 py-4">
           {songFitLoading ? (
             <div className="flex flex-col items-center gap-3">
-              <div className="w-32 h-32 rounded-full border-4 border-muted animate-pulse flex items-center justify-center">
-                <Target size={24} className="text-primary animate-pulse" />
+              <div className="w-32 h-32 rounded-full border border-border/40 flex items-center justify-center">
+                <span className="font-mono text-[11px] text-muted-foreground tracking-widest">ANALYZING…</span>
               </div>
-              <p className="text-sm text-muted-foreground">Analyzing fit...</p>
             </div>
           ) : (
             <>
               <ScoreGauge score={displayScore} label={displayLabel} hideLabel={hasBlendedScore} />
               {hasBlendedScore && fit ? (
-                <div className="mt-4">
-                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-mono border ${fit.className}`}>
-                    {fit.emoji} {fit.text}
-                  </span>
-                </div>
+                <span className={`font-mono text-[11px] tracking-widest uppercase border border-border/40 px-3 py-1 rounded-sm ${fit.className}`}>
+                  {fit.text}
+                </span>
               ) : (
-                <div className="mt-4">
-                  <PitchBadge suitability={result.summary.pitchSuitability} />
-                </div>
+                <PitchBadge suitability={result.summary.pitchSuitability} />
               )}
             </>
           )}
-        </motion.div>
+        </div>
 
-        {/* Breakdown */}
-        <motion.div
-          className="glass-card rounded-2xl p-6 space-y-4"
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+        <div className="space-y-3 py-4">
+          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">
             {hasBlendedScore ? "Playlist Breakdown" : "Score Breakdown"}
-          </h3>
-          {CATEGORY_META.map((cat, i) => {
+          </p>
+          {CATEGORY_META.map((cat) => {
             const indicator = getScoreIndicator(result.scoreBreakdown[cat.key], cat.max);
             return (
               <CategoryBar
@@ -177,168 +158,129 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
                 dataLabel={getDataLabel(cat.key, inputData)}
                 score={result.scoreBreakdown[cat.key]}
                 max={cat.max}
-                delay={0.3 + i * 0.08}
+                delay={0}
                 indicator={indicator.icon}
               />
             );
           })}
-        </motion.div>
+        </div>
       </div>
 
-      {/* Blended Song Fit Details (replaces narrative/recommendation when present) */}
+      {/* Blended Song Fit */}
       {hasBlendedScore && (
         <>
-          {/* Summary */}
-          <motion.div
-            className="glass-card rounded-xl p-5 space-y-3"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-              <Target size={14} className="text-primary" />
-              {songFitAnalysis.songName ? `"${songFitAnalysis.songName}" Fit Analysis` : "Fit Analysis"}
-            </div>
-            <p className="text-sm text-secondary-foreground leading-relaxed">{songFitAnalysis.summary}</p>
+          {/* Fit Analysis */}
+          <div className="py-8 space-y-4">
+            <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">
+              {songFitAnalysis.songName ? `"${songFitAnalysis.songName}" · Fit Analysis` : "Fit Analysis"}
+            </p>
+            <p className="text-sm text-foreground leading-relaxed">{songFitAnalysis.summary}</p>
 
-            {/* Sub-scores */}
             {(songFitAnalysis.sonicFitScore != null || songFitAnalysis.playlistQualityScore != null) && (
-              <div className="flex gap-4 pt-2">
+              <div className="flex gap-6 pt-2 border-t border-border/20">
                 {songFitAnalysis.sonicFitScore != null && (
-                  <div className="text-xs text-muted-foreground font-mono">
-                    Sonic Fit: <span className="text-foreground font-bold">{songFitAnalysis.sonicFitScore}/100</span>
+                  <div className="space-y-0.5">
+                    <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Sonic Fit</p>
+                    <p className="font-mono text-lg font-semibold">{songFitAnalysis.sonicFitScore}<span className="text-[10px] text-muted-foreground">/100</span></p>
                   </div>
                 )}
                 {songFitAnalysis.playlistQualityScore != null && (
-                  <div className="text-xs text-muted-foreground font-mono">
-                    Playlist Quality: <span className="text-foreground font-bold">{songFitAnalysis.playlistQualityScore}/100</span>
+                  <div className="space-y-0.5">
+                    <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Playlist Quality</p>
+                    <p className="font-mono text-lg font-semibold">{songFitAnalysis.playlistQualityScore}<span className="text-[10px] text-muted-foreground">/100</span></p>
                   </div>
                 )}
               </div>
             )}
-          </motion.div>
+          </div>
 
           {/* Strengths & Concerns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {songFitAnalysis.strengths.length > 0 && (
-              <motion.div
-                className="glass-card rounded-xl p-5 space-y-3"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.55 }}
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-score-excellent uppercase tracking-wider">
-                  <ThumbsUp size={12} /> Strengths
+          {(songFitAnalysis.strengths.length > 0 || songFitAnalysis.concerns.length > 0) && (
+            <div className="py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+              {songFitAnalysis.strengths.length > 0 && (
+                <div className="space-y-3">
+                  <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Strengths</p>
+                  <ul className="space-y-2">
+                    {songFitAnalysis.strengths.map((s, i) => (
+                      <li key={i} className="text-sm text-foreground flex items-start gap-2.5">
+                        <span className="font-mono text-score-excellent shrink-0 mt-0.5">✓</span> {s}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className="space-y-1.5">
-                  {songFitAnalysis.strengths.map((s, i) => (
-                    <li key={i} className="text-sm text-secondary-foreground flex items-start gap-2">
-                      <span className="text-score-excellent mt-0.5">✓</span> {s}
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            )}
-            {songFitAnalysis.concerns.length > 0 && (
-              <motion.div
-                className="glass-card rounded-xl p-5 space-y-3"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-score-ok uppercase tracking-wider">
-                  <AlertTriangle size={12} /> Concerns
+              )}
+              {songFitAnalysis.concerns.length > 0 && (
+                <div className="space-y-3">
+                  <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Concerns</p>
+                  <ul className="space-y-2">
+                    {songFitAnalysis.concerns.map((c, i) => (
+                      <li key={i} className="text-sm text-foreground flex items-start gap-2.5">
+                        <span className="font-mono text-score-ok shrink-0 mt-0.5">—</span> {c}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className="space-y-1.5">
-                  {songFitAnalysis.concerns.map((c, i) => (
-                    <li key={i} className="text-sm text-secondary-foreground flex items-start gap-2">
-                      <span className="text-score-ok mt-0.5">•</span> {c}
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Suggestion */}
           {songFitAnalysis.suggestion && (
-            <motion.div
-              className="glass-card rounded-xl p-5 space-y-2 border-primary/20"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.65 }}
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                <Lightbulb size={14} />
-                Suggestion
-              </div>
-              <p className="text-sm text-secondary-foreground leading-relaxed">
-                {songFitAnalysis.suggestion}
-              </p>
-            </motion.div>
+            <div className="py-8 space-y-3">
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Suggestion</p>
+              <p className="text-sm text-foreground leading-relaxed">{songFitAnalysis.suggestion}</p>
+            </div>
           )}
         </>
       )}
 
-      {/* Narrative (only when no blended score) */}
+      {/* Narrative */}
       {!hasBlendedScore && result.narrative && (
-        <motion.div
-          className="glass-card rounded-xl p-5 space-y-3"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-            <MessageSquare size={14} className="text-primary" />
+        <div className="py-8 space-y-3">
+          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">
             Why this {result.summary.healthScore >= 75 ? "works" : result.summary.healthScore >= 60 ? "might work" : "doesn't work"} for you
-          </div>
-          <p className="text-sm text-secondary-foreground leading-relaxed">
-            {result.narrative}
           </p>
-        </motion.div>
+          <p className="text-sm text-foreground leading-relaxed">{result.narrative}</p>
+        </div>
       )}
 
-      {/* Recommendation (only when no blended score) */}
+      {/* Recommendation */}
       {!hasBlendedScore && result.recommendation && (
-        <motion.div
-          className="glass-card rounded-xl p-5 space-y-2 border-primary/20"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-        >
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-            <ArrowRight size={14} />
-            What to do
-          </div>
-          <p className="text-sm text-secondary-foreground leading-relaxed">
-            {result.recommendation}
-          </p>
-        </motion.div>
+        <div className="py-8 space-y-3">
+          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">What to do</p>
+          <p className="text-sm text-foreground leading-relaxed">{result.recommendation}</p>
+        </div>
       )}
 
       {/* Pitch Draft */}
       {hasBlendedScore && songFitAnalysis.songName && playlistName && (
-        <PitchDraftCard
-          songName={songFitAnalysis.songName}
-          artistName={songFitAnalysis.artistName}
-          soundDescription={songFitAnalysis.soundDescription}
-          playlistName={playlistName}
-          curatorName={inputData?.ownerName}
-          fitLabel={songFitAnalysis.blendedLabel}
-          strengths={songFitAnalysis.strengths}
-          concerns={songFitAnalysis.concerns}
-          suggestion={songFitAnalysis.suggestion}
-          inputData={inputData}
-          blendedScore={songFitAnalysis.blendedScore}
-        />
+        <div className="py-8">
+          <PitchDraftCard
+            songName={songFitAnalysis.songName}
+            artistName={songFitAnalysis.artistName}
+            soundDescription={songFitAnalysis.soundDescription}
+            playlistName={playlistName}
+            curatorName={inputData?.ownerName}
+            fitLabel={songFitAnalysis.blendedLabel}
+            strengths={songFitAnalysis.strengths}
+            concerns={songFitAnalysis.concerns}
+            suggestion={songFitAnalysis.suggestion}
+            inputData={inputData}
+            blendedScore={songFitAnalysis.blendedScore}
+          />
+        </div>
       )}
 
       {/* Vibe Analysis */}
       {(vibeLoading || vibeAnalysis) && (
-        <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} playlistName={playlistName} />
+        <div className="py-8">
+          <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} playlistName={playlistName} />
+        </div>
       )}
 
-      <SignUpToSaveBanner />
-    </motion.div>
+      <div className="pt-8">
+        <SignUpToSaveBanner />
+      </div>
+    </div>
   );
 }
