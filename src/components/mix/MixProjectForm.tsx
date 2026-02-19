@@ -22,7 +22,7 @@ export function MixProjectForm({ onSubmit }: MixProjectFormProps) {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
       <div className="space-y-1">
-        <h2 className="text-xl font-semibold">{siteCopy.tools.mix?.heading || "Compare Mix Versions And Choose The Best Fit"}</h2>
+        <h2 className="text-[18px] font-semibold tracking-tight">{siteCopy.tools.mix?.heading || "Compare Mix Versions And Choose The Best Fit"}</h2>
         {siteCopy.tools.mix?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.mix.subheading}</p>}
       </div>
 
