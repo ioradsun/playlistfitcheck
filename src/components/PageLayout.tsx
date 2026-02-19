@@ -24,7 +24,7 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
             </span>
           )}
         </header>
-        <div className="flex-1 flex flex-col overflow-y-auto" style={{ paddingBottom: 120 }}>
+        <div id="page-scroll-container" className="flex-1 flex flex-col overflow-y-auto" style={{ paddingBottom: 120 }}>
           {children}
         </div>
       </SidebarInset>
