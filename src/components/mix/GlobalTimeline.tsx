@@ -21,6 +21,11 @@ function formatTime(s: number) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+function getCssHsl(variable: string, alpha = 1): string {
+  const val = getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
+  return `hsla(${val}, ${alpha})`;
+}
+
 function drawWaveform(canvas: HTMLCanvasElement, peaks: number[]) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
@@ -31,11 +36,12 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[]) {
   const ch = canvas.clientHeight;
   ctx.clearRect(0, 0, cw, ch);
 
+  const color = getCssHsl("--muted-foreground", 0.6);
   const barW = Math.max(cw / peaks.length, 1);
   const gap = 1;
   peaks.forEach((peak, i) => {
     const barH = Math.max(peak * ch * 0.85, 1);
-    ctx.fillStyle = "hsl(var(--muted-foreground) / 0.5)";
+    ctx.fillStyle = color;
     ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
 }
