@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Download, FileText, Subtitles, Type } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -131,10 +131,10 @@ function applyLineFormat(lines: LyricLine[], format: LineFormat): LyricLine[] {
 
 type ExportFormat = "lrc" | "srt" | "txt";
 
-const EXPORT_OPTIONS: { format: ExportFormat; label: string; icon: React.ReactNode; desc: string }[] = [
-  { format: "lrc", label: "LRC", icon: <Subtitles size={14} />, desc: "Synced" },
-  { format: "srt", label: "SRT", icon: <FileText size={14} />, desc: "Subtitles" },
-  { format: "txt", label: "TXT", icon: <Type size={14} />, desc: "Plain" },
+const EXPORT_OPTIONS: { format: ExportFormat; label: string; desc: string }[] = [
+  { format: "lrc", label: "LRC", desc: "Synced" },
+  { format: "srt", label: "SRT", desc: "Subtitles" },
+  { format: "txt", label: "TXT", desc: "Plain" },
 ];
 
 const DEFAULT_VERSION_META: VersionMeta = {
@@ -486,10 +486,10 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
                 Export · {versionSuffix}
               </p>
               <div className="grid grid-cols-3 gap-3">
-                {EXPORT_OPTIONS.map(({ format, label, icon, desc }) => (
+                {EXPORT_OPTIONS.map(({ format, label, desc }) => (
                   <div key={format} className="space-y-1.5">
                     <div className="flex items-center gap-1">
-                      {icon}
+                      <span className="text-xs font-mono font-medium text-foreground">{label}</span>
                       <span className="text-xs font-semibold">{label}</span>
                       <span className="text-[10px] text-muted-foreground">· {desc}</span>
                     </div>
