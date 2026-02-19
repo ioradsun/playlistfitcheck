@@ -149,11 +149,21 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
           return pct > best.pct ? { label, pct } : best;
         }, { label: "", pct: 0 });
         const replayPct = results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0;
+        const topIcon = HOOK_OPTIONS.find(o => o.label === topEntry.label)?.icon ?? "";
+        const replayIcon = REPLAY_OPTIONS[0].icon;
         return (
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-mono">
-            <span><span className="text-foreground font-medium">{topEntry.pct}%</span> {topEntry.label}</span>
+            <span className="flex items-center gap-1">
+              <span className="text-muted-foreground/50">{topIcon}</span>
+              <span className="text-foreground font-medium">{topEntry.pct}%</span>
+              <span>{topEntry.label}</span>
+            </span>
             <span className="text-muted-foreground/30">·</span>
-            <span><span className="text-foreground font-medium">{replayPct}%</span> replay</span>
+            <span className="flex items-center gap-1">
+              <span className="text-muted-foreground/50">{replayIcon}</span>
+              <span className="text-foreground font-medium">{replayPct}%</span>
+              <span>replay</span>
+            </span>
             <span className="text-muted-foreground/30">·</span>
             {isOwner && onOpenReviews ? (
               <button
