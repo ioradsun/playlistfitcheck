@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy,
-  Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle, BarChart2,
+  Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle, BarChart2, Sparkles,
 } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -229,14 +229,27 @@ const PublicProfile = () => {
           )}
           <h1 className="text-xl font-semibold truncate">{profile.display_name || "User"}</h1>
           {isOwner && (
-            <Button
-              variant={editing ? "secondary" : "outline"}
-              size="sm"
-              className="gap-1.5 ml-auto"
-              onClick={() => setEditing(!editing)}
-            >
-              {editing ? <><X size={14} /> Cancel</> : <><Pencil size={14} /> Edit</>}
-            </Button>
+            <div className="flex items-center gap-2 ml-auto">
+              {profile.is_verified && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={() => navigate(`/artist/${profile.display_name?.toLowerCase().replace(/\s+/g, "-") || userId}`)}
+                >
+                  <Sparkles size={13} />
+                  ME
+                </Button>
+              )}
+              <Button
+                variant={editing ? "secondary" : "outline"}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setEditing(!editing)}
+              >
+                {editing ? <><X size={14} /> Cancel</> : <><Pencil size={14} /> Edit</>}
+              </Button>
+            </div>
           )}
         </div>
 
