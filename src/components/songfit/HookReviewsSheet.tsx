@@ -291,7 +291,7 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                 {/* Replay Signal card */}
                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
-                    Replay Signal
+                   Signal Strength
                   </p>
                   <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
                     {replayPct}%
