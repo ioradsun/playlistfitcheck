@@ -1,4 +1,3 @@
-
 import { formatDistanceToNow } from "date-fns";
 
 export type ActiveVersion = "explicit" | "fmly";
@@ -20,37 +19,35 @@ export function VersionToggle({
 }: VersionToggleProps) {
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Version</p>
-      <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+      <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Version</p>
+      <div className="flex items-center gap-4">
         <button
           onClick={() => onChange("explicit")}
-          className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+          className={`font-mono text-[11px] tracking-widest uppercase whitespace-nowrap transition-colors ${
             active === "explicit"
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+              ? "text-foreground font-medium"
+              : "text-muted-foreground font-normal hover:text-foreground"
           }`}
         >
           Explicit
         </button>
         <button
           onClick={() => onChange("fmly")}
-          className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+          className={`font-mono text-[11px] tracking-widest uppercase whitespace-nowrap transition-colors ${
             active === "fmly"
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+              ? "text-foreground font-medium"
+              : "text-muted-foreground font-normal hover:text-foreground"
           }`}
         >
-          {hasFmly ? "FMLY Friendly" : "FMLY Friendly ✦"}
+          FMLY Friendly
         </button>
       </div>
-      <div className="flex justify-between text-[10px] text-muted-foreground/60">
-        <span>
-          {active === "explicit" && explicitLastEdited
-            ? `Edited ${formatDistanceToNow(explicitLastEdited, { addSuffix: true })}`
-            : active === "fmly" && fmlyLastEdited
-            ? `Edited ${formatDistanceToNow(fmlyLastEdited, { addSuffix: true })}`
-            : ""}
-        </span>
+      <div className="text-[10px] font-mono text-muted-foreground/50">
+        {active === "explicit" && explicitLastEdited
+          ? `Edited ${formatDistanceToNow(explicitLastEdited, { addSuffix: true })}`
+          : active === "fmly" && fmlyLastEdited
+          ? `Edited ${formatDistanceToNow(fmlyLastEdited, { addSuffix: true })}`
+          : ""}
       </div>
     </div>
   );
