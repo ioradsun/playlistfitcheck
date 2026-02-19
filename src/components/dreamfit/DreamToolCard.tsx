@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { Heart, MessageCircle, User, MoreHorizontal, Trash2 } from "lucide-react";
+import { MessageCircle, User, MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dream, STATUS_CONFIG } from "./types";
 import { formatDistanceToNow } from "date-fns";
@@ -112,20 +112,27 @@ export function DreamToolCard({ dream, isBacked, onToggleBack, onOpenComments, o
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center px-3 pt-1 pb-1">
-        <div className="flex items-center -ml-1">
-          <button onClick={handleBack} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
-            <Heart size={22} className={backed ? "fill-red-500 text-red-500" : "text-foreground"} />
-          </button>
-          {backersCount > 0 && (
-            <span className="text-xs text-muted-foreground -ml-1 mr-2">{backersCount}</span>
+      {/* Actions — matching CrowdFit style */}
+      <div className="flex items-center px-1 pt-1 pb-1">
+        <button
+          onClick={() => onOpenComments(dream.id)}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
+        >
+          <MessageCircle size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
+          {dream.comments_count > 0 && (
+            <span className="text-xs text-muted-foreground group-hover:text-primary">{dream.comments_count}</span>
           )}
-          <button onClick={() => onOpenComments(dream.id)} className="flex items-center gap-1 p-2.5 hover:opacity-70 active:scale-90 transition-all">
-            <MessageCircle size={22} className="text-foreground" />
-            {dream.comments_count > 0 && <span className="text-xs text-muted-foreground">{dream.comments_count}</span>}
-          </button>
-        </div>
+        </button>
+
+        <button
+          onClick={handleBack}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 active:scale-90 transition-all group"
+        >
+          <span className={`text-[18px] leading-none transition-opacity ${backed ? "" : "opacity-40 group-hover:opacity-70"}`}>🔥</span>
+          {backersCount > 0 && (
+            <span className="text-xs text-muted-foreground group-hover:text-primary">{backersCount}</span>
+          )}
+        </button>
       </div>
     </div>
   );
