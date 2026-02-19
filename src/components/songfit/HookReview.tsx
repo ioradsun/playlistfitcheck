@@ -114,6 +114,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
     } catch { /* ignore unique constraint */ }
 
     incrementSessionReviewCount();
+    window.dispatchEvent(new CustomEvent("crowdfit:vote"));
     setStep("revealing");
 
     setTimeout(async () => {
