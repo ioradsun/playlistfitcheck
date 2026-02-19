@@ -455,37 +455,27 @@ const PublicProfile = () => {
             </div>
 
             {/* Tab switcher */}
-            <div className="flex border-b border-border/40 mt-3 px-4">
+            <div className="flex items-center gap-4 mt-3 px-4">
               <button
                 onClick={() => setSongTab("mine")}
-                className={`pb-2 text-sm font-semibold border-b-2 transition-colors mr-4 ${
+                className={`font-mono text-[11px] tracking-widest uppercase transition-colors ${
                   songTab === "mine"
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    ? "text-foreground font-medium"
+                    : "text-muted-foreground font-normal hover:text-foreground"
                 }`}
               >
                 My Songs
-                {submissions.length > 0 && (
-                  <span className="ml-1.5 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                    {submissions.length}
-                  </span>
-                )}
               </button>
               {isOwner && (
                 <button
                   onClick={() => setSongTab("saved")}
-                  className={`pb-2 text-sm font-semibold border-b-2 transition-colors ${
+                  className={`font-mono text-[11px] tracking-widest uppercase transition-colors ${
                     songTab === "saved"
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
+                      ? "text-foreground font-medium"
+                      : "text-muted-foreground font-normal hover:text-foreground"
                   }`}
                 >
                   FMLY Saves
-                  {savedPosts.length > 0 && (
-                    <span className="ml-1.5 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                      {savedPosts.length}
-                    </span>
-                  )}
                 </button>
               )}
             </div>
