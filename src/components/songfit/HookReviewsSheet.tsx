@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { User, Music, Heart, CornerDownRight, X, ChevronDown } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { User, Music, Heart, ChevronDown, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
@@ -11,6 +11,8 @@ interface Reply {
   content: string;
   created_at: string;
   user_id: string | null;
+  liked: boolean;
+  likes: number;
   profiles: { display_name: string | null; avatar_url: string | null } | null;
 }
 
@@ -23,11 +25,11 @@ interface ReviewRow {
   user_id: string | null;
   session_id: string | null;
   profiles: { display_name: string | null; avatar_url: string | null } | null;
-  // client-side
   likes: number;
   liked: boolean;
   replies: Reply[];
-  showReply: boolean;
+  showReplies: boolean;
+  showReplyInput: boolean;
 }
 
 interface PostMeta {
@@ -63,6 +65,22 @@ interface Props {
   onClose: () => void;
 }
 
+function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name: string; size?: number }) {
+  const dim = `${size * 4}px`;
+  return (
+    <div
+      className="rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden"
+      style={{ width: dim, height: dim }}
+    >
+      {avatar ? (
+        <img src={avatar} alt="" className="w-full h-full object-cover" />
+      ) : (
+        <User size={size * 1.5} className="text-muted-foreground" />
+      )}
+    </div>
+  );
+}
+
 export function HookReviewsSheet({ postId, onClose }: Props) {
   const { user, profile } = useAuth();
   const [rows, setRows] = useState<ReviewRow[]>([]);
@@ -71,6 +89,7 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
   const [lyricsExpanded, setLyricsExpanded] = useState(false);
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [replySubmitting, setReplySubmitting] = useState<Record<string, boolean>>({});
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     if (!postId) return;
@@ -112,7 +131,6 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
         return;
       }
 
-      // Fetch profiles for non-null user_ids
       const userIds = [...new Set(reviews.filter(r => r.user_id).map(r => r.user_id!))];
       let profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
       if (userIds.length > 0) {
@@ -125,7 +143,6 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
         }
       }
 
-      // Fetch replies stored as tagged comments: content starts with [review:<id>]
       const reviewIds = reviews.map(r => r.id);
       const { data: allComments } = await supabase
         .from("songfit_comments")
@@ -133,7 +150,6 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
         .eq("post_id", postId)
         .order("created_at", { ascending: true });
 
-      // Parse out which review each tagged comment belongs to
       const tagPattern = /^\[review:([a-f0-9-]+)\] /;
       const repliesData = (allComments ?? []).filter(c => tagPattern.test(c.content));
 
@@ -157,6 +173,8 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
           content: reply.content.replace(tagPattern, ""),
           created_at: reply.created_at,
           user_id: reply.user_id,
+          liked: false,
+          likes: 0,
           profiles: reply.user_id ? (replyProfileMap[reply.user_id] ?? null) : null,
         });
       }
@@ -167,7 +185,8 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
         likes: 0,
         liked: false,
         replies: replyMap[r.id] ?? [],
-        showReply: false,
+        showReplies: true,
+        showReplyInput: false,
       })) as ReviewRow[]);
       setLoading(false);
     })();
@@ -181,18 +200,40 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
     ));
   }, []);
 
-  const toggleReply = useCallback((reviewId: string) => {
+  const toggleReplyLike = useCallback((reviewId: string, replyId: string) => {
     setRows(prev => prev.map(r =>
-      r.id === reviewId ? { ...r, showReply: !r.showReply } : r
+      r.id === reviewId
+        ? {
+            ...r,
+            replies: r.replies.map(rep =>
+              rep.id === replyId
+                ? { ...rep, liked: !rep.liked, likes: rep.liked ? rep.likes - 1 : rep.likes + 1 }
+                : rep
+            ),
+          }
+        : r
     ));
+  }, []);
+
+  const openReplyInput = useCallback((reviewId: string, mentionName?: string) => {
+    setRows(prev => prev.map(r =>
+      r.id === reviewId
+        ? { ...r, showReplyInput: true, showReplies: true }
+        : { ...r, showReplyInput: false }
+    ));
+    if (mentionName) {
+      setReplyTexts(prev => ({
+        ...prev,
+        [reviewId]: `@${mentionName} `,
+      }));
+    }
+    setTimeout(() => inputRefs.current[reviewId]?.focus(), 80);
   }, []);
 
   const submitReply = useCallback(async (reviewId: string) => {
     const text = (replyTexts[reviewId] ?? "").trim();
     if (!text || !user || !postId) return;
     setReplySubmitting(prev => ({ ...prev, [reviewId]: true }));
-    // Encode the review reference in content as a tag so we don't violate
-    // the FK constraint (parent_comment_id must reference songfit_comments)
     const taggedContent = `[review:${reviewId}] ${text}`;
     try {
       const { data, error } = await supabase.from("songfit_comments").insert({
@@ -203,14 +244,16 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
       if (error) throw error;
       const newReply: Reply = {
         id: data.id,
-        content: text, // display without the [review:...] tag
+        content: text,
         created_at: data.created_at,
         user_id: data.user_id,
+        liked: false,
+        likes: 0,
         profiles: { display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null },
       };
       setRows(prev => prev.map(r =>
         r.id === reviewId
-          ? { ...r, replies: [...r.replies, newReply], showReply: false }
+          ? { ...r, replies: [...r.replies, newReply], showReplyInput: false, showReplies: true }
           : r
       ));
       setReplyTexts(prev => ({ ...prev, [reviewId]: "" }));
@@ -226,7 +269,6 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
 
         {/* ── Song identity header ── */}
         <div className="shrink-0 px-5 pt-5 pb-4 border-b border-border/40 space-y-3">
-          {/* Track identity */}
           <div className="flex items-center gap-3">
             {post?.album_art_url ? (
               <img
@@ -307,7 +349,7 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
         </div>
 
         {/* ── Reviews list ── */}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted-foreground" />
@@ -315,102 +357,156 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-16">No reviews yet.</p>
           ) : (
-            <div className="space-y-2">
+            <div>
               {rows.map((row) => {
                 const name = row.profiles?.display_name || (row.user_id ? "User" : "Anonymous");
                 const avatar = row.profiles?.avatar_url;
+                const hasReplies = row.replies.length > 0;
+
                 return (
-                  <div key={row.id} className="rounded-xl bg-muted/20 px-3 py-3 space-y-2">
-                    {/* Row: avatar + content */}
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
-                        {avatar ? (
-                          <img src={avatar} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <User size={13} className="text-muted-foreground" />
+                  <div key={row.id} className="px-4 pt-4 pb-1">
+                    {/* ── Top-level review ── */}
+                    <div className="flex gap-3">
+                      {/* Avatar + thread line */}
+                      <div className="flex flex-col items-center shrink-0">
+                        <AvatarBubble avatar={avatar} name={name} size={8} />
+                        {(hasReplies || row.showReplyInput) && (
+                          <div className="w-px flex-1 bg-border/40 mt-2 min-h-[12px]" />
                         )}
                       </div>
 
-                      <div className="flex-1 min-w-0">
-                        {/* Name + rating badges */}
-                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 pb-2">
+                        {/* Name + badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                           <span className="text-sm font-semibold leading-none">{name}</span>
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${RATING_COLOR[row.hook_rating] ?? "text-muted-foreground"} ${RATING_BG[row.hook_rating] ?? "bg-muted/40"}`}>
                             {RATING_LABEL[row.hook_rating] ?? row.hook_rating}
                           </span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md select-none ${row.would_replay ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted/60"}`}>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${row.would_replay ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted/60"}`}>
                             {row.would_replay ? "Replay" : "Skip"}
                           </span>
                         </div>
 
                         {row.context_note && (
-                          <p className="text-xs text-foreground/75 leading-snug">{row.context_note}</p>
+                          <p className="text-sm text-foreground/80 leading-snug mb-1">{row.context_note}</p>
                         )}
 
-                        {/* Actions row */}
-                        <div className="flex items-center gap-3 mt-1.5">
-                          <p className="text-[10px] text-muted-foreground/40 flex-1">
+                        {/* Meta row */}
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs text-muted-foreground/50">
                             {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
-                          </p>
-                          {/* Like */}
-                          <button
-                            onClick={() => toggleLike(row.id)}
-                            className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-primary transition-colors group"
-                          >
-                            <Heart
-                              size={12}
-                              className={row.liked ? "fill-primary text-primary" : "group-hover:text-primary"}
-                            />
-                            {row.likes > 0 && <span className={row.liked ? "text-primary" : ""}>{row.likes}</span>}
-                          </button>
-                          {/* Reply */}
+                          </span>
+                          {row.likes > 0 && (
+                            <span className="text-xs text-muted-foreground/50">
+                              {row.likes} {row.likes === 1 ? "like" : "likes"}
+                            </span>
+                          )}
                           {user && (
                             <button
-                              onClick={() => toggleReply(row.id)}
-                              className="text-[11px] text-muted-foreground/60 hover:text-primary transition-colors"
+                              onClick={() => openReplyInput(row.id)}
+                              className="text-xs font-semibold text-muted-foreground/60 hover:text-foreground transition-colors"
                             >
                               Reply
                             </button>
                           )}
                         </div>
                       </div>
+
+                      {/* Heart — right side */}
+                      <button
+                        onClick={() => toggleLike(row.id)}
+                        className="shrink-0 flex flex-col items-center gap-0.5 pt-0.5"
+                      >
+                        <Heart
+                          size={14}
+                          className={`transition-colors ${row.liked ? "fill-destructive text-destructive" : "text-muted-foreground/30 hover:text-muted-foreground"}`}
+                        />
+                        {row.likes > 0 && (
+                          <span className={`text-[10px] ${row.liked ? "text-destructive" : "text-muted-foreground/40"}`}>{row.likes}</span>
+                        )}
+                      </button>
                     </div>
 
-                    {/* Replies */}
-                    {row.replies.length > 0 && (
-                      <div className="ml-10 space-y-2 border-l-2 border-border/30 pl-3">
-                        {row.replies.map(reply => {
-                          const rName = reply.profiles?.display_name || "User";
-                          const rAvatar = reply.profiles?.avatar_url;
-                          return (
-                            <div key={reply.id} className="flex items-start gap-2">
-                              <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
-                                {rAvatar ? (
-                                  <img src={rAvatar} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <User size={10} className="text-muted-foreground" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <span className="text-[11px] font-semibold">{rName}</span>
-                                <span className="text-[10px] text-muted-foreground/40 ml-1.5">
-                                  {formatDistanceToNow(new Date(reply.created_at), { addSuffix: true })}
-                                </span>
-                                <p className="text-xs text-foreground/75 leading-snug mt-0.5">{reply.content}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
+                    {/* ── Replies ── */}
+                    {hasReplies && (
+                      <div className="ml-11">
+                        {!row.showReplies ? (
+                          <button
+                            onClick={() => setRows(prev => prev.map(r => r.id === row.id ? { ...r, showReplies: true } : r))}
+                            className="flex items-center gap-2 mb-3"
+                          >
+                            <div className="h-px w-5 bg-muted-foreground/30" />
+                            <span className="text-xs font-semibold text-muted-foreground/60 hover:text-foreground transition-colors">
+                              View {row.replies.length} {row.replies.length === 1 ? "reply" : "replies"}
+                            </span>
+                          </button>
+                        ) : (
+                          <div className="space-y-3 mb-2">
+                            {row.replies.map((reply) => {
+                              const rName = reply.profiles?.display_name || "User";
+                              const rAvatar = reply.profiles?.avatar_url;
+                              return (
+                                <div key={reply.id} className="flex gap-2.5">
+                                  <AvatarBubble avatar={rAvatar} name={rName} size={6} />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs leading-snug">
+                                      <span className="font-semibold mr-1.5">{rName}</span>
+                                      <span className="text-foreground/75">{reply.content}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-0.5">
+                                      <span className="text-[11px] text-muted-foreground/50">
+                                        {formatDistanceToNow(new Date(reply.created_at), { addSuffix: true })}
+                                      </span>
+                                      {reply.likes > 0 && (
+                                        <span className="text-[11px] text-muted-foreground/50">{reply.likes} likes</span>
+                                      )}
+                                      {user && (
+                                        <button
+                                          onClick={() => openReplyInput(row.id, rName)}
+                                          className="text-[11px] font-semibold text-muted-foreground/60 hover:text-foreground transition-colors"
+                                        >
+                                          Reply
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => toggleReplyLike(row.id, reply.id)}
+                                    className="shrink-0 flex flex-col items-center gap-0.5 pt-0.5"
+                                  >
+                                    <Heart
+                                      size={12}
+                                      className={`transition-colors ${reply.liked ? "fill-destructive text-destructive" : "text-muted-foreground/30 hover:text-muted-foreground"}`}
+                                    />
+                                    {reply.likes > 0 && (
+                                      <span className={`text-[9px] ${reply.liked ? "text-destructive" : "text-muted-foreground/40"}`}>{reply.likes}</span>
+                                    )}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            <button
+                              onClick={() => setRows(prev => prev.map(r => r.id === row.id ? { ...r, showReplies: false } : r))}
+                              className="flex items-center gap-2"
+                            >
+                              <div className="h-px w-5 bg-muted-foreground/30" />
+                              <span className="text-[11px] font-semibold text-muted-foreground/50 hover:text-foreground transition-colors">
+                                Hide replies
+                              </span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {/* Reply composer */}
-                    {row.showReply && user && (
-                      <div className="ml-10 flex items-start gap-2">
-                        <CornerDownRight size={12} className="text-muted-foreground/40 mt-2 shrink-0" />
-                        <div className="flex-1 flex items-end gap-2 rounded-lg bg-muted/40 border border-border/50 px-2.5 py-1.5">
-                          <textarea
-                            autoFocus
+                    {/* ── Inline reply composer ── */}
+                    {row.showReplyInput && user && (
+                      <div className="ml-11 flex items-center gap-2 mb-3 mt-1">
+                        <AvatarBubble avatar={profile?.avatar_url} name={profile?.display_name ?? "You"} size={6} />
+                        <div className="flex-1 flex items-center gap-2 bg-transparent border border-border/50 rounded-full px-3 py-1.5">
+                          <input
+                            ref={el => { inputRefs.current[row.id] = el; }}
                             value={replyTexts[row.id] ?? ""}
                             onChange={e => setReplyTexts(prev => ({ ...prev, [row.id]: e.target.value }))}
                             onKeyDown={e => {
@@ -418,30 +514,29 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
                                 e.preventDefault();
                                 submitReply(row.id);
                               }
-                              if (e.key === "Escape") toggleReply(row.id);
+                              if (e.key === "Escape") {
+                                setRows(prev => prev.map(r => r.id === row.id ? { ...r, showReplyInput: false } : r));
+                              }
                             }}
-                            placeholder="Write a reply…"
-                            rows={1}
-                            className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/50 outline-none resize-none leading-relaxed"
+                            placeholder={`Reply to ${name}…`}
+                            className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/40 outline-none min-w-0"
                           />
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              onClick={() => toggleReply(row.id)}
-                              className="p-0.5 text-muted-foreground/50 hover:text-foreground transition-colors"
-                            >
-                              <X size={11} />
-                            </button>
-                            <button
-                              onClick={() => submitReply(row.id)}
-                              disabled={replySubmitting[row.id] || !(replyTexts[row.id] ?? "").trim()}
-                              className="text-[11px] font-semibold text-primary hover:text-primary/80 disabled:opacity-40 transition-colors"
-                            >
-                              {replySubmitting[row.id] ? <Loader2 size={11} className="animate-spin" /> : "Post"}
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => submitReply(row.id)}
+                            disabled={!replyTexts[row.id]?.trim() || replySubmitting[row.id]}
+                            className="text-primary disabled:opacity-30 transition-opacity"
+                          >
+                            {replySubmitting[row.id]
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : <Send size={13} />
+                            }
+                          </button>
                         </div>
                       </div>
                     )}
+
+                    {/* Divider */}
+                    <div className="border-b border-border/20 mt-2" />
                   </div>
                 );
               })}
