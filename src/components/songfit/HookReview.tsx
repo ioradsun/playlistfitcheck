@@ -55,6 +55,12 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   const [results, setResults] = useState<Results | null>(null);
   const [dots, setDots] = useState(".");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const skipTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (step === "replay_cta") setTimeout(() => textareaRef.current?.focus(), 50);
+    if (step === "skip_cta") setTimeout(() => skipTextareaRef.current?.focus(), 50);
+  }, [step]);
 
   useEffect(() => {
     const checkExisting = async () => {
@@ -259,7 +265,8 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
             </button>
           </div>
           <div className="flex items-end gap-2">
-            <textarea
+          <textarea
+              ref={skipTextareaRef}
               value={contextNote}
               onChange={e => setContextNote(e.target.value)}
               onKeyDown={handleContextKeyDown}
