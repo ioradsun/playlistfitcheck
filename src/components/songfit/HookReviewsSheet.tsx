@@ -297,7 +297,7 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                     {replayPct}%
                   </p>
                   <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
-                    {replayPct >= 50 ? "would run it back" : "would skip"}
+                    {replayPct >= 50 ? "of the FMLY would run it back." : "are feeling this."}
                   </p>
                 </div>
                 {/* Signals card */}
