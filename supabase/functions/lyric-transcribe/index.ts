@@ -6,134 +6,83 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DEFAULT_PROMPT = `You are a professional lyrics transcription engine. Your job is to transcribe song lyrics from audio with precise timestamps.
-
-CRITICAL RULES:
-1. Transcribe ONLY the sung/spoken lyrics — no descriptions of instrumentals or sounds
-2. Output MUST be valid JSON — no markdown, no code blocks, no extra text
-3. Each line should be a natural lyric line (not individual words)
-4. Timestamps must be in seconds (decimal, e.g. 14.2)
-5. If you cannot detect lyrics (instrumental track), return {"lines": [], "title": "Unknown", "artist": "Unknown"}
-6. Estimate a reasonable end_time for each line (typically 2-5 seconds after start)
-
-Output this exact JSON structure:
-{
-  "title": "detected or 'Unknown'",
-  "artist": "detected or 'Unknown'",
-  "lines": [
-    {"start": 0.0, "end": 3.5, "text": "First lyric line"},
-    {"start": 3.5, "end": 7.2, "text": "Second lyric line"}
-  ]
-}`;
-
-async function fetchPrompt(): Promise<string> {
-  try {
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const res = await fetch(
-      `${url}/rest/v1/ai_prompts?slug=eq.lyric-transcribe&select=prompt`,
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } }
-    );
-    const rows = await res.json();
-    return rows?.[0]?.prompt || DEFAULT_PROMPT;
-  } catch {
-    return DEFAULT_PROMPT;
-  }
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
 
-    // Client sends pre-encoded base64 audio as JSON
     const { audioBase64, format } = await req.json();
     if (!audioBase64) throw new Error("No audio data provided");
 
-    // Rough size check on base64 string (~0.75 bytes per char)
     const estimatedBytes = audioBase64.length * 0.75;
-    if (estimatedBytes > 20 * 1024 * 1024) {
+    if (estimatedBytes > 25 * 1024 * 1024) {
       return new Response(
-        JSON.stringify({ error: `File too large (~${(estimatedBytes / 1024 / 1024).toFixed(0)} MB). Max is 20 MB.` }),
+        JSON.stringify({ error: `File too large (~${(estimatedBytes / 1024 / 1024).toFixed(0)} MB). Max is 25 MB.` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     console.log(`Processing audio: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${format || "mp3"}`);
 
-    const systemPrompt = await fetchPrompt();
+    // Decode base64 → binary → Uint8Array for FormData
+    const binaryStr = atob(audioBase64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
 
-    // Gateway only accepts "text" or "image_url" content block types.
-    // We pass audio as a base64 data URI via image_url — Gemini handles audio mime types.
     const mimeType = format === "wav" ? "audio/wav" : format === "m4a" ? "audio/mp4" : "audio/mpeg";
-    const audioDataUri = `data:${mimeType};base64,${audioBase64}`;
+    const ext = format === "wav" ? "wav" : format === "m4a" ? "m4a" : "mp3";
+    const audioBlob = new Blob([bytes], { type: mimeType });
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call Whisper with verbose_json to get segment-level timestamps
+    const formData = new FormData();
+    formData.append("file", audioBlob, `audio.${ext}`);
+    formData.append("model", "whisper-1");
+    formData.append("response_format", "verbose_json");
+    formData.append("timestamp_granularities[]", "segment");
+
+    const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: { url: audioDataUri },
-              },
-              {
-                type: "text",
-                text: "Transcribe the lyrics from this audio with precise timestamps. Return ONLY valid JSON.",
-              },
-            ],
-          },
-        ],
-        temperature: 0.1,
-      }),
+      body: formData,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      if (response.status === 429) {
+    if (!whisperRes.ok) {
+      const errorText = await whisperRes.text();
+      console.error("Whisper API error:", whisperRes.status, errorText);
+      if (whisperRes.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Usage limit reached." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      // Return the actual gateway error to the client for debugging
-      return new Response(
-        JSON.stringify({ error: `Gateway error ${response.status}: ${errorText}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw new Error(`Whisper error ${whisperRes.status}: ${errorText}`);
     }
 
-    const aiResponse = await response.json();
-    const content = aiResponse.choices?.[0]?.message?.content;
-    if (!content) throw new Error("No response from AI");
+    const whisperData = await whisperRes.json();
+    console.log(`Whisper segments: ${whisperData.segments?.length ?? 0}`);
 
-    let cleanContent = content.trim();
-    if (cleanContent.startsWith("```")) {
-      cleanContent = cleanContent.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-    }
+    // Map Whisper segments → our lyric line format
+    const lines = (whisperData.segments ?? []).map((seg: any) => ({
+      start: Math.round(seg.start * 10) / 10,
+      end: Math.round(seg.end * 10) / 10,
+      text: seg.text.trim(),
+    })).filter((l: any) => l.text.length > 0);
 
-    const lyrics = JSON.parse(cleanContent);
+    // Attempt to detect title/artist from full text (best-effort)
+    const title = "Unknown";
+    const artist = "Unknown";
 
-    return new Response(JSON.stringify(lyrics), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ title, artist, lines }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (e) {
     console.error("lyric-transcribe error:", e);
     return new Response(
