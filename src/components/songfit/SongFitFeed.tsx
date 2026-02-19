@@ -24,6 +24,7 @@ export function SongFitFeed() {
   const [userVoteCount, setUserVoteCount] = useState<number | null>(null);
   const [composerUnlocked, setComposerUnlocked] = useState(false);
   const [showFloatingAnchor, setShowFloatingAnchor] = useState(false);
+  const [hasPosted, setHasPosted] = useState(false);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -144,6 +145,7 @@ export function SongFitFeed() {
     const handler = () => {
       setComposerUnlocked(false);
       setUserVoteCount(0);
+      setHasPosted(true);
     };
     window.addEventListener("crowdfit:post-created", handler);
     return () => window.removeEventListener("crowdfit:post-created", handler);
@@ -180,6 +182,7 @@ export function SongFitFeed() {
           <StagePresence
             currentVotes={userVoteCount ?? 0}
             onUnlocked={() => setComposerUnlocked(true)}
+            hasPosted={hasPosted}
           />
         )
       ) : (
