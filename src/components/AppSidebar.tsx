@@ -496,9 +496,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
               {!collapsed && (
                 <>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span className="text-xs font-medium truncate text-left">
-                      {profile?.display_name ?? user.email?.split("@")[0]}
-                    </span>
                     {isBlazer && pioneerNumber && (
                       <span
                         className="shrink-0 font-mono px-1.5 py-0.5 rounded-sm border-[0.5px] border-foreground/20 bg-transparent text-foreground/80 text-[9px] tracking-tighter leading-none cursor-default"
