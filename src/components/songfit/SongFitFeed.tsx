@@ -192,7 +192,7 @@ export function SongFitFeed() {
               <User size={16} className="text-muted-foreground" />
             </div>
             <div className="flex-1 min-w-0 flex items-center">
-              <span className="text-base text-muted-foreground/60">Share your song and get feedback</span>
+              <span className="text-base text-muted-foreground/60">Drop your song and get signals</span>
             </div>
           </div>
         </div>
