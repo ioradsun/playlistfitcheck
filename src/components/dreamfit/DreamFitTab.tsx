@@ -12,7 +12,6 @@ export function DreamFitTab() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [dreams, setDreams] = useState<Dream[]>([]);
-  const [backedIds, setBackedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [commentDreamId, setCommentDreamId] = useState<string | null>(null);
 
@@ -27,24 +26,13 @@ export function DreamFitTab() {
     setLoading(false);
   }, []);
 
-  const fetchBacked = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("dream_backers")
-      .select("dream_id")
-      .eq("user_id", user.id);
-    setBackedIds(new Set((data || []).map((d: any) => d.dream_id)));
-  }, [user]);
-
   useEffect(() => {
     fetchDreams();
-    fetchBacked();
-  }, [fetchDreams, fetchBacked]);
+  }, [fetchDreams]);
 
   const handleRefresh = () => {
     setTimeout(() => {
       fetchDreams();
-      fetchBacked();
     }, 300);
   };
 
@@ -84,8 +72,6 @@ export function DreamFitTab() {
             <DreamToolCard
               key={dream.id}
               dream={dream}
-              isBacked={backedIds.has(dream.id)}
-              onToggleBack={handleRefresh}
               onOpenComments={setCommentDreamId}
               onRefresh={handleRefresh}
             />

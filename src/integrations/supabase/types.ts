@@ -132,22 +132,31 @@ export type Database = {
       }
       dream_backers: {
         Row: {
+          context_note: string | null
           created_at: string
           dream_id: string
           id: string
-          user_id: string
+          session_id: string | null
+          signal_type: string
+          user_id: string | null
         }
         Insert: {
+          context_note?: string | null
           created_at?: string
           dream_id: string
           id?: string
-          user_id: string
+          session_id?: string | null
+          signal_type?: string
+          user_id?: string | null
         }
         Update: {
+          context_note?: string | null
           created_at?: string
           dream_id?: string
           id?: string
-          user_id?: string
+          session_id?: string | null
+          signal_type?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -254,6 +263,7 @@ export type Database = {
           created_at: string
           dream_type: string
           frustration: string
+          greenlight_count: number
           id: string
           status: string
           status_note: string | null
@@ -269,6 +279,7 @@ export type Database = {
           created_at?: string
           dream_type?: string
           frustration: string
+          greenlight_count?: number
           id?: string
           status?: string
           status_note?: string | null
@@ -284,6 +295,7 @@ export type Database = {
           created_at?: string
           dream_type?: string
           frustration?: string
+          greenlight_count?: number
           id?: string
           status?: string
           status_note?: string | null

@@ -9,6 +9,7 @@ export interface Dream {
   status: "seeding" | "momentum" | "review" | "building" | "live" | "not_a_fit";
   status_note: string | null;
   backers_count: number;
+  greenlight_count: number;
   comments_count: number;
   trending_score: number;
   created_at: string;
