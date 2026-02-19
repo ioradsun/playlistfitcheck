@@ -20,6 +20,7 @@ import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import type { SongFitPost } from "@/components/songfit/types";
+import { HookReviewsSheet } from "@/components/songfit/HookReviewsSheet";
 
 interface HookReviewSummary {
   total: number;
@@ -79,6 +80,7 @@ const PublicProfile = () => {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [savedPosts, setSavedPosts] = useState<SavedPost[]>([]);
   const [songTab, setSongTab] = useState<"mine" | "saved">("mine");
+  const [reviewSheetPostId, setReviewSheetPostId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -517,7 +519,12 @@ const PublicProfile = () => {
                                   <span className="text-[10px] text-muted-foreground font-mono">
                                     <span className="text-foreground font-semibold">{hookReviews[s.id].replayPct}%</span> replay
                                   </span>
-                                  <span className="text-[10px] text-muted-foreground/50">{hookReviews[s.id].total} reviews</span>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setReviewSheetPostId(s.id); }}
+                                    className="text-[10px] text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
+                                  >
+                                    {hookReviews[s.id].total} reviews
+                                  </button>
                                 </>
                               ) : (
                                 <span className="text-[10px] text-muted-foreground/50">no reviews yet</span>
@@ -579,6 +586,11 @@ const PublicProfile = () => {
           </Card>
         )}
       </div>
+
+      <HookReviewsSheet
+        postId={reviewSheetPostId}
+        onClose={() => setReviewSheetPostId(null)}
+      />
     </div>
   );
 };
