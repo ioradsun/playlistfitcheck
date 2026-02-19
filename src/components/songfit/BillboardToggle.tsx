@@ -38,9 +38,15 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
 
         <div className="flex-1 flex items-center justify-center">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild disabled={view !== "billboard"}>
               <button
-                onClick={() => onViewChange("billboard")}
+                onClick={(e) => {
+                  if (view !== "billboard") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onViewChange("billboard");
+                  }
+                }}
                 className={cn(
                   "py-2.5 text-sm transition-all duration-150",
                   view === "billboard"
