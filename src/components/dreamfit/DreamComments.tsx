@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { User, Send, Loader2, CornerDownRight, Smile, Trash2, Heart } from "lucide-react";
+import { User, Loader2, CornerDownRight, Smile, Trash2, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import type { DreamComment } from "./types";
+import type { DreamComment, Dream } from "./types";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
@@ -19,6 +19,7 @@ const QUICK_EMOJIS = ["🔥", "❤️", "🙌", "💯", "😍", "🚀", "👏", 
 
 interface Props {
   dreamId: string | null;
+  dream?: Dream | null;
   onClose: () => void;
   onCommentAdded?: (dreamId: string) => void;
 }
@@ -94,7 +95,6 @@ function CommentItem({
             )}
           </div>
         </div>
-        {/* Heart like button */}
         <button
           onClick={() => currentUserId && onToggleLike(comment.id, liked)}
           className="flex flex-col items-center gap-0.5 shrink-0 ml-1 mt-0.5"
@@ -132,7 +132,7 @@ function CommentItem({
   );
 }
 
-export function DreamComments({ dreamId, onClose, onCommentAdded }: Props) {
+export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props) {
   const { user } = useAuth();
   const [comments, setComments] = useState<DreamComment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -251,35 +251,58 @@ export function DreamComments({ dreamId, onClose, onCommentAdded }: Props) {
   };
 
   const tree = buildTree(comments);
+  const displayName = dream?.profiles?.display_name || "Anonymous";
 
   return (
     <Sheet open={!!dreamId} onOpenChange={(open) => { if (!open) onClose(); }}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
         <SheetHeader className="px-4 py-3 border-b border-border/40 shrink-0">
-          <SheetTitle className="text-base">Comments</SheetTitle>
+          <SheetTitle className="text-base font-semibold">Comments</SheetTitle>
         </SheetHeader>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-2">
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 size={20} className="animate-spin text-muted-foreground" />
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+          {/* Original post — pinned at the top */}
+          {dream && (
+            <div className="px-4 pt-4 pb-3 border-b border-border/40">
+              <div className="flex gap-3">
+                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20 shrink-0">
+                  {dream.profiles?.avatar_url ? (
+                    <img src={dream.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={16} className="text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold leading-tight">{displayName}</p>
+                  <p className="text-sm text-foreground/80 leading-snug mt-0.5">{dream.title}</p>
+                </div>
+              </div>
             </div>
-          ) : tree.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-12">No comments yet — be the first!</p>
-          ) : (
-            tree.map(c => (
-              <CommentItem
-                key={c.id}
-                comment={c}
-                depth={0}
-                onReply={handleReply}
-                onDelete={handleDelete}
-                onToggleLike={handleToggleLike}
-                currentUserId={user?.id}
-                likedSet={likedSet}
-              />
-            ))
           )}
+
+          {/* Comments list */}
+          <div className="px-4 py-2">
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 size={20} className="animate-spin text-muted-foreground" />
+              </div>
+            ) : tree.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-12">No comments yet — be the first!</p>
+            ) : (
+              tree.map(c => (
+                <CommentItem
+                  key={c.id}
+                  comment={c}
+                  depth={0}
+                  onReply={handleReply}
+                  onDelete={handleDelete}
+                  onToggleLike={handleToggleLike}
+                  currentUserId={user?.id}
+                  likedSet={likedSet}
+                />
+              ))
+            )}
+          </div>
         </div>
 
         <div className="shrink-0 border-t border-border bg-background">

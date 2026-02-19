@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { MessageCircle, User, MoreHorizontal, Trash2 } from "lucide-react";
+import { User, MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dream } from "./types";
 import { DreamSignal } from "./DreamSignal";
@@ -54,34 +54,21 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Comment button — moved to header */}
-          <button
-            onClick={() => onOpenComments(dream.id)}
-            className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-primary/10 transition-colors group"
-          >
-            <MessageCircle size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-            {dream.comments_count > 0 && (
-              <span className="text-xs text-muted-foreground group-hover:text-primary">{dream.comments_count}</span>
-            )}
-          </button>
-
-          {isOwnPost && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="p-1.5 rounded-full hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors">
-                  <MoreHorizontal size={18} />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDelete}>
-                  <Trash2 size={14} className="mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        {isOwnPost && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-1.5 rounded-full hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                <MoreHorizontal size={18} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDelete}>
+                <Trash2 size={14} className="mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Content */}
@@ -103,7 +90,9 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
         dreamId={dream.id}
         backersCount={dream.backers_count}
         greenlightCount={dream.greenlight_count}
+        commentsCount={dream.comments_count}
         onRefresh={onRefresh}
+        onOpenComments={onOpenComments}
       />
     </div>
   );
