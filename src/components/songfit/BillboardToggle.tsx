@@ -1,6 +1,5 @@
 import type { BillboardMode, FeedView } from "./types";
 import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,46 +21,34 @@ interface Props {
 }
 
 export function BillboardToggle({ view, onViewChange, billboardMode, onModeChange }: Props) {
-  const activeMode = modes.find(m => m.key === billboardMode) || modes[0];
-
   return (
     <div className="border-b border-border/40">
       <div className="flex">
         <button
           onClick={() => onViewChange("recent")}
           className={cn(
-            "flex-1 py-2.5 text-sm font-semibold text-center transition-colors border-b-2",
+            "flex-1 py-2.5 text-sm text-center transition-all duration-150",
             view === "recent"
-              ? "border-primary text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground"
+              ? "font-medium text-foreground"
+              : "font-normal text-muted-foreground"
           )}
         >
           Recent
         </button>
 
         <div className="flex-1 flex items-center justify-center">
-          <button
-            onClick={() => onViewChange("billboard")}
-            className={cn(
-              "py-2.5 text-sm font-semibold transition-colors border-b-2",
-              view === "billboard"
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            FMLY 40
-          </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
+                onClick={() => onViewChange("billboard")}
                 className={cn(
-                  "ml-1 flex items-center gap-0.5 transition-colors py-2.5 px-1 rounded",
+                  "py-2.5 text-sm transition-all duration-150",
                   view === "billboard"
-                    ? "text-primary hover:text-primary/80"
-                    : "text-muted-foreground/50 hover:text-muted-foreground"
+                    ? "font-medium text-foreground"
+                    : "font-normal text-muted-foreground"
                 )}
               >
-                <ChevronDown size={12} className="opacity-70" />
+                FMLY 40
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" className="w-44 bg-popover z-50">
@@ -71,7 +58,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                   onClick={() => { onModeChange(key); onViewChange("billboard"); }}
                   className={cn(
                     "text-sm",
-                    billboardMode === key && "text-primary font-semibold"
+                    billboardMode === key && "text-foreground font-medium"
                   )}
                 >
                   {label}
