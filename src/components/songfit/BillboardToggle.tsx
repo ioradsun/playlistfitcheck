@@ -25,7 +25,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
     <div className="border-b border-border/40">
       <div className="flex">
         <button
-          onClick={() => onViewChange("recent")}
+          onClick={(e) => { e.stopPropagation(); onViewChange("recent"); }}
           className={cn(
             "flex-1 py-2.5 text-sm text-center transition-all duration-150",
             view === "recent"
