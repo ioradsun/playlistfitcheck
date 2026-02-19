@@ -295,8 +295,13 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    // Clear user-specific localStorage to prevent data leakage between accounts
-    ["mix_projects", "profit_history", "vibefit_usage_today"].forEach(k => localStorage.removeItem(k));
+    // Clear ALL user-specific localStorage to prevent data leakage between accounts
+    [
+      "mix_projects",
+      "profit_history",
+      "vibefit_usage",
+      "vibefit_usage_today",
+    ].forEach(k => localStorage.removeItem(k));
     navigate("/");
   };
 
