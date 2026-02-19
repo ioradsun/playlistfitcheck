@@ -124,16 +124,19 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
         }
       }
 
-      // Fetch replies (comments where parent_comment_id maps to review id — stored as context on the post)
-      // Replies are stored as songfit_comments with content prefixed by review id tag
+      // Fetch replies stored as tagged comments: content starts with [review:<id>]
       const reviewIds = reviews.map(r => r.id);
-      const { data: repliesData } = await supabase
+      const { data: allComments } = await supabase
         .from("songfit_comments")
-        .select("id, content, created_at, user_id, parent_comment_id")
-        .in("parent_comment_id", reviewIds)
+        .select("id, content, created_at, user_id")
+        .eq("post_id", postId)
         .order("created_at", { ascending: true });
 
-      const replyProfileIds = [...new Set((repliesData ?? []).filter(r => r.user_id).map(r => r.user_id!))];
+      // Parse out which review each tagged comment belongs to
+      const tagPattern = /^\[review:([a-f0-9-]+)\] /;
+      const repliesData = (allComments ?? []).filter(c => tagPattern.test(c.content));
+
+      const replyProfileIds = [...new Set(repliesData.filter(r => r.user_id).map(r => r.user_id!))];
       let replyProfileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = { ...profileMap };
       const newIds = replyProfileIds.filter(id => !replyProfileMap[id]);
       if (newIds.length > 0) {
@@ -142,12 +145,15 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
       }
 
       const replyMap: Record<string, Reply[]> = {};
-      for (const reply of repliesData ?? []) {
-        const pid = reply.parent_comment_id!;
-        if (!replyMap[pid]) replyMap[pid] = [];
-        replyMap[pid].push({
+      for (const reply of repliesData) {
+        const match = reply.content.match(tagPattern);
+        if (!match) continue;
+        const reviewId = match[1];
+        if (!reviewIds.includes(reviewId)) continue;
+        if (!replyMap[reviewId]) replyMap[reviewId] = [];
+        replyMap[reviewId].push({
           id: reply.id,
-          content: reply.content,
+          content: reply.content.replace(tagPattern, ""),
           created_at: reply.created_at,
           user_id: reply.user_id,
           profiles: reply.user_id ? (replyProfileMap[reply.user_id] ?? null) : null,
@@ -184,17 +190,19 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
     const text = (replyTexts[reviewId] ?? "").trim();
     if (!text || !user || !postId) return;
     setReplySubmitting(prev => ({ ...prev, [reviewId]: true }));
+    // Encode the review reference in content as a tag so we don't violate
+    // the FK constraint (parent_comment_id must reference songfit_comments)
+    const taggedContent = `[review:${reviewId}] ${text}`;
     try {
       const { data, error } = await supabase.from("songfit_comments").insert({
         post_id: postId,
         user_id: user.id,
-        content: text,
-        parent_comment_id: reviewId,
+        content: taggedContent,
       }).select("id, content, created_at, user_id").single();
       if (error) throw error;
       const newReply: Reply = {
         id: data.id,
-        content: data.content,
+        content: text, // display without the [review:...] tag
         created_at: data.created_at,
         user_id: data.user_id,
         profiles: { display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null },
@@ -317,13 +325,13 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
                           {/* Like */}
                           <button
                             onClick={() => toggleLike(row.id)}
-                            className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-rose-500 transition-colors group"
+                            className="flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-primary transition-colors group"
                           >
                             <Heart
                               size={12}
-                              className={row.liked ? "fill-rose-500 text-rose-500" : "group-hover:text-rose-500"}
+                              className={row.liked ? "fill-primary text-primary" : "group-hover:text-primary"}
                             />
-                            {row.likes > 0 && <span className={row.liked ? "text-rose-500" : ""}>{row.likes}</span>}
+                            {row.likes > 0 && <span className={row.liked ? "text-primary" : ""}>{row.likes}</span>}
                           </button>
                           {/* Reply */}
                           {user && (
