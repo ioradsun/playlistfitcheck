@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.vibefit-generate]
 verify_jwt = false
+
+[functions.populate-artists]
+verify_jwt = false
