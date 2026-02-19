@@ -1,107 +1,79 @@
 
-## Stage Presence — Vote Gate for Song Submission
+## Stage Presence — Master Refinement
 
-### What We're Building
-
-Before a logged-in user can submit their own song, they must first give 3 signals (votes) on other songs. The composer is replaced by a "ghost" Stage Presence component that tracks their vote count and dissolves into the full composer once the threshold is met.
+Four files, four focused changes. No new components needed.
 
 ---
 
-### Data Source
+### 1. `StagePresence.tsx` — Full Rewrite of the Gate Logic
 
-The vote count comes from `songfit_hook_reviews` — filtered to the current user's `user_id`. This is the authoritative count (not just sessionStorage, which resets). We query it once on mount and increment it locally each time a vote is cast.
+**Remove:** The numeric mono counter (`Signal Progress: N/3`).
+
+**Add:** Dynamic narrative copy that counts down based on `currentVotes`:
+
+| currentVotes | Copy |
+|---|---|
+| 0 | "Give 3 signals to drop your song" |
+| 1 | "Give 2 more signals to drop your song" |
+| 2 | "Give 1 more signal to drop your song" |
+| 3 (threshold) | "The stage is yours." |
+
+**Transition:** When `currentVotes >= 3`, the text changes to "The stage is yours." — hold for exactly **1000ms** — then call `onUnlocked()`. The container fades out with `transition-opacity duration-300`.
+
+**Progress bars:** Already correct (3 horizontal bars, `bg-primary/60` filled, `bg-border/30` empty). Keep exactly as-is — just remove the numeric counter above them.
+
+**Copy hierarchy:** Use `text-[12px] font-medium text-foreground/60` for gate copy, `text-[13px] font-medium text-foreground/70` for "The stage is yours." to give it slightly more weight.
 
 ---
 
-### Files to Create / Modify
+### 2. `SongFitFeed.tsx` — Circular Economy + Floating Anchor
 
-**1. New component: `src/components/songfit/StagePresence.tsx`**
+**A. Re-lock on post:** Add a listener for `crowdfit:post-created` window event. When fired:
+- `setComposerUnlocked(false)`
+- `setUserVoteCount(0)`
 
-The "ghost" gate UI. It:
-- Accepts `currentVotes` (number, 0–3) and `onUnlocked` (callback)
-- Shows the dashed-border container with the mono-type `Signal Progress: N/3` counter in the top-right
-- Shows the centered copy: `"Give 3 signals to drop your own."`
-- Shows the 3-bar progress indicator — bars fill left to right as votes accumulate (`bg-primary/60` filled, `bg-border/30` empty)
-- When `currentVotes >= 3`, calls `onUnlocked()` which triggers the fade-in transition into the composer
+This resets the gate so the artist must give 3 more signals before their next drop.
 
-```text
-┌─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┐          Signal Progress: 1/3
-│                                          │
-│     Give 3 signals to drop your own.     │
-│          ▬ ▬ ─ ─ ─ ─ ─ ─               │
-└─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┘
+**B. Floating "Drop Your Song" anchor:** Add state `showFloatingAnchor` (boolean). Add a `useEffect` that listens to `scroll` on `window`. Logic:
+- Only active when `composerUnlocked === true`
+- If `window.scrollY > 600` → `setShowFloatingAnchor(true)`
+- If `window.scrollY <= 600` → `setShowFloatingAnchor(false)`
+
+Render a fixed-position button at the bottom-center of viewport:
+
+```
+[ + Drop Your Song ]
 ```
 
-Transition: when `currentVotes` hits 3, the component animates out (`opacity-0`) and `onUnlocked()` is fired after the CSS transition (300ms). The composer fades in using the existing `animate-fade-in` class.
+Style: `fixed bottom-6 left-1/2 -translate-x-1/2 z-50` — minimal: `border border-border/40 bg-background text-[12px] font-medium px-4 py-2 rounded-full` — no color fill, no icons beyond the `+`. Clicking it: `window.scrollTo({ top: 0, behavior: "smooth" })`.
+
+Clean up the scroll listener on unmount.
 
 ---
 
-**2. Modify: `src/components/songfit/SongFitFeed.tsx`**
+### 3. `SongFitInlineComposer.tsx` — Two changes
 
-Replace the direct `<SongFitInlineComposer>` render for logged-in users with a container that:
-- On mount (when `user` is defined), fetches the count of rows in `songfit_hook_reviews` where `user_id = user.id`
-- Stores this in `userVoteCount` state
-- If `userVoteCount < 3` → renders `<StagePresence currentVotes={userVoteCount} onUnlocked={() => setUserVoteCount(3)} />`
-- If `userVoteCount >= 3` → renders `<SongFitInlineComposer>` with a `animate-fade-in` wrapper
+**A. Rename "Post" → "Drop":** Line 357 — change button label from `"Post"` to `"Drop"`.
 
-When `HookReview` fires `incrementSessionReviewCount`, we need the feed to know a vote was cast. The cleanest way: pass an `onVoteCast` callback down through the post card chain OR use a lightweight event. Given the architecture, the best approach is to **re-query the vote count from the DB** whenever the feed refreshes (which happens naturally after `onPostCreated`), and to additionally expose a `window` custom event `"crowdfit:vote"` that `SongFitFeed` listens to and uses to bump `userVoteCount` by 1.
-
-This avoids prop-drilling through `SongFitPostCard → HookReview`.
-
----
-
-**3. Modify: `src/components/songfit/HookReview.tsx`**
-
-After `incrementSessionReviewCount()` is called in `handleSubmit`, also dispatch:
+**B. Dispatch `crowdfit:post-created` event:** After a successful submission (both new submission and re-entry paths), before or alongside the existing `onPostCreated()` call, dispatch:
 ```ts
-window.dispatchEvent(new CustomEvent("crowdfit:vote"));
+window.dispatchEvent(new CustomEvent("crowdfit:post-created"));
 ```
-
-This fires once per successful vote submission and is caught by the feed.
-
----
-
-### Technical Flow
-
-```text
-User loads CrowdFit feed (logged in)
-  → SongFitFeed queries songfit_hook_reviews for user's vote count
-  → userVoteCount = 1 → StagePresence rendered (1/3 bars filled)
-
-User clicks "Run it back" on a post
-  → HookReview.handleSubmit inserts row, calls incrementSessionReviewCount()
-  → dispatches window event "crowdfit:vote"
-  → SongFitFeed listener: setUserVoteCount(prev => prev + 1)
-  → If count reaches 3 → StagePresence fades out, composer fades in
-
-User with ≥ 3 prior votes
-  → Fetch returns count ≥ 3 immediately
-  → Composer rendered directly, no gate shown
-```
+There are two success paths — the re-entry path (around line 224) and the new submission path (around line 258). Both need the dispatch added.
 
 ---
 
-### Edge Cases
+### 4. `HookReview.tsx` — No changes needed
 
-- **Already has votes from previous sessions**: DB query picks this up — users who have already given 3+ votes across any session see the composer immediately.
-- **User owns the post they're voting on**: The `HookReview` component doesn't prevent self-voting. The gate doesn't need to distinguish — any 3 votes unlock the composer.
-- **Votes already cast before this feature ships**: Existing `songfit_hook_reviews` rows with a `user_id` are counted — no data migration needed.
-- **Loading state**: While the vote count is being fetched, show a neutral placeholder (empty dashed box, no bars, no counter) to avoid layout shift.
+The `crowdfit:vote` event dispatch is already in place at line 117. This file is complete.
 
 ---
 
-### What Stays the Same
-
-- The `HookReview` voting UI itself is unchanged
-- No new database tables or migrations needed
-- The `SESSION_COUNT_KEY` sessionStorage key continues to work as-is alongside the new gate
-
----
-
-### Summary of Changes
+### Summary of Edits
 
 | File | Change |
 |---|---|
-| `src/components/songfit/StagePresence.tsx` | New component — the ghost gate UI |
-| `src/components/songfit/SongFitFeed.tsx` | Fetch user vote count on mount, conditionally render gate vs composer, listen for `crowdfit:vote` event |
-| `src/components/songfit/HookReview.tsx` | Dispatch `crowdfit:vote` custom event after successful vote submission |
+| `StagePresence.tsx` | Remove numeric counter. Dynamic narrative copy (0/1/2/3 remaining). "The stage is yours." hold for 1000ms before `onUnlocked()`. |
+| `SongFitFeed.tsx` | Listen for `crowdfit:post-created` → re-lock composer and reset vote count. Add scroll-based floating "Drop Your Song" anchor button when composer is unlocked and scrollY > 600px. |
+| `SongFitInlineComposer.tsx` | Change "Post" → "Drop". Dispatch `crowdfit:post-created` on both success paths. |
+| `HookReview.tsx` | No changes. Already correct. |
