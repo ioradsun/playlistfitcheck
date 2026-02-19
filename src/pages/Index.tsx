@@ -437,7 +437,7 @@ const Index = () => {
     // Input/form pages: centered with padding
     switch (activeTab) {
       case "songfit":
-        return <div className="flex-1 overflow-y-auto px-4 py-6"><SongFitTab /></div>;
+        return <div id="songfit-scroll-container" className="flex-1 overflow-y-auto px-4 py-6"><SongFitTab /></div>;
       case "profit":
         return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onProjectSaved={refreshSidebar} /></div>;
       case "playlist":
