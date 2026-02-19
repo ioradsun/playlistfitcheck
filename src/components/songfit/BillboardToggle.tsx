@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { BillboardMode, FeedView } from "./types";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +22,8 @@ interface Props {
 }
 
 export function BillboardToggle({ view, onViewChange, billboardMode, onModeChange }: Props) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
   return (
     <div className="border-b border-border/40">
       <div className="flex">
@@ -37,14 +40,22 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
         </button>
 
         <div className="flex-1 flex items-center justify-center">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild disabled={view !== "billboard"}>
+          <DropdownMenu
+            open={dropdownOpen}
+            onOpenChange={(o) => {
+              // only allow opening when already on billboard view
+              if (o && view !== "billboard") return;
+              setDropdownOpen(o);
+            }}
+          >
+            <DropdownMenuTrigger asChild>
               <button
                 onClick={(e) => {
+                  e.stopPropagation();
                   if (view !== "billboard") {
-                    e.preventDefault();
-                    e.stopPropagation();
                     onViewChange("billboard");
+                  } else {
+                    setDropdownOpen((prev) => !prev);
                   }
                 }}
                 className={cn(
@@ -61,7 +72,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
               {modes.map(({ key, label }) => (
                 <DropdownMenuItem
                   key={key}
-                  onClick={() => { onModeChange(key); onViewChange("billboard"); }}
+                  onClick={() => { onModeChange(key); onViewChange("billboard"); setDropdownOpen(false); }}
                   className={cn(
                     "text-sm",
                     billboardMode === key && "text-foreground font-medium"
@@ -77,5 +88,4 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
     </div>
   );
 }
-
 
