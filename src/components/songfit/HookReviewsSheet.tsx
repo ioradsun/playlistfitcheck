@@ -282,13 +282,28 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
             </button>
           )}
 
-          {/* Review count */}
-          {!loading && rows.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">{rows.length}</span>{" "}
-              {rows.length === 1 ? "review" : "reviews"}
-            </p>
-          )}
+          {/* Review count + scores */}
+          {!loading && rows.length > 0 && (() => {
+            const topRating = ["hit", "solid", "almost", "missed"].find(r =>
+              rows.some(row => row.hook_rating === r)
+            );
+            const topPct = topRating
+              ? Math.round((rows.filter(r => r.hook_rating === topRating).length / rows.length) * 100)
+              : 0;
+            const replayPct = Math.round((rows.filter(r => r.would_replay).length / rows.length) * 100);
+            return (
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{rows.length}</span>{" "}
+                  {rows.length === 1 ? "review" : "reviews"}
+                </p>
+                <span className="text-muted-foreground/30">·</span>
+                <span className="text-xs font-medium text-primary">{topPct}% {topRating}</span>
+                <span className="text-muted-foreground/30">·</span>
+                <span className="text-xs font-medium text-foreground/60">{replayPct}% replay</span>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── Reviews list ── */}
