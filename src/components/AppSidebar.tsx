@@ -122,7 +122,10 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   
 
   const fetchRecents = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setRecentItems([]);
+      return;
+    }
     const items: RecentItem[] = [];
 
     const { data: reports } = await supabase
@@ -295,6 +298,8 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    // Clear sidebar state immediately
+    setRecentItems([]);
     // Clear ALL user-specific localStorage to prevent data leakage between accounts
     [
       "mix_projects",
