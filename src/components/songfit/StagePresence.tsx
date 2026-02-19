@@ -3,16 +3,18 @@ import { useEffect, useState } from "react";
 interface Props {
   currentVotes: number;
   onUnlocked: () => void;
+  hasPosted?: boolean;
 }
 
-function getGateCopy(votes: number): { text: string; isUnlocked: boolean } {
+function getGateCopy(votes: number, hasPosted: boolean): { text: string; isUnlocked: boolean } {
+  const suffix = hasPosted ? "another song" : "your song";
   if (votes >= 3) return { text: "The stage is yours.", isUnlocked: true };
-  if (votes === 2) return { text: "Give 1 more signal to drop your song", isUnlocked: false };
-  if (votes === 1) return { text: "Give 2 more signals to drop your song", isUnlocked: false };
-  return { text: "Give 3 signals to drop your song", isUnlocked: false };
+  if (votes === 2) return { text: `Give 1 more signal to drop ${suffix}`, isUnlocked: false };
+  if (votes === 1) return { text: `Give 2 more signals to drop ${suffix}`, isUnlocked: false };
+  return { text: `Give 3 signals to drop ${suffix}`, isUnlocked: false };
 }
 
-export function StagePresence({ currentVotes, onUnlocked }: Props) {
+export function StagePresence({ currentVotes, onUnlocked, hasPosted = false }: Props) {
   const [fading, setFading] = useState(false);
   const [held, setHeld] = useState(false);
 
@@ -29,7 +31,7 @@ export function StagePresence({ currentVotes, onUnlocked }: Props) {
     }
   }, [currentVotes, held, onUnlocked]);
 
-  const { text, isUnlocked } = getGateCopy(currentVotes);
+  const { text, isUnlocked } = getGateCopy(currentVotes, hasPosted);
 
   return (
     <div
