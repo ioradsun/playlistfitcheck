@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Users, BarChart3, ListMusic, Sliders, FileText, Target, Sparkles, AudioWaveform } from "lucide-react";
 import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
-const TOOL_ORDER = ["songfit", "hitfit", "vibefit", "profit", "playlist", "mix", "lyric", "dreamfit"];
+const DEFAULT_TOOL_ORDER = ["songfit", "hitfit", "vibefit", "profit", "playlist", "mix", "lyric", "dreamfit"];
 
 const TOOL_ICON_MAP: Record<string, any> = {
   songfit: Users,
@@ -102,7 +102,7 @@ export default function About() {
             {about.tools_intro || "Six tools. One goal: give independent artists the clarity they deserve. No gatekeeping, no vague advice. Just data, context, and a little taste."}
           </p>
 
-          {TOOL_ORDER.filter((key) => {
+          {(siteCopy.features?.tools_order ?? DEFAULT_TOOL_ORDER).filter((key) => {
             const enabled = siteCopy.features?.tools_enabled?.[key];
             return enabled === undefined || enabled === true;
           }).map((key, i) => {
