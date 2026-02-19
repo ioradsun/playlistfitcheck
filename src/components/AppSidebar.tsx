@@ -330,7 +330,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Tools</SidebarGroupLabel>
+          <SidebarGroupLabel className="hidden">Tools</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {(siteCopy.features?.tools_order ?? TOOLS.map(t => t.value))
