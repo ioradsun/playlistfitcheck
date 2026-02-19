@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
-import { Youtube, Music, Upload } from "lucide-react";
+import { Upload, X, Music, Youtube, Info } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AudioSlot } from "@/components/ui/AudioSlot";
 import { AudioUploadZone } from "@/components/ui/AudioUploadZone";
 
 export type ReferenceSource =
@@ -57,6 +56,11 @@ export function HitFitUploader({ onAnalyze, loading, disabled, disabledMessage }
     { mode: "youtube", label: "YouTube", icon: <Youtube size={12} /> },
   ];
 
+  const slots = [
+    { label: "Master A", desc: "Your primary mastered track · MP3, WAV, M4A · 75 MB max · Large files auto-compressed", files: master1Files, onChange: setMaster1Files, required: true },
+    { label: "Master B", desc: "Optional second master to compare · MP3, WAV, M4A · 75 MB max", files: master2Files, onChange: setMaster2Files, required: false },
+  ];
+
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
       <div className="text-center space-y-1">
@@ -65,33 +69,39 @@ export function HitFitUploader({ onAnalyze, loading, disabled, disabledMessage }
       </div>
 
       <div className="space-y-3">
-        <AudioSlot
-          label="Master A"
-          hint="Your primary mastered track · MP3, WAV, M4A · 75 MB max · Large files auto-compressed"
-          files={master1Files}
-          onChange={setMaster1Files}
-          disabled={loading}
-          active={master1Files.length > 0}
-        />
+        {slots.map((slot, i) => (
+          <div key={i} className={`glass-card rounded-xl p-4 transition-all ${slot.files.length > 0 ? "border-primary/30" : "border-border"}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm font-medium">{slot.label}</span>
+              {!slot.required && (
+                <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Optional</span>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Info size={13} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs max-w-[220px]">{slot.desc}</TooltipContent>
+              </Tooltip>
+            </div>
+            <AudioUploadZone
+              label="Upload"
+              files={slot.files}
+              onChange={slot.onChange}
+              maxFiles={1}
+              disabled={loading}
+            />
+          </div>
+        ))}
 
-        <AudioSlot
-          label="Master B"
-          hint="Optional second master to compare · MP3, WAV, M4A · 75 MB max"
-          files={master2Files}
-          onChange={setMaster2Files}
-          disabled={loading}
-          optional
-          active={master2Files.length > 0}
-        />
-
-        {/* Reference slot — keeps URL mode tabs, only file upload uses AudioSlot */}
+        {/* Reference slot */}
         <div className={`glass-card rounded-xl p-4 transition-all ${hasReference ? "border-primary/30" : "border-border"}`}>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-sm font-medium">Reference Track</span>
             <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Optional</span>
           </div>
 
-          {/* Mode tabs */}
           <div className="flex gap-1 mb-3 bg-secondary/50 rounded-lg p-0.5">
             {refModes.map(({ mode, label, icon }) => (
               <button

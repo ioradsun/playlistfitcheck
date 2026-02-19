@@ -424,11 +424,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 onTogglePlay={togglePlay}
               />
             ) : (
-              <div className="h-16 flex items-center justify-between gap-3 px-1">
-                <span className="text-[11px] text-muted-foreground font-mono">No audio — reupload to enable playback</span>
+              <div className="h-16 flex items-center gap-3">
                 <label className="cursor-pointer">
-                  <span className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded px-2 py-1">
-                    Reupload
+                  <span className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors border border-border/30 rounded px-2 py-1">
+                    Reupload Song
                   </span>
                   <input
                     type="file"
@@ -440,6 +439,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     }}
                   />
                 </label>
+                <span className="text-[10px] text-muted-foreground/60 font-mono">Audio files aren't saved or stored.</span>
               </div>
             )}
           </div>

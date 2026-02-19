@@ -263,13 +263,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
         )}
       </div>
 
-      {/* Re-upload prompt */}
-      {needsReupload && (
-        <div className="glass-card rounded-xl p-4 text-center space-y-1">
-          <p className="text-[11px] font-mono text-muted-foreground">No audio — re-upload your files to resume playback</p>
-          <p className="text-[10px] text-muted-foreground/60">Filenames, rankings and notes have been restored.</p>
-        </div>
-      )}
+      
 
       {/* Global Timeline */}
       <GlobalTimeline
@@ -307,7 +301,9 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
             className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors border border-border/30 rounded px-2 py-1"
             onClick={() => fileRef.current?.click()}
           >
-            + Add Mix ({activeMixes.length}/{MAX_MIXES})
+            {needsReupload
+              ? `Reupload Mixes (${activeMixes.length}/${MAX_MIXES})`
+              : `+ Add Mix (${activeMixes.length}/${MAX_MIXES})`}
           </button>
           <span className="text-[10px] text-muted-foreground/60 font-mono">Audio files aren't saved or stored.</span>
         </div>
