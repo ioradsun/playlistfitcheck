@@ -37,7 +37,7 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: nu
     const x = i * barW;
     ctx.fillStyle = x <= playedX
       ? "hsl(var(--primary) / 0.9)"
-      : "hsl(var(--muted-foreground) / 0.3)";
+      : "hsl(var(--muted-foreground) / 0.5)";
     ctx.fillRect(x, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
 }

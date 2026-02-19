@@ -35,7 +35,7 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[]) {
   const gap = 1;
   peaks.forEach((peak, i) => {
     const barH = Math.max(peak * ch * 0.85, 1);
-    ctx.fillStyle = "hsl(var(--muted-foreground) / 0.3)";
+    ctx.fillStyle = "hsl(var(--muted-foreground) / 0.5)";
     ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
 }
