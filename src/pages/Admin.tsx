@@ -117,14 +117,14 @@ export default function Admin() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full max-w-3xl grid-cols-7">
-            <TabsTrigger value="users" className="gap-1.5"><Users size={14} /> Users</TabsTrigger>
-            <TabsTrigger value="artists" className="gap-1.5"><Music size={14} /> Artists</TabsTrigger>
-            <TabsTrigger value="verify" className="gap-1.5"><CheckCircle2 size={14} /> Verify</TabsTrigger>
-            <TabsTrigger value="data" className="gap-1.5"><Database size={14} /> Data</TabsTrigger>
-            <TabsTrigger value="tools" className="gap-1.5"><Wrench size={14} /> Tools</TabsTrigger>
-            <TabsTrigger value="copy" className="gap-1.5"><FileText size={14} /> Copy</TabsTrigger>
-            <TabsTrigger value="prompts" className="gap-1.5"><Bot size={14} /> AI</TabsTrigger>
+          <TabsList className="flex flex-wrap gap-x-4 gap-y-1 max-w-3xl mb-2">
+            <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="artists">Artists</TabsTrigger>
+            <TabsTrigger value="verify">Verify</TabsTrigger>
+            <TabsTrigger value="data">Data</TabsTrigger>
+            <TabsTrigger value="tools">Tools</TabsTrigger>
+            <TabsTrigger value="copy">Copy</TabsTrigger>
+            <TabsTrigger value="prompts">AI</TabsTrigger>
           </TabsList>
 
           {/* ── USERS TAB ── */}

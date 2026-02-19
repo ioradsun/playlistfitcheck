@@ -252,15 +252,9 @@ export function FitWidgetInviteModal({ open, onOpenChange, inviteCode, isUnlimit
         </DialogHeader>
 
         <Tabs defaultValue="invite" className="px-5 pb-5">
-          <TabsList className="w-full mb-3 h-9 bg-muted/50">
-            <TabsTrigger value="invite" className="flex-1 gap-1.5 text-xs data-[state=active]:shadow-sm">
-              <Users size={12} />
-              Invite an Artist
-            </TabsTrigger>
-            <TabsTrigger value="share" className="flex-1 gap-1.5 text-xs data-[state=active]:shadow-sm">
-              <Share2 size={12} />
-              Share on Social
-            </TabsTrigger>
+          <TabsList className="w-full mb-4 gap-6">
+            <TabsTrigger value="invite">Invite an Artist</TabsTrigger>
+            <TabsTrigger value="share">Share on Social</TabsTrigger>
           </TabsList>
 
           <div className="min-h-[190px]">

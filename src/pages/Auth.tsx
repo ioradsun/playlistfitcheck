@@ -311,7 +311,7 @@ const Auth = () => {
             </>
           ) : (
             <Tabs value={activeTab} onValueChange={v => setActiveTab(v)} className="w-full">
-              <TabsList className="w-full">
+              <TabsList className="w-full flex gap-6 border-b border-border/30 pb-2 mb-1">
                 <TabsTrigger value="signup" className="flex-1">Sign Up</TabsTrigger>
                 <TabsTrigger value="signin" className="flex-1">Log In</TabsTrigger>
               </TabsList>
