@@ -23,6 +23,7 @@ export function SongFitFeed() {
   const [billboardMode, setBillboardMode] = useState<BillboardMode>("this_week");
   const [userVoteCount, setUserVoteCount] = useState<number | null>(null);
   const [composerUnlocked, setComposerUnlocked] = useState(false);
+  const [showFloatingAnchor, setShowFloatingAnchor] = useState(false);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -138,6 +139,30 @@ export function SongFitFeed() {
     return () => window.removeEventListener("crowdfit:vote", handler);
   }, []);
 
+  // Re-lock on post-created event (circular economy)
+  useEffect(() => {
+    const handler = () => {
+      setComposerUnlocked(false);
+      setUserVoteCount(0);
+    };
+    window.addEventListener("crowdfit:post-created", handler);
+    return () => window.removeEventListener("crowdfit:post-created", handler);
+  }, []);
+
+  // Floating anchor: show when composer is unlocked and user scrolled > 600px
+  useEffect(() => {
+    if (!composerUnlocked) {
+      setShowFloatingAnchor(false);
+      return;
+    }
+    const handleScroll = () => {
+      setShowFloatingAnchor(window.scrollY > 600);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [composerUnlocked]);
+
   return (
     <div className="w-full max-w-[470px] mx-auto">
       {user ? (
@@ -210,6 +235,15 @@ export function SongFitFeed() {
         }}
       />
       <SongFitLikesList postId={likesPostId} onClose={() => setLikesPostId(null)} />
+
+      {showFloatingAnchor && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 border border-border/40 bg-background text-[12px] font-medium px-4 py-2 rounded-full"
+        >
+          + Drop Your Song
+        </button>
+      )}
     </div>
   );
 }
