@@ -8,6 +8,8 @@ type Step = 1 | 2 | 3 | "revealing" | "done";
 
 interface Props {
   postId: string;
+  isOwner?: boolean;
+  onOpenReviews?: () => void;
 }
 
 interface Results {
@@ -35,7 +37,7 @@ function incrementSessionReviewCount(): number {
   return next;
 }
 
-export function HookReview({ postId }: Props) {
+export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
 
@@ -165,7 +167,16 @@ export function HookReview({ postId }: Props) {
             <span className="text-muted-foreground/30">·</span>
             <span><span className="text-foreground font-medium">{replayPct}%</span> replay</span>
             <span className="text-muted-foreground/30">·</span>
-            <span className="text-muted-foreground/50">{results.total} {results.total === 1 ? "review" : "reviews"}</span>
+            {isOwner && onOpenReviews ? (
+              <button
+                onClick={onOpenReviews}
+                className="text-muted-foreground/50 hover:text-foreground underline underline-offset-2 transition-colors"
+              >
+                {results.total} {results.total === 1 ? "review" : "reviews"}
+              </button>
+            ) : (
+              <span className="text-muted-foreground/50">{results.total} {results.total === 1 ? "review" : "reviews"}</span>
+            )}
           </div>
         );
       })()}
