@@ -485,18 +485,18 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
               <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">
                 Export · {versionSuffix}
               </p>
-              <div className="grid grid-cols-3 gap-3">
-                {EXPORT_OPTIONS.map(({ format, label, desc }) => (
-                  <div key={format} className="space-y-1.5">
+              <div className="flex">
+                {EXPORT_OPTIONS.map(({ format, label, desc }, idx) => (
+                  <div key={format} className={`flex-1 space-y-1.5 ${idx > 0 ? "border-l border-border/40 pl-3" : ""} ${idx < EXPORT_OPTIONS.length - 1 ? "pr-3" : ""}`}>
                     <div className="flex items-center gap-1">
                       <span className="text-xs font-mono font-medium text-foreground">{label}</span>
                       <span className="text-[10px] text-muted-foreground">· {desc}</span>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide border border-muted-foreground/30 text-muted-foreground rounded-sm hover:border-muted-foreground/60 hover:text-foreground" onClick={() => handleCopy(format)}>
+                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide text-muted-foreground hover:text-foreground px-1" onClick={() => handleCopy(format)}>
                         {copied === format ? "✓" : "Copy"}
                       </Button>
-                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide border border-muted-foreground/30 text-muted-foreground rounded-sm hover:border-muted-foreground/60 hover:text-foreground" onClick={() => handleDownload(format)}>
+                      <Button variant="ghost" size="sm" className="flex-1 text-[10px] h-7 font-mono tracking-wide text-muted-foreground hover:text-foreground px-1" onClick={() => handleDownload(format)}>
                         Save
                       </Button>
                     </div>
