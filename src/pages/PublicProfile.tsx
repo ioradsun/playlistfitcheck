@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy,
-  Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle, BarChart2, Sparkles,
+  Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle, BarChart2, Sparkles, Zap,
 } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -20,6 +20,14 @@ import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import type { SongFitPost } from "@/components/songfit/types";
+
+interface HookReviewSummary {
+  total: number;
+  topRatingPct: number;
+  topRatingLabel: string;
+  replayPct: number;
+}
+
 
 interface PublicProfileData {
   display_name: string | null;
@@ -50,10 +58,12 @@ const PublicProfile = () => {
   const location = useLocation();
   const { features } = useSiteCopy();
   const fromMenu = !!(location.state as any)?.fromMenu;
+  const isHookMode = features?.crowdfit_mode === "hook_review";
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<SongFitPost[]>([]);
   const [saveCounts, setSaveCounts] = useState<Record<string, number>>({});
+  const [hookReviews, setHookReviews] = useState<Record<string, HookReviewSummary>>({});
   const [notFound, setNotFound] = useState(false);
 
   const isOwner = user?.id === userId;
@@ -85,13 +95,14 @@ const PublicProfile = () => {
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50)
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (!data) return;
         const posts = data as unknown as SongFitPost[];
         setSubmissions(posts);
-        // Fetch save counts for all posts
         const postIds = posts.map(p => p.id);
         if (postIds.length === 0) return;
+
+        // Fetch save counts
         supabase.from("songfit_saves")
           .select("post_id")
           .in("post_id", postIds)
@@ -101,6 +112,30 @@ const PublicProfile = () => {
             saves.forEach((s: any) => { counts[s.post_id] = (counts[s.post_id] ?? 0) + 1; });
             setSaveCounts(counts);
           });
+
+        // Fetch hook reviews per post
+        const { data: reviews } = await supabase
+          .from("songfit_hook_reviews")
+          .select("post_id, hook_rating, would_replay")
+          .in("post_id", postIds);
+        if (reviews) {
+          const HOOK_ORDER = ["missed", "almost", "solid", "hit"];
+          const byPost: Record<string, HookReviewSummary> = {};
+          postIds.forEach(id => {
+            const pr = reviews.filter((r: any) => r.post_id === id);
+            if (pr.length === 0) return;
+            const total = pr.length;
+            const replayCount = pr.filter((r: any) => r.would_replay).length;
+            const replayPct = Math.round((replayCount / total) * 100);
+            const ratingCounts: Record<string, number> = {};
+            pr.forEach((r: any) => { ratingCounts[r.hook_rating] = (ratingCounts[r.hook_rating] ?? 0) + 1; });
+            let topRating = ""; let topCount = 0;
+            HOOK_ORDER.forEach(k => { if ((ratingCounts[k] ?? 0) > topCount) { topCount = ratingCounts[k]; topRating = k; } });
+            const LABELS: Record<string, string> = { missed: "missed", almost: "almost", solid: "solid", hit: "hit" };
+            byPost[id] = { total, topRatingPct: Math.round((topCount / total) * 100), topRatingLabel: LABELS[topRating] ?? topRating, replayPct };
+          });
+          setHookReviews(byPost);
+        }
       });
   }, [userId]);
 
@@ -201,6 +236,15 @@ const PublicProfile = () => {
   const totalLikes = submissions.reduce((sum, s) => sum + (s.likes_count || 0), 0);
   const totalComments = submissions.reduce((sum, s) => sum + (s.comments_count || 0), 0);
   const totalSaves = Object.values(saveCounts).reduce((sum, c) => sum + c, 0);
+  // Hook mode aggregate stats
+  const hookReviewsAll = Object.values(hookReviews);
+  const totalReviews = hookReviewsAll.reduce((sum, r) => sum + r.total, 0);
+  const avgReplayPct = hookReviewsAll.length > 0
+    ? Math.round(hookReviewsAll.reduce((sum, r) => sum + r.replayPct, 0) / hookReviewsAll.length)
+    : 0;
+  const avgHitPct = hookReviewsAll.length > 0
+    ? Math.round(hookReviewsAll.reduce((sum, r) => sum + r.topRatingPct, 0) / hookReviewsAll.length)
+    : 0;
 
   if (notFound) {
     return (
@@ -347,7 +391,7 @@ const PublicProfile = () => {
 
         {/* Competitive Summary */}
         {submissions.length > 0 && (
-          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${bestPeakRank ? 5 : 4}, minmax(0, 1fr))` }}>
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${bestPeakRank ? (isHookMode ? 4 : 5) : (isHookMode ? 3 : 4)}, minmax(0, 1fr))` }}>
             {bestPeakRank && (
               <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
                 <Trophy size={14} className="mx-auto mb-1 text-primary" />
@@ -360,21 +404,38 @@ const PublicProfile = () => {
               <p className="text-base font-bold">{submissions.length}</p>
               <p className="text-[10px] text-muted-foreground">Songs</p>
             </div>
-            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <Heart size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-base font-bold">{totalLikes}</p>
-              <p className="text-[10px] text-muted-foreground">Likes</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <MessageCircle size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-base font-bold">{totalComments}</p>
-              <p className="text-[10px] text-muted-foreground">Comments</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <Bookmark size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-base font-bold">{totalSaves}</p>
-              <p className="text-[10px] text-muted-foreground">Saves</p>
-            </div>
+            {isHookMode ? (
+              <>
+                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
+                  <Zap size={14} className="mx-auto mb-1 text-primary" />
+                  <p className="text-base font-bold">{totalReviews}</p>
+                  <p className="text-[10px] text-muted-foreground">Reviews</p>
+                </div>
+                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
+                  <BarChart2 size={14} className="mx-auto mb-1 text-primary" />
+                  <p className="text-base font-bold">{avgReplayPct}%</p>
+                  <p className="text-[10px] text-muted-foreground">Avg Replay</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
+                  <Heart size={14} className="mx-auto mb-1 text-primary" />
+                  <p className="text-base font-bold">{totalLikes}</p>
+                  <p className="text-[10px] text-muted-foreground">Likes</p>
+                </div>
+                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
+                  <MessageCircle size={14} className="mx-auto mb-1 text-primary" />
+                  <p className="text-base font-bold">{totalComments}</p>
+                  <p className="text-[10px] text-muted-foreground">Comments</p>
+                </div>
+                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
+                  <Bookmark size={14} className="mx-auto mb-1 text-primary" />
+                  <p className="text-base font-bold">{totalSaves}</p>
+                  <p className="text-[10px] text-muted-foreground">Saves</p>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -385,7 +446,9 @@ const PublicProfile = () => {
             <div className="px-4 pt-4 pb-0 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <BarChart2 size={14} className="text-primary" />
-                <span className="text-xs font-bold tracking-widest uppercase text-primary">CrowdFit</span>
+                <span className="text-xs font-bold tracking-widest uppercase text-primary">
+                  {isHookMode ? "HookFit" : "CrowdFit"}
+                </span>
               </div>
             </div>
 
@@ -444,15 +507,34 @@ const PublicProfile = () => {
                           <p className="text-sm font-medium truncate">{s.track_title}</p>
                           <div className="flex items-center gap-2.5 mt-0.5">
                             <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
-                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                              <Heart size={9} /> {s.likes_count ?? 0}
-                            </span>
-                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                              <MessageCircle size={9} /> {s.comments_count ?? 0}
-                            </span>
-                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                              <Bookmark size={9} /> {saveCounts[s.id] ?? 0}
-                            </span>
+                            {isHookMode ? (
+                              hookReviews[s.id] ? (
+                                <>
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    <span className="text-foreground font-semibold">{hookReviews[s.id].topRatingPct}%</span> {hookReviews[s.id].topRatingLabel}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground/40">·</span>
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    <span className="text-foreground font-semibold">{hookReviews[s.id].replayPct}%</span> replay
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground/50">{hookReviews[s.id].total} reviews</span>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground/50">no reviews yet</span>
+                              )
+                            ) : (
+                              <>
+                                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                  <Heart size={9} /> {s.likes_count ?? 0}
+                                </span>
+                                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                  <MessageCircle size={9} /> {s.comments_count ?? 0}
+                                </span>
+                                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                  <Bookmark size={9} /> {saveCounts[s.id] ?? 0}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
