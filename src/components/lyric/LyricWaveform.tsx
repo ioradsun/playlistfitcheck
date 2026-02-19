@@ -23,6 +23,10 @@ function getCssHsl(variable: string, alpha = 1): string {
   return `hsla(${val}, ${alpha})`;
 }
 
+function isDarkMode(): boolean {
+  return document.documentElement.classList.contains("dark");
+}
+
 function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: number) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
@@ -33,8 +37,12 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: nu
   const ch = canvas.clientHeight;
   ctx.clearRect(0, 0, cw, ch);
 
+  const dark = isDarkMode();
   const playedColor = getCssHsl("--primary", 0.9);
-  const unplayedColor = getCssHsl("--muted-foreground", 0.5);
+  // In dark mode use a much higher opacity so bars are clearly visible
+  const unplayedColor = dark
+    ? getCssHsl("--foreground", 0.3)
+    : getCssHsl("--muted-foreground", 0.4);
 
   const barW = Math.max(cw / peaks.length, 1);
   const gap = 1;
@@ -71,6 +79,16 @@ export function LyricWaveform({ waveform, isPlaying, currentTime, onSeek, onTogg
     });
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
+  }, [waveform, currentPct]);
+
+  // Redraw when dark/light theme toggles
+  useEffect(() => {
+    if (!canvasRef.current || !waveform) return;
+    const mo = new MutationObserver(() => {
+      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks, currentPct);
+    });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
   }, [waveform, currentPct]);
 
   const handleClick = useCallback(
