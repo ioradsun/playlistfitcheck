@@ -16,6 +16,7 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent, logImpression } from "@/lib/engagementTracking";
 import { HookReview } from "./HookReview";
+import { HookReviewsSheet } from "./HookReviewsSheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +51,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
   const impressionRef = useRef<HTMLDivElement>(null);
   const impressionLogged = useRef(false);
+  const [reviewsSheetPostId, setReviewsSheetPostId] = useState<string | null>(null);
 
   const isOwnPost = user?.id === post.user_id;
   const CAPTION_MAX = 300;
@@ -266,7 +268,17 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
 
       {/* Action Row — conditional on crowdfit mode */}
       {crowdfitMode === "hook_review" ? (
-        <HookReview postId={post.id} />
+        <>
+          <HookReview
+            postId={post.id}
+            isOwner={isOwnPost}
+            onOpenReviews={isOwnPost ? () => setReviewsSheetPostId(post.id) : undefined}
+          />
+          <HookReviewsSheet
+            postId={reviewsSheetPostId}
+            onClose={() => setReviewsSheetPostId(null)}
+          />
+        </>
       ) : (
         <div className="flex items-center justify-between px-1 py-0.5">
           {/* Left group: comment, share, like, bookmark */}
