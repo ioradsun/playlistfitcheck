@@ -188,78 +188,90 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
         </div>
       )}
 
-      {/* replay_cta: Spotify CTAs + comment + submit */}
+      {/* replay_cta: Spotify CTAs + comment + vote */}
       {step === "replay_cta" && (
         <div className="space-y-2.5">
-          <div className="flex gap-2 flex-wrap">
-            {artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
-              <a
-                href={artistsJson[0].spotifyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
-              >
-                <span>♫</span>
-                <span>Follow {artistsJson[0].name}</span>
-              </a>
-            )}
-            {spotifyTrackUrl && (
-              <a
-                href={spotifyTrackUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
-              >
-                <span>+</span>
-                <span>Save track</span>
-              </a>
-            )}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2 flex-wrap">
+              {artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
+                <a
+                  href={artistsJson[0].spotifyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                >
+                  <span>♫</span>
+                  <span>Follow {artistsJson[0].name}</span>
+                </a>
+              )}
+              {spotifyTrackUrl && (
+                <a
+                  href={spotifyTrackUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                >
+                  <span>+</span>
+                  <span>Save track</span>
+                </a>
+              )}
+            </div>
+            <button
+              onClick={() => setStep(2)}
+              className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
+              aria-label="Cancel"
+            >
+              ✕
+            </button>
           </div>
-          <div className="space-y-1.5">
+          <div className="flex items-end gap-2">
             <textarea
               ref={textareaRef}
               value={contextNote}
               onChange={e => setContextNote(e.target.value)}
               onKeyDown={handleContextKeyDown}
-              placeholder="What made you choose that? (optional) — press Enter to submit"
+              placeholder="What hit? (Optional)..."
               rows={2}
-              className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+              className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
             />
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground/40">Shift+Enter for new line</span>
-              <button
-                onClick={() => handleSubmit(contextNote)}
-                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Submit
-              </button>
-            </div>
+            <button
+              onClick={() => handleSubmit(contextNote)}
+              className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
+            >
+              Vote
+            </button>
           </div>
         </div>
       )}
 
-      {/* skip_cta: comment + submit (no Spotify CTAs) */}
+      {/* skip_cta: comment + vote (no Spotify CTAs) */}
       {step === "skip_cta" && (
         <div className="space-y-2.5">
-          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">→| Noted — anything to add?</p>
-          <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-medium text-muted-foreground tracking-wide">→| Noted — anything to add?</p>
+            <button
+              onClick={() => setStep(2)}
+              className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
+              aria-label="Cancel"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex items-end gap-2">
             <textarea
               value={contextNote}
               onChange={e => setContextNote(e.target.value)}
               onKeyDown={handleContextKeyDown}
-              placeholder="What made you choose that? (optional) — press Enter to submit"
+              placeholder="Real talk: What's missing? (Optional)..."
               rows={2}
-              className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+              className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
             />
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground/40">Shift+Enter for new line</span>
-              <button
-                onClick={() => handleSubmit(contextNote)}
-                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Submit
-              </button>
-            </div>
+            <button
+              onClick={() => handleSubmit(contextNote)}
+              className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
+            >
+              Vote
+            </button>
           </div>
         </div>
       )}
