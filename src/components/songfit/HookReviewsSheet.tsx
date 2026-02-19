@@ -267,13 +267,17 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
                   className={`text-muted-foreground/40 transition-transform duration-200 group-hover:text-muted-foreground/70 ${lyricsExpanded ? "rotate-180" : ""}`}
                 />
               </div>
-              <div className={`overflow-hidden transition-all duration-200 ${lyricsExpanded ? "max-h-[2000px]" : "max-h-5"}`}>
-                <p className={`text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap ${!lyricsExpanded ? "line-clamp-1" : ""}`}>
+              {lyricsExpanded ? (
+                <p className="text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap">
                   {post.caption}
                 </p>
-              </div>
-              {!lyricsExpanded && (
-                <p className="text-[10px] text-muted-foreground/40 mt-1">Tap to expand</p>
+              ) : (
+                <>
+                  <p className="text-xs leading-relaxed text-foreground/80 line-clamp-1">
+                    {post.caption}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/40 mt-1">Tap to expand</p>
+                </>
               )}
             </button>
           )}
