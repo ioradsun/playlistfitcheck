@@ -30,9 +30,11 @@ interface Props {
   onOpenComments: (postId: string) => void;
   onOpenLikes: (postId: string) => void;
   onRefresh: () => void;
+  isBillboard?: boolean;
+  signalData?: { total: number; replay_yes: number };
 }
 
-export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRefresh }: Props) {
+export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRefresh, isBillboard, signalData }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
@@ -432,6 +434,9 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             onOpenReviews={isOwnPost ? () => setReviewsSheetPostId(post.id) : undefined}
             spotifyTrackUrl={post.spotify_track_url}
             artistsJson={post.track_artists_json as any[]}
+            showPreResolved={isBillboard && !!signalData}
+            preResolved={signalData}
+            rank={rank}
           />
           <HookReviewsSheet
             postId={reviewsSheetPostId}

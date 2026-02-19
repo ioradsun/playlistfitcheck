@@ -14,6 +14,10 @@ interface Props {
   onReviewRemoved?: () => void;
   spotifyTrackUrl?: string;
   artistsJson?: any[];
+  // Billboard pre-resolved mode
+  showPreResolved?: boolean;
+  preResolved?: { total: number; replay_yes: number };
+  rank?: number;
 }
 
 interface Results {
@@ -34,7 +38,7 @@ function incrementSessionReviewCount(): number {
   return next;
 }
 
-export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson }: Props) {
+export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, showPreResolved, preResolved, rank }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
   const navigate = useNavigate();
@@ -63,6 +67,11 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   }, [step]);
 
   useEffect(() => {
+    // In pre-resolved (billboard) mode, skip the per-post DB check
+    if (showPreResolved) {
+      setAlreadyChecked(true);
+      return;
+    }
     const checkExisting = async () => {
       let query = supabase.from("songfit_hook_reviews").select("id").eq("post_id", postId);
       if (user) {
@@ -77,7 +86,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       setAlreadyChecked(true);
     };
     checkExisting();
-  }, [postId, user, sessionId]);
+  }, [postId, user, sessionId, showPreResolved]);
 
   useEffect(() => {
     if (step !== "revealing") return;
@@ -138,6 +147,45 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   };
 
   if (!alreadyChecked) return null;
+
+  // Pre-resolved (FMLY 40 billboard) layout
+  if (showPreResolved && step !== "done" && step !== "revealing" && step !== "replay_cta" && step !== "skip_cta") {
+    const total = preResolved?.total ?? 0;
+    const replayYes = preResolved?.replay_yes ?? 0;
+    const strength = total > 0 ? Math.round((replayYes / total) * 100) : null;
+    const rankStr = rank != null ? String(rank).padStart(2, "0") : null;
+    const signalLabel = total === 1 ? "signal" : "signals";
+
+    return (
+      <div className="border-t border-border/30">
+        {/* Signal Row */}
+        <div className="px-4 py-2.5 flex items-center justify-between">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+            Signal Strength: {strength !== null ? `${strength}%` : "—"}
+            {rankStr && <> · Standing: {rankStr}</>}
+            {" · "}{total} {signalLabel}
+          </span>
+        </div>
+        {/* Action Row */}
+        <div className="border-t border-border/30 px-4 py-3 flex gap-2">
+          <button
+            onClick={() => handleVoteClick(true)}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+          >
+            <span className="text-[13px] leading-none text-muted-foreground/40">↺</span>
+            <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
+          </button>
+          <button
+            onClick={() => handleVoteClick(false)}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+          >
+            <span className="text-[13px] leading-none text-muted-foreground/40">→|</span>
+            <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-border/30 px-4 py-3 min-h-[72px] flex flex-col justify-center">

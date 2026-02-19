@@ -26,11 +26,13 @@ export function SongFitFeed() {
   const [showFloatingAnchor, setShowFloatingAnchor] = useState(false);
   const [hasPosted, setHasPosted] = useState(false);
   const [hasEverPosted, setHasEverPosted] = useState<boolean | null>(null);
+  const [signalMap, setSignalMap] = useState<Record<string, { total: number; replay_yes: number }>>({});
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
 
     if (feedView === "recent") {
+      setSignalMap({});
       const { data } = await supabase
         .from("songfit_posts")
         .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
@@ -66,6 +68,25 @@ export function SongFitFeed() {
       enriched = await enrichWithUserData(enriched);
       enriched = enriched.map((p, i) => ({ ...p, current_rank: i + 1 }));
       setPosts(enriched);
+
+      // Batch-fetch signal aggregates for all billboard posts
+      if (enriched.length > 0) {
+        const postIds = enriched.map(p => p.id);
+        const { data: reviews } = await supabase
+          .from("songfit_hook_reviews")
+          .select("post_id, would_replay")
+          .in("post_id", postIds);
+
+        const map = (reviews || []).reduce((acc, r) => {
+          if (!acc[r.post_id]) acc[r.post_id] = { total: 0, replay_yes: 0 };
+          acc[r.post_id].total++;
+          if (r.would_replay) acc[r.post_id].replay_yes++;
+          return acc;
+        }, {} as Record<string, { total: number; replay_yes: number }>);
+        setSignalMap(map);
+      } else {
+        setSignalMap({});
+      }
     }
 
     setLoading(false);
@@ -239,6 +260,8 @@ export function SongFitFeed() {
                 onOpenComments={setCommentPostId}
                 onOpenLikes={setLikesPostId}
                 onRefresh={fetchPosts}
+                isBillboard={feedView === "billboard"}
+                signalData={signalMap[post.id]}
               />
             ))}
           </div>
