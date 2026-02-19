@@ -257,45 +257,67 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0">
 
         {/* ── Song identity header ── */}
-        <div className="shrink-0 px-5 pt-5 pb-4 border-b border-border/40 space-y-3">
+        <div className="shrink-0 px-5 pt-5 pb-4 border-b border-border/40 space-y-4">
+
+          {/* Song row */}
           <div className="flex items-center gap-3">
             {post?.album_art_url ? (
               <img
                 src={post.album_art_url}
                 alt={post?.track_title}
-                className="w-12 h-12 rounded-xl object-cover shrink-0 shadow-sm"
+                className="w-11 h-11 rounded-xl object-cover shrink-0 shadow-sm"
               />
             ) : (
-              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                <Music size={18} className="text-muted-foreground" />
+              <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                <Music size={16} className="text-muted-foreground" />
               </div>
             )}
             <div className="flex-1 min-w-0">
-              {!loading && rows.length > 0 ? (() => {
-                const replayPct = Math.round((rows.filter(r => r.would_replay).length / rows.length) * 100);
-                return (
-                  <>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-0.5">
-                      REPLAY SIGNAL: {replayPct}%
-                    </p>
-                    <p className="text-[10px] text-muted-foreground/60">
-                      {rows.length} {rows.length === 1 ? "signal" : "signals"}
-                    </p>
-                  </>
-                );
-              })() : (
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-0.5">
-                  Song Reviews
-                </p>
-              )}
-              <h2 className="text-sm font-bold leading-tight truncate mt-1">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40 mb-0.5">
+                Song Reviews
+              </p>
+              <h2 className="text-sm font-bold leading-tight truncate">
                 {post?.track_title ?? "Loading…"}
               </h2>
               {artistNames && (
-                <p className="text-xs text-muted-foreground truncate mt-0.5">{artistNames}</p>
+                <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{artistNames}</p>
               )}
             </div>
           </div>
+
+          {/* Stat cards */}
+          {!loading && rows.length > 0 && (() => {
+            const replayPct = Math.round((rows.filter(r => r.would_replay).length / rows.length) * 100);
+            const skipPct = 100 - replayPct;
+            return (
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* Replay Signal card */}
+                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
+                    Replay Signal
+                  </p>
+                  <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
+                    {replayPct}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
+                    {replayPct >= 50 ? "would run it back" : "would skip"}
+                  </p>
+                </div>
+                {/* Signals card */}
+                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
+                    Signals
+                  </p>
+                  <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
+                    {rows.length}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
+                    {rows.filter(r => r.would_replay).length} replay · {rows.filter(r => !r.would_replay).length} skip
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Hook lyrics — collapsible */}
           {post?.caption && (
@@ -303,7 +325,7 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
               onClick={() => setLyricsExpanded(prev => !prev)}
               className="w-full text-left rounded-xl bg-muted/40 border border-border/50 px-3 py-2.5 hover:bg-muted/60 transition-colors group"
             >
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1">
                 <ChevronDown
                   size={13}
                   className={`text-muted-foreground/40 transition-transform duration-200 group-hover:text-muted-foreground/70 ${lyricsExpanded ? "rotate-180" : ""}`}
