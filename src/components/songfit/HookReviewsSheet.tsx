@@ -271,10 +271,24 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-0.5">
-                Song Reviews
-              </p>
-              <h2 className="text-sm font-bold leading-tight truncate">
+              {!loading && rows.length > 0 ? (() => {
+                const replayPct = Math.round((rows.filter(r => r.would_replay).length / rows.length) * 100);
+                return (
+                  <>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-0.5">
+                      REPLAY SIGNAL: {replayPct}%
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/60">
+                      {rows.length} {rows.length === 1 ? "signal" : "signals"}
+                    </p>
+                  </>
+                );
+              })() : (
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-0.5">
+                  Song Reviews
+                </p>
+              )}
+              <h2 className="text-sm font-bold leading-tight truncate mt-1">
                 {post?.track_title ?? "Loading…"}
               </h2>
               {artistNames && (
@@ -310,16 +324,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             </button>
           )}
 
-          {/* Signal count + Replay Signal */}
-          {!loading && rows.length > 0 && (() => {
-            const replayPct = Math.round((rows.filter(r => r.would_replay).length / rows.length) * 100);
-            return (
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] font-medium text-foreground">Replay Signal: {replayPct}%</span>
-                <span className="text-[10px] text-muted-foreground">{rows.length} {rows.length === 1 ? "signal" : "signals"}</span>
-              </div>
-            );
-          })()}
         </div>
 
         {/* ── Reviews list ── */}
