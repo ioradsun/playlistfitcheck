@@ -40,6 +40,7 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/CrowdFit" element={<Index />} />
+                <Route path="/HookFit" element={<Index />} />
                 <Route path="/SongFit" element={<Index />} />
                 <Route path="/ProFit" element={<Index />} />
                 <Route path="/PlaylistFit" element={<Index />} />

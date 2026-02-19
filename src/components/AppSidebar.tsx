@@ -104,6 +104,7 @@ export { TOOLS };
 
 export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }: AppSidebarProps) {
   const siteCopy = useSiteCopy();
+  const isHookMode = siteCopy.features?.crowdfit_mode === "hook_review";
   const { user, loading: authLoading, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -262,7 +263,8 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
 
   const handleToolClick = (tool: ToolItem) => {
     onTabChange?.(tool.value);
-    navigate(tool.path);
+    const path = tool.value === "songfit" && isHookMode ? "/HookFit" : tool.path;
+    navigate(path);
     closeMobileIfNeeded();
   };
 
@@ -353,9 +355,10 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   const enabled = siteCopy.features?.tools_enabled?.[tool.value];
                   return enabled === undefined || enabled === true;
                 }).map((tool) => {
+                const effectivePath = tool.value === "songfit" && isHookMode ? "/HookFit" : tool.path;
                 const isActive = activeTab
                   ? activeTab === tool.value
-                  : location.pathname === tool.path;
+                  : location.pathname === effectivePath || location.pathname === tool.path;
                 const recents = recentByType[tool.value] || [];
 
                 return (
