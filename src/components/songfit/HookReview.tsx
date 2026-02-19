@@ -143,24 +143,27 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       {/* Done */}
       {step === "done" && results && (() => {
         const replayPct = results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0;
+        const signalLabel = results.total === 1 ? "signal" : "signals";
         return (
-          <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground font-mono">
-            <span className="inline-flex items-center gap-1.5 bg-foreground/[0.05] border border-border/40 rounded-full px-2.5 py-1 leading-none">
-              <span className="text-sm text-foreground/80">↺</span>
-              <span className="font-semibold text-foreground">{replayPct}%</span>
-              <span className="text-muted-foreground">replay</span>
-            </span>
-            <span className="text-muted-foreground/30">·</span>
-            {isOwner && onOpenReviews ? (
-              <button
-                onClick={onOpenReviews}
-                className="text-muted-foreground/50 hover:text-foreground underline underline-offset-2 transition-colors"
-              >
-                {results.total} {results.total === 1 ? "review" : "reviews"}
-              </button>
-            ) : (
-              <span className="text-muted-foreground/50">{results.total} {results.total === 1 ? "review" : "reviews"}</span>
-            )}
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[11px] font-medium text-foreground">Replay Signal: {replayPct}%</span>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>
+                {replayPct >= 50
+                  ? `${replayPct}% of the FMLY would run it back.`
+                  : `${replayPct}% are feeling this.`}
+              </span>
+              {isOwner && onOpenReviews ? (
+                <button
+                  onClick={onOpenReviews}
+                  className="text-muted-foreground/50 hover:text-foreground transition-colors"
+                >
+                  {results.total} {signalLabel}
+                </button>
+              ) : (
+                <span className="text-muted-foreground/50">{results.total} {signalLabel}</span>
+              )}
+            </div>
           </div>
         );
       })()}

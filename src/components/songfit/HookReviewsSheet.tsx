@@ -40,33 +40,6 @@ interface PostMeta {
   caption: string | null;
 }
 
-const RATING_LABEL: Record<string, string> = {
-  missed: "Missed",
-  almost: "Almost",
-  solid: "Solid",
-  hit: "Hit",
-};
-
-const RATING_ICON: Record<string, string> = {
-  missed: "○",
-  almost: "◐",
-  solid: "●",
-  hit: "✦",
-};
-
-const RATING_COLOR: Record<string, string> = {
-  missed: "text-destructive/80",
-  almost: "text-yellow-500",
-  solid: "text-primary/80",
-  hit: "text-primary",
-};
-
-const RATING_BG: Record<string, string> = {
-  missed: "bg-destructive/10",
-  almost: "bg-yellow-500/10",
-  solid: "bg-primary/10",
-  hit: "bg-primary/15",
-};
 
 interface Props {
   postId: string | null;
@@ -337,18 +310,13 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             </button>
           )}
 
-          {/* Review count + scores */}
+          {/* Signal count + Replay Signal */}
           {!loading && rows.length > 0 && (() => {
             const replayPct = Math.round((rows.filter(r => r.would_replay).length / rows.length) * 100);
             return (
-              <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-muted-foreground">
-                <span className="font-semibold text-foreground text-xs not-italic">{rows.length} {rows.length === 1 ? "review" : "reviews"}</span>
-                <span className="text-muted-foreground/30">·</span>
-                <span className="inline-flex items-center gap-1.5 bg-foreground/[0.05] border border-border/40 rounded-full px-2.5 py-0.5 leading-none">
-                  <span className="text-sm text-foreground/80">↺</span>
-                  <span className="font-semibold text-foreground">{replayPct}%</span>
-                  <span>replay</span>
-                </span>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] font-medium text-foreground">Replay Signal: {replayPct}%</span>
+                <span className="text-[10px] text-muted-foreground">{rows.length} {rows.length === 1 ? "signal" : "signals"}</span>
               </div>
             );
           })()}
@@ -386,9 +354,8 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                         {/* Name + badges */}
                          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                            <span className="text-sm font-semibold leading-none">{name}</span>
-                           <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${row.would_replay ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted/60"}`}>
-                             <span className="text-[11px] leading-none">{row.would_replay ? "↺" : "→|"}</span>
-                             {row.would_replay ? "Replay" : "Skip"}
+                           <span className="text-[10px] border border-border/30 rounded-full px-2 py-0.5 text-muted-foreground/60">
+                             {row.would_replay ? "Would replay" : "Would skip"}
                            </span>
                          </div>
 
