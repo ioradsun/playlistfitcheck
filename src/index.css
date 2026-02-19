@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import 'geist/dist/fonts/geist-sans/style.css';
+@import 'geist/dist/fonts/geist-mono/style.css';
 
 @layer base {
   :root {
@@ -120,13 +121,36 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
     height: 100%;
     overflow: hidden;
   }
 
-  code, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+  /* H1: Page Titles */
+  h1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-family: 'Geist', system-ui, sans-serif;
+  }
+
+  /* H2: Section Titles */
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-family: 'Geist', system-ui, sans-serif;
+  }
+
+  /* Body text */
+  p, li, span:not(.font-mono) {
+    font-family: 'Geist', system-ui, sans-serif;
+  }
+
+  code, .font-mono, [class*="font-mono"] {
+    font-family: 'Geist Mono', monospace;
   }
 }
 
@@ -150,5 +174,49 @@
   }
   .score-ring {
     filter: drop-shadow(var(--glow-primary));
+  }
+
+  /* ── Two-Font Protocol utilities ── */
+  /* Navigation / Action labels */
+  .type-nav {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  /* Page titles */
+  .type-title {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  /* Section titles */
+  .type-section {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  /* Body / editorial */
+  .type-body {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.6;
+  }
+  /* Technical / machine data */
+  .type-mono {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+  }
+  .type-mono-sm {
+    font-family: 'Geist Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
   }
 }
