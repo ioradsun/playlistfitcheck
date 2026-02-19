@@ -15,6 +15,7 @@ import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent, logImpression } from "@/lib/engagementTracking";
+import { HookReview } from "./HookReview";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +35,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
+  const crowdfitMode = siteCopy.features?.crowdfit_mode ?? "reactions";
   const navigate = useNavigate();
   const [liked, setLiked] = useState(post.user_has_liked ?? false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
@@ -262,109 +264,113 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         genre={((post.tags_json as any[]) || [])[0] || null}
       />
 
-      {/* Action Row — X-style metrics toolbar */}
-      <div className="flex items-center justify-between px-1 py-0.5">
-        {/* Left group: comment, share, like, bookmark */}
-        <div className="flex items-center">
-          <button
-            onClick={() => {
-              onOpenComments(post.id);
-              if (user) logEngagementEvent(post.id, user.id, "comment");
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
-          >
-            <MessageCircle size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
-            {post.comments_count > 0 && (
-              <span className="text-xs text-muted-foreground group-hover:text-primary">{post.comments_count}</span>
-            )}
-          </button>
-
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
-          >
-            <Share2 size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
-          </button>
-
-          <button
-            onClick={toggleLike}
-            className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-orange-500/10 transition-colors group"
-          >
-            <span className={`text-lg leading-none transition-all ${liked ? "scale-125" : "opacity-60 group-hover:opacity-100 group-hover:scale-110"}`}>🔥</span>
-            {likesCount > 0 && (
-              <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-xs text-muted-foreground group-hover:text-red-500">
-                {likesCount}
-              </button>
-            )}
-          </button>
-
-          <button onClick={toggleSave} className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group">
-            <Bookmark size={18} className={saved ? "fill-primary text-primary" : "text-muted-foreground group-hover:text-primary transition-colors"} />
-            {(post as any).saves_count > 0 && (
-              <span className="text-xs text-muted-foreground group-hover:text-primary">{(post as any).saves_count}</span>
-            )}
-          </button>
-
-          {cryptoEnabled && (
-            <div className="flex items-center">
-              <TipButton
-                recipientAddress={(post.profiles as any)?.wallet_address}
-                recipientName={displayName}
-                postId={post.id}
-                recipientUserId={post.user_id}
-                onTipLogged={(amount) => setTipsTotal(t => t + amount)}
-              />
-              {tipsTotal > 0 && (
-                <span className="text-xs text-muted-foreground font-mono -ml-1">
-                  {tipsTotal.toLocaleString()}
-                </span>
+      {/* Action Row — conditional on crowdfit mode */}
+      {crowdfitMode === "hook_review" ? (
+        <HookReview postId={post.id} />
+      ) : (
+        <div className="flex items-center justify-between px-1 py-0.5">
+          {/* Left group: comment, share, like, bookmark */}
+          <div className="flex items-center">
+            <button
+              onClick={() => {
+                onOpenComments(post.id);
+                if (user) logEngagementEvent(post.id, user.id, "comment");
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
+            >
+              <MessageCircle size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              {post.comments_count > 0 && (
+                <span className="text-xs text-muted-foreground group-hover:text-primary">{post.comments_count}</span>
               )}
-            </div>
-          )}
-        </div>
+            </button>
 
-        {/* Right: game mechanics */}
-        <TooltipProvider delayDuration={350}>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            {post.engagement_score > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-muted/60 transition-colors cursor-help">
-                    <Trophy size={14} />
-                    <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs max-w-48">
-                  Engagement score — weighted total of likes, comments, saves, shares &amp; clicks
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {post.status === "live" && post.expires_at && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-muted/60 transition-colors cursor-help">
-                    <Clock size={14} />
-                    <span className="text-xs font-mono">
-                      {Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d
-                    </span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs max-w-48">
-                  Days remaining in this submission cycle
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {rank && rank <= 50 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" className="text-xs font-bold text-primary font-mono px-2 py-1.5 rounded-full hover:bg-primary/10 transition-colors cursor-help">#{rank}</button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">Billboard rank</TooltipContent>
-              </Tooltip>
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
+            >
+              <Share2 size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
+            </button>
+
+            <button
+              onClick={toggleLike}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-orange-500/10 transition-colors group"
+            >
+              <span className={`text-lg leading-none transition-all ${liked ? "scale-125" : "opacity-60 group-hover:opacity-100 group-hover:scale-110"}`}>🔥</span>
+              {likesCount > 0 && (
+                <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-xs text-muted-foreground group-hover:text-red-500">
+                  {likesCount}
+                </button>
+              )}
+            </button>
+
+            <button onClick={toggleSave} className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group">
+              <Bookmark size={18} className={saved ? "fill-primary text-primary" : "text-muted-foreground group-hover:text-primary transition-colors"} />
+              {(post as any).saves_count > 0 && (
+                <span className="text-xs text-muted-foreground group-hover:text-primary">{(post as any).saves_count}</span>
+              )}
+            </button>
+
+            {cryptoEnabled && (
+              <div className="flex items-center">
+                <TipButton
+                  recipientAddress={(post.profiles as any)?.wallet_address}
+                  recipientName={displayName}
+                  postId={post.id}
+                  recipientUserId={post.user_id}
+                  onTipLogged={(amount) => setTipsTotal(t => t + amount)}
+                />
+                {tipsTotal > 0 && (
+                  <span className="text-xs text-muted-foreground font-mono -ml-1">
+                    {tipsTotal.toLocaleString()}
+                  </span>
+                )}
+              </div>
             )}
           </div>
-        </TooltipProvider>
-      </div>
+
+          {/* Right: game mechanics */}
+          <TooltipProvider delayDuration={350}>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              {post.engagement_score > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-muted/60 transition-colors cursor-help">
+                      <Trophy size={14} />
+                      <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-48">
+                    Engagement score — weighted total of likes, comments, saves, shares &amp; clicks
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {post.status === "live" && post.expires_at && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-muted/60 transition-colors cursor-help">
+                      <Clock size={14} />
+                      <span className="text-xs font-mono">
+                        {Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-48">
+                    Days remaining in this submission cycle
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {rank && rank <= 50 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="text-xs font-bold text-primary font-mono px-2 py-1.5 rounded-full hover:bg-primary/10 transition-colors cursor-help">#{rank}</button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">Billboard rank</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </TooltipProvider>
+        </div>
+      )}
 
       {/* Caption - Instagram style */}
       {editing ? (

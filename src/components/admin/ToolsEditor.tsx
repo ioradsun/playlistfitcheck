@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Coins, Rocket, Wrench, GripVertical } from "lucide-react";
+import { Loader2, Coins, Rocket, Wrench, GripVertical, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Reorder, useDragControls } from "framer-motion";
@@ -24,6 +24,7 @@ interface FeaturesState {
   growth_quotas: { guest: number; limited: number };
   tools_enabled: Record<string, boolean>;
   tools_order: string[];
+  crowdfit_mode: "reactions" | "hook_review";
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -32,6 +33,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   growth_quotas: { guest: 5, limited: 10 },
   tools_enabled: Object.fromEntries(ALL_TOOLS.map(t => [t.key, true])),
   tools_order: DEFAULT_ORDER,
+  crowdfit_mode: "reactions",
 };
 
 async function patchFeatures(patch: Partial<FeaturesState>) {
@@ -117,6 +119,7 @@ export function ToolsEditor() {
           growth_quotas: f.growth_quotas ?? { guest: 5, limited: 10 },
           tools_enabled,
           tools_order: merged,
+          crowdfit_mode: f.crowdfit_mode ?? "reactions",
         });
         setOrderedKeys(merged);
         setGuestQuota(f.growth_quotas?.guest ?? 5);
@@ -189,6 +192,21 @@ export function ToolsEditor() {
     }
   };
 
+  const setCrowdfitMode = async (mode: "reactions" | "hook_review") => {
+    const prev = features.crowdfit_mode;
+    setFeatures(f => ({ ...f, crowdfit_mode: mode }));
+    setSavingKey("crowdfit_mode");
+    try {
+      await patchFeatures({ crowdfit_mode: mode } as any);
+      toast.success(mode === "hook_review" ? "Hook Review mode enabled" : "Standard reactions enabled");
+    } catch {
+      setFeatures(f => ({ ...f, crowdfit_mode: prev }));
+      toast.error("Failed to update");
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
   const saveQuotas = async () => {
     setSavingQuotas(true);
     try {
@@ -252,6 +270,42 @@ export function ToolsEditor() {
             );
           })}
         </Reorder.Group>
+      </div>
+
+      {/* ── CrowdFit Mode ── */}
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Target size={14} className="text-primary" />
+          <span className="text-sm font-mono font-medium">CrowdFit Mode</span>
+        </div>
+        <div className="divide-y divide-border">
+          <button
+            onClick={() => setCrowdfitMode("reactions")}
+            disabled={savingKey === "crowdfit_mode"}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
+          >
+            <div className="text-left">
+              <p className="text-sm font-medium">Standard reactions</p>
+              <p className="text-xs text-muted-foreground mt-0.5">🔥 fire, 💬 comments, share, bookmark</p>
+            </div>
+            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${features.crowdfit_mode === "reactions" || !features.crowdfit_mode ? "border-primary bg-primary" : "border-border"}`}>
+              {(features.crowdfit_mode === "reactions" || !features.crowdfit_mode) && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+            </div>
+          </button>
+          <button
+            onClick={() => setCrowdfitMode("hook_review")}
+            disabled={savingKey === "crowdfit_mode"}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
+          >
+            <div className="text-left">
+              <p className="text-sm font-medium">Hook Review</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Structured 2-tap panel — did the hook land?</p>
+            </div>
+            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${features.crowdfit_mode === "hook_review" ? "border-primary bg-primary" : "border-border"}`}>
+              {features.crowdfit_mode === "hook_review" && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+            </div>
+          </button>
+        </div>
       </div>
 
       {/* ── Crypto Tipping ── */}

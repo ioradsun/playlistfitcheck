@@ -1105,6 +1105,47 @@ export type Database = {
         }
         Relationships: []
       }
+      songfit_hook_reviews: {
+        Row: {
+          context_note: string | null
+          created_at: string
+          hook_rating: string
+          id: string
+          post_id: string
+          session_id: string | null
+          user_id: string | null
+          would_replay: boolean
+        }
+        Insert: {
+          context_note?: string | null
+          created_at?: string
+          hook_rating: string
+          id?: string
+          post_id: string
+          session_id?: string | null
+          user_id?: string | null
+          would_replay: boolean
+        }
+        Update: {
+          context_note?: string | null
+          created_at?: string
+          hook_rating?: string
+          id?: string
+          post_id?: string
+          session_id?: string | null
+          user_id?: string | null
+          would_replay?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "songfit_hook_reviews_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       songfit_likes: {
         Row: {
           created_at: string
