@@ -430,6 +430,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             postId={post.id}
             isOwner={isOwnPost}
             onOpenReviews={isOwnPost ? () => setReviewsSheetPostId(post.id) : undefined}
+            spotifyTrackUrl={post.spotify_track_url}
+            artistsJson={post.track_artists_json as any[]}
           />
           <HookReviewsSheet
             postId={reviewsSheetPostId}
