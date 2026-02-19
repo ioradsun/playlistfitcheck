@@ -69,30 +69,42 @@ serve(async (req) => {
 
     const mimeType = format === "wav" ? "audio/wav" : format === "m4a" ? "audio/mp4" : "audio/mpeg";
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: { url: `data:${mimeType};base64,${audioBase64}` },
+    // Use Gemini native API via gateway for audio (inline_data) support
+    const geminiBody = {
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              inline_data: {
+                mime_type: mimeType,
+                data: audioBase64,
               },
-              { type: "text", text: "Transcribe the lyrics from this audio with precise timestamps. Return ONLY valid JSON." },
-            ],
-          },
-        ],
+            },
+            {
+              text: "Transcribe the lyrics from this audio with precise timestamps. Return ONLY valid JSON.",
+            },
+          ],
+        },
+      ],
+      generationConfig: {
         temperature: 0.1,
-      }),
-    });
+        responseMimeType: "application/json",
+      },
+    };
+
+    const response = await fetch(
+      "https://ai.gateway.lovable.dev/google/gemini-2.5-flash/v1beta/models/gemini-2.5-flash:generateContent",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(geminiBody),
+      }
+    );
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -111,7 +123,8 @@ serve(async (req) => {
     }
 
     const aiResponse = await response.json();
-    const content = aiResponse.choices?.[0]?.message?.content;
+    // Handle Gemini native API response format
+    const content = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!content) throw new Error("No response from AI");
 
     let cleanContent = content.trim();
