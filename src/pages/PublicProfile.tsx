@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy,
-  Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle,
+  Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle, BarChart2,
 } from "lucide-react";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -68,6 +68,7 @@ const PublicProfile = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [savedPosts, setSavedPosts] = useState<SavedPost[]>([]);
+  const [songTab, setSongTab] = useState<"mine" | "saved">("mine");
 
   useEffect(() => {
     if (!userId) return;
@@ -364,78 +365,121 @@ const PublicProfile = () => {
           </div>
         )}
 
-        {/* My Songs on CrowdFit */}
-        {submissions.length > 0 && (
-          <Card className="glass-card border-border">
-            <CardHeader>
-              <CardTitle className="text-base">My Songs on CrowdFit</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {submissions.map(s => (
+        {/* CrowdFit — tabbed songs card */}
+        {(submissions.length > 0 || (isOwner && savedPosts.length > 0)) && (
+          <Card className="glass-card border-border overflow-hidden">
+            {/* Card header with CrowdFit brand */}
+            <div className="px-4 pt-4 pb-0 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <BarChart2 size={14} className="text-primary" />
+                <span className="text-xs font-bold tracking-widest uppercase text-primary">CrowdFit</span>
+              </div>
+            </div>
+
+            {/* Tab switcher */}
+            <div className="flex border-b border-border/40 mt-3 px-4">
+              <button
+                onClick={() => setSongTab("mine")}
+                className={`pb-2 text-sm font-semibold border-b-2 transition-colors mr-4 ${
+                  songTab === "mine"
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                My Songs
+                {submissions.length > 0 && (
+                  <span className="ml-1.5 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                    {submissions.length}
+                  </span>
+                )}
+              </button>
+              {isOwner && (
                 <button
-                  key={s.id}
-                  onClick={() => navigate(`/song/${s.id}`)}
-                  className="w-full flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 transition-colors text-left"
+                  onClick={() => setSongTab("saved")}
+                  className={`pb-2 text-sm font-semibold border-b-2 transition-colors ${
+                    songTab === "saved"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    {s.album_art_url && (
-                      <img src={s.album_art_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{s.track_title}</p>
-                      <div className="flex items-center gap-2.5 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
-                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                          <Heart size={9} /> {s.likes_count ?? 0}
-                        </span>
-                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                          <MessageCircle size={9} /> {s.comments_count ?? 0}
-                        </span>
-                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                          <Bookmark size={9} /> {saveCounts[s.id] ?? 0}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  {s.peak_rank && (
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-mono font-bold text-primary">#{s.peak_rank}</p>
-                      <p className="text-[10px] text-muted-foreground">Peak</p>
-                    </div>
+                  FMLY Saves
+                  {savedPosts.length > 0 && (
+                    <span className="ml-1.5 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                      {savedPosts.length}
+                    </span>
                   )}
                 </button>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+              )}
+            </div>
 
-        {/* Saved Songs (owner only) */}
-        {isOwner && savedPosts.length > 0 && (
-          <Card className="glass-card border-border">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2"><Bookmark size={18} /> Saved Songs</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {savedPosts.map(s => {
-                const p = s.songfit_posts;
-                if (!p) return null;
-                const artists = (p.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || "";
-                return (
-                  <div
-                    key={s.id}
-                    onClick={() => navigate(`/song/${p.id}`)}
-                    className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 cursor-pointer transition-colors"
-                  >
-                    {p.album_art_url && (
-                      <img src={p.album_art_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{p.track_title}</p>
-                      {artists && <p className="text-xs text-muted-foreground truncate">{artists}</p>}
-                    </div>
-                  </div>
-                );
-              })}
+            <CardContent className="pt-3 pb-4 space-y-2">
+              {songTab === "mine" && (
+                <>
+                  {submissions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No songs submitted yet.</p>
+                  ) : submissions.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => navigate(`/song/${s.id}`)}
+                      className="w-full flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {s.album_art_url && (
+                          <img src={s.album_art_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{s.track_title}</p>
+                          <div className="flex items-center gap-2.5 mt-0.5">
+                            <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
+                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                              <Heart size={9} /> {s.likes_count ?? 0}
+                            </span>
+                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                              <MessageCircle size={9} /> {s.comments_count ?? 0}
+                            </span>
+                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                              <Bookmark size={9} /> {saveCounts[s.id] ?? 0}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {s.peak_rank && (
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-mono font-bold text-primary">#{s.peak_rank}</p>
+                          <p className="text-[10px] text-muted-foreground">Peak</p>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {songTab === "saved" && isOwner && (
+                <>
+                  {savedPosts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No saved songs yet.</p>
+                  ) : savedPosts.map(s => {
+                    const p = s.songfit_posts;
+                    if (!p) return null;
+                    const artists = (p.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || "";
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => navigate(`/song/${p.id}`)}
+                        className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 cursor-pointer transition-colors"
+                      >
+                        {p.album_art_url && (
+                          <img src={p.album_art_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{p.track_title}</p>
+                          {artists && <p className="text-xs text-muted-foreground truncate">{artists}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </CardContent>
           </Card>
         )}
