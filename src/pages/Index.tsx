@@ -462,14 +462,6 @@ const Index = () => {
             <PlaylistInputSection onAnalyze={handleAnalyze} />
           </div>
         );
-      case "mix":
-        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} /></div>;
-      case "hitfit":
-        return loadedHitFitAnalysis ? (
-          <div className="flex-1 overflow-y-auto px-4 py-6"><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} /></div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} /></div>
-        );
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><DreamFitTab /></div>;
       case "vibefit":
@@ -478,6 +470,8 @@ const Index = () => {
         return null;
     }
   };
+
+  const persistedTabs = ["songfit", "lyric", "mix", "hitfit"];
 
   return (
     <>
@@ -504,7 +498,18 @@ const Index = () => {
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
             <LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} />
           </div>
-          {activeTab !== "songfit" && activeTab !== "lyric" && renderTabContent()}
+          {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
+          <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "mix" ? "" : "hidden"}`}>
+            <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} />
+          </div>
+          {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
+          <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "hitfit" ? "" : "hidden"}`}>
+            {loadedHitFitAnalysis
+              ? <HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} />
+              : <HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} />
+            }
+          </div>
+          {!persistedTabs.includes(activeTab) && renderTabContent()}
         </div>
       </SidebarInset>
       
