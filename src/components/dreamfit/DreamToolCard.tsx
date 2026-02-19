@@ -1,10 +1,9 @@
-import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
 import { MessageCircle, User, MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Dream, STATUS_CONFIG } from "./types";
+import { Dream } from "./types";
+import { DreamSignal } from "./DreamSignal";
 import { formatDistanceToNow } from "date-fns";
 import {
   DropdownMenu,
@@ -15,40 +14,16 @@ import {
 
 interface Props {
   dream: Dream;
-  isBacked: boolean;
-  onToggleBack: () => void;
   onOpenComments: (dreamId: string) => void;
   onRefresh: () => void;
 }
 
-export function DreamToolCard({ dream, isBacked, onToggleBack, onOpenComments, onRefresh }: Props) {
+export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [backed, setBacked] = useState(isBacked);
-  const [backersCount, setBackersCount] = useState(dream.backers_count);
 
   const isOwnPost = user?.id === dream.user_id;
   const displayName = dream.profiles?.display_name || "Anonymous";
   const timeAgo = formatDistanceToNow(new Date(dream.created_at), { addSuffix: true });
-  const status = STATUS_CONFIG[dream.status] || STATUS_CONFIG.seeding;
-
-  const handleBack = async () => {
-    if (!user) { navigate("/auth"); return; }
-    const wasBacked = backed;
-    setBacked(!wasBacked);
-    setBackersCount(c => wasBacked ? c - 1 : c + 1);
-    try {
-      if (wasBacked) {
-        await supabase.from("dream_backers").delete().eq("dream_id", dream.id).eq("user_id", user.id);
-      } else {
-        await supabase.from("dream_backers").insert({ dream_id: dream.id, user_id: user.id });
-      }
-      onToggleBack();
-    } catch {
-      setBacked(wasBacked);
-      setBackersCount(c => wasBacked ? c + 1 : c - 1);
-    }
-  };
 
   const handleDelete = async () => {
     try {
@@ -79,7 +54,18 @@ export function DreamToolCard({ dream, isBacked, onToggleBack, onOpenComments, o
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Comment button — moved to header */}
+          <button
+            onClick={() => onOpenComments(dream.id)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-primary/10 transition-colors group"
+          >
+            <MessageCircle size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
+            {dream.comments_count > 0 && (
+              <span className="text-xs text-muted-foreground group-hover:text-primary">{dream.comments_count}</span>
+            )}
+          </button>
+
           {isOwnPost && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -112,28 +98,13 @@ export function DreamToolCard({ dream, isBacked, onToggleBack, onOpenComments, o
         </div>
       )}
 
-      {/* Actions — matching CrowdFit style */}
-      <div className="flex items-center px-1 pt-1 pb-1">
-        <button
-          onClick={() => onOpenComments(dream.id)}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
-        >
-          <MessageCircle size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
-          {dream.comments_count > 0 && (
-            <span className="text-xs text-muted-foreground group-hover:text-primary">{dream.comments_count}</span>
-          )}
-        </button>
-
-        <button
-          onClick={handleBack}
-          className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 active:scale-90 transition-all group"
-        >
-          <span className={`text-[18px] leading-none transition-opacity ${backed ? "" : "opacity-40 group-hover:opacity-70"}`}>🔥</span>
-          {backersCount > 0 && (
-            <span className="text-xs text-muted-foreground group-hover:text-primary">{backersCount}</span>
-          )}
-        </button>
-      </div>
+      {/* Demand Signal bar */}
+      <DreamSignal
+        dreamId={dream.id}
+        backersCount={dream.backers_count}
+        greenlightCount={dream.greenlight_count}
+        onRefresh={onRefresh}
+      />
     </div>
   );
 }
