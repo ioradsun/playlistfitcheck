@@ -469,7 +469,11 @@ const Index = () => {
       case "lyric":
         return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} /></div>;
       case "hitfit":
-        return <div className="flex-1 overflow-y-auto px-4 py-6"><HitFitTab key={loadedHitFitAnalysis ? "loaded" : "new"} initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} /></div>;
+        return loadedHitFitAnalysis ? (
+          <div className="flex-1 overflow-y-auto px-4 py-6"><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} /></div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden"><HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} /></div>
+        );
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><DreamFitTab /></div>;
       case "vibefit":
