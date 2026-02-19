@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { User, Music, Heart, CornerDownRight, X } from "lucide-react";
+import { User, Music, Heart, CornerDownRight, X, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
@@ -68,6 +68,7 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [post, setPost] = useState<PostMeta | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lyricsExpanded, setLyricsExpanded] = useState(false);
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [replySubmitting, setReplySubmitting] = useState<Record<string, boolean>>({});
 
@@ -251,18 +252,30 @@ export function HookReviewsSheet({ postId, onClose }: Props) {
             </div>
           </div>
 
-          {/* Hook lyrics — capped height, scrollable */}
+          {/* Hook lyrics — collapsible */}
           {post?.caption && (
-            <div className="rounded-xl bg-muted/40 border border-border/50 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-1.5">
-                Hook
-              </p>
-              <div className="max-h-20 overflow-y-auto pr-1">
-                <p className="text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap">
+            <button
+              onClick={() => setLyricsExpanded(prev => !prev)}
+              className="w-full text-left rounded-xl bg-muted/40 border border-border/50 px-3 py-2.5 hover:bg-muted/60 transition-colors group"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+                  Hook Lyrics
+                </p>
+                <ChevronDown
+                  size={13}
+                  className={`text-muted-foreground/40 transition-transform duration-200 group-hover:text-muted-foreground/70 ${lyricsExpanded ? "rotate-180" : ""}`}
+                />
+              </div>
+              <div className={`overflow-hidden transition-all duration-200 ${lyricsExpanded ? "max-h-96" : "max-h-10"}`}>
+                <p className={`text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap ${!lyricsExpanded ? "line-clamp-2" : ""}`}>
                   {post.caption}
                 </p>
               </div>
-            </div>
+              {!lyricsExpanded && (
+                <p className="text-[10px] text-muted-foreground/40 mt-1">Tap to expand</p>
+              )}
+            </button>
           )}
 
           {/* Review count */}
