@@ -67,46 +67,41 @@ serve(async (req) => {
 
     const systemPrompt = await fetchPrompt();
 
-    const mimeType = format === "wav" ? "audio/wav" : format === "m4a" ? "audio/mp4" : "audio/mpeg";
+    // The gateway only supports OpenAI-compat /v1/chat/completions.
+    // openai/gpt-5 (gpt-4o-audio) supports input_audio; format must be "wav" or "mp3".
+    const audioFormat = format === "wav" ? "wav" : "mp3";
 
-    // Use Gemini native API via gateway for audio (inline_data) support
-    const geminiBody = {
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: audioBase64,
-              },
-            },
-            {
-              text: "Transcribe the lyrics from this audio with precise timestamps. Return ONLY valid JSON.",
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
       },
-    };
-
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/google/gemini-2.5-flash/v1beta/models/gemini-2.5-flash:generateContent",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(geminiBody),
-      }
-    );
+      body: JSON.stringify({
+        model: "openai/gpt-5",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_audio",
+                input_audio: { data: audioBase64, format: audioFormat },
+              },
+              {
+                type: "text",
+                text: "Transcribe the lyrics from this audio with precise timestamps. Return ONLY valid JSON.",
+              },
+            ],
+          },
+        ],
+        temperature: 0.1,
+      }),
+    });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("AI gateway error:", response.status, errorText);
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -117,14 +112,15 @@ serve(async (req) => {
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error("Transcription failed");
+      // Return the actual gateway error to the client for debugging
+      return new Response(
+        JSON.stringify({ error: `Gateway error ${response.status}: ${errorText}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const aiResponse = await response.json();
-    // Handle Gemini native API response format
-    const content = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
+    const content = aiResponse.choices?.[0]?.message?.content;
     if (!content) throw new Error("No response from AI");
 
     let cleanContent = content.trim();
