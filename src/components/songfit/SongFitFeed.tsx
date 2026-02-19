@@ -30,7 +30,6 @@ export function SongFitFeed() {
     setLoading(true);
 
     if (feedView === "recent") {
-      // Recent: live submissions, chronological
       const { data } = await supabase
         .from("songfit_posts")
         .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
@@ -42,7 +41,6 @@ export function SongFitFeed() {
       enriched = await enrichWithUserData(enriched);
       setPosts(enriched);
     } else {
-      // FMLY 40: filter by time window based on mode
       let cutoff: string | null = null;
       let ceiling: string | null = null;
       if (billboardMode === "this_week") {
@@ -51,7 +49,6 @@ export function SongFitFeed() {
         cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
         ceiling = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       }
-      // all_time: no cutoff
 
       let query = supabase
         .from("songfit_posts")
@@ -77,7 +74,6 @@ export function SongFitFeed() {
     if (posts.length === 0) return posts;
     const postIds = posts.map(p => p.id);
 
-    // Fetch saves counts for all posts
     const savesCountRes = await supabase
       .from("songfit_saves")
       .select("post_id")
@@ -106,10 +102,6 @@ export function SongFitFeed() {
       user_has_saved: savedSet.has(p.id),
     }));
   };
-
-  // Commented out - previously used for multi-mode billboard ranking
-  // const applyBillboardRanking = ...
-
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
@@ -152,35 +144,25 @@ export function SongFitFeed() {
   }, []);
 
   // Floating anchor: show when composer is unlocked and user scrolled > 300px
+  // The actual scroll container for CrowdFit is #songfit-scroll-container in Index.tsx
   useEffect(() => {
     if (!composerUnlocked) {
       setShowFloatingAnchor(false);
       return;
     }
 
-    let scrollEl: HTMLElement | null = null;
-
-    const attachListener = () => {
-      scrollEl = document.getElementById("page-scroll-container");
-      if (!scrollEl) return;
-
-      const handleScroll = () => {
-        setShowFloatingAnchor(scrollEl!.scrollTop > 300);
-      };
-
-      scrollEl.addEventListener("scroll", handleScroll, { passive: true });
-      handleScroll(); // check immediately in case already scrolled
-
-      return () => scrollEl?.removeEventListener("scroll", handleScroll);
+    const handleScroll = () => {
+      const scrollEl = document.getElementById("songfit-scroll-container");
+      if (scrollEl) setShowFloatingAnchor(scrollEl.scrollTop > 300);
     };
 
-    // Defer slightly to ensure DOM is stable after state change
-    const t = setTimeout(() => {
-      const cleanup = attachListener();
-      return cleanup;
-    }, 50);
+    // Capture phase catches scroll events from all elements (scroll doesn't bubble)
+    document.addEventListener("scroll", handleScroll, true);
 
-    return () => clearTimeout(t);
+    // Check immediately in case already scrolled past threshold
+    handleScroll();
+
+    return () => document.removeEventListener("scroll", handleScroll, true);
   }, [composerUnlocked]);
 
   return (
@@ -260,10 +242,8 @@ export function SongFitFeed() {
       {showFloatingAnchor && (
         <button
           onClick={() => {
-            const scrollEl = document.getElementById("page-scroll-container");
-            if (scrollEl) {
-              scrollEl.scrollTo({ top: 0, behavior: "smooth" });
-            }
+            const scrollEl = document.getElementById("songfit-scroll-container");
+            if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: "smooth" });
           }}
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 border border-border/50 bg-background text-foreground/70 hover:text-foreground hover:border-border text-[11px] font-mono tracking-wide px-5 py-2 rounded-full shadow-sm transition-all duration-200"
         >
