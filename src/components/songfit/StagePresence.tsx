@@ -5,30 +5,46 @@ interface Props {
   onUnlocked: () => void;
 }
 
+function getGateCopy(votes: number): { text: string; isUnlocked: boolean } {
+  if (votes >= 3) return { text: "The stage is yours.", isUnlocked: true };
+  if (votes === 2) return { text: "Give 1 more signal to drop your song", isUnlocked: false };
+  if (votes === 1) return { text: "Give 2 more signals to drop your song", isUnlocked: false };
+  return { text: "Give 3 signals to drop your song", isUnlocked: false };
+}
+
 export function StagePresence({ currentVotes, onUnlocked }: Props) {
   const [fading, setFading] = useState(false);
+  const [held, setHeld] = useState(false);
 
   useEffect(() => {
-    if (currentVotes >= 3) {
-      setFading(true);
-      const t = setTimeout(() => onUnlocked(), 300);
-      return () => clearTimeout(t);
+    if (currentVotes >= 3 && !held) {
+      setHeld(true);
+      // Hold "The stage is yours." for 1000ms, then fade out and call onUnlocked
+      const holdTimer = setTimeout(() => {
+        setFading(true);
+        const fadeTimer = setTimeout(() => onUnlocked(), 300);
+        return () => clearTimeout(fadeTimer);
+      }, 1000);
+      return () => clearTimeout(holdTimer);
     }
-  }, [currentVotes, onUnlocked]);
+  }, [currentVotes, held, onUnlocked]);
+
+  const { text, isUnlocked } = getGateCopy(currentVotes);
 
   return (
     <div
       className={`relative flex flex-col items-center justify-center px-4 py-7 mx-4 my-3 border border-dashed border-border/40 rounded-lg bg-muted/5 transition-opacity duration-300 ${fading ? "opacity-0" : "opacity-100"}`}
     >
-      {/* Mono counter — top right */}
-      <div className="absolute top-3 right-3 font-mono text-[9px] tracking-widest text-muted-foreground/40 uppercase">
-        Signal Progress: {Math.min(currentVotes, 3)}/3
-      </div>
-
       {/* Body */}
       <div className="flex flex-col items-center gap-2 text-center">
-        <p className="text-[12px] font-medium text-foreground/60 leading-tight">
-          Give 3 signals to drop your own.
+        <p
+          className={`leading-tight transition-all duration-300 ${
+            isUnlocked
+              ? "text-[13px] font-medium text-foreground/70"
+              : "text-[12px] font-medium text-foreground/60"
+          }`}
+        >
+          {text}
         </p>
 
         {/* 3-bar indicator */}

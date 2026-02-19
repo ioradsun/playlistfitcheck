@@ -220,6 +220,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
         setQuery("");
         setCaption("");
         setSelectedTrack(null);
+        window.dispatchEvent(new CustomEvent("crowdfit:post-created"));
         // Show posted banner
         setPosted(true);
         postedTimerRef.current = setTimeout(() => {
@@ -253,6 +254,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       setQuery("");
       setCaption("");
       setSelectedTrack(null);
+      window.dispatchEvent(new CustomEvent("crowdfit:post-created"));
       // Show posted banner for 3 seconds then refresh feed
       setPosted(true);
       postedTimerRef.current = setTimeout(() => {
@@ -354,7 +356,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
               disabled={!selectedTrack || publishing || !!duplicateWarning || !caption.trim()}
               onClick={publish}
             >
-              {publishing ? <Loader2 size={14} className="animate-spin" /> : "Post"}
+              {publishing ? <Loader2 size={14} className="animate-spin" /> : "Drop"}
             </Button>
           </div>
 
