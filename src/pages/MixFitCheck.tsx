@@ -8,7 +8,7 @@ import { useAudioEngine, type AudioMix } from "@/hooks/useAudioEngine";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
-import { Upload, ArrowLeft } from "lucide-react";
+
 import { toast } from "sonner";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 
@@ -251,8 +251,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetProject}>
-            <ArrowLeft size={16} />
+          <Button variant="ghost" size="sm" onClick={resetProject}>
+            Back
           </Button>
           <div>
             <h1 className="text-lg font-semibold">{title}</h1>
@@ -312,7 +312,6 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
             onChange={handleUpload}
           />
           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-            <Upload size={14} className="mr-1" />
             Upload Mix{activeMixes.length > 0 ? "" : "es"} ({activeMixes.length}/{MAX_MIXES})
           </Button>
           <span className="text-xs text-muted-foreground">Audio files aren't saved or stored.</span>

@@ -201,7 +201,7 @@ export function VibeFitResults({ result, songTitle, onBack, onRegenerate, regene
               toast.success("All hashtags copied!");
             }}
           >
-            <Copy size={12} className="mr-1" /> Copy All
+            Copy All
           </Button>
         </motion.section>
       )}

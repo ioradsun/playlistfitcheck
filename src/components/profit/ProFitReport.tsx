@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   ArrowLeft, Copy, Download, MessageSquare, ChevronDown, ChevronUp,
-  Star, AlertTriangle, CheckSquare, Target, Zap, TrendingUp, Music, Loader2,
+  Star, AlertTriangle, CheckSquare, Target, Zap, TrendingUp, Music,
   Calendar, Clock
 } from "lucide-react";
 import { toast } from "sonner";
@@ -109,16 +109,10 @@ ${bp.singleROIFocus.why}`;
     >
       {/* Top bar */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft size={16} className="mr-1" /> Back
-        </Button>
+        <Button variant="ghost" size="sm" onClick={onBack}>Back</Button>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={copyBlueprint}>
-            <Copy size={14} className="mr-1" /> Copy
-          </Button>
-          <Button variant="outline" size="sm" onClick={onOpenChat}>
-            <MessageSquare size={14} className="mr-1" /> Refine Strategy
-          </Button>
+          <Button variant="outline" size="sm" onClick={copyBlueprint}>Copy</Button>
+          <Button variant="outline" size="sm" onClick={onOpenChat}>Refine Strategy</Button>
         </div>
       </div>
 
@@ -338,8 +332,7 @@ ${bp.singleROIFocus.why}`;
               disabled={focusLoading !== null}
               className="text-xs"
             >
-              {focusLoading === type ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Icon size={12} className="mr-1" />}
-              {label}
+              {focusLoading === type ? "Loading…" : label}
             </Button>
           ))}
         </CardContent>

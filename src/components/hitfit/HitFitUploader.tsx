@@ -182,13 +182,7 @@ export function HitFitUploader({ onAnalyze, loading, disabled, disabledMessage }
               disabled={!canSubmit || disabled}
               onClick={handleSubmit}
             >
-              {loading ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" /> Analyzing…
-                </>
-              ) : (
-                <>Analyze</>
-              )}
+              {loading ? "Analyzing…" : "Analyze"}
             </Button>
           </div>
         </TooltipTrigger>

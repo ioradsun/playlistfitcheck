@@ -356,7 +356,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
               disabled={!selectedTrack || publishing || !!duplicateWarning || !caption.trim()}
               onClick={publish}
             >
-              {publishing ? <Loader2 size={14} className="animate-spin" /> : "Drop"}
+              {publishing ? "Dropping…" : "Drop"}
             </Button>
           </div>
 

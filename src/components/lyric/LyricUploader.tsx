@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
-import { Loader2, FileAudio, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AudioUploadZone } from "@/components/ui/AudioUploadZone";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -59,11 +59,6 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg }: Props) {
         size="lg"
         disabled={loading || files.length === 0}
       >
-        {loading ? (
-          <Loader2 size={16} className="mr-1 animate-spin" />
-        ) : (
-          <FileAudio size={16} className="mr-1" />
-        )}
         {loading ? (loadingMsg || "Syncing...") : (siteCopy.tools.lyric?.cta || "Sync Lyrics")}
       </Button>
     </div>
