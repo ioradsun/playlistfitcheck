@@ -4,13 +4,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 
 type HookRating = "missed" | "almost" | "solid" | "hit";
-type Step = 1 | 2 | "revealing" | "done";
+type Step = 1 | 2 | "replay_cta" | "revealing" | "done";
 
 interface Props {
   postId: string;
   isOwner?: boolean;
   onOpenReviews?: () => void;
   onReviewRemoved?: () => void;
+  spotifyTrackUrl?: string;
+  artistsJson?: any[];
 }
 
 interface Results {
@@ -43,7 +45,7 @@ function incrementSessionReviewCount(): number {
   return next;
 }
 
-export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
+export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
 
@@ -99,12 +101,13 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
     return { total: rows.length, hook, replay_yes, replay_no };
   };
 
-  const handleSubmit = async (note: string) => {
+  const handleSubmit = async (note: string, overrideReplay?: boolean) => {
+    const replayValue = overrideReplay !== undefined ? overrideReplay : wouldReplay;
     try {
       const payload: any = {
         post_id: postId,
         hook_rating: hookRating,
-        would_replay: wouldReplay,
+        would_replay: replayValue,
         context_note: note.trim() || null,
       };
       if (user) payload.user_id = user.id;
@@ -177,41 +180,56 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
 
       {/* Step 1 removed — flow starts at Step 2 */}
 
-      {/* Step 2: Replay + optional context (combined) */}
+      {/* Step 2: Would you replay this? */}
       {step === 2 && (
         <div className="space-y-2.5">
           <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Would you replay this?</p>
           <div className="flex gap-2">
-            {REPLAY_OPTIONS.map(({ value, label, icon }) => {
-              const selected = wouldReplay === value;
-              return (
-                <button
-                  key={String(value)}
-                  onClick={() => setWouldReplay(value)}
-                  className={[
-                    "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border transition-all duration-[120ms]",
-                    selected
-                      ? "border-foreground/20 bg-foreground/[0.06]"
-                      : "border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03]",
-                  ].join(" ")}
-                >
-                  <span className={[
-                    "text-[13px] leading-none transition-colors duration-[120ms]",
-                    selected ? "text-foreground/70" : "text-muted-foreground/40",
-                  ].join(" ")}>
-                    {icon}
-                  </span>
-                  <span className={[
-                    "text-[12px] leading-none transition-all duration-[120ms]",
-                    selected
-                      ? "font-semibold text-foreground underline underline-offset-2 decoration-foreground/30"
-                      : "font-medium text-muted-foreground",
-                  ].join(" ")}>
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
+            <button
+              onClick={() => { setWouldReplay(true); setStep("replay_cta"); }}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+            >
+              <span className="text-[13px] leading-none text-muted-foreground/40">↺</span>
+              <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
+            </button>
+            <button
+              onClick={() => { setWouldReplay(false); handleSubmit("", false); }}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+            >
+              <span className="text-[13px] leading-none text-muted-foreground/40">→|</span>
+              <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* replay_cta: Spotify CTAs + comment + submit */}
+      {step === "replay_cta" && (
+        <div className="space-y-2.5">
+          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">↺ Glad you liked it!</p>
+          <div className="flex gap-2 flex-wrap">
+            {artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
+              <a
+                href={artistsJson[0].spotifyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+              >
+                <span>♫</span>
+                <span>Follow {artistsJson[0].name}</span>
+              </a>
+            )}
+            {spotifyTrackUrl && (
+              <a
+                href={spotifyTrackUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+              >
+                <span>+</span>
+                <span>Save track</span>
+              </a>
+            )}
           </div>
           <div className="space-y-1.5">
             <textarea
@@ -227,13 +245,7 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
               <span className="text-[10px] text-muted-foreground/40">Shift+Enter for new line</span>
               <button
                 onClick={() => handleSubmit(contextNote)}
-                disabled={wouldReplay === null}
-                className={[
-                  "text-[11px] transition-colors",
-                  wouldReplay !== null
-                    ? "text-muted-foreground hover:text-foreground"
-                    : "text-muted-foreground/25 cursor-not-allowed",
-                ].join(" ")}
+                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
               >
                 Submit
               </button>
