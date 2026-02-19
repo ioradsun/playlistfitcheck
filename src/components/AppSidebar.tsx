@@ -263,7 +263,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
 
   const handleToolClick = (tool: ToolItem) => {
     onTabChange?.(tool.value);
-    const path = tool.value === "songfit" && isHookMode ? "/HookFit" : tool.path;
+    const path = tool.path;
     navigate(path);
     closeMobileIfNeeded();
   };
@@ -355,7 +355,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   const enabled = siteCopy.features?.tools_enabled?.[tool.value];
                   return enabled === undefined || enabled === true;
                 }).map((tool) => {
-                const effectivePath = tool.value === "songfit" && isHookMode ? "/HookFit" : tool.path;
+                const effectivePath = tool.path;
                 const isActive = activeTab
                   ? activeTab === tool.value
                   : location.pathname === effectivePath || location.pathname === tool.path;

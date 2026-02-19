@@ -98,13 +98,6 @@ export function SiteCopyProvider({ children }: { children: ReactNode }) {
     if (data?.copy_json) {
       const merged = deepMerge(DEFAULT_COPY, data.copy_json as any);
       // When hook_review mode is active, override songfit label/pill dynamically
-      if (merged.features?.crowdfit_mode === "hook_review") {
-        merged.tools.songfit = {
-          ...merged.tools.songfit,
-          label: "HookFit",
-          pill: "See how your hook fits listeners.",
-        };
-      }
       setCopy(merged);
     }
   };

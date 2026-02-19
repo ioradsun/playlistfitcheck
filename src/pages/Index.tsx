@@ -102,12 +102,11 @@ const Index = () => {
       navigate(`/auth?mode=signup&ref=${refParam}`, { replace: true });
       return;
     }
-    const defaultPath = siteCopy.features?.crowdfit_mode === "hook_review" ? "/HookFit" : "/CrowdFit";
     if (location.pathname === "/" && !location.state && !location.search && !window.location.hash) {
-      navigate(defaultPath, { replace: true });
+      navigate("/CrowdFit", { replace: true });
     }
-    if (location.pathname === "/SongFit" || location.pathname === "/CrowdFit") {
-      navigate(defaultPath, { replace: true });
+    if (location.pathname === "/SongFit" || location.pathname === "/HookFit") {
+      navigate("/CrowdFit", { replace: true });
     }
   }, [location.pathname]);
 
@@ -259,7 +258,7 @@ const Index = () => {
     if (autoRunRef.current) return;
     
     if (state?.returnTab) {
-      const crowdfitPath = siteCopy.features?.crowdfit_mode === "hook_review" ? "/HookFit" : "/CrowdFit";
+      const crowdfitPath = "/CrowdFit";
       const TAB_TO_PATH: Record<string, string> = { songfit: crowdfitPath, profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
       setActiveTab(state.returnTab);
       navigate(TAB_TO_PATH[state.returnTab] || crowdfitPath, { replace: true });
