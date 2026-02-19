@@ -20,7 +20,7 @@ export function VersionToggle({
   return (
     <div className="space-y-1.5">
       <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Version</p>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 border-b border-border/40 pb-2">
         <button
           onClick={() => onChange("explicit")}
           className={`font-mono text-[11px] tracking-widest uppercase whitespace-nowrap transition-colors ${
