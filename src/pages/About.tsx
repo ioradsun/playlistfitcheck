@@ -124,7 +124,7 @@ export default function About() {
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold">{tool.label}</h2>
-                    <p className="text-xs text-primary">{tool.pill}</p>
+                    <p className="font-mono text-[11px] tracking-widest text-muted-foreground">{tool.pill}</p>
                     {tool.subheading && <p className="text-xs text-muted-foreground">{tool.subheading}</p>}
                   </div>
                 </div>
