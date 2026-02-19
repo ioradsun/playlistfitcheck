@@ -56,7 +56,7 @@ function downloadImage(dataUrl: string, index: number) {
 
 export function VibeFitResults({ result, songTitle, onBack, onRegenerate, regenerating }: VibeFitResultsProps) {
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-8">
+    <div className="w-full max-w-2xl mx-auto space-y-8 pb-24">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
