@@ -36,11 +36,13 @@ interface VersionMeta {
 interface Props {
   data: LyricData;
   audioFile: File;
+  hasRealAudio?: boolean;
   savedId?: string | null;
   fmlyLines?: LyricLine[] | null;
   versionMeta?: { explicit?: Partial<VersionMeta>; fmly?: Partial<VersionMeta> } | null;
   onBack: () => void;
   onSaved?: (id: string) => void;
+  onReuploadAudio?: (file: File) => void;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -145,7 +147,7 @@ const DEFAULT_VERSION_META: VersionMeta = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, onBack, onSaved }: Props) {
+export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, onBack, onSaved, onReuploadAudio }: Props) {
   const { user } = useAuth();
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
 
@@ -413,13 +415,33 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
 
           {/* Waveform */}
           <div className="glass-card rounded-xl p-3">
-            <LyricWaveform
-              waveform={waveform}
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              onSeek={seekTo}
-              onTogglePlay={togglePlay}
-            />
+            {hasRealAudio ? (
+              <LyricWaveform
+                waveform={waveform}
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+                onSeek={seekTo}
+                onTogglePlay={togglePlay}
+              />
+            ) : (
+              <div className="h-16 flex items-center justify-between gap-3 px-1">
+                <span className="text-[11px] text-muted-foreground font-mono">No audio — reupload to enable playback</span>
+                <label className="cursor-pointer">
+                  <span className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors border border-border/40 rounded px-2 py-1">
+                    Reupload
+                  </span>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) onReuploadAudio?.(f);
+                    }}
+                  />
+                </label>
+              </div>
+            )}
           </div>
 
           {/* Lyrics editor */}
