@@ -245,7 +245,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               onClick={() => handleSubmit(contextNote)}
               className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
             >
-              Vote
+              Send Signal
             </button>
           </div>
         </div>
@@ -278,7 +278,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               onClick={() => handleSubmit(contextNote)}
               className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
             >
-              Vote
+              Send Signal
             </button>
           </div>
         </div>
