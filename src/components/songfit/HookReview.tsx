@@ -4,10 +4,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 
 type HookRating = "missed" | "almost" | "solid" | "hit";
-type Step = 1 | 2 | 3 | "done";
+type Step = 1 | 2 | 3 | "revealing" | "done";
 
 interface Props {
   postId: string;
+}
+
+interface Results {
+  total: number;
+  hook: Record<HookRating, number>;
+  replay_yes: number;
+  replay_no: number;
 }
 
 const HOOK_OPTIONS: { value: HookRating; label: string }[] = [
@@ -38,6 +45,8 @@ export function HookReview({ postId }: Props) {
   const [contextNote, setContextNote] = useState("");
   const [reviewCount, setReviewCount] = useState(getSessionReviewCount());
   const [alreadyChecked, setAlreadyChecked] = useState(false);
+  const [results, setResults] = useState<Results | null>(null);
+  const [dots, setDots] = useState(".");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -49,7 +58,10 @@ export function HookReview({ postId }: Props) {
         query = query.eq("session_id", sessionId).is("user_id", null);
       }
       const { data } = await query.maybeSingle();
-      if (data) setStep("done");
+      if (data) {
+        // Already reviewed — fetch results and jump straight to done
+        fetchResults().then(r => { setResults(r); setStep("done"); });
+      }
       setAlreadyChecked(true);
     };
     checkExisting();
@@ -61,6 +73,35 @@ export function HookReview({ postId }: Props) {
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
   }, [step]);
+
+  // Animated dots while revealing
+  useEffect(() => {
+    if (step !== "revealing") return;
+    const interval = setInterval(() => {
+      setDots(d => d.length >= 3 ? "." : d + ".");
+    }, 400);
+    return () => clearInterval(interval);
+  }, [step]);
+
+  const fetchResults = async (): Promise<Results> => {
+    const { data } = await supabase
+      .from("songfit_hook_reviews")
+      .select("hook_rating, would_replay")
+      .eq("post_id", postId);
+
+    const rows = data || [];
+    const hook: Record<HookRating, number> = { missed: 0, almost: 0, solid: 0, hit: 0 };
+    let replay_yes = 0;
+    let replay_no = 0;
+
+    for (const row of rows) {
+      if (row.hook_rating in hook) hook[row.hook_rating as HookRating]++;
+      if (row.would_replay === true) replay_yes++;
+      else if (row.would_replay === false) replay_no++;
+    }
+
+    return { total: rows.length, hook, replay_yes, replay_no };
+  };
 
   const handleSubmit = async (note: string) => {
     try {
@@ -79,9 +120,17 @@ export function HookReview({ postId }: Props) {
     } catch {
       // ignore unique constraint
     }
-    const count = incrementSessionReviewCount();
-    setReviewCount(count);
-    setStep("done");
+
+    incrementSessionReviewCount();
+    setReviewCount(getSessionReviewCount());
+    setStep("revealing");
+
+    // After 3 seconds, fetch and show results
+    setTimeout(async () => {
+      const r = await fetchResults();
+      setResults(r);
+      setStep("done");
+    }, 3000);
   };
 
   const handleContextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -96,15 +145,61 @@ export function HookReview({ postId }: Props) {
   return (
     <div className="border-t border-border/30 px-4 py-3 min-h-[72px] flex flex-col justify-center">
 
-      {/* Done state */}
-      {step === "done" && (
+      {/* Revealing state */}
+      {step === "revealing" && (
         <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Your take was recorded.</span>
-          {reviewCount > 0 && (
-            <span className="text-[10px] font-mono text-muted-foreground/40">
-              {reviewCount} {reviewCount === 1 ? "review" : "reviews"} this session
-            </span>
+          <span className="text-xs text-muted-foreground">Tallying results{dots}</span>
+        </div>
+      )}
+
+      {/* Done: show results */}
+      {step === "done" && results && (
+        <div className="space-y-3">
+          {/* Hook rating bars */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Did the hook land?</p>
+            {HOOK_OPTIONS.map(({ value, label }) => {
+              const count = results.hook[value];
+              const pct = results.total > 0 ? Math.round((count / results.total) * 100) : 0;
+              const isMyPick = hookRating === value;
+              return (
+                <div key={value} className="flex items-center gap-2">
+                  <span className={`text-[11px] w-12 shrink-0 ${isMyPick ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                    {label}
+                  </span>
+                  <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${isMyPick ? "bg-primary" : "bg-muted-foreground/30"}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-muted-foreground/50 w-7 text-right">{pct}%</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Replay split */}
+          {results.total > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Replay?</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden flex">
+                  <div
+                    className="h-full bg-primary/70 transition-all duration-700"
+                    style={{ width: `${results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono text-muted-foreground/50 shrink-0">
+                  {results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0}% yes
+                </span>
+              </div>
+            </div>
           )}
+
+          <p className="text-[10px] text-muted-foreground/35 font-mono">
+            {results.total} {results.total === 1 ? "review" : "reviews"} total
+          </p>
         </div>
       )}
 
