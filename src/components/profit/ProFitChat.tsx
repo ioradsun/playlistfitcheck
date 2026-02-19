@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, Send, Loader2, CheckCircle, AlertTriangle, HelpCircle } from "lucide-react";
+import { Send, Loader2, CheckCircle, AlertTriangle, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ArtistData, Blueprint, ChatMessage } from "./types";
@@ -82,9 +82,7 @@ export const ProFitChat = ({ artist, blueprint, onBack }: ProFitChatProps) => {
     >
       {/* Header */}
       <div className="flex items-center gap-3 pb-3">
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft size={16} className="mr-1" /> Report
-        </Button>
+        <Button variant="ghost" size="sm" onClick={onBack}>Report</Button>
         <h2 className="text-sm font-semibold truncate">Strategy Chat: {artist.name}</h2>
       </div>
 

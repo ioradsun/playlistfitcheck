@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles } from "lucide-react";
+
 
 const MOODS = ["Dark", "Emotional", "Euphoric", "Aggressive", "Romantic", "Dreamy", "Chill", "Energetic", "Sad", "Mysterious"];
 
@@ -93,9 +93,7 @@ export function VibeFitForm({ onSubmit, loading, disabled, disabledMessage }: Vi
         className="w-full"
         disabled={!canSubmit}
       >
-        <span className="flex items-center gap-2">
-          <Sparkles size={14} /> Fit My Vibe
-        </span>
+        Fit My Vibe
       </Button>
     </form>
   );

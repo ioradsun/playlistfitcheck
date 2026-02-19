@@ -317,8 +317,8 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
               maxLength={1000}
               className="h-9 text-sm"
             />
-            <Button size="icon" className="h-9 w-9 shrink-0" onClick={submitComment} disabled={!user || sending || !text.trim()}>
-              {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            <Button size="sm" className="shrink-0" onClick={submitComment} disabled={!user || sending || !text.trim()}>
+              {sending ? "…" : "Send"}
             </Button>
           </div>
         </div>

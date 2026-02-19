@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 
-import { Search, Zap, Loader2, Music, X } from "lucide-react";
+import { Search, Loader2, Music, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -356,11 +356,6 @@ export function PlaylistInputSection({ onAnalyze }: Props) {
 
           <div className="pt-1">
             <Button onClick={handleAnalyze} className="w-full glow-primary" size="lg" disabled={loading || (!url.trim() && !selectedPlaylist)}>
-              {loading ? (
-                <Loader2 size={16} className="mr-1 animate-spin" />
-              ) : (
-                <Zap size={16} className="mr-1" />
-              )}
               {loading ? "Fetching..." : (siteCopy.tools.playlist?.cta || "Analyze Playlist")}
             </Button>
           </div>

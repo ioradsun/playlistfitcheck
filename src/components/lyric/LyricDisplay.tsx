@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Copy, Download, Check, FileText, Subtitles, Type } from "lucide-react";
+import { ArrowLeft, Download, FileText, Subtitles, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -495,10 +495,10 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
                     </div>
                     <div className="flex gap-1">
                       <Button variant="secondary" size="sm" className="flex-1 text-xs h-7" onClick={() => handleCopy(format)}>
-                        {copied === format ? <Check size={12} className="mr-1" /> : <Copy size={12} className="mr-1" />}Copy
+                        {copied === format ? "Copied" : "Copy"}
                       </Button>
                       <Button variant="secondary" size="sm" className="flex-1 text-xs h-7" onClick={() => handleDownload(format)}>
-                        <Download size={12} className="mr-1" />Save
+                        Save
                       </Button>
                     </div>
                   </div>
