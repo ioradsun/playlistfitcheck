@@ -67,6 +67,8 @@ serve(async (req) => {
 
     const systemPrompt = await fetchPrompt();
 
+    const mimeType = format === "wav" ? "audio/wav" : format === "m4a" ? "audio/mp4" : "audio/mpeg";
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -74,14 +76,17 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           {
             role: "user",
             content: [
-              { type: "input_audio", input_audio: { data: audioBase64, format: format || "wav" } },
-              { type: "text", text: "Transcribe the lyrics from this song with precise timestamps. Return ONLY valid JSON." },
+              {
+                type: "image_url",
+                image_url: { url: `data:${mimeType};base64,${audioBase64}` },
+              },
+              { type: "text", text: "Transcribe the lyrics from this audio with precise timestamps. Return ONLY valid JSON." },
             ],
           },
         ],
