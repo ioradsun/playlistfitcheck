@@ -235,17 +235,17 @@ export default function ArtistStage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="animate-spin text-muted-foreground" size={28} />
+      <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center z-50">
+        <Loader2 className="animate-spin text-white/30" size={28} />
       </div>
     );
   }
 
   if (notFound || !profile) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <p className="text-muted-foreground text-lg">Artist not found.</p>
-        <Button variant="ghost" onClick={() => navigate(-1)}>Go back</Button>
+      <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 z-50">
+        <p className="text-white/40 text-lg">Artist not found.</p>
+        <Button variant="ghost" onClick={() => navigate(-1)} className="text-white/60">Go back</Button>
       </div>
     );
   }
@@ -268,7 +268,7 @@ export default function ArtistStage() {
 
   return (
     <div
-      className={`min-h-screen bg-[#0a0a0a] text-white ${themeFont} relative`}
+      className={`fixed inset-0 overflow-y-auto bg-[#0a0a0a] text-white ${themeFont} z-50`}
       style={{ "--accent-r": r, "--accent-g": g, "--accent-b": b } as React.CSSProperties}
     >
       {/* Global accent CSS vars injected via style tag */}
