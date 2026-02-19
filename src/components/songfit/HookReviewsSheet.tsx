@@ -299,7 +299,7 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             )}
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-0.5">
-                Hook Reviews
+                Song Reviews
               </p>
               <h2 className="text-sm font-bold leading-tight truncate">
                 {post?.track_title ?? "Loading…"}
@@ -342,22 +342,11 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
 
           {/* Review count + scores */}
           {!loading && rows.length > 0 && (() => {
-            const topRating = ["hit", "solid", "almost", "missed"].find(r =>
-              rows.some(row => row.hook_rating === r)
-            );
-            const topPct = topRating
-              ? Math.round((rows.filter(r => r.hook_rating === topRating).length / rows.length) * 100)
-              : 0;
             const replayPct = Math.round((rows.filter(r => r.would_replay).length / rows.length) * 100);
             return (
               <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-muted-foreground">
                 <span className="font-semibold text-foreground text-xs not-italic">{rows.length} {rows.length === 1 ? "review" : "reviews"}</span>
                 <span className="text-muted-foreground/30">·</span>
-                <span className="inline-flex items-center gap-1.5 bg-foreground/[0.05] border border-border/40 rounded-full px-2.5 py-0.5 leading-none">
-                  <span className="text-sm text-foreground/80">{RATING_ICON[topRating ?? ""] ?? ""}</span>
-                  <span className="font-semibold text-foreground">{topPct}%</span>
-                  <span>{topRating}</span>
-                </span>
                 <span className="inline-flex items-center gap-1.5 bg-foreground/[0.05] border border-border/40 rounded-full px-2.5 py-0.5 leading-none">
                   <span className="text-sm text-foreground/80">↺</span>
                   <span className="font-semibold text-foreground">{replayPct}%</span>
@@ -398,17 +387,13 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                       {/* Content */}
                       <div className="flex-1 min-w-0 pb-2">
                         {/* Name + badges */}
-                        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                          <span className="text-sm font-semibold leading-none">{name}</span>
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${RATING_COLOR[row.hook_rating] ?? "text-muted-foreground"} ${RATING_BG[row.hook_rating] ?? "bg-muted/40"}`}>
-                             <span className="text-[11px] leading-none">{RATING_ICON[row.hook_rating] ?? ""}</span>
-                             {RATING_LABEL[row.hook_rating] ?? row.hook_rating}
-                           </span>
+                         <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                           <span className="text-sm font-semibold leading-none">{name}</span>
                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${row.would_replay ? "text-primary bg-primary/10" : "text-muted-foreground bg-muted/60"}`}>
                              <span className="text-[11px] leading-none">{row.would_replay ? "↺" : "→|"}</span>
                              {row.would_replay ? "Replay" : "Skip"}
                            </span>
-                        </div>
+                         </div>
 
                         {row.context_note && (
                           <p className="text-sm text-foreground/80 leading-snug mb-1">{row.context_note}</p>
