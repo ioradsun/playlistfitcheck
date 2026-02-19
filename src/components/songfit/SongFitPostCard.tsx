@@ -373,6 +373,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       )}
 
       {/* Caption - Instagram style */}
+      {/* Spacer between embed and caption/review — Instagram-style breathing room */}
+      <div className="h-2" />
       {editing ? (
         <div className="px-3 pb-2.5 space-y-2">
           <textarea
