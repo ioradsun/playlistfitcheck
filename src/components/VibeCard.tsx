@@ -1,6 +1,5 @@
 import { motion } from "framer-motion";
-import { Music, Sparkles, Zap, Users } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Users } from "lucide-react";
 
 export interface VibeAnalysis {
   genres: string[];
@@ -11,89 +10,79 @@ export interface VibeAnalysis {
   standoutArtists: string[];
 }
 
-const ENERGY_CONFIG = {
-  low: { label: "Low Energy", className: "bg-blue-600 text-white border-blue-700" },
-  medium: { label: "Medium Energy", className: "bg-score-ok text-white border-score-ok" },
-  high: { label: "High Energy", className: "bg-score-excellent text-white border-score-excellent" },
-  mixed: { label: "Mixed Energy", className: "bg-primary text-primary-foreground border-primary" },
+const ENERGY_LABEL = {
+  low: "Low Energy",
+  medium: "Medium Energy",
+  high: "High Energy",
+  mixed: "Mixed Energy",
 };
 
 export function VibeCard({ analysis, loading, playlistName }: { analysis: VibeAnalysis | null; loading: boolean; playlistName?: string }) {
   if (loading) {
     return (
-      <motion.div
-        className="glass-card rounded-2xl p-6 space-y-4"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-      >
-        <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-          <Sparkles size={14} className="animate-pulse text-primary" />
-          Analyzing Playlist Vibe...
+      <div className="py-8 space-y-4">
+        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">
+          {playlistName ? `"${playlistName}" Vibe Analysis` : "Playlist Vibe Analysis"}
+        </p>
+        <div className="space-y-2">
+          <div className="h-3 bg-border/40 animate-pulse w-3/4" />
+          <div className="h-3 bg-border/40 animate-pulse w-1/2" />
+          <div className="h-3 bg-border/40 animate-pulse w-5/6" />
         </div>
-        <div className="space-y-3">
-          <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
-          <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
-          <div className="h-4 bg-muted rounded animate-pulse w-5/6" />
-        </div>
-      </motion.div>
+      </div>
     );
   }
 
   if (!analysis) return null;
 
-  const energy = ENERGY_CONFIG[analysis.energyLevel] || ENERGY_CONFIG.mixed;
-
   return (
     <motion.div
-      className="glass-card rounded-2xl p-6 space-y-5"
+      className="space-y-6"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.5 }}
+      transition={{ delay: 0.3 }}
     >
-      <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-        <Sparkles size={14} className="text-primary" />
+      <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">
         {playlistName ? `"${playlistName}" Vibe Analysis` : "Playlist Vibe Analysis"}
-      </div>
+      </p>
 
       {/* Genres + Energy */}
       <div className="flex flex-wrap gap-2">
         {analysis.genres.map((genre) => (
-          <Badge key={genre} variant="secondary" className="font-mono text-xs">
+          <span
+            key={genre}
+            className="font-mono text-[10px] tracking-wide uppercase border border-border/40 px-2.5 py-1 text-muted-foreground"
+          >
             {genre}
-          </Badge>
+          </span>
         ))}
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono border ${energy.className}`}>
-          <Zap size={10} /> {energy.label}
+        <span className="font-mono text-[10px] tracking-wide uppercase border border-foreground/20 px-2.5 py-1 text-foreground">
+          {ENERGY_LABEL[analysis.energyLevel] || "Mixed Energy"}
         </span>
       </div>
 
       {/* Mood */}
       <div className="space-y-1">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          <Music size={12} /> Mood
-        </div>
-        <p className="text-sm text-secondary-foreground">{analysis.mood}</p>
+        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Mood</p>
+        <p className="text-sm text-foreground leading-relaxed">{analysis.mood}</p>
       </div>
 
       {/* Vibe */}
       <div className="space-y-1">
-        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sonic Character</div>
-        <p className="text-sm text-secondary-foreground leading-relaxed">{analysis.vibe}</p>
+        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Sonic Character</p>
+        <p className="text-sm text-foreground leading-relaxed">{analysis.vibe}</p>
       </div>
 
       {/* Ideal Submission */}
-      <div className="space-y-1 bg-primary/5 rounded-lg p-3 border border-primary/10">
-        <div className="text-xs font-semibold text-primary uppercase tracking-wider">🎯 Ideal Submission</div>
-        <p className="text-sm text-secondary-foreground leading-relaxed">{analysis.idealSubmission}</p>
+      <div className="space-y-1">
+        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Ideal Submission</p>
+        <p className="text-sm text-foreground leading-relaxed">{analysis.idealSubmission}</p>
       </div>
 
       {/* Standout Artists */}
       {analysis.standoutArtists.length > 0 && (
         <div className="space-y-1">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            <Users size={12} /> Key Artists
-          </div>
+          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Key Artists</p>
           <p className="text-xs font-mono text-muted-foreground">
             {analysis.standoutArtists.join(" · ")}
           </p>
