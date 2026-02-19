@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Coins, Rocket, Wrench } from "lucide-react";
+import { Loader2, Coins, Rocket, Wrench, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
-import { motion } from "framer-motion";
+import { Reorder, useDragControls } from "framer-motion";
 
 const ALL_TOOLS = [
   { key: "songfit",  label: "CrowdFit" },
@@ -16,11 +16,14 @@ const ALL_TOOLS = [
   { key: "dreamfit", label: "DreamFit" },
 ];
 
+const DEFAULT_ORDER = ALL_TOOLS.map(t => t.key);
+
 interface FeaturesState {
   crypto_tipping: boolean;
   growth_flow: boolean;
   growth_quotas: { guest: number; limited: number };
   tools_enabled: Record<string, boolean>;
+  tools_order: string[];
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -28,6 +31,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   growth_flow: false,
   growth_quotas: { guest: 5, limited: 10 },
   tools_enabled: Object.fromEntries(ALL_TOOLS.map(t => [t.key, true])),
+  tools_order: DEFAULT_ORDER,
 };
 
 async function patchFeatures(patch: Partial<FeaturesState>) {
@@ -42,31 +46,102 @@ async function patchFeatures(patch: Partial<FeaturesState>) {
   window.dispatchEvent(new CustomEvent("site-copy-updated"));
 }
 
+// Individual draggable tool row
+function ToolRow({
+  tool,
+  enabled,
+  saving,
+  onToggle,
+}: {
+  tool: { key: string; label: string };
+  enabled: boolean;
+  saving: boolean;
+  onToggle: (enabled: boolean) => void;
+}) {
+  const controls = useDragControls();
+
+  return (
+    <Reorder.Item
+      value={tool.key}
+      dragListener={false}
+      dragControls={controls}
+      className="px-4 py-3 flex items-center justify-between bg-background border-b border-border last:border-0 select-none"
+    >
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <button
+          className="cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          onPointerDown={(e) => controls.start(e)}
+        >
+          <GripVertical size={15} />
+        </button>
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{tool.label}</p>
+          <p className="text-xs text-muted-foreground font-mono">{tool.key}</p>
+        </div>
+      </div>
+      <Switch
+        checked={enabled}
+        onCheckedChange={onToggle}
+        disabled={saving}
+      />
+    </Reorder.Item>
+  );
+}
+
 export function ToolsEditor() {
   const [features, setFeatures] = useState<FeaturesState>(DEFAULT_FEATURES);
+  const [orderedKeys, setOrderedKeys] = useState<string[]>(DEFAULT_ORDER);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [guestQuota, setGuestQuota] = useState(5);
   const [limitedQuota, setLimitedQuota] = useState(10);
   const [savingQuotas, setSavingQuotas] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
     supabase.from("site_copy").select("copy_json").limit(1).single().then(({ data }) => {
       if (data?.copy_json) {
         const f = (data.copy_json as any).features || {};
         const tools_enabled = { ...DEFAULT_FEATURES.tools_enabled, ...(f.tools_enabled || {}) };
+        const savedOrder: string[] = Array.isArray(f.tools_order) && f.tools_order.length > 0
+          ? f.tools_order
+          : DEFAULT_ORDER;
+        // Ensure any new tools not in saved order are appended
+        const merged = [
+          ...savedOrder.filter(k => DEFAULT_ORDER.includes(k)),
+          ...DEFAULT_ORDER.filter(k => !savedOrder.includes(k)),
+        ];
         setFeatures({
           crypto_tipping: f.crypto_tipping ?? false,
           growth_flow: f.growth_flow ?? false,
           growth_quotas: f.growth_quotas ?? { guest: 5, limited: 10 },
           tools_enabled,
+          tools_order: merged,
         });
+        setOrderedKeys(merged);
         setGuestQuota(f.growth_quotas?.guest ?? 5);
         setLimitedQuota(f.growth_quotas?.limited ?? 10);
       }
       setLoading(false);
     });
   }, []);
+
+  const handleReorder = (newOrder: string[]) => {
+    setOrderedKeys(newOrder);
+  };
+
+  const saveOrder = async () => {
+    setSavingOrder(true);
+    try {
+      await patchFeatures({ tools_order: orderedKeys });
+      setFeatures(f => ({ ...f, tools_order: orderedKeys }));
+      toast.success("Tool order saved");
+    } catch {
+      toast.error("Failed to save order");
+    } finally {
+      setSavingOrder(false);
+    }
+  };
 
   const toggleTool = async (key: string, enabled: boolean) => {
     const prev = features.tools_enabled[key];
@@ -131,38 +206,56 @@ export function ToolsEditor() {
     return <div className="flex justify-center py-12"><Loader2 className="animate-spin text-primary" size={20} /></div>;
   }
 
+  const orderChanged = orderedKeys.join(",") !== features.tools_order.join(",");
+
   return (
     <div className="space-y-6">
 
-      {/* ── Tool Toggles ── */}
-      <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      {/* ── Tool Toggles + Order ── */}
+      <div className="glass-card rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <Wrench size={14} className="text-primary" />
           <span className="text-sm font-mono font-medium">Products</span>
-          <span className="text-xs text-muted-foreground ml-auto">Toggle to show/hide in sidebar & navigation</span>
+          <span className="text-xs text-muted-foreground ml-2 hidden sm:inline">Drag to reorder · toggle to show/hide</span>
+          <div className="ml-auto flex items-center gap-2">
+            {orderChanged && (
+              <button
+                onClick={saveOrder}
+                disabled={savingOrder}
+                className="px-3 py-1 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {savingOrder ? "Saving…" : "Save Order"}
+              </button>
+            )}
+          </div>
         </div>
-        <div className="divide-y divide-border">
-          {ALL_TOOLS.map((tool) => {
-            const enabled = features.tools_enabled[tool.key] ?? true;
+
+        <Reorder.Group
+          axis="y"
+          values={orderedKeys}
+          onReorder={handleReorder}
+          className="divide-y divide-border"
+          as="div"
+        >
+          {orderedKeys.map((key) => {
+            const tool = ALL_TOOLS.find(t => t.key === key);
+            if (!tool) return null;
+            const enabled = features.tools_enabled[key] ?? true;
             return (
-              <div key={tool.key} className="px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">{tool.label}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{tool.key}</p>
-                </div>
-                <Switch
-                  checked={enabled}
-                  onCheckedChange={(v) => toggleTool(tool.key, v)}
-                  disabled={savingKey === tool.key}
-                />
-              </div>
+              <ToolRow
+                key={key}
+                tool={tool}
+                enabled={enabled}
+                saving={savingKey === key}
+                onToggle={(v) => toggleTool(key, v)}
+              />
             );
           })}
-        </div>
-      </motion.div>
+        </Reorder.Group>
+      </div>
 
       {/* ── Crypto Tipping ── */}
-      <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+      <div className="glass-card rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <Coins size={14} className="text-purple-400" />
           <span className="text-sm font-mono font-medium">Crypto Tipping</span>
@@ -178,10 +271,10 @@ export function ToolsEditor() {
             disabled={savingKey === "crypto"}
           />
         </div>
-      </motion.div>
+      </div>
 
       {/* ── Product-Led Growth ── */}
-      <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+      <div className="glass-card rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <Rocket size={14} className="text-primary" />
           <span className="text-sm font-mono font-medium">Product-Led Growth</span>
@@ -237,7 +330,7 @@ export function ToolsEditor() {
             </div>
           </div>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 }

@@ -79,6 +79,7 @@ export interface SiteCopy {
       limited: number;
     };
     tools_enabled?: Record<string, boolean>;
+    tools_order?: string[];
   };
 }
 

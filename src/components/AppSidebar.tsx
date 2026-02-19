@@ -341,10 +341,13 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
           <SidebarGroupLabel>Tools</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {TOOLS.filter((tool) => {
-                const enabled = siteCopy.features?.tools_enabled?.[tool.value];
-                return enabled === undefined || enabled === true;
-              }).map((tool) => {
+              {(siteCopy.features?.tools_order ?? TOOLS.map(t => t.value))
+                .map(key => TOOLS.find(t => t.value === key))
+                .filter((tool): tool is typeof TOOLS[number] => {
+                  if (!tool) return false;
+                  const enabled = siteCopy.features?.tools_enabled?.[tool.value];
+                  return enabled === undefined || enabled === true;
+                }).map((tool) => {
                 const isActive = activeTab
                   ? activeTab === tool.value
                   : location.pathname === tool.path;
