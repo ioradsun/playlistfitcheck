@@ -153,55 +153,22 @@ export function HookReview({ postId }: Props) {
       )}
 
       {/* Done: show results */}
-      {step === "done" && results && (
-        <div className="space-y-3">
-          {/* Hook rating bars */}
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Did the hook land?</p>
-            {HOOK_OPTIONS.map(({ value, label }) => {
-              const count = results.hook[value];
-              const pct = results.total > 0 ? Math.round((count / results.total) * 100) : 0;
-              const isMyPick = hookRating === value;
-              return (
-                <div key={value} className="flex items-center gap-2">
-                  <span className={`text-[11px] w-12 shrink-0 ${isMyPick ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                    {label}
-                  </span>
-                  <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-700 ${isMyPick ? "bg-primary" : "bg-muted-foreground/30"}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-mono text-muted-foreground/50 w-7 text-right">{pct}%</span>
-                </div>
-              );
-            })}
+      {step === "done" && results && (() => {
+        const topEntry = HOOK_OPTIONS.reduce((best, { value, label }) => {
+          const pct = results.total > 0 ? Math.round((results.hook[value] / results.total) * 100) : 0;
+          return pct > best.pct ? { label, pct } : best;
+        }, { label: "", pct: 0 });
+        const replayPct = results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0;
+        return (
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-mono">
+            <span><span className="text-foreground font-medium">{topEntry.pct}%</span> {topEntry.label}</span>
+            <span className="text-muted-foreground/30">·</span>
+            <span><span className="text-foreground font-medium">{replayPct}%</span> replay</span>
+            <span className="text-muted-foreground/30">·</span>
+            <span className="text-muted-foreground/50">{results.total} {results.total === 1 ? "review" : "reviews"}</span>
           </div>
-
-          {/* Replay split */}
-          {results.total > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Replay?</p>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden flex">
-                  <div
-                    className="h-full bg-primary/70 transition-all duration-700"
-                    style={{ width: `${results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0}%` }}
-                  />
-                </div>
-                <span className="text-[10px] font-mono text-muted-foreground/50 shrink-0">
-                  {results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0}% yes
-                </span>
-              </div>
-            </div>
-          )}
-
-          <p className="text-[10px] text-muted-foreground/35 font-mono">
-            {results.total} {results.total === 1 ? "review" : "reviews"} total
-          </p>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Step 1: Did the hook land? */}
       {step === 1 && (
