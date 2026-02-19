@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 
 type HookRating = "missed" | "almost" | "solid" | "hit";
-type Step = 1 | 2 | "replay_cta" | "revealing" | "done";
+type Step = 1 | 2 | "replay_cta" | "skip_cta" | "revealing" | "done";
 
 interface Props {
   postId: string;
@@ -183,7 +183,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
             </button>
             <button
-              onClick={() => { setWouldReplay(false); handleSubmit("", false); }}
+              onClick={() => { setWouldReplay(false); setStep("skip_cta"); }}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
             >
               <span className="text-[13px] leading-none text-muted-foreground/40">→|</span>
@@ -224,6 +224,32 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
           <div className="space-y-1.5">
             <textarea
               ref={textareaRef}
+              value={contextNote}
+              onChange={e => setContextNote(e.target.value)}
+              onKeyDown={handleContextKeyDown}
+              placeholder="What made you choose that? (optional) — press Enter to submit"
+              rows={2}
+              className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground/40">Shift+Enter for new line</span>
+              <button
+                onClick={() => handleSubmit(contextNote)}
+                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* skip_cta: comment + submit (no Spotify CTAs) */}
+      {step === "skip_cta" && (
+        <div className="space-y-2.5">
+          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">→| Noted — anything to add?</p>
+          <div className="space-y-1.5">
+            <textarea
               value={contextNote}
               onChange={e => setContextNote(e.target.value)}
               onKeyDown={handleContextKeyDown}
