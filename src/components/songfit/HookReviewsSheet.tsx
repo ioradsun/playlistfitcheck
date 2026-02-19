@@ -273,9 +273,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40 mb-0.5">
-                Song Reviews
-              </p>
               <h2 className="text-sm font-bold leading-tight truncate">
                 {post?.track_title ?? "Loading…"}
               </h2>
