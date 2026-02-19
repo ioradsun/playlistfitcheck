@@ -144,19 +144,9 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
 
       {/* Done */}
       {step === "done" && results && (() => {
-        const topEntry = HOOK_OPTIONS.reduce((best, { value, label, icon }) => {
-          const pct = results.total > 0 ? Math.round((results.hook[value] / results.total) * 100) : 0;
-          return pct > best.pct ? { label, pct, icon } : best;
-        }, { label: "", pct: 0, icon: "" });
         const replayPct = results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0;
         return (
           <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground font-mono">
-            {/* Hook pill */}
-            <span className="inline-flex items-center gap-1.5 bg-foreground/[0.05] border border-border/40 rounded-full px-2.5 py-1 leading-none">
-              <span className="text-sm text-foreground/80">{topEntry.icon}</span>
-              <span className="font-semibold text-foreground">{topEntry.pct}%</span>
-              <span className="text-muted-foreground">{topEntry.label}</span>
-            </span>
             {/* Replay pill */}
             <span className="inline-flex items-center gap-1.5 bg-foreground/[0.05] border border-border/40 rounded-full px-2.5 py-1 leading-none">
               <span className="text-sm text-foreground/80">↺</span>
