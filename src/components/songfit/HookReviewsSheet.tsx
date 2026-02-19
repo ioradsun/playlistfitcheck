@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { toast } from "sonner";
 import { User, Music, Heart, ChevronDown, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -201,7 +202,8 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
   }, [postId]);
 
   const removeReview = useCallback(async (reviewId: string) => {
-    await supabase.from("songfit_hook_reviews").delete().eq("id", reviewId);
+    const { error } = await supabase.from("songfit_hook_reviews").delete().eq("id", reviewId);
+    if (error) { toast.error("Failed to remove review"); return; }
     setRows(prev => prev.filter(r => r.id !== reviewId));
     onRemoved?.();
   }, [onRemoved]);
