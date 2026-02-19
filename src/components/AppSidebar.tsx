@@ -23,29 +23,15 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Music,
-  AudioWaveform,
-  Users,
-  BarChart3,
-  ListMusic,
-  Sliders,
-  FileText,
-  Target,
-  Sparkles,
   Bell,
-  LogOut,
   User,
-  Shield,
-  Info,
   Heart,
-  Moon,
-  Sun,
   MessageCircle,
   UserPlus,
   ChevronDown,
   MoreHorizontal,
   Pencil,
   Trash2,
-  BadgeCheck,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -64,18 +50,17 @@ interface ToolItem {
   value: string;
   label: string;
   path: string;
-  icon: typeof Music;
 }
 
 const TOOLS: ToolItem[] = [
-  { value: "songfit", label: "CrowdFit", path: "/CrowdFit", icon: Users },
-  { value: "hitfit", label: "HitFit", path: "/HitFit", icon: Target },
-  { value: "vibefit", label: "VibeFit", path: "/VibeFit", icon: AudioWaveform },
-  { value: "profit", label: "ProFit", path: "/ProFit", icon: BarChart3 },
-  { value: "playlist", label: "PlaylistFit", path: "/PlaylistFit", icon: ListMusic },
-  { value: "mix", label: "MixFit", path: "/MixFit", icon: Sliders },
-  { value: "lyric", label: "LyricFit", path: "/LyricFit", icon: FileText },
-  { value: "dreamfit", label: "DreamFit", path: "/DreamFit", icon: Sparkles },
+  { value: "songfit", label: "CrowdFit", path: "/CrowdFit" },
+  { value: "hitfit", label: "HitFit", path: "/HitFit" },
+  { value: "vibefit", label: "VibeFit", path: "/VibeFit" },
+  { value: "profit", label: "ProFit", path: "/ProFit" },
+  { value: "playlist", label: "PlaylistFit", path: "/PlaylistFit" },
+  { value: "mix", label: "MixFit", path: "/MixFit" },
+  { value: "lyric", label: "LyricFit", path: "/LyricFit" },
+  { value: "dreamfit", label: "DreamFit", path: "/DreamFit" },
 ];
 
 const NOTI_ICON_MAP = {
@@ -368,7 +353,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                       tooltip={siteCopy.tools[tool.value]?.label || tool.label}
                       onClick={() => handleToolClick(tool)}
                     >
-                      <tool.icon size={16} />
                       <span>{siteCopy.tools[tool.value]?.label || tool.label}</span>
                     </SidebarMenuButton>
 
@@ -464,7 +448,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   isActive={location.pathname === "/about"}
                   onClick={() => { navigate("/about"); closeMobileIfNeeded(); }}
                 >
-                  <Info size={16} />
                   <span>{siteCopy.sidebar.story_link}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -474,7 +457,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   isActive={location.pathname === "/terms"}
                   onClick={() => { navigate("/terms"); closeMobileIfNeeded(); }}
                 >
-                  <FileText size={16} />
                   <span>Let's agree</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -599,7 +581,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   onClick={() => { navigate("/profile"); closeMobileIfNeeded(); }}
                   className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                 >
-                  <User size={14} />
                   <span>Profile</span>
                 </button>
                 {!(profile as any)?.is_verified && (
@@ -607,7 +588,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                     onClick={() => setShowVerify(true)}
                     className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                   >
-                    <BadgeCheck size={14} />
                     <span>Get Verified</span>
                   </button>
                 )}
@@ -616,7 +596,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                     onClick={() => { navigate("/admin"); closeMobileIfNeeded(); }}
                     className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                   >
-                    <Shield size={14} />
                     <span>Admin</span>
                   </button>
                 )}
@@ -630,14 +609,12 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   }}
                   className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                 >
-                  {isDark ? <Sun size={14} /> : <Moon size={14} />}
-                  <span>{isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}</span>
+                  <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
                 </button>
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-destructive hover:bg-sidebar-accent transition-colors"
                 >
-                  <LogOut size={14} />
                   <span>Log out</span>
                 </button>
               </div>
