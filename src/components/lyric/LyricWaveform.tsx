@@ -18,6 +18,11 @@ function formatTime(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+function getCssHsl(variable: string, alpha = 1): string {
+  const val = getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
+  return `hsla(${val}, ${alpha})`;
+}
+
 function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: number) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
@@ -28,6 +33,9 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: nu
   const ch = canvas.clientHeight;
   ctx.clearRect(0, 0, cw, ch);
 
+  const playedColor = getCssHsl("--primary", 0.9);
+  const unplayedColor = getCssHsl("--muted-foreground", 0.5);
+
   const barW = Math.max(cw / peaks.length, 1);
   const gap = 1;
   const playedX = currentPct * cw;
@@ -35,9 +43,7 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: nu
   peaks.forEach((peak, i) => {
     const barH = Math.max(peak * ch * 0.85, 2);
     const x = i * barW;
-    ctx.fillStyle = x <= playedX
-      ? "hsl(var(--primary) / 0.9)"
-      : "hsl(var(--muted-foreground) / 0.5)";
+    ctx.fillStyle = x <= playedX ? playedColor : unplayedColor;
     ctx.fillRect(x, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
 }

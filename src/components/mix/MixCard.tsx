@@ -25,6 +25,11 @@ interface MixCardProps {
   onRemove: () => void;
 }
 
+function getCssHsl(variable: string, alpha = 1): string {
+  const val = getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
+  return `hsla(${val}, ${alpha})`;
+}
+
 function drawCardWaveform(canvas: HTMLCanvasElement, peaks: number[], isPlaying: boolean) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
@@ -35,13 +40,14 @@ function drawCardWaveform(canvas: HTMLCanvasElement, peaks: number[], isPlaying:
   const ch = canvas.clientHeight;
   ctx.clearRect(0, 0, cw, ch);
 
+  const color = isPlaying
+    ? getCssHsl("--primary", 0.7)
+    : getCssHsl("--muted-foreground", 0.6);
   const barW = cw / peaks.length;
   const barGap = 1;
   peaks.forEach((peak, i) => {
     const barH = Math.max(peak * ch * 0.85, 1);
-    ctx.fillStyle = isPlaying
-      ? "hsl(var(--primary) / 0.7)"
-      : "hsl(var(--muted-foreground) / 0.5)";
+    ctx.fillStyle = color;
     ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - barGap, 1), barH);
   });
 }
