@@ -1,10 +1,8 @@
 import { useRef, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Play, Pause, X } from "lucide-react";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
 interface MixCardProps {
@@ -39,34 +37,19 @@ function drawCardWaveform(canvas: HTMLCanvasElement, peaks: number[], isPlaying:
 
   const barW = cw / peaks.length;
   const barGap = 1;
-  const gap = 1;
   peaks.forEach((peak, i) => {
     const barH = Math.max(peak * ch * 0.85, 1);
     ctx.fillStyle = isPlaying
-      ? "hsla(0, 0%, 75%, 0.8)"
-      : "hsla(0, 0%, 55%, 0.4)";
+      ? "hsl(var(--primary) / 0.7)"
+      : "hsl(var(--muted-foreground) / 0.25)";
     ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - barGap, 1), barH);
   });
 }
 
 export function MixCard({
-  id,
-  name,
-  waveform,
-  rank,
-  comments,
-  isPlaying,
-  usedRanks,
-  totalMixes,
-  markerStartPct,
-  markerEndPct,
-  playheadPct,
-  onPlay,
-  onStop,
-  onNameChange,
-  onRankChange,
-  onCommentsChange,
-  onRemove,
+  id, name, waveform, rank, comments, isPlaying, usedRanks, totalMixes,
+  markerStartPct, markerEndPct, playheadPct,
+  onPlay, onStop, onNameChange, onRankChange, onCommentsChange, onRemove,
 }: MixCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -76,105 +59,95 @@ export function MixCard({
     }
   }, [waveform.peaks, isPlaying]);
 
-  const isRankOne = rank === 1;
   const availableRanks = Array.from({ length: totalMixes }, (_, i) => i + 1).filter(
     (r) => r === rank || !usedRanks.includes(r)
   );
 
   return (
-    <Card
-      className={`relative transition-all ${
-        isRankOne ? "ring-1 ring-primary/50 shadow-[0_0_15px_hsla(var(--primary),0.15)]" : ""
-      }`}
-    >
-      <CardContent className="p-4 space-y-3">
-        {/* Header: name + remove */}
-        <div className="flex items-center gap-2">
-          <Input
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            className="h-8 text-sm font-medium bg-transparent border-border/50"
-            placeholder="Mix name"
-          />
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onRemove}>
-            <X size={14} />
-          </Button>
-        </div>
-
-        {/* Waveform with marker overlay */}
-        <div className="relative">
-          <canvas ref={canvasRef} className="w-full h-12 rounded" />
-
-          {/* Dimmed regions outside markers */}
-          <div
-            className="absolute inset-y-0 left-0 bg-background/60 rounded-l pointer-events-none"
-            style={{ width: `${markerStartPct}%` }}
-          />
-          <div
-            className="absolute inset-y-0 right-0 bg-background/60 rounded-r pointer-events-none"
-            style={{ width: `${100 - markerEndPct}%` }}
-          />
-
-          {/* Start marker line */}
-          <div
-            className="absolute inset-y-0 w-[2px] bg-primary pointer-events-none"
-            style={{ left: `${markerStartPct}%` }}
-          />
-          {/* End marker line */}
-          <div
-            className="absolute inset-y-0 w-[2px] bg-primary pointer-events-none"
-            style={{ left: `${markerEndPct}%` }}
-          />
-
-          {/* Playhead */}
-          {isPlaying && playheadPct > 0 && (
-            <div
-              className="absolute inset-y-0 w-[2px] bg-white/90 pointer-events-none z-10"
-              style={{ left: `${playheadPct}%` }}
-            />
-          )}
-        </div>
-
-        {/* Controls row */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant={isPlaying ? "default" : "outline"}
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={isPlaying ? onStop : onPlay}
-          >
-            {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-          </Button>
-
-          <Select
-            value={rank?.toString() || ""}
-            onValueChange={(v) => onRankChange(v ? Number(v) : null)}
-          >
-            <SelectTrigger className="h-8 w-20 text-xs">
-              <SelectValue placeholder="Rank" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableRanks.map((r) => (
-                <SelectItem key={r} value={r.toString()}>
-                  #{r}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {isRankOne && (
-            <span className="text-xs text-primary font-medium ml-auto">★ Top Pick</span>
-          )}
-        </div>
-
-        {/* Comments */}
-        <Textarea
-          value={comments}
-          onChange={(e) => onCommentsChange(e.target.value)}
-          placeholder="Notes on this mix..."
-          className="min-h-[60px] text-xs resize-none bg-transparent border-border/50"
+    <div className="glass-card rounded-xl p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <Input
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          className="h-7 text-xs font-mono bg-transparent border-0 focus-visible:ring-0 p-0"
+          placeholder="Mix name"
         />
-      </CardContent>
-    </Card>
+        <button
+          className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          onClick={onRemove}
+        >
+          Remove
+        </button>
+      </div>
+
+      <div className="border-t border-border/30" />
+
+      {/* Waveform with marker overlay */}
+      <div className="relative">
+        <canvas ref={canvasRef} className="w-full h-10 rounded" />
+
+        {/* Dimmed regions outside markers */}
+        <div
+          className="absolute inset-y-0 left-0 bg-background/60 rounded-l pointer-events-none"
+          style={{ width: `${markerStartPct}%` }}
+        />
+        <div
+          className="absolute inset-y-0 right-0 bg-background/60 rounded-r pointer-events-none"
+          style={{ width: `${100 - markerEndPct}%` }}
+        />
+        <div className="absolute inset-y-0 w-[1px] bg-primary/60 pointer-events-none" style={{ left: `${markerStartPct}%` }} />
+        <div className="absolute inset-y-0 w-[1px] bg-primary/60 pointer-events-none" style={{ left: `${markerEndPct}%` }} />
+
+        {isPlaying && playheadPct > 0 && (
+          <div
+            className="absolute inset-y-0 w-[1px] bg-foreground/80 pointer-events-none z-10"
+            style={{ left: `${playheadPct}%` }}
+          />
+        )}
+      </div>
+
+      {/* Controls row */}
+      <div className="flex items-center gap-3">
+        <button
+          className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+          onClick={isPlaying ? onStop : onPlay}
+        >
+          {isPlaying ? "Stop" : "Play"}
+        </button>
+
+        <div className="border-l border-border/30 h-3" />
+
+        <Select
+          value={rank?.toString() || ""}
+          onValueChange={(v) => onRankChange(v ? Number(v) : null)}
+        >
+          <SelectTrigger className="h-6 w-20 text-[10px] font-mono border-0 bg-transparent focus:ring-0 p-0 gap-1">
+            <SelectValue placeholder="Rank" />
+          </SelectTrigger>
+          <SelectContent>
+            {availableRanks.map((r) => (
+              <SelectItem key={r} value={r.toString()} className="text-xs font-mono">
+                #{r}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {rank === 1 && (
+          <span className="text-[10px] font-mono text-muted-foreground ml-auto">Top Pick</span>
+        )}
+      </div>
+
+      <div className="border-t border-border/30" />
+
+      {/* Notes */}
+      <Textarea
+        value={comments}
+        onChange={(e) => onCommentsChange(e.target.value)}
+        placeholder="Notes…"
+        className="min-h-[48px] text-[11px] resize-none bg-transparent border-0 focus-visible:ring-0 p-0 text-muted-foreground"
+      />
+    </div>
   );
 }

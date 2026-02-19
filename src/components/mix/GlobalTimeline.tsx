@@ -1,7 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Play, Pause, Info } from "lucide-react";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
 interface GlobalTimelineProps {
@@ -37,7 +35,7 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[]) {
   const gap = 1;
   peaks.forEach((peak, i) => {
     const barH = Math.max(peak * ch * 0.85, 1);
-    ctx.fillStyle = "hsla(0, 0%, 55%, 0.5)";
+    ctx.fillStyle = "hsl(var(--muted-foreground) / 0.3)";
     ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
 }
@@ -99,47 +97,32 @@ export function GlobalTimeline({
   if (!waveform) return null;
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card/50 p-4 space-y-3">
+    <div className="glass-card rounded-xl p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button
-            variant={isPlaying ? "default" : "outline"}
-            size="sm"
-            className="h-7 w-7 p-0"
+        <div className="flex items-center gap-3">
+          <button
+            className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
             onClick={isPlaying ? onStop : onPlay}
           >
-            {isPlaying ? <Pause size={12} /> : <Play size={12} />}
-          </Button>
-          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Loop Zone
-          </h3>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info size={13} className="text-muted-foreground/60 cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Set zone to compare the same section across mixes</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+            {isPlaying ? "Stop" : "Play"}
+          </button>
+          <div className="border-l border-border/30 h-3" />
+          <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Loop Zone</span>
           {referenceName && (
-            <span className="text-xs text-muted-foreground/70 truncate max-w-[200px]">
-              · {referenceName}
-            </span>
+            <span className="text-[10px] text-muted-foreground/60 truncate max-w-[180px]">· {referenceName}</span>
           )}
         </div>
-        <span className="text-xs font-mono text-primary px-2 py-0.5 rounded bg-primary/10">
+        <span className="text-[10px] font-mono text-muted-foreground">
           {formatTime(markerStart)} – {formatTime(markerEnd)}
         </span>
       </div>
 
-      {/* Timeline container */}
+      {/* Timeline */}
       <div className="relative select-none" ref={containerRef}>
-        <canvas ref={canvasRef} className="w-full h-20 rounded" />
+        <canvas ref={canvasRef} className="w-full h-16 rounded" />
 
-        {/* Dimmed regions outside markers */}
+        {/* Dimmed outside markers */}
         <div
           className="absolute inset-y-0 left-0 bg-background/70 rounded-l pointer-events-none"
           style={{ width: `${startPct}%` }}
@@ -149,55 +132,37 @@ export function GlobalTimeline({
           style={{ width: `${100 - endPct}%` }}
         />
 
-        {/* Active region highlight */}
-        <div
-          className="absolute inset-y-0 border-y border-primary/20 pointer-events-none"
-          style={{ left: `${startPct}%`, width: `${endPct - startPct}%` }}
-        />
-
         {/* Playhead */}
         {isPlaying && (
           <div
-            className="absolute inset-y-0 w-[2px] bg-white/90 pointer-events-none z-10 transition-none"
+            className="absolute inset-y-0 w-[1px] bg-foreground/70 pointer-events-none z-10"
             style={{ left: `${playheadPct}%` }}
-          >
-            <div className="absolute -top-1 -translate-x-[3px] w-2 h-2 rounded-full bg-white shadow" />
-          </div>
+          />
         )}
 
         {/* Start marker */}
         <div className="absolute inset-y-0" style={{ left: `${startPct}%` }}>
-          <div className="absolute inset-y-0 -translate-x-[1px] w-[2px] bg-primary" />
+          <div className="absolute inset-y-0 w-[1px] bg-primary/80 pointer-events-none" />
           <div
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-10 rounded-sm bg-primary cursor-ew-resize flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95"
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-8 rounded-sm bg-primary/80 cursor-ew-resize"
             onPointerDown={(e) => { e.preventDefault(); setDragging("start"); }}
-          >
-            <div className="w-[2px] h-4 bg-primary-foreground/60 rounded-full" />
-          </div>
-          <div className="absolute -bottom-5 -translate-x-1/2 text-[10px] font-mono text-muted-foreground whitespace-nowrap">
-            {formatTime(markerStart)}
-          </div>
+          />
         </div>
 
         {/* End marker */}
         <div className="absolute inset-y-0" style={{ left: `${endPct}%` }}>
-          <div className="absolute inset-y-0 -translate-x-[1px] w-[2px] bg-primary" />
+          <div className="absolute inset-y-0 w-[1px] bg-primary/80 pointer-events-none" />
           <div
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-10 rounded-sm bg-primary cursor-ew-resize flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95"
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-8 rounded-sm bg-primary/80 cursor-ew-resize"
             onPointerDown={(e) => { e.preventDefault(); setDragging("end"); }}
-          >
-            <div className="w-[2px] h-4 bg-primary-foreground/60 rounded-full" />
-          </div>
-          <div className="absolute -bottom-5 -translate-x-1/2 text-[10px] font-mono text-muted-foreground whitespace-nowrap">
-            {formatTime(markerEnd)}
-          </div>
+          />
         </div>
       </div>
 
       {/* Footer */}
-      <div className="flex justify-between text-[10px] text-muted-foreground/60 font-mono pt-1">
+      <div className="flex justify-between text-[10px] font-mono text-muted-foreground/40">
         <span>0:00</span>
-        <span className="text-muted-foreground/40">Drag markers to set loop zone</span>
+        <span>Drag markers to set loop zone</span>
         <span>{formatTime(duration)}</span>
       </div>
     </div>
