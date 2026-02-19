@@ -67,11 +67,6 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   }, [step]);
 
   useEffect(() => {
-    // In pre-resolved (billboard) mode, skip the per-post DB check
-    if (showPreResolved) {
-      setAlreadyChecked(true);
-      return;
-    }
     const checkExisting = async () => {
       let query = supabase.from("songfit_hook_reviews").select("id").eq("post_id", postId);
       if (user) {
