@@ -149,7 +149,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
                 onChange={(e) => {
                   if (e.target.value.length <= 280) setContextNote(e.target.value);
                 }}
-                placeholder="Why does the FMLY need this?"
+                placeholder={step === "shelved" ? "Have a better idea?" : "Why does the FMLY need this?"}
                 rows={2}
                 className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
               />
