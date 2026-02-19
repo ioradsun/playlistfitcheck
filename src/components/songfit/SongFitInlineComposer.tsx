@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type RefObject } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, X, Music, AlertTriangle } from "lucide-react";
@@ -44,9 +44,11 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   const [focused, setFocused] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<TrackData | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [posted, setPosted] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [duplicatePostId, setDuplicatePostId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const postedTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
   const captionRef = useRef<HTMLTextAreaElement>(null);
 
@@ -61,6 +63,13 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       setTimeout(() => captionRef.current?.focus(), 100);
     }
   }, [selectedTrack]);
+
+  // Clear posted banner after 3 seconds
+  useEffect(() => {
+    return () => {
+      if (postedTimerRef.current) clearTimeout(postedTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!query.trim() || query.includes("spotify.com")) {
@@ -157,14 +166,12 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     if (e.key === "Enter") {
       if (query.includes("spotify.com/track/")) {
         fetchTrackByUrl(query);
-      } else if (selectedTrack) {
-        publish();
       }
     }
   };
 
   const publish = async () => {
-    if (!user || !selectedTrack) return;
+    if (!user || !selectedTrack || !caption.trim()) return;
     setPublishing(true);
     try {
       // Check for duplicate submissions
@@ -202,11 +209,15 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       if (eligible) {
         const { error: reError } = await reenterSubmission(eligible.id, eligible.engagement_score);
         if (reError) throw reError;
-        toast.success("🎯 Song re-entered the arena!");
         setQuery("");
         setCaption("");
         setSelectedTrack(null);
-        onPostCreated();
+        // Show posted banner
+        setPosted(true);
+        postedTimerRef.current = setTimeout(() => {
+          setPosted(false);
+          onPostCreated();
+        }, 3000);
         setPublishing(false);
         return;
       }
@@ -231,11 +242,15 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
         expires_at: expiresAt.toISOString(),
       });
       if (error) throw error;
-      toast.success("🔥 Submission is live!");
       setQuery("");
       setCaption("");
       setSelectedTrack(null);
-      onPostCreated();
+      // Show posted banner for 3 seconds then refresh feed
+      setPosted(true);
+      postedTimerRef.current = setTimeout(() => {
+        setPosted(false);
+        onPostCreated();
+      }, 3000);
     } catch (e: any) {
       toast.error(e.message || "Failed to post");
     } finally {
@@ -250,10 +265,23 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     setResults([]);
     setDuplicateWarning(null);
     setDuplicatePostId(null);
+    setPosted(false);
+    if (postedTimerRef.current) clearTimeout(postedTimerRef.current);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const showDropdown = focused && results.length > 0 && !selectedTrack;
+
+  // Posted success banner
+  if (posted) {
+    return (
+      <div className="border-b border-border/40 px-4 py-5 flex items-center justify-center">
+        <p className="text-sm font-medium text-primary animate-pulse">
+          Your hook is live. Let's see if it lands.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="border-b border-border/40 transition-colors">
@@ -302,7 +330,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
                     onPaste={handlePaste}
                     onFocus={() => setFocused(true)}
                     onBlur={() => setTimeout(() => setFocused(false), 200)}
-                    placeholder="Share your song and get feedback"
+                    placeholder="Search your song or paste Spotify link"
                     className="w-full bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none py-2 pr-8"
                     disabled={publishing}
                   />
@@ -315,21 +343,21 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
             <Button
               size="sm"
               className="h-9 px-5 rounded-full text-xs font-bold shrink-0"
-              disabled={!selectedTrack || publishing || !!duplicateWarning}
+              disabled={!selectedTrack || publishing || !!duplicateWarning || !caption.trim()}
               onClick={publish}
             >
               {publishing ? <Loader2 size={14} className="animate-spin" /> : "Post"}
             </Button>
           </div>
 
-          {/* Caption - shown after track is selected */}
-          {selectedTrack && (
+          {/* Hook lyrics — required after track is selected */}
+          {selectedTrack && !duplicateWarning && (
             <div className="mt-2">
               <textarea
                 ref={captionRef}
                 value={caption}
                 onChange={e => setCaption(e.target.value.slice(0, CAPTION_MAX))}
-                placeholder="Tell us why you made this song."
+                placeholder="Paste your hook lyrics..."
                 rows={2}
                 className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none resize-none leading-relaxed"
                 disabled={publishing}
@@ -342,9 +370,9 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
             </div>
           )}
 
-          {/* Duplicate warning — replaces caption area */}
+          {/* Duplicate warning */}
           {duplicateWarning && (
-             <div className="mt-2 flex items-center gap-2 rounded-lg border-none bg-amber-600 px-3 py-2 text-sm text-white">
+            <div className="mt-2 flex items-center gap-2 rounded-lg border-none bg-amber-600 px-3 py-2 text-sm text-white">
               <AlertTriangle size={15} className="shrink-0 text-white" />
               <span className="flex-1">
                 {duplicateWarning}{" "}
@@ -357,7 +385,6 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
               </button>
             </div>
           )}
-
 
           {showDropdown && (
             <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-[100] overflow-hidden max-h-72 overflow-y-auto"
