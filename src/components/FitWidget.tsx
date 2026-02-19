@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
-import { Music, ChevronDown, ChevronUp, Users, Zap, Crown, ArrowRight, UserPlus } from "lucide-react";
+import { Music, ChevronDown, ChevronUp, Zap, Crown, ArrowRight, UserPlus } from "lucide-react";
 import { TrailblazerBadge } from "./TrailblazerBadge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -155,7 +155,7 @@ export function FitWidget() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full gap-1.5 text-xs h-8"
+                      className="w-full text-xs h-8"
                       onClick={() => navigate("/auth")}
                     >
                       Sign Up
@@ -164,10 +164,9 @@ export function FitWidget() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full gap-1.5 text-xs h-8"
+                      className="w-full text-xs h-8"
                       onClick={() => setShowInvite(true)}
                     >
-                      <Users size={12} />
                       Invite Artist
                     </Button>
                   )}
@@ -192,10 +191,9 @@ export function FitWidget() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full gap-1.5 text-xs h-8"
+                    className="w-full text-xs h-8"
                     onClick={() => setShowInvite(true)}
                   >
-                    <Users size={12} />
                     Invite Artist
                   </Button>
                 </div>
