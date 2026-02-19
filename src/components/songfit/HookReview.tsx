@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 
 type HookRating = "missed" | "almost" | "solid" | "hit";
-type Step = 1 | 2 | 3 | "revealing" | "done";
+type Step = 1 | 2 | "revealing" | "done";
 
 interface Props {
   postId: string;
@@ -72,10 +72,6 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
     };
     checkExisting();
   }, [postId, user, sessionId]);
-
-  useEffect(() => {
-    if (step === 3) setTimeout(() => textareaRef.current?.focus(), 50);
-  }, [step]);
 
   useEffect(() => {
     if (step !== "revealing") return;
@@ -181,7 +177,7 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
 
       {/* Step 1 removed — flow starts at Step 2 */}
 
-      {/* Step 2: Would you replay this? */}
+      {/* Step 2: Replay + optional context (combined) */}
       {step === 2 && (
         <div className="space-y-2.5">
           <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Would you replay this?</p>
@@ -191,7 +187,7 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
               return (
                 <button
                   key={String(value)}
-                  onClick={() => { setWouldReplay(value); setStep(3); }}
+                  onClick={() => setWouldReplay(value)}
                   className={[
                     "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border transition-all duration-[120ms]",
                     selected
@@ -217,29 +213,31 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* Step 3: Optional context */}
-      {step === 3 && (
-        <div className="space-y-1.5">
-          <textarea
-            ref={textareaRef}
-            value={contextNote}
-            onChange={e => setContextNote(e.target.value)}
-            onKeyDown={handleContextKeyDown}
-            placeholder="What made you choose that? (optional) — press Enter to submit"
-            rows={2}
-            className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground/40">Shift+Enter for new line</span>
-            <button
-              onClick={() => handleSubmit(contextNote)}
-              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Submit
-            </button>
+          <div className="space-y-1.5">
+            <textarea
+              ref={textareaRef}
+              value={contextNote}
+              onChange={e => setContextNote(e.target.value)}
+              onKeyDown={handleContextKeyDown}
+              placeholder="What made you choose that? (optional) — press Enter to submit"
+              rows={2}
+              className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground/40">Shift+Enter for new line</span>
+              <button
+                onClick={() => handleSubmit(contextNote)}
+                disabled={wouldReplay === null}
+                className={[
+                  "text-[11px] transition-colors",
+                  wouldReplay !== null
+                    ? "text-muted-foreground hover:text-foreground"
+                    : "text-muted-foreground/25 cursor-not-allowed",
+                ].join(" ")}
+              >
+                Submit
+              </button>
+            </div>
           </div>
         </div>
       )}
