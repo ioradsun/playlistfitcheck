@@ -1,129 +1,123 @@
 
-# LyricFit — Complete Feature Upgrade Plan
+## CrowdFit Hook Review — Feature Plan
 
-## What Already Exists
+### Overview
 
-- Audio upload + compression pipeline (client-side to base64)
-- AI transcription via `lyric-transcribe` edge function
-- Synced lyric display (auto-scroll, highlight active line)
-- Inline line editing (double-click)
-- Export: LRC, SRT, TXT (copy + download)
-- Manual Save button for logged-in users
-- `SignUpToSaveBanner` for guests
-- `saved_lyrics` table with RLS
-
-## What Needs to Be Built (Gap Analysis)
-
-### 1. FMLY Friendly Version System
-The biggest new feature. Two versions: Explicit (current) and FMLY Friendly (new). Each stored and editable independently.
-
-### 2. Waveform Visualization
-Replace the plain Play/Pause button with a visual waveform timeline (same pattern as MixFit's `GlobalTimeline` + `useAudioEngine`). Scrubbable, shows playhead, synced to lyrics.
-
-### 3. Autosave (replace manual Save)
-Remove the manual Save button. Debounced autosave on any edit, with a subtle "Saving… / Saved" status indicator.
-
-### 4. Line Format Controls
-Dropdown: Natural Phrases, 1 Word, 2–3 Words, 4–6 Words, Break On Pause. Re-splits line text into new lines while preserving timestamps.
-
-### 5. Social Optimization Presets
-Dropdown: General, Instagram Reels, TikTok, YouTube Shorts, Musixmatch, Live Performance, etc. Applies formatting recommendations. Stored per version.
-
-### 6. Export filename versioning
-Rename exports to `songname_Explicit.lrc` / `songname_FMLY_Friendly.srt` format.
-
-### 7. Database schema update
-Add `fmly_lines` (JSONB) and `version_meta` (JSONB for formatting/optimization settings per version) columns to `saved_lyrics`.
+This adds a **"Hook Review" interaction mode** to CrowdFit posts, toggled on/off from the Admin Tools panel. When enabled, the standard 🔥 / comment / share action bar is replaced by a frictionless 2-tap structured review panel inline under each Spotify embed.
 
 ---
 
-## Technical Implementation Plan
+### What Gets Built
 
-### Database Migration
-Add two new nullable columns to `saved_lyrics`:
-- `fmly_lines jsonb DEFAULT NULL` — stores the FMLY Friendly version lines
-- `version_meta jsonb DEFAULT '{}'` — stores formatting preset + social optimization preset per version (`{ explicit: { lineFormat, socialPreset }, fmly: { lineFormat, socialPreset } }`)
+**1. Admin Toggle (ToolsEditor.tsx)**
 
-### New Components
+A new section in the Admin → Tools panel:
 
-**`src/components/lyric/LyricWaveform.tsx`** (new)
-- Adapts `GlobalTimeline` canvas waveform pattern from MixFit
-- Uses `useAudioEngine.decodeFile()` to extract peaks from the real `audioFile`
-- Scrubbable: clicking jumps audio position
-- Shows playhead via `requestAnimationFrame` loop
-- Shared between both versions (audio doesn't change)
+```text
+┌─────────────────────────────────────────────┐
+│ 🎯  CrowdFit Mode                           │
+├─────────────────────────────────────────────┤
+│  Standard reactions (🔥, 💬, share)  ●  ○  │
+│  Hook Review (structured 2-tap panel)  ○  ●  │
+└─────────────────────────────────────────────┘
+```
 
-**`src/components/lyric/VersionToggle.tsx`** (new)
-- Segmented control: `[ Explicit ] [ FMLY Friendly ]`
-- Shows last-edited timestamp per version
-- If FMLY version doesn't exist yet, shows "Generate" state
+This writes `features.crowdfit_mode: "reactions" | "hook_review"` to `site_copy` in the database, the same pattern already used for `crypto_tipping` and `growth_flow`.
 
-**`src/components/lyric/LyricFormatControls.tsx`** (new)
-- Line Format dropdown (Natural Phrases, 1 Word, 2–3 Words, 4–6 Words, Break On Pause)
-- Social Optimization dropdown (General, Instagram Reels, TikTok, YouTube Shorts, Musixmatch, Live Performance, Karaoke)
-- Strictness selector for FMLY (Mild / Standard / Strict) — only shown on FMLY tab
+**2. New Component: `HookReview.tsx`**
 
-**`src/components/lyric/FmlyFriendlyPanel.tsx`** (new)
-- "Make FMLY Friendly" button
-- Profanity report panel: total flagged, unique flagged, breakdown list (censored)
-- Confirmation dialog if FMLY version already exists and user clicks regenerate
+A self-contained inline panel rendered directly under the Spotify embed, replacing the action bar when `crowdfit_mode === "hook_review"`. Stores state in a new `songfit_hook_reviews` database table.
 
-### Updated Components
+Layout (single-screen, no modals):
 
-**`src/components/lyric/LyricDisplay.tsx`** (major refactor)
-- Split into two modes driven by `activeVersion: 'explicit' | 'fmly'`
-- Each version has its own `lines` state
-- Remove manual Save button → replace with autosave (debounced 1.5s)
-- Show autosave status: `Saving… / Saved`
-- Wire in `LyricWaveform` above lyrics
-- Wire in `VersionToggle` in header
-- Wire in `LyricFormatControls` + `FmlyFriendlyPanel` in a right-side panel
-- Export filenames use version suffixes
+```text
+──────────────────────────────────────────
+  Did the hook land?
+  [ Missed ]  [ Almost ]  [ Solid ]  [ Hit ]
+──────────────────────────────────────────
+  Would you replay this?
+  [   🔁 Yes   ]        [   ⏭ No   ]
+──────────────────────────────────────────
+  ▸ Add context (optional)
+──────────────────────────────────────────
+  "Your reaction was recorded."   ✓
+──────────────────────────────────────────
+```
 
-**`src/components/lyric/LyricFitTab.tsx`** (minor updates)
-- Pass `audioFile` to waveform decoder
-- Handle `fmly_lines` and `version_meta` when loading saved lyrics
+**3. Database Migration**
 
-### FMLY Friendly Generation (Client-Side)
-Run the profanity filter in the browser (no extra API call needed for basic filter). A curated profanity word list is embedded as a module. Each matched word is replaced with asterisks of equal character length. Strictness modes use different-sized word lists.
+New table `songfit_hook_reviews`:
 
-For the admin-editable profanity dictionary: store it in the `ai_prompts` table (or a dedicated field in `site_copy`) so admins can update the word list from the admin dashboard.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `post_id` | uuid | FK to songfit_posts |
+| `user_id` | uuid | nullable (guest reviews allowed) |
+| `session_id` | text | for guest dedup |
+| `hook_rating` | text | `missed`, `almost`, `solid`, `hit` |
+| `would_replay` | boolean | true = yes, false = no |
+| `context_note` | text | nullable, optional |
+| `created_at` | timestamptz | |
 
-### Layout Change
-Move from single-column to a two-panel layout within `LyricDisplay`:
-- **Left/Main panel (2/3 width)**: Waveform + synced lyrics editor
-- **Right panel (1/3 width)**: Version toggle, Format controls, Social preset, FMLY generation + report, Export
+RLS policies:
+- SELECT: public (aggregates visible)
+- INSERT: authenticated users only with `auth.uid() = user_id`, or guest with `user_id IS NULL AND session_id IS NOT NULL`
+- No UPDATE or DELETE
 
-### Autosave Logic
-- `useEffect` watching `lines`, `fmlyLines`, `versionMeta` with a 1500ms debounce
-- Only saves if user is logged in
-- For guest users: keep the `SignUpToSaveBanner` (no session persistence)
-- Status shown as small text near the header: `● Saving…` / `✓ Saved`
+**4. SongFitPostCard.tsx — Conditional Rendering**
 
-### Waveform / Audio Sync
-- `useAudioEngine` already provides `decodeFile` — use it to decode the audio file once and extract peaks
-- The playhead position is tracked with `requestAnimationFrame` since `useAudioEngine.getPlayheadPosition()` is already available
-- Clicking on the waveform calls `seekTo(time)` which updates the audio position and jumps the lyric list
+The post card will read `crowdfit_mode` from `useSiteCopy()`. When it equals `"hook_review"`:
+- Hide the existing action bar (🔥, 💬, Share, Bookmark)
+- Render `<HookReview postId={post.id} />` beneath the embed
 
----
+When in standard mode, behavior is unchanged.
 
-## File Summary
+**5. SiteCopy Interface Update**
 
-| File | Action |
-|------|--------|
-| `supabase/migrations/...sql` | Add `fmly_lines` + `version_meta` columns to `saved_lyrics` |
-| `src/components/lyric/LyricWaveform.tsx` | Create — canvas waveform with scrubbable playhead |
-| `src/components/lyric/VersionToggle.tsx` | Create — Explicit / FMLY Friendly segmented toggle |
-| `src/components/lyric/LyricFormatControls.tsx` | Create — line format + social preset dropdowns |
-| `src/components/lyric/FmlyFriendlyPanel.tsx` | Create — FMLY generation button + profanity report |
-| `src/lib/profanityFilter.ts` | Create — client-side profanity replacement engine |
-| `src/components/lyric/LyricDisplay.tsx` | Refactor — two-version system, autosave, waveform, new layout |
-| `src/components/lyric/LyricFitTab.tsx` | Update — pass fmly/meta through, handle loading |
+Add `crowdfit_mode?: "reactions" | "hook_review"` to the `features` object in `useSiteCopy.tsx` and the `DEFAULT_COPY`.
 
 ---
 
-## Scope Intentionally Excluded (Future Work)
-- Beat marker BPM detection (requires a WebAudio beat-detection algorithm — significant standalone feature)
-- Rhyme / chorus / sentiment detection
-- Brand safety scoring
-- Free vs Pro gating
+### Interaction Design
+
+**Hook Rating** — 4 pill buttons, single select, required:
+- `Missed` · `Almost` · `Solid` · `Hit`
+- Selected state: filled background with primary color
+- Cultural framing, no numbers
+
+**Replay Intent** — 2 wide buttons, single select, required:
+- `🔁 Yes` · `⏭ No`
+- Equal weight, clear visual confirmation
+
+**Context Field** — collapsed by default, one chevron tap expands:
+- Single textarea, placeholder: *"What made you choose that?"*
+- No character minimum, no validation blocking submit
+
+**Completion State:**
+- After both required fields selected, auto-submit triggers (no separate submit button needed — submits when 2nd required selection is made)
+- Shows: `"Your reaction was recorded."` with a subtle checkmark
+- Shows progress: `1 of N reviews complete` (count from local session)
+- No animations, no modals
+
+**Deduplication**: One review per `user_id` + `post_id` (or `session_id` + `post_id` for guests). If already reviewed, show the completed state immediately on mount.
+
+---
+
+### Files to Create/Modify
+
+| File | Change |
+|---|---|
+| `src/components/songfit/HookReview.tsx` | **New** — the full review panel component |
+| `src/components/songfit/SongFitPostCard.tsx` | Conditional render: action bar vs. HookReview |
+| `src/components/admin/ToolsEditor.tsx` | Add CrowdFit Mode toggle section |
+| `src/hooks/useSiteCopy.tsx` | Add `crowdfit_mode` to `features` type + default |
+| Database migration | Create `songfit_hook_reviews` table with RLS |
+
+---
+
+### Technical Notes
+
+- The `HookReview` component manages its own local state for the two selections and context text.
+- Auto-submit fires when `hook_rating` AND `would_replay` are both set, inserting a row into `songfit_hook_reviews`.
+- The session-review count (for "1 of N reviews") is tracked in component state using a simple `sessionStorage` counter key `crowdfit_reviews_this_session`.
+- The existing 🔥 like system, comments, saves, and share remain in the database and are simply hidden from the UI in Hook Review mode — no data is lost, the mode can be toggled back.
