@@ -26,14 +26,14 @@ export default function About() {
   return (
     <div className="max-w-2xl mx-auto px-4 pt-8 pb-12 space-y-6">
       {/* Tab bar */}
-      <div className="flex gap-1 bg-muted/50 rounded-lg p-1 w-fit">
+      <div className="flex gap-6 border-b border-border/40">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            className={`pb-2 text-xs font-mono tracking-wide transition-colors ${
               tab === t
-                ? "bg-primary text-primary-foreground"
+                ? "text-foreground border-b border-foreground -mb-px"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
