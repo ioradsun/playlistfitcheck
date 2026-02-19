@@ -182,7 +182,7 @@ export function HookReview({ postId, isOwner, onOpenReviews }: Props) {
       {/* Step 1: Did the hook land? */}
       {step === 1 && (
         <div className="space-y-2.5">
-          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Did the hook land?</p>
+          {/* <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Did the hook land?</p> */}
           <div className="flex gap-2">
             {HOOK_OPTIONS.map(({ value, label, icon }) => {
               const selected = hookRating === value;
