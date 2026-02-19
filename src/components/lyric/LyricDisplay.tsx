@@ -390,8 +390,8 @@ export function LyricDisplay({ data, audioFile, savedId, fmlyLines: initFmlyLine
     >
       {/* Header bar */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack} className="text-muted-foreground hover:text-foreground shrink-0">
-          <ArrowLeft size={20} />
+        <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
+          <ArrowLeft size={18} strokeWidth={1.5} />
         </Button>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold truncate">{audioFile.name.replace(/\.[^.]+$/, "")}</h2>

@@ -60,7 +60,7 @@ export function VibeFitResults({ result, songTitle, onBack, onRegenerate, regene
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
-          <ArrowLeft size={18} />
+          <ArrowLeft size={18} strokeWidth={1.5} />
         </Button>
         <h1 className="text-xl font-semibold">{songTitle || "Your Vibe"}</h1>
       </div>

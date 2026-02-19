@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 import { MixProjectForm } from "@/components/mix/MixProjectForm";
 import { MixCard } from "@/components/mix/MixCard";
 import { GlobalTimeline } from "@/components/mix/GlobalTimeline";
@@ -251,8 +252,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved }: MixFitCh
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={resetProject}>
-            Back
+          <Button variant="ghost" size="icon" onClick={resetProject}>
+            <ArrowLeft size={18} strokeWidth={1.5} />
           </Button>
           <div>
             <h1 className="text-lg font-semibold">{title}</h1>
