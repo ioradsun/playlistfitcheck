@@ -1,20 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Users, BarChart3, ListMusic, Sliders, FileText, Target, Sparkles, AudioWaveform } from "lucide-react";
 import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
 const DEFAULT_TOOL_ORDER = ["songfit", "hitfit", "vibefit", "profit", "playlist", "mix", "lyric", "dreamfit"];
-
-const TOOL_ICON_MAP: Record<string, any> = {
-  songfit: Users,
-  hitfit: Target,
-  vibefit: AudioWaveform,
-  profit: BarChart3,
-  playlist: ListMusic,
-  mix: Sliders,
-  lyric: FileText,
-  dreamfit: Sparkles,
-};
 
 const TABS = ["Origin Story", "The Tools"] as const;
 
@@ -108,7 +96,6 @@ export default function About() {
           }).map((key, i) => {
             const tool = siteCopy.tools[key] as ToolCopy;
             if (!tool) return null;
-            const Icon = TOOL_ICON_MAP[key] || Target;
             const product = about.products.find((p) => p.name === tool.label);
             return (
               <motion.div
@@ -118,15 +105,9 @@ export default function About() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.05 * i }}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <Icon size={16} className="text-primary" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-semibold">{tool.label}</h2>
-                    <p className="font-mono text-[11px] tracking-widest text-muted-foreground">{tool.pill}</p>
-                    {tool.subheading && <p className="text-xs text-muted-foreground">{tool.subheading}</p>}
-                  </div>
+                <div>
+                  <h2 className="text-sm font-semibold">{tool.label}</h2>
+                  <p className="font-mono text-[11px] tracking-widest text-muted-foreground">{tool.pill}</p>
                 </div>
                 {product?.description && (
                   <p className="text-sm text-muted-foreground leading-relaxed">
