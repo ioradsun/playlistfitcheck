@@ -196,7 +196,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       {/* replay_cta: Spotify CTAs + comment + submit */}
       {step === "replay_cta" && (
         <div className="space-y-2.5">
-          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">↺ Glad you liked it!</p>
+          
           <div className="flex gap-2 flex-wrap">
             {artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
               <a
