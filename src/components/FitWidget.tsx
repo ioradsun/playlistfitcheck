@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
 import { Music, ChevronDown, ChevronUp, Users, Zap, Crown, ArrowRight, UserPlus } from "lucide-react";
 import { TrailblazerBadge } from "./TrailblazerBadge";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -29,21 +28,14 @@ const TOOL_LABELS: Record<string, string> = {
 function ToolUsageBar({ tool, forceUnlimited }: { tool: string; forceUnlimited?: boolean }) {
   const { used, limit, tier } = useUsageQuota(tool);
   const isUnlimited = forceUnlimited || tier === "unlimited";
-  const pct = isUnlimited ? 100 : limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
   const isNearLimit = !isUnlimited && limit > 0 && used >= limit * 0.8;
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-xs">
-        <span className="font-medium text-foreground/80">{TOOL_LABELS[tool] || tool}</span>
-        <span className={`font-mono ${isNearLimit ? "text-destructive" : "text-muted-foreground"}`}>
-          {isUnlimited ? "∞" : `${used}/${limit}`}
-        </span>
-      </div>
-      <Progress
-        value={pct}
-        className={`h-1.5 ${isNearLimit ? "[&>div]:bg-destructive" : ""}`}
-      />
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-muted-foreground">{TOOL_LABELS[tool] || tool}</span>
+      <span className={`font-mono ${isNearLimit ? "text-destructive" : "text-muted-foreground/60"}`}>
+        {isUnlimited ? "∞" : `${used}/${limit}`}
+      </span>
     </div>
   );
 }
