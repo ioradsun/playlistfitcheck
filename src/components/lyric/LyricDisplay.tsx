@@ -209,6 +209,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // Timing offset (Bug 3: MP3 codec / processing offset correction)
+  const [timingOffset, setTimingOffset] = useState(0);
+  const TIMING_OFFSET_STEP = 0.1;
+  const TIMING_OFFSET_MAX = 2.0;
+
   // Clip loop state
   const [activeHookIndex, setActiveHookIndex] = useState<number | null>(null);
   const [clipProgress, setClipProgress] = useState(0); // 0-1 for the progress ring
@@ -257,10 +262,16 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const activeMeta = activeVersion === "explicit" ? explicitMeta : fmlyMeta;
   const activeLines = applyLineFormat(activeLinesRaw, activeMeta.lineFormat);
 
+  // Bug 3: adjustedTime accounts for MP3 codec/processing offset
+  const adjustedTime = currentTime - timingOffset;
+
+  // Bug 2: epsilon prevents flickering at floating-point boundaries
+  const HIGHLIGHT_EPSILON = 0.08;
+
   // ── Multi-active highlighting — supports overlapping adlibs ───────────────
   const activeLineIndices = new Set<number>(
     activeLines.reduce<number[]>((acc, l, i) => {
-      if (currentTime >= l.start && currentTime < l.end) acc.push(i);
+      if (adjustedTime >= l.start && adjustedTime < l.end + HIGHLIGHT_EPSILON) acc.push(i);
       return acc;
     }, [])
   );
@@ -268,7 +279,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   if (activeLineIndices.size === 0) {
     let lastPassed = -1;
     for (let i = 0; i < activeLines.length; i++) {
-      if (activeLines[i].tag !== "adlib" && currentTime >= activeLines[i].start) lastPassed = i;
+      if (activeLines[i].tag !== "adlib" && adjustedTime >= activeLines[i].start) lastPassed = i;
     }
     if (lastPassed !== -1) activeLineIndices.add(lastPassed);
   }
@@ -281,20 +292,36 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     const audio = new Audio(url);
     audioRef.current = audio;
 
-    const handleTimeUpdate = () => {
+    // Bug 1: RAF loop at 60fps instead of timeupdate (~4fps) for smooth highlight/waveform
+    let rafId: number;
+    const tick = () => {
       setCurrentTime(audio.currentTime);
-      // Loop mode: if inside a loop region, restart when past end
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const handlePlay = () => {
+      rafId = requestAnimationFrame(tick);
+    };
+    const handlePause = () => {
+      cancelAnimationFrame(rafId);
+    };
+
+    // Keep timeupdate only for loop-region enforcement (doesn't need 60fps accuracy)
+    const handleTimeUpdate = () => {
       const region = loopRegionRef.current;
       if (region && audio.currentTime >= region.end) {
         audio.currentTime = region.start;
       }
     };
     const handleEnded = () => {
+      cancelAnimationFrame(rafId);
       setIsPlaying(false);
       loopRegionRef.current = null;
       setActiveHookIndex(null);
     };
 
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
 
@@ -303,6 +330,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     }
 
     return () => {
+      cancelAnimationFrame(rafId);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
       audio.pause();
@@ -704,6 +734,34 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {/* Timing Offset Control (Bug 3: processing offset adjustment) */}
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/20">
+                  <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">Offset</span>
+                  <button
+                    onClick={() => setTimingOffset((v) => Math.max(-TIMING_OFFSET_MAX, +(v - TIMING_OFFSET_STEP).toFixed(1)))}
+                    className="text-[10px] font-mono w-5 h-5 flex items-center justify-center rounded border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+                  >
+                    −
+                  </button>
+                  <span className="text-[10px] font-mono text-foreground w-16 text-center tabular-nums">
+                    {timingOffset === 0 ? "0.0s" : `${timingOffset > 0 ? "+" : ""}${timingOffset.toFixed(1)}s`}
+                  </span>
+                  <button
+                    onClick={() => setTimingOffset((v) => Math.min(TIMING_OFFSET_MAX, +(v + TIMING_OFFSET_STEP).toFixed(1)))}
+                    className="text-[10px] font-mono w-5 h-5 flex items-center justify-center rounded border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+                  >
+                    +
+                  </button>
+                  {timingOffset !== 0 && (
+                    <button
+                      onClick={() => setTimingOffset(0)}
+                      className="text-[10px] font-mono text-muted-foreground/50 hover:text-foreground transition-colors ml-1"
+                    >
+                      Reset
+                    </button>
+                  )}
+                  <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto">sync lyrics ↔ audio</span>
+                </div>
               </>
             ) : (
               <div className="h-16 flex items-center gap-3">
