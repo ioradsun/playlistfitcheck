@@ -30,7 +30,8 @@ function getSignalVerbiage(total: number, pct: number) {
     tier: "consensus" as const,
   };
 }
-type Step = 2 | "replay_cta" | "skip_cta" | "revealing" | "done";
+
+type Step = 2 | "replay_cta" | "skip_cta" | "done";
 
 interface Props {
   postId: string;
@@ -70,21 +71,11 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   const sessionId = getSessionId();
   const navigate = useNavigate();
 
-  const handleVoteClick = (replay: boolean) => {
-    if (!user) {
-      navigate("/Auth", { state: { returnTab: "crowdfit" } });
-      return;
-    }
-    setWouldReplay(replay);
-    setStep(replay ? "replay_cta" : "skip_cta");
-  };
-
   const [step, setStep] = useState<Step>(2);
   const [wouldReplay, setWouldReplay] = useState<boolean | null>(null);
   const [contextNote, setContextNote] = useState("");
   const [alreadyChecked, setAlreadyChecked] = useState(false);
   const [results, setResults] = useState<Results | null>(null);
-  const [dots, setDots] = useState(".");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const skipTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -111,14 +102,6 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
     checkExisting();
   }, [postId, user, sessionId]);
 
-  useEffect(() => {
-    if (step !== "revealing") return;
-    const interval = setInterval(() => {
-      setDots(d => d.length >= 3 ? "." : d + ".");
-    }, 400);
-    return () => clearInterval(interval);
-  }, [step]);
-
   const fetchResults = async (): Promise<Results> => {
     const { data } = await supabase
       .from("songfit_hook_reviews")
@@ -135,6 +118,15 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       else if (row.would_replay === false) replay_no++;
     }
     return { total: rows.length, hook, replay_yes, replay_no };
+  };
+
+  const handleVoteClick = (replay: boolean) => {
+    if (!user) {
+      navigate("/Auth", { state: { returnTab: "crowdfit" } });
+      return;
+    }
+    setWouldReplay(replay);
+    setStep(replay ? "replay_cta" : "skip_cta");
   };
 
   const handleRemoveSignal = async () => {
@@ -165,14 +157,12 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
 
     incrementSessionReviewCount();
     window.dispatchEvent(new CustomEvent("crowdfit:vote"));
-    setStep("revealing");
 
-    setTimeout(async () => {
-      const r = await fetchResults();
-      setResults(r);
-      setStep("done");
-      onScored?.();
-    }, 1200);
+    // Fetch results and go directly to done — no intermediate flash state
+    const r = await fetchResults();
+    setResults(r);
+    setStep("done");
+    onScored?.();
   };
 
   const handleContextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -185,7 +175,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   if (!alreadyChecked) return null;
 
   // Pre-resolved (FMLY 40 billboard) layout
-  if (showPreResolved && step !== "done" && step !== "revealing" && step !== "replay_cta" && step !== "skip_cta") {
+  if (showPreResolved && step !== "done" && step !== "replay_cta" && step !== "skip_cta") {
     const total = preResolved?.total ?? 0;
     const replayYes = preResolved?.replay_yes ?? 0;
     const savesCount = preResolved?.saves_count ?? 0;
@@ -223,24 +213,13 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
 
   return (
     <div>
-      {/* Revealing → SIGNALED flash */}
-      {step === "revealing" && (
-        <div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-          <div className="px-3 py-2">
-            <span className="font-mono text-[11px] tracking-widest text-muted-foreground/60">SIGNALED</span>
-          </div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-        </div>
-      )}
-
       {/* Done */}
       {step === "done" && results && (() => {
         const replayPct = results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0;
         const signalLabel = results.total === 1 ? "signal" : "signals";
         const verbiage = getSignalVerbiage(results.total, replayPct);
         return (
-          <div>
+          <div className="animate-fade-in">
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
             <div className="px-3 py-2 flex items-start justify-between gap-3">
               <div className="flex-1 space-y-0.5">
