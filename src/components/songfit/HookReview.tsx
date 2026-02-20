@@ -218,30 +218,42 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
         return (
           <div className="animate-fade-in">
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-            <div className="px-3 py-2 flex items-start justify-between gap-3">
-              <div className="flex-1 space-y-0.5">
-                {verbiage.tier !== "resolving" && (
+            <div className="px-3 py-2 space-y-0.5">
+              {/* Top row: label (left) + Turn Off Signal (right) */}
+              {verbiage.tier !== "resolving" && (
+                <div className="flex items-center justify-between">
                   <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                     {verbiage.label}
                   </p>
-                )}
+                  <button
+                    onClick={handleRemoveSignal}
+                    className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
+                  >
+                    Turn Off Signal
+                  </button>
+                </div>
+              )}
+              {verbiage.tier === "resolving" && (
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={handleRemoveSignal}
+                    className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
+                  >
+                    Turn Off Signal
+                  </button>
+                </div>
+              )}
+              {/* Bottom row: summary (left) + signals count (right) */}
+              <div className="flex items-center justify-between gap-3">
                 <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
                   {verbiage.summary}
                 </p>
-              </div>
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <button
-                  onClick={handleRemoveSignal}
-                  className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
-                >
-                  Turn Off Signal
-                </button>
                 {onOpenReviews ? (
-                  <button onClick={onOpenReviews} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors">
+                  <button onClick={onOpenReviews} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0">
                     {results.total} {signalLabel}
                   </button>
                 ) : (
-                  <span className="font-mono text-[11px] tracking-widest text-muted-foreground">{results.total} {signalLabel}</span>
+                  <span className="font-mono text-[11px] tracking-widest text-muted-foreground shrink-0">{results.total} {signalLabel}</span>
                 )}
               </div>
             </div>
