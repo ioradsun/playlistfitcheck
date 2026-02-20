@@ -18,6 +18,15 @@ const ALL_TOOLS = [
 
 const DEFAULT_ORDER = ALL_TOOLS.map(t => t.key);
 
+// ── LyricFit pipeline model types ─────────────────────────────────────────────
+type TranscriptionModel = "whisper-1" | "gemini";
+type AnalysisModel =
+  | "google/gemini-3-flash-preview"
+  | "google/gemini-2.5-flash"
+  | "google/gemini-2.5-pro"
+  | "google/gemini-3-pro-preview"
+  | "disabled";
+
 interface FeaturesState {
   crypto_tipping: boolean;
   growth_flow: boolean;
@@ -25,8 +34,8 @@ interface FeaturesState {
   tools_enabled: Record<string, boolean>;
   tools_order: string[];
   crowdfit_mode: "reactions" | "hook_review";
-  lyric_transcribe_model: "gemini" | "whisper" | "hybrid";
-  lyric_gemini_model: "google/gemini-3-flash-preview" | "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "google/gemini-3-pro-preview";
+  lyric_transcription_model: TranscriptionModel;
+  lyric_analysis_model: AnalysisModel;
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -36,11 +45,11 @@ const DEFAULT_FEATURES: FeaturesState = {
   tools_enabled: Object.fromEntries(ALL_TOOLS.map(t => [t.key, true])),
   tools_order: DEFAULT_ORDER,
   crowdfit_mode: "reactions",
-  lyric_transcribe_model: "hybrid",
-  lyric_gemini_model: "google/gemini-3-flash-preview",
+  lyric_transcription_model: "whisper-1",
+  lyric_analysis_model: "google/gemini-3-flash-preview",
 };
 
-async function patchFeatures(patch: Partial<FeaturesState>) {
+async function patchFeatures(patch: Partial<FeaturesState & Record<string, any>>) {
   const { data: existing } = await supabase.from("site_copy").select("id, copy_json").limit(1).single();
   if (!existing) throw new Error("No site_copy row found");
   const prev = (existing.copy_json as any) || {};
@@ -94,6 +103,44 @@ function ToolRow({
   );
 }
 
+// Reusable radio option row
+function RadioOption({
+  active,
+  disabled,
+  onClick,
+  title,
+  desc,
+  badge,
+}: {
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  title: string;
+  desc: string;
+  badge?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
+    >
+      <div className="text-left flex-1 min-w-0 pr-3">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium">{title}</p>
+          {badge && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/15 text-primary shrink-0">{badge}</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+      </div>
+      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${active ? "border-primary bg-primary" : "border-border"}`}>
+        {active && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+      </div>
+    </button>
+  );
+}
+
 export function ToolsEditor() {
   const [features, setFeatures] = useState<FeaturesState>(DEFAULT_FEATURES);
   const [orderedKeys, setOrderedKeys] = useState<string[]>(DEFAULT_ORDER);
@@ -112,7 +159,6 @@ export function ToolsEditor() {
         const savedOrder: string[] = Array.isArray(f.tools_order) && f.tools_order.length > 0
           ? f.tools_order
           : DEFAULT_ORDER;
-        // Ensure any new tools not in saved order are appended
         const merged = [
           ...savedOrder.filter(k => DEFAULT_ORDER.includes(k)),
           ...DEFAULT_ORDER.filter(k => !savedOrder.includes(k)),
@@ -124,8 +170,9 @@ export function ToolsEditor() {
           tools_enabled,
           tools_order: merged,
           crowdfit_mode: f.crowdfit_mode ?? "reactions",
-          lyric_transcribe_model: f.lyric_transcribe_model ?? "hybrid",
-          lyric_gemini_model: f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
+          // Support old field names for backwards compat
+          lyric_transcription_model: f.lyric_transcription_model ?? (f.lyric_transcribe_model === "gemini" ? "gemini" : "whisper-1"),
+          lyric_analysis_model: f.lyric_analysis_model ?? f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
         });
         setOrderedKeys(merged);
         setGuestQuota(f.growth_quotas?.guest ?? 5);
@@ -135,9 +182,7 @@ export function ToolsEditor() {
     });
   }, []);
 
-  const handleReorder = (newOrder: string[]) => {
-    setOrderedKeys(newOrder);
-  };
+  const handleReorder = (newOrder: string[]) => setOrderedKeys(newOrder);
 
   const saveOrder = async () => {
     setSavingOrder(true);
@@ -198,34 +243,30 @@ export function ToolsEditor() {
     }
   };
 
-  const setLyricModel = async (model: "gemini" | "whisper" | "hybrid") => {
-    const prev = features.lyric_transcribe_model;
-    setFeatures(f => ({ ...f, lyric_transcribe_model: model }));
-    setSavingKey("lyric_model");
+  const setTranscriptionModel = async (model: TranscriptionModel) => {
+    const prev = features.lyric_transcription_model;
+    setFeatures(f => ({ ...f, lyric_transcription_model: model }));
+    setSavingKey("lyric_transcription");
     try {
-      await patchFeatures({ lyric_transcribe_model: model } as any);
-      toast.success(
-        model === "hybrid" ? "Switched to Hybrid (Whisper + Gemini)"
-        : model === "whisper" ? "Switched to Whisper only"
-        : "Switched to Gemini only"
-      );
+      await patchFeatures({ lyric_transcription_model: model });
+      toast.success(model === "whisper-1" ? "Transcription → Whisper-1" : "Transcription → Gemini (audio-only)");
     } catch {
-      setFeatures(f => ({ ...f, lyric_transcribe_model: prev }));
+      setFeatures(f => ({ ...f, lyric_transcription_model: prev }));
       toast.error("Failed to update");
     } finally {
       setSavingKey(null);
     }
   };
 
-  const setGeminiModel = async (model: FeaturesState["lyric_gemini_model"]) => {
-    const prev = features.lyric_gemini_model;
-    setFeatures(f => ({ ...f, lyric_gemini_model: model }));
-    setSavingKey("gemini_model");
+  const setAnalysisModel = async (model: AnalysisModel) => {
+    const prev = features.lyric_analysis_model;
+    setFeatures(f => ({ ...f, lyric_analysis_model: model }));
+    setSavingKey("lyric_analysis");
     try {
-      await patchFeatures({ lyric_gemini_model: model } as any);
-      toast.success(`Gemini model → ${model}`);
+      await patchFeatures({ lyric_analysis_model: model });
+      toast.success(model === "disabled" ? "Analysis disabled (transcription only)" : `Analysis → ${model.split("/")[1]}`);
     } catch {
-      setFeatures(f => ({ ...f, lyric_gemini_model: prev }));
+      setFeatures(f => ({ ...f, lyric_analysis_model: prev }));
       toast.error("Failed to update");
     } finally {
       setSavingKey(null);
@@ -237,7 +278,7 @@ export function ToolsEditor() {
     setFeatures(f => ({ ...f, crowdfit_mode: mode }));
     setSavingKey("crowdfit_mode");
     try {
-      await patchFeatures({ crowdfit_mode: mode } as any);
+      await patchFeatures({ crowdfit_mode: mode });
       toast.success(mode === "hook_review" ? "Hook Review mode enabled" : "Standard reactions enabled");
     } catch {
       setFeatures(f => ({ ...f, crowdfit_mode: prev }));
@@ -319,73 +360,81 @@ export function ToolsEditor() {
           <span className="text-sm font-mono font-medium">CrowdFit Mode</span>
         </div>
         <div className="divide-y divide-border">
-          <button
+          <RadioOption
+            active={features.crowdfit_mode === "reactions" || !features.crowdfit_mode}
+            disabled={savingKey === "crowdfit_mode"}
             onClick={() => setCrowdfitMode("reactions")}
+            title="Standard reactions"
+            desc="🔥 fire, 💬 comments, share, bookmark"
+          />
+          <RadioOption
+            active={features.crowdfit_mode === "hook_review"}
             disabled={savingKey === "crowdfit_mode"}
-            className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
-          >
-            <div className="text-left">
-              <p className="text-sm font-medium">Standard reactions</p>
-              <p className="text-xs text-muted-foreground mt-0.5">🔥 fire, 💬 comments, share, bookmark</p>
-            </div>
-            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${features.crowdfit_mode === "reactions" || !features.crowdfit_mode ? "border-primary bg-primary" : "border-border"}`}>
-              {(features.crowdfit_mode === "reactions" || !features.crowdfit_mode) && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-            </div>
-          </button>
-          <button
             onClick={() => setCrowdfitMode("hook_review")}
-            disabled={savingKey === "crowdfit_mode"}
-            className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
-          >
-            <div className="text-left">
-              <p className="text-sm font-medium">Hook Review</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Structured 2-tap panel — did the hook land?</p>
-            </div>
-            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${features.crowdfit_mode === "hook_review" ? "border-primary bg-primary" : "border-border"}`}>
-              {features.crowdfit_mode === "hook_review" && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-            </div>
-          </button>
+            title="Hook Review"
+            desc="Structured 2-tap panel — did the hook land?"
+          />
         </div>
       </div>
 
-      {/* ── LyricFit Transcription Model ── */}
+      {/* ── LyricFit Pipeline Config ── */}
       <div className="glass-card rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <Mic size={14} className="text-primary" />
-          <span className="text-sm font-mono font-medium">LyricFit Transcription Engine</span>
+          <span className="text-sm font-mono font-medium">LyricFit Pipeline</span>
+        </div>
+
+        {/* Stage 1: Transcription */}
+        <div className="px-4 py-2 bg-muted/30 border-b border-border">
+          <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">Stage 1 — Transcription (timing source)</p>
         </div>
         <div className="divide-y divide-border">
-          {(["hybrid", "whisper", "gemini"] as const).map((model) => {
-            const labels: Record<string, { title: string; desc: string }> = {
-              hybrid: { title: "Hybrid ✦ (recommended)", desc: "Whisper timestamps + Gemini adlibs, hook & metadata — both run in parallel" },
-              whisper: { title: "Whisper only", desc: "Fast raw segments, accurate timing — no adlibs, hooks, or metadata" },
-              gemini:  { title: "Gemini only", desc: "Full multimodal analysis — slower timing accuracy than hybrid" },
-            };
-            const active = (features.lyric_transcribe_model || "hybrid") === model;
-            return (
-              <button
-                key={model}
-                onClick={() => setLyricModel(model as any)}
-                disabled={savingKey === "lyric_model"}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
-              >
-                <div className="text-left">
-                  <p className="text-sm font-medium">{labels[model].title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{labels[model].desc}</p>
-                </div>
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${active ? "border-primary bg-primary" : "border-border"}`}>
-                  {active && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-                </div>
-              </button>
-            );
-          })}
+          <RadioOption
+            active={features.lyric_transcription_model === "whisper-1"}
+            disabled={savingKey === "lyric_transcription"}
+            onClick={() => setTranscriptionModel("whisper-1")}
+            title="OpenAI Whisper-1"
+            desc="Word-level timestamps, highest timing precision. Requires OPENAI_API_KEY."
+            badge="recommended"
+          />
+          <RadioOption
+            active={features.lyric_transcription_model === "gemini"}
+            disabled={savingKey === "lyric_transcription"}
+            onClick={() => setTranscriptionModel("gemini")}
+            title="Gemini (audio-only)"
+            desc="No Whisper dependency. Gemini handles timestamps — less precise, uses one model for everything."
+          />
+        </div>
+
+        {/* Stage 2: Analysis */}
+        <div className="px-4 py-2 bg-muted/30 border-b border-border border-t border-border mt-0">
+          <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">Stage 2 — Analysis (adlibs · hook · metadata)</p>
+        </div>
+        <div className="divide-y divide-border">
+          {([
+            { value: "google/gemini-3-flash-preview", title: "Gemini 3 Flash Preview", desc: "Fast, next-gen. Best balance of speed + audio quality.", badge: "default" },
+            { value: "google/gemini-2.5-flash",       title: "Gemini 2.5 Flash",       desc: "Stable, balanced — good multimodal + reasoning." },
+            { value: "google/gemini-2.5-pro",         title: "Gemini 2.5 Pro",         desc: "Top-tier accuracy. Slower, best for complex tracks." },
+            { value: "google/gemini-3-pro-preview",   title: "Gemini 3 Pro Preview",   desc: "Next-gen Pro — highest capability, experimental.", badge: "exp" },
+            { value: "disabled",                      title: "Disabled",               desc: "Skip analysis — transcription timestamps only, no adlibs or hooks." },
+          ] satisfies { value: AnalysisModel; title: string; desc: string; badge?: string }[]).map(({ value, title, desc, badge }) => (
+            <RadioOption
+              key={value}
+              active={features.lyric_analysis_model === value}
+              disabled={savingKey === "lyric_analysis"}
+              onClick={() => setAnalysisModel(value)}
+              title={title}
+              desc={desc}
+              badge={badge}
+            />
+          ))}
         </div>
       </div>
 
       {/* ── Crypto Tipping ── */}
       <div className="glass-card rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <Coins size={14} className="text-purple-400" />
+          <Coins size={14} className="text-primary" />
           <span className="text-sm font-mono font-medium">Crypto Tipping</span>
         </div>
         <div className="px-4 py-4 flex items-center justify-between">
@@ -398,40 +447,6 @@ export function ToolsEditor() {
             onCheckedChange={toggleCrypto}
             disabled={savingKey === "crypto"}
           />
-        </div>
-      </div>
-
-      {/* ── Gemini Model Selector ── */}
-      <div className="glass-card rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <Mic size={14} className="text-primary" />
-          <span className="text-sm font-mono font-medium">LyricFit — Gemini Model</span>
-        </div>
-        <div className="divide-y divide-border">
-          {([
-            { value: "google/gemini-3-flash-preview", title: "Gemini 3 Flash Preview ✦ (default)", desc: "Fast, next-gen. Best balance of speed and audio quality." },
-            { value: "google/gemini-2.5-flash",       title: "Gemini 2.5 Flash",                  desc: "Stable, balanced — good multimodal + reasoning." },
-            { value: "google/gemini-2.5-pro",         title: "Gemini 2.5 Pro",                    desc: "Top-tier accuracy. Slower, best for complex tracks." },
-            { value: "google/gemini-3-pro-preview",   title: "Gemini 3 Pro Preview",              desc: "Next-gen Pro — highest capability, experimental." },
-          ] as const).map(({ value, title, desc }) => {
-            const active = (features.lyric_gemini_model || "google/gemini-3-flash-preview") === value;
-            return (
-              <button
-                key={value}
-                onClick={() => setGeminiModel(value)}
-                disabled={savingKey === "gemini_model"}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
-              >
-                <div className="text-left">
-                  <p className="text-sm font-medium">{title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
-                </div>
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${active ? "border-primary bg-primary" : "border-border"}`}>
-                  {active && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-                </div>
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -485,7 +500,7 @@ export function ToolsEditor() {
               <button
                 onClick={saveQuotas}
                 disabled={savingQuotas}
-                className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                className="px-3 py-1 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {savingQuotas ? "Saving…" : "Save Quotas"}
               </button>
@@ -493,6 +508,7 @@ export function ToolsEditor() {
           </div>
         )}
       </div>
+
     </div>
   );
 }
