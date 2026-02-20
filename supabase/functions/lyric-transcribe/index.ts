@@ -69,34 +69,18 @@ async function runGeminiEnrichment(
   adlib_ranges: { start: number; end: number }[];
   hooks: any[];
 }> {
-  const enrichPrompt = `ROLE: You are a Music Structure AI. The audio has already been transcribed by Whisper — you do NOT need to re-transcribe it.
+  const enrichPrompt = `You are a Music Structure AI. Listen to the audio and return ONLY a compact JSON object — no markdown, no explanation.
 
-YOUR TASKS:
-1. ADLIB DETECTION — Listen for background vocals, hype words, harmonies, shouts that are NOT the lead vocal/rap. Return their time ranges as "adlib_ranges".
-2. HOTTEST HOOK — Identify the single most impactful repetitive segment (8–20 seconds). Criteria: melodic peak, highest energy, title repetition.
-3. METADATA — Detect title, artist name (if audible), mood, BPM estimate, musical key, genre hint.
+RULES:
+- adlib_ranges: Group consecutive adlib moments into BROAD ranges (min 1s duration). Max 15 ranges total. Merge nearby adlibs within 2 seconds of each other.
+- hooks: ONE hook only (8-20s), the most impactful chorus/hook.
+- metadata: best guesses for mood, bpm, key, genre.
 
-STRICT JSON OUTPUT ONLY — no markdown, no preamble:
-{
-  "title": "Detected Title or Unknown",
-  "artist": "Detected Artist or Unknown",
-  "metadata": {
-    "mood": "string",
-    "bpm_estimate": 0,
-    "confidence": 0.0,
-    "key": "string",
-    "genre_hint": "string"
-  },
-  "adlib_ranges": [
-    { "start": 0.0, "end": 0.0 }
-  ],
-  "hooks": [
-    { "start": 0.0, "end": 0.0, "score": 95, "reasonCodes": ["repetition", "melodic-peak"], "previewText": "First words of hook..." }
-  ]
-}
+OUTPUT FORMAT (strict, no trailing commas):
+{"title":"Song Title or Unknown","artist":"Artist or Unknown","metadata":{"mood":"energetic","bpm_estimate":120,"confidence":0.8,"key":"C minor","genre_hint":"Hip-Hop"},"adlib_ranges":[{"start":12.5,"end":15.0}],"hooks":[{"start":45.0,"end":60.0,"score":92,"reasonCodes":["repetition","melodic-peak"],"previewText":"First few words..."}]}
 
-If there are no adlibs, return "adlib_ranges": [].
-Return only ONE hook — the hottest one.`;
+If no adlibs detected: "adlib_ranges":[]
+Keep total JSON under 1000 characters.`;
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -123,7 +107,7 @@ Return only ONE hook — the hottest one.`;
         },
       ],
       temperature: 0.1,
-      max_tokens: 8192,
+      max_tokens: 1024,
     }),
   });
 
