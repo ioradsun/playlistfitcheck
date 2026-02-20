@@ -9,24 +9,24 @@ type HookRating = "missed" | "almost" | "solid" | "hit";
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `STATUS: RESOLVING... (${total}/50 SIGNALS)`,
+      label: `RESOLVING...`,
+      sublabel: `${total}/50 SIGNALS`,
       summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
-      bigDisplay: `${pct}%`,
       tier: "resolving" as const,
     };
   }
   if (total < 50) {
     return {
       label: `STATUS: ${total}/50 SIGNALS`,
+      sublabel: undefined,
       summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
-      bigDisplay: `${total}/50`,
       tier: "detected" as const,
     };
   }
   return {
     label: "STATUS: CONSENSUS REACHED",
+    sublabel: undefined,
     summary: `${pct}% OF THE FMLY RESONATE WITH THIS.`,
-    bigDisplay: `${pct}%`,
     tier: "consensus" as const,
   };
 }
@@ -226,6 +226,11 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                   <span className={verbiage.tier === "resolving" ? "opacity-50" : ""}>{verbiage.label}</span>
                 </p>
+                {verbiage.sublabel && (
+                  <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground opacity-50">
+                    {verbiage.sublabel}
+                  </p>
+                )}
                 <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
                   {verbiage.summary}
                 </p>
