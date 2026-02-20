@@ -74,7 +74,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
   }, [step]);
 
   const pct = localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
-  const signalsLabel = localBackers === 1 ? "1 signal" : `${localBackers} signals`;
+  const signalsLabel = localBackers >= 50 ? (localBackers === 1 ? "1 signal" : `${localBackers} signals`) : `${localBackers} / 50 signals needed`;
   const v = getSignalVerbiage(localBackers, pct);
 
   const handleVoteClick = (type: "signal" | "bypass") => {

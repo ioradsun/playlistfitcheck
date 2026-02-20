@@ -213,7 +213,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       {/* Done */}
       {step === "done" && results && (() => {
         const replayPct = results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0;
-        const signalLabel = results.total === 1 ? "signal" : "signals";
+        const signalLabel = results.total >= 50 ? (results.total === 1 ? "signal" : "signals") : "/ 50 signals needed";
         const verbiage = getSignalVerbiage(results.total, replayPct);
         return (
           <div className="animate-fade-in">
