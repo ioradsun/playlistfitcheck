@@ -121,23 +121,12 @@ function CommentItem({
 }
 
 function getSignalVerbiage(total: number, pct: number) {
-  if (total < 50) {
-    return {
-      label: "",
-      sublabel: undefined,
-      summary: "CALIBRATING BUILD FIT",
-      signalLine: `${total}/50 SIGNALS NEEDED`,
-      bigDisplay: `${pct}%`,
-      tier: total <= 10 ? "resolving" as const : "detected" as const,
-    };
-  }
+  const statusLine = total < 50
+    ? `CALIBRATING BUILD FIT · ${total}/50 SIGNALS NEEDED`
+    : `CONSENSUS REACHED · ${pct}% FMLY BUILD FIT`;
   return {
-    label: "CONSENSUS REACHED",
-    sublabel: undefined,
-    summary: `${pct}% FMLY BUILD FIT`,
-    signalLine: undefined,
+    statusLine,
     bigDisplay: `${pct}%`,
-    tier: "consensus" as const,
   };
 }
 
@@ -296,39 +285,16 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
           {backersCount > 0 && (() => {
             const verbiage = getSignalVerbiage(backersCount, demandPct);
             return (
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
-                    Signal Status
-                  </p>
-                  <p className="text-2xl font-bold leading-none tracking-tight text-foreground">
-                    {verbiage.bigDisplay}
-                  </p>
-                  {verbiage.label && (
-                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5 truncate">
-                      {verbiage.label}
-                    </p>
-                  )}
-                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
-                    {verbiage.summary}
-                  </p>
-                  {verbiage.signalLine && (
-                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
-                      {verbiage.signalLine}
-                    </p>
-                  )}
-                </div>
-                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
-                    Signals
-                  </p>
-                  <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
-                    {backersCount}
-                  </p>
-                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                    {greenlightCount} {greenlightCount === 1 ? "SIGNAL" : "SIGNALS"}<br />{shelveCount} Bypassed
-                  </p>
-                </div>
+              <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
+                  Signal Status
+                </p>
+                <p className="text-2xl font-bold leading-none tracking-tight text-foreground">
+                  {verbiage.bigDisplay}
+                </p>
+                <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
+                  {verbiage.statusLine}
+                </p>
               </div>
             );
           })()}
