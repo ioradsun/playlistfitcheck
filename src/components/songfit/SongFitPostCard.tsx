@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
 import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
@@ -51,6 +52,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const [localCaption, setLocalCaption] = useState(post.caption || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
+  const [isScored, setIsScored] = useState(false);
   const impressionRef = useRef<HTMLDivElement>(null);
   const impressionLogged = useRef(false);
   const [reviewsSheetPostId, setReviewsSheetPostId] = useState<string | null>(null);
@@ -259,15 +261,20 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       </div>
 
       {/* Music Embed Player */}
-      <LazySpotifyEmbed
-        trackId={post.spotify_track_id}
-        trackTitle={post.track_title}
-        trackUrl={post.spotify_track_url}
-        postId={post.id}
-        albumArtUrl={post.album_art_url}
-        artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
-        genre={((post.tags_json as any[]) || [])[0] || null}
-      />
+      <div className={cn(
+        "transition-all duration-500",
+        isScored && "opacity-80 pointer-events-none [filter:grayscale(20%)_brightness(90%)]"
+      )}>
+        <LazySpotifyEmbed
+          trackId={post.spotify_track_id}
+          trackTitle={post.track_title}
+          trackUrl={post.spotify_track_url}
+          postId={post.id}
+          albumArtUrl={post.album_art_url}
+          artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
+          genre={((post.tags_json as any[]) || [])[0] || null}
+        />
+      </div>
 
       {/* Action Row — reactions mode only here */}
       {crowdfitMode !== "hook_review" && (
@@ -437,6 +444,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             showPreResolved={isBillboard && !!signalData}
             preResolved={signalData}
             rank={rank}
+            onScored={() => setIsScored(true)}
           />
           <HookReviewsSheet
             postId={reviewsSheetPostId}
