@@ -263,7 +263,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       {/* Music Embed Player */}
       <div className={cn(
         "transition-all duration-500",
-        isScored && "opacity-90 [filter:grayscale(30%)_brightness(0.95)_contrast(1.25)] dark:opacity-70 dark:[filter:grayscale(30%)_brightness(0.90)]"
+        isScored && "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.1)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]"
       )}>
         <LazySpotifyEmbed
           trackId={post.spotify_track_id}
