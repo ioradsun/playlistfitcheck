@@ -26,14 +26,16 @@ interface Props {
   onViewChange: (v: FeedView) => void;
   billboardMode: BillboardMode;
   onModeChange: (m: BillboardMode) => void;
+  isLoggedIn?: boolean;
 }
 
-export function BillboardToggle({ view, onViewChange, billboardMode, onModeChange }: Props) {
+export function BillboardToggle({ view, onViewChange, billboardMode, onModeChange, isLoggedIn }: Props) {
   const [recentDropdownOpen, setRecentDropdownOpen] = useState(false);
   const [billboardDropdownOpen, setBillboardDropdownOpen] = useState(false);
 
   const isRecentActive = view === "recent" || view === "pending" || view === "resolved";
   const isBillboardActive = view === "billboard";
+  const showRecentChevron = isLoggedIn && isRecentActive;
 
   return (
     <div className="border-b border-border/40">
@@ -43,7 +45,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
           <DropdownMenu
             open={recentDropdownOpen}
             onOpenChange={(o) => {
-              if (o && !isRecentActive) return;
+              if (o && (!isRecentActive || !isLoggedIn)) return;
               setRecentDropdownOpen(o);
             }}
           >
@@ -53,7 +55,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                   e.stopPropagation();
                   if (!isRecentActive) {
                     onViewChange("recent");
-                  } else {
+                  } else if (isLoggedIn) {
                     setRecentDropdownOpen((prev) => !prev);
                   }
                 }}
@@ -69,7 +71,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                   size={12}
                   className={cn(
                     "transition-all duration-150",
-                    isRecentActive ? "opacity-60" : "opacity-0 w-0"
+                    showRecentChevron ? "opacity-60" : "opacity-0 w-0"
                   )}
                 />
               </button>
