@@ -138,9 +138,38 @@ Return only ONE hook — the hottest one.`;
   const content = gwData.choices?.[0]?.message?.content || "";
   if (!content) throw new Error("Empty Gemini response");
 
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("No JSON in Gemini response");
-  return JSON.parse(jsonMatch[0]);
+  console.log(`Gemini raw content length: ${content.length} chars`);
+  console.log(`Gemini content tail: ${content.slice(-200)}`);
+
+  // Extract JSON robustly
+  const jsonStart = content.indexOf("{");
+  const jsonEnd = content.lastIndexOf("}");
+  if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON in Gemini response");
+
+  let rawJson = content.slice(jsonStart, jsonEnd + 1);
+
+  // Repair common LLM JSON issues: trailing commas before ] or }
+  rawJson = rawJson
+    .replace(/,\s*}/g, "}")
+    .replace(/,\s*]/g, "]")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ""); // strip control chars
+
+  try {
+    return JSON.parse(rawJson);
+  } catch (firstErr) {
+    // Last resort: try to recover by truncating at last complete top-level field
+    console.warn("JSON parse failed, attempting bracket-counting repair:", (firstErr as Error).message);
+    // Find last safe closing of adlib_ranges array to salvage partial hooks
+    const adlibEnd = rawJson.indexOf('"hooks"');
+    if (adlibEnd > 0) {
+      // Close off JSON after adlib_ranges, skip hooks
+      const partial = rawJson.slice(0, adlibEnd) + '"hooks": []}';
+      try {
+        return JSON.parse(partial.replace(/,\s*}$/, "}"));
+      } catch (_) { /* fall through */ }
+    }
+    throw firstErr;
+  }
 }
 
 // ── Merge: apply Gemini enrichment onto Whisper segments ─────────────────────
