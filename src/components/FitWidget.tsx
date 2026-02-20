@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
-import { Music, ChevronDown, ChevronUp, Zap, Crown, ArrowRight, UserPlus } from "lucide-react";
+import { Music, X } from "lucide-react";
 import { TrailblazerBadge } from "./TrailblazerBadge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -151,12 +151,12 @@ export function FitWidget() {
                   ))}
                 </div>
                 <div className="px-3 pb-3 pt-1 shrink-0">
-                  {!user ? (
+                {!user ? (
                     <Button
                       size="sm"
                       variant="outline"
                       className="w-full text-xs h-8"
-                      onClick={() => navigate("/auth")}
+                      onClick={() => { navigate("/auth"); setCollapsed(true); }}
                     >
                       Sign Up
                     </Button>
@@ -165,7 +165,7 @@ export function FitWidget() {
                       size="sm"
                       variant="outline"
                       className="w-full text-xs h-8"
-                      onClick={() => setShowInvite(true)}
+                      onClick={() => { setShowInvite(true); setCollapsed(true); }}
                     >
                       Invite Artist
                     </Button>
@@ -192,7 +192,7 @@ export function FitWidget() {
                     size="sm"
                     variant="outline"
                     className="w-full text-xs h-8"
-                    onClick={() => setShowInvite(true)}
+                    onClick={() => { setShowInvite(true); setCollapsed(true); }}
                   >
                     Invite Artist
                   </Button>
@@ -215,7 +215,7 @@ export function FitWidget() {
               whileTap={{ scale: 0.93 }}
               style={{ userSelect: "none" }}
             >
-              <Music size={16} className="text-primary-foreground" />
+              {collapsed ? <Music size={16} className="text-primary-foreground" /> : <X size={16} className="text-primary-foreground" />}
               {tier === "unlimited" && (
                 <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-primary border-2 border-background" />
               )}
