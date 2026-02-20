@@ -31,7 +31,7 @@ interface Props {
   onOpenLikes: (postId: string) => void;
   onRefresh: () => void;
   isBillboard?: boolean;
-  signalData?: { total: number; replay_yes: number };
+  signalData?: { total: number; replay_yes: number; saves_count?: number; signal_velocity?: number };
 }
 
 export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRefresh, isBillboard, signalData }: Props) {

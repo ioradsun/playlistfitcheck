@@ -27,7 +27,7 @@ export function SongFitFeed() {
   const [showFloatingAnchor, setShowFloatingAnchor] = useState(false);
   const [hasPosted, setHasPosted] = useState(false);
   const [hasEverPosted, setHasEverPosted] = useState<boolean | null>(null);
-  const [signalMap, setSignalMap] = useState<Record<string, { total: number; replay_yes: number }>>({});
+  const [signalMap, setSignalMap] = useState<Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }>>({});
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -60,6 +60,8 @@ export function SongFitFeed() {
       enriched = await enrichWithUserData(enriched);
       setPosts(enriched);
     } else {
+      // Billboard: Signal Velocity scoring
+      // Time-window cutoffs applied to SIGNAL created_at, not post submitted_at
       let cutoff: string | null = null;
       let ceiling: string | null = null;
       if (billboardMode === "this_week") {
@@ -69,40 +71,95 @@ export function SongFitFeed() {
         ceiling = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       }
 
-      let query = supabase
+      // Broad pool of posts — ranked by signal velocity, not engagement_score
+      const { data: poolData } = await supabase
         .from("songfit_posts")
         .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
         .eq("status", "live")
-        .limit(40)
-        .order("engagement_score", { ascending: false });
+        .limit(100)
+        .order("created_at", { ascending: false });
 
-      if (cutoff) query = query.gte("submitted_at", cutoff);
-      if (ceiling) query = query.lte("submitted_at", ceiling);
+      const pool = (poolData || []) as unknown as SongFitPost[];
+      if (pool.length === 0) {
+        setPosts([]);
+        setSignalMap({});
+        setLoading(false);
+        return;
+      }
 
-      const { data } = await query;
-      let enriched = (data || []) as unknown as SongFitPost[];
-      enriched = await enrichWithUserData(enriched);
+      const postIds = pool.map(p => p.id);
+      const ownerIds = [...new Set(pool.map(p => p.user_id))];
+
+      // Build time-window filter helper
+      const applyWindow = (q: any) => {
+        if (cutoff) q = q.gte("created_at", cutoff);
+        if (ceiling) q = q.lte("created_at", ceiling);
+        return q;
+      };
+
+      // 4 parallel signal queries, all time-windowed
+      const [reviewsRes, commentsRes, followsRes, savesRes] = await Promise.all([
+        applyWindow(supabase.from("songfit_hook_reviews").select("post_id, would_replay").in("post_id", postIds)),
+        applyWindow(supabase.from("songfit_comments").select("post_id").in("post_id", postIds)),
+        applyWindow(supabase.from("songfit_follows").select("followed_user_id").in("followed_user_id", ownerIds)),
+        applyWindow(supabase.from("songfit_saves").select("post_id").in("post_id", postIds)),
+      ]);
+
+      // Aggregate per post
+      const hookMap: Record<string, { run_it_back: number; skip: number; total: number; replay_yes: number }> = {};
+      for (const r of (reviewsRes.data || [])) {
+        if (!hookMap[r.post_id]) hookMap[r.post_id] = { run_it_back: 0, skip: 0, total: 0, replay_yes: 0 };
+        hookMap[r.post_id].total++;
+        if (r.would_replay) { hookMap[r.post_id].run_it_back++; hookMap[r.post_id].replay_yes++; }
+        else hookMap[r.post_id].skip++;
+      }
+
+      const commentMap: Record<string, number> = {};
+      for (const c of (commentsRes.data || [])) {
+        commentMap[c.post_id] = (commentMap[c.post_id] || 0) + 1;
+      }
+
+      // follows are per-artist; map followed_user_id → count, then assign per post by post.user_id
+      const followByOwner: Record<string, number> = {};
+      for (const f of (followsRes.data || [])) {
+        followByOwner[f.followed_user_id] = (followByOwner[f.followed_user_id] || 0) + 1;
+      }
+
+      const savesMap: Record<string, number> = {};
+      for (const s of (savesRes.data || [])) {
+        savesMap[s.post_id] = (savesMap[s.post_id] || 0) + 1;
+      }
+
+      // Compute Signal Velocity per post
+      // Formula: (1×RunItBack) + (3×Comments) + (8×Follows) + (12×Saves) − (2×Skips)
+      const scored = pool.map(p => {
+        const h = hookMap[p.id] || { run_it_back: 0, skip: 0, total: 0, replay_yes: 0 };
+        const comments = commentMap[p.id] || 0;
+        const follows = followByOwner[p.user_id] || 0;
+        const saves = savesMap[p.id] || 0;
+        const velocity = (1 * h.run_it_back) + (3 * comments) + (8 * follows) + (12 * saves) - (2 * h.skip);
+        return { post: p, velocity, h, saves };
+      });
+
+      // Sort descending, take top 40, assign ranks
+      scored.sort((a, b) => b.velocity - a.velocity);
+      const top40 = scored.slice(0, 40);
+
+      let enriched = await enrichWithUserData(top40.map(s => s.post));
       enriched = enriched.map((p, i) => ({ ...p, current_rank: i + 1 }));
       setPosts(enriched);
 
-      // Batch-fetch signal aggregates for all billboard posts
-      if (enriched.length > 0) {
-        const postIds = enriched.map(p => p.id);
-        const { data: reviews } = await supabase
-          .from("songfit_hook_reviews")
-          .select("post_id, would_replay")
-          .in("post_id", postIds);
-
-        const map = (reviews || []).reduce((acc, r) => {
-          if (!acc[r.post_id]) acc[r.post_id] = { total: 0, replay_yes: 0 };
-          acc[r.post_id].total++;
-          if (r.would_replay) acc[r.post_id].replay_yes++;
-          return acc;
-        }, {} as Record<string, { total: number; replay_yes: number }>);
-        setSignalMap(map);
-      } else {
-        setSignalMap({});
+      // Build signalMap with extended data for display
+      const newSignalMap: Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }> = {};
+      for (const s of top40) {
+        newSignalMap[s.post.id] = {
+          total: s.h.total,
+          replay_yes: s.h.replay_yes,
+          saves_count: s.saves,
+          signal_velocity: s.velocity,
+        };
       }
+      setSignalMap(newSignalMap);
     }
 
     setLoading(false);
