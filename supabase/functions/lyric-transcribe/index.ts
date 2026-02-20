@@ -96,6 +96,36 @@ function tokenOverlap(a: string, b: string): number {
   return matches / Math.max(tokA.length, tokB.length);
 }
 
+// ── Phonetic Similarity (Soundex-style + Levenshtein hybrid) ─────────────────
+/**
+ * Returns a 0–1 phonetic similarity between two short words.
+ * Strips non-alpha, lowercases, runs a length-penalized Levenshtein, then
+ * adds a consonant-skeleton bonus (vowels stripped) to catch rhymes like
+ * "rain" vs "range" or "runnin'" vs "running".
+ */
+function phoneticSimilarity(a: string, b: string): number {
+  const clean = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const ca = clean(a), cb = clean(b);
+  if (!ca || !cb) return 0;
+  if (ca === cb) return 1;
+
+  // Raw Levenshtein score
+  const dist = levenshtein(ca, cb);
+  const maxLen = Math.max(ca.length, cb.length);
+  const levScore = 1 - dist / maxLen;
+
+  // Consonant skeleton (strip vowels except leading)
+  const skeleton = (s: string) =>
+    (s[0] || "") + s.slice(1).replace(/[aeiou]/g, "");
+  const sa = skeleton(ca), sb = skeleton(cb);
+  const sdist = levenshtein(sa, sb);
+  const smaxLen = Math.max(sa.length, sb.length, 1);
+  const skelScore = 1 - sdist / smaxLen;
+
+  // Weighted blend: 60% raw, 40% consonant skeleton
+  return levScore * 0.6 + skelScore * 0.4;
+}
+
 // ── Whisper: word-level granularity ──────────────────────────────────────────
 async function runWhisper(
   audioBase64: string,
@@ -454,39 +484,67 @@ function extractAdlibsFromWords(
   let ghostCount = 0;
   let correctionCount = 0;
 
+  // ── Boundary: last Whisper word timestamp (Rule: discard beyond this) ────
+  const trackEnd = words.length > 0 ? words[words.length - 1].end : Infinity;
+
   for (const adlib of adlibs) {
     // Apply global timebase correction
     const correctedStart = Math.round((adlib.start - globalOffset) * 1000) / 1000;
     const correctedEnd = Math.round((adlib.end - globalOffset) * 1000) / 1000;
 
+    // ── Boundary Enforcement: discard adlibs beyond final Whisper word ────
+    if (correctedStart > trackEnd + 2.0) {
+      console.log(`[boundary] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — beyond track end (${trackEnd.toFixed(3)}s)`);
+      ghostCount++;
+      continue;
+    }
+
     const normAdlibText = normalize(adlib.text);
     const adlibWordTokens = normAdlibText.split(" ").filter(Boolean);
     if (adlibWordTokens.length === 0) continue;
 
-    // ── Rule 2: Automated QA Swap (Correction) ────────────────────────────
-    // If Gemini tagged this as a "correction", it heard a different word than Whisper
-    // at that timestamp. Apply the Gemini text to the main line while preserving
-    // Whisper's millisecond timestamps.
+    // ── Rule 2: Phonetic QA Swap (The "Rain/Range" Fix) ──────────────────
+    // If Gemini tagged this as a "correction", search the entire parent Whisper
+    // segment for the word with the highest PHONETIC similarity to the Gemini
+    // correction text (threshold > 0.8). This catches drift cases where the
+    // correction timestamp differs by up to 2s from the actual Whisper word.
     if (adlib.isCorrection || adlib.layer === "correction") {
+      // Find which main segment this correction falls in (widened to ±2s)
       const targetSeg = mainSegments.find(s =>
-        correctedStart >= s.start - 0.5 && correctedStart <= s.end + 0.5
+        correctedStart >= s.start - 2.0 && correctedStart <= s.end + 2.0
       );
       if (targetSeg) {
-        // Patch the individual word within the line text (best-effort substring replace)
+        // Gather ALL words in the parent segment (full phonetic search window)
         const segWords = words.filter(w => w.start >= targetSeg.start - 0.1 && w.end <= targetSeg.end + 0.1);
-        const nearestWord = segWords.reduce<{ w: WhisperWord | null; dist: number }>(
+
+        // Score every word by phonetic similarity to the correction text
+        let bestPhoneticWord: WhisperWord | null = null;
+        let bestPhoneticScore = 0;
+        for (const w of segWords) {
+          const score = phoneticSimilarity(normalize(w.word), normalize(adlib.text));
+          if (score > bestPhoneticScore) { bestPhoneticScore = score; bestPhoneticWord = w; }
+        }
+
+        // Also fall back to nearest-by-time word (existing behaviour)
+        const nearestByTime = segWords.reduce<{ w: WhisperWord | null; dist: number }>(
           (acc, w) => { const d = Math.abs(w.start - correctedStart); return d < acc.dist ? { w, dist: d } : acc; },
           { w: null, dist: Infinity }
         );
-        if (nearestWord.w && nearestWord.dist <= 0.5) {
-          const oldWord = nearestWord.w.word.trim();
-          // Only patch if Gemini text actually differs
+
+        // Prefer phonetic match (> 0.80) over pure time proximity
+        const chosen = bestPhoneticScore >= 0.80
+          ? bestPhoneticWord
+          : (nearestByTime.w && nearestByTime.dist <= 0.5 ? nearestByTime.w : null);
+
+        if (chosen) {
+          const oldWord = chosen.word.trim();
+          // Only patch if text actually differs from correction
           const similarity = 1 - levenshtein(normalize(oldWord), normalize(adlib.text)) / Math.max(oldWord.length, adlib.text.length, 1);
           if (similarity < 0.85) {
             targetSeg.lineRef.text = targetSeg.lineRef.text.replace(oldWord, adlib.text);
-            targetSeg.lineRef.geminiConflict = oldWord; // mark original as conflict reference
+            targetSeg.lineRef.geminiConflict = oldWord;
             correctionCount++;
-            console.log(`[qa-swap] Corrected "${oldWord}" → "${adlib.text}" @ ${correctedStart.toFixed(3)}s in main line`);
+            console.log(`[qa-swap] Phonetic correction "${oldWord}" → "${adlib.text}" @ ${correctedStart.toFixed(3)}s (phoneticScore=${bestPhoneticScore.toFixed(2)})`);
           }
         }
       }
@@ -522,10 +580,12 @@ function extractAdlibsFromWords(
       }
     }
 
-    // ── Token-Overlap Floating Logic ──────────────────────────────────────
+    // ── Token-Overlap Floating Logic + Outro Promotion (Rule 4) ──────────
     const nearbyWords = words.filter(w => Math.abs(w.start - correctedStart) <= 1.5);
     const hasWordMatch = nearbyWords.some(w => tokenOverlap(adlib.text, w.word) >= 0.6);
-    const isFloating = !hasWordMatch;
+    // Rule 4: Any adlib in 2:45–3:00 window is explicitly promoted as floating
+    const isOutroWindow = correctedStart >= 165.0 && correctedStart <= 180.0;
+    const isFloating = !hasWordMatch || isOutroWindow;
 
     // ── Find best Whisper word match for snapping ──────────────────────
     const windowWords = words.filter(w => w.start >= correctedStart - 5 && w.start <= correctedEnd + 5);
@@ -611,6 +671,13 @@ function findHookFromWords(
 
   const HOOK_DURATION = 10.000; // Absolute invariant — never override
   const { start_sec, confidence = 0 } = hook;
+
+  // ── Boundary Enforcement: hook beyond track end → discard ─────────────
+  const trackEnd = words.length > 0 ? words[words.length - 1].end : Infinity;
+  if (start_sec > trackEnd) {
+    console.log(`[hook] Discarding hook @ ${start_sec.toFixed(3)}s — beyond track end (${trackEnd.toFixed(3)}s)`);
+    return null;
+  }
 
   // Confidence gate — if below 0.75 this is already filtered in Gemini parsing
   // but double-check here for safety
@@ -873,7 +940,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.0",
+          version: "production-master-v3.1-phonetic",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
