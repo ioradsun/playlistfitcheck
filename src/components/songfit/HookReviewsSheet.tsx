@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Loader2 } from "lucide-react";
-import { useSiteCopy } from "@/hooks/useSiteCopy";
+
 
 interface Reply {
   id: string;
@@ -66,7 +66,7 @@ function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name
 
 export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
   const { user, profile } = useAuth();
-  const siteCopy = useSiteCopy();
+  
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [post, setPost] = useState<PostMeta | null>(null);
   const [loading, setLoading] = useState(true);
@@ -287,12 +287,13 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
           {/* Stat cards */}
           {!loading && rows.length > 0 && (() => {
             const total = rows.length;
-            const replayPct = Math.round((rows.filter(r => r.would_replay).length / total) * 100);
-            const s = siteCopy.signals;
+            const replayCount = rows.filter(r => r.would_replay).length;
+            const bypassCount = rows.filter(r => !r.would_replay).length;
+            const replayPct = Math.round((replayCount / total) * 100);
             const verbiage = (() => {
-              if (total <= 10) return { label: s.resolving_label, summary: s.resolving_summary, bigDisplay: `${replayPct}%`, tier: "resolving" as const };
-              if (total < 50) return { label: s.detected_label.replace("{n}", String(total)), summary: s.detected_summary, bigDisplay: `${total}/50`, tier: "detected" as const };
-              return { label: s.consensus_label, summary: s.consensus_summary.replace("{pct}", String(replayPct)), bigDisplay: `${replayPct}%`, tier: "consensus" as const };
+              if (total <= 10) return { label: "RESOLVING...", sublabel: `${total}/50 SIGNALS`, bigDisplay: `${replayPct}%`, tier: "resolving" as const };
+              if (total < 50) return { label: `STATUS: ${total}/50 SIGNALS`, sublabel: undefined, summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.", bigDisplay: `${total}/50`, tier: "detected" as const };
+              return { label: "STATUS: CONSENSUS REACHED", sublabel: undefined, summary: `${replayPct}% OF THE FMLY RESONATE WITH THIS.`, bigDisplay: `${replayPct}%`, tier: "consensus" as const };
             })();
             return (
               <div className="grid grid-cols-2 gap-2.5">
@@ -301,12 +302,17 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
                     Signal Status
                   </p>
-                  <p className={`text-2xl font-bold leading-none tracking-tight ${verbiage.tier === "resolving" ? "text-muted-foreground/40" : "text-foreground"}`}>
+                  <p className="text-2xl font-bold leading-none tracking-tight text-foreground">
                     {verbiage.bigDisplay}
                   </p>
                   <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                    {verbiage.tier === "resolving" ? verbiage.label : verbiage.summary}
+                    {verbiage.label}
                   </p>
+                  {verbiage.sublabel && (
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
+                      {verbiage.sublabel}
+                    </p>
+                  )}
                 </div>
                 {/* Signals card */}
                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
@@ -316,8 +322,8 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                   <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
                     {total}
                   </p>
-                  <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
-                    {rows.filter(r => r.would_replay).length} replay · {rows.filter(r => !r.would_replay).length} skip
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
+                    {replayCount} SIGNALS<br />{bypassCount} Bypassed
                   </p>
                 </div>
               </div>
