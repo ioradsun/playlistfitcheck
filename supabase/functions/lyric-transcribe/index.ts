@@ -579,8 +579,8 @@ function extractAdlibsFromWords(
   adlibs: GeminiAdlib[],
   words: WhisperWord[],
   globalOffset: number
-): LyricLine[] {
-  if (adlibs.length === 0 || words.length === 0) return lines;
+): { lines: LyricLine[]; qaCorrections: number } {
+  if (adlibs.length === 0 || words.length === 0) return { lines, qaCorrections: 0 };
   // result is mutable — Rule 2 (QA Swap) may patch main line text in place
   const result: LyricLine[] = lines.map(l => ({ ...l }));
   const adlibLines: LyricLine[] = [];
@@ -670,14 +670,15 @@ function extractAdlibsFromWords(
       continue;
     }
 
-    // ── Rule 3: Intro/Outro Zone Preservation (v3.8) ─────────────────────
+    // ── Rule 3: Intro/Outro Zone Preservation (v4.4) ─────────────────────
     // Explicit time-based zone tagging: do NOT depend solely on Whisper's
     // first-word timestamp (which can vary). Use hard invariants instead.
     //   INTRO: 0s–17.0s  — pre-lyric dialogue, hums, count-ins
-    //   OUTRO: 181.0s–end — overlapping echoes, crowd fade, tail textures
+    //   OUTRO: dynamic (trackEnd - 8s) — overlapping echoes, crowd fade, tail textures
+    //   v4.4: OUTRO_ZONE_START is dynamic so final echoes (e.g. 186s on a 189s track) aren't cut off
     // All zone items: isFloating: true + isOrphaned: true (always render as chip)
     const INTRO_ZONE_END = 17.0;
-    const OUTRO_ZONE_START = 181.0;
+    const OUTRO_ZONE_START = Math.max(trackEnd - 8.0, 175.0); // dynamic but never earlier than 175s
     const firstWordStart = words.length > 0 ? words[0].start : 0;
     const isIntroZone = correctedStart < INTRO_ZONE_END || correctedStart < firstWordStart;
     const isOutroZone = correctedStart >= OUTRO_ZONE_START;
@@ -747,11 +748,23 @@ function extractAdlibsFromWords(
         })
       : undefined;
 
+    // Path e (v4.4): Wide-net segment scan for fillers that survive containment check.
+    // Catches filler like "yeah" at 42s that appears in a segment whose start/end
+    // boundaries extend far from the adlib's correctedStart, causing Path d to miss it.
+    // Search ALL segments within ±8s for the filler token anywhere in their text.
+    const identityMatchWide = !identityMatchTight && !identityMatchFiller && !identityMatchSegment && isFiller
+      ? mainSegments.find(seg => {
+          if (Math.abs(seg.start - correctedStart) > 8.0 && Math.abs(seg.end - correctedStart) > 8.0) return false;
+          const segTokens = normalize(seg.text).split(" ").filter(Boolean);
+          return segTokens.includes(normAdlibNorm);
+        })
+      : undefined;
+
     // Synthesize a fake "word" for logging when caught by segment path
-    const identityMatchWord = identityMatchTight ?? identityMatchFiller ?? (identityMatchSegment ? { word: `[segment: ${identityMatchSegment.text.slice(0, 25)}]` } : undefined);
+    const identityMatchWord = identityMatchTight ?? identityMatchFiller ?? (identityMatchSegment ? { word: `[segment: ${identityMatchSegment.text.slice(0, 25)}]` } : undefined) ?? (identityMatchWide ? { word: `[wide-scan: ${identityMatchWide.text.slice(0, 25)}]` } : undefined);
     if (identityMatchWord) {
       ghostCount++;
-      const path = identityMatchSegment ? "containment segment-text" : identityMatchFiller ? "±500ms filler" : "±250ms tight";
+      const path = identityMatchWide ? "±8s wide-scan" : identityMatchSegment ? "containment segment-text" : identityMatchFiller ? "±500ms filler" : "±250ms tight";
       console.log(`[identity-prune] Hard-deleting "${adlib.text}" @ ${correctedStart.toFixed(3)}s — ghost of "${identityMatchWord.word}" (${path})`);
       continue;
     }
@@ -846,8 +859,8 @@ function extractAdlibsFromWords(
   const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
   const floatingCount = adlibLines.filter(l => l.isFloating).length;
   const conflictCount = adlibLines.filter(l => l.geminiConflict).length;
-  console.log(`[v4.3] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
-  return merged;
+  console.log(`[v4.4] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
+  return { lines: merged, qaCorrections: correctionCount };
 }
 
 // ── v2.2 Hook Invariant: start_sec + fixed 10.000s duration ──────────────────
@@ -1060,6 +1073,7 @@ serve(async (req) => {
     let geminiUsed = false;
     let geminiError: string | null = null;
     let globalOffset = 0;
+    let mergeQaCorrections = 0; // v4.4: threaded from extractAdlibsFromWords
 
     const hookSuccess = !analysisDisabled && hookResult.status === "fulfilled";
     const adlibSuccess = !analysisDisabled && adlibResult.status === "fulfilled";
@@ -1103,7 +1117,9 @@ serve(async (req) => {
       }
 
       // Hybrid: Whisper timing + Gemini adlib semantic tags
-      lines = extractAdlibsFromWords(baseLines, resolvedAdlibs, words, globalOffset);
+      const mergeResult = extractAdlibsFromWords(baseLines, resolvedAdlibs, words, globalOffset);
+      lines = mergeResult.lines;
+      mergeQaCorrections = mergeResult.qaCorrections;
 
       // ── v2.2: Hook Invariant — 10s fixed, confidence-gated ───────────────
       if (resolvedHook) {
@@ -1156,8 +1172,9 @@ serve(async (req) => {
     const adlibCount = lines.filter(l => l.tag === "adlib").length;
     const floatingCount = lines.filter(l => l.isFloating).length;
     const conflictCount = lines.filter(l => l.geminiConflict).length;
-    const correctionCount = lines.filter(l => l.isCorrection).length;
-    console.log(`[v3.0] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${conflictCount} conflicts, ${correctionCount} qa-corrections), ${hooks.length} hooks | hook=${hookSuccess} adlib=${adlibSuccess} transcriptProvided=${transcriptProvided}`);
+    // v4.4: Use qaCorrections threaded from merge function for accurate counter
+    const correctionCount = mergeQaCorrections;
+    console.log(`[v4.4] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${conflictCount} conflicts, ${correctionCount} qa-corrections), ${hooks.length} hooks | hook=${hookSuccess} adlib=${adlibSuccess} transcriptProvided=${transcriptProvided}`);
 
     return new Response(
       JSON.stringify({
@@ -1167,7 +1184,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v4.3-visibility-pruning",
+          version: "anchor-align-v4.4-absolute-truth",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
