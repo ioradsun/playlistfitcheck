@@ -42,99 +42,152 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
-    console.log(`Processing audio via Gemini: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`);
+    console.log(`Processing audio via Gemini native API: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
 
-    const systemPrompt = `You are a professional lyrics transcription engine. Your job is to transcribe song lyrics from audio with precise timing. Return ONLY valid JSON — no markdown, no code fences, no explanation.
+    // Use Gemini native REST API for better audio timestamp accuracy
+    // The OpenAI-compatible endpoint doesn't map audio timestamps as precisely
+    const geminiApiKey = LOVABLE_API_KEY;
 
-Output format:
+    const systemPrompt = `You are a professional lyrics transcription engine. Transcribe the song lyrics from the provided audio with PRECISE timestamps.
+
+CRITICAL TIMING RULES:
+- Each timestamp must reflect the EXACT moment in the audio when that lyric begins/ends
+- Do NOT guess or estimate — listen carefully and map each line to its actual position
+- Timestamps must be monotonically increasing
+- The last line's end time should match the approximate end of singing (not necessarily the full track duration)
+- Lines should NOT overlap in time
+
+Output ONLY valid JSON, no markdown, no code fences:
 {
-  "title": "Unknown",
-  "artist": "Unknown",
+  "title": "Song title if audible, else Unknown",
+  "artist": "Artist name if audible, else Unknown",
   "lines": [
-    { "start": 0.0, "end": 3.2, "text": "Line of lyrics here" },
-    ...
+    { "start": 12.4, "end": 15.8, "text": "First lyric line" },
+    { "start": 16.0, "end": 19.2, "text": "Second lyric line" }
   ]
 }
 
 Rules:
-- Each line should be a meaningful lyrical phrase or sentence, not individual words
-- start and end are timestamps in seconds, rounded to 1 decimal place
-- Omit empty/silent sections
-- If you cannot determine title/artist from the audio, use "Unknown"
-- Lines must be in chronological order`;
+- start and end are floating point seconds, 1 decimal place precision
+- Each line = one natural phrase or lyrical sentence
+- Skip instrumental sections (no text entries for those)
+- Lines in strict chronological order`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+    const requestBody = {
+      contents: [
+        {
+          parts: [
+            {
+              inline_data: {
+                mime_type: mimeType,
+                data: audioBase64,
+              },
+            },
+            {
+              text: systemPrompt,
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 8192,
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_audio",
-                input_audio: {
-                  data: audioBase64,
-                  format: ext === "mp3" || ext === "mpga" || ext === "mpeg" ? "mp3"
-                    : ext === "wav" ? "wav"
-                    : ext === "ogg" || ext === "oga" ? "ogg"
-                    : ext === "flac" ? "flac"
-                    : ext === "webm" ? "webm"
-                    : "mp3",
-                },
-              },
-              {
-                type: "text",
-                text: "Please transcribe the lyrics from this audio file with timestamps for each line.",
-              },
-            ],
-          },
-        ],
-      }),
-    });
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI usage limit reached. Add credits in Settings → Workspace → Usage." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    );
+
+    let content = "";
+    if (geminiRes.ok) {
+      const geminiData = await geminiRes.json();
+      content = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      console.log(`Gemini native response length: ${content.length}`);
+    } else {
+      const errorText = await geminiRes.text();
+      console.warn("Gemini native API failed, falling back to gateway:", geminiRes.status, errorText.slice(0, 200));
+
+      // Fallback: Lovable AI gateway
+      const gatewayRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_audio",
+                  input_audio: { data: audioBase64, format: ext === "wav" ? "wav" : ext === "ogg" || ext === "oga" ? "ogg" : "mp3" },
+                },
+                { type: "text", text: "Transcribe the lyrics with precise timestamps." },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (!gatewayRes.ok) {
+        const gwError = await gatewayRes.text();
+        if (gatewayRes.status === 429) {
+          return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (gatewayRes.status === 402) {
+          return new Response(JSON.stringify({ error: "AI usage limit reached. Add credits in Settings → Workspace → Usage." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`Both Gemini endpoints failed. Gateway: ${gatewayRes.status}`);
       }
-      throw new Error(`Gemini error ${response.status}: ${errorText}`);
+
+      const gwData = await gatewayRes.json();
+      content = gwData.choices?.[0]?.message?.content || "";
     }
 
-    const aiData = await response.json();
-    const content = aiData.choices?.[0]?.message?.content || "";
-
+    // Parse JSON response
     let parsed: { title?: string; artist?: string; lines?: any[] };
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(content);
     } catch {
-      console.error("Failed to parse Gemini response:", content);
-      throw new Error("Failed to parse transcription response");
+      console.error("Failed to parse Gemini response:", content.slice(0, 500));
+      throw new Error("Failed to parse transcription response — try again");
     }
 
-    const lines = (parsed.lines ?? [])
+    // Sanitize lines: ensure monotonic timestamps, round to 1dp
+    const rawLines = (parsed.lines ?? [])
       .map((l: any) => ({
-        start: Math.round((l.start ?? 0) * 10) / 10,
-        end: Math.round((l.end ?? 0) * 10) / 10,
+        start: Math.round((Number(l.start) || 0) * 10) / 10,
+        end: Math.round((Number(l.end) || 0) * 10) / 10,
         text: String(l.text ?? "").trim(),
       }))
-      .filter((l: any) => l.text.length > 0);
+      .filter((l: any) => l.text.length > 0 && l.end > l.start);
 
-    console.log(`Gemini transcription lines: ${lines.length}`);
+    // Fix overlaps: clamp each line's end to next line's start
+    const lines = rawLines.map((l: any, i: number) => {
+      if (i < rawLines.length - 1) {
+        const nextStart = rawLines[i + 1].start;
+        if (l.end > nextStart) {
+          return { ...l, end: Math.round((nextStart - 0.1) * 10) / 10 };
+        }
+      }
+      return l;
+    });
+
+    console.log(`Final transcription lines: ${lines.length}`);
 
     return new Response(
       JSON.stringify({ title: parsed.title || "Unknown", artist: parsed.artist || "Unknown", lines }),
