@@ -15,6 +15,7 @@ interface LyricLine {
   isFloating?: boolean;      // v2.2: adlib has no Whisper word match within ±1.5s
   geminiConflict?: string;   // v2.2: Gemini text differs significantly from Whisper text
   confidence?: number;       // v2.2: per-adlib confidence from Gemini
+  isCorrection?: boolean;    // v3.0: QA correction — Gemini heard a different word than Whisper
 }
 
 interface WhisperWord {
@@ -25,10 +26,11 @@ interface WhisperWord {
 
 interface GeminiAdlib {
   text: string;
-  start: number;  // seconds (v2.2 raw numeric from Gemini)
+  start: number;  // seconds (v3.0 raw numeric from Gemini)
   end: number;
-  layer?: string;
+  layer?: string;  // "echo" | "callout" | "background" | "texture" | "correction"
   confidence?: number;
+  isCorrection?: boolean;  // v3.0: QA correction flag
 }
 
 interface GeminiHook {
@@ -149,85 +151,88 @@ async function runWhisper(
   return { words, segments, rawText: data.text || "" };
 }
 
-// ── Gemini Prompt: Macro-Structural (Hook + Metadata) ────────────────────────
-const GEMINI_HOOK_PROMPT = `ROLE: Lead Musicologist
+// ── Gemini Prompt 2: Music Intelligence Analyst (Hook + Meta) v3.0 ───────────
+const GEMINI_HOOK_PROMPT = `ROLE: Lead Music Intelligence Analyst
 
-TASK: Analyze this audio track for macro-structure and track DNA only.
-
-CRITICAL CONSTRAINT: You must COMPLETELY IGNORE all background vocals, adlibs, harmonies, hype vocals, and secondary layers. Your attention is locked exclusively on the PRIMARY lead vocal and the track's musical production.
+TASK: Identify structural identity and production metadata.
 
 1. THE 10.000s HOOK ANCHOR
-- Identify the single primary 10-second region that represents the track's core hook or chorus.
+- Identify the single primary 10-second segment representing the track's "Hottest Hook."
 - Evaluation criteria: production lift, lead vocal intensity, melodic memorability, emotional peak, and repetition.
+- Scan the FULL track. Do not default to the first chorus.
 - Output ONLY start_sec as a decimal in seconds with 3-decimal precision (e.g., 78.450).
 - The 10s duration is a system invariant — do NOT output an end time.
-- Only output hottest_hook if confidence >= 0.75. If below, omit the field entirely.
-- Scan the FULL track. Do not default to the first chorus.
+- Confidence floor: Only return hottest_hook if confidence >= 0.75. If below, omit the field entirely.
 
-2. TRACK DNA
-- bpm: Estimated beats per minute as an integer.
-- key: Musical key (e.g., "F#m", "Bb", "C major").
-- mood: Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic").
+2. PRODUCTION INSIGHTS
+- bpm: Estimated beats per minute as an integer. Confidence floor: 0.85 — return null if below.
+- key: Musical key (e.g., "F#m", "Bb", "C major"). Confidence floor: 0.85 — return null if below.
+- mood: Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic"). Confidence floor: 0.85 — return null if below.
+- Each field must have its own confidence score (0.0–1.0). If confidence for a field is < 0.85, set the value to null.
+
+3. TRACK METADATA
 - title: If audible from lyrics or context; otherwise "Unknown".
 - artist: If known; otherwise "Unknown".
 - genre_hint: Best-guess genre (e.g., "hip-hop", "r&b", "pop").
-- Each field must have its own confidence score (0.0–1.0).
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
   "hottest_hook": { "start_sec": 0.000, "confidence": 0.00 },
-  "insights": {
-    "bpm": { "value": 88, "confidence": 0.00 },
-    "key": { "value": "F#m", "confidence": 0.00 },
-    "mood": { "value": "hype", "confidence": 0.00 }
-  },
   "metadata": {
     "title": "Unknown",
     "artist": "Unknown",
     "genre_hint": ""
+  },
+  "insights": {
+    "bpm": { "value": 88, "confidence": 0.00 },
+    "key": { "value": "F#m", "confidence": 0.00 },
+    "mood": { "value": "hype", "confidence": 0.00 }
   }
 }`;
 
-// ── Gemini Prompt: Adlib Auditor v2.4 (Reference-Based, Transcript-Aware) ────
+// ── Gemini Prompt 1: Adlib Auditor v3.0 (Reference-Based, QA-Correction-Aware) ─
 function buildAdlibPrompt(whisperTranscript: string): string {
-  return `ROLE: Lead Vocal Producer
+  return `ROLE: Lead Vocal Alignment Engineer
 
 You have been provided:
 1. Raw audio of a musical track
-2. The Main Lead Vocal Transcript (below) — already captured by a word-level transcription engine
+2. Main Transcript (Reference) — already captured by a word-level transcription engine:
 
-MAIN LEAD VOCAL TRANSCRIPT:
 ${whisperTranscript}
 
-TASK: Perform SUBTRACTION. Identify every vocal event in the audio that is NOT part of the Main Lead Vocal Transcript above.
+TASK: Audit the audio and identify every Adlib (background vocal, harmony, or interjection) that is NOT part of the provided Main Transcript.
 
-SUBTRACTION RULE:
-- If a word appears in the provided transcript, it belongs to the lead vocal — DO NOT include it.
+1. THE "QA CORRECTION" RULE:
+- If you hear a word in the main vocal that contradicts the provided Transcript (e.g., the transcript says "range" but the artist clearly sings "rain"), identify this as a CORRECTION.
+- Output these as adlib objects with layer: "correction".
+- Corrections are the only exception where the text you output overlaps with a transcript word — but the TEXT IS DIFFERENT.
+
+2. THE "LAYER DENSITY" RULE:
+- Identify all background interjections, harmonies, and "hype" vocals (e.g., "Yeah!", "Let's go!").
+- FULL-TRACK SCAN: You must audit every second from 0:00 to the final millisecond. Do not stop early.
+- OUTRO FOCUS: Pay extreme attention to the final 60 seconds (specifically the 2:45 to 3:00 window) to capture all overlapping textures.
+
+3. IDENTITY FILTER:
+- Do NOT transcribe the lead vocal as an adlib. If the text AND time match the main transcript exactly (within ±50ms), ignore it.
 - You are hunting ONLY for: background vocals, hype interjections, call-and-response layers, echo repeats, harmonies under the lead, and atmospheric vocal textures.
-
-HIGH-SENSITIVITY WINDOW:
-- Pay extreme attention from 2:30 to the end of the track. Outro sections contain dense background layers.
-
-FULL-TRACK SCAN REQUIREMENT:
-- You MUST scan from 0:00 to the very last second of the audio. Do not stop early.
-- The end of the track is equally important as the beginning.
 
 ADLIB TAXONOMY:
 - "callout": Short exclamations or interjections ("yeah", "ayy", "uh", "okay", "let's go") — typically 0.2–1.5s
 - "echo": A repeat or echo of a lead vocal phrase, slightly offset in time — typically 0.3–2.5s
 - "background": Sustained harmonies or stacked background vocals — typically 1.0–6.0s
 - "texture": Atmospheric vocal sounds, hums, breaths with melodic intent — typically 0.5–3.0s
+- "correction": A word the artist clearly sang that differs from the transcript text at that timestamp
 
 PRECISION:
 - Timestamps: seconds with 3-decimal precision (e.g., 169.452). NOT MM:SS format.
-- Confidence floor: 0.95 — only output if you are 95% certain it is a secondary vocal layer.
+- Confidence floor: 0.95 — only output if you are 95% certain it is a secondary vocal layer or correction.
 - Separate EVERY instance: Even if the same text appears 10 times, each occurrence is a unique event with its own timestamp.
 - No output limit: Return every event you find. Completeness is the primary directive.
 
 OUTPUT — ONLY valid JSON, no markdown, no explanation:
 {
   "adlibs": [
-    { "text": "...", "start": 0.000, "end": 0.000, "layer": "callout", "confidence": 0.98 }
+    { "text": "The detected word", "start": 0.000, "end": 0.000, "layer": "callout", "confidence": 0.98 }
   ]
 }`;
 }
@@ -332,7 +337,7 @@ async function runGeminiHookAnalysis(
   };
 }
 
-// ── Gemini Call 2: Adlibs (v2.4 — Reference-Based with Whisper transcript) ───
+// ── Gemini Call 1: Adlibs (v3.0 — Reference-Based, QA-Correction-Aware) ──────
 async function runGeminiAdlibAnalysis(
   audioBase64: string,
   mimeType: string,
@@ -342,12 +347,12 @@ async function runGeminiAdlibAnalysis(
 ): Promise<{ adlibs: GeminiAdlib[]; rawContent: string; transcriptProvided: boolean }> {
   const prompt = buildAdlibPrompt(whisperTranscript);
   const transcriptProvided = whisperTranscript.trim().length > 0;
-  console.log(`[adlib] v2.4 reference-based prompt — transcriptProvided=${transcriptProvided} (${whisperTranscript.length} chars)`);
+  console.log(`[adlib] v3.0 reference-based prompt — transcriptProvided=${transcriptProvided} (${whisperTranscript.length} chars)`);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 2500, "adlib");
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 3000, "adlib");
   const parsed = extractJsonFromContent(content);
 
-  // v2.4: confidence floor raised to 0.95 (Gemini has script as anchor)
+  // v3.0: confidence floor 0.95 (Gemini has script as anchor)
   const CONFIDENCE_FLOOR = transcriptProvided ? 0.95 : 0.6;
 
   const adlibs: GeminiAdlib[] = Array.isArray(parsed.adlibs)
@@ -359,11 +364,13 @@ async function runGeminiAdlibAnalysis(
           end: Math.round(Number(a.end) * 1000) / 1000,
           layer: a.layer,
           confidence: Math.min(1, Math.max(0, Number(a.confidence) || 0)),
+          isCorrection: a.layer === "correction",
         }))
         .filter((a: GeminiAdlib) => a.end > a.start && a.confidence >= CONFIDENCE_FLOOR)
     : [];
 
-  console.log(`[adlib] Parsed ${adlibs.length} adlibs from Gemini (floor=${CONFIDENCE_FLOOR})`);
+  const correctionCount = adlibs.filter(a => a.isCorrection).length;
+  console.log(`[adlib] Parsed ${adlibs.length} adlibs from Gemini (floor=${CONFIDENCE_FLOOR}, corrections=${correctionCount})`);
   return { adlibs, rawContent: content, transcriptProvided };
 }
 
@@ -424,7 +431,7 @@ function computeGlobalOffset(adlibs: GeminiAdlib[], words: WhisperWord[]): numbe
   return Math.abs(median) > 0.150 ? median : 0;
 }
 
-// ── v2.2 Adlib extraction with Token-Overlap Floating Logic ──────────────────
+// ── v3.0 Merge & QA Logic ────────────────────────────────────────────────────
 function extractAdlibsFromWords(
   lines: LyricLine[],
   adlibs: GeminiAdlib[],
@@ -432,19 +439,20 @@ function extractAdlibsFromWords(
   globalOffset: number
 ): LyricLine[] {
   if (adlibs.length === 0 || words.length === 0) return lines;
+  // result is mutable — Rule 2 (QA Swap) may patch main line text in place
   const result: LyricLine[] = lines.map(l => ({ ...l }));
   const adlibLines: LyricLine[] = [];
 
   // Pre-build main segment text windows for ghost-adlib de-duplication
-  // Source A: build a lookup of main-line Whisper text spans
-  const mainSegments = lines
+  const mainSegments = result
     .filter(l => l.tag === "main")
     .map(l => {
       const spanWords = words.filter(w => w.start >= l.start - 0.1 && w.end <= l.end + 0.1);
-      return { start: l.start, end: l.end, text: spanWords.map(w => w.word).join(" ") };
+      return { lineRef: l, start: l.start, end: l.end, text: spanWords.map(w => w.word).join(" ") };
     });
 
   let ghostCount = 0;
+  let correctionCount = 0;
 
   for (const adlib of adlibs) {
     // Apply global timebase correction
@@ -455,15 +463,58 @@ function extractAdlibsFromWords(
     const adlibWordTokens = normAdlibText.split(" ").filter(Boolean);
     if (adlibWordTokens.length === 0) continue;
 
-    // ── Ghost-Adlib De-Duplication ─────────────────────────────────────────
-    // Source C de-dup: if this adlib text overlaps >= 0.9 with the Whisper main vocal
-    // text at the same time window, it is a re-transcription of the lead vocal — discard.
+    // ── Rule 2: Automated QA Swap (Correction) ────────────────────────────
+    // If Gemini tagged this as a "correction", it heard a different word than Whisper
+    // at that timestamp. Apply the Gemini text to the main line while preserving
+    // Whisper's millisecond timestamps.
+    if (adlib.isCorrection || adlib.layer === "correction") {
+      const targetSeg = mainSegments.find(s =>
+        correctedStart >= s.start - 0.5 && correctedStart <= s.end + 0.5
+      );
+      if (targetSeg) {
+        // Patch the individual word within the line text (best-effort substring replace)
+        const segWords = words.filter(w => w.start >= targetSeg.start - 0.1 && w.end <= targetSeg.end + 0.1);
+        const nearestWord = segWords.reduce<{ w: WhisperWord | null; dist: number }>(
+          (acc, w) => { const d = Math.abs(w.start - correctedStart); return d < acc.dist ? { w, dist: d } : acc; },
+          { w: null, dist: Infinity }
+        );
+        if (nearestWord.w && nearestWord.dist <= 0.5) {
+          const oldWord = nearestWord.w.word.trim();
+          // Only patch if Gemini text actually differs
+          const similarity = 1 - levenshtein(normalize(oldWord), normalize(adlib.text)) / Math.max(oldWord.length, adlib.text.length, 1);
+          if (similarity < 0.85) {
+            targetSeg.lineRef.text = targetSeg.lineRef.text.replace(oldWord, adlib.text);
+            targetSeg.lineRef.geminiConflict = oldWord; // mark original as conflict reference
+            correctionCount++;
+            console.log(`[qa-swap] Corrected "${oldWord}" → "${adlib.text}" @ ${correctedStart.toFixed(3)}s in main line`);
+          }
+        }
+      }
+      continue; // corrections are applied to main, not added as adlib overlay
+    }
+
+    // ── Rule 1: Identity Pruning (±50ms — Anti-Ghosting) ──────────────────
+    // If this adlib's text AND timestamp match a Whisper word exactly (within 50ms),
+    // it is a lead vocal duplicate — discard it immediately.
+    const IDENTITY_WINDOW_MS = 0.050;
+    const identityMatch = words.find(w => {
+      const timeDiff = Math.abs(w.start - correctedStart);
+      const textSim = tokenOverlap(adlib.text, w.word);
+      return timeDiff <= IDENTITY_WINDOW_MS && textSim >= 0.9;
+    });
+    if (identityMatch) {
+      ghostCount++;
+      console.log(`[identity-prune] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — exact match with Whisper word "${identityMatch.word}" (±50ms)`);
+      continue;
+    }
+
+    // ── Ghost-Adlib De-Duplication (text-overlap fallback) ────────────────
     const overlappingMain = mainSegments.find(s =>
       correctedStart < s.end + 0.5 && correctedEnd > s.start - 0.5
     );
     if (overlappingMain) {
       const ghostScore = tokenOverlap(adlib.text, overlappingMain.text);
-      // v2.4: threshold lowered 0.9 → 0.75; reference-based prompt already does text subtraction
+      // v3.0: threshold 0.75; reference-based prompt already does text subtraction
       if (ghostScore >= 0.75) {
         ghostCount++;
         console.log(`[ghost-dedup] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — overlap ${ghostScore.toFixed(2)} with main`);
@@ -472,12 +523,8 @@ function extractAdlibsFromWords(
     }
 
     // ── Token-Overlap Floating Logic ──────────────────────────────────────
-    // Check if any Whisper word within ±1.5s has a normalized token overlap >= 0.6
     const nearbyWords = words.filter(w => Math.abs(w.start - correctedStart) <= 1.5);
-    const hasWordMatch = nearbyWords.some(w => {
-      const overlap = tokenOverlap(adlib.text, w.word);
-      return overlap >= 0.6;
-    });
+    const hasWordMatch = nearbyWords.some(w => tokenOverlap(adlib.text, w.word) >= 0.6);
     const isFloating = !hasWordMatch;
 
     // ── Find best Whisper word match for snapping ──────────────────────
@@ -530,6 +577,8 @@ function extractAdlibsFromWords(
       }
     }
 
+    // ── Rule 3: Floating Promotion ─────────────────────────────────────────
+    // Any adlib remaining after pruning is promoted to the adlibs overlay layer.
     adlibLines.push({
       start: snapStart,
       end: snapEnd,
@@ -538,6 +587,7 @@ function extractAdlibsFromWords(
       isFloating,
       geminiConflict,
       confidence: adlib.confidence,
+      isCorrection: false,
     });
 
     if (isFloating) {
@@ -548,7 +598,7 @@ function extractAdlibsFromWords(
   const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
   const floatingCount = adlibLines.filter(l => l.isFloating).length;
   const conflictCount = adlibLines.filter(l => l.geminiConflict).length;
-  console.log(`[v2.3] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost-deduped → ${adlibLines.length} kept (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
+  console.log(`[v3.0] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/identity-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
   return merged;
 }
 
@@ -645,8 +695,8 @@ serve(async (req) => {
 
 
     console.log(
-      `[v2.4] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Option A: whisper+hook parallel, then adlib with transcript), ` +
+      `[v3.0] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Option A: whisper+hook parallel, then adlib with transcript+QA-correction), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
@@ -812,7 +862,8 @@ serve(async (req) => {
     const adlibCount = lines.filter(l => l.tag === "adlib").length;
     const floatingCount = lines.filter(l => l.isFloating).length;
     const conflictCount = lines.filter(l => l.geminiConflict).length;
-    console.log(`[v2.4] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${conflictCount} conflicts), ${hooks.length} hooks | hook=${hookSuccess} adlib=${adlibSuccess} transcriptProvided=${transcriptProvided}`);
+    const correctionCount = lines.filter(l => l.isCorrection).length;
+    console.log(`[v3.0] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${conflictCount} conflicts, ${correctionCount} qa-corrections), ${hooks.length} hooks | hook=${hookSuccess} adlib=${adlibSuccess} transcriptProvided=${transcriptProvided}`);
 
     return new Response(
       JSON.stringify({
@@ -822,11 +873,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v2.4-reference",
+          version: "production-master-v3.0",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            adlibSequencing: "option-a-sequential",
+            adlibSequencing: "option-a-sequential-with-qa-correction",
           },
           geminiUsed,
           geminiError,
@@ -836,6 +887,7 @@ serve(async (req) => {
           adlibLines: adlibCount,
           floatingAdlibs: floatingCount,
           conflictAdlibs: conflictCount,
+          qaCorrections: correctionCount,
           mainLines: lines.length - adlibCount,
           hooksFound: hooks.length,
           whisper: {
@@ -846,7 +898,7 @@ serve(async (req) => {
             input: { model: analysisDisabled ? "disabled" : resolvedAnalysisModel, mimeType },
             output: geminiOutput,
           },
-          merged: { totalLines: lines.length, mainLines: lines.length - adlibCount, adlibLines: adlibCount, hooks, title, artist, metadata, allLines: lines },
+          merged: { totalLines: lines.length, mainLines: lines.length - adlibCount, adlibLines: adlibCount, qaCorrections: correctionCount, hooks, title, artist, metadata, allLines: lines },
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
