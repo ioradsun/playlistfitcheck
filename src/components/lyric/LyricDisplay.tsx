@@ -228,7 +228,18 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   }, [audioFile, decodeFile]);
 
   // ── Auto-scroll active lyric ──────────────────────────────────────────────
-  const activeLine = activeLines.findIndex((l) => currentTime >= l.start && currentTime < l.end);
+  // Use a "sticky" approach: if we're in a gap between lines, highlight the most recently passed line
+  const activeLine = (() => {
+    const exact = activeLines.findIndex((l) => currentTime >= l.start && currentTime < l.end);
+    if (exact !== -1) return exact;
+    // Find the last line whose start we've passed
+    let lastPassed = -1;
+    for (let i = 0; i < activeLines.length; i++) {
+      if (currentTime >= activeLines[i].start) lastPassed = i;
+      else break;
+    }
+    return lastPassed;
+  })();
 
   useEffect(() => {
     if (activeLineRef.current) {
