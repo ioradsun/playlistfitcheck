@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, Anchor } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, Anchor, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,6 +27,9 @@ export interface LyricLine {
   end: number;
   text: string;
   tag?: "main" | "adlib";
+  isFloating?: boolean;      // v2.2: adlib has no Whisper word match within ±1.5s
+  geminiConflict?: string;   // v2.2: Whisper alternative text when Gemini text diverges
+  confidence?: number;       // v2.2: per-adlib confidence from Gemini
 }
 
 export interface LyricHook {
@@ -34,6 +38,7 @@ export interface LyricHook {
   score: number;
   reasonCodes: string[];
   previewText: string;
+  status?: "confirmed" | "candidate"; // v2.2: candidate = confidence < 0.75
 }
 
 export interface LyricMetadata {
@@ -42,6 +47,10 @@ export interface LyricMetadata {
   confidence?: number;
   key?: string;
   genre_hint?: string;
+  // v2.2: per-field confidence scores
+  bpm_confidence?: number;
+  key_confidence?: number;
+  mood_confidence?: number;
 }
 
 export interface LyricData {
@@ -261,6 +270,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   // Auto-Anchor state — tracks which raw line indices have been manually snapped
   const [anchoredLines, setAnchoredLines] = useState<Set<number>>(new Set());
+
+  // v2.2: Conflict resolution modal
+  const [conflictLine, setConflictLine] = useState<{ lineIndex: number; whisperText: string; geminiText: string } | null>(null);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
@@ -920,12 +932,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               <span className="font-medium text-foreground capitalize">{metadata.genre_hint}</span>
             </span>
           )}
-          {metadata.confidence !== undefined && (
-            <span className="text-[11px] text-muted-foreground ml-auto">
-              <span className="text-foreground/50 font-mono">Confidence</span>{" "}
-              <span className={`font-medium ${metadata.confidence >= 0.8 ? "text-green-400" : metadata.confidence >= 0.5 ? "text-yellow-400" : "text-red-400"}`}>
-                {Math.round(metadata.confidence * 100)}%
-              </span>
+          {/* v2.2: per-field confidence scores or overall confidence */}
+          {(metadata.mood_confidence !== undefined || metadata.confidence !== undefined) && (
+            <span className="text-[11px] text-muted-foreground ml-auto flex items-center gap-1.5">
+              <span className="text-foreground/50 font-mono">AI</span>{" "}
+              {(() => {
+                const conf = metadata.mood_confidence ?? metadata.confidence ?? 0;
+                const cls = conf >= 0.8 ? "text-green-400" : conf >= 0.5 ? "text-yellow-400" : "text-red-400";
+                return <span className={`font-medium ${cls}`} title={`Mood: ${Math.round((metadata.mood_confidence ?? 0) * 100)}% · BPM: ${Math.round((metadata.bpm_confidence ?? 0) * 100)}% · Key: ${Math.round((metadata.key_confidence ?? 0) * 100)}%`}>{Math.round(conf * 100)}%</span>;
+              })()}
             </span>
           )}
         </div>
@@ -1100,8 +1115,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     : "No lyrics detected — this may be an instrumental track."}
                 </p>
               ) : (
-                activeLines.map((line, i) => {
+              activeLines.map((line, i) => {
                   const isAdlib = line.tag === "adlib";
+                  const isFloating = isAdlib && line.isFloating;
+                  const hasConflict = isAdlib && !!line.geminiConflict;
                   const isActive = activeLineIndices.has(i);
                   const isPrimary = i === primaryActiveLine;
                   const isEditing = i === editingIndex;
@@ -1121,6 +1138,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       ref={isPrimary ? activeLineRef : undefined}
                       className={`group flex items-start gap-3 px-3 py-1 rounded-lg transition-all ${
                         isAdlib ? "ml-6 opacity-70" : ""
+                      } ${
+                        isFloating ? "border-l-2 border-dashed border-primary/30" : ""
                       } ${
                         isActive
                           ? isAdlib
@@ -1171,6 +1190,26 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         >
                           {line.text}
                         </span>
+                      )}
+                      {/* v2.2: Floating chip badge */}
+                      {isFloating && (
+                        <span className="shrink-0 text-[9px] font-mono text-primary/50 border border-primary/20 rounded px-1 py-0.5 self-center" title="Floating adlib — no matching word in Whisper timeline">
+                          float
+                        </span>
+                      )}
+                      {/* v2.2: Conflict indicator 💡 */}
+                      {hasConflict && (
+                        <button
+                          className="shrink-0 opacity-60 hover:opacity-100 transition-opacity self-center"
+                          title="Gemini and Whisper text differ — click to resolve"
+                          onClick={() => setConflictLine({
+                            lineIndex: i,
+                            whisperText: line.geminiConflict!,
+                            geminiText: line.text,
+                          })}
+                        >
+                          <AlertCircle size={12} className="text-yellow-500" />
+                        </button>
                       )}
                       {/* Three-dot context menu */}
                       <DropdownMenu>
@@ -1275,6 +1314,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           {(() => {
             const hook = hooks[0] ?? null;
             const isLooping = activeHookIndex === 0;
+            const isCandidate = hook?.status === "candidate";
             const r = 20;
             const circ = 2 * Math.PI * r;
             const dashOffset = circ * (1 - (isLooping ? clipProgress : 0));
@@ -1285,15 +1325,17 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 className={`glass-card rounded-xl p-4 space-y-3 transition-all duration-300 ${
                   hook && isLooping
                     ? "border border-primary/60 shadow-[0_0_18px_4px_hsl(var(--primary)/0.22)]"
+                    : isCandidate
+                    ? "border border-yellow-500/30"
                     : "border border-border/30"
                 }`}
               >
                 {/* Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <Zap size={11} className="text-primary" />
+                    <Zap size={11} className={isCandidate ? "text-yellow-500" : "text-primary"} />
                     <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                      {hook ? "Hottest Hook" : "Hook Analysis"}
+                      {hook ? (isCandidate ? "Hook Candidate" : "Hottest Hook") : "Hook Analysis"}
                     </span>
                   </div>
                   {hook && (
@@ -1303,14 +1345,23 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   )}
                 </div>
 
+                {/* v2.2: Candidate notice */}
+                {isCandidate && (
+                  <p className="text-[10px] text-yellow-500/80 font-mono border border-yellow-500/20 rounded px-2 py-1">
+                    Low confidence — confirm or skip this hook
+                  </p>
+                )}
+
                 {hook ? (
                   <>
                     {/* Preview text — large & featured */}
-                    <p className="text-sm font-medium text-foreground leading-snug">
-                      "{hook.previewText}"
-                    </p>
+                    {hook.previewText && (
+                      <p className="text-sm font-medium text-foreground leading-snug">
+                        "{hook.previewText}"
+                      </p>
+                    )}
 
-                    {/* Timestamp row */}
+                    {/* Timestamp row — v2.2: always shows 10s duration */}
                     <p className="text-[10px] font-mono text-muted-foreground">
                       {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
                       <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
@@ -1389,6 +1440,65 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
       <SignUpToSaveBanner />
 
+      {/* v2.2: Conflict Resolution Modal — keeps Whisper timestamps, lets artist swap text */}
+      <Dialog open={!!conflictLine} onOpenChange={(open) => { if (!open) setConflictLine(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              <AlertCircle size={14} className="text-yellow-500" />
+              Text Conflict Detected
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Gemini and Whisper identified different words at this timestamp. Whisper's timestamps are kept regardless — choose which text to display.
+            </DialogDescription>
+          </DialogHeader>
+          {conflictLine && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <div className="rounded-lg border border-border/40 p-3 space-y-1">
+                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Gemini (AI label)</p>
+                  <p className="text-sm font-medium text-foreground">"{conflictLine.geminiText}"</p>
+                </div>
+                <div className="rounded-lg border border-border/40 p-3 space-y-1">
+                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Whisper (transcription)</p>
+                  <p className="text-sm font-medium text-foreground">"{conflictLine.whisperText}"</p>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground font-mono">Timestamps always stay from Whisper — you're only choosing what text is shown.</p>
+              <div className="flex gap-2">
+                <button
+                  className="flex-1 text-xs font-mono border border-border/50 rounded-lg py-2 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                  onClick={() => setConflictLine(null)}
+                >
+                  Keep Gemini
+                </button>
+                <button
+                  className="flex-1 text-xs font-mono bg-primary/10 border border-primary/40 rounded-lg py-2 text-primary hover:bg-primary/20 transition-colors"
+                  onClick={() => {
+                    if (!conflictLine) return;
+                    const line = activeLines[conflictLine.lineIndex];
+                    const updater = (prev: LyricLine[]) =>
+                      prev.map((l) =>
+                        l.start === line.start && l.text === line.text ? { ...l, text: conflictLine.whisperText, geminiConflict: undefined } : l
+                      );
+                    if (activeVersion === "explicit") {
+                      setExplicitLines(updater);
+                    } else {
+                      setFmlyLines((prev) => (prev ? updater(prev) : prev));
+                    }
+                    setConflictLine(null);
+                    toast.success("Switched to Whisper transcription text");
+                  }}
+                >
+                  Use Whisper text
+                </button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
     </motion.div>
   );
 }
+
