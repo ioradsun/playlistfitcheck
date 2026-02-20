@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Save, FileText, Download, Upload } from "lucide-react";
+import { Loader2, Save, FileText, Download, Upload, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +86,13 @@ export function CopyEditor() {
     setCopy((prev) => {
       if (!prev) return prev;
       return { ...prev, sidebar: { ...prev.sidebar, [field]: value } };
+    });
+  };
+
+  const updateSignal = (field: string, value: string) => {
+    setCopy((prev) => {
+      if (!prev) return prev;
+      return { ...prev, signals: { ...prev.signals, [field]: value } };
     });
   };
 
@@ -325,6 +332,58 @@ export function CopyEditor() {
               </div>
             </div>
           ))}
+        </div>
+      </motion.div>
+
+      {/* Signal Verbiage */}
+      <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Activity size={14} className="text-primary" />
+          <span className="text-sm font-mono font-medium">Signal Verbiage (CrowdFit &amp; DreamFit)</span>
+        </div>
+        <div className="divide-y divide-border">
+          {/* Tier 1: Resolving */}
+          <div className="px-4 py-3 space-y-2">
+            <p className="text-xs font-mono text-muted-foreground uppercase">0–10 Signals — Resolving</p>
+            <div className="grid grid-cols-1 gap-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground">Status Label <span className="opacity-50">(mono readout)</span></label>
+                <Input value={copy.signals?.resolving_label ?? ""} onChange={(e) => updateSignal("resolving_label", e.target.value)} className="h-8 text-sm font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Summary Line</label>
+                <Input value={copy.signals?.resolving_summary ?? ""} onChange={(e) => updateSignal("resolving_summary", e.target.value)} className="h-8 text-sm font-mono" />
+              </div>
+            </div>
+          </div>
+          {/* Tier 2: Detected */}
+          <div className="px-4 py-3 space-y-2">
+            <p className="text-xs font-mono text-muted-foreground uppercase">11–49 Signals — Detected <span className="normal-case opacity-60">(use {"{n}"} for count)</span></p>
+            <div className="grid grid-cols-1 gap-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground">Status Label</label>
+                <Input value={copy.signals?.detected_label ?? ""} onChange={(e) => updateSignal("detected_label", e.target.value)} className="h-8 text-sm font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Summary Line</label>
+                <Input value={copy.signals?.detected_summary ?? ""} onChange={(e) => updateSignal("detected_summary", e.target.value)} className="h-8 text-sm font-mono" />
+              </div>
+            </div>
+          </div>
+          {/* Tier 3: Consensus */}
+          <div className="px-4 py-3 space-y-2">
+            <p className="text-xs font-mono text-muted-foreground uppercase">50+ Signals — Consensus <span className="normal-case opacity-60">(use {"{pct}"} for percentage)</span></p>
+            <div className="grid grid-cols-1 gap-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground">Status Label</label>
+                <Input value={copy.signals?.consensus_label ?? ""} onChange={(e) => updateSignal("consensus_label", e.target.value)} className="h-8 text-sm font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Summary Line</label>
+                <Input value={copy.signals?.consensus_summary ?? ""} onChange={(e) => updateSignal("consensus_summary", e.target.value)} className="h-8 text-sm font-mono" />
+              </div>
+            </div>
+          </div>
         </div>
       </motion.div>
 

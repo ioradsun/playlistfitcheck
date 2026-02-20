@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Loader2 } from "lucide-react";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 
 interface Reply {
   id: string;
@@ -65,6 +66,7 @@ function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name
 
 export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
   const { user, profile } = useAuth();
+  const siteCopy = useSiteCopy();
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [post, setPost] = useState<PostMeta | null>(null);
   const [loading, setLoading] = useState(true);
@@ -286,10 +288,11 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
           {!loading && rows.length > 0 && (() => {
             const total = rows.length;
             const replayPct = Math.round((rows.filter(r => r.would_replay).length / total) * 100);
+            const s = siteCopy.signals;
             const verbiage = (() => {
-              if (total <= 10) return { label: "STATUS: RESOLVING...", summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.", bigDisplay: `${replayPct}%`, tier: "resolving" as const };
-              if (total < 50) return { label: `STATUS: ${total}/50 SIGNALS`, summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.", bigDisplay: `${total}/50`, tier: "detected" as const };
-              return { label: "STATUS: CONSENSUS REACHED", summary: `${replayPct}% OF THE FMLY RESONATE WITH THIS.`, bigDisplay: `${replayPct}%`, tier: "consensus" as const };
+              if (total <= 10) return { label: s.resolving_label, summary: s.resolving_summary, bigDisplay: `${replayPct}%`, tier: "resolving" as const };
+              if (total < 50) return { label: s.detected_label.replace("{n}", String(total)), summary: s.detected_summary, bigDisplay: `${total}/50`, tier: "detected" as const };
+              return { label: s.consensus_label, summary: s.consensus_summary.replace("{pct}", String(replayPct)), bigDisplay: `${replayPct}%`, tier: "consensus" as const };
             })();
             return (
               <div className="grid grid-cols-2 gap-2.5">
