@@ -20,6 +20,7 @@ export function SongFitFeed() {
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [likesPostId, setLikesPostId] = useState<string | null>(null);
   const [feedView, setFeedView] = useState<FeedView>("recent");
+
   const [billboardMode, setBillboardMode] = useState<BillboardMode>("this_week");
   const [userVoteCount, setUserVoteCount] = useState<number | null>(null);
   const [composerUnlocked, setComposerUnlocked] = useState(false);
@@ -31,16 +32,31 @@ export function SongFitFeed() {
   const fetchPosts = useCallback(async () => {
     setLoading(true);
 
-    if (feedView === "recent") {
+    if (feedView === "recent" || feedView === "pending" || feedView === "resolved") {
       setSignalMap({});
-      const { data } = await supabase
+      const { data: allPosts } = await supabase
         .from("songfit_posts")
         .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
         .eq("status", "live")
-        .limit(50)
+        .limit(100)
         .order("created_at", { ascending: false });
 
-      let enriched = (data || []) as unknown as SongFitPost[];
+      let enriched = (allPosts || []) as unknown as SongFitPost[];
+
+      if (feedView === "pending" || feedView === "resolved") {
+        // Fetch signal counts for all posts
+        const postIds = enriched.map(p => p.id);
+        const { data: reviews } = postIds.length > 0
+          ? await supabase.from("songfit_hook_reviews").select("post_id").in("post_id", postIds)
+          : { data: [] };
+        const signaled = new Set((reviews || []).map(r => r.post_id));
+        if (feedView === "pending") {
+          enriched = enriched.filter(p => !signaled.has(p.id));
+        } else {
+          enriched = enriched.filter(p => signaled.has(p.id));
+        }
+      }
+
       enriched = await enrichWithUserData(enriched);
       setPosts(enriched);
     } else {
@@ -261,7 +277,7 @@ export function SongFitFeed() {
                 onOpenLikes={setLikesPostId}
                 onRefresh={fetchPosts}
                 isBillboard={feedView === "billboard"}
-                signalData={signalMap[post.id]}
+                signalData={feedView === "billboard" ? signalMap[post.id] : undefined}
               />
             ))}
           </div>
