@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, Scissors } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -526,17 +526,14 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   }, [activeLines, activeVersion]);
 
   // ── Word-level splitter ───────────────────────────────────────────────────
+  // Store selection at mouseUp time — clicking the menu clears the browser selection
   const [selectionLineIndex, setSelectionLineIndex] = useState<number | null>(null);
+  const [capturedSelectionText, setCapturedSelectionText] = useState<string>("");
 
   const handleSplitToAdlib = useCallback((lineIndex: number) => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
-      toast.error("Select the adlib word(s) first, then click Split to Adlib");
-      return;
-    }
-    const selectedText = selection.toString().trim();
+    const selectedText = capturedSelectionText.trim();
     if (!selectedText) {
-      toast.error("No text selected");
+      toast.error("Select the adlib word(s) first, then choose Split new line Adlib");
       return;
     }
     const line = activeLines[lineIndex];
@@ -559,9 +556,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     } else {
       setFmlyLines((prev) => (prev ? updater(prev) : prev));
     }
-    selection.removeAllRanges();
-    toast.success(`"${selectedText}" split to Adlib`);
-  }, [activeLines, activeVersion]);
+    setCapturedSelectionText("");
+    setSelectionLineIndex(null);
+    toast.success(`"${selectedText}" split to new Adlib line`);
+  }, [capturedSelectionText, activeLines, activeVersion]);
+
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -801,8 +800,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                           onDoubleClick={() => startEditing(i)}
                           onMouseUp={() => {
                             const sel = window.getSelection();
-                            if (sel && !sel.isCollapsed) setSelectionLineIndex(i);
-                            else setSelectionLineIndex(null);
+                            if (sel && !sel.isCollapsed) {
+                              setSelectionLineIndex(i);
+                              setCapturedSelectionText(sel.toString());
+                            } else {
+                              setSelectionLineIndex(null);
+                              setCapturedSelectionText("");
+                            }
                           }}
                         >
                           {line.text}
@@ -815,7 +819,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                             <MoreHorizontal size={14} />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuContent align="end" className="w-48">
                           {isAdlib ? (
                             <DropdownMenuItem onClick={() => toggleLineTag(i)}>
                               Convert to Main vocal
@@ -828,12 +832,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                           {!isAdlib && (
                             <>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleSplitToAdlib(i)}
-                                className="flex items-center gap-2"
-                              >
-                                <Scissors size={12} />
-                                <span>Split selection to Adlib</span>
+                              <DropdownMenuItem onClick={() => handleSplitToAdlib(i)}>
+                                Split new line Adlib
                               </DropdownMenuItem>
                             </>
                           )}
