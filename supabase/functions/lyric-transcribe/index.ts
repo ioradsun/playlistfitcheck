@@ -130,27 +130,26 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── v5.2: Universal Acoustic Orchestrator Prompt (Sync-Anchor) ────────────────
+// ── v5.3: Universal Acoustic Orchestrator Prompt (Precision Calibration) ──────
 function buildOrchestratorPrompt(
   whisperWords: WhisperWord[],
   whisperSegments: Array<{ start: number; end: number; text: string }>,
   whisperRawText: string,
   trackEnd: number
 ): string {
-  const wordsJson = JSON.stringify(whisperWords.slice(0, 500)); // cap for token budget
+  const wordsJson = JSON.stringify(whisperWords.slice(0, 500));
   const segmentsJson = JSON.stringify(whisperSegments.slice(0, 80));
 
-  // Provide the first Whisper word as a calibration anchor for Gemini's clock
   const anchorWord = whisperWords.length > 0 ? whisperWords[0] : null;
   const anchorBlock = anchorWord
-    ? `SYNC_ANCHOR_WORD: "${anchorWord.word}" at WHISPER_TIMESTAMP: ${anchorWord.start.toFixed(3)}s`
-    : `SYNC_ANCHOR_WORD: none (no Whisper words available)`;
+    ? `ANCHOR_WORD: "${anchorWord.word}" | WHISPER_TIMESTAMP: ${anchorWord.start.toFixed(3)}s\nThis is the ground-truth reference point for your internal clock.`
+    : `ANCHOR_WORD: none (no Whisper words available)`;
 
-  return `ROLE: Universal Acoustic Orchestrator (v5.2 Sync-Anchor)
+  return `ROLE: Universal Acoustic Orchestrator (v5.3 Precision Calibration)
 
-You are simultaneously hearing the raw audio AND receiving the Whisper timing grid below. Your mission is to produce a perfect, production-ready merged_lines array by applying four sequential passes.
+You are simultaneously hearing the raw audio AND receiving the Whisper timing grid. Your mission is to produce a perfect, production-ready merged_lines array.
 
-=== WHISPER TIMING GRID (Ground Truth for Timestamps) ===
+=== WHISPER TIMING GRID ===
 WHISPER_RAW_TEXT: ${whisperRawText.slice(0, 2000)}
 
 WHISPER_WORDS (word-level timing skeleton):
@@ -161,59 +160,57 @@ ${segmentsJson}
 
 TRACK_END: ${trackEnd.toFixed(3)}s
 
-=== PATH 1: TEMPORAL CALIBRATION (THE SYNC-ANCHOR) — EXECUTE FIRST ===
-Before any other pass, calibrate your internal acoustic clock against the Whisper master clock.
+=== PATH 1: ACOUSTIC FINGERPRINT CALIBRATION (Execute This First) ===
+You must synchronize your internal timeline to the master audio file clock.
 
 ${anchorBlock}
 
 Steps:
-1. FIND the anchor word in the raw audio using your acoustic detection.
-2. CALCULATE the Global Delta: delta = WHISPER_TIMESTAMP − your_acoustic_detection_timestamp
-   Example: if you hear "${anchorWord?.word ?? "the anchor word"}" at ${anchorWord ? (anchorWord.start - 0.48).toFixed(3) : "X.XXX"}s but Whisper places it at ${anchorWord?.start.toFixed(3) ?? "X.XXX"}s, delta = +${anchorWord ? (0.48).toFixed(3) : "X.XXX"}s
-3. APPLY this Global Delta to ALL isOrphaned lines (Intro/Outro dialogue) you find in Path 3.
-   corrected_timestamp = your_acoustic_timestamp + delta
-4. This ensures every Intro/Outro chip is sample-accurate against the master audio playhead, not approximated.
+1. FINGERPRINT: Locate the first acoustic peak (the onset transient) of the anchor word in the raw audio waveform. This is the exact millisecond the sound begins, not an approximation.
+2. CALCULATE Micro-Delta: micro_delta = ${anchorWord?.start.toFixed(3) ?? "anchor_timestamp"} − your_detected_peak_timestamp
+   (e.g., if you detect the peak at ${anchorWord ? (anchorWord.start - 0.24).toFixed(3) : "X.XXX"}s, micro_delta = +${anchorWord ? (0.24).toFixed(3) : "X.XXX"}s)
+3. APPLY: Add micro_delta to every isOrphaned line timestamp so Intro/Outro chips connect seamlessly to the first Whisper segment with no gap.
+4. PRECISION RULE: Never use rounded timestamps for orphaned lines (e.g., 2.5, 5.0, 10.0). Always output high-precision decimals (e.g., 3.824s, 7.416s, 12.053s).
+5. CONTINUITY CHECK: The last orphaned Intro chip's end timestamp must be ≤ ${anchorWord?.start.toFixed(3) ?? "first_whisper_start"}s so the Intro dialogue flows directly into the first lyric line with no gap.
 
-NOTE: For ALL "main" lyric lines, IGNORE the Global Delta — they always use WHISPER_SEGMENTS timestamps verbatim.
+NOTE: The Micro-Delta applies ONLY to isOrphaned lines. All "main" lyric lines always use WHISPER_SEGMENTS timestamps verbatim — never apply the delta to them.
 
-=== PATH 2: PHONETIC & CONTEXTUAL QA (Correction Pass) ===
+=== PATH 2: SURGICAL PHONETIC & CONTEXTUAL QA ===
 - Audit every main lyric segment in WHISPER_SEGMENTS against the raw audio.
-- If Whisper transcribed a word incorrectly (phonetic error, contextual hallucination — e.g., "whore" → "boy", "range" → "rain"), replace it with the acoustically correct word.
+- If Whisper transcribed a word incorrectly (phonetic error or contextual hallucination — e.g., "whore" → "boy", "range" → "rain"), replace only the incorrect word.
 - You MUST use the EXACT start/end timestamps from that Whisper segment. Never drift the timestamp.
 - Mark the corrected line: isCorrection: true.
-- geminiConflict: store ONLY the specific mismatched word or phrase that was wrong (e.g., "range"), NOT the entire line.
+- SURGICAL CONFLICT RULE: geminiConflict must store ONLY the specific mismatched word or phrase (e.g., "whore" or "range"), NOT the surrounding sentence or the full line text.
 - Increment qaCorrections by 1 for each word or phrase swapped.
 
-=== PATH 3: SIGNAL RESTORATION & GHOST PRUNING ===
-
-RESTORE — Orphaned Signals:
-- Listen to sections where Whisper is silent: Intros (0s to first Whisper word), Outros (last Whisper word to TRACK_END), and Bridge gaps > 3s.
+=== PATH 3: SIGNAL RESTORATION (Orphaned Signals) ===
+- Listen to sections where Whisper is silent: Intros (0s to first Whisper word at ${anchorWord?.start.toFixed(3) ?? "?"}s), Outros (last Whisper word to TRACK_END), and Bridge gaps > 3s.
 - Transcribe ALL legitimate dialogue, count-ins, vocal textures, or hums Whisper missed.
-- CRITICAL: Group into natural logical phrases (2–6 words each), NOT single words. A "1, 2, 3, 4" count-in = one line.
+- Group into human-readable logical phrases (2–6 words each) — NOT single words. E.g., "Oh what the hell is that melody?" as one line.
 - Tag these lines: tag: "adlib", isOrphaned: true, isFloating: true.
-- Apply the Global Delta (from Path 1) to calibrate these timestamps to the master clock.
+- Apply the Micro-Delta from Path 1 to calibrate these timestamps.
+
+=== PATH 4: GHOST PRUNING & OVERLAP PRESERVATION ===
 
 PRUNE — Ghost Execution:
-- Identify background adlibs that are acoustic bleed, reverb tails, or echoes of the lead vocal.
-- A vocal event is a Ghost if: its text matches (or is a phonetic subset of) a main segment within ±500ms AND it is the same voice/layer.
-- Ghosts MUST be hard-deleted — do NOT include them in merged_lines, not even as floating adlibs.
-- Legitimate unique adlibs (different text, separate voice, or timestamp > 500ms from any main line) MUST remain.
+- A vocal event is a Ghost if its text matches (or is a phonetic subset of) a main segment within ±500ms AND it is the same voice/layer.
+- Ghosts MUST be hard-deleted — do NOT include them in merged_lines at all.
+- Unique adlibs (different text, separate voice/layer, or timestamp > 500ms from any main line) MUST remain.
 - Increment ghostsRemoved by 1 for each deleted ghost.
 
-=== PATH 4: OVERLAP PRESERVATION (Density Mapping) ===
+PRESERVE OVERLAP — Density Mapping:
 - Do NOT flatten overlapping vocals into a single line.
-- If multiple distinct voices or echo layers occur simultaneously, output each as a separate adlib line with its own timestamps.
-- This allows the UI to stack them vertically for full vocal density.
+- If multiple distinct voices or echo layers occur simultaneously (especially in Outros), output each as a separate adlib entry with its own overlapping timestamps.
 - Tag these: tag: "adlib", isFloating: true.
 
 === OUTPUT RULES ===
 - Return the COMPLETE merged_lines array: every main segment from WHISPER_SEGMENTS (corrected if needed) PLUS all legitimate adlibs/orphaned signals.
-- Maximum 80 total lines to ensure valid JSON output within token budget.
-- ALL timestamps must be numeric seconds with 3-decimal precision (e.g., 17.450). NEVER use MM:SS string format.
+- Maximum 80 total lines.
+- ALL timestamps must be numeric seconds with 3-decimal precision (e.g., 17.450). NEVER use MM:SS format.
 - Hard boundary: discard any line with start > ${Math.min(189.3, trackEnd + 1.0).toFixed(3)}s.
 - Sort all lines by start timestamp ascending.
-- qaCorrections must equal the exact count of words/phrases swapped during Path 2.
-- ghostsRemoved must equal the exact count of lines hard-deleted during Path 3 pruning.
+- qaCorrections = exact count of words/phrases swapped in Path 2.
+- ghostsRemoved = exact count of lines hard-deleted in Path 4 pruning.
 - JSON ROBUSTNESS: Every array element except the last MUST be followed by a comma. The final element must NOT have a trailing comma.
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
@@ -382,7 +379,7 @@ async function runGeminiOrchestrator(
 ): Promise<{ lines: LyricLine[]; qaCorrections: number; ghostsRemoved: number; rawContent: string }> {
   const prompt = buildOrchestratorPrompt(whisperWords, whisperSegments, whisperRawText, trackEnd);
 
-  console.log(`[orchestrator] v5.2 sending ${whisperWords.length} words, ${whisperSegments.length} segments to Gemini (anchor: "${whisperWords[0]?.word ?? "none"}" @ ${whisperWords[0]?.start.toFixed(3) ?? "0"}s)`);
+  console.log(`[orchestrator] v5.3 sending ${whisperWords.length} words, ${whisperSegments.length} segments to Gemini (anchor: "${whisperWords[0]?.word ?? "none"}" @ ${whisperWords[0]?.start.toFixed(3) ?? "0"}s)`);
 
   const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 6000, "orchestrator");
   const parsed = extractJsonFromContent(content, "merged_lines");
@@ -412,7 +409,7 @@ async function runGeminiOrchestrator(
   const qaCorrections = typeof parsed.qaCorrections === "number" ? parsed.qaCorrections : rawLines.filter(l => l.isCorrection).length;
   const ghostsRemoved = typeof parsed.ghostsRemoved === "number" ? parsed.ghostsRemoved : 0;
 
-  console.log(`[orchestrator] v5.2 result: ${rawLines.length} lines (${rawLines.filter(l => l.tag === "main").length} main, ${rawLines.filter(l => l.tag === "adlib").length} adlib, ${rawLines.filter(l => l.isOrphaned).length} orphaned, ${qaCorrections} qa-corrections, ${ghostsRemoved} ghosts-removed)`);
+  console.log(`[orchestrator] v5.3 result: ${rawLines.length} lines (${rawLines.filter(l => l.tag === "main").length} main, ${rawLines.filter(l => l.tag === "adlib").length} adlib, ${rawLines.filter(l => l.isOrphaned).length} orphaned, ${qaCorrections} qa-corrections, ${ghostsRemoved} ghosts-removed)`);
 
   return { lines: rawLines, qaCorrections, ghostsRemoved, rawContent: content };
 }
@@ -549,8 +546,8 @@ serve(async (req) => {
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
     console.log(
-      `[v5.2] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Universal Acoustic Orchestrator v5.2 Sync-Anchor), ` +
+      `[v5.3] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Universal Acoustic Orchestrator v5.3 Precision Calibration), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
@@ -684,7 +681,7 @@ serve(async (req) => {
     const orphanedCount = lines.filter(l => l.isOrphaned).length;
     const correctionCount = qaCorrections;
 
-    console.log(`[v5.2] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${orphanedCount} orphaned, ${correctionCount} qa-corrections, ${ghostsRemoved} ghosts-removed), ${hooks.length} hooks`);
+    console.log(`[v5.3] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${orphanedCount} orphaned, ${correctionCount} qa-corrections, ${ghostsRemoved} ghosts-removed), ${hooks.length} hooks`);
 
     const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
       wordCount: words.length,
@@ -702,11 +699,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v5.2-sync-anchor",
+          version: "anchor-align-v5.3-precision-calibration",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v5.2-universal-acoustic-orchestrator-sync-anchor",
+            orchestrator: "v5.3-universal-acoustic-orchestrator-precision-calibration",
           },
           geminiUsed,
           geminiError,
