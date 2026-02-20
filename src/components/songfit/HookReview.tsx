@@ -16,7 +16,7 @@ interface Props {
   artistsJson?: any[];
   // Billboard pre-resolved mode
   showPreResolved?: boolean;
-  preResolved?: { total: number; replay_yes: number };
+  preResolved?: { total: number; replay_yes: number; saves_count?: number };
   rank?: number;
 }
 
@@ -158,18 +158,18 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   if (showPreResolved && step !== "done" && step !== "revealing" && step !== "replay_cta" && step !== "skip_cta") {
     const total = preResolved?.total ?? 0;
     const replayYes = preResolved?.replay_yes ?? 0;
+    const savesCount = preResolved?.saves_count ?? 0;
     const strength = total > 0 ? Math.round((replayYes / total) * 100) : null;
-    const rankStr = rank != null ? String(rank).padStart(2, "0") : null;
-    const signalLabel = total === 1 ? "signal" : "signals";
+    const rankStr = rank != null ? `#${String(rank).padStart(2, "0")}` : null;
 
     return (
       <div className="border-t border-border/30">
-        {/* Signal Row */}
+        {/* Studio Display Row */}
         <div className="px-4 py-2.5 flex items-center justify-between">
           <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-            Signal Strength: {strength !== null ? `${strength}%` : "—"}
-            {rankStr && <> · Standing: {rankStr}</>}
-            {" · "}{total} {signalLabel}
+            {rankStr && <>RANK: {rankStr} · </>}
+            SIGNAL: {strength !== null ? `${strength}%` : "—"}
+            {" · "}{savesCount} SAVES
           </span>
         </div>
         {/* Action Row */}
