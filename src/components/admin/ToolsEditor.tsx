@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Coins, Rocket, Wrench, GripVertical, Target } from "lucide-react";
+import { Loader2, Coins, Rocket, Wrench, GripVertical, Target, Mic } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Reorder, useDragControls } from "framer-motion";
@@ -25,6 +25,7 @@ interface FeaturesState {
   tools_enabled: Record<string, boolean>;
   tools_order: string[];
   crowdfit_mode: "reactions" | "hook_review";
+  lyric_transcribe_model: "gemini" | "whisper";
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -34,6 +35,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   tools_enabled: Object.fromEntries(ALL_TOOLS.map(t => [t.key, true])),
   tools_order: DEFAULT_ORDER,
   crowdfit_mode: "reactions",
+  lyric_transcribe_model: "gemini",
 };
 
 async function patchFeatures(patch: Partial<FeaturesState>) {
@@ -120,6 +122,7 @@ export function ToolsEditor() {
           tools_enabled,
           tools_order: merged,
           crowdfit_mode: f.crowdfit_mode ?? "reactions",
+          lyric_transcribe_model: f.lyric_transcribe_model ?? "gemini",
         });
         setOrderedKeys(merged);
         setGuestQuota(f.growth_quotas?.guest ?? 5);
@@ -186,6 +189,21 @@ export function ToolsEditor() {
       toast.success(enabled ? "Growth flow enabled" : "Growth flow disabled");
     } catch {
       setFeatures(f => ({ ...f, growth_flow: prev }));
+      toast.error("Failed to update");
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const setLyricModel = async (model: "gemini" | "whisper") => {
+    const prev = features.lyric_transcribe_model;
+    setFeatures(f => ({ ...f, lyric_transcribe_model: model }));
+    setSavingKey("lyric_model");
+    try {
+      await patchFeatures({ lyric_transcribe_model: model } as any);
+      toast.success(model === "whisper" ? "Switched to OpenAI Whisper" : "Switched to Gemini 2.5 Flash");
+    } catch {
+      setFeatures(f => ({ ...f, lyric_transcribe_model: prev }));
       toast.error("Failed to update");
     } finally {
       setSavingKey(null);
@@ -303,6 +321,42 @@ export function ToolsEditor() {
             </div>
             <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${features.crowdfit_mode === "hook_review" ? "border-primary bg-primary" : "border-border"}`}>
               {features.crowdfit_mode === "hook_review" && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* ── LyricFit Transcription Model ── */}
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Mic size={14} className="text-primary" />
+          <span className="text-sm font-mono font-medium">LyricFit Transcription Engine</span>
+        </div>
+        <div className="divide-y divide-border">
+          <button
+            onClick={() => setLyricModel("gemini")}
+            disabled={savingKey === "lyric_model"}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
+          >
+            <div className="text-left">
+              <p className="text-sm font-medium">Gemini 2.5 Flash (multimodal)</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Full track understanding, adlib detection, hook analysis</p>
+            </div>
+            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${features.lyric_transcribe_model === "gemini" || !features.lyric_transcribe_model ? "border-primary bg-primary" : "border-border"}`}>
+              {(features.lyric_transcribe_model === "gemini" || !features.lyric_transcribe_model) && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+            </div>
+          </button>
+          <button
+            onClick={() => setLyricModel("whisper")}
+            disabled={savingKey === "lyric_model"}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
+          >
+            <div className="text-left">
+              <p className="text-sm font-medium">OpenAI Whisper</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Fast word-level transcription, no adlibs/hooks, raw segments only</p>
+            </div>
+            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${features.lyric_transcribe_model === "whisper" ? "border-primary bg-primary" : "border-border"}`}>
+              {features.lyric_transcribe_model === "whisper" && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
             </div>
           </button>
         </div>
