@@ -1,43 +1,87 @@
 
-## Changes to Signal Status Verbiage in Both Comments Panels
+## Signal Engine — Dual-Meter Status Card
 
-### What's Changing
+### What's changing
 
-The Signal Status card in both comments panels (DreamFit and CrowdFit) will collapse to a **single combined line** per tier, removing the separate `RESOLVING {n}/50` label row and merging everything into one compact string.
+Both detail panels (CrowdFit's `HookReviewsSheet.tsx` and DreamFit's `DreamComments.tsx`) get a rebuilt Signal Status card. The secondary raw-count card in HookReviewsSheet is already gone; this replaces the primary card logic in both files.
 
-#### New Tier Format
+---
 
-| Tier | Line 1 (label) | Line 2 (summary) |
+### Data model (per panel)
+
+| Variable | CrowdFit source | DreamFit source |
 |---|---|---|
-| Resolving (≤10) | *(removed)* | `CALIBRATING REPLAY FIT · {n}/50 SIGNALS NEEDED` |
-| Resolving (≤10) DreamFit | *(removed)* | `CALIBRATING BUILD FIT · {n}/50 SIGNALS NEEDED` |
-| Detected (11–49) | *(removed)* | `CALIBRATING REPLAY FIT · {n}/50 SIGNALS NEEDED` |
-| Detected (11–49) DreamFit | *(removed)* | `CALIBRATING BUILD FIT · {n}/50 SIGNALS NEEDED` |
-| Consensus (50+) | `CONSENSUS REACHED` | `{pct}% FMLY REPLAY FIT` / `{pct}% FMLY BUILD FIT` |
-
-The `bigDisplay` value (the large bold number) stays as-is (`{pct}%` for resolving/consensus, unchanged for detected).
+| `signals` | `rows.filter(r => r.would_replay).length` | `dream.greenlight_count` |
+| `total` | `rows.length` | `dream.backers_count` |
+| `threshold` | 50 (constant) | 50 (constant) |
+| `percentage` | `round((signals / total) * 100)` | `round((greenlight / backers) * 100)` |
 
 ---
 
-### Files to Change
+### State logic
 
-**1. `src/components/dreamfit/DreamComments.tsx`** — `getSignalVerbiage` function
+**Resolving** (`signals < 50`)
+- Primary display: `CALIBRATING` (animated — see below)
+- Metadata line: `REPLAY FIT · {signals}/50 SIGNALS · {signals}/{total} RESONANCE`
+- DreamFit variant: `BUILD FIT · …`
+- If `total = 0`: omit the `· {signals}/{total} RESONANCE` fragment
+- Never show a `%` value
 
-- Resolving: `label` → `"CONSENSUS REACHED"` only for consensus; for resolving/detected collapse into `summary` only as `CALIBRATING FIT · {n}/50 SIGNALS NEEDED`
-- Specifically, update `label` and `summary` strings, remove the now-redundant separate label line from the rendered stat card (or set `label` to `""` / `undefined` so the render loop skips it)
-
-**2. `src/components/songfit/HookReviewsSheet.tsx`** — inline `verbiage` object (lines 293–297)
-
-- Same restructure: resolving/detected tiers get a single combined `summary` string; consensus tier keeps its two-line format
+**Consensus** (`signals ≥ 50`)
+- Primary display: `{percentage}%` (static, bold)
+- Metadata line: `CONSENSUS REACHED · {percentage}% REPLAY FIT · {signals}/{total} RESONANCE`
 
 ---
 
-### Technical Detail
+### Tooltip
 
-The stat card currently renders two `<p>` tags below the big number — `verbiage.label` and `verbiage.summary`. The cleanest approach is:
+- Attached **only** to the `{signals}/{total}` fraction span
+- Uses Radix `Tooltip` (already in the project) with `delayDuration={350}` (matching project standard)
+- Copy: `{signals} of {total} listeners signaled this track.`
+- DreamFit copy: `{signals} of {total} members backed this feature.`
+- Wrapped in `TooltipProvider` scoped to just the card
 
-- For **resolving** and **detected**: set `label` to `undefined`/`""` and put the full combined string in `summary`
-- For **consensus**: keep `label = "CONSENSUS REACHED"` and `summary = "{pct}% FMLY REPLAY/BUILD FIT"`
-- The render side already uses `truncate`, so both lines display cleanly on one line each without wrap
+---
 
-No schema changes, no new components — purely string/logic updates in two files.
+### CALIBRATING Animation
+
+Added as a Tailwind keyframe in `tailwind.config.ts`:
+
+```text
+@keyframes signal-pulse {
+  0%, 100%  → opacity: 1,   filter: blur(0px)
+  50%       → opacity: 0.55, filter: blur(0.3px)
+}
+duration: 1400ms, timing: ease-in-out, infinite
+```
+
+Applied only when `signals < 50` via class `animate-signal-pulse`.
+
+Respects `prefers-reduced-motion` — the keyframe uses `@media (prefers-reduced-motion: reduce)` override to set `animation: none`.
+
+No dot tick accent (keeping it clean for now).
+
+---
+
+### Consensus lock-in transition
+
+When signals crosses 50 the display switches. Since this is a detail panel (not a live feed), the transition happens on panel open. No cross-fade needed here — the panel always opens with fresh data. The CSS class switch itself provides the natural instant reveal.
+
+If a future requirement is live realtime transition within the panel, we can add `framer-motion` `AnimatePresence` at that point.
+
+---
+
+### Files to modify
+
+1. **`tailwind.config.ts`** — add `signal-pulse` keyframe + animation token + `prefers-reduced-motion` disable
+2. **`src/components/songfit/HookReviewsSheet.tsx`** — rebuild the stat card with dual variables, tooltip on resonance fraction, CALIBRATING animation
+3. **`src/components/dreamfit/DreamComments.tsx`** — same rebuild, BUILD FIT verbiage, `backers_count` as total
+
+---
+
+### What stays the same
+
+- Card border, radius, padding (`rounded-2xl border border-border/50 bg-card px-4 py-3.5`)
+- "Signal Status" label at top (10px mono, muted/50)
+- Everything below the card (comments list, input footer)
+- No database changes required
