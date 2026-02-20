@@ -172,7 +172,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       setResults(r);
       setStep("done");
       onScored?.();
-    }, 3000);
+    }, 1200);
   };
 
   const handleContextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -223,12 +223,12 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
 
   return (
     <div>
-      {/* Revealing */}
+      {/* Revealing → SIGNALED flash */}
       {step === "revealing" && (
         <div>
           <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
           <div className="px-3 py-2">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Summing Signals{dots}</span>
+            <span className="font-mono text-[11px] tracking-widest text-muted-foreground/60">SIGNALED</span>
           </div>
           <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         </div>
@@ -341,9 +341,9 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               />
               <button
                 onClick={() => handleSubmit(contextNote)}
-                className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
+                className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity"
               >
-                Send Signal
+                BROADCAST
               </button>
             </div>
           </div>
@@ -378,9 +378,9 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               />
               <button
                 onClick={() => handleSubmit(contextNote)}
-                className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
+                className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity"
               >
-                Send Signal
+                BROADCAST
               </button>
             </div>
           </div>
