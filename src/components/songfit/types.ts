@@ -56,4 +56,5 @@ export interface CycleHistory {
 }
 
 export type BillboardMode = 'this_week' | 'last_week' | 'all_time';
-export type FeedView = 'recent' | 'billboard';
+export type FeedView = 'recent' | 'pending' | 'resolved' | 'billboard';
+export type RecentSubView = 'recent' | 'pending' | 'resolved';
