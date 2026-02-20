@@ -125,7 +125,8 @@ function getSignalVerbiage(total: number, pct: number) {
     return {
       label: "",
       sublabel: undefined,
-      summary: `CALIBRATING BUILD FIT · ${total}/50 SIGNALS NEEDED`,
+      summary: "CALIBRATING BUILD FIT",
+      signalLine: `${total}/50 SIGNALS NEEDED`,
       bigDisplay: `${pct}%`,
       tier: total <= 10 ? "resolving" as const : "detected" as const,
     };
@@ -134,6 +135,7 @@ function getSignalVerbiage(total: number, pct: number) {
     label: "CONSENSUS REACHED",
     sublabel: undefined,
     summary: `${pct}% FMLY BUILD FIT`,
+    signalLine: undefined,
     bigDisplay: `${pct}%`,
     tier: "consensus" as const,
   };
@@ -310,6 +312,11 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                   <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
                     {verbiage.summary}
                   </p>
+                  {verbiage.signalLine && (
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
+                      {verbiage.signalLine}
+                    </p>
+                  )}
                 </div>
                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
