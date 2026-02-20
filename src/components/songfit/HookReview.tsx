@@ -228,6 +228,12 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 </p>
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0">
+                <button
+                  onClick={handleRemoveSignal}
+                  className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
+                >
+                  Turn Off Signal
+                </button>
                 {onOpenReviews ? (
                   <button onClick={onOpenReviews} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors">
                     {results.total} {signalLabel}
@@ -235,12 +241,6 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 ) : (
                   <span className="font-mono text-[11px] tracking-widest text-muted-foreground">{results.total} {signalLabel}</span>
                 )}
-                <button
-                  onClick={handleRemoveSignal}
-                  className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
-                >
-                  Turn Off Signal
-                </button>
               </div>
             </div>
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />

@@ -149,19 +149,19 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
             </p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
-            {/* Metadata Tier: 11px mono, tracking-widest */}
-            <button
-              onClick={() => onOpenComments(dreamId)}
-              className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {signalsLabel}
-            </button>
             {/* Metadata Tier: 11px mono, muted/30 */}
             <button
               onClick={handleRemoveSignal}
               className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
             >
               Turn Off Signal
+            </button>
+            {/* Metadata Tier: 11px mono, tracking-widest */}
+            <button
+              onClick={() => onOpenComments(dreamId)}
+              className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {signalsLabel}
             </button>
           </div>
         </div>
