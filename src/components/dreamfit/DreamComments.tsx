@@ -123,9 +123,9 @@ function CommentItem({
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `RESOLVING...`,
-      sublabel: `${total}/50 SIGNALS`,
-      summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
+      label: `STATUS: RESOLVING... (${total}/50)`,
+      sublabel: undefined,
+      summary: "CALIBRATING BUILD FIT.",
       bigDisplay: `${pct}%`,
       tier: "resolving" as const,
     };
@@ -142,7 +142,7 @@ function getSignalVerbiage(total: number, pct: number) {
   return {
     label: "STATUS: CONSENSUS REACHED",
     sublabel: undefined,
-    summary: `${pct}% OF THE FMLY RESONATE WITH THIS.`,
+    summary: `${pct}% FMLY BUILD FIT.`,
     bigDisplay: `${pct}%`,
     tier: "consensus" as const,
   };
