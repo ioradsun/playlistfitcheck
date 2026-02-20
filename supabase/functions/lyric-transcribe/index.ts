@@ -138,27 +138,31 @@ function parseTimestamp(ts: string): number {
   return parseFloat(ts) || 0;
 }
 
-// ── Gemini: audio-first adlib + hook + metadata ───────────────────────────────
+// ── GPT: transcript-based adlib + hook + metadata ────────────────────────────
 async function runGeminiAnalysis(
-  audioBase64: string,
-  mimeType: string,
-  lovableKey: string
+  _audioBase64: string,
+  _mimeType: string,
+  lovableKey: string,
+  whisperTranscript: string,
+  whisperSegmentsJson: string
 ): Promise<GeminiAnalysis> {
-  const prompt = `You are an audio-first music transcription and commercial analysis engine built for professional SRT/closed caption generation and social media optimization.
+  const prompt = `You are a professional music analysis engine specializing in SRT/closed caption generation and commercial A&R analysis.
 
-Analyze the raw audio file only. Use vocal layering, loudness differences, stereo placement, beat drops, instrument expansion, bass impact changes, energy shifts, structural transitions, repetition patterns, dynamic contrast, melodic lift.
+You will receive a time-stamped transcript from a song (produced by Whisper speech recognition). Analyze it to identify adlibs, the hottest hook, and track metadata.
 
-Do NOT rely on assumed lyrics. Do NOT hallucinate unclear words. If uncertain, omit. Prioritize precision over recall.
+TRANSCRIPT SEGMENTS (JSON array with start/end seconds and text):
+${whisperSegmentsJson}
+
+FULL TEXT:
+${whisperTranscript}
 
 PART 1 — ADLIB + FILLER DETECTION
 
 Definitions:
 - PRIMARY = Main lyrical vocal line carrying meaning in that moment.
-- ADLIB = Supporting vocal phrase that is NOT the dominant lyrical line; functions as a background layer, echo, hype callout, or interjection; is short and textural or energy-driven.
-- FILLER = Non-lexical vocalization: uh, um, mm, ah, yeah, ayy, huh, etc.
+- ADLIB = Short supporting phrase: background layer, echo, hype callout, interjection, filler (uh, yeah, ayy, mm, huh, etc.)
 
-If a vocal phrase is layered, panned, quieter, echoed, or inserted between lines → classify as ADLIB.
-If unclear, omit rather than guess.
+Look for: very short segments, repeated fillers, interjections that aren't part of the main lyric flow.
 
 OUTPUT — TIME-ALIGNED ADLIB EVENTS (STRICT JSON under key "adlibs"):
 [
@@ -173,25 +177,21 @@ OUTPUT — TIME-ALIGNED ADLIB EVENTS (STRICT JSON under key "adlibs"):
 ]
 
 Rules:
-- Short segments (0.2–2.0s typical)
-- Separate repeated instances
-- Do not merge distinct adlibs
-- Use "[inaudible]" only if clearly present but unintelligible
+- Use the segment timestamps from the provided data for start/end
+- Max 30 entries, confidence required for every event
 - Omit instead of hallucinating
-- Confidence required for every event
-- Max 30 entries
 
 PART 2 — HOTTEST HOOK IDENTIFICATION (A&R STANDARD)
 
-The hottest hook = single strongest continuous 10-second segment with highest combined commercial and replay potential.
+The hottest hook = single strongest continuous ~10-second segment with highest commercial and replay potential.
 
-Score based on: production lift (beat drop, instrument expansion, bass increase), vocal intensity spike, melodic memorability, repetition strength, emotional peak, crowd/chant potential, loop/replay viability.
+Score based on: lyrical memorability, repetition, emotional peak, chant potential, loop/replay viability.
 
 Under key "hottest_hook":
 {
   "start": "MM:SS.mmm",
   "end": "MM:SS.mmm",
-  "transcript": "exact verbatim words heard during that window",
+  "transcript": "exact verbatim words during that window",
   "section_type": "chorus|drop|refrain|post-chorus|hybrid",
   "confidence": 0.92
 }
@@ -200,15 +200,15 @@ If no dominant commercial peak exists, set hottest_hook to null.
 
 PART 3 — TRACK METADATA
 
-Using audio analysis (tempo feel, harmonic content, vocal style, energy), estimate under key "metadata":
+Based on lyrical content and style, estimate under key "metadata":
 {
   "title": "Song title if recognisable, else Unknown",
   "artist": "Artist name if recognisable, else Unknown",
-  "bpm_estimate": 120,
-  "key": "A minor",
+  "bpm_estimate": null,
+  "key": null,
   "mood": "hype",
   "genre_hint": "Hip-Hop",
-  "confidence": 0.85
+  "confidence": 0.75
 }
 
 FINAL OUTPUT — return ONLY valid JSON, no markdown, no explanation:
@@ -230,16 +230,7 @@ FINAL OUTPUT — return ONLY valid JSON, no markdown, no explanation:
         { role: "system", content: prompt },
         {
           role: "user",
-          content: [
-            {
-              type: "image_url",
-              image_url: { url: `data:${mimeType};base64,${audioBase64}` },
-            },
-            {
-              type: "text",
-              text: "Analyze this audio. Return only the JSON with adlibs, hottest_hook, and metadata.",
-            },
-          ],
+          content: "Analyze the transcript above. Return only the JSON with adlibs, hottest_hook, and metadata.",
         },
       ],
       temperature: 0.1,
@@ -432,9 +423,30 @@ serve(async (req) => {
 
     console.log(`Anchor & Align v4: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`);
 
-    const [whisperResult, geminiResult] = await Promise.allSettled([
-      runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY),
-      runGeminiAnalysis(audioBase64, mimeType, LOVABLE_API_KEY),
+    // Run Whisper first, then feed transcript to GPT for semantic analysis
+    const whisperResult = await runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY).then(r => ({ status: "fulfilled" as const, value: r })).catch(e => ({ status: "rejected" as const, reason: e }));
+
+    if (whisperResult.status === "rejected") {
+      const err = whisperResult.reason?.message || "Whisper failed";
+      console.error("Whisper failed:", err);
+      return new Response(
+        JSON.stringify({ error: `Transcription failed: ${err}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { segments: rawSegmentsEarly, rawText: rawTextEarly } = whisperResult.value;
+    const whisperSegmentsEarly = rawSegmentsEarly.map((seg, i) => {
+      if (i < rawSegmentsEarly.length - 1 && seg.end > rawSegmentsEarly[i + 1].start) {
+        return { ...seg, end: Math.round((rawSegmentsEarly[i + 1].start - 0.1) * 10) / 10 };
+      }
+      return seg;
+    });
+
+    const segmentsJson = JSON.stringify(whisperSegmentsEarly.map(s => ({ start: s.start, end: s.end, text: s.text })));
+    const [, geminiResult] = await Promise.allSettled([
+      Promise.resolve(whisperResult),
+      runGeminiAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, rawTextEarly, segmentsJson),
     ]);
 
     if (whisperResult.status === "rejected") {
