@@ -133,13 +133,17 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
             <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
               {hasSignals ? `${pct}% BUILD FIT` : "CALIBRATING"}
             </p>
-            {hasSignals && (
+            {hasSignals ? (
               <button
                 onClick={() => onOpenComments(dreamId)}
                 className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
               >
                 {localGreenlight} OF {localBackers} FMLY MEMBERS
               </button>
+            ) : (
+              <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/40">
+                Waiting for input
+              </span>
             )}
           </div>
         </div>

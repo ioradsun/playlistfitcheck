@@ -216,13 +216,17 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
                   {hasSignals ? `${pct}% REPLAY FIT` : "CALIBRATING"}
                 </p>
-                {hasSignals && onOpenReviews && (
+                {hasSignals && onOpenReviews ? (
                   <button
                     onClick={onOpenReviews}
                     className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
                   >
                     {signals} OF {total} FMLY MEMBERS
                   </button>
+                ) : !hasSignals && (
+                  <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/40">
+                    Waiting for input
+                  </span>
                 )}
               </div>
             </div>
