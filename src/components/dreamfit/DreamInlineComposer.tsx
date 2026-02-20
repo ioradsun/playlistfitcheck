@@ -55,8 +55,8 @@ export function DreamInlineComposer({ onCreated }: Props) {
   return (
     <div className="border-b border-border/40">
       {/* Input row */}
-      <div className="flex gap-3 px-4 pt-3 pb-1">
-        <Avatar className="h-8 w-8 border border-border shrink-0 mt-0.5">
+      <div className="flex gap-3 px-3 pt-3 pb-1">
+        <Avatar className="h-9 w-9 ring-2 ring-primary/20 shrink-0 mt-0.5">
           <AvatarImage src={avatarUrl} alt={profile?.display_name ?? "You"} />
           <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
             {initials}
@@ -76,7 +76,7 @@ export function DreamInlineComposer({ onCreated }: Props) {
       </div>
 
       {/* Action row — anchored to bottom, button always visible */}
-      <div className="flex items-center justify-between px-4 pb-2.5">
+      <div className="flex items-center justify-between px-3 pb-2.5">
         <span className={`text-[10px] font-mono transition-opacity duration-150 ${
           text.length === 0
             ? "opacity-0 pointer-events-none"
