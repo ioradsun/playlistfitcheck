@@ -285,7 +285,34 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             </div>
           </div>
 
-          {/* Signal Status card */}
+          {/* Hook lyrics — collapsible */}
+          {post?.caption && (
+            <button
+              onClick={() => setLyricsExpanded(prev => !prev)}
+              className="w-full text-left rounded-xl bg-muted/40 border border-border/50 px-3 py-2.5 hover:bg-muted/60 transition-colors group"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <ChevronDown
+                  size={13}
+                  className={`text-muted-foreground/40 transition-transform duration-200 group-hover:text-muted-foreground/70 ${lyricsExpanded ? "rotate-180" : ""}`}
+                />
+              </div>
+              {lyricsExpanded ? (
+                <p className="text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap">
+                  {post.caption}
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs leading-relaxed text-foreground/80 line-clamp-1">
+                    {post.caption}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/40 mt-1">Tap to expand</p>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Replay Fit card */}
           {!loading && rows.length > 0 && (() => {
             const total = rows.length;
             const signals = rows.filter(r => r.would_replay).length;
@@ -293,9 +320,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
 
             const bigDisplay = hasSignals ? `${pct}%` : "CALIBRATING";
-            const metaLine = hasSignals
-              ? null // rendered with tooltip below
-              : "WAITING FOR INPUT";
 
             return (
               <TooltipProvider delayDuration={350}>
@@ -326,33 +350,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
               </TooltipProvider>
             );
           })()}
-
-          {/* Hook lyrics — collapsible */}
-          {post?.caption && (
-            <button
-              onClick={() => setLyricsExpanded(prev => !prev)}
-              className="w-full text-left rounded-xl bg-muted/40 border border-border/50 px-3 py-2.5 hover:bg-muted/60 transition-colors group"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <ChevronDown
-                  size={13}
-                  className={`text-muted-foreground/40 transition-transform duration-200 group-hover:text-muted-foreground/70 ${lyricsExpanded ? "rotate-180" : ""}`}
-                />
-              </div>
-              {lyricsExpanded ? (
-                <p className="text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap">
-                  {post.caption}
-                </p>
-              ) : (
-                <>
-                  <p className="text-xs leading-relaxed text-foreground/80 line-clamp-1">
-                    {post.caption}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/40 mt-1">Tap to expand</p>
-                </>
-              )}
-            </button>
-          )}
 
         </div>
 
