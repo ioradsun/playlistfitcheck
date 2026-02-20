@@ -257,7 +257,8 @@ PRECISION:
 - Timestamps: seconds with 3-decimal precision (e.g., 169.452). NOT MM:SS format.
 - Confidence floor: 0.95 — only output if you are 95% certain it is a secondary vocal layer or correction.
 - Separate EVERY instance: Even if the same text appears 10 times, each occurrence is a unique event with its own timestamp.
-- No output limit: Return every event you find. Completeness is the primary directive.
+- OUTPUT LIMIT: Return a MAXIMUM of 30 adlibs. Prioritize the most audible and distinct events. This limit ensures valid, complete JSON output.
+- JSON ROBUSTNESS: Every array element except the last MUST be followed by a comma. The final element must NOT have a trailing comma. Close the array with ] and the object with }.
 
 OUTPUT — ONLY valid JSON, no markdown, no explanation:
 {
@@ -321,7 +322,52 @@ function extractJsonFromContent(content: string): any {
     .replace(/,\s*}/g, "}")
     .replace(/,\s*]/g, "]")
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-  return JSON.parse(rawJson);
+
+  // ── v3.5: Robust JSON Recovery ────────────────────────────────────────────
+  // Gemini may truncate output mid-array when token budget is exhausted.
+  // safeParseJson attempts standard parse first, then tries progressively
+  // more aggressive repairs to recover as many array elements as possible.
+  function safeParseJson(s: string): any {
+    try {
+      return JSON.parse(s);
+    } catch (_e1) {
+      // Strip trailing comma then try again
+      let fixed = s.replace(/,\s*$/, "").trim();
+      try {
+        return JSON.parse(fixed);
+      } catch (_e2) {
+        // If last char is neither ] nor }, the array/object was cut off.
+        // Find the last complete array element (ends with }) and close the structure.
+        const lastComplete = fixed.lastIndexOf("}");
+        if (lastComplete !== -1) {
+          fixed = fixed.slice(0, lastComplete + 1);
+          // Determine if we're still inside an array
+          const openBracket = fixed.lastIndexOf("[");
+          const closeBracket = fixed.lastIndexOf("]");
+          if (openBracket > closeBracket) fixed += "]";
+          // Close outer object if needed
+          const openBrace = fixed.lastIndexOf("{");
+          const closeBrace = fixed.lastIndexOf("}");
+          // Count top-level braces
+          let depth = 0;
+          for (const ch of fixed) { if (ch === "{") depth++; else if (ch === "}") depth--; }
+          if (depth > 0) fixed += "}".repeat(depth);
+          try {
+            const recovered = JSON.parse(fixed);
+            console.warn(`[safeParseJson] Recovered truncated JSON — partial data restored`);
+            return recovered;
+          } catch (_e3) {
+            // Last resort: return empty adlibs object
+            console.warn(`[safeParseJson] JSON unrecoverable — returning empty adlibs`);
+            return { adlibs: [] };
+          }
+        }
+        return { adlibs: [] };
+      }
+    }
+  }
+
+  return safeParseJson(rawJson);
 }
 
 // ── Gemini Call 1: Hook + Insights + Metadata ─────────────────────────────────
@@ -379,7 +425,7 @@ async function runGeminiAdlibAnalysis(
   const transcriptProvided = whisperTranscript.trim().length > 0;
   console.log(`[adlib] v3.0 reference-based prompt — transcriptProvided=${transcriptProvided} (${whisperTranscript.length} chars)`);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 3000, "adlib");
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 4000, "adlib");
   const parsed = extractJsonFromContent(content);
 
   // v3.0: confidence floor 0.95 (Gemini has script as anchor)
@@ -982,7 +1028,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.4",
+          version: "production-master-v3.5",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
