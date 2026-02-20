@@ -9,8 +9,7 @@ type HookRating = "missed" | "almost" | "solid" | "hit";
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `RESOLVING...`,
-      sublabel: `${total}/50 SIGNALS`,
+      label: `RESOLVING... ${total}/50 SIGNALS`,
       summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
       tier: "resolving" as const,
     };
@@ -18,14 +17,12 @@ function getSignalVerbiage(total: number, pct: number) {
   if (total < 50) {
     return {
       label: `STATUS: ${total}/50 SIGNALS`,
-      sublabel: undefined,
       summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
       tier: "detected" as const,
     };
   }
   return {
     label: "STATUS: CONSENSUS REACHED",
-    sublabel: undefined,
     summary: `${pct}% OF THE FMLY RESONATE WITH THIS.`,
     tier: "consensus" as const,
   };
@@ -226,11 +223,6 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                   <span className={verbiage.tier === "resolving" ? "opacity-50" : ""}>{verbiage.label}</span>
                 </p>
-                {verbiage.sublabel && (
-                  <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground opacity-50">
-                    {verbiage.sublabel}
-                  </p>
-                )}
                 <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
                   {verbiage.summary}
                 </p>
