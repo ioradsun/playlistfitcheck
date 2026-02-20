@@ -119,10 +119,10 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       <div className="animate-fade-in">
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2 space-y-0.5">
-          {/* Top row: display (left) + Turn Off Signal (right) */}
+          {/* Top row: fit label (left) + Turn Off Signal (right) */}
           <div className="flex items-center justify-between">
-            <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
-              {bigDisplay}
+            <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50 ${!hasSignals ? "animate-signal-pulse" : ""}`}>
+              {hasSignals ? "BUILD FIT" : "CALIBRATING"}
             </p>
             <button
               onClick={handleRemoveSignal}
@@ -131,17 +131,19 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
               Turn Off Signal
             </button>
           </div>
-          {/* Bottom row: meta (left) + open comments (right) */}
+          {/* Bottom row: % (left) + clickable tally (right) */}
           <div className="flex items-center justify-between gap-3">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50">
-              {hasSignals ? `BUILD FIT · ${localGreenlight} OF ${localBackers} FMLY MEMBERS` : "WAITING FOR INPUT"}
+            <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+              {hasSignals ? `${pct}%` : "WAITING FOR INPUT"}
             </p>
-            <button
-              onClick={() => onOpenComments(dreamId)}
-              className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
-            >
-              View All
-            </button>
+            {hasSignals && (
+              <button
+                onClick={() => onOpenComments(dreamId)}
+                className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                {localGreenlight} OF {localBackers} FMLY MEMBERS
+              </button>
+            )}
           </div>
         </div>
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />

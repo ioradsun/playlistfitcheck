@@ -202,10 +202,10 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
           <div className="animate-fade-in">
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
             <div className="px-3 py-2 space-y-0.5">
-              {/* Top row: pct + fit label (left) + Turn Off Signal (right) */}
+              {/* Top row: fit label (left) + Turn Off Signal (right) */}
               <div className="flex items-center justify-between">
-                <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
-                  {hasSignals ? `${pct}% REPLAY FIT` : "CALIBRATING"}
+                <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50 ${!hasSignals ? "animate-signal-pulse" : ""}`}>
+                  {hasSignals ? "REPLAY FIT" : "CALIBRATING"}
                 </p>
                 <button
                   onClick={handleRemoveSignal}
@@ -214,14 +214,17 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   Turn Off Signal
                 </button>
               </div>
-              {/* Bottom row: tally (left) + open reviews (right) */}
+              {/* Bottom row: % (left) + clickable tally (right) */}
               <div className="flex items-center justify-between gap-3">
-                <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50">
-                  {hasSignals ? `${signals} OF ${total} FMLY MEMBERS` : "WAITING FOR INPUT"}
+                <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                  {hasSignals ? `${pct}%` : "WAITING FOR INPUT"}
                 </p>
-                {onOpenReviews && (
-                  <button onClick={onOpenReviews} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                    View All
+                {hasSignals && onOpenReviews && (
+                  <button
+                    onClick={onOpenReviews}
+                    className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  >
+                    {signals} OF {total} FMLY MEMBERS
                   </button>
                 )}
               </div>
