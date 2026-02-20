@@ -660,6 +660,42 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     toast.success("Timestamps restored to original AI output");
   }, []);
 
+  // ── Linear drift correction (clock skew) ──────────────────────────────────
+  // If drift = currentTime - activeLine.start at some point T into the track,
+  // it means the AI clock ran at rate: activeLine.start / currentTime.
+  // We stretch all timestamps by the inverse: currentTime / activeLine.start.
+  const applyDriftCorrection = useCallback(() => {
+    const activeLine = activeLines.find((_, i) => activeLineIndices.has(i));
+    if (!activeLine) {
+      toast.error("Play the song until you see a lyric highlighted, then press Fix Drift");
+      return;
+    }
+    const realTime = audioRef.current?.currentTime ?? currentTime;
+    const lyricTime = activeLine.start;
+    if (lyricTime < 1) {
+      toast.error("Seek further into the track — need a reference point past the intro");
+      return;
+    }
+    const stretchFactor = realTime / lyricTime;
+    if (Math.abs(stretchFactor - 1) < 0.001) {
+      toast("Already in sync — no correction needed ✓");
+      return;
+    }
+    const stretch = (lines: LyricLine[]): LyricLine[] =>
+      lines.map((l) => ({
+        ...l,
+        start: Math.round(l.start * stretchFactor * 100) / 100,
+        end: Math.round(l.end * stretchFactor * 100) / 100,
+      }));
+    setExplicitLines((prev) => stretch(prev));
+    if (fmlyLines) setFmlyLines((prev) => (prev ? stretch(prev) : prev));
+    setAnchoredLines(new Set());
+    const pct = ((stretchFactor - 1) * 100).toFixed(2);
+    toast.success(`Drift corrected — timestamps stretched by ${pct}%`, {
+      description: `Factor: ${stretchFactor.toFixed(4)} (measured at ${realTime.toFixed(2)}s audio / ${lyricTime.toFixed(2)}s lyric)`,
+    });
+  }, [activeLines, activeLineIndices, currentTime, fmlyLines]);
+
   // ── Tag toggle ─────────────────────────────────────────────────────────────
   const toggleLineTag = useCallback((lineIndex: number) => {
     const line = activeLines[lineIndex];
@@ -860,16 +896,25 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 {/* Live sync delta — shows gap between playhead and current lyric */}
                 {(() => {
                   const activeLine = activeLines.find((_, i) => activeLineIndices.has(i));
-                  if (!activeLine || !isPlaying) return null;
+                  if (!activeLine) return null;
                   const delta = adjustedTime - activeLine.start;
                   const absDelta = Math.abs(delta);
                   const color = absDelta < 0.3 ? "text-green-400" : absDelta < 1.5 ? "text-yellow-400" : "text-red-400";
                   return (
                     <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/20">
                       <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">Live sync</span>
-                      <span className={`text-[10px] font-mono tabular-nums ${color}`}>
-                        playhead {adjustedTime.toFixed(2)}s · lyric starts {activeLine.start.toFixed(2)}s · drift {delta > 0 ? "+" : ""}{delta.toFixed(2)}s
+                      <span className={`text-[10px] font-mono tabular-nums ${color} flex-1`}>
+                        ▶ {adjustedTime.toFixed(2)}s · lyric {activeLine.start.toFixed(2)}s · drift {delta > 0 ? "+" : ""}{delta.toFixed(2)}s
                       </span>
+                      {absDelta > 0.5 && isPlaying && (
+                        <button
+                          onClick={applyDriftCorrection}
+                          className="text-[10px] font-mono text-primary hover:text-primary/80 border border-primary/30 hover:border-primary/50 rounded px-1.5 py-0.5 shrink-0 transition-colors"
+                          title="Stretch all timestamps to correct progressive clock skew"
+                        >
+                          Fix Drift ↗
+                        </button>
+                      )}
                     </div>
                   );
                 })()}
