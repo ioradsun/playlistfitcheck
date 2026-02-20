@@ -148,9 +148,11 @@ const DEFAULT_VERSION_META: VersionMeta = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
+
 export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, onBack, onSaved, onReuploadAudio }: Props) {
-  const { user, roles } = useAuth();
-  const isAdmin = roles.includes("admin");
+  const { user } = useAuth();
+  const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
   const [showDebug, setShowDebug] = useState(false);
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
 
