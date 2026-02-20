@@ -130,7 +130,7 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── v5.8: Universal Acoustic Orchestrator Prompt (Acoustic Guard) ─────────────
+// ── v5.8: Universal Acoustic Orchestrator Prompt (Acoustic Guard & End-Cap) ──
 function buildOrchestratorPrompt(
   whisperWords: WhisperWord[],
   whisperSegments: Array<{ start: number; end: number; text: string }>,
@@ -143,14 +143,13 @@ function buildOrchestratorPrompt(
   const anchorWord = whisperWords.length > 0 ? whisperWords[0] : null;
   const anchorTs = anchorWord?.start.toFixed(3) ?? "0.000";
   const anchorW = anchorWord?.word ?? "unknown";
-  // Second Whisper word gives a second calibration reference for cadence verification
   const anchorWord2 = whisperWords.length > 1 ? whisperWords[1] : null;
   const anchorTs2 = anchorWord2?.start.toFixed(3) ?? "0.000";
   const anchorW2 = anchorWord2?.word ?? "unknown";
 
-  return `ROLE: Universal Acoustic Orchestrator (v5.8 Acoustic Guard)
+  return `ROLE: Universal Acoustic Orchestrator (v5.8 Acoustic Guard & End-Cap)
 
-You are simultaneously hearing the raw audio AND receiving the Whisper timing grid. Your mission is to produce a perfect, production-ready merged_lines array.
+You are simultaneously hearing the raw audio AND receiving the Whisper timing grid. Produce a complete, production-ready merged_lines array covering the ENTIRE track from first sound to last.
 
 === WHISPER TIMING GRID ===
 WHISPER_RAW_TEXT: ${whisperRawText.slice(0, 2000)}
@@ -163,85 +162,88 @@ ${segmentsJson}
 
 TRACK_END: ${trackEnd.toFixed(3)}s
 
-=== PATH 1: ABSOLUTE SILENCE GUARD (Execute This First — Critical Timing Fix) ===
-You must synchronize the intro timeline by calculating BACKWARD from the first Whisper anchor.
-The Silence Guard is the single most important rule: the first intro line MUST NOT start at 0.0s.
+=== PATH 1: ABSOLUTE SILENCE GUARD (Critical Timing Fix) ===
+Synchronize the intro by calculating BACKWARD from the first Whisper anchor.
+THE SILENCE GUARD IS LAW: The first intro line MUST NOT start at 0.000s.
 
-TEMPORAL NORTH STAR: "${anchorW}" at ${anchorTs}s (Whisper master clock — immovable, never touch).
-SECONDARY REFERENCE:  "${anchorW2}" at ${anchorTs2}s (cadence verification anchor).
+TEMPORAL NORTH STAR: "${anchorW}" at ${anchorTs}s — immovable Whisper master clock.
+SECONDARY REFERENCE:  "${anchorW2}" at ${anchorTs2}s — cadence verification.
 
-SILENCE DETECTION — The Zero-Fill Prevention Gate:
-  STEP 1: Scan the audio from 0.000s forward. Find the first frame where vocal amplitude rises above the noise floor.
-  STEP 2: That timestamp is T_first_onset. This is NEVER 0.000s unless there is literally sound at the file's first sample.
-  STEP 3: If the first 3 seconds of audio are silent or contain only music/noise (no voice), T_first_onset >= 3.000s.
-  ENFORCEMENT: The first intro line's start MUST equal T_first_onset — not 0.000s, not 0.500s, not 1.000s.
+SILENCE DETECTION — Zero-Fill Prevention Gate:
+  STEP 1: Scan from 0.000s. Find the first frame where vocal amplitude rises above the noise floor.
+  STEP 2: That timestamp is T_first_onset. It is NEVER 0.000s unless sound begins at the file's first sample.
+  STEP 3: If the first 3+ seconds are silent or music-only, T_first_onset >= 3.000s.
+  ENFORCEMENT: First intro line start = T_first_onset exactly. Not 0.000s, not 0.500s, not 1.000s.
 
-BACKWARD PROJECTION FORMULA — For each intro phrase:
-  1. LISTEN: Detect acoustic onset of "${anchorW}" in audio => T_acoustic_anchor.
-  2. DETECT: For each intro phrase, detect its acoustic onset => T_acoustic_i.
-  3. MEASURE: relative_gap_i = T_acoustic_anchor - T_acoustic_i
-  4. PROJECT: t_final_i = ${anchorTs} - relative_gap_i
+BACKWARD PROJECTION — For each intro phrase not in WHISPER_SEGMENTS:
+  1. Detect acoustic onset of "${anchorW}" in audio => T_acoustic_anchor
+  2. Detect acoustic onset of intro phrase i => T_acoustic_i
+  3. relative_gap_i = T_acoustic_anchor - T_acoustic_i
+  4. t_final_i = ${anchorTs} - relative_gap_i
 
-  Example: Anchor heard at T_acoustic=17.2s, first intro phrase at T_acoustic_i=3.35s
-           => relative_gap = 17.2 - 3.35 = 13.85s => t_final = ${anchorTs} - 13.85 = ${(parseFloat(anchorTs) - 13.85).toFixed(3)}s
+  Example: anchor heard at 17.2s, first phrase at 3.35s => gap=13.85s => t_final=${(parseFloat(anchorTs) - 13.85).toFixed(3)}s
 
 PRECISION MANDATE:
-  - 3-decimal precision always (e.g., 3.842s). NEVER rounded values (0.0s, 2.5s, 5.0s, 7.5s).
-  - Evenly-spaced timestamps (e.g., 0.0, 2.14, 4.28...) = linear estimation hallucination. REJECT and re-detect.
-  - Genuine speech cadence is IRREGULAR. If your timestamps look like an arithmetic sequence, you have guessed.
+  - 3-decimal precision always (e.g., 3.842s). NEVER rounded values like 0.0, 2.5, 5.0.
+  - Evenly-spaced timestamps (0.0, 2.14, 4.28…) = hallucinated arithmetic sequence. REJECT and re-detect.
+  - Real speech cadence is IRREGULAR. If your timestamps look like a rhythm grid, you guessed.
 
-VALIDATION: Apply backward formula to "${anchorW2}". Result must match ${anchorTs2}s +/- 0.050s. Recalculate if outside tolerance.
+VALIDATION: Project "${anchorW2}" via backward formula. Result must equal ${anchorTs2}s ±0.050s. Recalculate if not.
+CONTINUITY: Last intro line's end must be <= ${anchorTs}s (no overlap into Whisper main lines).
+SCOPE: Backward projection applies ONLY to isFloating lines. WHISPER_SEGMENTS lines keep their exact timestamps.
 
-CONTINUITY RULE: The last intro line's end MUST be <= ${anchorTs}s (no overlap into Whisper main lines).
-
-SCOPE: Backward projection applies ONLY to isFloating lines. Main WHISPER_SEGMENTS lines keep their exact Whisper timestamps.
-
-=== PATH 2: SIGNAL HIERARCHY — LEAD VS. STACK ===
-Classify every vocal based on its role in the mix. This is a strict binary rule.
+=== PATH 2: SIGNAL HIERARCHY — MONOPOLY CONSTRAINT ===
+STRICT BINARY RULE: Only ONE vocal can be tag: "main" at any given moment.
 
 LEAD SIGNAL => tag: "main":
-  - Spoken intro dialogue (the only voice playing => it IS the lead).
-  - The primary singing track throughout the song body.
-  - Any restored Whisper-missed vocal that has NO concurrent main signal.
+  - Spoken intro dialogue (sole voice in the mix = the lead).
+  - Primary singing track throughout the song body.
+  - Any restored Whisper-missed vocal with NO concurrent main signal.
 
 SECONDARY SIGNAL => tag: "adlib":
-  - Echoes, background harmonies, textures, whispers, call-and-response backgrounds.
-  - Any vocal that overlaps with an existing tag: "main" line at the same timestamp.
+  - Overlapping echoes, background harmonies, textures, call-and-response.
+  - Any vocal that overlaps with an existing main line at the same timestamp.
 
-THE STACKING CONSTRAINT — Critical Anti-Overrun Rule:
-  If two vocals occur at the SAME TIME, one MUST be tag: "main" and the other MUST be tag: "adlib".
+THE STACKING CONSTRAINT:
+  If two vocals occur simultaneously, one MUST be main and one MUST be adlib.
   It is FORBIDDEN to assign tag: "main" to two simultaneous vocal lines.
-  Determine the lead by prominence: louder, more continuous, or melodically central signal = main.
+  Determine the lead by prominence: louder, more continuous, melodically central = main.
+  NOTE: Enforcing this rule reduces JSON token usage and prevents response truncation.
 
 FLOATING STATUS: Any line you restore that was NOT in WHISPER_SEGMENTS => isFloating: true.
 
-=== PATH 3: SURGICAL QA & GHOST PRUNING ===
+=== PATH 3: END-TO-END MANDATE + SURGICAL QA ===
 
-CONFLICT RESOLUTION:
+END-TO-END COMPLETENESS (Critical Anti-Cutoff Rule):
+  - You MUST process and output lines for the ENTIRE audio track until the last acoustic event.
+  - The track ends at approximately ${trackEnd.toFixed(3)}s. Do NOT stop at 180s or any earlier point.
+  - If Whisper truncated before the end (rawText ends mid-sentence), continue using your audio perception alone.
+  - After Whisper data ends: listen directly, tag main/adlib by prominence, use 3-decimal precision.
+  - A complete Outro is required. Missing the final 10-30s is a failure.
+
+SURGICAL QA — Conflict Resolution:
   - Audit every WHISPER_SEGMENTS main line against the raw audio for phonetic/contextual errors.
   - Correct the text but keep Whisper's EXACT start/end timestamps. Never shift them.
   - isCorrection: true on corrected lines.
-  - geminiConflict = ONLY the single original Whisper word that was wrong (e.g., "range", "clean"). NOT the corrected form. NOT the full line. One word only.
+  - geminiConflict = ONLY the single original Whisper word that was wrong (e.g., "range"). One word only.
   - qaCorrections += 1 per word swap.
 
 GHOST KILLER:
-  - A Ghost = a background vocal whose text is phonetically identical to a concurrent main line (+/-500ms), same voice.
+  - A Ghost = a background vocal phonetically identical to a concurrent main line (±500ms), same voice.
   - Physically delete Ghosts. Do not output them under any tag.
   - ghostsRemoved += 1 per deletion.
 
 DENSITY PRESERVATION — Outro/Bridge Overlaps:
-  - NEVER merge overlapping distinct voices into one line.
-  - Output EACH concurrent voice as a separate entry. Tag the lead as main, backgrounds as adlib, isFloating: true.
+  - NEVER merge concurrent distinct voices into one line.
+  - Output each voice as a separate entry. Lead = main, backgrounds = adlib with isFloating: true.
 
 === OUTPUT RULES ===
-- COMPLETE merged_lines: all WHISPER_SEGMENTS main lines + all restored floating lines + all legitimate adlibs.
-- Maximum 80 total lines.
+- ALL lines: WHISPER_SEGMENTS main lines + all restored floating lines + all legitimate adlibs.
+- Maximum 80 total lines (prioritize completeness; trim redundant adlibs if approaching limit).
 - ALL timestamps: numeric seconds, 3-decimal precision. NEVER MM:SS format.
 - Hard boundary: discard any line with start > ${Math.min(189.3, trackEnd + 1.0).toFixed(3)}s.
 - Sort ascending by start time.
-- qaCorrections = exact word swaps in Path 3.
-- ghostsRemoved = exact deletions in Path 3.
-- JSON ROBUSTNESS: Every array element except the last MUST have a trailing comma. Final element must NOT.
+- JSON ROBUSTNESS: Ensure valid JSON — every array element except the last has a trailing comma.
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
@@ -729,7 +731,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v5.8-acoustic-guard",
+          version: "anchor-align-v5.8-acoustic-guard-endcap",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
