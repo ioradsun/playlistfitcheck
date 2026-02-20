@@ -17,6 +17,7 @@ import { AiPromptsEditor } from "@/components/admin/AiPromptsEditor";
 import { PendingVerifications } from "@/components/admin/PendingVerifications";
 import { ToolsEditor } from "@/components/admin/ToolsEditor";
 import { FmlyArtists } from "@/components/admin/FmlyArtists";
+import { GlobalCssEditor } from "@/components/admin/GlobalCssEditor";
 
 interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
 interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
@@ -125,6 +126,7 @@ export default function Admin() {
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="copy">Copy</TabsTrigger>
             <TabsTrigger value="prompts">AI</TabsTrigger>
+            <TabsTrigger value="css">CSS</TabsTrigger>
           </TabsList>
 
           {/* ── USERS TAB ── */}
@@ -309,6 +311,11 @@ export default function Admin() {
           {/* ── AI PROMPTS TAB ── */}
           <TabsContent value="prompts" className="mt-4">
             <AiPromptsEditor />
+          </TabsContent>
+
+          {/* ── CSS TAB ── */}
+          <TabsContent value="css" className="mt-4">
+            <GlobalCssEditor />
           </TabsContent>
         </Tabs>
       </div>
