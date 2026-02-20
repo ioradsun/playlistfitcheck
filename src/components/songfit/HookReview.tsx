@@ -243,17 +243,17 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   </button>
                 </div>
               )}
-              {/* Bottom: summary + signals count stacked left */}
-              <div className="space-y-0.5">
+              {/* Bottom row: summary (left) + signals count (right) */}
+              <div className="flex items-center justify-between gap-3">
                 <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
                   {verbiage.summary}
                 </p>
                 {onOpenReviews ? (
-                  <button onClick={onOpenReviews} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors block">
+                  <button onClick={onOpenReviews} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0">
                     {results.total} {signalLabel}
                   </button>
                 ) : (
-                  <span className="font-mono text-[11px] tracking-widest text-muted-foreground block">{results.total} {signalLabel}</span>
+                  <span className="font-mono text-[11px] tracking-widest text-muted-foreground shrink-0">{results.total} {signalLabel}</span>
                 )}
               </div>
             </div>

@@ -162,14 +162,14 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
               </button>
             </div>
           )}
-          {/* Bottom row: summary + signals count stacked left */}
-          <div className="space-y-0.5">
+          {/* Bottom row: summary (left) + signals count (right) */}
+          <div className="flex items-center justify-between gap-3">
             <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
               {v.summary}
             </p>
             <button
               onClick={() => onOpenComments(dreamId)}
-              className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors block"
+              className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
             >
               {signalsLabel}
             </button>
