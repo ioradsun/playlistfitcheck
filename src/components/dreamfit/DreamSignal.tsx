@@ -119,11 +119,8 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       <div className="animate-fade-in">
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2 space-y-0.5">
-          {/* Top row: fit label (left) + Turn Off Signal (right) */}
-          <div className="flex items-center justify-between">
-            <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50 ${!hasSignals ? "animate-signal-pulse" : ""}`}>
-              {hasSignals ? "BUILD FIT" : "CALIBRATING"}
-            </p>
+          {/* Top row: Turn Off Signal (right only) */}
+          <div className="flex items-center justify-end">
             <button
               onClick={handleRemoveSignal}
               className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
@@ -131,10 +128,10 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
               Turn Off Signal
             </button>
           </div>
-          {/* Bottom row: % (left) + clickable tally (right) */}
+          {/* Bottom row: % + fit label (left) + clickable tally (right) */}
           <div className="flex items-center justify-between gap-3">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-              {hasSignals ? `${pct}%` : "WAITING FOR INPUT"}
+            <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
+              {hasSignals ? `${pct}% BUILD FIT` : "CALIBRATING"}
             </p>
             {hasSignals && (
               <button
