@@ -679,7 +679,6 @@ function findHookFromWords(
 
   // ── Boundary Enforcement: hook beyond track end OR in last 10s → discard ─
   const trackEnd = words.length > 0 ? words[words.length - 1].end : Infinity;
-  const HOOK_DURATION = 10.000;
 
   if (start_sec > trackEnd || start_sec > trackEnd - HOOK_DURATION) {
     console.log(`[hook] Discarding hook @ ${start_sec.toFixed(3)}s — in last 10s or beyond track end (${trackEnd.toFixed(3)}s). Falling back to repetition anchor.`);
