@@ -629,11 +629,20 @@ function extractAdlibsFromWords(
       let bestPhoneticScore = 0;
       let bestSeg: typeof mainSegments[0] | null = null;
 
-      // Full corpus scan — no time window restriction for corrections
+      // v4.0: Full corpus scan — EXCLUDE exact-text matches.
+      // Root cause of v3.9 "rain" bug: Gemini outputs "rain" as correction.
+      // Engine found a Whisper word already spelled "rain" (score=1.00), near-identical
+      // guard fired, skipped. Never reached "range" (score=0.53). Fix: skip any
+      // candidate word whose normalized text matches the correction exactly — we're
+      // looking for the word that NEEDS swapping, not words already correct.
+      const normCorrection = normalize(adlib.text);
       for (const seg of mainSegments) {
         const segWords = words.filter(w => w.start >= seg.start - 0.1 && w.end <= seg.end + 0.1);
         for (const w of segWords) {
-          const score = phoneticSimilarity(normalize(w.word), normalize(adlib.text));
+          const normW = normalize(w.word);
+          // Skip words already identical to the correction — they don't need swapping
+          if (normW === normCorrection) continue;
+          const score = phoneticSimilarity(normW, normCorrection);
           if (score > bestPhoneticScore) {
             bestPhoneticScore = score;
             bestPhoneticWord = w;
@@ -642,12 +651,11 @@ function extractAdlibsFromWords(
         }
       }
 
-      // v3.9: Two-gate phonetic swap guard
+      // v4.0: Two-gate phonetic swap guard
       //   Gate 1 — Soundex root match: "range"→"rain" R520/R500 share "R5" ✓
       //                                 "race" →"rain" R200/R500 "R2"≠"R5"  ✗
-      //   Gate 2 — Levenshtein threshold 0.40 (lowered from 0.65 — empirically "rain"/"range"
-      //             scores 0.53 due to edit-distance 3/5, so 0.65 was always too high).
-      //             Soundex guard is the primary quality gate; 0.40 is just a noise floor.
+      //   Gate 2 — Levenshtein threshold 0.40 (noise floor; Soundex is primary gate)
+      //   Note: Near-identical check removed — we already excluded exact matches above.
       const PHONETIC_THRESHOLD = 0.40;
       if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
         const oldWord = bestPhoneticWord.word.trim();
@@ -655,21 +663,15 @@ function extractAdlibsFromWords(
         if (!phoneticRootMatch(oldWord, adlib.text)) {
           console.log(`[qa-swap] Soundex root mismatch: "${oldWord}" (${soundex(oldWord)}) vs "${adlib.text}" (${soundex(adlib.text)}) — swap aborted`);
         } else {
-          // Gate 2: only swap if the words are genuinely different (not near-identical)
-          const similarity = 1 - levenshtein(normalize(oldWord), normalize(adlib.text)) / Math.max(oldWord.length, adlib.text.length, 1);
-          if (similarity < 0.95) {
-            bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
-            bestSeg.lineRef.geminiConflict = oldWord;
-            (bestSeg.lineRef as any).isCorrection = true;
-            (bestSeg.lineRef as any).correctedWord = adlib.text;
-            correctionCount++;
-            console.log(`[qa-swap] v3.9 swap "${oldWord}" (${soundex(oldWord)}) → "${adlib.text}" (${soundex(adlib.text)}) score=${bestPhoneticScore.toFixed(2)}`);;
-          } else {
-            console.log(`[qa-swap] Skipped — near-identical to "${oldWord}" (sim=${similarity.toFixed(2)})`);
-          }
+          bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
+          bestSeg.lineRef.geminiConflict = oldWord;
+          (bestSeg.lineRef as any).isCorrection = true;
+          (bestSeg.lineRef as any).correctedWord = adlib.text;
+          correctionCount++;
+          console.log(`[qa-swap] v4.0 swap "${oldWord}" (${soundex(oldWord)}) → "${adlib.text}" (${soundex(adlib.text)}) score=${bestPhoneticScore.toFixed(2)} gap=${Math.abs(correctedStart - bestPhoneticWord.start).toFixed(2)}s`);
         }
       } else {
-        console.log(`[qa-swap] No match for "${adlib.text}" @ ${correctedStart.toFixed(3)}s — best score ${bestPhoneticScore.toFixed(2)} < ${PHONETIC_THRESHOLD}`);
+        console.log(`[qa-swap] No differing match for "${adlib.text}" @ ${correctedStart.toFixed(3)}s — best score ${bestPhoneticScore.toFixed(2)} < ${PHONETIC_THRESHOLD}`);
       }
       continue;
     }
@@ -847,7 +849,7 @@ function extractAdlibsFromWords(
   const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
   const floatingCount = adlibLines.filter(l => l.isFloating).length;
   const conflictCount = adlibLines.filter(l => l.geminiConflict).length;
-  console.log(`[v3.8] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
+  console.log(`[v4.0] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
   return merged;
 }
 
@@ -1168,7 +1170,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.9",
+          version: "anchor-align-v4.0-phonetic-truth",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
