@@ -287,9 +287,9 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             const total = rows.length;
             const replayPct = Math.round((rows.filter(r => r.would_replay).length / total) * 100);
             const verbiage = (() => {
-              if (total <= 10) return { label: "SIGNAL RESOLVING...", pctDisplay: `${replayPct}%`, summary: "Not enough signals yet to read the room.", tier: "resolving" as const };
-              if (total <= 50) return { label: `${total} SIGNALS DETECTED`, pctDisplay: null, summary: `${total} members have signaled.`, tier: "detected" as const };
-              return { label: `${replayPct}% UNIT CONSENSUS`, pctDisplay: `${replayPct}%`, summary: replayPct >= 50 ? "of the unit would run it back." : "are feeling this.", tier: "consensus" as const };
+              if (total <= 10) return { label: "STATUS: RESOLVING...", summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.", bigDisplay: `${replayPct}%`, tier: "resolving" as const };
+              if (total < 50) return { label: `STATUS: ${total}/50 SIGNALS`, summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.", bigDisplay: `${total}/50`, tier: "detected" as const };
+              return { label: "STATUS: CONSENSUS REACHED", summary: `${replayPct}% OF THE FMLY RESONATE WITH THIS.`, bigDisplay: `${replayPct}%`, tier: "consensus" as const };
             })();
             return (
               <div className="grid grid-cols-2 gap-2.5">
@@ -298,16 +298,10 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
                     Signal Status
                   </p>
-                  {verbiage.pctDisplay ? (
-                    <p className={`text-2xl font-bold leading-none tracking-tight ${verbiage.tier === "resolving" ? "text-muted-foreground/50" : "text-foreground"}`}>
-                      {verbiage.pctDisplay}
-                    </p>
-                  ) : (
-                    <p className="text-lg font-bold leading-none text-foreground tracking-tight">
-                      {total}
-                    </p>
-                  )}
-                  <p className={`text-[10px] leading-snug mt-0.5 ${verbiage.tier === "resolving" ? "text-muted-foreground/40" : "text-muted-foreground/50"}`}>
+                  <p className={`text-2xl font-bold leading-none tracking-tight ${verbiage.tier === "resolving" ? "text-muted-foreground/40" : "text-foreground"}`}>
+                    {verbiage.bigDisplay}
+                  </p>
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/50 leading-snug mt-0.5">
                     {verbiage.tier === "resolving" ? verbiage.label : verbiage.summary}
                   </p>
                 </div>

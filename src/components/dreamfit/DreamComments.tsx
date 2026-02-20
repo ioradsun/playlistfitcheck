@@ -121,17 +121,12 @@ function CommentItem({
 
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
-    return { label: "SIGNAL RESOLVING...", pctDisplay: `${pct}%`, summary: "Not enough signals yet to read the room.", tier: "resolving" as const };
+    return { label: "STATUS: RESOLVING...", summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.", bigDisplay: `${pct}%`, tier: "resolving" as const };
   }
-  if (total <= 50) {
-    return { label: `${total} SIGNALS DETECTED`, pctDisplay: null, summary: `${total} members have weighed in.`, tier: "detected" as const };
+  if (total < 50) {
+    return { label: `STATUS: ${total}/50 SIGNALS`, summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.", bigDisplay: `${total}/50`, tier: "detected" as const };
   }
-  return {
-    label: `${pct}% UNIT CONSENSUS`,
-    pctDisplay: `${pct}%`,
-    summary: pct >= 50 ? `${pct}% of the unit greenlighted this.` : `Only ${pct}% greenlighted this.`,
-    tier: "consensus" as const,
-  };
+  return { label: "STATUS: CONSENSUS REACHED", summary: `${pct}% OF THE FMLY RESONATE WITH THIS.`, bigDisplay: `${pct}%`, tier: "consensus" as const };
 }
 
 export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props) {
@@ -293,16 +288,10 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
                     Signal Status
                   </p>
-                  {verbiage.pctDisplay ? (
-                    <p className={`text-2xl font-bold leading-none tracking-tight ${verbiage.tier === "resolving" ? "text-muted-foreground/50" : "text-foreground"}`}>
-                      {verbiage.pctDisplay}
-                    </p>
-                  ) : (
-                    <p className="text-lg font-bold leading-none text-foreground tracking-tight">
-                      {backersCount}
-                    </p>
-                  )}
-                  <p className={`text-[10px] leading-snug mt-0.5 ${verbiage.tier === "resolving" ? "text-muted-foreground/40" : "text-muted-foreground/50"}`}>
+                  <p className={`text-2xl font-bold leading-none tracking-tight ${verbiage.tier === "resolving" ? "text-muted-foreground/40" : "text-foreground"}`}>
+                    {verbiage.bigDisplay}
+                  </p>
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/50 leading-snug mt-0.5">
                     {verbiage.tier === "resolving" ? verbiage.label : verbiage.summary}
                   </p>
                 </div>

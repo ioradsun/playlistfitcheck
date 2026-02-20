@@ -9,26 +9,24 @@ type HookRating = "missed" | "almost" | "solid" | "hit";
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: "SIGNAL RESOLVING...",
-      pctDisplay: `${pct}%`,
-      summary: "Not enough signals yet to read the room.",
+      label: "STATUS: RESOLVING...",
+      summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
+      bigDisplay: `${pct}%`,
       tier: "resolving" as const,
     };
   }
-  if (total <= 50) {
+  if (total < 50) {
     return {
-      label: `${total} SIGNALS DETECTED`,
-      pctDisplay: null,
-      summary: `${total} members have signaled.`,
+      label: `STATUS: ${total}/50 SIGNALS`,
+      summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
+      bigDisplay: `${total}/50`,
       tier: "detected" as const,
     };
   }
   return {
-    label: `${pct}% UNIT CONSENSUS`,
-    pctDisplay: `${pct}%`,
-    summary: pct >= 50
-      ? `${pct}% of the unit would run it back.`
-      : `Only ${pct}% are feeling this.`,
+    label: "STATUS: CONSENSUS REACHED",
+    summary: `${pct}% OF THE FMLY RESONATE WITH THIS.`,
+    bigDisplay: `${pct}%`,
     tier: "consensus" as const,
   };
 }
@@ -264,7 +262,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   Turn Off Signal
                 </button>
               </div>
-              <p className={`text-[11px] font-sans ${verbiage.tier === "resolving" ? "text-muted-foreground/50" : "text-foreground/70"}`}>
+              <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/50">
                 {verbiage.summary}
               </p>
             </div>
