@@ -25,7 +25,7 @@ interface FeaturesState {
   tools_enabled: Record<string, boolean>;
   tools_order: string[];
   crowdfit_mode: "reactions" | "hook_review";
-  lyric_transcribe_model: "gemini" | "whisper";
+  lyric_transcribe_model: "gemini" | "whisper" | "hybrid";
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -35,7 +35,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   tools_enabled: Object.fromEntries(ALL_TOOLS.map(t => [t.key, true])),
   tools_order: DEFAULT_ORDER,
   crowdfit_mode: "reactions",
-  lyric_transcribe_model: "gemini",
+  lyric_transcribe_model: "hybrid",
 };
 
 async function patchFeatures(patch: Partial<FeaturesState>) {
@@ -195,13 +195,17 @@ export function ToolsEditor() {
     }
   };
 
-  const setLyricModel = async (model: "gemini" | "whisper") => {
+  const setLyricModel = async (model: "gemini" | "whisper" | "hybrid") => {
     const prev = features.lyric_transcribe_model;
     setFeatures(f => ({ ...f, lyric_transcribe_model: model }));
     setSavingKey("lyric_model");
     try {
       await patchFeatures({ lyric_transcribe_model: model } as any);
-      toast.success(model === "whisper" ? "Switched to OpenAI Whisper" : "Switched to Gemini 2.5 Flash");
+      toast.success(
+        model === "hybrid" ? "Switched to Hybrid (Whisper + Gemini)"
+        : model === "whisper" ? "Switched to Whisper only"
+        : "Switched to Gemini only"
+      );
     } catch {
       setFeatures(f => ({ ...f, lyric_transcribe_model: prev }));
       toast.error("Failed to update");
@@ -333,32 +337,30 @@ export function ToolsEditor() {
           <span className="text-sm font-mono font-medium">LyricFit Transcription Engine</span>
         </div>
         <div className="divide-y divide-border">
-          <button
-            onClick={() => setLyricModel("gemini")}
-            disabled={savingKey === "lyric_model"}
-            className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
-          >
-            <div className="text-left">
-              <p className="text-sm font-medium">Gemini 2.5 Flash (multimodal)</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Full track understanding, adlib detection, hook analysis</p>
-            </div>
-            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${features.lyric_transcribe_model === "gemini" || !features.lyric_transcribe_model ? "border-primary bg-primary" : "border-border"}`}>
-              {(features.lyric_transcribe_model === "gemini" || !features.lyric_transcribe_model) && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-            </div>
-          </button>
-          <button
-            onClick={() => setLyricModel("whisper")}
-            disabled={savingKey === "lyric_model"}
-            className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
-          >
-            <div className="text-left">
-              <p className="text-sm font-medium">OpenAI Whisper</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Fast word-level transcription, no adlibs/hooks, raw segments only</p>
-            </div>
-            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${features.lyric_transcribe_model === "whisper" ? "border-primary bg-primary" : "border-border"}`}>
-              {features.lyric_transcribe_model === "whisper" && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-            </div>
-          </button>
+          {(["hybrid", "whisper", "gemini"] as const).map((model) => {
+            const labels: Record<string, { title: string; desc: string }> = {
+              hybrid: { title: "Hybrid ✦ (recommended)", desc: "Whisper timestamps + Gemini adlibs, hook & metadata — both run in parallel" },
+              whisper: { title: "Whisper only", desc: "Fast raw segments, accurate timing — no adlibs, hooks, or metadata" },
+              gemini:  { title: "Gemini only", desc: "Full multimodal analysis — slower timing accuracy than hybrid" },
+            };
+            const active = (features.lyric_transcribe_model || "hybrid") === model;
+            return (
+              <button
+                key={model}
+                onClick={() => setLyricModel(model as any)}
+                disabled={savingKey === "lyric_model"}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
+              >
+                <div className="text-left">
+                  <p className="text-sm font-medium">{labels[model].title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{labels[model].desc}</p>
+                </div>
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${active ? "border-primary bg-primary" : "border-border"}`}>
+                  {active && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
