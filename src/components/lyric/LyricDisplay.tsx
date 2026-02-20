@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, Anchor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -257,6 +257,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   // Copy state
   const [copied, setCopied] = useState<ExportFormat | null>(null);
 
+  // Auto-Anchor state — tracks which raw line indices have been manually snapped
+  const [anchoredLines, setAnchoredLines] = useState<Set<number>>(new Set());
+
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
   const activeMeta = activeVersion === "explicit" ? explicitMeta : fmlyMeta;
@@ -374,6 +377,111 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       setIsPlaying(true);
     }
   }, [isPlaying]);
+
+  // ── Auto-Anchor: snap current line to playhead ────────────────────────────
+  const snapCurrentLine = useCallback(() => {
+    if (!isPlaying) {
+      toast.error("Press S while the song is playing to sync a line");
+      return;
+    }
+    const snapTime = audioRef.current?.currentTime ?? currentTime;
+    const adjustedSnap = snapTime - timingOffset;
+
+    // Find the primary active main line index in the raw (unformatted) lines
+    const rawLines = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
+    // Find which raw line is currently highlighted
+    let targetRawIdx = -1;
+    for (let i = 0; i < rawLines.length; i++) {
+      const l = rawLines[i];
+      if (l.tag === "adlib") continue;
+      if (adjustedSnap >= l.start && adjustedSnap < l.end + HIGHLIGHT_EPSILON) {
+        targetRawIdx = i;
+      }
+    }
+    // Fallback: last passed main line
+    if (targetRawIdx === -1) {
+      for (let i = 0; i < rawLines.length; i++) {
+        if (rawLines[i].tag !== "adlib" && adjustedSnap >= rawLines[i].start) targetRawIdx = i;
+      }
+    }
+    if (targetRawIdx === -1) {
+      toast.error("No lyric line active — seek to a lyric first");
+      return;
+    }
+
+    const targetLine = rawLines[targetRawIdx];
+    const delta = Math.round((snapTime - targetLine.start) * 100) / 100;
+
+    if (Math.abs(delta) < 0.05) {
+      toast("Already in sync ✓", { description: `Line "${targetLine.text.slice(0, 30)}…" is accurate` });
+      return;
+    }
+
+    // Shift the snapped line
+    const applyShift = (lines: LyricLine[], shift: boolean): LyricLine[] => {
+      if (!shift) {
+        return lines.map((l, i) =>
+          i === targetRawIdx ? { ...l, start: Math.round((l.start + delta) * 100) / 100 } : l
+        );
+      }
+      // Ripple: shift this line + all subsequent lines
+      return lines.map((l, i) =>
+        i >= targetRawIdx
+          ? { ...l, start: Math.round((l.start + delta) * 100) / 100, end: Math.round((l.end + delta) * 100) / 100 }
+          : l
+      );
+    };
+
+    const confirmRipple = () => {
+      const updater = (lines: LyricLine[]) => applyShift(lines, true);
+      if (activeVersion === "explicit") {
+        setExplicitLines(updater);
+        setExplicitLastEdited(new Date());
+      } else {
+        setFmlyLines((prev) => (prev ? updater(prev) : prev));
+        setFmlyLastEdited(new Date());
+      }
+      setAnchoredLines((prev) => new Set([...prev, targetRawIdx]));
+      toast.dismiss("anchor-ripple");
+      toast.success(`All lines from here shifted by ${delta > 0 ? "+" : ""}${delta.toFixed(2)}s`);
+    };
+
+    // Snap only this line first; offer ripple as a toast action
+    const snapOnly = (lines: LyricLine[]) => applyShift(lines, false);
+    if (activeVersion === "explicit") {
+      setExplicitLines(snapOnly);
+      setExplicitLastEdited(new Date());
+    } else {
+      setFmlyLines((prev) => (prev ? snapOnly(prev) : prev));
+      setFmlyLastEdited(new Date());
+    }
+    setAnchoredLines((prev) => new Set([...prev, targetRawIdx]));
+
+    toast(`⚓ Line anchored (${delta > 0 ? "+" : ""}${delta.toFixed(2)}s)`, {
+      id: "anchor-ripple",
+      description: `"${targetLine.text.slice(0, 35)}${targetLine.text.length > 35 ? "…" : ""}"`,
+      action: {
+        label: "Ripple all →",
+        onClick: confirmRipple,
+      },
+      duration: 6000,
+    });
+  }, [isPlaying, currentTime, timingOffset, activeVersion, explicitLines, fmlyLines, HIGHLIGHT_EPSILON, setExplicitLastEdited, setFmlyLastEdited]);
+
+  // ── S key listener for Auto-Anchor ───────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't fire when typing in an input/textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        snapCurrentLine();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [snapCurrentLine]);
 
   // ── Clip loop: play a hook region on repeat ───────────────────────────────
   const playClip = useCallback((hook: LyricHook, hookIdx: number) => {
@@ -762,6 +870,19 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   )}
                   <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto">sync lyrics ↔ audio</span>
                 </div>
+                {/* Auto-Anchor hint */}
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <Anchor size={9} className="text-muted-foreground/40 shrink-0" />
+                  <span className="text-[10px] text-muted-foreground/40 font-mono">
+                    Press <kbd className="px-1 py-0.5 rounded bg-secondary/60 text-muted-foreground/60 text-[9px] font-mono">S</kbd> while playing to snap a line to the playhead
+                  </span>
+                  <button
+                    onClick={snapCurrentLine}
+                    className="ml-auto text-[10px] font-mono text-muted-foreground/50 hover:text-primary transition-colors border border-border/30 rounded px-1.5 py-0.5 shrink-0"
+                  >
+                    Sync Now
+                  </button>
+                </div>
               </>
             ) : (
               <div className="h-16 flex items-center gap-3">
@@ -814,6 +935,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     ? line.start >= activeHook.start && line.start < activeHook.end
                     : false;
                   const isSelected = selectionLineIndex === i;
+                  // Check if this line has been manually anchored
+                  const rawLinesForCheck = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
+                  const rawIdx = rawLinesForCheck.findIndex((rl) => rl.start === line.start && rl.tag === line.tag && rl.text === line.text);
+                  const isAnchored = rawIdx !== -1 && anchoredLines.has(rawIdx);
                   return (
                     <div
                       key={`${line.start}-${line.tag ?? "main"}-${i}`}
@@ -831,10 +956,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       }`}
                     >
                       <span
-                        className="text-[10px] font-mono text-muted-foreground/60 pt-0.5 shrink-0 w-12 cursor-pointer hover:text-primary"
+                        className="text-[10px] font-mono text-muted-foreground/60 pt-0.5 shrink-0 w-12 cursor-pointer hover:text-primary flex items-center gap-0.5"
                         onClick={() => seekTo(line.start)}
                       >
                         {formatTimeLRC(line.start)}
+                        {isAnchored && <Anchor size={7} className="text-primary/70 ml-0.5 shrink-0" />}
                       </span>
                       {isEditing ? (
                         <input
