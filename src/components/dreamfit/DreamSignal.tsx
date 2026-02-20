@@ -8,7 +8,7 @@ type SignalStep = "idle" | "compose" | "done";
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `STATUS: RESOLVING... (${total}/50)`,
+      label: `STATUS: RESOLVING ${total}/50`,
       summary: "CALIBRATING BUILD FIT.",
       tier: "resolving" as const,
     };
