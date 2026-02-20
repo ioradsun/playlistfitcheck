@@ -164,10 +164,9 @@ function ShareTab({ onClose, isUnlimited }: { onClose: () => void; isUnlimited?:
         <Button
           variant="outline"
           size="sm"
-          className="w-full gap-2 text-xs h-9 hover:border-primary/50 transition-colors"
+          className="w-full text-xs h-9 hover:border-primary/50 transition-colors"
           onClick={handleCopyLink}
         >
-          <ExternalLink size={13} />
           Copy Link
         </Button>
       </div>
@@ -184,32 +183,19 @@ function ShareTab({ onClose, isUnlimited }: { onClose: () => void; isUnlimited?:
         <Button
           variant="outline"
           size="sm"
-          className="flex-1 gap-2 text-xs h-9 hover:border-primary/50 transition-colors"
+          className="flex-1 text-xs h-9 hover:border-primary/50 transition-colors"
           onClick={handleCopyLink}
         >
-          <motion.div whileHover={{ x: 3 }} transition={{ duration: 0.2 }}>
-            <ExternalLink size={13} />
-          </motion.div>
           Copy Link
         </Button>
         <motion.div className="flex-1" whileTap={{ scale: 0.97 }}>
           <Button
             size="sm"
-            className="w-full gap-2 text-xs h-9"
+            className="w-full text-xs h-9"
             onClick={handleShared}
             disabled={shared}
           >
-            {shared ? (
-              <>
-                <Check size={13} />
-                Shared!
-              </>
-            ) : (
-              <>
-                <Share2 size={13} />
-                I Shared
-              </>
-            )}
+            {shared ? "Shared!" : "I Shared"}
           </Button>
         </motion.div>
       </div>
