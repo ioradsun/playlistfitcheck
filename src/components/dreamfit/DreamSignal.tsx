@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 
-type SignalStep = "idle" | "signaled" | "bypassed" | "done";
+type SignalStep = "idle" | "signaled" | "bypassed" | "broadcasting" | "done";
 
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
@@ -134,14 +134,16 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     if (!error) {
       setLocalBackers((c) => c + 1);
       if (signalType === "greenlight") setLocalGreenlight((c) => c + 1);
-      setStep("done");
+      setSubmitting(false);
+      setStep("broadcasting");
       onRefresh();
+      setTimeout(() => setStep("done"), 900);
+    } else {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   };
 
-  const submitLabel = contextNote.length > 0 ? "Submit Signal" : "Send Signal";
+  
 
   // Shared signals + comments footer line
   const signalsLabel = localBackers === 1 ? "1 signal" : `${localBackers} signals`;
@@ -183,6 +185,19 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     );
   }
 
+  // ── Broadcasting flash state ──────────────────────────────────
+  if (step === "broadcasting") {
+    return (
+      <div>
+        <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+        <div className="px-3 py-2">
+          <span className="font-mono text-[11px] tracking-widest text-muted-foreground/60">SIGNALED</span>
+        </div>
+        <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+      </div>
+    );
+  }
+
   // ── Active (feedback) state ──────────────────────────────────
   if (step === "signaled" || step === "bypassed") {
     return (
@@ -215,9 +230,9 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md disabled:opacity-40 transition-opacity"
+                className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-3 py-1.5 rounded-md disabled:opacity-80 transition-opacity"
               >
-                {submitting ? "Sending..." : submitLabel}
+                {submitting ? "BROADCASTING..." : "BROADCAST"}
               </button>
             </div>
           </div>
