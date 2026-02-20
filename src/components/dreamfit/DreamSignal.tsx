@@ -3,12 +3,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 
-type SignalStep = "idle" | "greenlit" | "shelved" | "done";
+type SignalStep = "idle" | "signaled" | "bypassed" | "done";
 
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: "STATUS: RESOLVING...",
+      label: `STATUS: RESOLVING... (${total}/50 SIGNALS)`,
       summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
       bigDisplay: `${pct}%`,
       tier: "resolving" as const,
@@ -48,7 +48,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
   const [submitting, setSubmitting] = useState(false);
   const [localBackers, setLocalBackers] = useState(backersCount);
   const [localGreenlight, setLocalGreenlight] = useState(greenlightCount);
-  const [chosenSignal, setChosenSignal] = useState<"greenlight" | "shelve" | null>(null);
+  const [chosenSignal, setChosenSignal] = useState<"signal" | "bypass" | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Check if this user/session has already voted
@@ -62,7 +62,9 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       }
       const { data } = await query.maybeSingle();
       if (data) {
-        setChosenSignal(data.signal_type as "greenlight" | "shelve");
+        // Map DB values to new UI values
+        const mapped = data.signal_type === "greenlight" ? "signal" : "bypass";
+        setChosenSignal(mapped as "signal" | "bypass");
         setStep("done");
       }
     };
@@ -75,9 +77,9 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     setLocalGreenlight(greenlightCount);
   }, [backersCount, greenlightCount]);
 
-  // Auto-focus textarea when step changes to greenlit/shelved
+  // Auto-focus textarea when step changes to signaled/bypassed
   useEffect(() => {
-    if ((step === "greenlit" || step === "shelved") && textareaRef.current) {
+    if ((step === "signaled" || step === "bypassed") && textareaRef.current) {
       textareaRef.current.focus();
     }
   }, [step]);
@@ -85,8 +87,8 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
   const demandStrength =
     localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
 
-  const handleVoteClick = (type: "greenlight" | "shelve") => {
-    setStep(type === "greenlight" ? "greenlit" : "shelved");
+  const handleVoteClick = (type: "signal" | "bypass") => {
+    setStep(type === "signal" ? "signaled" : "bypassed");
     setChosenSignal(type);
   };
 
@@ -102,7 +104,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     else query = (query as any).eq("session_id", sessionId).is("user_id", null);
     await query;
     setLocalBackers(c => Math.max(c - 1, 0));
-    if (chosenSignal === "greenlight") setLocalGreenlight(c => Math.max(c - 1, 0));
+    if (chosenSignal === "signal") setLocalGreenlight(c => Math.max(c - 1, 0));
     setChosenSignal(null);
     setStep("idle");
     onRefresh();
@@ -112,7 +114,8 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     if (submitting) return;
     setSubmitting(true);
 
-    const signalType = step === "greenlit" ? "greenlight" : "shelve";
+    // Map UI values back to DB values (greenlight/shelve)
+    const signalType = step === "signaled" ? "greenlight" : "shelve";
 
     const payload: Record<string, any> = {
       dream_id: dreamId,
@@ -180,7 +183,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
   }
 
   // ── Active (feedback) state ──────────────────────────────────
-  if (step === "greenlit" || step === "shelved") {
+  if (step === "signaled" || step === "bypassed") {
     return (
       <div>
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
@@ -193,7 +196,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
                 onChange={(e) => {
                   if (e.target.value.length <= 280) setContextNote(e.target.value);
                 }}
-                placeholder={step === "shelved" ? "Have a better idea?" : "Why does the FMLY need this?"}
+                placeholder={step === "bypassed" ? "Have a better idea?" : "Why does the FMLY need this?"}
                 rows={2}
                 className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
               />
@@ -228,7 +231,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     <div>
       <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
 
-      {/* Demand Strength row — signals count is tappable to open comments */}
+      {/* Signal Status row — signals count is tappable to open comments */}
       <div className="px-3 py-1.5">
         <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
           {localBackers === 0 ? (
@@ -253,19 +256,19 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
 
       <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
 
-      {/* Greenlight / Shelve buttons */}
+      {/* SIGNAL / BYPASS buttons */}
       <div className="flex gap-2 px-3 py-2.5">
         <button
-          onClick={() => handleVoteClick("greenlight")}
+          onClick={() => handleVoteClick("signal")}
           className="flex-1 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[12px] font-medium text-muted-foreground transition-colors"
         >
-          Greenlight
+          Signal
         </button>
         <button
-          onClick={() => handleVoteClick("shelve")}
+          onClick={() => handleVoteClick("bypass")}
           className="flex-1 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[12px] font-medium text-muted-foreground transition-colors"
         >
-          Shelve
+          Bypass
         </button>
       </div>
     </div>

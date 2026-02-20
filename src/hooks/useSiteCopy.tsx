@@ -36,7 +36,7 @@ const DEFAULT_COPY: SiteCopy = {
     growth_quotas: { guest: 5, limited: 10 },
   },
   signals: {
-    resolving_label: "STATUS: RESOLVING...",
+    resolving_label: "STATUS: RESOLVING... ({n}/50 SIGNALS)",
     resolving_summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
     detected_label: "STATUS: {n}/50 SIGNALS",
     detected_summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
