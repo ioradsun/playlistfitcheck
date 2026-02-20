@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Loader2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 interface Reply {
@@ -284,27 +285,48 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             </div>
           </div>
 
-          {/* Stat cards */}
+          {/* Signal Status card */}
           {!loading && rows.length > 0 && (() => {
             const total = rows.length;
-            const replayCount = rows.filter(r => r.would_replay).length;
-            const replayPct = Math.round((replayCount / total) * 100);
-            const statusLine = total < 50
-              ? `CALIBRATING REPLAY FIT · ${total}/50 SIGNALS NEEDED`
-              : `CONSENSUS REACHED · ${replayPct}% FMLY REPLAY FIT`;
-            const bigDisplay = `${replayPct}%`;
+            const signals = rows.filter(r => r.would_replay).length;
+            const isResolving = signals < 50;
+            const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
+
+            // Metadata fragments
+            const signalsFrag = `${signals}/50 SIGNALS`;
+            const resonanceFrag = total > 0 ? `${signals}/${total} RESONANCE` : null;
+
+            const prefixLine = isResolving
+              ? `REPLAY FIT · ${signalsFrag}`
+              : `CONSENSUS REACHED · ${pct}% REPLAY FIT`;
+
             return (
-              <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
-                  Signal Status
-                </p>
-                <p className="text-2xl font-bold leading-none tracking-tight text-foreground">
-                  {bigDisplay}
-                </p>
-                <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                  {statusLine}
-                </p>
-              </div>
+              <TooltipProvider delayDuration={350}>
+                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none font-mono">
+                    Signal Status
+                  </p>
+                  <p className={`text-2xl font-bold leading-none tracking-tight text-foreground ${isResolving ? "animate-signal-pulse" : ""}`}>
+                    {isResolving ? "CALIBRATING" : `${pct}%`}
+                  </p>
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
+                    {prefixLine}
+                    {resonanceFrag && (
+                      <>
+                        {" · "}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-default underline-offset-2 decoration-dotted hover:underline">{resonanceFrag}</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            {signals} of {total} listeners signaled this track.
+                          </TooltipContent>
+                        </Tooltip>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </TooltipProvider>
             );
           })()}
 

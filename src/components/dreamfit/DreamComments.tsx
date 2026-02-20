@@ -9,6 +9,7 @@ import type { DreamComment, Dream } from "./types";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 const QUICK_EMOJIS = ["🔥", "❤️", "🙌", "💯", "😍", "🚀", "👏", "✨"];
@@ -120,14 +121,9 @@ function CommentItem({
   );
 }
 
-function getSignalVerbiage(total: number, pct: number) {
-  const statusLine = total < 50
-    ? `CALIBRATING BUILD FIT · ${total}/50 SIGNALS NEEDED`
-    : `CONSENSUS REACHED · ${pct}% FMLY BUILD FIT`;
-  return {
-    statusLine,
-    bigDisplay: `${pct}%`,
-  };
+// getSignalVerbiage kept for legacy callers but the card now renders inline
+function getSignalVerbiage(_total: number, _pct: number) {
+  return {};
 }
 
 export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props) {
@@ -283,19 +279,42 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
 
           {/* Stat cards — Signal Status + Signals */}
           {backersCount > 0 && (() => {
-            const verbiage = getSignalVerbiage(backersCount, demandPct);
+            const signals = greenlightCount;
+            const total = backersCount;
+            const isResolving = signals < 50;
+            const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
+            const signalsFrag = `${signals}/50 SIGNALS`;
+            const resonanceFrag = total > 0 ? `${signals}/${total} RESONANCE` : null;
+            const prefixLine = isResolving
+              ? `BUILD FIT · ${signalsFrag}`
+              : `CONSENSUS REACHED · ${pct}% BUILD FIT`;
             return (
-              <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
-                  Signal Status
-                </p>
-                <p className="text-2xl font-bold leading-none tracking-tight text-foreground">
-                  {verbiage.bigDisplay}
-                </p>
-                <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                  {verbiage.statusLine}
-                </p>
-              </div>
+              <TooltipProvider delayDuration={350}>
+                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none font-mono">
+                    Signal Status
+                  </p>
+                  <p className={`text-2xl font-bold leading-none tracking-tight text-foreground ${isResolving ? "animate-signal-pulse" : ""}`}>
+                    {isResolving ? "CALIBRATING" : `${pct}%`}
+                  </p>
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
+                    {prefixLine}
+                    {resonanceFrag && (
+                      <>
+                        {" · "}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-default underline-offset-2 decoration-dotted hover:underline">{resonanceFrag}</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            {signals} of {total} members backed this feature.
+                          </TooltipContent>
+                        </Tooltip>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </TooltipProvider>
             );
           })()}
         </div>
