@@ -242,15 +242,17 @@ ${whisperTranscript}
 
 TASK: Audit the audio and identify every Adlib (background vocal, harmony, or interjection) that is NOT part of the provided Main Transcript.
 
-1. THE "QA CORRECTION" RULE:
-- If you hear a word in the main vocal that contradicts the provided Transcript (e.g., the transcript says "range" but the artist clearly sings "rain"), identify this as a CORRECTION.
+1. THE PHONETIC QA RULE ("RAIN" FIX):
+- If the artist sings a word that contradicts the provided Transcript (e.g., the transcript says "range" but the artist clearly sings "rain"), identify this as a CORRECTION.
+- Use lyrical context (e.g., nearby words like "umbrella", "storm", "pouring") to confirm the correction is accurate before tagging it.
 - Output these as adlib objects with layer: "correction".
-- Corrections are the only exception where the text you output overlaps with a transcript word — but the TEXT IS DIFFERENT.
+- Corrections are the ONLY exception where the text you output overlaps with a transcript word — but the TEXT IS DIFFERENT.
 
-2. THE "LAYER DENSITY" RULE:
-- Identify all background interjections, harmonies, and "hype" vocals (e.g., "Yeah!", "Let's go!").
+2. TOTAL DURATION SCAN:
+- INTRO ZONE (0:00–0:17): Capture ALL dialogue, hums, count-ins, and vocal textures BEFORE the first main lyric starts. These are critical scene-setters.
+- MAIN BODY: Identify all background interjections, harmonies, and "hype" vocals (e.g., "Yeah!", "Let's go!").
+- OUTRO ZONE (2:45–End): Pay extreme attention to the final 15 seconds to capture all overlapping echoes and textures.
 - FULL-TRACK SCAN: You must audit every second from 0:00 to the final millisecond. Do not stop early.
-- OUTRO FOCUS: Pay extreme attention to the final 60 seconds (specifically the 2:45 to 3:00 window) to capture all overlapping textures.
 
 3. IDENTITY FILTER:
 - Do NOT transcribe the lead vocal as an adlib. If the text AND time match the main transcript exactly (within ±50ms), ignore it.
@@ -267,7 +269,7 @@ PRECISION:
 - Timestamps: seconds with 3-decimal precision (e.g., 169.452). NOT MM:SS format.
 - Confidence floor: 0.95 — only output if you are 95% certain it is a secondary vocal layer or correction.
 - Separate EVERY instance: Even if the same text appears 10 times, each occurrence is a unique event with its own timestamp.
-- OUTPUT LIMIT: Return a MAXIMUM of 30 adlibs. Prioritize the most audible and distinct events. This limit ensures valid, complete JSON output.
+- OUTPUT LIMIT: Return a MAXIMUM of 30 adlibs. Prioritize corrections first, then most audible/distinct events. This limit ensures valid, complete JSON output.
 - JSON ROBUSTNESS: Every array element except the last MUST be followed by a comma. The final element must NOT have a trailing comma. Close the array with ] and the object with }.
 
 OUTPUT — ONLY valid JSON, no markdown, no explanation:
@@ -560,15 +562,30 @@ function extractAdlibsFromWords(
     const adlibWordTokens = normAdlibText.split(" ").filter(Boolean);
     if (adlibWordTokens.length === 0) continue;
 
-    // ── Rule 2: Segment-Wide Phonetic QA Swap (v3.4 — "Rain/Range" Fix) ───
-    // PURE PHONETIC SELECTION: time-proximity is completely removed from the
-    // correction path. We score EVERY word in EVERY segment across the ENTIRE
-    // track by phoneticSimilarity and swap only the best match (must exceed 0.80).
-    // This prevents "rain @ 20.5s" from replacing "I @ 16.98s" simply because
-    // "I" is the nearest word in time — it will correctly find "range" instead.
+    // ── Rule 2: Forward-Looking Phonetic QA Swap (v3.6 — "Rain/Range" Fix) ─
+    // When a correction is detected, search the parent segment AND the
+    // immediately following segment (if gap < 3.0s) to bridge timestamp drift.
+    // Pure phonetic scoring — no time proximity used.
     if (adlib.isCorrection || adlib.layer === "correction") {
-      // v3.4: Search ALL main segments (no time window) — pure phonetic targeting
-      const candidateSegs = mainSegments;
+      // Identify the parent segment (closest main segment by timestamp)
+      let parentIdx = 0;
+      let minDist = Infinity;
+      for (let si = 0; si < mainSegments.length; si++) {
+        const s = mainSegments[si];
+        const dist = Math.min(
+          Math.abs(correctedStart - s.start),
+          Math.abs(correctedStart - s.end)
+        );
+        if (dist < minDist) { minDist = dist; parentIdx = si; }
+      }
+
+      // Build candidate set: parent + next segment if gap < 3.0s (v3.6 forward-look)
+      const candidateSegs = [mainSegments[parentIdx]].filter(Boolean);
+      const nextSeg = mainSegments[parentIdx + 1];
+      if (nextSeg) {
+        const gap = nextSeg.start - (mainSegments[parentIdx]?.end ?? 0);
+        if (gap < 3.0) candidateSegs.push(nextSeg);
+      }
 
       let bestPhoneticWord: WhisperWord | null = null;
       let bestPhoneticScore = 0;
@@ -586,7 +603,22 @@ function extractAdlibsFromWords(
         }
       }
 
-      const PHONETIC_THRESHOLD = 0.50; // v3.5: calibrated to "rain"→"range" score (~0.68 with prefix bonus)
+      // If forward-look didn't find a strong match, fall back to ALL segments
+      if (bestPhoneticScore < 0.50) {
+        for (const seg of mainSegments) {
+          const segWords = words.filter(w => w.start >= seg.start - 0.1 && w.end <= seg.end + 0.1);
+          for (const w of segWords) {
+            const score = phoneticSimilarity(normalize(w.word), normalize(adlib.text));
+            if (score > bestPhoneticScore) {
+              bestPhoneticScore = score;
+              bestPhoneticWord = w;
+              bestSeg = seg;
+            }
+          }
+        }
+      }
+
+      const PHONETIC_THRESHOLD = 0.50; // calibrated to "rain"→"range" score (~0.68 with prefix bonus)
       if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
         const oldWord = bestPhoneticWord.word.trim();
         // Only apply if the text is genuinely different
@@ -595,7 +627,7 @@ function extractAdlibsFromWords(
           bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
           bestSeg.lineRef.geminiConflict = oldWord;
           correctionCount++;
-          console.log(`[qa-swap] Phonetic swap "${oldWord}" → "${adlib.text}" (phoneticScore=${bestPhoneticScore.toFixed(2)}, segment="${bestSeg.lineRef.text.slice(0, 40)}")`);
+          console.log(`[qa-swap] v3.6 phonetic swap "${oldWord}" → "${adlib.text}" (score=${bestPhoneticScore.toFixed(2)}, seg="${bestSeg.lineRef.text.slice(0, 40)}")`);
         } else {
           console.log(`[qa-swap] Skipped correction "${adlib.text}" — too similar to "${oldWord}" (${similarity.toFixed(2)})`);
         }
@@ -605,10 +637,29 @@ function extractAdlibsFromWords(
       continue; // corrections always applied to main lines, never promoted as adlib overlay
     }
 
-    // ── Rule 1: Identity Pruning (±150ms — Anti-Ghosting, v3.4) ──────────
+    // ── Rule 3: Intro Zone Restoration (v3.6) ────────────────────────────
+    // Adlibs before the first Whisper word (dialogue, hums, count-ins) must
+    // NOT be dropped. Render them as standalone floating chips anchored to
+    // Gemini's raw timestamps (no Whisper snap needed — nothing to snap to).
+    const firstWordStart = words.length > 0 ? words[0].start : 0;
+    if (correctedStart < firstWordStart) {
+      adlibLines.push({
+        start: correctedStart,
+        end: correctedEnd,
+        text: adlib.text,
+        tag: "adlib",
+        isFloating: true,
+        confidence: adlib.confidence,
+        isCorrection: false,
+      });
+      console.log(`[intro-zone] Preserving pre-lyric "${adlib.text}" @ ${correctedStart.toFixed(3)}s as floating chip`);
+      continue;
+    }
+
+    // ── Rule 1: Identity Pruning (±150ms — Anti-Ghosting, v3.6) ─────────────
     // Two paths to catch a ghost:
-    //  a) text AND time match within 150ms (widened from 100ms per v3.4 spec)
-    //  b) exact text equality within 150ms
+    //  a) text AND time match within 150ms
+    //  b) exact normalized text equality within 150ms
     const IDENTITY_WINDOW_MS = 0.150;
     const normAdlibNorm = normalize(adlib.text);
     const identityMatch = words.find(w => {
@@ -1038,7 +1089,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.5b",
+          version: "production-master-v3.6",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
