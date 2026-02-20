@@ -780,43 +780,70 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               ⚙ Debug
             </button>
             {showDebug && (
-              <div className="absolute right-0 top-full mt-2 w-[420px] z-50 glass-card rounded-xl p-4 border border-border/40 shadow-lg">
+              <div className="absolute right-0 top-full mt-2 w-[500px] z-50 glass-card rounded-xl p-4 border border-border/40 shadow-lg max-h-[80vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-widest">Gemini Debug</span>
+                  <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-widest">AI Debug Panel</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono text-muted-foreground/40">
-                      {debugData.model} · {Math.round(debugData.inputBytes / 1024)}KB · {debugData.outputLines} lines
+                      {debugData.model} · {Math.round((debugData.inputBytes || 0) / 1024)}KB
                     </span>
                     <button
                       onClick={() => {
-                        const full = JSON.stringify(debugData, null, 2);
-                        navigator.clipboard.writeText(full);
+                        navigator.clipboard.writeText(JSON.stringify(debugData, null, 2));
                         toast.success("Debug data copied");
                       }}
                       className="text-[10px] font-mono text-muted-foreground/50 hover:text-foreground border border-border/30 rounded px-1.5 py-0.5 transition-colors"
                     >
-                      Copy
+                      Copy all
                     </button>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider mb-1">Raw Lines (pre-sanitize)</p>
-                    <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap">
-                      {JSON.stringify(debugData.rawLines, null, 2)}
-                    </pre>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider mb-1">Raw Gemini Response</p>
-                    <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto max-h-60 whitespace-pre-wrap">
-                      {debugData.rawResponse}
-                    </pre>
-                  </div>
+
+                {/* Whisper output */}
+                <div className="mb-4">
+                  <p className="text-[10px] font-mono text-primary/80 uppercase tracking-wider mb-1">
+                    🎙 Whisper — {debugData.whisperSegments} segments
+                  </p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap">
+                    {debugData.whisperRawText || "(no raw text)"}
+                  </pre>
+                </div>
+
+                {/* AI metadata */}
+                <div className="mb-4">
+                  <p className="text-[10px] font-mono text-accent-foreground/80 uppercase tracking-wider mb-1">
+                    🤖 {debugData.model?.includes("openai") ? "GPT" : "Gemini"} — Metadata
+                  </p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto whitespace-pre-wrap">
+                    {JSON.stringify({ title: debugData.title, artist: debugData.artist, ...(debugData.geminiMetadata || {}) }, null, 2)}
+                  </pre>
+                </div>
+
+                {/* Hook detection */}
+                <div className="mb-4">
+                  <p className="text-[10px] font-mono text-yellow-600/80 uppercase tracking-wider mb-1">
+                    🔥 Hook Detection
+                  </p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto whitespace-pre-wrap">
+                    {debugData.geminiHook ? JSON.stringify(debugData.geminiHook, null, 2) : "No hook detected"}
+                  </pre>
+                </div>
+
+                {/* Adlibs */}
+                <div className="mb-2">
+                  <p className="text-[10px] font-mono text-green-700/80 uppercase tracking-wider mb-1">
+                    🎤 Adlibs Tagged — {(debugData.geminiAdlibs || []).length} matched
+                  </p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto max-h-48 whitespace-pre-wrap">
+                    {JSON.stringify(debugData.geminiAdlibs, null, 2)}
+                  </pre>
                 </div>
               </div>
             )}
           </div>
         )}
+
+
       </div>
 
       {/* Metadata strip */}
