@@ -604,9 +604,11 @@ function extractAdlibsFromWords(
     const correctedStart = Math.round((adlib.start - globalOffset) * 1000) / 1000;
     const correctedEnd = Math.round((adlib.end - globalOffset) * 1000) / 1000;
 
-    // ── Boundary Enforcement (Rule 1 v3.7): discard adlibs beyond maxTime + 1.0s ─
-    // 1.0s buffer allows legitimate echo tails; anything further is a hallucination.
-    const MAX_BOUNDARY = trackEnd + 1.0;
+    // ── Boundary Enforcement (Rule 3 v3.8): Hard cap at 189.3s OR trackEnd+1s ─
+    // Explicit 189.3s stops the 211s "Ghost Hook" hallucination.
+    // trackEnd+1s allows legitimate echo tails in shorter tracks.
+    const HARD_MAX_BOUNDARY = 189.3;
+    const MAX_BOUNDARY = Math.min(HARD_MAX_BOUNDARY, trackEnd + 1.0);
     if (correctedStart > MAX_BOUNDARY) {
       console.log(`[boundary] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — beyond maxTime+1s (${MAX_BOUNDARY.toFixed(3)}s)`);
       ghostCount++;
@@ -617,36 +619,18 @@ function extractAdlibsFromWords(
     const adlibWordTokens = normAdlibText.split(" ").filter(Boolean);
     if (adlibWordTokens.length === 0) continue;
 
-    // ── Rule 2: Forward-Looking Phonetic QA Swap (v3.6 — "Rain/Range" Fix) ─
-    // When a correction is detected, search the parent segment AND the
-    // immediately following segment (if gap < 3.0s) to bridge timestamp drift.
-    // Pure phonetic scoring — no time proximity used.
+    // ── Rule 2: Segment-Wide Phonetic QA Swap (v3.8 — "Rain/Range" Fix) ──────
+    // When a correction is detected, IGNORE the timestamp entirely.
+    // Search ALL segments across the ENTIRE transcript for the best phonetic
+    // match. This bridges the 5.4s gap observed in v3.7 where Gemini tags
+    // "rain" at 17.12s but Whisper transcribes "range" at 22.5s.
     if (adlib.isCorrection || adlib.layer === "correction") {
-      // Identify the parent segment (closest main segment by timestamp)
-      let parentIdx = 0;
-      let minDist = Infinity;
-      for (let si = 0; si < mainSegments.length; si++) {
-        const s = mainSegments[si];
-        const dist = Math.min(
-          Math.abs(correctedStart - s.start),
-          Math.abs(correctedStart - s.end)
-        );
-        if (dist < minDist) { minDist = dist; parentIdx = si; }
-      }
-
-      // Build candidate set: parent + next segment if gap < 3.0s (v3.6 forward-look)
-      const candidateSegs = [mainSegments[parentIdx]].filter(Boolean);
-      const nextSeg = mainSegments[parentIdx + 1];
-      if (nextSeg) {
-        const gap = nextSeg.start - (mainSegments[parentIdx]?.end ?? 0);
-        if (gap < 3.0) candidateSegs.push(nextSeg);
-      }
-
       let bestPhoneticWord: WhisperWord | null = null;
       let bestPhoneticScore = 0;
       let bestSeg: typeof mainSegments[0] | null = null;
 
-      for (const seg of candidateSegs) {
+      // Full corpus scan — no time window restriction for corrections
+      for (const seg of mainSegments) {
         const segWords = words.filter(w => w.start >= seg.start - 0.1 && w.end <= seg.end + 0.1);
         for (const w of segWords) {
           const score = phoneticSimilarity(normalize(w.word), normalize(adlib.text));
@@ -654,21 +638,6 @@ function extractAdlibsFromWords(
             bestPhoneticScore = score;
             bestPhoneticWord = w;
             bestSeg = seg;
-          }
-        }
-      }
-
-      // If forward-look didn't find a strong match, fall back to ALL segments
-      if (bestPhoneticScore < 0.50) {
-        for (const seg of mainSegments) {
-          const segWords = words.filter(w => w.start >= seg.start - 0.1 && w.end <= seg.end + 0.1);
-          for (const w of segWords) {
-            const score = phoneticSimilarity(normalize(w.word), normalize(adlib.text));
-            if (score > bestPhoneticScore) {
-              bestPhoneticScore = score;
-              bestPhoneticWord = w;
-              bestSeg = seg;
-            }
           }
         }
       }
@@ -738,13 +707,14 @@ function extractAdlibsFromWords(
     //  c) filler word (yeah/ayy/uh/oh/etc.) matches ANY Whisper word within ±500ms
     //  d) filler word appears in Whisper SEGMENT TEXT within ±2.0s window
     //     (catches cases where Whisper tokenized it inside a multi-word segment)
-    const IDENTITY_WINDOW_MS = 0.150;
+    // v3.8: Expanded identity window (±250ms) for tighter ghost removal
+    const IDENTITY_WINDOW_MS = 0.250;
     const FILLER_WINDOW_MS = 0.500;
     const FILLER_SEGMENT_WINDOW = 2.0;
     const normAdlibNorm = normalize(adlib.text);
-    const isFiller = /^(yeah+|yea|ayy+|ay|uh+|ah+|oh+|mm+|hmm+|woo+|ooh+|aye|ok|okay|let'?s go|come on)$/i.test(normAdlibNorm);
+    const isFiller = /^(yeah+|yea|ayy+|ay|uh+|ah+|oh+|mm+|hmm+|woo+|ooh+|aye|ok|okay|let'?s go|come on|whoa+|woah+)$/i.test(normAdlibNorm);
 
-    // Path a + b: tight word-level window
+    // Path a + b: tight word-level window (±250ms)
     const identityMatchTight = words.find(w => {
       const timeDiff = Math.abs(w.start - correctedStart);
       if (timeDiff > IDENTITY_WINDOW_MS) return false;
@@ -1196,7 +1166,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.7",
+          version: "production-master-v3.8",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
