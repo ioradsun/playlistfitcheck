@@ -130,7 +130,7 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── v5.8: Universal Acoustic Orchestrator Prompt (Acoustic Guard & End-Cap) ──
+// ── v5.9: Universal Acoustic Orchestrator Prompt (Production Master) ──
 function buildOrchestratorPrompt(
   whisperWords: WhisperWord[],
   whisperSegments: Array<{ start: number; end: number; text: string }>,
@@ -147,7 +147,7 @@ function buildOrchestratorPrompt(
   const anchorTs2 = anchorWord2?.start.toFixed(3) ?? "0.000";
   const anchorW2 = anchorWord2?.word ?? "unknown";
 
-  return `ROLE: Universal Acoustic Orchestrator (v5.8 Acoustic Guard & End-Cap)
+  return `ROLE: Universal Acoustic Orchestrator (v5.9 Production Master)
 
 You are simultaneously hearing the raw audio AND receiving the Whisper timing grid. Produce a complete, production-ready merged_lines array covering the ENTIRE track from first sound to last.
 
@@ -162,38 +162,42 @@ ${segmentsJson}
 
 TRACK_END: ${trackEnd.toFixed(3)}s
 
-=== PATH 1: ABSOLUTE SILENCE GUARD (Critical Timing Fix) ===
-Synchronize the intro by calculating BACKWARD from the first Whisper anchor.
-THE SILENCE GUARD IS LAW: The first intro line MUST NOT start at 0.000s.
+=== RULE 1: END-TO-END MANDATE (Critical Anti-Cutoff) ===
+COMPLETENESS: You MUST return a line for every acoustic event from start of audio until the very last echo (approx. ${trackEnd.toFixed(3)}s).
 
-TEMPORAL NORTH STAR: "${anchorW}" at ${anchorTs}s — immovable Whisper master clock.
-SECONDARY REFERENCE:  "${anchorW2}" at ${anchorTs2}s — cadence verification.
+BEYOND THE SKELETON: Even if WHISPER_SEGMENTS ends early (e.g., at 181s), you MUST continue transcribing the remaining audio as adlib lines until the file truly ends. Listen directly to the audio for any vocals after the Whisper skeleton ends.
 
-SILENCE DETECTION — Zero-Fill Prevention Gate:
+A complete Outro is REQUIRED. Missing the final 10-30s of the track is a critical failure.
+
+TOKEN BUDGET AWARENESS: To ensure the entire track fits within the output limit:
+  - Keep geminiConflict to ONLY the single mismatched word (e.g., "range"), never the whole sentence.
+  - Use concise text — do not pad or elaborate.
+  - Prioritize completeness over annotation density.
+
+=== RULE 2: ABSOLUTE ONSET GUARD (Fix Chips) ===
+THE ANCHOR: Use the first Whisper word ("${anchorW}" at ${anchorTs}s) to calibrate your internal clock.
+
+THE SILENCE RULE: Do NOT start at 0.000s. Detect the exact millisecond onset of the first spoken/sung word.
   STEP 1: Scan from 0.000s. Find the first frame where vocal amplitude rises above the noise floor.
   STEP 2: That timestamp is T_first_onset. It is NEVER 0.000s unless sound begins at the file's first sample.
   STEP 3: If the first 3+ seconds are silent or music-only, T_first_onset >= 3.000s.
-  ENFORCEMENT: First intro line start = T_first_onset exactly. Not 0.000s, not 0.500s, not 1.000s.
 
-BACKWARD PROJECTION — For each intro phrase not in WHISPER_SEGMENTS:
+PRECISION: Use 3-decimal precision for ALL timestamps (e.g., 3.842s). NEVER rounded values like 0.0, 2.5, 5.0.
+  - Evenly-spaced timestamps (0.0, 2.14, 4.28…) = hallucinated arithmetic sequence. REJECT and re-detect.
+  - Real speech cadence is IRREGULAR. If your timestamps look like a rhythm grid, you guessed.
+
+BACKWARD PROJECTION — For intro phrases not in WHISPER_SEGMENTS:
   1. Detect acoustic onset of "${anchorW}" in audio => T_acoustic_anchor
   2. Detect acoustic onset of intro phrase i => T_acoustic_i
   3. relative_gap_i = T_acoustic_anchor - T_acoustic_i
   4. t_final_i = ${anchorTs} - relative_gap_i
 
-  Example: anchor heard at 17.2s, first phrase at 3.35s => gap=13.85s => t_final=${(parseFloat(anchorTs) - 13.85).toFixed(3)}s
-
-PRECISION MANDATE:
-  - 3-decimal precision always (e.g., 3.842s). NEVER rounded values like 0.0, 2.5, 5.0.
-  - Evenly-spaced timestamps (0.0, 2.14, 4.28…) = hallucinated arithmetic sequence. REJECT and re-detect.
-  - Real speech cadence is IRREGULAR. If your timestamps look like a rhythm grid, you guessed.
-
-VALIDATION: Project "${anchorW2}" via backward formula. Result must equal ${anchorTs2}s ±0.050s. Recalculate if not.
-CONTINUITY: Last intro line's end must be <= ${anchorTs}s (no overlap into Whisper main lines).
+VALIDATION: Project "${anchorW2}" via backward formula. Result must equal ${anchorTs2}s ±0.050s.
+CONTINUITY: Last intro line's end must be <= ${anchorTs}s.
 SCOPE: Backward projection applies ONLY to isFloating lines. WHISPER_SEGMENTS lines keep their exact timestamps.
 
-=== PATH 2: SIGNAL HIERARCHY — MONOPOLY CONSTRAINT ===
-STRICT BINARY RULE: Only ONE vocal can be tag: "main" at any given moment.
+=== RULE 3: HIERARCHICAL EFFICIENCY (Token Fix) ===
+COLLISION RULE: Only ONE line can be tag: "main" at any given moment.
 
 LEAD SIGNAL => tag: "main":
   - Spoken intro dialogue (sole voice in the mix = the lead).
@@ -208,20 +212,12 @@ THE STACKING CONSTRAINT:
   If two vocals occur simultaneously, one MUST be main and one MUST be adlib.
   It is FORBIDDEN to assign tag: "main" to two simultaneous vocal lines.
   Determine the lead by prominence: louder, more continuous, melodically central = main.
-  NOTE: Enforcing this rule reduces JSON token usage and prevents response truncation.
+  NOTE: Enforcing this rule reduces JSON token usage by ~40% and prevents response truncation.
 
 FLOATING STATUS: Any line you restore that was NOT in WHISPER_SEGMENTS => isFloating: true.
 
-=== PATH 3: END-TO-END MANDATE + SURGICAL QA ===
-
-END-TO-END COMPLETENESS (Critical Anti-Cutoff Rule):
-  - You MUST process and output lines for the ENTIRE audio track until the last acoustic event.
-  - The track ends at approximately ${trackEnd.toFixed(3)}s. Do NOT stop at 180s or any earlier point.
-  - If Whisper truncated before the end (rawText ends mid-sentence), continue using your audio perception alone.
-  - After Whisper data ends: listen directly, tag main/adlib by prominence, use 3-decimal precision.
-  - A complete Outro is required. Missing the final 10-30s is a failure.
-
-SURGICAL QA — Conflict Resolution:
+=== RULE 4: SURGICAL QA ===
+CONFLICT RESOLUTION:
   - Audit every WHISPER_SEGMENTS main line against the raw audio for phonetic/contextual errors.
   - Correct the text but keep Whisper's EXACT start/end timestamps. Never shift them.
   - isCorrection: true on corrected lines.
@@ -239,7 +235,7 @@ DENSITY PRESERVATION — Outro/Bridge Overlaps:
 
 === OUTPUT RULES ===
 - ALL lines: WHISPER_SEGMENTS main lines + all restored floating lines + all legitimate adlibs.
-- Maximum 80 total lines (prioritize completeness; trim redundant adlibs if approaching limit).
+- Maximum 80 total lines (prioritize completeness over adlib density; trim redundant adlibs if approaching limit).
 - ALL timestamps: numeric seconds, 3-decimal precision. NEVER MM:SS format.
 - Hard boundary: discard any line with start > ${Math.min(189.3, trackEnd + 1.0).toFixed(3)}s.
 - Sort ascending by start time.
@@ -411,9 +407,9 @@ async function runGeminiOrchestrator(
 ): Promise<{ lines: LyricLine[]; qaCorrections: number; ghostsRemoved: number; rawContent: string }> {
   const prompt = buildOrchestratorPrompt(whisperWords, whisperSegments, whisperRawText, trackEnd);
 
-  console.log(`[orchestrator] v5.8 sending ${whisperWords.length} words, ${whisperSegments.length} segments to Gemini (acoustic-guard anchor: "${whisperWords[0]?.word ?? "none"}" @ ${whisperWords[0]?.start.toFixed(3) ?? "0"}s, secondary: "${whisperWords[1]?.word ?? "none"}" @ ${whisperWords[1]?.start.toFixed(3) ?? "0"}s)`);
+  console.log(`[orchestrator] v5.9 sending ${whisperWords.length} words, ${whisperSegments.length} segments to Gemini (anchor: "${whisperWords[0]?.word ?? "none"}" @ ${whisperWords[0]?.start.toFixed(3) ?? "0"}s, secondary: "${whisperWords[1]?.word ?? "none"}" @ ${whisperWords[1]?.start.toFixed(3) ?? "0"}s)`);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 6000, "orchestrator");
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 8000, "orchestrator");
   const parsed = extractJsonFromContent(content, "merged_lines");
 
   const HARD_MAX_BOUNDARY = Math.min(189.3, trackEnd + 1.0);
@@ -441,7 +437,7 @@ async function runGeminiOrchestrator(
   const qaCorrections = typeof parsed.qaCorrections === "number" ? parsed.qaCorrections : rawLines.filter(l => l.isCorrection).length;
   const ghostsRemoved = typeof parsed.ghostsRemoved === "number" ? parsed.ghostsRemoved : 0;
 
-  console.log(`[orchestrator] v5.5 result: ${rawLines.length} lines (${rawLines.filter(l => l.tag === "main").length} main, ${rawLines.filter(l => l.tag === "adlib").length} adlib, ${rawLines.filter(l => l.isOrphaned).length} orphaned, ${qaCorrections} qa-corrections, ${ghostsRemoved} ghosts-removed)`);
+  console.log(`[orchestrator] v5.9 result: ${rawLines.length} lines (${rawLines.filter(l => l.tag === "main").length} main, ${rawLines.filter(l => l.tag === "adlib").length} adlib, ${rawLines.filter(l => l.isOrphaned).length} orphaned, ${qaCorrections} qa-corrections, ${ghostsRemoved} ghosts-removed)`);
 
   return { lines: rawLines, qaCorrections, ghostsRemoved, rawContent: content };
 }
@@ -578,8 +574,8 @@ serve(async (req) => {
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
     console.log(
-      `[v5.5] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Universal Acoustic Orchestrator v5.5 Temporal Resonance), ` +
+      `[v5.9] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Universal Acoustic Orchestrator v5.9 Production Master), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
@@ -713,7 +709,7 @@ serve(async (req) => {
     const orphanedCount = lines.filter(l => l.isOrphaned).length;
     const correctionCount = qaCorrections;
 
-    console.log(`[v5.5] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${orphanedCount} orphaned, ${correctionCount} qa-corrections, ${ghostsRemoved} ghosts-removed), ${hooks.length} hooks`);
+    console.log(`[v5.9] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${orphanedCount} orphaned, ${correctionCount} qa-corrections, ${ghostsRemoved} ghosts-removed), ${hooks.length} hooks`);
 
     const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
       wordCount: words.length,
@@ -731,11 +727,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v5.8-acoustic-guard-endcap",
+          version: "anchor-align-v5.9-production-master",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v5.5-universal-acoustic-orchestrator-temporal-resonance",
+            orchestrator: "v5.9-production-master",
           },
           geminiUsed,
           geminiError,
