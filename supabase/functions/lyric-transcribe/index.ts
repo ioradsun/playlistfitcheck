@@ -66,13 +66,16 @@ CORE DIRECTIVE: Transcribe the provided audio into a precise JSON structure. Acc
 - Identify the single most impactful repetitive segment (8–20 seconds).
 - Criteria: Highest lyrical density, melodic peak, or title repetition.
 - Output: Return ONLY the highest-scoring hook in the hooks array.
+- If the hook repeats, the second occurrence timestamps must be INDEPENDENTLY derived — do NOT copy-paste the first occurrence timestamps.
 
-4. DRIFT PREVENTION & ANCHORING
-- Absolute Time Sync: Do NOT estimate duration based on word count or lyric density. You MUST reference the absolute file timestamp for every single line by listening to the audio directly.
-- Mid-Track Re-Calibration: Every 30 seconds of audio, perform a "Hard Sync." Ensure the line starting near that mark (e.g., 30s, 60s, 90s) aligns exactly with the audible transients (beat hits, breath before the phrase) in the audio signal.
-- Hook Alignment: The "Hottest Hook" timestamps are your PRIMARY ANCHORS. They must be 100% frame-accurate as they drive the "Clip Preview" feature. Double-check these timestamps against the actual audio before finalizing.
-- Decimal Consistency: Use two-decimal precision (e.g., 4.50, 113.89). End times must NOT overlap the next start time unless the line is tagged "adlib".
+4. STRICT TEMPORAL ANCHORING (v1.2 — DRIFT KILLER)
+- Absolute Clocking: You must NOT estimate time based on word count or lyric density. You MUST reference the absolute audio stream timestamp for every single line by listening to the audio directly.
+- Cumulative Drift Correction: Every 20 seconds of audio, perform a "Hard Sync." Look at the exact waveform transient (beat hit, breath, or attack) for the next word and RESET your internal clock to that absolute position. Do not carry forward any accumulated estimation error.
+- Mid-Track Re-Calibration: Every 30 seconds, double-check a "sync anchor" line: ensure its start timestamp matches the exact audible transient. If it doesn't, correct ALL subsequent timestamps from that point forward.
+- The Hook Anchor: The "Hottest Hook" timestamps are MATHEMATICALLY PERFECT primary anchors. They drive the "Clip Preview" feature and must be 100% frame-accurate. Verify hook timestamps independently against the audio before finalizing output.
+- Frame Accuracy: Use 2-decimal precision (e.g., 171.79 — do NOT round to 171.8). If a word starts at 171.79, write exactly 171.79.
 - VBR Compensation: Audio files may use Variable Bitrate encoding. Do NOT extrapolate timestamps from a constant bitrate assumption. Derive all timestamps from the actual audio content position.
+- End Time Overlap: End times must NOT overlap the next start time unless the line is tagged "adlib".
 
 5. MANDATORY OUTPUT SCHEMA (STRICT JSON ONLY)
 Return ONLY a valid JSON object. No markdown, no backticks, no preamble.

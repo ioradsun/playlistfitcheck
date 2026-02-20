@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
-import { LyricWaveform } from "./LyricWaveform";
+import { LyricWaveform, type DiagnosticDot } from "./LyricWaveform";
 import { VersionToggle, type ActiveVersion } from "./VersionToggle";
 import { LyricFormatControls, type LineFormat, type SocialPreset } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
@@ -287,6 +287,20 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     if (lastPassed !== -1) activeLineIndices.add(lastPassed);
   }
   const primaryActiveLine = Math.min(...(activeLineIndices.size > 0 ? [...activeLineIndices] : [-1]));
+
+  // ── Sync Diagnostic: confidence heatmap dots ───────────────────────────────
+  const diagnosticDots: DiagnosticDot[] = (() => {
+    const mainLines = activeLinesRaw.filter((l) => l.tag !== "adlib");
+    return mainLines.map((line, i) => {
+      // Gap detection: flag if gap to next line > 1s (potential drift region)
+      const nextLine = mainLines[i + 1];
+      const gap = nextLine ? nextLine.start - line.end : 0;
+      let color: DiagnosticDot["color"] = "green";
+      if (gap > 1.0) color = "red";
+      else if (gap > 0.4) color = "yellow";
+      return { time: line.start, color, label: line.text.slice(0, 20) };
+    });
+  })();
 
   // ── Audio setup ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -827,6 +841,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   loopRegion={activeHookIndex !== null && hooks[activeHookIndex]
                     ? { start: hooks[activeHookIndex].start, end: hooks[activeHookIndex].end, duration: waveform?.duration ?? 1 }
                     : null}
+                  diagnosticDots={diagnosticDots}
                 />
                 <AnimatePresence>
                   {activeHookIndex !== null && (
@@ -870,6 +885,24 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   )}
                   <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto">sync lyrics ↔ audio</span>
                 </div>
+                {/* Sync Diagnostic legend */}
+                {diagnosticDots.length > 0 && (
+                  <div className="flex items-center gap-3 mt-1.5">
+                    <span className="text-[10px] font-mono text-muted-foreground/50 shrink-0">Sync</span>
+                    <span className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground/50">
+                      <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: "rgba(74,222,128,0.8)" }} />tight
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground/50">
+                      <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: "rgba(251,191,36,0.8)" }} />gap
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground/50">
+                      <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: "rgba(248,113,113,0.8)" }} />drift risk
+                    </span>
+                    <span className="text-[10px] font-mono text-muted-foreground/30 ml-auto">
+                      {diagnosticDots.filter(d => d.color === "red").length} drift risk{diagnosticDots.filter(d => d.color === "red").length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                )}
                 {/* Auto-Anchor hint */}
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <Anchor size={9} className="text-muted-foreground/40 shrink-0" />
