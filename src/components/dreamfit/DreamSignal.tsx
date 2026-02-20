@@ -5,6 +5,33 @@ import { getSessionId } from "@/lib/sessionId";
 
 type SignalStep = "idle" | "greenlit" | "shelved" | "done";
 
+function getSignalVerbiage(total: number, pct: number) {
+  if (total <= 10) {
+    return {
+      label: "SIGNAL RESOLVING...",
+      pctDisplay: `${pct}%`,
+      summary: "Not enough signals yet to read the room.",
+      tier: "resolving" as const,
+    };
+  }
+  if (total <= 50) {
+    return {
+      label: `${total} SIGNALS DETECTED`,
+      pctDisplay: null,
+      summary: `${total} members have weighed in.`,
+      tier: "detected" as const,
+    };
+  }
+  return {
+    label: `${pct}% UNIT CONSENSUS`,
+    pctDisplay: `${pct}%`,
+    summary: pct >= 50
+      ? `${pct}% of the unit greenlighted this.`
+      : `Only ${pct}% greenlighted this.`,
+    tier: "consensus" as const,
+  };
+}
+
 interface Props {
   dreamId: string;
   backersCount: number;
@@ -121,10 +148,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
   // ── Done state ──────────────────────────────────────────────
   if (step === "done") {
     const pct = localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
-    const majority = pct >= 50;
-    const summaryLine = majority
-      ? `${pct}% of the FMLY greenlighted this.`
-      : `Only ${pct}% greenlighted this.`;
+    const verbiage = getSignalVerbiage(localBackers, pct);
 
     return (
       <div>
@@ -132,8 +156,14 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
         <div className="px-3 py-2 space-y-0.5">
           <div className="flex items-center justify-between">
             <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Demand Strength: {pct}%
-              {" · "}
+              {verbiage.tier === "resolving" ? (
+                <>
+                  <span className="opacity-50">{verbiage.label}</span>
+                  {" · "}
+                </>
+              ) : (
+                <>{verbiage.label}{" · "}</>
+              )}
               <button
                 onClick={() => onOpenComments(dreamId)}
                 className="hover:text-foreground transition-colors"
@@ -148,7 +178,9 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
               Turn Off Signal
             </button>
           </div>
-          <p className="text-[11px] text-foreground/70 font-sans">{summaryLine}</p>
+          <p className={`text-[11px] font-sans ${verbiage.tier === "resolving" ? "text-muted-foreground/50" : "text-foreground/70"}`}>
+            {verbiage.summary}
+          </p>
         </div>
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
       </div>
@@ -207,8 +239,16 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       {/* Demand Strength row — signals count is tappable to open comments */}
       <div className="px-3 py-1.5">
         <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          Demand Strength:{" "}
-          {localBackers > 0 ? `${demandStrength}%` : "—"}
+          {localBackers === 0 ? (
+            <>Demand Strength: —</>
+          ) : (() => {
+            const v = getSignalVerbiage(localBackers, demandStrength);
+            return (
+              <>
+                <span className={v.tier === "resolving" ? "opacity-50" : ""}>{v.label}</span>
+              </>
+            );
+          })()}
           {" · "}
           <button
             onClick={() => onOpenComments(dreamId)}

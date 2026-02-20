@@ -5,6 +5,33 @@ import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 
 type HookRating = "missed" | "almost" | "solid" | "hit";
+
+function getSignalVerbiage(total: number, pct: number) {
+  if (total <= 10) {
+    return {
+      label: "SIGNAL RESOLVING...",
+      pctDisplay: `${pct}%`,
+      summary: "Not enough signals yet to read the room.",
+      tier: "resolving" as const,
+    };
+  }
+  if (total <= 50) {
+    return {
+      label: `${total} SIGNALS DETECTED`,
+      pctDisplay: null,
+      summary: `${total} members have signaled.`,
+      tier: "detected" as const,
+    };
+  }
+  return {
+    label: `${pct}% UNIT CONSENSUS`,
+    pctDisplay: `${pct}%`,
+    summary: pct >= 50
+      ? `${pct}% of the unit would run it back.`
+      : `Only ${pct}% are feeling this.`,
+    tier: "consensus" as const,
+  };
+}
 type Step = 2 | "replay_cta" | "skip_cta" | "revealing" | "done";
 
 interface Props {
@@ -208,14 +235,15 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       {step === "done" && results && (() => {
         const replayPct = results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0;
         const signalLabel = results.total === 1 ? "signal" : "signals";
+        const verbiage = getSignalVerbiage(results.total, replayPct);
         return (
           <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium text-foreground">Signal Strength: {replayPct}%</span>
+            <span className={`text-[11px] font-medium ${verbiage.tier === "resolving" ? "text-muted-foreground/60" : "text-foreground"}`}>
+              {verbiage.label}
+            </span>
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>
-                {replayPct >= 50
-                  ? `${replayPct}% of the FMLY would run it back.`
-                  : `${replayPct}% are feeling this.`}
+              <span className={verbiage.tier === "resolving" ? "text-muted-foreground/50" : ""}>
+                {verbiage.summary}
               </span>
               <div className="flex items-center gap-3">
                 {onOpenReviews ? (

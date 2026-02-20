@@ -284,20 +284,31 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
 
           {/* Stat cards */}
           {!loading && rows.length > 0 && (() => {
-            const replayPct = Math.round((rows.filter(r => r.would_replay).length / rows.length) * 100);
-            const skipPct = 100 - replayPct;
+            const total = rows.length;
+            const replayPct = Math.round((rows.filter(r => r.would_replay).length / total) * 100);
+            const verbiage = (() => {
+              if (total <= 10) return { label: "SIGNAL RESOLVING...", pctDisplay: `${replayPct}%`, summary: "Not enough signals yet to read the room.", tier: "resolving" as const };
+              if (total <= 50) return { label: `${total} SIGNALS DETECTED`, pctDisplay: null, summary: `${total} members have signaled.`, tier: "detected" as const };
+              return { label: `${replayPct}% UNIT CONSENSUS`, pctDisplay: `${replayPct}%`, summary: replayPct >= 50 ? "of the unit would run it back." : "are feeling this.", tier: "consensus" as const };
+            })();
             return (
               <div className="grid grid-cols-2 gap-2.5">
-                {/* Replay Signal card */}
+                {/* Signal card */}
                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
-                   Signal Strength
+                    Signal Status
                   </p>
-                  <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
-                    {replayPct}%
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
-                    {replayPct >= 50 ? "of the FMLY would run it back." : "are feeling this."}
+                  {verbiage.pctDisplay ? (
+                    <p className={`text-2xl font-bold leading-none tracking-tight ${verbiage.tier === "resolving" ? "text-muted-foreground/50" : "text-foreground"}`}>
+                      {verbiage.pctDisplay}
+                    </p>
+                  ) : (
+                    <p className="text-lg font-bold leading-none text-foreground tracking-tight">
+                      {total}
+                    </p>
+                  )}
+                  <p className={`text-[10px] leading-snug mt-0.5 ${verbiage.tier === "resolving" ? "text-muted-foreground/40" : "text-muted-foreground/50"}`}>
+                    {verbiage.tier === "resolving" ? verbiage.label : verbiage.summary}
                   </p>
                 </div>
                 {/* Signals card */}
@@ -306,7 +317,7 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                     Signals
                   </p>
                   <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
-                    {rows.length}
+                    {total}
                   </p>
                   <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
                     {rows.filter(r => r.would_replay).length} replay · {rows.filter(r => !r.would_replay).length} skip
