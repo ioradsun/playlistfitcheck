@@ -385,11 +385,11 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
 
                       {/* Content */}
                       <div className="flex-1 min-w-0 pb-2">
-                        {/* Name + badges */}
+                         {/* Name + badges */}
                          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                            <span className="text-sm font-semibold leading-none">{name}</span>
                            <span className="text-[10px] border border-border/30 rounded-full px-2 py-0.5 text-muted-foreground/60">
-                             {row.would_replay ? "Would replay" : "Would skip"}
+                             {row.would_replay ? "Signaled" : "Bypassed"}
                            </span>
                          </div>
 
@@ -443,73 +443,51 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
 
                     {/* ── Replies ── */}
                     {hasReplies && (
-                      <div className="ml-11">
-                        {!row.showReplies ? (
-                          <button
-                            onClick={() => setRows(prev => prev.map(r => r.id === row.id ? { ...r, showReplies: true } : r))}
-                            className="flex items-center gap-2 mb-3"
-                          >
-                            <div className="h-px w-5 bg-muted-foreground/30" />
-                            <span className="text-xs font-semibold text-muted-foreground/60 hover:text-foreground transition-colors">
-                              View {row.replies.length} {row.replies.length === 1 ? "reply" : "replies"}
-                            </span>
-                          </button>
-                        ) : (
-                          <div className="space-y-3 mb-2">
-                            {row.replies.map((reply) => {
-                              const rName = reply.profiles?.display_name || "User";
-                              const rAvatar = reply.profiles?.avatar_url;
-                              return (
-                                <div key={reply.id} className="flex gap-2.5">
-                                  <AvatarBubble avatar={rAvatar} name={rName} size={6} />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs leading-snug">
-                                      <span className="font-semibold mr-1.5">{rName}</span>
-                                      <span className="text-foreground/75">{reply.content}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 mt-0.5">
-                                      <span className="text-[11px] text-muted-foreground/50">
-                                        {formatDistanceToNow(new Date(reply.created_at), { addSuffix: true })}
-                                      </span>
-                                      {reply.likes > 0 && (
-                                        <span className="text-[11px] text-muted-foreground/50">{reply.likes} likes</span>
-                                      )}
-                                      {user && (
-                                        <button
-                                          onClick={() => openReplyInput(row.id, rName)}
-                                          className="text-[11px] font-semibold text-muted-foreground/60 hover:text-foreground transition-colors"
-                                        >
-                                          Reply
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => toggleReplyLike(row.id, reply.id)}
-                                    className="shrink-0 flex flex-col items-center gap-0.5 pt-0.5"
-                                  >
-                                    <Heart
-                                      size={12}
-                                      className={`transition-colors ${reply.liked ? "fill-destructive text-destructive" : "text-muted-foreground/30 hover:text-muted-foreground"}`}
-                                    />
-                                    {reply.likes > 0 && (
-                                      <span className={`text-[9px] ${reply.liked ? "text-destructive" : "text-muted-foreground/40"}`}>{reply.likes}</span>
-                                    )}
-                                  </button>
+                      <div className="ml-11 border-l border-border/30">
+                        {row.replies.map((reply) => {
+                          const rName = reply.profiles?.display_name || "User";
+                          const rAvatar = reply.profiles?.avatar_url;
+                          return (
+                            <div key={reply.id} className="flex gap-2.5 py-2 pl-3 group">
+                              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
+                                {rAvatar
+                                  ? <img src={rAvatar} alt="" className="w-full h-full object-cover" />
+                                  : <User size={11} className="text-muted-foreground" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm leading-snug">
+                                  <span className="font-semibold mr-1.5">{rName}</span>
+                                  <span className="text-foreground/80">{reply.content}</span>
+                                </p>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <span className="text-[11px] text-muted-foreground/50">
+                                    {formatDistanceToNow(new Date(reply.created_at), { addSuffix: true })}
+                                  </span>
+                                  {user && (
+                                    <button
+                                      onClick={() => openReplyInput(row.id, rName)}
+                                      className="text-[11px] font-semibold text-muted-foreground/60 hover:text-foreground transition-colors"
+                                    >
+                                      Reply
+                                    </button>
+                                  )}
                                 </div>
-                              );
-                            })}
-                            <button
-                              onClick={() => setRows(prev => prev.map(r => r.id === row.id ? { ...r, showReplies: false } : r))}
-                              className="flex items-center gap-2"
-                            >
-                              <div className="h-px w-5 bg-muted-foreground/30" />
-                              <span className="text-[11px] font-semibold text-muted-foreground/50 hover:text-foreground transition-colors">
-                                Hide replies
-                              </span>
-                            </button>
-                          </div>
-                        )}
+                              </div>
+                              <button
+                                onClick={() => toggleReplyLike(row.id, reply.id)}
+                                className="shrink-0 flex flex-col items-center gap-0.5 pt-0.5"
+                              >
+                                <Heart
+                                  size={13}
+                                  className={`transition-colors ${reply.liked ? "fill-destructive text-destructive" : "text-muted-foreground/30 hover:text-muted-foreground"}`}
+                                />
+                                {reply.likes > 0 && (
+                                  <span className={`text-[10px] ${reply.liked ? "text-destructive" : "text-muted-foreground/40"}`}>{reply.likes}</span>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 

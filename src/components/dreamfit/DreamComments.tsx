@@ -34,7 +34,7 @@ function buildTree(comments: DreamComment[]): (DreamComment & { replies: DreamCo
 }
 
 function CommentItem({
-  comment, depth, onReply, onDelete, onToggleLike, currentUserId, likedSet,
+  comment, depth, onReply, onDelete, onToggleLike, currentUserId, likedSet, signalMap,
 }: {
   comment: DreamComment & { replies?: DreamComment[] };
   depth: number;
@@ -43,11 +43,13 @@ function CommentItem({
   onToggleLike: (commentId: string, liked: boolean) => void;
   currentUserId?: string;
   likedSet: Set<string>;
+  signalMap: Record<string, string>;
 }) {
   const displayName = comment.profiles?.display_name || "Anonymous";
   const isOwn = currentUserId === comment.user_id;
   const liked = likedSet.has(comment.id);
   const likesCount = (comment as any).likes_count ?? 0;
+  const signal = comment.user_id ? signalMap[comment.user_id] : undefined;
 
   return (
     <div style={{ paddingLeft: depth > 0 ? 20 : 0 }}>
@@ -58,10 +60,15 @@ function CommentItem({
             : <User size={12} className="text-muted-foreground" />}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm leading-snug">
-            <span className="font-semibold mr-1.5">{displayName}</span>
-            {comment.content}
-          </p>
+          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+            <span className="font-semibold text-sm leading-none">{displayName}</span>
+            {signal && (
+              <span className="text-[10px] border border-border/30 rounded-full px-2 py-0.5 text-muted-foreground/60">
+                {signal === "greenlight" ? "Greenlighted" : "Shelved"}
+              </span>
+            )}
+          </div>
+          <p className="text-sm leading-snug text-foreground/80">{comment.content}</p>
           <div className="flex items-center gap-3 mt-1">
             <span className="text-[11px] text-muted-foreground">
               {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
@@ -103,6 +110,7 @@ function CommentItem({
               onToggleLike={onToggleLike}
               currentUserId={currentUserId}
               likedSet={likedSet}
+              signalMap={signalMap}
             />
           ))}
         </div>
@@ -120,20 +128,36 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
+  const [signalMap, setSignalMap] = useState<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const fetchComments = async () => {
     if (!dreamId) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("dream_comments")
-      .select("*, profiles:user_id(display_name, avatar_url), likes_count")
-      .eq("dream_id", dreamId)
-      .order("created_at", { ascending: true })
-      .limit(200);
-    const fetched = ((data as any) || []) as DreamComment[];
+    const [commentsRes, backersRes] = await Promise.all([
+      supabase
+        .from("dream_comments")
+        .select("*, profiles:user_id(display_name, avatar_url), likes_count")
+        .eq("dream_id", dreamId)
+        .order("created_at", { ascending: true })
+        .limit(200),
+      supabase
+        .from("dream_backers")
+        .select("user_id, signal_type")
+        .eq("dream_id", dreamId)
+        .not("user_id", "is", null),
+    ]);
+
+    const fetched = ((commentsRes.data as any) || []) as DreamComment[];
     setComments(fetched);
+
+    // Build signal map: user_id → signal_type
+    const sMap: Record<string, string> = {};
+    for (const b of (backersRes.data || [])) {
+      if (b.user_id) sMap[b.user_id] = b.signal_type;
+    }
+    setSignalMap(sMap);
 
     if (user && fetched.length > 0) {
       const ids = fetched.map(c => c.id);
@@ -293,6 +317,7 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                 onToggleLike={handleToggleLike}
                 currentUserId={user?.id}
                 likedSet={likedSet}
+                signalMap={signalMap}
               />
             ))
           )}
