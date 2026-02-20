@@ -124,7 +124,7 @@ function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
       label: `RESOLVING...`,
-      sublabel: `(${total}/50 SIGNALS)`,
+      sublabel: `${total}/50 SIGNALS`,
       summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
       bigDisplay: `${pct}%`,
       tier: "resolving" as const,
@@ -328,7 +328,7 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                     {backersCount}
                   </p>
                   <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                    {greenlightCount} Signaled · {shelveCount} Bypassed
+                    {greenlightCount} Signaled<br />{shelveCount} Bypassed
                   </p>
                 </div>
               </div>
