@@ -40,6 +40,7 @@ interface Props {
   savedId?: string | null;
   fmlyLines?: LyricLine[] | null;
   versionMeta?: { explicit?: Partial<VersionMeta>; fmly?: Partial<VersionMeta> } | null;
+  debugData?: any | null;
   onBack: () => void;
   onSaved?: (id: string) => void;
   onReuploadAudio?: (file: File) => void;
@@ -147,8 +148,10 @@ const DEFAULT_VERSION_META: VersionMeta = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, onBack, onSaved, onReuploadAudio }: Props) {
-  const { user } = useAuth();
+export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, onBack, onSaved, onReuploadAudio }: Props) {
+  const { user, roles } = useAuth();
+  const isAdmin = roles.includes("admin");
+  const [showDebug, setShowDebug] = useState(false);
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
 
   // Audio state
@@ -581,6 +584,39 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       </div>
 
       <SignUpToSaveBanner />
+
+      {/* Admin-only: Gemini debug panel */}
+      {isAdmin && debugData && (
+        <div className="glass-card rounded-xl p-4 border border-border/40">
+          <button
+            className="flex items-center gap-2 w-full text-left"
+            onClick={() => setShowDebug((v) => !v)}
+          >
+            <span className="text-[10px] font-mono text-accent-foreground/60 uppercase tracking-widest">
+              ⚙ Gemini Debug
+            </span>
+            <span className="text-[10px] font-mono text-muted-foreground/50 ml-auto">
+              {debugData.model} · {Math.round(debugData.inputBytes / 1024)}KB in · {debugData.outputLines} lines out · {showDebug ? "▲ hide" : "▼ show"}
+            </span>
+          </button>
+          {showDebug && (
+            <div className="mt-3 pt-3 border-t border-border/30 space-y-3">
+              <div>
+                <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider mb-1">Raw Lines (pre-sanitize)</p>
+                <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap">
+                  {JSON.stringify(debugData.rawLines, null, 2)}
+                </pre>
+              </div>
+              <div>
+                <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider mb-1">Raw Gemini Response</p>
+                <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto max-h-60 whitespace-pre-wrap">
+                  {debugData.rawResponse}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }
