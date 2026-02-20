@@ -208,6 +208,15 @@ export function LyricWaveform({
             style={{ left: `${playheadPct}%` }}
           >
             <div className="absolute -top-1 -translate-x-[3px] w-2 h-2 rounded-full bg-primary shadow" />
+            {/* Timestamp bubble on playhead */}
+            <div
+              className="absolute top-1 left-2 bg-primary text-primary-foreground text-[9px] font-mono px-1 py-0.5 rounded whitespace-nowrap pointer-events-none shadow z-20"
+              style={{
+                transform: playheadPct > 80 ? "translateX(calc(-100% - 6px))" : "translateX(0)",
+              }}
+            >
+              {currentTime.toFixed(2)}s
+            </div>
           </div>
         </div>
         <span className="text-[10px] font-mono text-muted-foreground shrink-0">
