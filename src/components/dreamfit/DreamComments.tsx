@@ -307,7 +307,7 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                       {verbiage.label}
                     </p>
                   )}
-                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug truncate">
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
                     {verbiage.summary}
                   </p>
                 </div>
