@@ -1,153 +1,155 @@
 
-# Anchor-Align v2.4: Reference-Based Adlib Auditor
+# v5.0 "Universal Acoustic Orchestrator" — Architecture Redesign
 
-## What Changes and Why
+## What the User is Proposing
 
-Currently the Adlib Auditor call sends only audio to Gemini. It has no awareness of what Whisper already transcribed as the main lead vocal. This forces Gemini to re-detect the lead vocal itself, which is the root cause of "ghost adlibs" (re-transcribed lead lines leaking through the 0.9 dedup filter).
+Replace the current multi-stage JavaScript merge engine (Soundex, phonetic similarity scoring, ghost-dedup, 5-path identity executioner) with a **single Gemini call** that receives both the audio and the Whisper JSON, then returns the final `merged.allLines` array directly.
 
-The fix: pass Whisper's `rawText` transcript directly into the adlib call as a "Main Lyric Script." Gemini is then instructed to perform **subtraction** — identify only the vocals NOT present in the provided script.
+The idea: instead of orchestrating corrections in TypeScript, let Gemini reason acoustically over the raw audio + timing grid simultaneously and output the final, production-ready merged transcript.
 
-This also reduces the globalOffset drift because Gemini can anchor its internal clock to the word sequence it sees in the transcript, instead of independently estimating timing.
+---
 
-## Pipeline Architecture (v2.4)
-
-```text
-Stage 1 — Whisper (unchanged)
-  audio → whisper-1 → words[] + segments[] + rawText
-
-Stage 2a — Gemini Hook (unchanged, audio only)
-  audio → Hook/Meta prompt → hottest_hook + insights + metadata
-
-Stage 2b — Gemini Adlib Auditor (UPGRADED)
-  audio + rawText → Reference-Based Adlib prompt → adlibs[]
-  Gemini now performs SUBTRACTION: only returns vocals NOT in rawText
-```
-
-The three calls still run in parallel via `Promise.allSettled`. The adlib call is fired immediately alongside the whisper call, but passes the rawText from the whisper result. Since whisper needs to resolve first before adlib can use rawText, the pipeline becomes:
+## Current Architecture (v4.4)
 
 ```text
-whisper + hook run in parallel first
-↓ (whisper resolves)
-adlib runs with rawText injected
-hook waits separately
+Stage 1: Whisper → words[], segments[], rawText        (timing skeleton)
+Stage 2a: Gemini Hook Call → hottest_hook + insights   (parallel with Whisper)
+Stage 2b: Gemini Adlib Call → adlibs[] (30 max)        (sequential, receives rawText)
+Stage 3: JS Merge Engine (~450 lines)                  (correction, ghost-pruning, snapping)
+  ├── phoneticRootMatch (Soundex gating)
+  ├── phoneticSimilarity (Levenshtein + skeleton)
+  ├── Identity Executioner (5-path ghost deletion)
+  ├── Intro/Outro Zone Preservation
+  └── Global Timebase Guard (median offset correction)
+Output: merged.allLines (LyricLine[])
 ```
 
-This adds a small sequential dependency but the benefit far outweighs the latency cost, since the adlib call is the most expensive to re-run when it hallucinates ghosts.
-
-## Sequencing Strategy
-
-There are two options for the timing:
-
-**Option A (Sequential, cleanest):** Run Whisper and Hook in parallel. Once Whisper resolves, fire the Adlib call with rawText. Hook and Adlib results are collected together.
-
-**Option B (Optimistic parallel):** Fire all three at once. If Whisper fails, the Adlib call falls back to audio-only mode (current behavior). This maintains max parallelism but loses the reference benefit on the first attempt.
-
-**Chosen: Option A** — reliability over raw parallelism. The hook call is fully parallel with Whisper (no dependency). The adlib call fires after Whisper resolves, armed with the transcript.
+## Proposed v5.0 Architecture
 
 ```text
-t=0  ──► whisper-1 starts
-t=0  ──► gemini hook starts
-         ↓ (whisper done, ~5-15s)
-t+W  ──► gemini adlib starts (with rawText)
-t+W+A ──► all results merged
+Stage 1: Whisper → words[], segments[], rawText        (timing skeleton, unchanged)
+Stage 2a: Gemini Hook Call → hottest_hook + insights   (unchanged, audio only)
+Stage 2b: Gemini Orchestrator Call                     (audio + whisper JSON payload)
+  Input: audioBase64 + whisperWords + whisperSegments + rawText
+  Prompt: Universal Acoustic Orchestrator
+  Output: final merged.allLines[] directly
+Stage 3: Thin JS validator                             (schema validation, boundary guard only)
+Output: merged.allLines (LyricLine[])
 ```
 
-## Specific Code Changes
+---
+
+## Why This is a Genuine Architectural Improvement
+
+The root cause of every iteration from v3.7 to v4.4 is that a **JavaScript function is trying to do linguistic reasoning**. The Soundex gate, the 5-path identity executioner, and the phonetic similarity scoring are all approximations of what Gemini can do directly by listening to the audio. The "Rain/Range" problem persisted through 8 versions because JavaScript cannot hear — it can only compare strings.
+
+By giving Gemini both the audio AND the Whisper timing grid simultaneously, Gemini can:
+- Hear that "range" is sung as "rain" acoustically, not infer it from string distance
+- Know with certainty whether a "Yeah!" at 42s is a ghost (heard in lead) or a genuine background vocal (from a different voice/position)
+- Group orphaned intro dialogue into natural phrases without guessing at segment boundaries
+
+---
+
+## What Changes
 
 ### `supabase/functions/lyric-transcribe/index.ts`
 
-**1. Update `runGeminiAdlibAnalysis` signature**
+**1. New Gemini Orchestrator Prompt**
 
-Add an optional `whisperTranscript?: string` parameter.
-
-**2. New Reference-Based Adlib Prompt**
-
-Replace the current `GEMINI_ADLIB_PROMPT` constant with a new `buildAdlibPrompt(transcript: string): string` function that dynamically injects the Whisper rawText:
+Replace `buildAdlibPrompt()` with `buildOrchestratorPrompt(whisperJson)` that includes the full Whisper output as a structured payload alongside the 4 Logical Workflows from the user's spec:
 
 ```text
-ROLE: Lead Vocal Producer
+System: You are the Universal Acoustic Orchestrator...
+Input payload (injected into prompt):
+  - WHISPER_WORDS: [{word, start, end}, ...]   (full word-level grid)
+  - WHISPER_SEGMENTS: [{start, end, text}, ...] (sentence-level segments)
+  - WHISPER_RAW_TEXT: "..."
 
-You have been provided:
-1. Raw audio of a musical track
-2. The Main Lead Vocal Transcript (below) — already captured by a word-level transcription engine
+Output: merged_lines[] following the exact LyricLine schema
+```
 
-MAIN LEAD VOCAL TRANSCRIPT:
-[whisperTranscript injected here]
+**2. New Output Schema for the Orchestrator Call**
 
-TASK: Perform SUBTRACTION. Identify every vocal event in the audio that is NOT part of the Main Lead Vocal Transcript above.
+Gemini is asked to return the complete `merged_lines` array directly, not just `adlibs[]`. The schema it must follow:
 
-SUBTRACTION RULE:
-- If a word appears in the provided transcript, it belongs to the lead vocal — DO NOT include it.
-- You are hunting ONLY for: background vocals, hype interjections, call-and-response layers, echo repeats, harmonies under the lead, and atmospheric vocal textures.
-
-HIGH-SENSITIVITY WINDOW:
-- Pay extreme attention from 2:30 to the end of the track. Outro sections contain dense background layers.
-
-PRECISION:
-- Timestamps: seconds with 3-decimal precision (e.g., 169.452)
-- Confidence floor: 0.95 — only output if you are 95% certain it is a secondary vocal layer
-- layer: "echo" | "callout" | "background" | "texture"
-
-OUTPUT — ONLY valid JSON:
+```json
 {
-  "adlibs": [
-    { "text": "...", "start": 0.000, "end": 0.000, "layer": "callout", "confidence": 0.98 }
-  ]
+  "merged_lines": [
+    {
+      "start": 0.000,
+      "end": 0.000,
+      "text": "...",
+      "tag": "main" | "adlib",
+      "isOrphaned": false,
+      "isFloating": false,
+      "isCorrection": false,
+      "geminiConflict": "original whisper word if corrected",
+      "confidence": 0.98
+    }
+  ],
+  "qaCorrections": 0,
+  "ghostsRemoved": 0
 }
 ```
 
-Note the confidence floor is raised from 0.60 → **0.95** for the reference-based call, since Gemini now has the script as an anchor and should only output events it is highly certain are secondary layers.
+**3. Sequencing remains Option A** (Whisper + Hook parallel first, then Orchestrator call)
 
-**3. Update main handler sequencing**
-
-Change from:
-```typescript
-// Current: all 3 parallel
-const [whisperResult, hookResult, adlibResult] = await Promise.allSettled([
-  whisperPromise, hookPromise, adlibPromise,
-]);
+```text
+t=0:  Whisper starts + Hook starts (parallel)
+t+W:  Whisper done → full JSON passed to Orchestrator
+t+W:  Orchestrator call starts (audio + whisper JSON)
+t+W+O: Orchestrator returns merged_lines[]
 ```
 
-To:
-```typescript
-// v2.4: Whisper + Hook parallel first, then Adlib with transcript
-const [whisperResult, hookResult] = await Promise.allSettled([
-  whisperPromise,
-  hookPromise,
-]);
+**4. Remove the JS merge engine** (`extractAdlibsFromWords`, `computeGlobalOffset`, `buildLinesFromSegments`, all Soundex/phonetic helpers)
 
-const rawTranscript = whisperResult.status === "fulfilled"
-  ? whisperResult.value.rawText
-  : "";
+These ~500 lines of merge logic are replaced by a thin validator that:
+- Validates the schema of each returned line
+- Enforces the hard boundary cap (189.3s / trackEnd+1s) as a safety net
+- Sorts lines by `start` timestamp
 
-const adlibResult = await (
-  !analysisDisabled
-    ? runGeminiAdlibAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, rawTranscript).then(v => ({ status: "fulfilled" as const, value: v })).catch(e => ({ status: "rejected" as const, reason: e }))
-    : Promise.resolve({ status: "rejected" as const, reason: new Error("ANALYSIS_DISABLED") })
-);
-```
+**5. Token Budget**
 
-**4. Update ghost-dedup threshold**
+The orchestrator call needs a larger token budget than the current adlib call (4000 tokens) because it is returning the full merged lines array. Recommended: **6000 tokens** to accommodate a 3–4 minute track with 60–80 lines + adlibs.
 
-Since the reference-based prompt already performs text subtraction, the downstream ghost-dedup overlap threshold in `extractAdlibsFromWords` can be lowered from `0.9` → `0.75`. This catches the remaining edge cases where Gemini still returns a near-duplicate despite having the transcript, without being too aggressive.
+---
 
-**5. Update version string**
+## What Does NOT Change
 
-Change `"anchor-align-v2.3-split"` → `"anchor-align-v2.4-reference"`.
+- `runWhisper()` — unchanged, still provides the timing skeleton
+- `runGeminiHookAnalysis()` — unchanged, still finds hook + BPM/key/mood
+- `callGemini()` / `extractJsonFromContent()` / `safeParseJson()` — reused as-is
+- `findHookFromWords()` / `findRepetitionAnchor()` — unchanged
+- The frontend (`LyricDisplay.tsx`, `LyricFitTab.tsx`) — no changes needed; the output schema is compatible with what they already consume (`lines[]` with `tag`, `isOrphaned`, `isFloating`, `isCorrection`, `geminiConflict`)
 
-**6. Update debug output**
+---
 
-Add `transcriptProvided: true/false` to the gemini adlib debug block so we can verify the transcript was injected.
+## Risks and Mitigations
+
+**Risk: Gemini returns invalid JSON for a 60+ line response**
+
+The current `safeParseJson()` recovery function is already robust (strips trailing commas, closes truncated arrays). This will be preserved and applied to the orchestrator response.
+
+Additionally, the **OUTPUT LIMIT guidance** from v4.4 (max 30 adlibs) will be adapted: the orchestrator will be instructed to return a maximum of 80 total lines to keep the response within the token budget.
+
+**Risk: Gemini ignores Whisper timestamps and invents its own**
+
+The prompt instructs Gemini to use Whisper `start`/`end` values for main lines verbatim and to snap adlib timestamps to the nearest Whisper word boundary. A JS post-pass will validate that main line timestamps fall within ±0.5s of the original Whisper segments.
+
+**Risk: Ghost adlibs reappear because Gemini's identity filter is imprecise**
+
+The identity filter becomes Gemini's own acoustic judgment ("is this the same voice as the lead?") rather than JavaScript string matching. This is strictly more accurate but could have edge cases. The JS boundary guard remains as a final safety net.
+
+---
 
 ## Files to Modify
 
-- `supabase/functions/lyric-transcribe/index.ts` — all logic changes, redeployed automatically
+- `supabase/functions/lyric-transcribe/index.ts` — single file, redeployed automatically
 
-No frontend changes required. The merge engine, LyricDisplay, and LyricFitTab remain unchanged.
+No frontend changes required.
 
-## Expected Outcomes
+---
 
-- Ghost adlib count drops significantly (Gemini won't re-identify lead lyrics)
-- Outro adlib detection improves (Gemini's full attention on secondary layers)
-- globalOffset drift reduces (transcript anchors Gemini's internal clock to Whisper's word sequence)
-- Confidence floor raised to 0.95 means every returned adlib is high-certainty
+## Version String
+
+`anchor-align-v5.0-universal-orchestrator`
