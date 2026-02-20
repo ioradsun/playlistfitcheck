@@ -9,8 +9,8 @@ type HookRating = "missed" | "almost" | "solid" | "hit";
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `RESOLVING... ${total}/50 SIGNALS`,
-      summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
+      label: `STATUS: RESOLVING... (${total}/50)`,
+      summary: "CALIBRATING REPLAY FIT.",
       tier: "resolving" as const,
     };
   }
@@ -23,7 +23,7 @@ function getSignalVerbiage(total: number, pct: number) {
   }
   return {
     label: "STATUS: CONSENSUS REACHED",
-    summary: `${pct}% OF THE FMLY RESONATE WITH THIS.`,
+    summary: `${pct}% FMLY REPLAY FIT.`,
     tier: "consensus" as const,
   };
 }

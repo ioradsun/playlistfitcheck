@@ -8,8 +8,8 @@ type SignalStep = "idle" | "compose" | "done";
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `STATUS: RESOLVING... (${total}/50 SIGNALS)`,
-      summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
+      label: `STATUS: RESOLVING... (${total}/50)`,
+      summary: "CALIBRATING BUILD FIT.",
       tier: "resolving" as const,
     };
   }
@@ -22,7 +22,7 @@ function getSignalVerbiage(total: number, pct: number) {
   }
   return {
     label: "STATUS: CONSENSUS REACHED",
-    summary: `${pct}% OF THE FMLY RESONATE WITH THIS.`,
+    summary: `${pct}% FMLY BUILD FIT.`,
     tier: "consensus" as const,
   };
 }
