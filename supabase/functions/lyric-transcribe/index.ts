@@ -708,7 +708,6 @@ function extractAdlibsFromWords(
     // v3.8: Expanded identity window (±250ms) for tighter ghost removal
     const IDENTITY_WINDOW_MS = 0.250;
     const FILLER_WINDOW_MS = 0.500;
-    const FILLER_SEGMENT_WINDOW = 2.0;
     const normAdlibNorm = normalize(adlib.text);
     const isFiller = /^(yeah+|yea|ayy+|ay|uh+|ah+|oh+|mm+|hmm+|woo+|ooh+|aye|ok|okay|let'?s go|come on|whoa+|woah+)$/i.test(normAdlibNorm);
 
@@ -729,16 +728,20 @@ function extractAdlibsFromWords(
         })
       : undefined;
 
-    // Path d: filler word appears in a Whisper segment's text within ±2.0s
-    // This catches "yeah" embedded in a segment like "run the race yeah" where
-    // Whisper may not have emitted it as a standalone word-level token.
+    // Path d: filler word appears in a Whisper segment's text (v4.3: check containment, not boundary)
+    // Previous bug: checked distance to segment START or END (boundary check).
+    // If "yeah" is in the MIDDLE of a 10s segment (e.g. "run yeah take it"), the
+    // nearest boundary was >2s away, so Path d missed it entirely.
+    // Fix: check if correctedStart falls WITHIN the segment (with ±1.5s tolerance),
+    // and also extend the look-around window to ±5.0s for long segments.
     const identityMatchSegment = !identityMatchTight && !identityMatchFiller && isFiller
       ? mainSegments.find(seg => {
-          const timeDiff = Math.min(
-            Math.abs(seg.start - correctedStart),
-            Math.abs(seg.end - correctedStart)
-          );
-          if (timeDiff > FILLER_SEGMENT_WINDOW) return false;
+          // Check containment: is the adlib within or near this segment?
+          const withinSeg = correctedStart >= seg.start - 1.5 && correctedStart <= seg.end + 1.5;
+          // Fallback: within ±5s of segment center for very long segments
+          const segCenter = (seg.start + seg.end) / 2;
+          const nearCenter = Math.abs(correctedStart - segCenter) <= 5.0;
+          if (!withinSeg && !nearCenter) return false;
           const segTokens = normalize(seg.text).split(" ").filter(Boolean);
           return segTokens.includes(normAdlibNorm);
         })
@@ -748,7 +751,7 @@ function extractAdlibsFromWords(
     const identityMatchWord = identityMatchTight ?? identityMatchFiller ?? (identityMatchSegment ? { word: `[segment: ${identityMatchSegment.text.slice(0, 25)}]` } : undefined);
     if (identityMatchWord) {
       ghostCount++;
-      const path = identityMatchSegment ? "±2s segment-text" : identityMatchFiller ? "±500ms filler" : "±150ms";
+      const path = identityMatchSegment ? "containment segment-text" : identityMatchFiller ? "±500ms filler" : "±250ms tight";
       console.log(`[identity-prune] Hard-deleting "${adlib.text}" @ ${correctedStart.toFixed(3)}s — ghost of "${identityMatchWord.word}" (${path})`);
       continue;
     }
@@ -843,7 +846,7 @@ function extractAdlibsFromWords(
   const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
   const floatingCount = adlibLines.filter(l => l.isFloating).length;
   const conflictCount = adlibLines.filter(l => l.geminiConflict).length;
-  console.log(`[v4.2] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
+  console.log(`[v4.3] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
   return merged;
 }
 
@@ -1164,7 +1167,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v4.2-signal-isolation",
+          version: "anchor-align-v4.3-visibility-pruning",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
