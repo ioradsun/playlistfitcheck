@@ -19,7 +19,7 @@ export function DreamFitTab() {
     setLoading(true);
     const { data } = await supabase
       .from("dream_tools")
-      .select("*, profiles:user_id(display_name, avatar_url)")
+      .select("*, profiles:user_id(display_name, avatar_url, is_verified)")
       .order("trending_score", { ascending: false })
       .limit(50);
     setDreams((data as any) || []);

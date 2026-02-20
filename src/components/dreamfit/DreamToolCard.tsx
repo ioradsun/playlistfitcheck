@@ -51,7 +51,7 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
                 <User size={16} className="text-muted-foreground" />
               )}
             </div>
-            {(dream.profiles as any)?.is_verified && (
+            {dream.profiles?.is_verified && (
               <span className="absolute -bottom-0.5 -right-0.5">
                 <VerifiedBadge size={14} />
               </span>
