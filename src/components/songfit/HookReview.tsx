@@ -220,9 +220,11 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
             <div className="px-3 py-2 flex items-start justify-between gap-3">
               <div className="flex-1 space-y-0.5">
-                <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                  <span className={verbiage.tier === "resolving" ? "opacity-50" : ""}>{verbiage.label}</span>
-                </p>
+                {verbiage.tier !== "resolving" && (
+                  <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                    {verbiage.label}
+                  </p>
+                )}
                 <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
                   {verbiage.summary}
                 </p>

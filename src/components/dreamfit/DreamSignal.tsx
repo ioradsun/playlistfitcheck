@@ -139,10 +139,11 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2 flex items-start justify-between gap-3">
           <div className="flex-1 space-y-0.5">
-            {/* Metadata Tier: 11px mono, tracking-widest, muted */}
-            <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground${v.tier === "resolving" ? " opacity-50" : ""}`}>
-              {v.label}
-            </p>
+            {v.tier !== "resolving" && (
+              <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                {v.label}
+              </p>
+            )}
             {/* Control Tier: 13px sans, muted/50 */}
             <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
               {v.summary}
