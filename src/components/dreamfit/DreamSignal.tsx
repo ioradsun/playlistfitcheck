@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 
-type SignalStep = "idle" | "active" | "done";
+type SignalStep = "idle" | "compose" | "done";
 
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
@@ -46,6 +46,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
   const [submitting, setSubmitting] = useState(false);
   const [localBackers, setLocalBackers] = useState(backersCount);
   const [localGreenlight, setLocalGreenlight] = useState(greenlightCount);
+  const [alreadyChecked, setAlreadyChecked] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
         setChosenType(data.signal_type === "greenlight" ? "signal" : "bypass");
         setStep("done");
       }
+      setAlreadyChecked(true);
     };
     checkExisting();
   }, [dreamId, user, sessionId]);
@@ -68,16 +70,16 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
   }, [backersCount, greenlightCount]);
 
   useEffect(() => {
-    if (step === "active") setTimeout(() => textareaRef.current?.focus(), 50);
+    if (step === "compose") setTimeout(() => textareaRef.current?.focus(), 50);
   }, [step]);
 
-  const demandStrength = localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
+  const pct = localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
   const signalsLabel = localBackers === 1 ? "1 signal" : `${localBackers} signals`;
-  const divider = <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />;
+  const v = getSignalVerbiage(localBackers, pct);
 
   const handleVoteClick = (type: "signal" | "bypass") => {
     setChosenType(type);
-    setStep("active");
+    setStep("compose");
   };
 
   const handleCancel = () => {
@@ -91,11 +93,11 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     if (user) query = query.eq("user_id", user.id);
     else query = (query as any).eq("session_id", sessionId).is("user_id", null);
     await query;
-    // Update local state only — no full refresh to avoid list re-render
     setLocalBackers(c => Math.max(c - 1, 0));
     if (chosenType === "signal") setLocalGreenlight(c => Math.max(c - 1, 0));
     setChosenType(null);
     setStep("idle");
+    // no onRefresh — avoids full list re-render
   };
 
   const handleSubmit = async () => {
@@ -112,117 +114,113 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
 
     const { error } = await (supabase.from("dream_backers") as any).insert(payload);
     if (!error) {
-      // Update local state only — no full refresh to avoid list re-render
       setLocalBackers(c => c + 1);
       if (signalType === "greenlight") setLocalGreenlight(c => c + 1);
-      setSubmitting(false);
       setContextNote("");
       setStep("done");
-    } else {
-      setSubmitting(false);
+      // no onRefresh — avoids full list re-render
+    }
+    setSubmitting(false);
+  };
+
+  const handleContextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
-  const pct = localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
-  const v = getSignalVerbiage(localBackers, pct);
+  if (!alreadyChecked) return null;
 
-  // All three states share the EXACT same outer skeleton to prevent height shifts:
-  // [divider] [top row] [divider] [bottom row] [divider]
-  // "done" fills the bottom row with a minimal placeholder so height stays constant.
+  // ── Done ─────────────────────────────────────────────────────────────────────
+  if (step === "done") {
+    return (
+      <div className="animate-fade-in">
+        <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+        <div className="px-3 py-2 flex items-start justify-between gap-3">
+          <div className="flex-1 space-y-0.5">
+            <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+              <span className={v.tier === "resolving" ? "opacity-50" : ""}>{v.label}</span>
+            </p>
+            <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
+              {v.summary}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <button onClick={() => onOpenComments(dreamId)} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors">
+              {signalsLabel}
+            </button>
+            <button onClick={handleRemoveSignal} className="text-muted-foreground/30 hover:text-muted-foreground transition-colors text-[10px] font-mono">
+              Turn Off Signal
+            </button>
+          </div>
+        </div>
+        <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+      </div>
+    );
+  }
 
-  const topRow = (
-    <div className="px-3 py-1.5 flex items-center justify-between">
-      <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-        {localBackers === 0 && step !== "done" ? (
-          <>Demand Strength: —</>
-        ) : (
-          <span className={v.tier === "resolving" ? "opacity-50" : ""}>{v.label}</span>
-        )}
-      </p>
-      <button
-        onClick={() => onOpenComments(dreamId)}
-        className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-2"
-      >
-        {signalsLabel}
-      </button>
-    </div>
-  );
-
-  // Bottom row is fixed height — idle: two buttons, active: textarea+broadcast, done: summary+turn off
-  const bottomRow = (
-    <div className="px-3 py-2.5">
-      {step === "idle" && (
-        <div className="flex gap-2">
+  // ── Idle: Signal / Bypass buttons ────────────────────────────────────────────
+  if (step === "idle") {
+    return (
+      <div>
+        <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+        <div className="flex gap-2 px-3 py-2.5">
           <button
             onClick={() => handleVoteClick("signal")}
-            className="flex-1 py-2 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[13px] font-bold tracking-[0.15em] text-muted-foreground transition-colors"
+            className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            Signal
+            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Signal</span>
           </button>
           <button
             onClick={() => handleVoteClick("bypass")}
-            className="flex-1 py-2 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[13px] font-bold tracking-[0.15em] text-muted-foreground transition-colors"
+            className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            Bypass
+            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Bypass</span>
           </button>
         </div>
-      )}
+        <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+      </div>
+    );
+  }
 
-      {step === "active" && (
-        <div className="flex gap-2">
+  // ── Compose: textarea + broadcast ────────────────────────────────────────────
+  return (
+    <div>
+      <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+      <div className="px-3 py-2.5 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">
+            {chosenType === "bypass" ? "Have a better idea?" : "Why does the FMLY need this?"}
+          </p>
+          <button
+            onClick={handleCancel}
+            className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
+            aria-label="Cancel"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex items-end gap-2">
           <textarea
             ref={textareaRef}
             value={contextNote}
             onChange={e => { if (e.target.value.length <= 280) setContextNote(e.target.value); }}
-            placeholder={chosenType === "bypass" ? "Have a better idea?" : "Why does the FMLY need this?"}
+            onKeyDown={handleContextKeyDown}
+            placeholder="Optional but helpful..."
             rows={2}
-            style={{ resize: "none", overflow: "hidden" }}
-            onInput={e => {
-              const el = e.currentTarget;
-              // Only grow beyond the 2-row default if user has typed enough
-              el.style.height = "auto";
-              el.style.height = Math.max(el.scrollHeight, 40) + "px";
-            }}
-            className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none leading-relaxed"
+            className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
           />
-          <div className="flex flex-col items-end justify-between shrink-0 gap-1">
-            <button onClick={handleCancel} className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors">
-              ✕
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="text-[12px] font-bold uppercase tracking-[0.12em] bg-foreground text-background px-2.5 py-1 rounded-md disabled:opacity-80 transition-opacity whitespace-nowrap"
-            >
-              {submitting ? "..." : "BROADCAST"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === "done" && (
-        <div className="flex items-center justify-between">
-          <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50 flex-1 pr-3">
-            {v.summary}
-          </p>
           <button
-            onClick={handleRemoveSignal}
-            className="text-muted-foreground/30 hover:text-muted-foreground transition-colors text-[10px] font-mono shrink-0"
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-3 py-1.5 rounded-md hover:opacity-90 disabled:opacity-60 transition-opacity"
           >
-            Turn Off Signal
+            {submitting ? "..." : "BROADCAST"}
           </button>
         </div>
-      )}
-    </div>
-  );
-
-  return (
-    <div>
-      {divider}
-      {topRow}
-      {divider}
-      {bottomRow}
-      {divider}
+      </div>
+      <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
     </div>
   );
 }
