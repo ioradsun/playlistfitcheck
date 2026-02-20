@@ -109,6 +109,17 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
     return { total: rows.length, hook, replay_yes, replay_no };
   };
 
+  const handleRemoveSignal = async () => {
+    let query = supabase.from("songfit_hook_reviews").delete().eq("post_id", postId);
+    if (user) query = query.eq("user_id", user.id);
+    else query = (query as any).eq("session_id", sessionId).is("user_id", null);
+    await query;
+    setResults(null);
+    setStep(2);
+    setContextNote("");
+    window.dispatchEvent(new CustomEvent("crowdfit:vote"));
+  };
+
   const handleSubmit = async (note: string, overrideReplay?: boolean) => {
     const replayValue = overrideReplay !== undefined ? overrideReplay : wouldReplay;
     try {
@@ -201,16 +212,24 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   ? `${replayPct}% of the FMLY would run it back.`
                   : `${replayPct}% are feeling this.`}
               </span>
-              {onOpenReviews ? (
+              <div className="flex items-center gap-3">
+                {onOpenReviews ? (
+                  <button
+                    onClick={onOpenReviews}
+                    className="text-muted-foreground/50 hover:text-foreground transition-colors"
+                  >
+                    {results.total} {signalLabel}
+                  </button>
+                ) : (
+                  <span className="text-muted-foreground/50">{results.total} {signalLabel}</span>
+                )}
                 <button
-                  onClick={onOpenReviews}
-                  className="text-muted-foreground/50 hover:text-foreground transition-colors"
+                  onClick={handleRemoveSignal}
+                  className="text-muted-foreground/30 hover:text-muted-foreground transition-colors text-[10px]"
                 >
-                  {results.total} {signalLabel}
+                  Turn Off Signal
                 </button>
-              ) : (
-                <span className="text-muted-foreground/50">{results.total} {signalLabel}</span>
-              )}
+              </div>
             </div>
           </div>
         );
