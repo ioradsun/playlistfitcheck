@@ -493,7 +493,8 @@ function extractAdlibsFromWords(
     const correctedEnd = Math.round((adlib.end - globalOffset) * 1000) / 1000;
 
     // ── Boundary Enforcement: discard adlibs beyond final Whisper word ────
-    if (correctedStart > trackEnd + 2.0) {
+    // No buffer — any adlib timestamped past the last Whisper word is a hallucination.
+    if (correctedStart > trackEnd) {
       console.log(`[boundary] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — beyond track end (${trackEnd.toFixed(3)}s)`);
       ghostCount++;
       continue;
@@ -525,16 +526,17 @@ function extractAdlibsFromWords(
           if (score > bestPhoneticScore) { bestPhoneticScore = score; bestPhoneticWord = w; }
         }
 
-        // Also fall back to nearest-by-time word (existing behaviour)
+        // Fall back to nearest-by-time word across the whole segment (no 0.5s cap)
         const nearestByTime = segWords.reduce<{ w: WhisperWord | null; dist: number }>(
           (acc, w) => { const d = Math.abs(w.start - correctedStart); return d < acc.dist ? { w, dist: d } : acc; },
           { w: null, dist: Infinity }
         );
 
-        // Prefer phonetic match (> 0.80) over pure time proximity
-        const chosen = bestPhoneticScore >= 0.80
+        // Prefer phonetic match (> 0.70 per spec) over pure time proximity
+        const PHONETIC_THRESHOLD = 0.70;
+        const chosen = bestPhoneticScore >= PHONETIC_THRESHOLD
           ? bestPhoneticWord
-          : (nearestByTime.w && nearestByTime.dist <= 0.5 ? nearestByTime.w : null);
+          : nearestByTime.w;  // no distance cap — entire segment is the search window
 
         if (chosen) {
           const oldWord = chosen.word.trim();
@@ -551,18 +553,23 @@ function extractAdlibsFromWords(
       continue; // corrections are applied to main, not added as adlib overlay
     }
 
-    // ── Rule 1: Identity Pruning (±50ms — Anti-Ghosting) ──────────────────
-    // If this adlib's text AND timestamp match a Whisper word exactly (within 50ms),
-    // it is a lead vocal duplicate — discard it immediately.
-    const IDENTITY_WINDOW_MS = 0.050;
+    // ── Rule 1: Identity Pruning (±100ms — Anti-Ghosting, v3.2) ──────────
+    // Two paths to catch a ghost:
+    //  a) text AND time match within 100ms (broadened from 50ms per v3.2 spec)
+    //  b) exact text equality within 100ms (no tokenOverlap needed — direct string)
+    const IDENTITY_WINDOW_MS = 0.100;
+    const normAdlibNorm = normalize(adlib.text);
     const identityMatch = words.find(w => {
       const timeDiff = Math.abs(w.start - correctedStart);
-      const textSim = tokenOverlap(adlib.text, w.word);
-      return timeDiff <= IDENTITY_WINDOW_MS && textSim >= 0.9;
+      if (timeDiff > IDENTITY_WINDOW_MS) return false;
+      // Path a: token overlap
+      if (tokenOverlap(adlib.text, w.word) >= 0.9) return true;
+      // Path b: exact normalized text
+      return normalize(w.word) === normAdlibNorm;
     });
     if (identityMatch) {
       ghostCount++;
-      console.log(`[identity-prune] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — exact match with Whisper word "${identityMatch.word}" (±50ms)`);
+      console.log(`[identity-prune] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — ghost of Whisper word "${identityMatch.word}" (±100ms)`);
       continue;
     }
 
@@ -940,7 +947,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.1-phonetic",
+          version: "production-master-v3.2",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
