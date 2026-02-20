@@ -67,7 +67,14 @@ CORE DIRECTIVE: Transcribe the provided audio into a precise JSON structure. Acc
 - Criteria: Highest lyrical density, melodic peak, or title repetition.
 - Output: Return ONLY the highest-scoring hook in the hooks array.
 
-4. MANDATORY OUTPUT SCHEMA (STRICT JSON ONLY)
+4. DRIFT PREVENTION & ANCHORING
+- Absolute Time Sync: Do NOT estimate duration based on word count or lyric density. You MUST reference the absolute file timestamp for every single line by listening to the audio directly.
+- Mid-Track Re-Calibration: Every 30 seconds of audio, perform a "Hard Sync." Ensure the line starting near that mark (e.g., 30s, 60s, 90s) aligns exactly with the audible transients (beat hits, breath before the phrase) in the audio signal.
+- Hook Alignment: The "Hottest Hook" timestamps are your PRIMARY ANCHORS. They must be 100% frame-accurate as they drive the "Clip Preview" feature. Double-check these timestamps against the actual audio before finalizing.
+- Decimal Consistency: Use two-decimal precision (e.g., 4.50, 113.89). End times must NOT overlap the next start time unless the line is tagged "adlib".
+- VBR Compensation: Audio files may use Variable Bitrate encoding. Do NOT extrapolate timestamps from a constant bitrate assumption. Derive all timestamps from the actual audio content position.
+
+5. MANDATORY OUTPUT SCHEMA (STRICT JSON ONLY)
 Return ONLY a valid JSON object. No markdown, no backticks, no preamble.
 
 {
