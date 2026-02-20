@@ -813,15 +813,19 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 {/* ── WHISPER OUTPUT ── */}
                 <div className="mb-3">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">📤 Whisper — Output ({debugData.whisper?.output?.segmentCount} segments)</p>
+                    <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">📤 Whisper — Output ({debugData.whisper?.output?.wordCount ?? 0} words / {debugData.whisper?.output?.segmentCount} segments)</p>
                     <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.whisper?.output, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
                   </div>
                   <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Raw text:</p>
                   <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
                     {debugData.whisper?.output?.rawText || "(no raw text)"}
                   </pre>
-                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Segments (first 20):</p>
-                  <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap">
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Words — source of truth (first 40):</p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap mb-1">
+                    {JSON.stringify(debugData.whisper?.output?.words?.slice(0, 40), null, 2) || "(no words — upgrade needed)"}
+                  </pre>
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Segments — grouping context (first 20):</p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
                     {JSON.stringify(debugData.whisper?.output?.segments?.slice(0, 20), null, 2) || "(no segments)"}
                   </pre>
                 </div>

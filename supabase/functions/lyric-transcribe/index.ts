@@ -14,6 +14,12 @@ interface LyricLine {
   tag: "main" | "adlib";
 }
 
+interface WhisperWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
 interface GeminiAdlib {
   start: string;       // "MM:SS.mmm" or "HH:MM:SS.mmm"
   end: string;
@@ -63,13 +69,6 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
-function similarity(a: string, b: string): number {
-  if (!a || !b) return 0;
-  const maxLen = Math.max(a.length, b.length);
-  if (maxLen === 0) return 1;
-  return 1 - levenshtein(a, b) / maxLen;
-}
-
 // ── Text normalizer ───────────────────────────────────────────────────────────
 function normalize(s: string): string {
   return s
@@ -79,23 +78,18 @@ function normalize(s: string): string {
     .trim();
 }
 
-function wordOverlap(a: string, b: string): number {
-  if (!a || !b) return 0;
-  const wordsA = new Set(a.split(" ").filter(Boolean));
-  const wordsB = new Set(b.split(" ").filter(Boolean));
-  if (wordsA.size === 0 || wordsB.size === 0) return 0;
-  let shared = 0;
-  for (const w of wordsA) if (wordsB.has(w)) shared++;
-  return shared / Math.min(wordsA.size, wordsB.size);
-}
-
-// ── Whisper: accurate timestamps ──────────────────────────────────────────────
+// ── Whisper: word-level granularity ──────────────────────────────────────────
 async function runWhisper(
   audioBase64: string,
   ext: string,
   mimeType: string,
   apiKey: string
-): Promise<{ segments: LyricLine[]; rawText: string; inputInfo: { format: string; mimeType: string; estimatedBytes: number } }> {
+): Promise<{
+  words: WhisperWord[];
+  segments: Array<{ start: number; end: number; text: string }>;
+  rawText: string;
+  inputInfo: { format: string; mimeType: string; estimatedBytes: number };
+}> {
   const binaryStr = atob(audioBase64);
   const bytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
@@ -106,6 +100,8 @@ async function runWhisper(
   form.append("file", blob, `audio.${ext}`);
   form.append("model", "whisper-1");
   form.append("response_format", "verbose_json");
+  // Request BOTH word and segment granularities in one call
+  form.append("timestamp_granularities[]", "word");
   form.append("timestamp_granularities[]", "segment");
 
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -120,16 +116,27 @@ async function runWhisper(
   }
 
   const data = await res.json();
-  const segments: LyricLine[] = (data.segments || [])
+
+  // Word-level array — source of truth for timing
+  const words: WhisperWord[] = (data.words || [])
+    .map((w: any) => ({
+      word: String(w.word ?? "").trim(),
+      start: Math.round((Number(w.start) || 0) * 1000) / 1000,
+      end: Math.round((Number(w.end) || 0) * 1000) / 1000,
+    }))
+    .filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
+
+  // Segments kept for fallback / grouping context
+  const segments = (data.segments || [])
     .map((seg: any) => ({
       start: Math.round((Number(seg.start) || 0) * 10) / 10,
       end: Math.round((Number(seg.end) || 0) * 10) / 10,
       text: String(seg.text ?? "").trim(),
-      tag: "main" as const,
     }))
-    .filter((l: LyricLine) => l.text.length > 0 && l.end > l.start);
+    .filter((s: any) => s.text.length > 0 && s.end > s.start);
 
   return {
+    words,
     segments,
     rawText: data.text || "",
     inputInfo: { format: ext, mimeType, estimatedBytes },
@@ -318,98 +325,228 @@ FINAL OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   };
 }
 
-// ── Find segments near a target time ─────────────────────────────────────────
-function findNearSegment(segments: LyricLine[], targetTime: number, windowSec = 15): number[] {
-  return segments
-    .map((s, i) => ({ i, dist: Math.abs(s.start - targetTime) }))
-    .filter(({ dist }) => dist <= windowSec)
-    .sort((a, b) => a.dist - b.dist)
-    .map(({ i }) => i);
+// ── Build lines from segments, respecting word-level gap detection (>0.5s) ────
+// Groups Whisper segments into LyricLines. Segments separated by >0.5s get
+// their own line so highlights clear cleanly between vocal phrases.
+function buildLinesFromSegments(
+  segments: Array<{ start: number; end: number; text: string }>,
+  words: WhisperWord[]
+): LyricLine[] {
+  if (segments.length === 0) return [];
+
+  const GAP_THRESHOLD = 0.5;
+  const lines: LyricLine[] = [];
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const nextSeg = segments[i + 1];
+
+    // Trim end to next segment start minus a tiny buffer to avoid overlap
+    let end = seg.end;
+    if (nextSeg && seg.end > nextSeg.start) {
+      end = Math.round((nextSeg.start - 0.05) * 1000) / 1000;
+    }
+
+    // Check gap to next segment — if >0.5s, the current line naturally "clears"
+    // (the end timestamp already handles it; we just log it)
+    const gap = nextSeg ? nextSeg.start - end : 0;
+    if (gap > GAP_THRESHOLD) {
+      console.log(`Gap ${gap.toFixed(2)}s between seg[${i}] and seg[${i + 1}]`);
+    }
+
+    lines.push({
+      start: Math.round(seg.start * 1000) / 1000,
+      end: Math.round(end * 1000) / 1000,
+      text: seg.text,
+      tag: "main",
+    });
+  }
+
+  return lines;
 }
 
-// ── Tag adlibs: snap Gemini timestamps to Whisper segments ────────────────────
-function tagAdlibsAnchored(segments: LyricLine[], adlibs: GeminiAdlib[]): LyricLine[] {
-  if (adlibs.length === 0) return segments;
-  const result = segments.map(s => ({ ...s }));
+// ── Snap adlibs using word-level precision ────────────────────────────────────
+// For each Gemini adlib, find the best matching word(s) in the Whisper word array
+// by time proximity + fuzzy text match, then emit a precise sub-line at word timing.
+function extractAdlibsFromWords(
+  lines: LyricLine[],
+  adlibs: GeminiAdlib[],
+  words: WhisperWord[]
+): LyricLine[] {
+  if (adlibs.length === 0 || words.length === 0) return lines;
+
+  const result: LyricLine[] = lines.map(l => ({ ...l }));
+  const adlibLines: LyricLine[] = [];
 
   for (const adlib of adlibs) {
     const adlibStartSec = parseTimestamp(adlib.start);
+    const adlibEndSec = parseTimestamp(adlib.end);
     const normAdlibText = normalize(adlib.text);
+    const adlibWordTokens = normAdlibText.split(" ").filter(Boolean);
 
-    let bestIdx = -1;
-    let bestScore = 0;
+    if (adlibWordTokens.length === 0) continue;
 
-    // Strategy 1: time overlap ± 1.5s
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      if (adlibStartSec < seg.start - 1.5 || adlibStartSec > seg.end + 1.5) continue;
-      const timeDist = Math.abs(seg.start - adlibStartSec);
-      const normSeg = normalize(seg.text);
-      const adlibWords = normAdlibText.split(" ").filter(Boolean);
-      const segWords = normSeg.split(" ").filter(Boolean);
-      const contained = adlibWords.length > 0 &&
-        adlibWords.every(w => segWords.some(sw => levenshtein(sw, w) <= 1));
-      const textScore = contained ? 0.9 : Math.max(similarity(normSeg, normAdlibText), wordOverlap(normSeg, normAdlibText));
-      const score = textScore * 0.6 + (1 / (1 + timeDist)) * 0.4;
-      if (score > bestScore) { bestScore = score; bestIdx = i; }
+    // Search words within a ±5s window of Gemini's timestamp
+    const windowWords = words.filter(
+      w => w.start >= adlibStartSec - 5 && w.start <= adlibEndSec + 5
+    );
+
+    if (windowWords.length === 0) {
+      console.log(`Adlib word window empty: "${adlib.text}" @${adlibStartSec.toFixed(1)}s`);
+      continue;
     }
 
-    // Strategy 2: fallback ± 20s window text match
-    if (bestIdx === -1) {
-      for (const idx of findNearSegment(segments, adlibStartSec, 20)) {
-        const normSeg = normalize(segments[idx].text);
-        const adlibWords = normAdlibText.split(" ").filter(Boolean);
-        const segWords = normSeg.split(" ").filter(Boolean);
-        const contained = adlibWords.length > 0 &&
-          adlibWords.every(w => segWords.some(sw => levenshtein(sw, w) <= 1));
-        const score = contained ? 0.9 : Math.max(similarity(normSeg, normAdlibText), wordOverlap(normSeg, normAdlibText));
-        if (score > bestScore && score >= 0.4) { bestScore = score; bestIdx = idx; }
+    // Find the best starting word by time + fuzzy match
+    let bestWordIdx = -1;
+    let bestScore = 0;
+
+    for (let wi = 0; wi < windowWords.length; wi++) {
+      const w = windowWords[wi];
+      const normWord = normalize(w.word);
+      const firstToken = adlibWordTokens[0];
+      const dist = levenshtein(normWord, firstToken);
+      const maxLen = Math.max(normWord.length, firstToken.length, 1);
+      const textSim = 1 - dist / maxLen;
+      const timeDist = Math.abs(w.start - adlibStartSec);
+      const timeScore = 1 / (1 + timeDist * 0.5);
+      const score = textSim * 0.65 + timeScore * 0.35;
+      if (score > bestScore) { bestScore = score; bestWordIdx = wi; }
+    }
+
+    if (bestScore < 0.3 || bestWordIdx === -1) {
+      console.log(`Adlib no word match: "${adlib.text}" @${adlibStartSec.toFixed(1)}s bestScore=${bestScore.toFixed(2)}`);
+      continue;
+    }
+
+    // Build the adlib span across matched word tokens
+    const startWord = windowWords[bestWordIdx];
+    let endWord = startWord;
+
+    if (adlibWordTokens.length > 1) {
+      // Try to match subsequent tokens greedily
+      let tokenIdx = 1;
+      for (
+        let wi = bestWordIdx + 1;
+        wi < windowWords.length && tokenIdx < adlibWordTokens.length;
+        wi++
+      ) {
+        const w = windowWords[wi];
+        const normWord = normalize(w.word);
+        const token = adlibWordTokens[tokenIdx];
+        const dist = levenshtein(normWord, token);
+        const maxLen = Math.max(normWord.length, token.length, 1);
+        if (1 - dist / maxLen >= 0.5) {
+          endWord = w;
+          tokenIdx++;
+        }
       }
     }
 
-    if (bestIdx !== -1) {
-      result[bestIdx].tag = "adlib";
-      console.log(`Adlib tagged: seg[${bestIdx}] "${segments[bestIdx].text.slice(0, 40)}" | gemini="${adlib.text}" @${adlibStartSec.toFixed(1)}s score=${bestScore.toFixed(2)}`);
-    } else {
-      console.log(`Adlib not matched: "${adlib.text}" @${adlibStartSec.toFixed(1)}s`);
-    }
+    const preciseStart = Math.round(startWord.start * 1000) / 1000;
+    const preciseEnd = Math.round(endWord.end * 1000) / 1000;
+
+    console.log(
+      `Adlib word-snapped: "${adlib.text}" → [${preciseStart}–${preciseEnd}s] from word "${startWord.word}" score=${bestScore.toFixed(2)}`
+    );
+
+    adlibLines.push({
+      start: preciseStart,
+      end: preciseEnd,
+      text: adlib.text,
+      tag: "adlib",
+    });
   }
-  return result;
+
+  // Merge result lines + adlib lines, sorted by start time
+  const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
+
+  const adlibCount = merged.filter(l => l.tag === "adlib").length;
+  console.log(`Word-level adlib extraction: ${adlibCount} adlibs injected`);
+
+  return merged;
 }
 
-// ── Snap hook to Whisper timestamps ──────────────────────────────────────────
-function findHookAnchored(
-  segments: LyricLine[],
+// ── Snap hook to word boundaries ──────────────────────────────────────────────
+function findHookFromWords(
+  words: WhisperWord[],
   hook: GeminiHook
 ): { start: number; end: number; score: number; previewText: string } | null {
-  if (!hook || !hook.transcript) return null;
-  const { start_sec, end_sec, transcript } = hook;
+  if (!hook) return null;
 
-  const hookSegments = segments.filter(s => s.start < end_sec + 2 && s.end > start_sec - 2);
+  const { start_sec, end_sec, transcript, confidence } = hook;
 
-  if (hookSegments.length === 0) {
-    console.warn(`Hook: no Whisper segments in window ${start_sec}–${end_sec}s, using Gemini times`);
-    return { start: start_sec, end: end_sec, score: Math.round((hook.confidence || 0.8) * 100), previewText: transcript.slice(0, 80) };
+  // Words within the Gemini time window ±3s
+  const windowWords = words.filter(
+    w => w.start >= start_sec - 3 && w.end <= end_sec + 3
+  );
+
+  if (windowWords.length === 0) {
+    console.warn(`Hook: no words in window ${start_sec}–${end_sec}s, using Gemini times`);
+    return {
+      start: start_sec,
+      end: end_sec,
+      score: Math.round((confidence || 0.8) * 100),
+      previewText: transcript.slice(0, 80),
+    };
   }
 
-  const snapStart = hookSegments.reduce((best, s) =>
-    Math.abs(s.start - start_sec) < Math.abs(best.start - start_sec) ? s : best);
-  const snapEnd = hookSegments.reduce((best, s) =>
-    Math.abs(s.end - end_sec) < Math.abs(best.end - end_sec) ? s : best);
+  // Try to find the first word of the hook transcript in the window
+  const hookWords = normalize(transcript).split(" ").filter(Boolean);
+  let snapStart = windowWords[0].start;
+  let snapEnd = windowWords[windowWords.length - 1].end;
 
-  let actualStart = snapStart.start;
-  let actualEnd = snapEnd.end;
-  const duration = actualEnd - actualStart;
+  if (hookWords.length > 0) {
+    const firstToken = hookWords[0];
+    let bestStartScore = 0;
+    let bestStartIdx = 0;
+    for (let i = 0; i < windowWords.length; i++) {
+      const w = windowWords[i];
+      const normWord = normalize(w.word);
+      const dist = levenshtein(normWord, firstToken);
+      const maxLen = Math.max(normWord.length, firstToken.length, 1);
+      const score = 1 - dist / maxLen;
+      if (score > bestStartScore) { bestStartScore = score; bestStartIdx = i; }
+    }
 
+    if (bestStartScore >= 0.4) {
+      snapStart = windowWords[bestStartIdx].start;
+    }
+
+    // Find last word of hook transcript
+    const lastToken = hookWords[hookWords.length - 1];
+    let bestEndScore = 0;
+    let bestEndIdx = windowWords.length - 1;
+    for (let i = windowWords.length - 1; i >= bestStartIdx; i--) {
+      const w = windowWords[i];
+      const normWord = normalize(w.word);
+      const dist = levenshtein(normWord, lastToken);
+      const maxLen = Math.max(normWord.length, lastToken.length, 1);
+      const score = 1 - dist / maxLen;
+      if (score > bestEndScore) { bestEndScore = score; bestEndIdx = i; }
+    }
+
+    if (bestEndScore >= 0.4 && windowWords[bestEndIdx].end > snapStart) {
+      snapEnd = windowWords[bestEndIdx].end;
+    }
+  }
+
+  // Clamp duration 4s–15s
+  const duration = snapEnd - snapStart;
   if (duration > 15) {
-    console.warn(`Hook duration ${duration.toFixed(1)}s > 15s, clamping to 12s`);
-    actualEnd = actualStart + 12;
+    console.warn(`Hook duration ${duration.toFixed(1)}s > 15s, clamping`);
+    snapEnd = snapStart + 12;
   } else if (duration < 4) {
-    actualEnd = end_sec;
+    snapEnd = end_sec;
   }
 
-  console.log(`Hook snapped: ${actualStart.toFixed(1)}s–${actualEnd.toFixed(1)}s (${(actualEnd - actualStart).toFixed(1)}s), conf=${hook.confidence}`);
-  return { start: actualStart, end: actualEnd, score: Math.round((hook.confidence || 0.8) * 100), previewText: transcript.slice(0, 80) };
+  console.log(`Hook word-snapped: ${snapStart.toFixed(3)}s–${snapEnd.toFixed(3)}s (${(snapEnd - snapStart).toFixed(1)}s), conf=${confidence}`);
+
+  return {
+    start: Math.round(snapStart * 1000) / 1000,
+    end: Math.round(snapEnd * 1000) / 1000,
+    score: Math.round((confidence || 0.8) * 100),
+    previewText: transcript.slice(0, 80),
+  };
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -441,7 +578,7 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
-    console.log(`Anchor & Align v5: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
+    console.log(`Anchor & Align v6 (word-level): ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
 
     // ── Whisper input captured for debug ────────────────────────────────────
     const whisperInput = {
@@ -450,7 +587,10 @@ serve(async (req) => {
       mimeType,
       estimatedMB: Math.round(estimatedBytes / 1024 / 1024 * 10) / 10,
       endpoint: "https://api.openai.com/v1/audio/transcriptions",
-      params: { response_format: "verbose_json", timestamp_granularities: ["segment"] },
+      params: {
+        response_format: "verbose_json",
+        timestamp_granularities: ["word", "segment"],
+      },
     };
 
     // ── Gemini input captured for debug ─────────────────────────────────────
@@ -462,6 +602,7 @@ serve(async (req) => {
       contentParts: ["image_url (audio as data URI)", "text instruction"],
     };
 
+    // Run Whisper and Gemini in parallel
     const [whisperResult, geminiResult] = await Promise.allSettled([
       runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY),
       runGeminiAnalysis(audioBase64, mimeType, LOVABLE_API_KEY),
@@ -476,28 +617,27 @@ serve(async (req) => {
       );
     }
 
-    const { segments: rawSegments, rawText } = whisperResult.value;
-    const whisperSegments = rawSegments.map((seg, i) => {
-      if (i < rawSegments.length - 1 && seg.end > rawSegments[i + 1].start) {
-        return { ...seg, end: Math.round((rawSegments[i + 1].start - 0.1) * 10) / 10 };
-      }
-      return seg;
-    });
+    const { words, segments, rawText } = whisperResult.value;
 
-    console.log(`Whisper: ${whisperSegments.length} segments`);
+    console.log(`Whisper: ${words.length} words, ${segments.length} segments`);
 
     // ── Whisper output for debug ─────────────────────────────────────────────
     const whisperOutput = {
-      segmentCount: whisperSegments.length,
+      wordCount: words.length,
+      segmentCount: segments.length,
       rawText: rawText.slice(0, 1000),
-      segments: whisperSegments.slice(0, 50).map(s => ({ start: s.start, end: s.end, text: s.text })),
+      words: words.slice(0, 80).map(w => ({ word: w.word, start: w.start, end: w.end })),
+      segments: segments.slice(0, 30).map(s => ({ start: s.start, end: s.end, text: s.text })),
     };
+
+    // Build initial lines from Whisper segments (respects gap clearing)
+    const baseLines = buildLinesFromSegments(segments, words);
 
     let title = "Unknown";
     let artist = "Unknown";
     let metadata: any = undefined;
     let hooks: any[] = [];
-    let lines: LyricLine[] = whisperSegments;
+    let lines: LyricLine[] = baseLines;
     let geminiUsed = false;
     let geminiOutput: any = { status: "not_run" };
     let geminiError: string | null = null;
@@ -515,12 +655,16 @@ serve(async (req) => {
         genre_hint: g.metadata.genre_hint,
       };
 
-      console.log(`Gemini: ${g.adlibs.length} adlibs, hook=${g.hottest_hook ? `${g.hottest_hook.start_sec.toFixed(1)}–${g.hottest_hook.end_sec.toFixed(1)}s` : "none"}, bpm=${metadata.bpm_estimate}, key=${metadata.key}`);
+      console.log(
+        `Gemini: ${g.adlibs.length} adlibs, hook=${g.hottest_hook ? `${g.hottest_hook.start_sec.toFixed(1)}–${g.hottest_hook.end_sec.toFixed(1)}s` : "none"}, bpm=${metadata.bpm_estimate}, key=${metadata.key}`
+      );
 
-      lines = tagAdlibsAnchored(whisperSegments, g.adlibs);
+      // Word-level adlib extraction — extracts precise sub-lines from word array
+      lines = extractAdlibsFromWords(baseLines, g.adlibs, words);
 
+      // Word-level hook snapping
       if (g.hottest_hook) {
-        const hookSpan = findHookAnchored(whisperSegments, g.hottest_hook);
+        const hookSpan = findHookFromWords(words, g.hottest_hook);
         if (hookSpan) hooks = [{ ...hookSpan, reasonCodes: [] }];
       }
 
@@ -553,7 +697,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v5",
+          version: "anchor-align-v6-word",
           geminiUsed,
           geminiError,
           inputBytes: Math.round(estimatedBytes),
