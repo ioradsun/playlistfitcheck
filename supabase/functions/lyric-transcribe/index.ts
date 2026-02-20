@@ -97,7 +97,60 @@ function tokenOverlap(a: string, b: string): number {
   return matches / Math.max(tokA.length, tokB.length);
 }
 
-// ── Phonetic Similarity (Soundex-style + Levenshtein hybrid) ─────────────────
+// ── Soundex (English, 4-char) ─────────────────────────────────────────────────
+/**
+ * Standard Soundex encoding. Used as a phonetic root guard to prevent
+ * false swaps like "race"→"rain" vs correct swaps like "range"→"rain".
+ *
+ * Soundex codes:
+ *   "rain"  → R500   "range" → R520   "race"  → R200
+ *   R500 vs R520: first 2 chars match "R5" ✓ → swap allowed
+ *   R500 vs R200: first 2 chars "R5" vs "R2" ✗ → swap blocked
+ */
+function soundex(s: string): string {
+  const clean = s.toLowerCase().replace(/[^a-z]/g, "");
+  if (!clean) return "0000";
+  const MAP: Record<string, string> = {
+    b: "1", f: "1", p: "1", v: "1",
+    c: "2", g: "2", j: "2", k: "2", q: "2", s: "2", x: "2", z: "2",
+    d: "3", t: "3",
+    l: "4",
+    m: "5", n: "5",
+    r: "6",
+  };
+  const first = clean[0].toUpperCase();
+  let code = first;
+  let prev = MAP[clean[0]] ?? "0";
+  for (let i = 1; i < clean.length && code.length < 4; i++) {
+    const c = MAP[clean[i]] ?? "0";
+    if (c !== "0" && c !== prev) code += c;
+    prev = c;
+  }
+  return code.padEnd(4, "0");
+}
+
+/**
+ * Returns true if the phonetic roots of two words are compatible for swapping.
+ * Guards: (1) Soundex first-2-chars must match. (2) word-length diff must be ≤ 2.
+ *
+ * rain  / range: soundex R500/R520 → "R5" matches, |4-5|=1 ≤ 2 ✓
+ * rain  / race:  soundex R500/R200 → "R5" vs "R2" mismatch        ✗
+ * round / range: soundex R530/R520 → "R5" matches, |5-5|=0 ≤ 2   ✓ (expected)
+ */
+function phoneticRootMatch(a: string, b: string): boolean {
+  const ca = a.toLowerCase().replace(/[^a-z]/g, "");
+  const cb = b.toLowerCase().replace(/[^a-z]/g, "");
+  if (Math.abs(ca.length - cb.length) > 2) return false;
+  const sa = soundex(ca);
+  const sb = soundex(cb);
+  // First letter must match (same initial consonant)
+  if (sa[0] !== sb[0]) return false;
+  // First Soundex digit must match (same primary consonant class)
+  if (sa[1] !== sb[1]) return false;
+  return true;
+}
+
+// ── Phonetic Similarity (Levenshtein + consonant skeleton + prefix bonus) ─────
 /**
  * Returns a 0–1 phonetic similarity between two short words.
  * v3.5: Added shared-prefix bonus so short rhymes like "rain"→"range" score higher.
@@ -106,7 +159,7 @@ function tokenOverlap(a: string, b: string): number {
  *   levScore  = 1 - 2/5 = 0.60
  *   skelScore = 1 - 1/3 = 0.67  (skeleton: rn vs rng)
  *   prefixBonus = 3/5 * 0.20   = 0.12  (shared prefix "ran")
- *   total ≈ 0.60*0.55 + 0.67*0.35 + 0.12 = 0.68  → clears 0.50 threshold
+ *   total ≈ 0.60*0.55 + 0.67*0.35 + 0.12 = 0.68  → clears 0.65 threshold
  */
 function phoneticSimilarity(a: string, b: string): number {
   const clean = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
@@ -620,28 +673,34 @@ function extractAdlibsFromWords(
         }
       }
 
-      // v3.8: Threshold 0.65 — mathematically correct cutoff:
-      //   "range"→"rain" scores ~0.685 (passes ✓)
-      //   "race" →"rain" scores ~0.55  (blocked ✗ — prevents false swaps)
+      // v3.8-final: Two-gate phonetic swap guard
+      //   Gate 1 — Soundex root match: "range"→"rain" R520/R500 share "R5" ✓
+      //                                 "race" →"rain" R200/R500 "R2"≠"R5"  ✗
+      //   Gate 2 — Levenshtein threshold 0.65 (empirically safe cutoff)
       const PHONETIC_THRESHOLD = 0.65;
       if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
         const oldWord = bestPhoneticWord.word.trim();
-        // Guard: only swap if the words are genuinely different (not near-identical)
-        const similarity = 1 - levenshtein(normalize(oldWord), normalize(adlib.text)) / Math.max(oldWord.length, adlib.text.length, 1);
-        if (similarity < 0.95) {
-          bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
-          bestSeg.lineRef.geminiConflict = oldWord;
-          (bestSeg.lineRef as any).isCorrection = true;
-          (bestSeg.lineRef as any).correctedWord = adlib.text;
-          correctionCount++;
-          console.log(`[qa-swap] v3.8 phonetic swap "${oldWord}" → "${adlib.text}" (score=${bestPhoneticScore.toFixed(2)}, seg="${bestSeg.lineRef.text.slice(0, 40)}")`);
+        // Gate 1: Soundex root guard — abort if phonetic roots don't match
+        if (!phoneticRootMatch(oldWord, adlib.text)) {
+          console.log(`[qa-swap] Soundex root mismatch: "${oldWord}" (${soundex(oldWord)}) vs "${adlib.text}" (${soundex(adlib.text)}) — swap aborted`);
         } else {
-          console.log(`[qa-swap] Skipped correction "${adlib.text}" — near-identical to "${oldWord}" (sim=${similarity.toFixed(2)})`);
+          // Gate 2: only swap if the words are genuinely different (not near-identical)
+          const similarity = 1 - levenshtein(normalize(oldWord), normalize(adlib.text)) / Math.max(oldWord.length, adlib.text.length, 1);
+          if (similarity < 0.95) {
+            bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
+            bestSeg.lineRef.geminiConflict = oldWord;
+            (bestSeg.lineRef as any).isCorrection = true;
+            (bestSeg.lineRef as any).correctedWord = adlib.text;
+            correctionCount++;
+            console.log(`[qa-swap] v3.8-final swap "${oldWord}" (${soundex(oldWord)}) → "${adlib.text}" (${soundex(adlib.text)}) score=${bestPhoneticScore.toFixed(2)}`);
+          } else {
+            console.log(`[qa-swap] Skipped — near-identical to "${oldWord}" (sim=${similarity.toFixed(2)})`);
+          }
         }
       } else {
-        console.log(`[qa-swap] No phonetic match for correction "${adlib.text}" @ ${correctedStart.toFixed(3)}s — best score ${bestPhoneticScore.toFixed(2)} < ${PHONETIC_THRESHOLD}`);
+        console.log(`[qa-swap] No match for "${adlib.text}" @ ${correctedStart.toFixed(3)}s — best score ${bestPhoneticScore.toFixed(2)} < ${PHONETIC_THRESHOLD}`);
       }
-      continue; // corrections always applied to main lines, never promoted as adlib overlay
+      continue;
     }
 
     // ── Rule 3: Intro/Outro Zone Preservation (v3.8) ─────────────────────
@@ -672,19 +731,20 @@ function extractAdlibsFromWords(
       continue;
     }
 
-    // ── Rule 1: Identity Pruning (Anti-Ghosting, v3.8) ───────────────────────
-    // Three-path pruning to catch all ghost variants:
-    //  a) text AND time match within ±150ms (tight window for distinct words)
-    //  b) exact normalized text equality within ±150ms
-    //  c) short filler words ("yeah", "ayy", "uh", etc.) within ±500ms of ANY
-    //     Whisper word — these are near-always lead vocal echoes, not adlibs.
-    //     Hard-delete: do NOT tag as floating, remove from array entirely.
+    // ── Rule 1: Identity Executioner (Anti-Ghosting, v3.8-final) ────────────
+    // Four-path hard-delete. No floating — if caught here, the adlib is GONE.
+    //  a) token overlap ≥ 0.9 AND time within ±150ms
+    //  b) exact normalized text match within ±150ms
+    //  c) filler word (yeah/ayy/uh/oh/etc.) matches ANY Whisper word within ±500ms
+    //  d) filler word appears in Whisper SEGMENT TEXT within ±2.0s window
+    //     (catches cases where Whisper tokenized it inside a multi-word segment)
     const IDENTITY_WINDOW_MS = 0.150;
     const FILLER_WINDOW_MS = 0.500;
+    const FILLER_SEGMENT_WINDOW = 2.0;
     const normAdlibNorm = normalize(adlib.text);
     const isFiller = /^(yeah+|yea|ayy+|ay|uh+|ah+|oh+|mm+|hmm+|woo+|ooh+|aye|ok|okay|let'?s go|come on)$/i.test(normAdlibNorm);
 
-    // Path a + b: tight window
+    // Path a + b: tight word-level window
     const identityMatchTight = words.find(w => {
       const timeDiff = Math.abs(w.start - correctedStart);
       if (timeDiff > IDENTITY_WINDOW_MS) return false;
@@ -692,7 +752,7 @@ function extractAdlibsFromWords(
       return normalize(w.word) === normAdlibNorm;
     });
 
-    // Path c: wide filler window — only for short filler exclamations
+    // Path c: wide filler word-level window
     const identityMatchFiller = !identityMatchTight && isFiller
       ? words.find(w => {
           const timeDiff = Math.abs(w.start - correctedStart);
@@ -701,11 +761,27 @@ function extractAdlibsFromWords(
         })
       : undefined;
 
-    const identityMatch = identityMatchTight ?? identityMatchFiller;
-    if (identityMatch) {
+    // Path d: filler word appears in a Whisper segment's text within ±2.0s
+    // This catches "yeah" embedded in a segment like "run the race yeah" where
+    // Whisper may not have emitted it as a standalone word-level token.
+    const identityMatchSegment = !identityMatchTight && !identityMatchFiller && isFiller
+      ? mainSegments.find(seg => {
+          const timeDiff = Math.min(
+            Math.abs(seg.start - correctedStart),
+            Math.abs(seg.end - correctedStart)
+          );
+          if (timeDiff > FILLER_SEGMENT_WINDOW) return false;
+          const segTokens = normalize(seg.text).split(" ").filter(Boolean);
+          return segTokens.includes(normAdlibNorm);
+        })
+      : undefined;
+
+    // Synthesize a fake "word" for logging when caught by segment path
+    const identityMatchWord = identityMatchTight ?? identityMatchFiller ?? (identityMatchSegment ? { word: `[segment: ${identityMatchSegment.text.slice(0, 25)}]` } : undefined);
+    if (identityMatchWord) {
       ghostCount++;
-      const window = identityMatchFiller ? "±500ms filler" : "±150ms";
-      console.log(`[identity-prune] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — ghost of Whisper word "${identityMatch.word}" (${window})`);
+      const path = identityMatchSegment ? "±2s segment-text" : identityMatchFiller ? "±500ms filler" : "±150ms";
+      console.log(`[identity-prune] Hard-deleting "${adlib.text}" @ ${correctedStart.toFixed(3)}s — ghost of "${identityMatchWord.word}" (${path})`);
       continue;
     }
 
