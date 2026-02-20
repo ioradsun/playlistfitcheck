@@ -154,7 +154,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     const verbiage = getSignalVerbiage(localBackers, pct);
 
     return (
-      <div>
+      <div className="animate-fade-in">
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2 flex items-start justify-between gap-3">
           <div className="flex-1 space-y-0.5">
@@ -188,7 +188,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
   // ── Broadcasting flash state ──────────────────────────────────
   if (step === "broadcasting") {
     return (
-      <div>
+      <div className="animate-fade-in">
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2">
           <span className="font-mono text-[11px] tracking-widest text-muted-foreground/60">SIGNALED</span>
