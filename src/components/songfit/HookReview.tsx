@@ -14,6 +14,7 @@ interface Props {
   onReviewRemoved?: () => void;
   spotifyTrackUrl?: string;
   artistsJson?: any[];
+  onScored?: () => void;
   // Billboard pre-resolved mode
   showPreResolved?: boolean;
   preResolved?: { total: number; replay_yes: number; saves_count?: number };
@@ -38,7 +39,7 @@ function incrementSessionReviewCount(): number {
   return next;
 }
 
-export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, showPreResolved, preResolved, rank }: Props) {
+export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, onScored, showPreResolved, preResolved, rank }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
   const navigate = useNavigate();
@@ -77,6 +78,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       const { data } = await query.maybeSingle();
       if (data) {
         fetchResults().then(r => { setResults(r); setStep("done"); });
+        onScored?.();
       }
       setAlreadyChecked(true);
     };
@@ -142,6 +144,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       const r = await fetchResults();
       setResults(r);
       setStep("done");
+      onScored?.();
     }, 3000);
   };
 
