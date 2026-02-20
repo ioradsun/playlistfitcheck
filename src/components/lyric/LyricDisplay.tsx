@@ -1,7 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2 } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -502,6 +509,60 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const hooks = data.hooks ?? [];
   const metadata = data.metadata;
 
+  // ── Tag toggle ────────────────────────────────────────────────────────────
+  const toggleLineTag = useCallback((lineIndex: number) => {
+    const line = activeLines[lineIndex];
+    const newTag: "main" | "adlib" = line.tag === "adlib" ? "main" : "adlib";
+    const updater = (prev: LyricLine[]) =>
+      prev.map((l) =>
+        l.start === line.start && l.text === line.text ? { ...l, tag: newTag } : l
+      );
+    if (activeVersion === "explicit") {
+      setExplicitLines(updater);
+    } else {
+      setFmlyLines((prev) => (prev ? updater(prev) : prev));
+    }
+    toast.success(newTag === "adlib" ? "Line converted to Adlib" : "Line converted to Main vocal");
+  }, [activeLines, activeVersion]);
+
+  // ── Word-level splitter ───────────────────────────────────────────────────
+  const [selectionLineIndex, setSelectionLineIndex] = useState<number | null>(null);
+
+  const handleSplitToAdlib = useCallback((lineIndex: number) => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) {
+      toast.error("Select the adlib word(s) first, then click Split to Adlib");
+      return;
+    }
+    const selectedText = selection.toString().trim();
+    if (!selectedText) {
+      toast.error("No text selected");
+      return;
+    }
+    const line = activeLines[lineIndex];
+    const remaining = line.text.replace(selectedText, "").replace(/\s{2,}/g, " ").trim();
+    if (!remaining) {
+      toast.error("Cannot split — nothing would remain on the main line");
+      return;
+    }
+
+    const mainLine: LyricLine = { ...line, text: remaining, tag: "main" };
+    const adlibLine: LyricLine = { start: line.start, end: line.end, text: selectedText, tag: "adlib" };
+
+    const updater = (prev: LyricLine[]): LyricLine[] => {
+      const idx = prev.findIndex((l) => l.start === line.start && l.text === line.text);
+      if (idx === -1) return prev;
+      return [...prev.slice(0, idx), mainLine, adlibLine, ...prev.slice(idx + 1)];
+    };
+    if (activeVersion === "explicit") {
+      setExplicitLines(updater);
+    } else {
+      setFmlyLines((prev) => (prev ? updater(prev) : prev));
+    }
+    selection.removeAllRanges();
+    toast.success(`"${selectedText}" split to Adlib`);
+  }, [activeLines, activeVersion]);
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <motion.div
@@ -670,7 +731,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           <div className="glass-card rounded-xl p-4 space-y-1">
             {activeLines.length > 0 && (
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] text-muted-foreground">Double-click a line to edit</p>
+                <p className="text-[10px] text-muted-foreground">Double-click to edit · Select text + ⋯ to split adlib</p>
                 <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground/50">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-foreground/20 inline-block" /> main</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-primary/20 inline-block" /> adlib</span>
@@ -695,11 +756,12 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   const isInHook = activeHook
                     ? line.start >= activeHook.start && line.start < activeHook.end
                     : false;
+                  const isSelected = selectionLineIndex === i;
                   return (
                     <div
                       key={`${line.start}-${line.tag ?? "main"}-${i}`}
                       ref={isPrimary ? activeLineRef : undefined}
-                      className={`flex items-start gap-3 px-3 py-1 rounded-lg transition-all ${
+                      className={`group flex items-start gap-3 px-3 py-1 rounded-lg transition-all ${
                         isAdlib ? "ml-6 opacity-70" : ""
                       } ${
                         isActive
@@ -731,16 +793,52 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         />
                       ) : (
                         <span
-                          className={`leading-relaxed cursor-text flex-1 ${
+                          className={`leading-relaxed cursor-text flex-1 select-text ${
                             isAdlib
                               ? "text-xs italic text-muted-foreground/80"
                               : `text-sm ${isActive ? "font-medium text-primary" : ""}`
-                          }`}
+                          } ${isSelected ? "bg-primary/10 rounded px-0.5" : ""}`}
                           onDoubleClick={() => startEditing(i)}
+                          onMouseUp={() => {
+                            const sel = window.getSelection();
+                            if (sel && !sel.isCollapsed) setSelectionLineIndex(i);
+                            else setSelectionLineIndex(null);
+                          }}
                         >
                           {line.text}
                         </span>
                       )}
+                      {/* Three-dot context menu */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="opacity-0 group-hover:opacity-100 focus:opacity-100 shrink-0 p-0.5 rounded text-muted-foreground/60 hover:text-foreground transition-all">
+                            <MoreHorizontal size={14} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          {isAdlib ? (
+                            <DropdownMenuItem onClick={() => toggleLineTag(i)}>
+                              Convert to Main vocal
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => toggleLineTag(i)}>
+                              Convert to Adlib
+                            </DropdownMenuItem>
+                          )}
+                          {!isAdlib && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleSplitToAdlib(i)}
+                                className="flex items-center gap-2"
+                              >
+                                <Scissors size={12} />
+                                <span>Split selection to Adlib</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   );
                 })
