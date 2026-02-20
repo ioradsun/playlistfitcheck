@@ -318,7 +318,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
           <div className="px-2 mt-2 space-y-1">
             <button
               onClick={() => { navigate("/auth"); closeMobileIfNeeded(); }}
-              className="w-full px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+              className="w-full px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-[0.15em] bg-foreground text-background hover:bg-foreground/80 transition-colors"
             >
               {collapsed ? <UserPlus size={14} className="mx-auto" /> : "Sign Up / Log In"}
             </button>
