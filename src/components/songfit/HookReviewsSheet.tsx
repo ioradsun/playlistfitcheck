@@ -323,7 +323,7 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                     {total}
                   </p>
                   <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                    {replayCount} SIGNALS<br />{bypassCount} Bypassed
+                    {replayCount} {replayCount === 1 ? "SIGNAL" : "SIGNALS"}<br />{bypassCount} Bypassed
                   </p>
                 </div>
               </div>
