@@ -71,6 +71,18 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     setContextNote("");
   };
 
+  const handleRemoveSignal = async () => {
+    let query = supabase.from("dream_backers").delete().eq("dream_id", dreamId);
+    if (user) query = query.eq("user_id", user.id);
+    else query = (query as any).eq("session_id", sessionId).is("user_id", null);
+    await query;
+    setLocalBackers(c => Math.max(c - 1, 0));
+    if (chosenSignal === "greenlight") setLocalGreenlight(c => Math.max(c - 1, 0));
+    setChosenSignal(null);
+    setStep("idle");
+    onRefresh();
+  };
+
   const handleSubmit = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -118,16 +130,24 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       <div>
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2 space-y-0.5">
-          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Demand Strength: {pct}%
-            {" · "}
+          <div className="flex items-center justify-between">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              Demand Strength: {pct}%
+              {" · "}
+              <button
+                onClick={() => onOpenComments(dreamId)}
+                className="hover:text-foreground transition-colors"
+              >
+                {signalsLabel}
+              </button>
+            </p>
             <button
-              onClick={() => onOpenComments(dreamId)}
-              className="hover:text-foreground transition-colors"
+              onClick={handleRemoveSignal}
+              className="text-muted-foreground/30 hover:text-muted-foreground transition-colors text-[10px] font-mono"
             >
-              {signalsLabel}
+              Turn Off Signal
             </button>
-          </p>
+          </div>
           <p className="text-[11px] text-foreground/70 font-sans">{summaryLine}</p>
         </div>
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
