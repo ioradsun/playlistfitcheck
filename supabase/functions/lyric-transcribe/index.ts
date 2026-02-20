@@ -504,17 +504,15 @@ function extractAdlibsFromWords(
     const adlibWordTokens = normAdlibText.split(" ").filter(Boolean);
     if (adlibWordTokens.length === 0) continue;
 
-    // ── Rule 2: Segment-Wide Phonetic QA Swap (v3.3 — "Rain/Range" Fix) ───
+    // ── Rule 2: Segment-Wide Phonetic QA Swap (v3.4 — "Rain/Range" Fix) ───
     // PURE PHONETIC SELECTION: time-proximity is completely removed from the
-    // correction path. We score EVERY word in EVERY candidate segment by
-    // phoneticSimilarity and swap only the best match (must exceed 0.75).
-    // This prevents "rain @ 15.5s" from replacing "I @ 16.98s" simply because
+    // correction path. We score EVERY word in EVERY segment across the ENTIRE
+    // track by phoneticSimilarity and swap only the best match (must exceed 0.80).
+    // This prevents "rain @ 20.5s" from replacing "I @ 16.98s" simply because
     // "I" is the nearest word in time — it will correctly find "range" instead.
     if (adlib.isCorrection || adlib.layer === "correction") {
-      // Candidate segments: any segment within ±5s of the correction (wide window)
-      const candidateSegs = mainSegments.filter(s =>
-        correctedStart >= s.start - 5.0 && correctedStart <= s.end + 5.0
-      );
+      // v3.4: Search ALL main segments (no time window) — pure phonetic targeting
+      const candidateSegs = mainSegments;
 
       let bestPhoneticWord: WhisperWord | null = null;
       let bestPhoneticScore = 0;
@@ -532,7 +530,7 @@ function extractAdlibsFromWords(
         }
       }
 
-      const PHONETIC_THRESHOLD = 0.75; // v3.3 spec — no time-proximity fallback
+      const PHONETIC_THRESHOLD = 0.80; // v3.4: raised from 0.75 — no time-proximity fallback
       if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
         const oldWord = bestPhoneticWord.word.trim();
         // Only apply if the text is genuinely different
@@ -551,11 +549,11 @@ function extractAdlibsFromWords(
       continue; // corrections always applied to main lines, never promoted as adlib overlay
     }
 
-    // ── Rule 1: Identity Pruning (±100ms — Anti-Ghosting, v3.2) ──────────
+    // ── Rule 1: Identity Pruning (±150ms — Anti-Ghosting, v3.4) ──────────
     // Two paths to catch a ghost:
-    //  a) text AND time match within 100ms (broadened from 50ms per v3.2 spec)
-    //  b) exact text equality within 100ms (no tokenOverlap needed — direct string)
-    const IDENTITY_WINDOW_MS = 0.100;
+    //  a) text AND time match within 150ms (widened from 100ms per v3.4 spec)
+    //  b) exact text equality within 150ms
+    const IDENTITY_WINDOW_MS = 0.150;
     const normAdlibNorm = normalize(adlib.text);
     const identityMatch = words.find(w => {
       const timeDiff = Math.abs(w.start - correctedStart);
@@ -984,7 +982,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.3",
+          version: "production-master-v3.4",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
