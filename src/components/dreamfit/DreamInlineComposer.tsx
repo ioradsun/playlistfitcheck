@@ -55,8 +55,8 @@ export function DreamInlineComposer({ onCreated }: Props) {
   return (
     <div className="border-b border-border/40">
       {/* Input row */}
-      <div className="flex gap-3 px-3 pt-3 pb-1">
-        <Avatar className="h-9 w-9 ring-2 ring-primary/20 shrink-0 mt-0.5">
+      <div className="flex gap-3 px-3 pt-3 pb-1 items-start">
+        <Avatar className="h-10 w-10 border border-border shrink-0 mt-1">
           <AvatarImage src={avatarUrl} alt={profile?.display_name ?? "You"} />
           <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
             {initials}
@@ -69,7 +69,7 @@ export function DreamInlineComposer({ onCreated }: Props) {
           onChange={e => setText(e.target.value.slice(0, MAX_LENGTH))}
           placeholder="What's frustrating you?"
           rows={1}
-          className="flex-1 bg-transparent text-foreground text-sm placeholder:text-muted-foreground/50 outline-none resize-none mt-0.5 leading-relaxed overflow-hidden"
+          className="flex-1 bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none resize-none py-2 leading-relaxed overflow-hidden"
           style={{ minHeight: "24px" }}
           disabled={publishing}
         />
