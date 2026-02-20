@@ -224,6 +224,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [activeVersion, setActiveVersion] = useState<ActiveVersion>("explicit");
   const [explicitLines, setExplicitLines] = useState<LyricLine[]>(data.lines);
   const [fmlyLines, setFmlyLines] = useState<LyricLine[] | null>(initFmlyLines ?? null);
+  // Store the original AI-generated lines so users can reset after manual edits/anchors
+  const originalLines = useRef<LyricLine[]>(data.lines);
   const [fmlyReport, setFmlyReport] = useState<ProfanityReport | null>(null);
 
   // Per-version meta
@@ -309,37 +311,27 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     const audio = new Audio(url);
     audioRef.current = audio;
 
-    // Bug 1: RAF loop at 60fps instead of timeupdate (~4fps) for smooth highlight/waveform
-    let rafId: number;
+    // Single RAF loop — runs continuously, only reads currentTime when playing.
+    // Using rafRef so cleanup always cancels the correct frame, even across re-renders.
+    let isRunning = true;
     const tick = () => {
+      if (!isRunning) return;
       setCurrentTime(audio.currentTime);
-      rafId = requestAnimationFrame(tick);
-    };
-
-    const handlePlay = () => {
-      rafId = requestAnimationFrame(tick);
-    };
-    const handlePause = () => {
-      cancelAnimationFrame(rafId);
-    };
-
-    // Keep timeupdate only for loop-region enforcement (doesn't need 60fps accuracy)
-    const handleTimeUpdate = () => {
+      // Loop-region enforcement (doesn't need separate timeupdate)
       const region = loopRegionRef.current;
       if (region && audio.currentTime >= region.end) {
         audio.currentTime = region.start;
       }
+      rafRef.current = requestAnimationFrame(tick);
     };
+    rafRef.current = requestAnimationFrame(tick);
+
     const handleEnded = () => {
-      cancelAnimationFrame(rafId);
       setIsPlaying(false);
       loopRegionRef.current = null;
       setActiveHookIndex(null);
     };
 
-    audio.addEventListener("play", handlePlay);
-    audio.addEventListener("pause", handlePause);
-    audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
 
     if (audioFile.size > 0) {
@@ -347,10 +339,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     }
 
     return () => {
-      cancelAnimationFrame(rafId);
-      audio.removeEventListener("play", handlePlay);
-      audio.removeEventListener("pause", handlePause);
-      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      isRunning = false;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
       audio.removeEventListener("ended", handleEnded);
       audio.pause();
       URL.revokeObjectURL(url);
@@ -661,7 +652,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const hooks = data.hooks ?? [];
   const metadata = data.metadata;
 
-  // ── Tag toggle ────────────────────────────────────────────────────────────
+  // ── Reset timestamps to original AI output ────────────────────────────────
+  const resetToOriginal = useCallback(() => {
+    setExplicitLines([...originalLines.current]);
+    setTimingOffset(0);
+    setAnchoredLines(new Set());
+    toast.success("Timestamps restored to original AI output");
+  }, []);
+
+  // ── Tag toggle ─────────────────────────────────────────────────────────────
   const toggleLineTag = useCallback((lineIndex: number) => {
     const line = activeLines[lineIndex];
     const newTag: "main" | "adlib" = line.tag === "adlib" ? "main" : "adlib";
@@ -857,7 +856,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* Timing Offset Control (Bug 3: processing offset adjustment) */}
+                {/* Timing Offset Control */}
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/20">
                   <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">Offset</span>
                   <button
@@ -883,7 +882,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       Reset
                     </button>
                   )}
-                  <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto">sync lyrics ↔ audio</span>
+                  <span className="text-[10px] text-muted-foreground/40 font-mono">lyrics ↔ audio</span>
+                  {/* Restore original timestamps */}
+                  <button
+                    onClick={resetToOriginal}
+                    className="ml-auto text-[10px] font-mono text-muted-foreground/40 hover:text-destructive transition-colors border border-border/20 rounded px-1.5 py-0.5 shrink-0"
+                    title="Undo all manual anchor shifts and restore original AI timestamps"
+                  >
+                    Restore original
+                  </button>
                 </div>
                 {/* Sync Diagnostic legend */}
                 {diagnosticDots.length > 0 && (
