@@ -328,7 +328,7 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                     {backersCount}
                   </p>
                   <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                    {greenlightCount} Signaled<br />{shelveCount} Bypassed
+                    {greenlightCount} SIGNALS<br />{shelveCount} Bypassed
                   </p>
                 </div>
               </div>
