@@ -291,23 +291,24 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             const bypassCount = rows.filter(r => !r.would_replay).length;
             const replayPct = Math.round((replayCount / total) * 100);
             const verbiage = (() => {
-              if (total <= 10) return { label: `RESOLVING ${total}/50`, sublabel: undefined, summary: "CALIBRATING REPLAY FIT.", bigDisplay: `${replayPct}%`, tier: "resolving" as const };
-              if (total < 50) return { label: `${total}/50 SIGNALS`, sublabel: undefined, summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.", bigDisplay: `${total}/50`, tier: "detected" as const };
-              return { label: "CONSENSUS REACHED", sublabel: undefined, summary: `${replayPct}% FMLY REPLAY FIT.`, bigDisplay: `${replayPct}%`, tier: "consensus" as const };
+              if (total < 50) return { label: "", sublabel: undefined, summary: `CALIBRATING REPLAY FIT · ${total}/50 SIGNALS NEEDED`, bigDisplay: `${replayPct}%`, tier: (total <= 10 ? "resolving" : "detected") as "resolving" | "detected" };
+              return { label: "CONSENSUS REACHED", sublabel: undefined, summary: `${replayPct}% FMLY REPLAY FIT`, bigDisplay: `${replayPct}%`, tier: "consensus" as const };
             })();
             return (
               <div className="grid grid-cols-2 gap-2.5">
                 {/* Signal card */}
-                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
+                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
                     Signal Status
                   </p>
                   <p className="text-2xl font-bold leading-none tracking-tight text-foreground">
                     {verbiage.bigDisplay}
                   </p>
-                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5 truncate">
-                    {verbiage.label}
-                  </p>
+                  {verbiage.label && (
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5 truncate">
+                      {verbiage.label}
+                    </p>
+                  )}
                   <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug truncate">
                     {verbiage.summary}
                   </p>
