@@ -119,16 +119,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
       setAudioFile(file);
       setHasRealAudio(true);
       setSavedId(null);
-      setDebugData({
-        ...(data._debug ?? {}),
-        whisperSegments: data._debug?.whisperSegments,
-        whisperRawText: data._debug?.rawText,
-        geminiAdlibs: data.lines?.filter((l: any) => l.tag === "adlib") ?? [],
-        geminiHook: data.hooks?.[0] ?? null,
-        geminiMetadata: data.metadata ?? null,
-        title: data.title,
-        artist: data.artist,
-      });
+      setDebugData(data._debug ?? null);
       await quota.increment();
     } catch (e) {
       console.error("Transcription error:", e);
