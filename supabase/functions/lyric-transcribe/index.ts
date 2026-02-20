@@ -253,7 +253,9 @@ function findNearSegment(
     .map(({ i }) => i);
 }
 
-// ── Anchor & Align: Tag adlibs using preceding_main_phrase ───────────────────
+// ── Anchor & Align: Tag adlibs using direct text match near ballpark time ────
+// NOTE: preceding_main_phrase is unreliable when Whisper produces long segments
+// (e.g. 28s chunks). Instead we match adlib.text directly within the ballpark window.
 function tagAdlibsAnchored(
   segments: LyricLine[],
   adlibs: GeminiAdlib[]
@@ -263,57 +265,50 @@ function tagAdlibsAnchored(
   const result = segments.map(s => ({ ...s }));
 
   for (const adlib of adlibs) {
-    const normPreceding = normalize(adlib.preceding_main_phrase);
     const normAdlibText = normalize(adlib.text);
     const ballpark = adlib.ballpark_time;
 
-    // Find the segment whose text best matches the preceding_main_phrase
-    // Search in a window around ballpark_time
+    // Strategy 1: Find segment near ballpark_time whose text contains or closely
+    // matches the adlib phrase (direct text match, window ±20s)
     const windowIndices = findNearSegment(segments, ballpark, 20);
-    // Also search globally as fallback
-    const allIndices = segments.map((_, i) => i);
-    const searchOrder = [...new Set([...windowIndices, ...allIndices])];
 
-    let bestPrecedingIdx = -1;
-    let bestPrecedingScore = 0;
+    let bestIdx = -1;
+    let bestScore = 0;
 
-    for (const idx of searchOrder) {
+    for (const idx of windowIndices) {
       const normSeg = normalize(segments[idx].text);
-      // Use both similarity and word overlap for robustness
-      const sim = similarity(normSeg, normPreceding);
-      const overlap = wordOverlap(normSeg, normPreceding);
-      const score = Math.max(sim, overlap);
-      if (score > bestPrecedingScore && score >= 0.4) {
-        bestPrecedingScore = score;
-        bestPrecedingIdx = idx;
-      }
-    }
-
-    if (bestPrecedingIdx === -1) {
-      // Fallback: just use word overlap on adlib text directly
-      for (const idx of searchOrder) {
-        const normSeg = normalize(segments[idx].text);
-        const overlap = wordOverlap(normSeg, normAdlibText);
-        if (overlap >= 0.6) {
-          result[idx].tag = "adlib";
-        }
-      }
-      continue;
-    }
-
-    // Now look at segments immediately after the preceding line for the adlib
-    // Check the next 1-3 segments for the adlib text
-    for (let offset = 1; offset <= 3; offset++) {
-      const checkIdx = bestPrecedingIdx + offset;
-      if (checkIdx >= segments.length) break;
-      const normSeg = normalize(segments[checkIdx].text);
+      // Check both direct similarity AND if adlib text appears as a substring
       const sim = similarity(normSeg, normAdlibText);
       const overlap = wordOverlap(normSeg, normAdlibText);
-      if (Math.max(sim, overlap) >= 0.5) {
-        result[checkIdx].tag = "adlib";
-        console.log(`Adlib tagged: "${segments[checkIdx].text}" (after "${segments[bestPrecedingIdx].text}")`);
-        break;
+      // Also check if the adlib words are contained within the longer segment
+      const adlibWords = normAdlibText.split(" ").filter(Boolean);
+      const segWords = normSeg.split(" ").filter(Boolean);
+      const contained = adlibWords.length > 0 &&
+        adlibWords.every(w => segWords.some(sw => levenshtein(sw, w) <= 1));
+      const score = contained ? 0.9 : Math.max(sim, overlap);
+      if (score > bestScore && score >= 0.45) {
+        bestScore = score;
+        bestIdx = idx;
       }
+    }
+
+    // Strategy 2: Fallback — search globally with relaxed threshold
+    if (bestIdx === -1) {
+      for (let idx = 0; idx < segments.length; idx++) {
+        const normSeg = normalize(segments[idx].text);
+        const overlap = wordOverlap(normSeg, normAdlibText);
+        if (overlap > bestScore && overlap >= 0.55) {
+          bestScore = overlap;
+          bestIdx = idx;
+        }
+      }
+    }
+
+    if (bestIdx !== -1) {
+      result[bestIdx].tag = "adlib";
+      console.log(`Adlib tagged: "${segments[bestIdx].text}" | phrase="${adlib.text}" score=${bestScore.toFixed(2)}`);
+    } else {
+      console.log(`Adlib not matched: "${adlib.text}" @ ~${ballpark}s`);
     }
   }
 
@@ -374,9 +369,35 @@ function findHookAnchored(
   }
 
   const startSeg = segments[bestStartIdx];
-  const endSeg = segments[bestEndIdx];
+  let endSeg = segments[bestEndIdx];
+  let duration = endSeg.end - startSeg.start;
 
-  console.log(`Hook anchored: segments ${bestStartIdx}–${bestEndIdx} (${startSeg.start}s–${endSeg.end}s), startScore=${bestStartScore.toFixed(2)}, endScore=${bestEndScore.toFixed(2)}`);
+  // ── Duration guard: hook must be 8–30s ───────────────────────────────────────
+  // If hook is too long (>30s), it means the match landed on a long Whisper segment.
+  // Walk back from bestEndIdx until duration is ≤ 30s.
+  if (duration > 30) {
+    console.warn(`Hook too long (${duration.toFixed(1)}s), trimming...`);
+    let trimmedEnd = bestEndIdx;
+    while (trimmedEnd > bestStartIdx && segments[trimmedEnd].end - startSeg.start > 30) {
+      trimmedEnd--;
+    }
+    bestEndIdx = trimmedEnd;
+    endSeg = segments[bestEndIdx];
+    duration = endSeg.end - startSeg.start;
+  }
+
+  // If hook is still a single very-long segment (>30s), use ballpark times as fallback
+  if (duration > 30) {
+    console.warn(`Hook still too long after trim — using ballpark times`);
+    return {
+      start: hook.ballpark_start,
+      end: hook.ballpark_end,
+      score: hook.score,
+      previewText: normStartPhrase.slice(0, 80),
+    };
+  }
+
+  console.log(`Hook anchored: segments ${bestStartIdx}–${bestEndIdx} (${startSeg.start}s–${endSeg.end}s = ${duration.toFixed(1)}s), startScore=${bestStartScore.toFixed(2)}, endScore=${bestEndScore.toFixed(2)}`);
 
   return {
     start: startSeg.start,
