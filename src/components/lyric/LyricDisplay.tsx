@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,12 +18,31 @@ export interface LyricLine {
   start: number;
   end: number;
   text: string;
+  tag?: "main" | "adlib";
+}
+
+export interface LyricHook {
+  start: number;
+  end: number;
+  score: number;
+  reasonCodes: string[];
+  previewText: string;
+}
+
+export interface LyricMetadata {
+  mood?: string;
+  bpm_estimate?: number;
+  confidence?: number;
+  key?: string;
+  genre_hint?: string;
 }
 
 export interface LyricData {
   title: string;
   artist: string;
   lines: LyricLine[];
+  hooks?: LyricHook[];
+  metadata?: LyricMetadata;
 }
 
 interface VersionMeta {
@@ -63,16 +82,25 @@ function formatTimeSRT(seconds: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
 }
 
+function formatTimeShort(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function toLRC(data: LyricData): string {
-  return [`[ti:${data.title}]`, `[ar:${data.artist}]`, "", ...data.lines.map((l) => `[${formatTimeLRC(l.start)}]${l.text}`)].join("\n");
+  const mainLines = data.lines.filter((l) => l.tag !== "adlib");
+  return [`[ti:${data.title}]`, `[ar:${data.artist}]`, "", ...mainLines.map((l) => `[${formatTimeLRC(l.start)}]${l.text}`)].join("\n");
 }
 
 function toSRT(data: LyricData): string {
-  return data.lines.map((l, i) => `${i + 1}\n${formatTimeSRT(l.start)} --> ${formatTimeSRT(l.end)}\n${l.text}\n`).join("\n");
+  const mainLines = data.lines.filter((l) => l.tag !== "adlib");
+  return mainLines.map((l, i) => `${i + 1}\n${formatTimeSRT(l.start)} --> ${formatTimeSRT(l.end)}\n${l.text}\n`).join("\n");
 }
 
 function toPlainText(data: LyricData): string {
-  return data.lines.map((l) => l.text).join("\n");
+  const mainLines = data.lines.filter((l) => l.tag !== "adlib");
+  return mainLines.map((l) => l.text).join("\n");
 }
 
 function downloadFile(content: string, filename: string, mime: string) {
@@ -85,13 +113,16 @@ function downloadFile(content: string, filename: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-/** Re-split lines by format while preserving timestamps */
+/** Re-split main lines by format while preserving timestamps */
 function applyLineFormat(lines: LyricLine[], format: LineFormat): LyricLine[] {
   if (format === "natural") return lines;
 
   const result: LyricLine[] = [];
 
   lines.forEach((line) => {
+    // Pass adlibs through unchanged
+    if (line.tag === "adlib") { result.push(line); return; }
+
     const words = line.text.trim().split(/\s+/).filter(Boolean);
     if (words.length === 0) return;
 
@@ -104,7 +135,6 @@ function applyLineFormat(lines: LyricLine[], format: LineFormat): LyricLine[] {
     } else if (format === "4_6_words") {
       for (let i = 0; i < words.length; i += 5) groups.push(words.slice(i, i + 5));
     } else if (format === "break_on_pause") {
-      // Simple heuristic: split at punctuation
       const text = line.text;
       const parts = text.split(/([,;:.!?]+\s*)/).filter(Boolean);
       const merged: string[] = [];
@@ -125,6 +155,7 @@ function applyLineFormat(lines: LyricLine[], format: LineFormat): LyricLine[] {
         start: line.start + gi * segDuration,
         end: line.start + (gi + 1) * segDuration,
         text: format === "break_on_pause" ? g[0] : g.join(" "),
+        tag: "main",
       });
     });
   });
@@ -145,6 +176,13 @@ const DEFAULT_VERSION_META: VersionMeta = {
   socialPreset: "general",
   strictness: "standard",
 };
+
+// ── Hook score color ─────────────────────────────────────────────────────────
+function hookScoreColor(score: number): string {
+  if (score >= 85) return "text-green-400";
+  if (score >= 70) return "text-yellow-400";
+  return "text-muted-foreground";
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -206,6 +244,23 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const activeMeta = activeVersion === "explicit" ? explicitMeta : fmlyMeta;
   const activeLines = applyLineFormat(activeLinesRaw, activeMeta.lineFormat);
 
+  // ── Multi-active highlighting — supports overlapping adlibs ───────────────
+  const activeLineIndices = new Set<number>(
+    activeLines.reduce<number[]>((acc, l, i) => {
+      if (currentTime >= l.start && currentTime < l.end) acc.push(i);
+      return acc;
+    }, [])
+  );
+  // Sticky: if no line is active, highlight the most recently passed main line
+  if (activeLineIndices.size === 0) {
+    let lastPassed = -1;
+    for (let i = 0; i < activeLines.length; i++) {
+      if (activeLines[i].tag !== "adlib" && currentTime >= activeLines[i].start) lastPassed = i;
+    }
+    if (lastPassed !== -1) activeLineIndices.add(lastPassed);
+  }
+  const primaryActiveLine = Math.min(...(activeLineIndices.size > 0 ? [...activeLineIndices] : [-1]));
+
   // ── Audio setup ───────────────────────────────────────────────────────────
   useEffect(() => {
     const url = URL.createObjectURL(audioFile);
@@ -219,7 +274,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
 
-    // Decode waveform (real audio only, not dummy files)
     if (audioFile.size > 0) {
       decodeFile(audioFile).then(({ waveform }) => setWaveform(waveform)).catch(() => {});
     }
@@ -233,24 +287,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   }, [audioFile, decodeFile]);
 
   // ── Auto-scroll active lyric ──────────────────────────────────────────────
-  // Use a "sticky" approach: if we're in a gap between lines, highlight the most recently passed line
-  const activeLine = (() => {
-    const exact = activeLines.findIndex((l) => currentTime >= l.start && currentTime < l.end);
-    if (exact !== -1) return exact;
-    // Find the last line whose start we've passed
-    let lastPassed = -1;
-    for (let i = 0; i < activeLines.length; i++) {
-      if (currentTime >= activeLines[i].start) lastPassed = i;
-      else break;
-    }
-    return lastPassed;
-  })();
-
   useEffect(() => {
     if (activeLineRef.current) {
       activeLineRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [activeLine]);
+  }, [primaryActiveLine]);
 
   // ── Playback controls ─────────────────────────────────────────────────────
   const togglePlay = useCallback(() => {
@@ -313,7 +354,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     }
   }, [user, currentSavedId, data, explicitLines, fmlyLines, explicitMeta, fmlyMeta, audioFile.name, onSaved]);
 
-  // Debounced autosave trigger
   const scheduleAutosave = useCallback(() => {
     if (!user) return;
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
@@ -339,13 +379,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     const updatedText = editText;
     if (activeVersion === "explicit") {
       setExplicitLines((prev) =>
-        prev.map((l) => (l.start === editedLine.start ? { ...l, text: updatedText } : l))
+        prev.map((l) => (l.start === editedLine.start && l.tag === editedLine.tag ? { ...l, text: updatedText } : l))
       );
       setExplicitLastEdited(new Date());
     } else {
       setFmlyLines((prev) =>
         prev
-          ? prev.map((l) => (l.start === editedLine.start ? { ...l, text: updatedText } : l))
+          ? prev.map((l) => (l.start === editedLine.start && l.tag === editedLine.tag ? { ...l, text: updatedText } : l))
           : prev
       );
       setFmlyLastEdited(new Date());
@@ -399,6 +439,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     toast.success(`${format.toUpperCase()} downloaded`);
   };
 
+  const hooks = data.hooks ?? [];
+  const metadata = data.metadata;
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <motion.div
@@ -415,7 +458,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           <h2 className="text-sm font-semibold truncate">{audioFile.name.replace(/\.[^.]+$/, "")}</h2>
           <p className="text-[10px] text-muted-foreground">{data.artist !== "Unknown" ? data.artist : ""}</p>
         </div>
-        {/* Autosave status */}
         {user && (
           <span className="text-[10px] text-muted-foreground shrink-0">
             {saveStatus === "saving" ? "● Saving…" : saveStatus === "saved" ? "✓ Saved" : ""}
@@ -470,6 +512,44 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         )}
       </div>
 
+      {/* Metadata strip */}
+      {metadata && (metadata.mood || metadata.bpm_estimate || metadata.confidence !== undefined || metadata.key) && (
+        <div className="glass-card rounded-xl px-4 py-2.5 flex flex-wrap gap-x-4 gap-y-1 items-center">
+          {metadata.mood && (
+            <span className="text-[11px] text-muted-foreground">
+              <span className="text-foreground/50 font-mono">Mood</span>{" "}
+              <span className="capitalize font-medium text-foreground">{metadata.mood}</span>
+            </span>
+          )}
+          {metadata.bpm_estimate && (
+            <span className="text-[11px] text-muted-foreground">
+              <span className="text-foreground/50 font-mono">BPM</span>{" "}
+              <span className="font-medium text-foreground">{metadata.bpm_estimate}</span>
+            </span>
+          )}
+          {metadata.key && (
+            <span className="text-[11px] text-muted-foreground">
+              <span className="text-foreground/50 font-mono">Key</span>{" "}
+              <span className="font-medium text-foreground">{metadata.key}</span>
+            </span>
+          )}
+          {metadata.genre_hint && (
+            <span className="text-[11px] text-muted-foreground">
+              <span className="text-foreground/50 font-mono">Genre</span>{" "}
+              <span className="font-medium text-foreground capitalize">{metadata.genre_hint}</span>
+            </span>
+          )}
+          {metadata.confidence !== undefined && (
+            <span className="text-[11px] text-muted-foreground ml-auto">
+              <span className="text-foreground/50 font-mono">Confidence</span>{" "}
+              <span className={`font-medium ${metadata.confidence >= 0.8 ? "text-green-400" : metadata.confidence >= 0.5 ? "text-yellow-400" : "text-red-400"}`}>
+                {Math.round(metadata.confidence * 100)}%
+              </span>
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Two-column layout */}
       <div className="flex flex-col lg:flex-row gap-4 items-start">
 
@@ -510,7 +590,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           {/* Lyrics editor */}
           <div className="glass-card rounded-xl p-4 space-y-1">
             {activeLines.length > 0 && (
-              <p className="text-[10px] text-muted-foreground text-right mb-2">Double-click a line to edit</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] text-muted-foreground">Double-click a line to edit</p>
+                <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground/50">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-foreground/20 inline-block" /> main</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-primary/20 inline-block" /> adlib</span>
+                </div>
+              </div>
             )}
             <div ref={lyricsContainerRef} className="max-h-[45vh] overflow-y-auto space-y-0.5">
               {activeLines.length === 0 ? (
@@ -521,14 +607,22 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 </p>
               ) : (
                 activeLines.map((line, i) => {
-                  const isActive = i === activeLine;
+                  const isAdlib = line.tag === "adlib";
+                  const isActive = activeLineIndices.has(i);
+                  const isPrimary = i === primaryActiveLine;
                   const isEditing = i === editingIndex;
                   return (
                     <div
-                      key={`${line.start}-${i}`}
-                      ref={isActive ? activeLineRef : undefined}
-                      className={`flex items-start gap-3 px-3 py-1.5 rounded-lg transition-all ${
-                        isActive ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
+                      key={`${line.start}-${line.tag ?? "main"}-${i}`}
+                      ref={isPrimary ? activeLineRef : undefined}
+                      className={`flex items-start gap-3 px-3 py-1 rounded-lg transition-all ${
+                        isAdlib ? "ml-6 opacity-70" : ""
+                      } ${
+                        isActive
+                          ? isAdlib
+                            ? "bg-primary/5 text-foreground"
+                            : "bg-primary/10 text-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
                       }`}
                     >
                       <span
@@ -551,7 +645,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         />
                       ) : (
                         <span
-                          className={`text-sm leading-relaxed cursor-text flex-1 ${isActive ? "font-medium text-primary" : ""}`}
+                          className={`leading-relaxed cursor-text flex-1 ${
+                            isAdlib
+                              ? "text-xs italic text-muted-foreground/80"
+                              : `text-sm ${isActive ? "font-medium text-primary" : ""}`
+                          }`}
                           onDoubleClick={() => startEditing(i)}
                         >
                           {line.text}
@@ -604,7 +702,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               hasFmly={fmlyLines !== null}
               onChange={setActiveVersion}
             />
-            {/* FMLY generate button — only shown on FMLY tab */}
             {activeVersion === "fmly" && (
               <div className="mt-3 pt-3 border-t border-border/40">
                 <FmlyFriendlyPanel
@@ -629,6 +726,42 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               onStrictnessChange={(v) => setFmlyMeta((m) => ({ ...m, strictness: v }))}
             />
           </div>
+
+          {/* Hooks panel */}
+          {hooks.length > 0 && (
+            <div className="glass-card rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Zap size={11} className="text-primary" />
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Hooks</span>
+              </div>
+              {hooks.map((hook, i) => (
+                <button
+                  key={`${hook.start}-${i}`}
+                  onClick={() => seekTo(hook.start)}
+                  className="w-full text-left rounded-lg border border-border/30 px-3 py-2 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-mono text-muted-foreground group-hover:text-foreground transition-colors">
+                      {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
+                    </span>
+                    <span className={`text-[10px] font-mono font-bold ${hookScoreColor(hook.score)}`}>
+                      {hook.score}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-foreground/80 leading-snug line-clamp-2">{hook.previewText}</p>
+                  {hook.reasonCodes.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {hook.reasonCodes.slice(0, 3).map((code) => (
+                        <span key={code} className="text-[9px] font-mono bg-secondary/50 text-muted-foreground rounded px-1 py-0.5">
+                          {code}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -637,4 +770,3 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     </motion.div>
   );
 }
-
