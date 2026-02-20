@@ -262,8 +262,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
 
       {/* Music Embed Player */}
       <div className={cn(
-        "transition-all duration-500",
-        isScored && "opacity-60 pointer-events-none [filter:grayscale(30%)_brightness(80%)]"
+        "relative transition-all duration-500",
+        isScored && "opacity-60 [filter:grayscale(30%)_brightness(80%)]"
       )}>
         <LazySpotifyEmbed
           trackId={post.spotify_track_id}
@@ -274,6 +274,9 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
           genre={((post.tags_json as any[]) || [])[0] || null}
         />
+        {isScored && (
+          <div className="absolute inset-0 z-10" aria-hidden="true" />
+        )}
       </div>
 
       {/* Action Row — reactions mode only here */}
