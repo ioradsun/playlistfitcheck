@@ -156,7 +156,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2 space-y-0.5">
           <div className="flex items-center justify-between">
-            <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
               <span className={verbiage.tier === "resolving" ? "opacity-50" : ""}>{verbiage.label}</span>
               {" · "}
               <button
@@ -173,7 +173,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
               Turn Off Signal
             </button>
           </div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/50">
+          <p className="font-sans text-[14px] leading-relaxed text-muted-foreground/50">
             {verbiage.summary}
           </p>
         </div>
@@ -233,7 +233,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
 
       {/* Signal Status row — signals count is tappable to open comments */}
       <div className="px-3 py-1.5">
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
           {localBackers === 0 ? (
             <>Demand Strength: —</>
           ) : (() => {
@@ -260,13 +260,13 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       <div className="flex gap-2 px-3 py-2.5">
         <button
           onClick={() => handleVoteClick("signal")}
-          className="flex-1 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[12px] font-medium text-muted-foreground transition-colors"
+          className="flex-1 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[13px] font-bold tracking-[0.15em] text-muted-foreground transition-colors"
         >
           Signal
         </button>
         <button
           onClick={() => handleVoteClick("bypass")}
-          className="flex-1 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[12px] font-medium text-muted-foreground transition-colors"
+          className="flex-1 py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[13px] font-bold tracking-[0.15em] text-muted-foreground transition-colors"
         >
           Bypass
         </button>
