@@ -289,16 +289,13 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
           {!loading && rows.length > 0 && (() => {
             const total = rows.length;
             const signals = rows.filter(r => r.would_replay).length;
-            const isResolving = signals < 50;
+            const hasSignals = signals > 0;
             const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
 
-            // Metadata fragments
-            const signalsFrag = `${signals}/50 SIGNALS`;
-            const resonanceFrag = total > 0 ? `${signals}/${total} RESONANCE` : null;
-
-            const prefixLine = isResolving
-              ? `REPLAY FIT · ${signalsFrag}`
-              : `CONSENSUS REACHED · ${pct}% REPLAY FIT`;
+            const bigDisplay = hasSignals ? `${pct}%` : "CALIBRATING";
+            const metaLine = hasSignals
+              ? null // rendered with tooltip below
+              : "WAITING FOR INPUT";
 
             return (
               <TooltipProvider delayDuration={350}>
@@ -306,20 +303,23 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none font-mono">
                     Signal Status
                   </p>
-                  <p className={`text-2xl font-bold leading-none tracking-tight text-foreground ${isResolving ? "animate-signal-pulse" : ""}`}>
-                    {isResolving ? "CALIBRATING" : `${pct}%`}
+                  <p className={`text-2xl font-bold leading-none tracking-tight text-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
+                    {bigDisplay}
                   </p>
                   <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                    {prefixLine}
-                    {resonanceFrag && (
+                    {!hasSignals ? (
+                      metaLine
+                    ) : (
                       <>
-                        {" · "}
+                        {"REPLAY FIT · "}
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="cursor-default underline-offset-2 decoration-dotted hover:underline">{resonanceFrag}</span>
+                            <span className="cursor-default underline-offset-2 decoration-dotted hover:underline">
+                              {signals} OF {total} FMLY MEMBERS
+                            </span>
                           </TooltipTrigger>
                           <TooltipContent side="bottom">
-                            {signals} of {total} listeners signaled this track.
+                            {signals} out of {total} listeners signaled this track.
                           </TooltipContent>
                         </Tooltip>
                       </>
