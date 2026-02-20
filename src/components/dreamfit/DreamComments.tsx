@@ -119,6 +119,21 @@ function CommentItem({
   );
 }
 
+function getSignalVerbiage(total: number, pct: number) {
+  if (total <= 10) {
+    return { label: "SIGNAL RESOLVING...", pctDisplay: `${pct}%`, summary: "Not enough signals yet to read the room.", tier: "resolving" as const };
+  }
+  if (total <= 50) {
+    return { label: `${total} SIGNALS DETECTED`, pctDisplay: null, summary: `${total} members have weighed in.`, tier: "detected" as const };
+  }
+  return {
+    label: `${pct}% UNIT CONSENSUS`,
+    pctDisplay: `${pct}%`,
+    summary: pct >= 50 ? `${pct}% of the unit greenlighted this.` : `Only ${pct}% greenlighted this.`,
+    tier: "consensus" as const,
+  };
+}
+
 export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props) {
   const { user } = useAuth();
   const [comments, setComments] = useState<DreamComment[]>([]);
@@ -269,33 +284,42 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
             </div>
           </div>
 
-          {/* Stat cards — Demand Strength + Signals */}
-          {backersCount > 0 && (
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
-                  Demand Strength
-                </p>
-                <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
-                  {demandPct}%
-                </p>
-                <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
-                  {demandPct >= 50 ? "of the FMLY greenlighted this." : "greenlighted so far."}
-                </p>
+          {/* Stat cards — Signal Status + Signals */}
+          {backersCount > 0 && (() => {
+            const verbiage = getSignalVerbiage(backersCount, demandPct);
+            return (
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
+                    Signal Status
+                  </p>
+                  {verbiage.pctDisplay ? (
+                    <p className={`text-2xl font-bold leading-none tracking-tight ${verbiage.tier === "resolving" ? "text-muted-foreground/50" : "text-foreground"}`}>
+                      {verbiage.pctDisplay}
+                    </p>
+                  ) : (
+                    <p className="text-lg font-bold leading-none text-foreground tracking-tight">
+                      {backersCount}
+                    </p>
+                  )}
+                  <p className={`text-[10px] leading-snug mt-0.5 ${verbiage.tier === "resolving" ? "text-muted-foreground/40" : "text-muted-foreground/50"}`}>
+                    {verbiage.tier === "resolving" ? verbiage.label : verbiage.summary}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
+                    Signals
+                  </p>
+                  <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
+                    {backersCount}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
+                    {greenlightCount} greenlight · {shelveCount} shelve
+                  </p>
+                </div>
               </div>
-              <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
-                  Signals
-                </p>
-                <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
-                  {backersCount}
-                </p>
-                <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
-                  {greenlightCount} greenlight · {shelveCount} shelve
-                </p>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* ── Comments list ── */}
