@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
-import { ArrowLeft, Zap } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -202,6 +202,12 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // Clip loop state
+  const [activeHookIndex, setActiveHookIndex] = useState<number | null>(null);
+  const [clipProgress, setClipProgress] = useState(0); // 0-1 for the progress ring
+  const clipProgressRafRef = useRef<number | null>(null);
+  const loopRegionRef = useRef<{ start: number; end: number } | null>(null);
+
   // Version state
   const [activeVersion, setActiveVersion] = useState<ActiveVersion>("explicit");
   const [explicitLines, setExplicitLines] = useState<LyricLine[]>(data.lines);
@@ -268,8 +274,19 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     const audio = new Audio(url);
     audioRef.current = audio;
 
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleEnded = () => { setIsPlaying(false); };
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      // Loop mode: if inside a loop region, restart when past end
+      const region = loopRegionRef.current;
+      if (region && audio.currentTime >= region.end) {
+        audio.currentTime = region.start;
+      }
+    };
+    const handleEnded = () => {
+      setIsPlaying(false);
+      loopRegionRef.current = null;
+      setActiveHookIndex(null);
+    };
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
@@ -299,6 +316,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
+      loopRegionRef.current = null;
+      setActiveHookIndex(null);
+      if (clipProgressRafRef.current) cancelAnimationFrame(clipProgressRafRef.current);
     } else {
       audioRef.current.play();
       setIsPlaying(true);
@@ -307,6 +327,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   const seekTo = useCallback((time: number) => {
     if (!audioRef.current) return;
+    loopRegionRef.current = null;
+    setActiveHookIndex(null);
+    if (clipProgressRafRef.current) cancelAnimationFrame(clipProgressRafRef.current);
     audioRef.current.currentTime = time;
     setCurrentTime(time);
     if (!isPlaying) {
@@ -314,6 +337,43 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       setIsPlaying(true);
     }
   }, [isPlaying]);
+
+  // ── Clip loop: play a hook region on repeat ───────────────────────────────
+  const playClip = useCallback((hook: LyricHook, hookIdx: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (activeHookIndex === hookIdx) {
+      loopRegionRef.current = null;
+      setActiveHookIndex(null);
+      if (clipProgressRafRef.current) cancelAnimationFrame(clipProgressRafRef.current);
+      setClipProgress(0);
+      audio.pause();
+      setIsPlaying(false);
+      return;
+    }
+    loopRegionRef.current = { start: hook.start, end: hook.end };
+    setActiveHookIndex(hookIdx);
+    audio.currentTime = hook.start;
+    audio.play();
+    setIsPlaying(true);
+    const duration = hook.end - hook.start;
+    const tickProgress = () => {
+      const region = loopRegionRef.current;
+      if (!region) { setClipProgress(0); return; }
+      const elapsed = (audio.currentTime - region.start + duration) % duration;
+      setClipProgress(Math.min(Math.max(elapsed / duration, 0), 1));
+      clipProgressRafRef.current = requestAnimationFrame(tickProgress);
+    };
+    if (clipProgressRafRef.current) cancelAnimationFrame(clipProgressRafRef.current);
+    clipProgressRafRef.current = requestAnimationFrame(tickProgress);
+  }, [activeHookIndex]);
+
+  // ── Copy Clip Info ────────────────────────────────────────────────────────
+  const copyClipInfo = useCallback((hook: LyricHook) => {
+    const text = `Start: ${formatTimeShort(hook.start)}\nEnd: ${formatTimeShort(hook.end)}\nDuration: ${Math.round(hook.end - hook.start)}s\n\nPreview:\n${hook.previewText}`;
+    navigator.clipboard.writeText(text);
+    toast.success("Clip info copied");
+  }, []);
 
   // ── Autosave ──────────────────────────────────────────────────────────────
   const performSave = useCallback(async () => {
@@ -559,13 +619,32 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           {/* Waveform */}
           <div className="glass-card rounded-xl p-3">
             {hasRealAudio ? (
-              <LyricWaveform
-                waveform={waveform}
-                isPlaying={isPlaying}
-                currentTime={currentTime}
-                onSeek={seekTo}
-                onTogglePlay={togglePlay}
-              />
+              <>
+                <LyricWaveform
+                  waveform={waveform}
+                  isPlaying={isPlaying}
+                  currentTime={currentTime}
+                  onSeek={seekTo}
+                  onTogglePlay={togglePlay}
+                  loopRegion={activeHookIndex !== null && hooks[activeHookIndex]
+                    ? { start: hooks[activeHookIndex].start, end: hooks[activeHookIndex].end, duration: waveform?.duration ?? 1 }
+                    : null}
+                />
+                <AnimatePresence>
+                  {activeHookIndex !== null && (
+                    <motion.div
+                      key="loop-indicator"
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      className="flex items-center gap-1.5 mt-2 px-1"
+                    >
+                      <Repeat2 size={11} className="text-primary animate-pulse" />
+                      <span className="text-[10px] font-mono text-primary">Looping clip — click Stop to exit</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
             ) : (
               <div className="h-16 flex items-center gap-3">
                 <label className="cursor-pointer">
@@ -611,6 +690,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   const isActive = activeLineIndices.has(i);
                   const isPrimary = i === primaryActiveLine;
                   const isEditing = i === editingIndex;
+                  // Highlight lines that fall within the active looping hook
+                  const activeHook = activeHookIndex !== null ? hooks[activeHookIndex] : null;
+                  const isInHook = activeHook
+                    ? line.start >= activeHook.start && line.start < activeHook.end
+                    : false;
                   return (
                     <div
                       key={`${line.start}-${line.tag ?? "main"}-${i}`}
@@ -622,6 +706,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                           ? isAdlib
                             ? "bg-primary/5 text-foreground"
                             : "bg-primary/10 text-foreground"
+                          : isInHook
+                          ? "bg-primary/5 text-foreground/80"
                           : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
                       }`}
                     >
@@ -734,32 +820,101 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 <Zap size={11} className="text-primary" />
                 <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Hooks</span>
               </div>
-              {hooks.map((hook, i) => (
-                <button
-                  key={`${hook.start}-${i}`}
-                  onClick={() => seekTo(hook.start)}
-                  className="w-full text-left rounded-lg border border-border/30 px-3 py-2 hover:border-primary/40 hover:bg-primary/5 transition-all group"
-                >
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-[10px] font-mono text-muted-foreground group-hover:text-foreground transition-colors">
-                      {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
-                    </span>
-                    <span className={`text-[10px] font-mono font-bold ${hookScoreColor(hook.score)}`}>
-                      {hook.score}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-foreground/80 leading-snug line-clamp-2">{hook.previewText}</p>
-                  {hook.reasonCodes.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {hook.reasonCodes.slice(0, 3).map((code) => (
-                        <span key={code} className="text-[9px] font-mono bg-secondary/50 text-muted-foreground rounded px-1 py-0.5">
-                          {code}
-                        </span>
-                      ))}
+              {hooks.map((hook, i) => {
+                const isLooping = activeHookIndex === i;
+                const clipDuration = hook.end - hook.start;
+                // SVG ring params
+                const r = 10;
+                const circ = 2 * Math.PI * r;
+                const dashOffset = circ * (1 - (isLooping ? clipProgress : 0));
+
+                return (
+                  <div
+                    key={`${hook.start}-${i}`}
+                    className={`rounded-lg border transition-all duration-300 ${
+                      isLooping
+                        ? "border-primary/60 bg-primary/10 shadow-[0_0_14px_2px_hsl(var(--primary)/0.22)]"
+                        : "border-border/30 hover:border-primary/40 hover:bg-primary/5"
+                    }`}
+                  >
+                    {/* Top row: time + score + Play button */}
+                    <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                      <span className="text-[10px] font-mono text-muted-foreground flex-1">
+                        {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
+                        <span className="ml-1 text-muted-foreground/50">({clipDuration < 60 ? Math.round(clipDuration) : `${Math.floor(clipDuration / 60)}:${String(Math.round(clipDuration % 60)).padStart(2, "0")}`}s)</span>
+                      </span>
+                      <span className={`text-[10px] font-mono font-bold ${hookScoreColor(hook.score)}`}>
+                        {hook.score}
+                      </span>
+
+                      {/* Progress ring + play/stop button */}
+                      <button
+                        onClick={() => playClip(hook, i)}
+                        className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all ${
+                          isLooping
+                            ? "text-primary"
+                            : "text-muted-foreground hover:text-primary"
+                        }`}
+                        title={isLooping ? "Stop clip" : "Preview clip"}
+                      >
+                        <svg
+                          width="28"
+                          height="28"
+                          viewBox="0 0 28 28"
+                          className="absolute inset-0"
+                          style={{ transform: "rotate(-90deg)" }}
+                        >
+                          <circle
+                            cx="14" cy="14" r={r}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeOpacity={0.12}
+                            strokeWidth="2"
+                          />
+                          {isLooping && (
+                            <circle
+                              cx="14" cy="14" r={r}
+                              fill="none"
+                              stroke="currentColor"
+                              strokeOpacity={0.9}
+                              strokeWidth="2"
+                              strokeDasharray={circ}
+                              strokeDashoffset={dashOffset}
+                              strokeLinecap="round"
+                              style={{ transition: "stroke-dashoffset 0.1s linear" }}
+                            />
+                          )}
+                        </svg>
+                        {isLooping ? <Pause size={10} /> : <Play size={10} />}
+                      </button>
                     </div>
-                  )}
-                </button>
-              ))}
+
+                    {/* Preview text */}
+                    <p className="text-[11px] text-foreground/80 leading-snug line-clamp-2 px-3 pb-1.5">
+                      {hook.previewText}
+                    </p>
+
+                    {/* Reason codes + copy clip info */}
+                    <div className="flex items-center justify-between px-3 pb-2 gap-1.5">
+                      <div className="flex flex-wrap gap-1">
+                        {hook.reasonCodes.slice(0, 3).map((code) => (
+                          <span key={code} className="text-[9px] font-mono bg-secondary/50 text-muted-foreground rounded px-1 py-0.5">
+                            {code}
+                          </span>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => copyClipInfo(hook)}
+                        className="flex items-center gap-0.5 text-[9px] font-mono text-muted-foreground/50 hover:text-foreground transition-colors shrink-0"
+                        title="Copy clip info"
+                      >
+                        <Copy size={8} />
+                        <span>Clip</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

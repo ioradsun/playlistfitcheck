@@ -1,8 +1,14 @@
 
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { Play, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { WaveformData } from "@/hooks/useAudioEngine";
+
+export interface LoopRegion {
+  start: number;
+  end: number;
+  duration: number;
+}
 
 interface LyricWaveformProps {
   waveform: WaveformData | null;
@@ -10,6 +16,7 @@ interface LyricWaveformProps {
   currentTime: number;
   onSeek: (time: number) => void;
   onTogglePlay: () => void;
+  loopRegion?: LoopRegion | null;
 }
 
 function formatTime(s: number): string {
@@ -27,7 +34,12 @@ function isDarkMode(): boolean {
   return document.documentElement.classList.contains("dark");
 }
 
-function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: number) {
+function drawWaveform(
+  canvas: HTMLCanvasElement,
+  peaks: number[],
+  currentPct: number,
+  loopRegion?: LoopRegion | null
+) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
   canvas.height = canvas.clientHeight * dpr;
@@ -41,6 +53,24 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: nu
   const playedColor = getCssHsl("--primary", 0.9);
   const unplayedColor = dark ? "rgba(150,150,150,0.6)" : "rgba(120,120,120,0.35)";
 
+  // Draw loop region shading behind bars
+  if (loopRegion && loopRegion.duration > 0) {
+    const loopStartPct = Math.min(loopRegion.start / loopRegion.duration, 1);
+    const loopEndPct = Math.min(loopRegion.end / loopRegion.duration, 1);
+    ctx.fillStyle = getCssHsl("--primary", 0.08);
+    ctx.fillRect(loopStartPct * cw, 0, (loopEndPct - loopStartPct) * cw, ch);
+    ctx.strokeStyle = getCssHsl("--primary", 0.5);
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(loopStartPct * cw, 0);
+    ctx.lineTo(loopStartPct * cw, ch);
+    ctx.moveTo(loopEndPct * cw, 0);
+    ctx.lineTo(loopEndPct * cw, ch);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   const barW = Math.max(cw / peaks.length, 1);
   const gap = 1;
   const playedX = currentPct * cw;
@@ -48,45 +78,63 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], currentPct: nu
   peaks.forEach((peak, i) => {
     const barH = Math.max(peak * ch * 0.85, 2);
     const x = i * barW;
-    ctx.fillStyle = x <= playedX ? playedColor : unplayedColor;
+    const barPct = x / cw;
+    const inLoop =
+      loopRegion && loopRegion.duration > 0
+        ? barPct >= loopRegion.start / loopRegion.duration &&
+          barPct <= loopRegion.end / loopRegion.duration
+        : false;
+
+    if (x <= playedX) {
+      ctx.fillStyle = playedColor;
+    } else if (inLoop) {
+      ctx.fillStyle = getCssHsl("--primary", 0.3);
+    } else {
+      ctx.fillStyle = unplayedColor;
+    }
     ctx.fillRect(x, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
 }
 
-export function LyricWaveform({ waveform, isPlaying, currentTime, onSeek, onTogglePlay }: LyricWaveformProps) {
+export function LyricWaveform({
+  waveform,
+  isPlaying,
+  currentTime,
+  onSeek,
+  onTogglePlay,
+  loopRegion,
+}: LyricWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number | null>(null);
 
   const duration = waveform?.duration || 1;
   const currentPct = Math.min(currentTime / duration, 1);
   const playheadPct = currentPct * 100;
 
-  // Draw waveform whenever peaks or playhead changes
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
-    drawWaveform(canvasRef.current, waveform.peaks, currentPct);
-  }, [waveform, currentPct]);
+    drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
+  }, [waveform, currentPct, loopRegion]);
 
-  // Resize observer
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
     const observer = new ResizeObserver(() => {
-      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks, currentPct);
+      if (canvasRef.current && waveform)
+        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
     });
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
-  }, [waveform, currentPct]);
+  }, [waveform, currentPct, loopRegion]);
 
-  // Redraw when dark/light theme toggles
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
     const mo = new MutationObserver(() => {
-      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks, currentPct);
+      if (canvasRef.current && waveform)
+        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
     });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => mo.disconnect();
-  }, [waveform, currentPct]);
+  }, [waveform, currentPct, loopRegion]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
