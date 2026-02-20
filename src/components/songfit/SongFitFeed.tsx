@@ -253,6 +253,7 @@ export function SongFitFeed() {
         onViewChange={setFeedView}
         billboardMode={billboardMode}
         onModeChange={setBillboardMode}
+        isLoggedIn={!!user}
       />
 
       {loading ? (
