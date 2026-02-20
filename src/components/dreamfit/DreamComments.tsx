@@ -277,37 +277,36 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
             </div>
           </div>
 
-          {/* Stat cards — Signal Status + Signals */}
+          {/* Stat card — Signal Status */}
           {backersCount > 0 && (() => {
             const signals = greenlightCount;
             const total = backersCount;
-            const isResolving = signals < 50;
+            const hasSignals = signals > 0;
             const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
-            const signalsFrag = `${signals}/50 SIGNALS`;
-            const resonanceFrag = total > 0 ? `${signals}/${total} RESONANCE` : null;
-            const prefixLine = isResolving
-              ? `BUILD FIT · ${signalsFrag}`
-              : `CONSENSUS REACHED · ${pct}% BUILD FIT`;
+
             return (
               <TooltipProvider delayDuration={350}>
                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none font-mono">
                     Signal Status
                   </p>
-                  <p className={`text-2xl font-bold leading-none tracking-tight text-foreground ${isResolving ? "animate-signal-pulse" : ""}`}>
-                    {isResolving ? "CALIBRATING" : `${pct}%`}
+                  <p className={`text-2xl font-bold leading-none tracking-tight text-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
+                    {hasSignals ? `${pct}%` : "CALIBRATING"}
                   </p>
                   <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                    {prefixLine}
-                    {resonanceFrag && (
+                    {!hasSignals ? (
+                      "WAITING FOR INPUT"
+                    ) : (
                       <>
-                        {" · "}
+                        {"BUILD FIT · "}
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="cursor-default underline-offset-2 decoration-dotted hover:underline">{resonanceFrag}</span>
+                            <span className="cursor-default underline-offset-2 decoration-dotted hover:underline">
+                              {signals} OF {total} FMLY MEMBERS
+                            </span>
                           </TooltipTrigger>
                           <TooltipContent side="bottom">
-                            {signals} of {total} members backed this feature.
+                            {signals} out of {total} members backed this feature.
                           </TooltipContent>
                         </Tooltip>
                       </>
