@@ -305,10 +305,10 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                   <p className="text-2xl font-bold leading-none tracking-tight text-foreground">
                     {verbiage.bigDisplay}
                   </p>
-                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5 truncate">
                     {verbiage.label}
                   </p>
-                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug truncate">
                     {verbiage.summary}
                   </p>
                 </div>
