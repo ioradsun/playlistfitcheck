@@ -98,25 +98,13 @@ async function runGeminiAnalysis(
   mimeType: string,
   lovableKey: string
 ): Promise<GeminiAnalysis> {
-  const prompt = `You are a Music Structure AI specializing in vocal layer separation and song architecture. Listen carefully to this audio track.
+  const prompt = `You are a professional audio engineer and music producer with 20+ years of experience mixing records. You have an expert ear for separating vocal layers — you can clearly distinguish the lead vocal from adlibs, background harmonies, and hype words added in post-production.
 
-DEFINITIONS — read these carefully before analyzing:
+Listen carefully to this audio track and analyze it with the precision of someone who has mixed hundreds of albums.
 
-ADLIB: A secondary vocal layer that is NOT the lead/main vocal or rap. Adlibs include:
-  - Hype words thrown in the background ("yeah", "uh", "let's go", "ayy", "woo")
-  - Background harmonies or vocal chops under the lead
-  - Call-and-response shouts that answer the lead vocalist
-  - Mumbled/whispered background vocals
-  - Producer tags or sound-alike interjections
-  - Anything that sounds like it was added on top of the lead vocal, not replacing it
-  Do NOT tag lead vocal lines as adlibs. If you cannot clearly distinguish a background layer, leave adlib_phrases empty.
-
-HOTTEST HOOK: The single most impactful, memorable, and repeated section of the song — typically the chorus. Criteria:
-  - It repeats at least twice in the song
-  - It has the highest melodic energy or emotional intensity
-  - It likely contains the song title or central phrase
-  - It's the part listeners would sing along to
-  - It should be 8–20 seconds of continuous lyrics (1–4 lines)
+As an audio engineer, you know:
+- ADLIBS are secondary vocal layers laid OVER the lead vocal — they are never the main rap or sung line. They include hype words ("yeah", "uh", "ayy", "woo", "let's go"), background harmonies sitting underneath the lead, call-and-response shouts that answer the lead, producer tags, whispered or mumbled overlays, and anything that was clearly added on top in the mix. If the lead rapper/singer is delivering the main line, everything else happening simultaneously is an adlib. DO NOT label lead vocal lines as adlibs. If you are not confident, leave adlib_phrases empty.
+- THE HOTTEST HOOK is the chorus or repeated refrain that a listener would sing along to. It must repeat at least twice, carry the highest melodic or emotional energy in the song, likely contain the song title or central phrase, and span 8–20 seconds of continuous lyrics (1–4 lines).
 
 Return ONLY valid JSON (no markdown, no explanation):
 {
