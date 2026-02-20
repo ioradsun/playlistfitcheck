@@ -1146,39 +1146,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   const rawIdx = rawLinesForCheck.findIndex((rl) => rl.start === line.start && rl.tag === line.tag && rl.text === line.text);
                   const isAnchored = rawIdx !== -1 && anchoredLines.has(rawIdx);
 
-                  // v3.8: Orphaned adlib — explicit zone flag (intro/outro) OR no overlapping main line
-                  // Both paths render as a standalone centered chip.
-                  const isOrphanedAdlib = isAdlib && (
-                    line.isFloating ||
-                    (line as any).isOrphaned ||
-                    !activeLines.some(
-                      (other) => other.tag !== "adlib" && other.start <= line.start && other.end >= line.start
-                    )
-                  );
-
-                  if (isOrphanedAdlib && !isEditing) {
-                    return (
-                      <div
-                        key={`${line.start}-${line.tag ?? "main"}-${i}`}
-                        ref={isPrimary ? activeLineRef : undefined}
-                        className={`flex justify-center py-1 transition-all ${isActive ? "opacity-100" : "opacity-60 hover:opacity-90"}`}
-                      >
-                        <button
-                          onClick={() => seekTo(line.start)}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-mono italic transition-all ${
-                            isActive
-                              ? "border-primary/60 bg-primary/10 text-primary"
-                              : "border-primary/20 bg-primary/5 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                          }`}
-                          title={`Orphaned adlib @ ${formatTimeLRC(line.start)}`}
-                        >
-                          <span className="text-primary/50">◆</span>
-                          <span>{line.text}</span>
-                          <span className="text-muted-foreground/40 not-italic">{formatTimeLRC(line.start)}</span>
-                        </button>
-                      </div>
-                    );
-                  }
+                  // v6.0: No standalone chips — all adlibs render inline regardless of orphan/floating status
 
                   // v3.7: render corrected word with purple underline
                   const renderLineText = () => {
