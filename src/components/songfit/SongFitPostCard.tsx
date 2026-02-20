@@ -445,6 +445,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             preResolved={signalData}
             rank={rank}
             onScored={() => setIsScored(true)}
+            onUnscored={() => setIsScored(false)}
           />
           <HookReviewsSheet
             postId={reviewsSheetPostId}
