@@ -149,33 +149,27 @@ async function runWhisper(
   return { words, segments, rawText: data.text || "" };
 }
 
-// ── v2.2 Gemini Producer Prompt ───────────────────────────────────────────────
-const GEMINI_V22_PROMPT = `ROLE: Lead Vocal Alignment Engineer
+// ── Gemini Prompt: Hook Analysis ─────────────────────────────────────────────
+const GEMINI_HOOK_PROMPT = `ROLE: Commercial Hook Engineer
 
-DIRECTIVE: Analyze the audio to map structural elements. You are the "Labeling Layer" for a word-level timing engine (Whisper). Accuracy is paramount; omission is better than a guess.
+DIRECTIVE: Your ONLY job is to identify the single strongest 10-second hook/chorus in this track. Focus all attention on finding the exact start timestamp. Accuracy over speed.
 
-1. ADLIB MAPPING & PRECISION
-- Timestamps: Output start and end in SECONDS as a decimal number with 3-decimal precision (e.g., 42.105). NOT MM:SS format.
-- Omit over Guess: If a vocal is unclear, output [inaudible] or omit. Ignore noise < 0.150s unless confidence is >= 0.95.
-- Confidence: Provide a 0.0–1.0 confidence score per event.
-- Short segments (0.2–2.0s typical). Separate repeated instances. Max 30 entries.
-- layer: "background" | "echo" | "callout" | "texture"
+EVALUATION CRITERIA (score each mentally):
+- Production lift: Does the beat/instrumentation intensify here?
+- Vocal intensity: Is this the most emotionally charged or melodically memorable vocal moment?
+- Repetition: Is this section repeated throughout the track?
+- Emotional peak: Does this represent the emotional climax of the song?
+- Commercial potential: Would this 10 seconds make someone stop scrolling?
 
-2. THE 10.000s HOOK ANCHOR
-- Identify the primary 10-second segment representing the track's core hook/chorus.
-- Output only start_sec as a decimal in seconds (e.g., 78.450). The 10s duration is a system invariant.
-- Only output the hook if confidence >= 0.75. Otherwise omit the hottest_hook field entirely.
-- Score based on: production lift, vocal intensity, melodic memorability, repetition, emotional peak.
+RULES:
+- Output ONLY the start_sec as a decimal in seconds with 3-decimal precision (e.g., 78.450).
+- The 10s duration is a system invariant — do NOT output an end time.
+- Only output the hottest_hook if your confidence is >= 0.75. If below, omit the field entirely.
+- Consider the FULL track before deciding — do not default to the first chorus.
 
-3. STRUCTURED INSIGHTS
-- bpm, key, and mood — each with its own confidence score.
-
-OUTPUT — return ONLY valid JSON, no markdown fences, no explanation:
+OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
   "hottest_hook": { "start_sec": 0.000, "confidence": 0.00 },
-  "adlibs": [
-    { "text": "yeah", "start": 0.000, "end": 0.000, "layer": "callout", "confidence": 0.00 }
-  ],
   "insights": {
     "bpm": { "value": 88, "confidence": 0.00 },
     "key": { "value": "F#m", "confidence": 0.00 },
@@ -188,17 +182,46 @@ OUTPUT — return ONLY valid JSON, no markdown fences, no explanation:
   }
 }`;
 
-// ── Gemini: audio-first analysis ──────────────────────────────────────────────
-async function runGeminiAnalysis(
+// ── Gemini Prompt: Adlib Analysis ─────────────────────────────────────────────
+const GEMINI_ADLIB_PROMPT = `ROLE: Vocal Isolation Engineer
+
+DIRECTIVE: Your ONLY job is to map every secondary vocal event (adlibs, ad-libs, background vocals, callouts, echoes, textures) in this track. The main vocal melody has already been transcribed — focus ONLY on what exists UNDERNEATH or ALONGSIDE it.
+
+ADLIB TAXONOMY:
+- "callout": Short exclamations ("yeah", "ayy", "let's go", "uh") — typically 0.2–1.5s
+- "echo": A repeat/echo of a main vocal phrase, slightly offset — typically 0.3–2.5s  
+- "background": Sustained background harmonies or layered vocals — typically 1.0–5.0s
+- "texture": Atmospheric vocal sounds, hums, breaths with intent — typically 0.5–3.0s
+
+PRECISION RULES:
+- Timestamps: Output start and end in SECONDS as a decimal with 3-decimal precision (e.g., 42.105). NOT MM:SS format.
+- Omit over Guess: If a vocal is unclear, use [inaudible] or omit entirely.
+- Ignore noise shorter than 0.150 seconds unless confidence >= 0.95.
+- Provide a 0.0–1.0 confidence score per event. Include only events with confidence >= 0.6.
+- Separate repeated instances even if the text is the same — each occurrence is a unique event.
+- Max 40 entries. Prioritize high-confidence events.
+
+OUTPUT — return ONLY valid JSON, no markdown, no explanation:
+{
+  "adlibs": [
+    { "text": "yeah", "start": 0.000, "end": 0.000, "layer": "callout", "confidence": 0.00 }
+  ]
+}`;
+
+// ── Shared: call Gemini gateway ───────────────────────────────────────────────
+async function callGemini(
+  systemPrompt: string,
   audioBase64: string,
   mimeType: string,
   lovableKey: string,
-  model = "google/gemini-3-flash-preview"
-): Promise<GeminiAnalysis> {
+  model: string,
+  maxTokens = 2500,
+  label = "gemini"
+): Promise<string> {
   const requestBody = {
     model,
     messages: [
-      { role: "system", content: GEMINI_V22_PROMPT },
+      { role: "system", content: systemPrompt },
       {
         role: "user",
         content: [
@@ -208,7 +231,7 @@ async function runGeminiAnalysis(
       },
     ],
     temperature: 0.1,
-    max_tokens: 3500,
+    max_tokens: maxTokens,
   };
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -221,60 +244,52 @@ async function runGeminiAnalysis(
     const errText = await res.text();
     if (res.status === 429) throw new Error("RATE_LIMIT");
     if (res.status === 402) throw new Error("CREDIT_LIMIT");
-    throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 200)}`);
+    throw new Error(`Gemini (${label}) error ${res.status}: ${errText.slice(0, 200)}`);
   }
 
   const gwData = await res.json();
   const content = gwData.choices?.[0]?.message?.content || "";
-  if (!content) throw new Error("Empty Gemini response");
+  if (!content) throw new Error(`Empty Gemini response (${label})`);
+  return content;
+}
 
-  // Robust JSON extraction
+function extractJsonFromContent(content: string): any {
   const jsonStart = content.indexOf("{");
   const jsonEnd = content.lastIndexOf("}");
   if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON in Gemini response");
-
   let rawJson = content.slice(jsonStart, jsonEnd + 1);
   rawJson = rawJson
     .replace(/,\s*}/g, "}")
     .replace(/,\s*]/g, "]")
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  return JSON.parse(rawJson);
+}
 
-  const parsed = JSON.parse(rawJson);
+// ── Gemini Call 1: Hook + Insights + Metadata ─────────────────────────────────
+async function runGeminiHookAnalysis(
+  audioBase64: string,
+  mimeType: string,
+  lovableKey: string,
+  model = "google/gemini-3-flash-preview"
+): Promise<{ hook: GeminiHook | null; insights?: GeminiInsights; metadata: GeminiAnalysis["metadata"]; rawContent: string }> {
+  const content = await callGemini(GEMINI_HOOK_PROMPT, audioBase64, mimeType, lovableKey, model, 1200, "hook");
+  const parsed = extractJsonFromContent(content);
 
-  // v2.2: hook is numeric start_sec + confidence gate enforced here too
-  let hookParsed: GeminiHook | null = null;
+  let hook: GeminiHook | null = null;
   if (parsed.hottest_hook && typeof parsed.hottest_hook.start_sec === "number") {
     const conf = Number(parsed.hottest_hook.confidence) || 0;
     if (conf >= 0.75) {
-      hookParsed = {
-        start_sec: Math.round(parsed.hottest_hook.start_sec * 1000) / 1000,
-        confidence: conf,
-      };
+      hook = { start_sec: Math.round(parsed.hottest_hook.start_sec * 1000) / 1000, confidence: conf };
     } else {
-      console.log(`Hook confidence ${conf.toFixed(2)} < 0.75 — marked as candidate`);
+      console.log(`[hook] Hook confidence ${conf.toFixed(2)} < 0.75 — omitted`);
     }
   }
-
-  // v2.2: adlibs use numeric start/end
-  const adlibsParsed: GeminiAdlib[] = Array.isArray(parsed.adlibs)
-    ? parsed.adlibs
-        .filter((a: any) => a && typeof a.start === "number" && a.text && a.text !== "[inaudible]")
-        .map((a: any) => ({
-          text: String(a.text).trim(),
-          start: Math.round(Number(a.start) * 1000) / 1000,
-          end: Math.round(Number(a.end) * 1000) / 1000,
-          layer: a.layer,
-          confidence: Math.min(1, Math.max(0, Number(a.confidence) || 0)),
-        }))
-        .filter((a: GeminiAdlib) => a.end > a.start && a.confidence >= 0.6)
-    : [];
 
   const ins = parsed.insights || {};
   const meta = parsed.metadata || {};
 
   return {
-    hottest_hook: hookParsed,
-    adlibs: adlibsParsed,
+    hook,
     insights: {
       bpm: ins.bpm ? { value: Number(ins.bpm.value), confidence: Number(ins.bpm.confidence) } : undefined,
       key: ins.key ? { value: String(ins.key.value), confidence: Number(ins.key.confidence) } : undefined,
@@ -289,9 +304,35 @@ async function runGeminiAnalysis(
       genre_hint: String(meta.genre_hint || "").trim() || undefined,
       confidence: ins.mood?.confidence ?? ins.bpm?.confidence ?? undefined,
     },
-    rawResponseContent: content,
-    promptUsed: GEMINI_V22_PROMPT,
+    rawContent: content,
   };
+}
+
+// ── Gemini Call 2: Adlibs only ────────────────────────────────────────────────
+async function runGeminiAdlibAnalysis(
+  audioBase64: string,
+  mimeType: string,
+  lovableKey: string,
+  model = "google/gemini-3-flash-preview"
+): Promise<{ adlibs: GeminiAdlib[]; rawContent: string }> {
+  const content = await callGemini(GEMINI_ADLIB_PROMPT, audioBase64, mimeType, lovableKey, model, 2500, "adlib");
+  const parsed = extractJsonFromContent(content);
+
+  const adlibs: GeminiAdlib[] = Array.isArray(parsed.adlibs)
+    ? parsed.adlibs
+        .filter((a: any) => a && typeof a.start === "number" && a.text && a.text !== "[inaudible]")
+        .map((a: any) => ({
+          text: String(a.text).trim(),
+          start: Math.round(Number(a.start) * 1000) / 1000,
+          end: Math.round(Number(a.end) * 1000) / 1000,
+          layer: a.layer,
+          confidence: Math.min(1, Math.max(0, Number(a.confidence) || 0)),
+        }))
+        .filter((a: GeminiAdlib) => a.end > a.start && a.confidence >= 0.6)
+    : [];
+
+  console.log(`[adlib] Parsed ${adlibs.length} adlibs from Gemini`);
+  return { adlibs, rawContent: content };
 }
 
 // ── Build lines from Whisper segments ────────────────────────────────────────
@@ -553,21 +594,29 @@ serve(async (req) => {
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
     console.log(
-      `[v2.2] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel}, ` +
+      `[v2.3] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (2 parallel calls: hook + adlib), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
-    // ── Run pipeline stages in parallel ─────────────────────────────────────
+    // ── Run all three stages in parallel ─────────────────────────────────────
     const whisperPromise = useWhisper && OPENAI_API_KEY
       ? runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY)
       : Promise.reject(new Error(useWhisper && !OPENAI_API_KEY ? "OPENAI_API_KEY not set" : "WHISPER_SKIPPED"));
 
-    const geminiPromise = !analysisDisabled
-      ? runGeminiAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel)
+    const hookPromise = !analysisDisabled
+      ? runGeminiHookAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel)
       : Promise.reject(new Error("ANALYSIS_DISABLED"));
 
-    const [whisperResult, geminiResult] = await Promise.allSettled([whisperPromise, geminiPromise]);
+    const adlibPromise = !analysisDisabled
+      ? runGeminiAdlibAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel)
+      : Promise.reject(new Error("ANALYSIS_DISABLED"));
+
+    const [whisperResult, hookResult, adlibResult] = await Promise.allSettled([
+      whisperPromise,
+      hookPromise,
+      adlibPromise,
+    ]);
 
     // ── Handle transcription result ──────────────────────────────────────────
     let words: WhisperWord[] = [];
@@ -597,95 +646,109 @@ serve(async (req) => {
 
     const baseLines = useWhisper ? buildLinesFromSegments(segments, words) : [];
 
-    // ── Handle analysis result ───────────────────────────────────────────────
+    // ── Handle analysis results ───────────────────────────────────────────────
     let title = "Unknown";
     let artist = "Unknown";
     let metadata: any = undefined;
     let hooks: any[] = [];
     let lines: LyricLine[] = baseLines;
     let geminiUsed = false;
-    let geminiOutput: any = analysisDisabled ? { status: "disabled" } : { status: "not_run" };
     let geminiError: string | null = null;
     let globalOffset = 0;
 
-    if (!analysisDisabled && geminiResult.status === "fulfilled") {
-      const g = geminiResult.value;
+    const hookSuccess = !analysisDisabled && hookResult.status === "fulfilled";
+    const adlibSuccess = !analysisDisabled && adlibResult.status === "fulfilled";
+
+    // Metadata/insights always come from hook call (less token pressure = more accurate)
+    if (hookSuccess) {
+      const h = hookResult.value;
       geminiUsed = true;
-      title = g.metadata.title || "Unknown";
-      artist = g.metadata.artist || "Unknown";
+      title = h.metadata.title || "Unknown";
+      artist = h.metadata.artist || "Unknown";
       metadata = {
-        mood: g.insights?.mood?.value || g.metadata.mood,
-        bpm_estimate: g.insights?.bpm?.value || g.metadata.bpm_estimate,
-        confidence: g.insights?.mood?.confidence ?? g.metadata.confidence,
-        key: g.insights?.key?.value || g.metadata.key,
-        genre_hint: g.metadata.genre_hint,
-        // Per-field confidence scores for richer UI
-        bpm_confidence: g.insights?.bpm?.confidence,
-        key_confidence: g.insights?.key?.confidence,
-        mood_confidence: g.insights?.mood?.confidence,
+        mood: h.insights?.mood?.value || h.metadata.mood,
+        bpm_estimate: h.insights?.bpm?.value || h.metadata.bpm_estimate,
+        confidence: h.insights?.mood?.confidence ?? h.metadata.confidence,
+        key: h.insights?.key?.value || h.metadata.key,
+        genre_hint: h.metadata.genre_hint,
+        bpm_confidence: h.insights?.bpm?.confidence,
+        key_confidence: h.insights?.key?.confidence,
+        mood_confidence: h.insights?.mood?.confidence,
       };
+    } else if (!analysisDisabled && hookResult.status === "rejected") {
+      const reason = (hookResult.reason as Error)?.message || "unknown";
+      geminiError = `hook: ${reason}`;
+      console.warn("Gemini hook analysis failed:", reason);
+    }
 
-      if (useWhisper) {
-        // ── v2.2: Compute Global Timebase Guard ──────────────────────────
-        globalOffset = computeGlobalOffset(g.adlibs, words);
-        if (Math.abs(globalOffset) > 0.150) {
-          console.log(`Applying global timebase correction: ${globalOffset.toFixed(3)}s`);
-        }
+    if (adlibResult.status === "rejected" && !analysisDisabled) {
+      const reason = (adlibResult.reason as Error)?.message || "unknown";
+      geminiError = geminiError ? `${geminiError}; adlib: ${reason}` : `adlib: ${reason}`;
+      console.warn("Gemini adlib analysis failed:", reason);
+    }
 
-        // Hybrid: Whisper timing + Gemini semantic tags
-        lines = extractAdlibsFromWords(baseLines, g.adlibs, words, globalOffset);
+    const resolvedAdlibs: GeminiAdlib[] = adlibSuccess ? adlibResult.value.adlibs : [];
+    const resolvedHook: GeminiHook | null = hookSuccess ? hookResult.value.hook : null;
 
-        // ── v2.2: Hook Invariant — 10s fixed, confidence-gated ───────────
-        if (g.hottest_hook) {
-          const hookSpan = findHookFromWords(words, g.hottest_hook);
-          if (hookSpan) hooks = [{ ...hookSpan, reasonCodes: [] }];
-        }
-      } else {
-        // Gemini-only: use corrected Gemini timestamps directly
-        const geminiLines: LyricLine[] = g.adlibs.map(a => ({
-          start: a.start,
-          end: a.end,
-          text: a.text,
-          tag: "adlib" as const,
-          confidence: a.confidence,
-        }));
-        lines = [...baseLines, ...geminiLines].sort((a, b) => a.start - b.start);
-        if (g.hottest_hook) {
-          const HOOK_DURATION = 10.000;
-          hooks = [{
-            start: g.hottest_hook.start_sec,
-            end: Math.round((g.hottest_hook.start_sec + HOOK_DURATION) * 1000) / 1000,
-            score: Math.round((g.hottest_hook.confidence || 0.75) * 100),
-            previewText: "",
-            reasonCodes: [],
-            status: "confirmed",
-          }];
-        }
+    if (useWhisper) {
+      // ── v2.2: Compute Global Timebase Guard ──────────────────────────────
+      globalOffset = computeGlobalOffset(resolvedAdlibs, words);
+      if (Math.abs(globalOffset) > 0.150) {
+        console.log(`Applying global timebase correction: ${globalOffset.toFixed(3)}s`);
       }
 
-      geminiOutput = {
-        status: "success",
-        model: resolvedAnalysisModel,
-        rawResponseContent: g.rawResponseContent || "",
-        rawResponseLength: (g.rawResponseContent || "").length,
-        adlibs: g.adlibs,
-        hottest_hook: g.hottest_hook,
-        insights: g.insights,
-        metadata: g.metadata,
-        adlibsCount: g.adlibs.length,
-        globalOffset,
-      };
-    } else if (!analysisDisabled && geminiResult.status === "rejected") {
-      const reason = (geminiResult.reason as Error)?.message || "unknown";
-      geminiError = reason;
-      geminiOutput = { status: "failed", error: reason };
-      console.warn("Gemini analysis failed:", reason);
+      // Hybrid: Whisper timing + Gemini adlib semantic tags
+      lines = extractAdlibsFromWords(baseLines, resolvedAdlibs, words, globalOffset);
+
+      // ── v2.2: Hook Invariant — 10s fixed, confidence-gated ───────────────
+      if (resolvedHook) {
+        const hookSpan = findHookFromWords(words, resolvedHook);
+        if (hookSpan) hooks = [{ ...hookSpan, reasonCodes: [] }];
+      }
+    } else if (geminiUsed) {
+      // Gemini-only: use timestamps directly
+      const geminiLines: LyricLine[] = resolvedAdlibs.map(a => ({
+        start: a.start,
+        end: a.end,
+        text: a.text,
+        tag: "adlib" as const,
+        confidence: a.confidence,
+      }));
+      lines = [...baseLines, ...geminiLines].sort((a, b) => a.start - b.start);
+      if (resolvedHook) {
+        const HOOK_DURATION = 10.000;
+        hooks = [{
+          start: resolvedHook.start_sec,
+          end: Math.round((resolvedHook.start_sec + HOOK_DURATION) * 1000) / 1000,
+          score: Math.round((resolvedHook.confidence || 0.75) * 100),
+          previewText: "",
+          reasonCodes: [],
+          status: "confirmed",
+        }];
+      }
     }
+
+    const geminiOutput = analysisDisabled ? { status: "disabled" } : {
+      status: hookSuccess || adlibSuccess ? "success" : "failed",
+      model: resolvedAnalysisModel,
+      hook: {
+        status: hookSuccess ? "success" : "failed",
+        rawLength: hookSuccess ? hookResult.value.rawContent.length : 0,
+        result: resolvedHook,
+      },
+      adlibs: {
+        status: adlibSuccess ? "success" : "failed",
+        rawLength: adlibSuccess ? adlibResult.value.rawContent.length : 0,
+        count: resolvedAdlibs.length,
+        results: resolvedAdlibs,
+      },
+      globalOffset,
+    };
 
     const adlibCount = lines.filter(l => l.tag === "adlib").length;
     const floatingCount = lines.filter(l => l.isFloating).length;
     const conflictCount = lines.filter(l => l.geminiConflict).length;
-    console.log(`[v2.2] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${conflictCount} conflicts), ${hooks.length} hooks`);
+    console.log(`[v2.3] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${conflictCount} conflicts), ${hooks.length} hooks | hook=${hookSuccess} adlib=${adlibSuccess}`);
 
     return new Response(
       JSON.stringify({
@@ -695,7 +758,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v2.2",
+          version: "anchor-align-v2.3-split",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
