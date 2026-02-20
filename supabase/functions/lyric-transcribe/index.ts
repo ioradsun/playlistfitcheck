@@ -504,53 +504,51 @@ function extractAdlibsFromWords(
     const adlibWordTokens = normAdlibText.split(" ").filter(Boolean);
     if (adlibWordTokens.length === 0) continue;
 
-    // ── Rule 2: Phonetic QA Swap (The "Rain/Range" Fix) ──────────────────
-    // If Gemini tagged this as a "correction", search the entire parent Whisper
-    // segment for the word with the highest PHONETIC similarity to the Gemini
-    // correction text (threshold > 0.8). This catches drift cases where the
-    // correction timestamp differs by up to 2s from the actual Whisper word.
+    // ── Rule 2: Segment-Wide Phonetic QA Swap (v3.3 — "Rain/Range" Fix) ───
+    // PURE PHONETIC SELECTION: time-proximity is completely removed from the
+    // correction path. We score EVERY word in EVERY candidate segment by
+    // phoneticSimilarity and swap only the best match (must exceed 0.75).
+    // This prevents "rain @ 15.5s" from replacing "I @ 16.98s" simply because
+    // "I" is the nearest word in time — it will correctly find "range" instead.
     if (adlib.isCorrection || adlib.layer === "correction") {
-      // Find which main segment this correction falls in (widened to ±2s)
-      const targetSeg = mainSegments.find(s =>
-        correctedStart >= s.start - 2.0 && correctedStart <= s.end + 2.0
+      // Candidate segments: any segment within ±5s of the correction (wide window)
+      const candidateSegs = mainSegments.filter(s =>
+        correctedStart >= s.start - 5.0 && correctedStart <= s.end + 5.0
       );
-      if (targetSeg) {
-        // Gather ALL words in the parent segment (full phonetic search window)
-        const segWords = words.filter(w => w.start >= targetSeg.start - 0.1 && w.end <= targetSeg.end + 0.1);
 
-        // Score every word by phonetic similarity to the correction text
-        let bestPhoneticWord: WhisperWord | null = null;
-        let bestPhoneticScore = 0;
+      let bestPhoneticWord: WhisperWord | null = null;
+      let bestPhoneticScore = 0;
+      let bestSeg: typeof mainSegments[0] | null = null;
+
+      for (const seg of candidateSegs) {
+        const segWords = words.filter(w => w.start >= seg.start - 0.1 && w.end <= seg.end + 0.1);
         for (const w of segWords) {
           const score = phoneticSimilarity(normalize(w.word), normalize(adlib.text));
-          if (score > bestPhoneticScore) { bestPhoneticScore = score; bestPhoneticWord = w; }
-        }
-
-        // Fall back to nearest-by-time word across the whole segment (no 0.5s cap)
-        const nearestByTime = segWords.reduce<{ w: WhisperWord | null; dist: number }>(
-          (acc, w) => { const d = Math.abs(w.start - correctedStart); return d < acc.dist ? { w, dist: d } : acc; },
-          { w: null, dist: Infinity }
-        );
-
-        // Prefer phonetic match (> 0.70 per spec) over pure time proximity
-        const PHONETIC_THRESHOLD = 0.70;
-        const chosen = bestPhoneticScore >= PHONETIC_THRESHOLD
-          ? bestPhoneticWord
-          : nearestByTime.w;  // no distance cap — entire segment is the search window
-
-        if (chosen) {
-          const oldWord = chosen.word.trim();
-          // Only patch if text actually differs from correction
-          const similarity = 1 - levenshtein(normalize(oldWord), normalize(adlib.text)) / Math.max(oldWord.length, adlib.text.length, 1);
-          if (similarity < 0.85) {
-            targetSeg.lineRef.text = targetSeg.lineRef.text.replace(oldWord, adlib.text);
-            targetSeg.lineRef.geminiConflict = oldWord;
-            correctionCount++;
-            console.log(`[qa-swap] Phonetic correction "${oldWord}" → "${adlib.text}" @ ${correctedStart.toFixed(3)}s (phoneticScore=${bestPhoneticScore.toFixed(2)})`);
+          if (score > bestPhoneticScore) {
+            bestPhoneticScore = score;
+            bestPhoneticWord = w;
+            bestSeg = seg;
           }
         }
       }
-      continue; // corrections are applied to main, not added as adlib overlay
+
+      const PHONETIC_THRESHOLD = 0.75; // v3.3 spec — no time-proximity fallback
+      if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
+        const oldWord = bestPhoneticWord.word.trim();
+        // Only apply if the text is genuinely different
+        const similarity = 1 - levenshtein(normalize(oldWord), normalize(adlib.text)) / Math.max(oldWord.length, adlib.text.length, 1);
+        if (similarity < 0.85) {
+          bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
+          bestSeg.lineRef.geminiConflict = oldWord;
+          correctionCount++;
+          console.log(`[qa-swap] Phonetic swap "${oldWord}" → "${adlib.text}" (phoneticScore=${bestPhoneticScore.toFixed(2)}, segment="${bestSeg.lineRef.text.slice(0, 40)}")`);
+        } else {
+          console.log(`[qa-swap] Skipped correction "${adlib.text}" — too similar to "${oldWord}" (${similarity.toFixed(2)})`);
+        }
+      } else {
+        console.log(`[qa-swap] No phonetic match for correction "${adlib.text}" @ ${correctedStart.toFixed(3)}s — best score ${bestPhoneticScore.toFixed(2)} < ${PHONETIC_THRESHOLD}`);
+      }
+      continue; // corrections always applied to main lines, never promoted as adlib overlay
     }
 
     // ── Rule 1: Identity Pruning (±100ms — Anti-Ghosting, v3.2) ──────────
@@ -679,15 +677,17 @@ function findHookFromWords(
   const HOOK_DURATION = 10.000; // Absolute invariant — never override
   const { start_sec, confidence = 0 } = hook;
 
-  // ── Boundary Enforcement: hook beyond track end → discard ─────────────
+  // ── Boundary Enforcement: hook beyond track end OR in last 10s → discard ─
   const trackEnd = words.length > 0 ? words[words.length - 1].end : Infinity;
-  if (start_sec > trackEnd) {
-    console.log(`[hook] Discarding hook @ ${start_sec.toFixed(3)}s — beyond track end (${trackEnd.toFixed(3)}s)`);
-    return null;
+  const HOOK_DURATION = 10.000;
+
+  if (start_sec > trackEnd || start_sec > trackEnd - HOOK_DURATION) {
+    console.log(`[hook] Discarding hook @ ${start_sec.toFixed(3)}s — in last 10s or beyond track end (${trackEnd.toFixed(3)}s). Falling back to repetition anchor.`);
+    // Fallback: find the 10s window with the highest word-repetition count
+    return findRepetitionAnchor(words, trackEnd, HOOK_DURATION);
   }
 
-  // Confidence gate — if below 0.75 this is already filtered in Gemini parsing
-  // but double-check here for safety
+  // Confidence gate — already filtered upstream but double-check
   if (confidence < 0.75) {
     return {
       start: start_sec,
@@ -703,7 +703,6 @@ function findHookFromWords(
   let snapStart = start_sec;
 
   if (windowWords.length > 0) {
-    // Find the word closest to the given start_sec
     let bestDist = Infinity;
     for (const w of windowWords) {
       const dist = Math.abs(w.start - start_sec);
@@ -711,10 +710,8 @@ function findHookFromWords(
     }
   }
 
-  // Gather preview text from words in the 10s window (Whisper-sourced)
   const hookWords = words.filter(w => w.start >= snapStart && w.end <= snapStart + HOOK_DURATION + 0.5);
   const previewText = hookWords.map(w => w.word).join(" ").slice(0, 100);
-
   const snapEnd = Math.round((snapStart + HOOK_DURATION) * 1000) / 1000;
 
   return {
@@ -723,6 +720,47 @@ function findHookFromWords(
     score: Math.round(confidence * 100),
     previewText,
     status: "confirmed",
+  };
+}
+
+// ── Repetition-anchor fallback for hook selection ─────────────────────────────
+/**
+ * Scans the Whisper word list in 10s sliding windows and returns the window
+ * with the highest repeated-word density. Used as a fallback when Gemini's
+ * hook selection is invalid (out-of-bounds or in the final 10s).
+ */
+function findRepetitionAnchor(
+  words: WhisperWord[],
+  trackEnd: number,
+  hookDuration: number
+): { start: number; end: number; score: number; previewText: string; status: "confirmed" | "candidate" } | null {
+  if (words.length === 0) return null;
+
+  const STEP = 2.0; // slide every 2s for efficiency
+  let bestStart = words[0].start;
+  let bestScore = 0;
+
+  for (let t = words[0].start; t <= trackEnd - hookDuration; t += STEP) {
+    const windowWords = words.filter(w => w.start >= t && w.start <= t + hookDuration);
+    if (windowWords.length < 3) continue;
+    const texts = windowWords.map(w => normalize(w.word));
+    const freq: Record<string, number> = {};
+    for (const tok of texts) { freq[tok] = (freq[tok] || 0) + 1; }
+    const repetitions = Object.values(freq).filter(c => c > 1).reduce((s, c) => s + c, 0);
+    const density = repetitions / windowWords.length;
+    if (density > bestScore) { bestScore = density; bestStart = t; }
+  }
+
+  const hookWords = words.filter(w => w.start >= bestStart && w.end <= bestStart + hookDuration + 0.5);
+  const previewText = hookWords.map(w => w.word).join(" ").slice(0, 100);
+
+  console.log(`[hook] Repetition anchor selected @ ${bestStart.toFixed(3)}s (density=${bestScore.toFixed(2)})`);
+  return {
+    start: Math.round(bestStart * 1000) / 1000,
+    end: Math.round((bestStart + hookDuration) * 1000) / 1000,
+    score: Math.round(bestScore * 100),
+    previewText,
+    status: "candidate",
   };
 }
 
@@ -947,7 +985,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.2",
+          version: "production-master-v3.3",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
