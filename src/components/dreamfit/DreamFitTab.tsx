@@ -67,7 +67,7 @@ export function DreamFitTab() {
           <p className="text-muted-foreground text-sm">No dreams yet. Be the first to ask for something.</p>
         </div>
       ) : (
-        <div>
+        <div className="pb-24">
           {dreams.map((dream) => (
             <DreamToolCard
               key={dream.id}
