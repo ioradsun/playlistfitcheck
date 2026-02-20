@@ -1,98 +1,153 @@
 
-# Timing Synchronization Fix for LyricFit
+# Anchor-Align v2.4: Reference-Based Adlib Auditor
 
-## Root Cause Diagnosis
+## What Changes and Why
 
-There are three distinct bugs causing the mismatch, each with a clear fix.
+Currently the Adlib Auditor call sends only audio to Gemini. It has no awareness of what Whisper already transcribed as the main lead vocal. This forces Gemini to re-detect the lead vocal itself, which is the root cause of "ghost adlibs" (re-transcribed lead lines leaking through the 0.9 dedup filter).
 
----
+The fix: pass Whisper's `rawText` transcript directly into the adlib call as a "Main Lyric Script." Gemini is then instructed to perform **subtraction** — identify only the vocals NOT present in the provided script.
 
-### Bug 1: `timeupdate` fires only ~4x per second (most impactful)
+This also reduces the globalOffset drift because Gemini can anchor its internal clock to the word sequence it sees in the transcript, instead of independently estimating timing.
 
-**Where**: `LyricDisplay.tsx`, lines 284-291.
-
-The `<audio>` `timeupdate` event fires roughly every 250ms (browser-defined). This is the single biggest source of lag. The waveform playhead and lyric highlight both read from `currentTime` state, which is only updated 4x per second.
-
-**Fix**: Replace the `timeupdate` listener with a `requestAnimationFrame` (RAF) loop that reads `audio.currentTime` at 60fps. The `timeupdate` listener is kept only for the loop-region check (which needs to fire accurately to prevent overshooting the hook end).
+## Pipeline Architecture (v2.4)
 
 ```text
-Current:
-  timeupdate (250ms intervals) → setState(currentTime) → re-render
+Stage 1 — Whisper (unchanged)
+  audio → whisper-1 → words[] + segments[] + rawText
 
-New:
-  requestAnimationFrame (16ms intervals) → setState(currentTime) → re-render
-  timeupdate (250ms) → loop region enforcement only
+Stage 2a — Gemini Hook (unchanged, audio only)
+  audio → Hook/Meta prompt → hottest_hook + insights + metadata
+
+Stage 2b — Gemini Adlib Auditor (UPGRADED)
+  audio + rawText → Reference-Based Adlib prompt → adlibs[]
+  Gemini now performs SUBTRACTION: only returns vocals NOT in rawText
 ```
 
----
-
-### Bug 2: Floating-point gap causes lines to be skipped or flicker
-
-**Where**: `LyricDisplay.tsx`, lines 261-274.
-
-The check `currentTime >= l.start && currentTime < l.end` has no tolerance. If a line ends at `14.8` and the next starts at `14.8`, the RAF loop may hit `14.800001` and briefly miss both. Short adlib lines (< 300ms) can be entirely skipped by a single RAF tick.
-
-**Fix**: Add a small epsilon (`0.08s`) to the end boundary:
-```
-currentTime >= l.start && currentTime < (l.end + 0.08)
-```
-This is invisible to the user but prevents flickering at boundaries. The sticky logic already handles gaps between non-adjacent lines, so this only needs to be applied at the active-line detection level.
-
----
-
-### Bug 3: MP3 codec delay ("Processing Offset")
-
-**Where**: Audio files — especially MP3s — can contain a LAME/Xing header that pads up to ~1,152 samples (~26ms at 44.1kHz) of silence. More significantly, some files have transcoding silence of 0.5–2 seconds that Gemini correctly ignores (its timestamps start where audio content starts) but the HTML5 player includes.
-
-**Fix**: Add a user-adjustable **Offset Slider** in the LyricDisplay header. This adds a signed offset (e.g., `-1.5` to `+1.5` seconds) to all timestamp comparisons — without touching the underlying data. The value is stored in component state and applied only at render/comparison time.
+The three calls still run in parallel via `Promise.allSettled`. The adlib call is fired immediately alongside the whisper call, but passes the rawText from the whisper result. Since whisper needs to resolve first before adlib can use rawText, the pipeline becomes:
 
 ```text
-Effective timestamp = stored_timestamp + timingOffset
+whisper + hook run in parallel first
+↓ (whisper resolves)
+adlib runs with rawText injected
+hook waits separately
 ```
 
-This lets artists dial in perfect sync after transcription without re-running the AI. Default is `0`. The slider is compact (a small row beneath the waveform).
+This adds a small sequential dependency but the benefit far outweighs the latency cost, since the adlib call is the most expensive to re-run when it hallucinates ghosts.
 
----
+## Sequencing Strategy
+
+There are two options for the timing:
+
+**Option A (Sequential, cleanest):** Run Whisper and Hook in parallel. Once Whisper resolves, fire the Adlib call with rawText. Hook and Adlib results are collected together.
+
+**Option B (Optimistic parallel):** Fire all three at once. If Whisper fails, the Adlib call falls back to audio-only mode (current behavior). This maintains max parallelism but loses the reference benefit on the first attempt.
+
+**Chosen: Option A** — reliability over raw parallelism. The hook call is fully parallel with Whisper (no dependency). The adlib call fires after Whisper resolves, armed with the transcript.
+
+```text
+t=0  ──► whisper-1 starts
+t=0  ──► gemini hook starts
+         ↓ (whisper done, ~5-15s)
+t+W  ──► gemini adlib starts (with rawText)
+t+W+A ──► all results merged
+```
+
+## Specific Code Changes
+
+### `supabase/functions/lyric-transcribe/index.ts`
+
+**1. Update `runGeminiAdlibAnalysis` signature**
+
+Add an optional `whisperTranscript?: string` parameter.
+
+**2. New Reference-Based Adlib Prompt**
+
+Replace the current `GEMINI_ADLIB_PROMPT` constant with a new `buildAdlibPrompt(transcript: string): string` function that dynamically injects the Whisper rawText:
+
+```text
+ROLE: Lead Vocal Producer
+
+You have been provided:
+1. Raw audio of a musical track
+2. The Main Lead Vocal Transcript (below) — already captured by a word-level transcription engine
+
+MAIN LEAD VOCAL TRANSCRIPT:
+[whisperTranscript injected here]
+
+TASK: Perform SUBTRACTION. Identify every vocal event in the audio that is NOT part of the Main Lead Vocal Transcript above.
+
+SUBTRACTION RULE:
+- If a word appears in the provided transcript, it belongs to the lead vocal — DO NOT include it.
+- You are hunting ONLY for: background vocals, hype interjections, call-and-response layers, echo repeats, harmonies under the lead, and atmospheric vocal textures.
+
+HIGH-SENSITIVITY WINDOW:
+- Pay extreme attention from 2:30 to the end of the track. Outro sections contain dense background layers.
+
+PRECISION:
+- Timestamps: seconds with 3-decimal precision (e.g., 169.452)
+- Confidence floor: 0.95 — only output if you are 95% certain it is a secondary vocal layer
+- layer: "echo" | "callout" | "background" | "texture"
+
+OUTPUT — ONLY valid JSON:
+{
+  "adlibs": [
+    { "text": "...", "start": 0.000, "end": 0.000, "layer": "callout", "confidence": 0.98 }
+  ]
+}
+```
+
+Note the confidence floor is raised from 0.60 → **0.95** for the reference-based call, since Gemini now has the script as an anchor and should only output events it is highly certain are secondary layers.
+
+**3. Update main handler sequencing**
+
+Change from:
+```typescript
+// Current: all 3 parallel
+const [whisperResult, hookResult, adlibResult] = await Promise.allSettled([
+  whisperPromise, hookPromise, adlibPromise,
+]);
+```
+
+To:
+```typescript
+// v2.4: Whisper + Hook parallel first, then Adlib with transcript
+const [whisperResult, hookResult] = await Promise.allSettled([
+  whisperPromise,
+  hookPromise,
+]);
+
+const rawTranscript = whisperResult.status === "fulfilled"
+  ? whisperResult.value.rawText
+  : "";
+
+const adlibResult = await (
+  !analysisDisabled
+    ? runGeminiAdlibAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, rawTranscript).then(v => ({ status: "fulfilled" as const, value: v })).catch(e => ({ status: "rejected" as const, reason: e }))
+    : Promise.resolve({ status: "rejected" as const, reason: new Error("ANALYSIS_DISABLED") })
+);
+```
+
+**4. Update ghost-dedup threshold**
+
+Since the reference-based prompt already performs text subtraction, the downstream ghost-dedup overlap threshold in `extractAdlibsFromWords` can be lowered from `0.9` → `0.75`. This catches the remaining edge cases where Gemini still returns a near-duplicate despite having the transcript, without being too aggressive.
+
+**5. Update version string**
+
+Change `"anchor-align-v2.3-split"` → `"anchor-align-v2.4-reference"`.
+
+**6. Update debug output**
+
+Add `transcriptProvided: true/false` to the gemini adlib debug block so we can verify the transcript was injected.
 
 ## Files to Modify
 
-### `src/components/lyric/LyricDisplay.tsx`
+- `supabase/functions/lyric-transcribe/index.ts` — all logic changes, redeployed automatically
 
-1. **Replace `timeupdate` → RAF loop**:
-   - On audio setup (`useEffect`), start a RAF loop using `rafRef` that reads `audio.currentTime` and calls `setCurrentTime`.
-   - Keep `timeupdate` only for the loop-region clamp (it doesn't need 60fps accuracy for that).
-   - Cancel the RAF loop on pause/stop/cleanup.
+No frontend changes required. The merge engine, LyricDisplay, and LyricFitTab remain unchanged.
 
-2. **Add epsilon to active-line detection**:
-   - Change `currentTime < l.end` → `currentTime < l.end + HIGHLIGHT_EPSILON` where `HIGHLIGHT_EPSILON = 0.08`.
+## Expected Outcomes
 
-3. **Add `timingOffset` state and slider**:
-   - `const [timingOffset, setTimingOffset] = useState(0)` — range `-2.0` to `+2.0`, step `0.1`.
-   - Compute `adjustedTime = currentTime - timingOffset` (subtracting means "shift lyrics earlier if audio leads").
-   - Use `adjustedTime` everywhere timestamps are compared (active-line detection, hook loop region, waveform playhead).
-   - Render a compact offset row beneath the waveform: a `-` button, a `+` button, a numeric display (`Offset: +0.3s`), and a Reset link. No full Radix slider needed — simple step buttons keep the UI clean.
-
----
-
-## Technical Summary
-
-```text
-Before:
-  audio.timeupdate (~250ms) ──► setCurrentTime ──► highlight / waveform
-
-After:
-  requestAnimationFrame (16ms) ──► setCurrentTime ──► highlight / waveform
-  audio.timeupdate (~250ms) ──► loop region clamp only
-
-Highlight check (before):
-  currentTime >= l.start && currentTime < l.end
-
-Highlight check (after):
-  adjustedTime >= l.start && adjustedTime < l.end + 0.08
-
-Timing offset:
-  adjustedTime = currentTime - timingOffset
-  UI: [ - ] [ Offset: 0.0s ] [ + ]  (step 0.1s, range ±2.0s)
-```
-
-No backend changes required. No new dependencies. All changes are contained in `LyricDisplay.tsx`.
+- Ghost adlib count drops significantly (Gemini won't re-identify lead lyrics)
+- Outro adlib detection improves (Gemini's full attention on secondary layers)
+- globalOffset drift reduces (transcript anchors Gemini's internal clock to Whisper's word sequence)
+- Confidence floor raised to 0.95 means every returned adlib is high-certainty
