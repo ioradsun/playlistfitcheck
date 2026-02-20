@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +15,7 @@ serve(async (req) => {
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
     const { audioBase64, format } = await req.json();
     if (!audioBase64) throw new Error("No audio data provided");
@@ -26,24 +28,108 @@ serve(async (req) => {
       );
     }
 
+    // Fetch model preference from site_copy
+    let lyricModel: "gemini" | "whisper" = "gemini";
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+      if (supabaseUrl && supabaseKey) {
+        const sb = createClient(supabaseUrl, supabaseKey);
+        const { data } = await sb.from("site_copy").select("copy_json").limit(1).single();
+        const pref = (data?.copy_json as any)?.features?.lyric_transcribe_model;
+        if (pref === "whisper" || pref === "gemini") lyricModel = pref;
+      }
+    } catch (e) {
+      console.warn("Could not fetch lyric model preference, defaulting to gemini:", e);
+    }
+
+    console.log(`Lyric transcribe model: ${lyricModel}, ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${format}`);
+
     // Map format → MIME type
     const mimeMap: Record<string, string> = {
-      wav: "audio/wav",
-      mp3: "audio/mpeg",
-      mpga: "audio/mpeg",
-      mpeg: "audio/mpeg",
-      m4a: "audio/mp4",
-      mp4: "audio/mp4",
-      flac: "audio/flac",
-      ogg: "audio/ogg",
-      oga: "audio/ogg",
-      webm: "audio/webm",
+      wav: "audio/wav", mp3: "audio/mpeg", mpga: "audio/mpeg", mpeg: "audio/mpeg",
+      m4a: "audio/mp4", mp4: "audio/mp4", flac: "audio/flac", ogg: "audio/ogg",
+      oga: "audio/ogg", webm: "audio/webm",
     };
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
-    console.log(`Processing audio via Gemini native API: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
+    let content = "";
 
+    if (lyricModel === "whisper" && OPENAI_API_KEY) {
+      // ── Whisper path ──────────────────────────────────────────────────────
+      // Decode base64 → binary blob
+      const binaryStr = atob(audioBase64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mimeType });
+
+      const form = new FormData();
+      form.append("file", blob, `audio.${ext}`);
+      form.append("model", "whisper-1");
+      form.append("response_format", "verbose_json");
+      form.append("timestamp_granularities[]", "segment");
+
+      console.log("Sending to Whisper API...");
+      const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+        body: form,
+      });
+
+      if (!whisperRes.ok) {
+        const errText = await whisperRes.text();
+        console.error("Whisper error:", whisperRes.status, errText.slice(0, 300));
+        if (whisperRes.status === 429) {
+          return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`Whisper API error: ${whisperRes.status}`);
+      }
+
+      const whisperData = await whisperRes.json();
+      console.log(`Whisper returned ${whisperData.segments?.length ?? 0} segments`);
+
+      // Build lines from Whisper segments
+      const rawLines = (whisperData.segments || []).map((seg: any) => ({
+        start: Math.round((Number(seg.start) || 0) * 10) / 10,
+        end: Math.round((Number(seg.end) || 0) * 10) / 10,
+        text: String(seg.text ?? "").trim(),
+        tag: "main" as const,
+      })).filter((l: any) => l.text.length > 0 && l.end > l.start);
+
+      // Fix overlaps
+      const fixedLines = rawLines.map((l: any, i: number) => {
+        if (i < rawLines.length - 1) {
+          const nextStart = rawLines[i + 1].start;
+          if (l.end > nextStart) return { ...l, end: Math.round((nextStart - 0.1) * 10) / 10 };
+        }
+        return l;
+      });
+
+      const detectedText = whisperData.text || "";
+      const detectedLang = whisperData.language || "";
+
+      return new Response(
+        JSON.stringify({
+          title: "Unknown",
+          artist: "Unknown",
+          metadata: { genre_hint: detectedLang || undefined },
+          lines: fixedLines,
+          hooks: [],
+          _debug: {
+            model: "whisper-1",
+            rawText: detectedText.slice(0, 500),
+            inputBytes: Math.round(estimatedBytes),
+            outputLines: fixedLines.length,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── Gemini path (default) ─────────────────────────────────────────────────
     const systemPrompt = `ROLE: You are an elite Music Production AI specializing in high-fidelity transcription, vocal layer analysis, and structural hook detection. Your output is used for professional synchronized lyrics and marketing intelligence.
 
 CORE DIRECTIVE: Transcribe the provided audio into a precise JSON structure. Accuracy of TIMESTAMPS is your highest priority to prevent playback desync.
@@ -89,8 +175,7 @@ Return ONLY a valid JSON object. No markdown, no backticks, no preamble.
   ]
 }`;
 
-    // Use Lovable AI gateway with Gemini multimodal (inline_data for audio)
-    console.log(`Sending audio to Lovable AI gateway: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
+    console.log(`Sending audio to Lovable AI gateway (Gemini): ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB`);
 
     const gatewayRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -107,9 +192,7 @@ Return ONLY a valid JSON object. No markdown, no backticks, no preamble.
             content: [
               {
                 type: "image_url",
-                image_url: {
-                  url: `data:${mimeType};base64,${audioBase64}`,
-                },
+                image_url: { url: `data:${mimeType};base64,${audioBase64}` },
               },
               { type: "text", text: "Transcribe the lyrics from this audio file with precise timestamps. Output only the JSON." },
             ],
@@ -120,7 +203,6 @@ Return ONLY a valid JSON object. No markdown, no backticks, no preamble.
       }),
     });
 
-    let content = "";
     if (!gatewayRes.ok) {
       const gwError = await gatewayRes.text();
       console.error("Gateway error:", gatewayRes.status, gwError.slice(0, 300));
@@ -155,7 +237,7 @@ Return ONLY a valid JSON object. No markdown, no backticks, no preamble.
       throw new Error("Failed to parse transcription response — try again");
     }
 
-    // Sanitize lines — keep tag field, allow adlibs to overlap
+    // Sanitize lines
     const rawLines = (parsed.lines ?? [])
       .map((l: any) => ({
         start: Math.round((Number(l.start) || 0) * 10) / 10,
@@ -165,7 +247,6 @@ Return ONLY a valid JSON object. No markdown, no backticks, no preamble.
       }))
       .filter((l: any) => l.text.length > 0 && l.end > l.start);
 
-    // For main lines only: fix overlaps by clamping end to next main line's start
     const mainLines = rawLines.filter((l: any) => l.tag === "main");
     const adlibLines = rawLines.filter((l: any) => l.tag === "adlib");
     const fixedMain = mainLines.map((l: any, i: number) => {
@@ -177,7 +258,6 @@ Return ONLY a valid JSON object. No markdown, no backticks, no preamble.
     });
     const lines = [...fixedMain, ...adlibLines].sort((a: any, b: any) => a.start - b.start);
 
-    // Sanitize hooks
     const hooks = (parsed.hooks ?? []).map((h: any) => ({
       start: Math.round((Number(h.start) || 0) * 10) / 10,
       end: Math.round((Number(h.end) || 0) * 10) / 10,
@@ -186,7 +266,6 @@ Return ONLY a valid JSON object. No markdown, no backticks, no preamble.
       previewText: String(h.previewText ?? "").trim(),
     })).filter((h: any) => h.end > h.start);
 
-    // Sanitize metadata
     const metadata = parsed.metadata ? {
       mood: String(parsed.metadata.mood || "").trim() || undefined,
       bpm_estimate: Number(parsed.metadata.bpm_estimate) || undefined,
