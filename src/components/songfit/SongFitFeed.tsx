@@ -325,7 +325,7 @@ export function SongFitFeed() {
         </div>
       ) : (
         <EagerEmbedProvider>
-          <div>
+          <div className="pb-24">
             {posts.map((post, idx) => (
               <SongFitPostCard
                 key={post.id}
