@@ -6,27 +6,8 @@ import { getSessionId } from "@/lib/sessionId";
 
 type HookRating = "missed" | "almost" | "solid" | "hit";
 
-function getSignalVerbiage(total: number, pct: number) {
-  if (total <= 10) {
-    return {
-      label: `RESOLVING ${total}/50`,
-      summary: "CALIBRATING REPLAY FIT.",
-      tier: "resolving" as const,
-    };
-  }
-  if (total < 50) {
-    return {
-      label: `${total}/50 SIGNALS`,
-      summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
-      tier: "detected" as const,
-    };
-  }
-  return {
-    label: "CONSENSUS REACHED",
-    summary: `${pct}% FMLY REPLAY FIT.`,
-    tier: "consensus" as const,
-  };
-}
+
+
 
 type Step = 2 | "replay_cta" | "skip_cta" | "done";
 
@@ -212,48 +193,36 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
     <div>
       {/* Done */}
       {step === "done" && results && (() => {
-        const replayPct = results.total > 0 ? Math.round((results.replay_yes / results.total) * 100) : 0;
-        const signalLabel = results.total >= 50 ? (results.total === 1 ? "signal" : "signals") : "/ 50 signals needed";
-        const verbiage = getSignalVerbiage(results.total, replayPct);
+        const total = results.total;
+        const signals = results.replay_yes;
+        const hasSignals = signals > 0;
+        const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
+        const bigDisplay = hasSignals ? `${pct}%` : "CALIBRATING";
         return (
           <div className="animate-fade-in">
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
             <div className="px-3 py-2 space-y-0.5">
-              {/* Top row: label (left) + Turn Off Signal (right) */}
-              {verbiage.tier !== "resolving" && (
-                <div className="flex items-center justify-between">
-                  <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                    {verbiage.label}
-                  </p>
-                  <button
-                    onClick={handleRemoveSignal}
-                    className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
-                  >
-                    Turn Off Signal
-                  </button>
-                </div>
-              )}
-              {verbiage.tier === "resolving" && (
-                <div className="flex items-center justify-end">
-                  <button
-                    onClick={handleRemoveSignal}
-                    className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
-                  >
-                    Turn Off Signal
-                  </button>
-                </div>
-              )}
-              {/* Bottom row: summary (left) + signals count (right) */}
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
-                  {verbiage.summary}
+              {/* Top row: pct display (left) + Turn Off Signal (right) */}
+              <div className="flex items-center justify-between">
+                <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
+                  {bigDisplay}
                 </p>
-                {onOpenReviews ? (
+                <button
+                  onClick={handleRemoveSignal}
+                  className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
+                >
+                  Turn Off Signal
+                </button>
+              </div>
+              {/* Bottom row: meta (left) + open reviews (right) */}
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50">
+                  {hasSignals ? `REPLAY FIT · ${signals} OF ${total} FMLY MEMBERS` : "WAITING FOR INPUT"}
+                </p>
+                {onOpenReviews && (
                   <button onClick={onOpenReviews} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                    {results.total} {signalLabel}
+                    View All
                   </button>
-                ) : (
-                  <span className="font-mono text-[11px] tracking-widest text-muted-foreground shrink-0">{results.total} {signalLabel}</span>
                 )}
               </div>
             </div>

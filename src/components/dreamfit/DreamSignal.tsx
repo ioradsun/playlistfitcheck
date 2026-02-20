@@ -5,27 +5,8 @@ import { getSessionId } from "@/lib/sessionId";
 
 type SignalStep = "idle" | "compose" | "done";
 
-function getSignalVerbiage(total: number, pct: number) {
-  if (total <= 10) {
-    return {
-      label: `RESOLVING ${total}/50`,
-      summary: "CALIBRATING FIT.",
-      tier: "resolving" as const,
-    };
-  }
-  if (total < 50) {
-    return {
-      label: `${total}/50 SIGNALS`,
-      summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
-      tier: "detected" as const,
-    };
-  }
-  return {
-    label: "CONSENSUS REACHED",
-    summary: `${pct}% FMLY BUILD FIT.`,
-    tier: "consensus" as const,
-  };
-}
+
+
 
 interface Props {
   dreamId: string;
@@ -74,8 +55,8 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
   }, [step]);
 
   const pct = localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
-  const signalsLabel = localBackers >= 50 ? (localBackers === 1 ? "1 signal" : `${localBackers} signals`) : `${localBackers} / 50 signals needed`;
-  const v = getSignalVerbiage(localBackers, pct);
+  const hasSignals = localGreenlight > 0;
+  const bigDisplay = hasSignals ? `${pct}%` : "CALIBRATING";
 
   const handleVoteClick = (type: "signal" | "bypass") => {
     setChosenType(type);
@@ -138,40 +119,28 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       <div className="animate-fade-in">
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2 space-y-0.5">
-          {/* Top row: label (left) + Turn Off Signal (right) */}
-          {v.tier !== "resolving" && (
-            <div className="flex items-center justify-between">
-              <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                {v.label}
-              </p>
-              <button
-                onClick={handleRemoveSignal}
-                className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
-              >
-                Turn Off Signal
-              </button>
-            </div>
-          )}
-          {v.tier === "resolving" && (
-            <div className="flex items-center justify-end">
-              <button
-                onClick={handleRemoveSignal}
-                className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
-              >
-                Turn Off Signal
-              </button>
-            </div>
-          )}
-          {/* Bottom row: summary (left) + signals count (right) */}
+          {/* Top row: display (left) + Turn Off Signal (right) */}
+          <div className="flex items-center justify-between">
+            <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
+              {bigDisplay}
+            </p>
+            <button
+              onClick={handleRemoveSignal}
+              className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
+            >
+              Turn Off Signal
+            </button>
+          </div>
+          {/* Bottom row: meta (left) + open comments (right) */}
           <div className="flex items-center justify-between gap-3">
-            <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
-              {v.summary}
+            <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/50">
+              {hasSignals ? `BUILD FIT · ${localGreenlight} OF ${localBackers} FMLY MEMBERS` : "WAITING FOR INPUT"}
             </p>
             <button
               onClick={() => onOpenComments(dreamId)}
               className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
             >
-              {signalsLabel}
+              View All
             </button>
           </div>
         </div>
