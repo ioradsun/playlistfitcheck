@@ -44,37 +44,50 @@ serve(async (req) => {
 
     console.log(`Processing audio via Gemini native API: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
 
-    const systemPrompt = `You are a professional lyrics transcription and analysis engine. Analyze the song audio and return a structured JSON response.
+    const systemPrompt = `ROLE: You are an elite Music Production AI specializing in high-fidelity transcription, vocal layer analysis, and structural hook detection. Your output is used for professional synchronized lyrics and marketing intelligence.
 
-Output ONLY valid JSON, no markdown, no code fences:
+CORE DIRECTIVE: Transcribe the provided audio into a precise JSON structure. Accuracy of TIMESTAMPS is your highest priority to prevent playback desync.
+
+1. STRICT TIMESTAMP CALIBRATION (ANTI-DELAY)
+- Zero-Point Sync: The audio clock starts at exactly 0.0.
+- No Relative Timing: If the first word occurs at 4.5 seconds due to an intro, the start timestamp MUST be 4.5. Do NOT start at 0.0 if the artist is not yet speaking.
+- Lead-in Silence: You must align the start timestamp to the absolute first audible phoneme of each line.
+- Phasing: Ensure line end times accurately reflect the vocal decay (do not cut off prematurely).
+
+2. VOCAL LAYER & ADLIB RULES
+- Every line must have a tag.
+- tag: "main" → The primary vocal melody or lead rap.
+- tag: "adlib" → Background shouts, harmonies, hype words (e.g., "yeah", "uh-huh", "let's go").
+- MANDATORY ISOLATION: You MUST isolate adlibs into their own JSON objects. Example: If an artist says "I'm the king (yeah!)", create one main line for "I'm the king" and a separate adlib line for "(yeah!)".
+- Overlaps: Adlib start times should overlap main times if they occur simultaneously.
+- Main lines should NOT overlap with other main lines.
+
+3. THE "HOTTEST HOOK" LOGIC
+- Identify the single most impactful repetitive segment (8–20 seconds).
+- Criteria: Highest lyrical density, melodic peak, or title repetition.
+- Output: Return ONLY the highest-scoring hook in the hooks array.
+
+4. MANDATORY OUTPUT SCHEMA (STRICT JSON ONLY)
+Return ONLY a valid JSON object. No markdown, no backticks, no preamble.
+
 {
-  "title": "Song title if audible, else Unknown",
-  "artist": "Artist name if audible, else Unknown",
+  "title": "Detected Title",
+  "artist": "Detected Artist",
   "metadata": {
-    "mood": "e.g. melancholic, energetic, uplifting, aggressive, romantic",
-    "bpm_estimate": 120,
-    "confidence": 0.85,
-    "key": "e.g. C major, A minor",
-    "genre_hint": "e.g. hip-hop, pop, R&B"
+    "mood": "String",
+    "bpm_estimate": 0,
+    "confidence": 0.0,
+    "key": "String",
+    "genre_hint": "String"
   },
   "lines": [
-    { "start": 12.4, "end": 15.8, "text": "Main lyric line", "tag": "main" },
-    { "start": 13.0, "end": 14.5, "text": "(ad-lib or background vocal)", "tag": "adlib" }
+    { "start": 0.0, "end": 0.0, "text": "String", "tag": "main" },
+    { "start": 0.0, "end": 0.0, "text": "(Adlib)", "tag": "adlib" }
   ],
   "hooks": [
-    { "start": 45.0, "end": 60.0, "score": 92, "reasonCodes": ["repetition", "melodic_peak", "chorus"], "previewText": "First few words of the hook..." }
+    { "start": 0.0, "end": 0.0, "score": 95, "reasonCodes": ["repetition", "title-drop"], "previewText": "First line of hook..." }
   ]
-}
-
-CRITICAL RULES:
-- "tag" must be "main" for lead vocals/primary lyrics, or "adlib" for background vocals, ad-libs, harmonies, or call-and-response
-- Ad-libs CAN overlap in time with main lines — this is expected and correct
-- Main lines should NOT overlap with other main lines
-- timestamps: start and end are floating point seconds, 1 decimal place precision
-- hooks: identify 1-4 of the most memorable/catchy sections (chorus, hook, drop). score is 0-100
-- metadata.confidence: 0.0-1.0 reflecting how confidently you could transcribe the vocals
-- Lines in chronological order by start time
-- Skip purely instrumental sections`;
+}`;
 
     // Use Lovable AI gateway with Gemini multimodal (inline_data for audio)
     console.log(`Sending audio to Lovable AI gateway: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
