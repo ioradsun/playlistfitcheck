@@ -26,6 +26,7 @@ interface FeaturesState {
   tools_order: string[];
   crowdfit_mode: "reactions" | "hook_review";
   lyric_transcribe_model: "gemini" | "whisper" | "hybrid";
+  lyric_gemini_model: "google/gemini-3-flash-preview" | "google/gemini-2.5-flash" | "google/gemini-2.5-pro" | "google/gemini-3-pro-preview";
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -36,6 +37,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   tools_order: DEFAULT_ORDER,
   crowdfit_mode: "reactions",
   lyric_transcribe_model: "hybrid",
+  lyric_gemini_model: "google/gemini-3-flash-preview",
 };
 
 async function patchFeatures(patch: Partial<FeaturesState>) {
@@ -122,7 +124,8 @@ export function ToolsEditor() {
           tools_enabled,
           tools_order: merged,
           crowdfit_mode: f.crowdfit_mode ?? "reactions",
-          lyric_transcribe_model: f.lyric_transcribe_model ?? "gemini",
+          lyric_transcribe_model: f.lyric_transcribe_model ?? "hybrid",
+          lyric_gemini_model: f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
         });
         setOrderedKeys(merged);
         setGuestQuota(f.growth_quotas?.guest ?? 5);
@@ -208,6 +211,21 @@ export function ToolsEditor() {
       );
     } catch {
       setFeatures(f => ({ ...f, lyric_transcribe_model: prev }));
+      toast.error("Failed to update");
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const setGeminiModel = async (model: FeaturesState["lyric_gemini_model"]) => {
+    const prev = features.lyric_gemini_model;
+    setFeatures(f => ({ ...f, lyric_gemini_model: model }));
+    setSavingKey("gemini_model");
+    try {
+      await patchFeatures({ lyric_gemini_model: model } as any);
+      toast.success(`Gemini model → ${model}`);
+    } catch {
+      setFeatures(f => ({ ...f, lyric_gemini_model: prev }));
       toast.error("Failed to update");
     } finally {
       setSavingKey(null);
@@ -380,6 +398,40 @@ export function ToolsEditor() {
             onCheckedChange={toggleCrypto}
             disabled={savingKey === "crypto"}
           />
+        </div>
+      </div>
+
+      {/* ── Gemini Model Selector ── */}
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Mic size={14} className="text-primary" />
+          <span className="text-sm font-mono font-medium">LyricFit — Gemini Model</span>
+        </div>
+        <div className="divide-y divide-border">
+          {([
+            { value: "google/gemini-3-flash-preview", title: "Gemini 3 Flash Preview ✦ (default)", desc: "Fast, next-gen. Best balance of speed and audio quality." },
+            { value: "google/gemini-2.5-flash",       title: "Gemini 2.5 Flash",                  desc: "Stable, balanced — good multimodal + reasoning." },
+            { value: "google/gemini-2.5-pro",         title: "Gemini 2.5 Pro",                    desc: "Top-tier accuracy. Slower, best for complex tracks." },
+            { value: "google/gemini-3-pro-preview",   title: "Gemini 3 Pro Preview",              desc: "Next-gen Pro — highest capability, experimental." },
+          ] as const).map(({ value, title, desc }) => {
+            const active = (features.lyric_gemini_model || "google/gemini-3-flash-preview") === value;
+            return (
+              <button
+                key={value}
+                onClick={() => setGeminiModel(value)}
+                disabled={savingKey === "gemini_model"}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-accent/30 transition-colors"
+              >
+                <div className="text-left">
+                  <p className="text-sm font-medium">{title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                </div>
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${active ? "border-primary bg-primary" : "border-border"}`}>
+                  {active && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 

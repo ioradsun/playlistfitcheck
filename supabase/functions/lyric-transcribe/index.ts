@@ -156,7 +156,8 @@ function parseTimestamp(ts: string): number {
 async function runGeminiAnalysis(
   audioBase64: string,
   mimeType: string,
-  lovableKey: string
+  lovableKey: string,
+  model = "google/gemini-3-flash-preview"
 ): Promise<GeminiAnalysis> {
   const prompt = `You are an audio-first music transcription and commercial analysis engine built for professional SRT/closed caption generation and social media optimization.
 
@@ -233,7 +234,7 @@ FINAL OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 }`;
 
   const requestBody = {
-    model: "google/gemini-3-flash-preview",
+    model,
     messages: [
       { role: "system", content: prompt },
       {
@@ -559,8 +560,19 @@ serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
 
-    const { audioBase64, format } = await req.json();
+    const { audioBase64, format, geminiModel } = await req.json();
     if (!audioBase64) throw new Error("No audio data provided");
+
+    // Allow caller to override the Gemini model; default to flash-preview
+    const VALID_GEMINI_MODELS = [
+      "google/gemini-3-flash-preview",
+      "google/gemini-2.5-flash",
+      "google/gemini-2.5-pro",
+      "google/gemini-3-pro-preview",
+    ];
+    const resolvedGeminiModel: string = VALID_GEMINI_MODELS.includes(geminiModel)
+      ? geminiModel
+      : "google/gemini-3-flash-preview";
 
     const estimatedBytes = audioBase64.length * 0.75;
     if (estimatedBytes > 25 * 1024 * 1024) {
@@ -595,17 +607,19 @@ serve(async (req) => {
 
     // ── Gemini input captured for debug ─────────────────────────────────────
     const geminiInput = {
-      model: "google/gemini-3-flash-preview",
+      model: resolvedGeminiModel,
       endpoint: "https://ai.gateway.lovable.dev/v1/chat/completions",
       mimeType,
       audioBytesApprox: Math.round(estimatedBytes),
       contentParts: ["image_url (audio as data URI)", "text instruction"],
     };
 
+    console.log(`Gemini model: ${resolvedGeminiModel}`);
+
     // Run Whisper and Gemini in parallel
     const [whisperResult, geminiResult] = await Promise.allSettled([
       runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY),
-      runGeminiAnalysis(audioBase64, mimeType, LOVABLE_API_KEY),
+      runGeminiAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedGeminiModel),
     ]);
 
     if (whisperResult.status === "rejected") {
