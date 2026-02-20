@@ -196,7 +196,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
               onClick={handleProfileClick}
             >
               <div className="relative shrink-0">
-                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
+                {/* h-10 avatar, ring-primary/20 */}
+                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
                   {post.profiles?.avatar_url ? (
                     <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -210,8 +211,10 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
-                <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
+                {/* Content Tier: text-sm, font-semibold, text-muted-foreground */}
+                <p className="text-sm font-semibold leading-tight truncate text-muted-foreground">{displayName}</p>
+                {/* Metadata Tier: 11px mono */}
+                <p className="font-mono text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
               </div>
             </div>
           </ProfileHoverCard>

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, X, Music, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -296,10 +295,10 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   return (
     <div className="border-b border-border/40 transition-colors">
       <div className="flex gap-3 px-4 pt-3 pb-3">
-        {/* Avatar */}
-        <Avatar className="h-10 w-10 border border-border shrink-0 mt-1">
+        {/* Avatar — h-10, bg-muted fallback, ring-primary/20 */}
+        <Avatar className="h-10 w-10 border border-border/40 ring-2 ring-primary/20 shrink-0 mt-0.5">
           <AvatarImage src={avatarUrl} alt={profile?.display_name ?? "You"} />
-          <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+          <AvatarFallback className="bg-muted text-muted-foreground text-[11px] font-bold">
             {initials}
           </AvatarFallback>
         </Avatar>
@@ -309,7 +308,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
           <div className="flex items-center gap-2">
             <div className="flex-1 min-w-0">
               {selectedTrack ? (
-                <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/50 group">
+                <div className="flex items-center gap-2.5 p-2 rounded-xl bg-muted/60 border border-border/40 group">
                   {selectedTrack.albumArt ? (
                     <img src={selectedTrack.albumArt} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                   ) : (
@@ -318,20 +317,23 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
+                    {/* Content Tier: text-sm, font-semibold */}
                     <p className="text-sm font-semibold truncate leading-tight">{selectedTrack.title}</p>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                    {/* Metadata Tier: 11px mono */}
+                    <p className="font-mono text-[11px] text-muted-foreground truncate mt-0.5">
                       {selectedTrack.artists.map(a => a.name).join(", ")}
                     </p>
                   </div>
                   <button
                     onClick={clear}
-                    className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                   >
                     <X size={14} />
                   </button>
                 </div>
               ) : (
                 <div className="relative">
+                  {/* Content Tier: text-sm, placeholder muted/35 */}
                   <input
                     ref={inputRef}
                     value={query}
@@ -341,7 +343,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
                     onFocus={() => setFocused(true)}
                     onBlur={() => setTimeout(() => setFocused(false), 200)}
                     placeholder="Search your song or paste Spotify link"
-                    className="w-full bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none py-2 pr-8"
+                    className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/35 outline-none py-2 pr-8"
                     disabled={publishing}
                   />
                   {searching && (
@@ -350,14 +352,14 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
                 </div>
               )}
             </div>
-            <Button
-              size="sm"
-              className="h-9 px-5 rounded-full text-xs font-bold shrink-0"
+            {/* Control Tier: 13px, font-bold, tracking-[0.15em], bg-foreground, text-background */}
+            <button
               disabled={!selectedTrack || publishing || !!duplicateWarning || !caption.trim()}
               onClick={publish}
+              className="text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background h-9 px-5 rounded-full hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0"
             >
               {publishing ? "Dropping…" : "Drop"}
-            </Button>
+            </button>
           </div>
 
           {/* Hook lyrics — required after track is selected */}

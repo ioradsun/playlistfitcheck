@@ -240,7 +240,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 )}
                 <button
                   onClick={handleRemoveSignal}
-                  className="text-muted-foreground/30 hover:text-muted-foreground transition-colors text-[10px] font-mono"
+                  className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
                 >
                   Turn Off Signal
                 </button>
@@ -316,7 +316,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 onKeyDown={handleContextKeyDown}
                 placeholder="What hit? (Optional but helpful)"
                 rows={2}
-                className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
               />
               <button
                 onClick={() => handleSubmit(contextNote)}
@@ -336,7 +336,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
           <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
           <div className="px-3 py-2.5 space-y-2.5">
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Real talk: What's missing?</p>
+              <p className="font-mono text-[11px] text-muted-foreground tracking-wide uppercase">Real talk: What's missing?</p>
               <button
                 onClick={() => setStep(2)}
                 className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
@@ -353,7 +353,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 onKeyDown={handleContextKeyDown}
                 placeholder="The missing piece... (Optional but helpful)"
                 rows={2}
-                className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
               />
               <button
                 onClick={() => handleSubmit(contextNote)}
