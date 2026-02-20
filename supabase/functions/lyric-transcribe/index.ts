@@ -44,30 +44,37 @@ serve(async (req) => {
 
     console.log(`Processing audio via Gemini native API: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
 
-    const systemPrompt = `You are a professional lyrics transcription engine. Transcribe the song lyrics from the provided audio with PRECISE timestamps.
-
-CRITICAL TIMING RULES:
-- Each timestamp must reflect the EXACT moment in the audio when that lyric begins/ends
-- Do NOT guess or estimate — listen carefully and map each line to its actual position
-- Timestamps must be monotonically increasing
-- The last line's end time should match the approximate end of singing (not necessarily the full track duration)
-- Lines should NOT overlap in time
+    const systemPrompt = `You are a professional lyrics transcription and analysis engine. Analyze the song audio and return a structured JSON response.
 
 Output ONLY valid JSON, no markdown, no code fences:
 {
   "title": "Song title if audible, else Unknown",
   "artist": "Artist name if audible, else Unknown",
+  "metadata": {
+    "mood": "e.g. melancholic, energetic, uplifting, aggressive, romantic",
+    "bpm_estimate": 120,
+    "confidence": 0.85,
+    "key": "e.g. C major, A minor",
+    "genre_hint": "e.g. hip-hop, pop, R&B"
+  },
   "lines": [
-    { "start": 12.4, "end": 15.8, "text": "First lyric line" },
-    { "start": 16.0, "end": 19.2, "text": "Second lyric line" }
+    { "start": 12.4, "end": 15.8, "text": "Main lyric line", "tag": "main" },
+    { "start": 13.0, "end": 14.5, "text": "(ad-lib or background vocal)", "tag": "adlib" }
+  ],
+  "hooks": [
+    { "start": 45.0, "end": 60.0, "score": 92, "reasonCodes": ["repetition", "melodic_peak", "chorus"], "previewText": "First few words of the hook..." }
   ]
 }
 
-Rules:
-- start and end are floating point seconds, 1 decimal place precision
-- Each line = one natural phrase or lyrical sentence
-- Skip instrumental sections (no text entries for those)
-- Lines in strict chronological order`;
+CRITICAL RULES:
+- "tag" must be "main" for lead vocals/primary lyrics, or "adlib" for background vocals, ad-libs, harmonies, or call-and-response
+- Ad-libs CAN overlap in time with main lines — this is expected and correct
+- Main lines should NOT overlap with other main lines
+- timestamps: start and end are floating point seconds, 1 decimal place precision
+- hooks: identify 1-4 of the most memorable/catchy sections (chorus, hook, drop). score is 0-100
+- metadata.confidence: 0.0-1.0 reflecting how confidently you could transcribe the vocals
+- Lines in chronological order by start time
+- Skip purely instrumental sections`;
 
     // Use Lovable AI gateway with Gemini multimodal (inline_data for audio)
     console.log(`Sending audio to Lovable AI gateway: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
@@ -126,7 +133,7 @@ Rules:
     }
 
     // Parse JSON response
-    let parsed: { title?: string; artist?: string; lines?: any[] };
+    let parsed: { title?: string; artist?: string; metadata?: any; lines?: any[]; hooks?: any[] };
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(content);
@@ -135,36 +142,58 @@ Rules:
       throw new Error("Failed to parse transcription response — try again");
     }
 
-    // Sanitize lines: ensure monotonic timestamps, round to 1dp
+    // Sanitize lines — keep tag field, allow adlibs to overlap
     const rawLines = (parsed.lines ?? [])
       .map((l: any) => ({
         start: Math.round((Number(l.start) || 0) * 10) / 10,
         end: Math.round((Number(l.end) || 0) * 10) / 10,
         text: String(l.text ?? "").trim(),
+        tag: l.tag === "adlib" ? "adlib" : "main",
       }))
       .filter((l: any) => l.text.length > 0 && l.end > l.start);
 
-    // Fix overlaps: clamp each line's end to next line's start
-    const lines = rawLines.map((l: any, i: number) => {
-      if (i < rawLines.length - 1) {
-        const nextStart = rawLines[i + 1].start;
-        if (l.end > nextStart) {
-          return { ...l, end: Math.round((nextStart - 0.1) * 10) / 10 };
-        }
+    // For main lines only: fix overlaps by clamping end to next main line's start
+    const mainLines = rawLines.filter((l: any) => l.tag === "main");
+    const adlibLines = rawLines.filter((l: any) => l.tag === "adlib");
+    const fixedMain = mainLines.map((l: any, i: number) => {
+      if (i < mainLines.length - 1) {
+        const nextStart = mainLines[i + 1].start;
+        if (l.end > nextStart) return { ...l, end: Math.round((nextStart - 0.1) * 10) / 10 };
       }
       return l;
     });
+    const lines = [...fixedMain, ...adlibLines].sort((a: any, b: any) => a.start - b.start);
 
-    console.log(`Final transcription lines: ${lines.length}`);
+    // Sanitize hooks
+    const hooks = (parsed.hooks ?? []).map((h: any) => ({
+      start: Math.round((Number(h.start) || 0) * 10) / 10,
+      end: Math.round((Number(h.end) || 0) * 10) / 10,
+      score: Math.min(100, Math.max(0, Number(h.score) || 0)),
+      reasonCodes: Array.isArray(h.reasonCodes) ? h.reasonCodes : [],
+      previewText: String(h.previewText ?? "").trim(),
+    })).filter((h: any) => h.end > h.start);
+
+    // Sanitize metadata
+    const metadata = parsed.metadata ? {
+      mood: String(parsed.metadata.mood || "").trim() || undefined,
+      bpm_estimate: Number(parsed.metadata.bpm_estimate) || undefined,
+      confidence: Math.min(1, Math.max(0, Number(parsed.metadata.confidence) || 0)) || undefined,
+      key: String(parsed.metadata.key || "").trim() || undefined,
+      genre_hint: String(parsed.metadata.genre_hint || "").trim() || undefined,
+    } : undefined;
+
+    console.log(`Final: ${lines.length} lines (${fixedMain.length} main, ${adlibLines.length} adlib), ${hooks.length} hooks`);
 
     return new Response(
       JSON.stringify({
         title: parsed.title || "Unknown",
         artist: parsed.artist || "Unknown",
+        metadata,
         lines,
+        hooks,
         _debug: {
           rawResponse: content,
-          rawLines: rawLines,
+          rawLines,
           model: "lovable-gateway/gemini-2.5-flash",
           inputBytes: Math.round(estimatedBytes),
           outputLines: lines.length,
