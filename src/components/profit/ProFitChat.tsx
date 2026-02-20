@@ -76,7 +76,7 @@ export const ProFitChat = ({ artist, blueprint, onBack }: ProFitChatProps) => {
 
   return (
     <motion.div
-      className="w-full max-w-5xl mx-auto flex flex-col h-[calc(100vh-8rem)]"
+      className="w-full max-w-5xl mx-auto flex flex-col h-[calc(100vh-8rem)] px-4 md:px-0"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
