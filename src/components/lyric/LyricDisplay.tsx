@@ -1146,10 +1146,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   const rawIdx = rawLinesForCheck.findIndex((rl) => rl.start === line.start && rl.tag === line.tag && rl.text === line.text);
                   const isAnchored = rawIdx !== -1 && anchoredLines.has(rawIdx);
 
-                  // v3.8: Orphaned adlib — explicitly floating (intro/outro) OR no overlapping main line
-                  // Render as standalone centered chip instead of indented overlay.
+                  // v3.8: Orphaned adlib — explicit zone flag (intro/outro) OR no overlapping main line
+                  // Both paths render as a standalone centered chip.
                   const isOrphanedAdlib = isAdlib && (
                     line.isFloating ||
+                    (line as any).isOrphaned ||
                     !activeLines.some(
                       (other) => other.tag !== "adlib" && other.start <= line.start && other.end >= line.start
                     )
