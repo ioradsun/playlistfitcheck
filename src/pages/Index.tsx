@@ -503,7 +503,7 @@ const Index = () => {
             <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} />
           </div>
           {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
-          <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "hitfit" ? "" : "hidden"}`}>
+          <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
             {loadedHitFitAnalysis
               ? <HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} />
               : <HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} />

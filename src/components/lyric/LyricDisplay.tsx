@@ -408,10 +408,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       </div>
 
       {/* Two-column layout */}
-      <div className="flex gap-4 items-start">
+      <div className="flex flex-col lg:flex-row gap-4 items-start">
 
         {/* ── LEFT: Waveform + Lyrics + Export ── */}
-        <div className="flex-1 min-w-0 space-y-3">
+        <div className="flex-1 min-w-0 w-full space-y-3">
 
           {/* Waveform */}
           <div className="glass-card rounded-xl p-3">
@@ -530,7 +530,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         </div>
 
         {/* ── RIGHT: Controls panel ── */}
-        <div className="w-56 shrink-0 space-y-4">
+        <div className="w-full lg:w-56 lg:shrink-0 space-y-4">
 
           {/* Version toggle */}
           <div className="glass-card rounded-xl p-3">

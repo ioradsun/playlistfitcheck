@@ -99,7 +99,7 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
   const fit = hasBlendedScore ? (FIT_CONFIG[songFitAnalysis.blendedLabel] || FIT_CONFIG.DECENT_FIT) : null;
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-0 pb-24 divide-y divide-border/30">
+    <div className="w-full max-w-3xl mx-auto space-y-0 pb-24 divide-y divide-border/30 px-0 sm:px-0">
 
       {/* Header */}
       <div className="flex items-center gap-3 pb-6">

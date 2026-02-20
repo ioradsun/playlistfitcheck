@@ -138,7 +138,7 @@ function MasterCard({ master, index }: { master: MasterAnalysis; index: number }
           )}
 
           {/* Strength / Weakness / Note */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-border/20 pt-4">
+          <div className="grid grid-cols-1 gap-4 border-t border-border/20 pt-4">
             <div className="space-y-1">
               <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Top Strength</p>
               <p className="text-[11px] text-foreground">{master.topStrength}</p>
