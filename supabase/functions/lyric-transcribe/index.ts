@@ -550,10 +550,11 @@ function extractAdlibsFromWords(
     const correctedStart = Math.round((adlib.start - globalOffset) * 1000) / 1000;
     const correctedEnd = Math.round((adlib.end - globalOffset) * 1000) / 1000;
 
-    // ── Boundary Enforcement: discard adlibs beyond final Whisper word ────
-    // No buffer — any adlib timestamped past the last Whisper word is a hallucination.
-    if (correctedStart > trackEnd) {
-      console.log(`[boundary] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — beyond track end (${trackEnd.toFixed(3)}s)`);
+    // ── Boundary Enforcement (Rule 1 v3.7): discard adlibs beyond maxTime + 1.0s ─
+    // 1.0s buffer allows legitimate echo tails; anything further is a hallucination.
+    const MAX_BOUNDARY = trackEnd + 1.0;
+    if (correctedStart > MAX_BOUNDARY) {
+      console.log(`[boundary] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — beyond maxTime+1s (${MAX_BOUNDARY.toFixed(3)}s)`);
       ghostCount++;
       continue;
     }
@@ -626,8 +627,11 @@ function extractAdlibsFromWords(
         if (similarity < 0.85) {
           bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
           bestSeg.lineRef.geminiConflict = oldWord;
+          // v3.7: mark the line so UI can underline the corrected word in purple
+          (bestSeg.lineRef as any).isCorrection = true;
+          (bestSeg.lineRef as any).correctedWord = adlib.text;
           correctionCount++;
-          console.log(`[qa-swap] v3.6 phonetic swap "${oldWord}" → "${adlib.text}" (score=${bestPhoneticScore.toFixed(2)}, seg="${bestSeg.lineRef.text.slice(0, 40)}")`);
+          console.log(`[qa-swap] v3.7 phonetic swap "${oldWord}" → "${adlib.text}" (score=${bestPhoneticScore.toFixed(2)}, seg="${bestSeg.lineRef.text.slice(0, 40)}")`);
         } else {
           console.log(`[qa-swap] Skipped correction "${adlib.text}" — too similar to "${oldWord}" (${similarity.toFixed(2)})`);
         }
@@ -768,7 +772,7 @@ function extractAdlibsFromWords(
   const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
   const floatingCount = adlibLines.filter(l => l.isFloating).length;
   const conflictCount = adlibLines.filter(l => l.geminiConflict).length;
-  console.log(`[v3.0] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/identity-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
+  console.log(`[v3.7] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
   return merged;
 }
 
@@ -1089,7 +1093,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.6",
+          version: "production-master-v3.7",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
