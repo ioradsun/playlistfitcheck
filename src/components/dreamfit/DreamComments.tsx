@@ -299,7 +299,7 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                   <p className={`text-2xl font-bold leading-none tracking-tight ${verbiage.tier === "resolving" ? "text-muted-foreground/40" : "text-foreground"}`}>
                     {verbiage.bigDisplay}
                   </p>
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/50 leading-snug mt-0.5">
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
                     {verbiage.tier === "resolving" ? verbiage.label : verbiage.summary}
                   </p>
                 </div>

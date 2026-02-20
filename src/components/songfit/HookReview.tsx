@@ -196,7 +196,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       <div className="border-t border-border/30">
         {/* Studio Display Row */}
         <div className="px-4 py-2.5 flex items-center justify-between">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+          <span className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
             {rankStr && <>RANK: {rankStr} · </>}
             SIGNAL: {strength !== null ? `${strength}%` : "—"}
             {" · "}{savesCount} SAVES
@@ -208,13 +208,13 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
             onClick={() => handleVoteClick(true)}
             className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
+            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Run it back</span>
           </button>
           <button
             onClick={() => handleVoteClick(false)}
             className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
+            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Skip</span>
           </button>
         </div>
       </div>
@@ -244,7 +244,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
             <div className="px-3 py-2 space-y-0.5">
               <div className="flex items-center justify-between">
-                <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                   <span className={verbiage.tier === "resolving" ? "opacity-50" : ""}>{verbiage.label}</span>
                   {" · "}
                   {onOpenReviews ? (
@@ -262,7 +262,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   Turn Off Signal
                 </button>
               </div>
-              <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/50">
+              <p className="font-sans text-[14px] leading-relaxed text-muted-foreground/50">
                 {verbiage.summary}
               </p>
             </div>
@@ -280,13 +280,13 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               onClick={() => handleVoteClick(true)}
               className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
             >
-              <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
+              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Run it back</span>
             </button>
             <button
               onClick={() => handleVoteClick(false)}
               className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
             >
-              <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
+              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Skip</span>
             </button>
           </div>
         </div>
