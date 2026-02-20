@@ -109,7 +109,13 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
       if (data.error) throw new Error(data.error);
       if (!data.lines) throw new Error("Invalid response format");
 
-      setLyricData(data as LyricData);
+      setLyricData({
+        title: data.title || file.name.replace(/\.[^/.]+$/, "") || "Unknown",
+        artist: data.artist || "Unknown",
+        lines: data.lines,
+        hooks: data.hooks,
+        metadata: data.metadata,
+      } as LyricData);
       setAudioFile(file);
       setHasRealAudio(true);
       setSavedId(null);
