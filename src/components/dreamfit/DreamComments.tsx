@@ -123,7 +123,8 @@ function CommentItem({
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `RESOLVING... (${total}/50 SIGNALS)`,
+      label: `RESOLVING...`,
+      sublabel: `(${total}/50 SIGNALS)`,
       summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
       bigDisplay: `${pct}%`,
       tier: "resolving" as const,
@@ -132,6 +133,7 @@ function getSignalVerbiage(total: number, pct: number) {
   if (total < 50) {
     return {
       label: `STATUS: ${total}/50 SIGNALS`,
+      sublabel: undefined,
       summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
       bigDisplay: `${total}/50`,
       tier: "detected" as const,
@@ -139,6 +141,7 @@ function getSignalVerbiage(total: number, pct: number) {
   }
   return {
     label: "STATUS: CONSENSUS REACHED",
+    sublabel: undefined,
     summary: `${pct}% OF THE FMLY RESONATE WITH THIS.`,
     bigDisplay: `${pct}%`,
     tier: "consensus" as const,
@@ -309,8 +312,13 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                     {verbiage.bigDisplay}
                   </p>
                   <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                    {verbiage.tier === "resolving" ? verbiage.label : verbiage.summary}
+                    {verbiage.label}
                   </p>
+                  {verbiage.tier === "resolving" && (
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
+                      {verbiage.sublabel}
+                    </p>
+                  )}
                 </div>
                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none">
@@ -319,8 +327,8 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                   <p className="text-2xl font-bold leading-none text-foreground tracking-tight">
                     {backersCount}
                   </p>
-                  <p className="text-[10px] text-muted-foreground/50 leading-snug mt-0.5">
-                    {greenlightCount} greenlight · {shelveCount} shelve
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
+                    {greenlightCount} Signaled · {shelveCount} Bypassed
                   </p>
                 </div>
               </div>
