@@ -35,6 +35,14 @@ const DEFAULT_COPY: SiteCopy = {
     growth_flow: false,
     growth_quotas: { guest: 5, limited: 10 },
   },
+  signals: {
+    resolving_label: "STATUS: RESOLVING...",
+    resolving_summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
+    detected_label: "STATUS: {n}/50 SIGNALS",
+    detected_summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
+    consensus_label: "STATUS: CONSENSUS REACHED",
+    consensus_summary: "{pct}% OF THE FMLY RESONATE WITH THIS.",
+  },
 };
 
 export interface ToolCopy {
@@ -81,6 +89,14 @@ export interface SiteCopy {
     tools_enabled?: Record<string, boolean>;
     tools_order?: string[];
     crowdfit_mode?: "reactions" | "hook_review";
+  };
+  signals: {
+    resolving_label: string;
+    resolving_summary: string;
+    detected_label: string;
+    detected_summary: string;
+    consensus_label: string;
+    consensus_summary: string;
   };
 }
 
