@@ -123,7 +123,7 @@ function CommentItem({
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `STATUS: RESOLVING... (${total}/50 SIGNALS)`,
+      label: `RESOLVING... (${total}/50 SIGNALS)`,
       summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
       bigDisplay: `${pct}%`,
       tier: "resolving" as const,
