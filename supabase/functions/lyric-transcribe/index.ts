@@ -190,7 +190,18 @@ Rules:
     console.log(`Final transcription lines: ${lines.length}`);
 
     return new Response(
-      JSON.stringify({ title: parsed.title || "Unknown", artist: parsed.artist || "Unknown", lines }),
+      JSON.stringify({
+        title: parsed.title || "Unknown",
+        artist: parsed.artist || "Unknown",
+        lines,
+        _debug: {
+          rawResponse: content,
+          rawLines: rawLines,
+          model: geminiRes.ok ? "gemini-native" : "gateway-fallback",
+          inputBytes: Math.round(estimatedBytes),
+          outputLines: lines.length,
+        },
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {

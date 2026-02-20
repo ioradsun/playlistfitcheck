@@ -22,6 +22,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
   const [savedId, setSavedId] = useState<string | null>(null);
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
+  const [debugData, setDebugData] = useState<any | null>(null);
   const { user } = useAuth();
   const quota = useUsageQuota("lyric");
 
@@ -112,6 +113,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
       setAudioFile(file);
       setHasRealAudio(true);
       setSavedId(null);
+      setDebugData(data._debug ?? null);
       await quota.increment();
     } catch (e) {
       console.error("Transcription error:", e);
@@ -128,6 +130,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
     setSavedId(null);
     setFmlyLines(null);
     setVersionMeta(null);
+    setDebugData(null);
     onNewProject?.();
   }, [onNewProject]);
 
@@ -141,6 +144,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
           savedId={savedId}
           fmlyLines={fmlyLines}
           versionMeta={versionMeta}
+          debugData={debugData}
           onBack={handleBack}
           onSaved={(id) => { setSavedId(id); onProjectSaved?.(); }}
           onReuploadAudio={(file) => { setAudioFile(file); setHasRealAudio(true); }}
