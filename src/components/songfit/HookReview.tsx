@@ -242,19 +242,23 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
         return (
           <div>
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-            <div className="px-3 py-2 space-y-0.5">
-              <div className="flex items-center justify-between">
+            <div className="px-3 py-2 flex items-start justify-between gap-3">
+              <div className="flex-1 space-y-0.5">
                 <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                   <span className={verbiage.tier === "resolving" ? "opacity-50" : ""}>{verbiage.label}</span>
-                  {" · "}
-                  {onOpenReviews ? (
-                    <button onClick={onOpenReviews} className="hover:text-foreground transition-colors">
-                      {results.total} {signalLabel}
-                    </button>
-                  ) : (
-                    <span>{results.total} {signalLabel}</span>
-                  )}
                 </p>
+                <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
+                  {verbiage.summary}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                {onOpenReviews ? (
+                  <button onClick={onOpenReviews} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors">
+                    {results.total} {signalLabel}
+                  </button>
+                ) : (
+                  <span className="font-mono text-[11px] tracking-widest text-muted-foreground">{results.total} {signalLabel}</span>
+                )}
                 <button
                   onClick={handleRemoveSignal}
                   className="text-muted-foreground/30 hover:text-muted-foreground transition-colors text-[10px] font-mono"
@@ -262,9 +266,6 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   Turn Off Signal
                 </button>
               </div>
-              <p className="font-sans text-[14px] leading-relaxed text-muted-foreground/50">
-                {verbiage.summary}
-              </p>
             </div>
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
           </div>
