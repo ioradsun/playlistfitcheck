@@ -1,87 +1,98 @@
 
-## Signal Engine — Dual-Meter Status Card
+# Timing Synchronization Fix for LyricFit
 
-### What's changing
+## Root Cause Diagnosis
 
-Both detail panels (CrowdFit's `HookReviewsSheet.tsx` and DreamFit's `DreamComments.tsx`) get a rebuilt Signal Status card. The secondary raw-count card in HookReviewsSheet is already gone; this replaces the primary card logic in both files.
-
----
-
-### Data model (per panel)
-
-| Variable | CrowdFit source | DreamFit source |
-|---|---|---|
-| `signals` | `rows.filter(r => r.would_replay).length` | `dream.greenlight_count` |
-| `total` | `rows.length` | `dream.backers_count` |
-| `threshold` | 50 (constant) | 50 (constant) |
-| `percentage` | `round((signals / total) * 100)` | `round((greenlight / backers) * 100)` |
+There are three distinct bugs causing the mismatch, each with a clear fix.
 
 ---
 
-### State logic
+### Bug 1: `timeupdate` fires only ~4x per second (most impactful)
 
-**Resolving** (`signals < 50`)
-- Primary display: `CALIBRATING` (animated — see below)
-- Metadata line: `REPLAY FIT · {signals}/50 SIGNALS · {signals}/{total} RESONANCE`
-- DreamFit variant: `BUILD FIT · …`
-- If `total = 0`: omit the `· {signals}/{total} RESONANCE` fragment
-- Never show a `%` value
+**Where**: `LyricDisplay.tsx`, lines 284-291.
 
-**Consensus** (`signals ≥ 50`)
-- Primary display: `{percentage}%` (static, bold)
-- Metadata line: `CONSENSUS REACHED · {percentage}% REPLAY FIT · {signals}/{total} RESONANCE`
+The `<audio>` `timeupdate` event fires roughly every 250ms (browser-defined). This is the single biggest source of lag. The waveform playhead and lyric highlight both read from `currentTime` state, which is only updated 4x per second.
 
----
-
-### Tooltip
-
-- Attached **only** to the `{signals}/{total}` fraction span
-- Uses Radix `Tooltip` (already in the project) with `delayDuration={350}` (matching project standard)
-- Copy: `{signals} of {total} listeners signaled this track.`
-- DreamFit copy: `{signals} of {total} members backed this feature.`
-- Wrapped in `TooltipProvider` scoped to just the card
-
----
-
-### CALIBRATING Animation
-
-Added as a Tailwind keyframe in `tailwind.config.ts`:
+**Fix**: Replace the `timeupdate` listener with a `requestAnimationFrame` (RAF) loop that reads `audio.currentTime` at 60fps. The `timeupdate` listener is kept only for the loop-region check (which needs to fire accurately to prevent overshooting the hook end).
 
 ```text
-@keyframes signal-pulse {
-  0%, 100%  → opacity: 1,   filter: blur(0px)
-  50%       → opacity: 0.55, filter: blur(0.3px)
-}
-duration: 1400ms, timing: ease-in-out, infinite
+Current:
+  timeupdate (250ms intervals) → setState(currentTime) → re-render
+
+New:
+  requestAnimationFrame (16ms intervals) → setState(currentTime) → re-render
+  timeupdate (250ms) → loop region enforcement only
 ```
 
-Applied only when `signals < 50` via class `animate-signal-pulse`.
+---
 
-Respects `prefers-reduced-motion` — the keyframe uses `@media (prefers-reduced-motion: reduce)` override to set `animation: none`.
+### Bug 2: Floating-point gap causes lines to be skipped or flicker
 
-No dot tick accent (keeping it clean for now).
+**Where**: `LyricDisplay.tsx`, lines 261-274.
+
+The check `currentTime >= l.start && currentTime < l.end` has no tolerance. If a line ends at `14.8` and the next starts at `14.8`, the RAF loop may hit `14.800001` and briefly miss both. Short adlib lines (< 300ms) can be entirely skipped by a single RAF tick.
+
+**Fix**: Add a small epsilon (`0.08s`) to the end boundary:
+```
+currentTime >= l.start && currentTime < (l.end + 0.08)
+```
+This is invisible to the user but prevents flickering at boundaries. The sticky logic already handles gaps between non-adjacent lines, so this only needs to be applied at the active-line detection level.
 
 ---
 
-### Consensus lock-in transition
+### Bug 3: MP3 codec delay ("Processing Offset")
 
-When signals crosses 50 the display switches. Since this is a detail panel (not a live feed), the transition happens on panel open. No cross-fade needed here — the panel always opens with fresh data. The CSS class switch itself provides the natural instant reveal.
+**Where**: Audio files — especially MP3s — can contain a LAME/Xing header that pads up to ~1,152 samples (~26ms at 44.1kHz) of silence. More significantly, some files have transcoding silence of 0.5–2 seconds that Gemini correctly ignores (its timestamps start where audio content starts) but the HTML5 player includes.
 
-If a future requirement is live realtime transition within the panel, we can add `framer-motion` `AnimatePresence` at that point.
+**Fix**: Add a user-adjustable **Offset Slider** in the LyricDisplay header. This adds a signed offset (e.g., `-1.5` to `+1.5` seconds) to all timestamp comparisons — without touching the underlying data. The value is stored in component state and applied only at render/comparison time.
 
----
+```text
+Effective timestamp = stored_timestamp + timingOffset
+```
 
-### Files to modify
-
-1. **`tailwind.config.ts`** — add `signal-pulse` keyframe + animation token + `prefers-reduced-motion` disable
-2. **`src/components/songfit/HookReviewsSheet.tsx`** — rebuild the stat card with dual variables, tooltip on resonance fraction, CALIBRATING animation
-3. **`src/components/dreamfit/DreamComments.tsx`** — same rebuild, BUILD FIT verbiage, `backers_count` as total
+This lets artists dial in perfect sync after transcription without re-running the AI. Default is `0`. The slider is compact (a small row beneath the waveform).
 
 ---
 
-### What stays the same
+## Files to Modify
 
-- Card border, radius, padding (`rounded-2xl border border-border/50 bg-card px-4 py-3.5`)
-- "Signal Status" label at top (10px mono, muted/50)
-- Everything below the card (comments list, input footer)
-- No database changes required
+### `src/components/lyric/LyricDisplay.tsx`
+
+1. **Replace `timeupdate` → RAF loop**:
+   - On audio setup (`useEffect`), start a RAF loop using `rafRef` that reads `audio.currentTime` and calls `setCurrentTime`.
+   - Keep `timeupdate` only for the loop-region clamp (it doesn't need 60fps accuracy for that).
+   - Cancel the RAF loop on pause/stop/cleanup.
+
+2. **Add epsilon to active-line detection**:
+   - Change `currentTime < l.end` → `currentTime < l.end + HIGHLIGHT_EPSILON` where `HIGHLIGHT_EPSILON = 0.08`.
+
+3. **Add `timingOffset` state and slider**:
+   - `const [timingOffset, setTimingOffset] = useState(0)` — range `-2.0` to `+2.0`, step `0.1`.
+   - Compute `adjustedTime = currentTime - timingOffset` (subtracting means "shift lyrics earlier if audio leads").
+   - Use `adjustedTime` everywhere timestamps are compared (active-line detection, hook loop region, waveform playhead).
+   - Render a compact offset row beneath the waveform: a `-` button, a `+` button, a numeric display (`Offset: +0.3s`), and a Reset link. No full Radix slider needed — simple step buttons keep the UI clean.
+
+---
+
+## Technical Summary
+
+```text
+Before:
+  audio.timeupdate (~250ms) ──► setCurrentTime ──► highlight / waveform
+
+After:
+  requestAnimationFrame (16ms) ──► setCurrentTime ──► highlight / waveform
+  audio.timeupdate (~250ms) ──► loop region clamp only
+
+Highlight check (before):
+  currentTime >= l.start && currentTime < l.end
+
+Highlight check (after):
+  adjustedTime >= l.start && adjustedTime < l.end + 0.08
+
+Timing offset:
+  adjustedTime = currentTime - timingOffset
+  UI: [ - ] [ Offset: 0.0s ] [ + ]  (step 0.1s, range ±2.0s)
+```
+
+No backend changes required. No new dependencies. All changes are contained in `LyricDisplay.tsx`.
