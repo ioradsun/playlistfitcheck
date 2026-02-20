@@ -14,30 +14,25 @@ interface LyricLine {
   tag: "main" | "adlib";
 }
 
+// Adlib from Gemini strict JSON array
 interface GeminiAdlib {
+  start: string;       // "00:12.400" or "00:00:12.400"
+  end: string;
   text: string;
-  preceding_main_phrase: string;
-  ballpark_time: number;
+  tag: string;         // "ADLIB"
+  layer?: string;
+  confidence?: number;
 }
 
 interface GeminiHook {
-  ballpark_start: number;
-  ballpark_end: number;
-  start_phrase: string;
-  end_phrase: string;
-  score: number;
+  start_sec: number;
+  end_sec: number;
+  transcript: string;   // verbatim words Gemini heard
+  section_type?: string;
+  confidence?: number;
 }
 
 interface GeminiAnalysis {
-  title: string;
-  artist: string;
-  metadata: {
-    mood?: string;
-    bpm_estimate?: number;
-    confidence?: number;
-    key?: string;
-    genre_hint?: string;
-  };
   hottest_hook: GeminiHook | null;
   adlibs: GeminiAdlib[];
 }
@@ -128,54 +123,91 @@ async function runWhisper(
   return { segments, rawText: data.text || "" };
 }
 
-// ── Gemini: semantic analysis with ballpark pointers ─────────────────────────
+// ── Parse "MM:SS.mmm" or "HH:MM:SS.mmm" timestamp strings → seconds ──────────
+function parseTimestamp(ts: string): number {
+  if (!ts) return 0;
+  const parts = ts.trim().split(":");
+  if (parts.length === 2) {
+    // MM:SS.mmm
+    return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+  } else if (parts.length === 3) {
+    // HH:MM:SS.mmm
+    return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+  }
+  return parseFloat(ts) || 0;
+}
+
+// ── Gemini: audio-first adlib detection + 10-second hottest hook ──────────────
 async function runGeminiAnalysis(
   audioBase64: string,
   mimeType: string,
   lovableKey: string
 ): Promise<GeminiAnalysis> {
-  const prompt = `You are a professional audio engineer and music producer with 20+ years of experience mixing records. You have an expert ear for separating vocal layers — you can clearly distinguish the lead vocal from adlibs, background harmonies, and hype words added in post-production.
+  const prompt = `You are an audio-first music transcription and commercial analysis engine built for professional SRT/closed caption generation and social media optimization.
 
-Listen carefully to this audio track and analyze it with the precision of someone who has mixed hundreds of albums.
+Analyze the raw audio file only. Use vocal layering, loudness differences, stereo placement, beat drops, instrument expansion, bass impact changes, energy shifts, structural transitions, repetition patterns, dynamic contrast, melodic lift.
 
-As an audio engineer, you know:
-- ADLIBS are secondary vocal layers laid OVER the lead vocal — they are never the main rap or sung line. They include hype words ("yeah", "uh", "ayy", "woo", "let's go"), background harmonies sitting underneath the lead, call-and-response shouts that answer the lead, producer tags, whispered or mumbled overlays, and anything that was clearly added on top in the mix. If the lead rapper/singer is delivering the main line, everything else happening simultaneously is an adlib. DO NOT label lead vocal lines as adlibs. If you are not confident, leave adlibs as [].
-- THE HOTTEST HOOK is the chorus or repeated refrain that a listener would sing along to. It must repeat at least twice, carry the highest melodic or emotional energy in the song, likely contain the song title or central phrase, and span 8–20 seconds of continuous lyrics (1–4 lines).
+Do NOT rely on assumed lyrics. Do NOT hallucinate unclear words. If uncertain, omit. Prioritize precision over recall.
 
-Your ballpark timestamps are used internally as SEARCH POINTERS only — they don't need to be perfectly precise, just close enough to identify the right region. Provide your best estimate.
+PART 1 — ADLIB + FILLER DETECTION
 
-Return ONLY valid JSON (no markdown, no explanation):
+Definitions:
+- PRIMARY = Main lyrical vocal line carrying meaning in that moment.
+- ADLIB = Supporting vocal phrase that is NOT the dominant lyrical line; functions as a background layer, echo, hype callout, or interjection; is short and textural or energy-driven.
+- FILLER = Non-lexical vocalization: uh, um, mm, ah, yeah, ayy, huh, etc.
+
+If a vocal phrase is layered, panned, quieter, echoed, or inserted between lines → classify as ADLIB.
+If unclear, omit rather than guess.
+
+OUTPUT — TIME-ALIGNED ADLIB EVENTS (STRICT JSON):
+
+Return only a valid JSON array under the key "adlibs":
 {
-  "title": "Song title or Unknown",
-  "artist": "Artist name or Unknown",
-  "metadata": {
-    "mood": "one word mood",
-    "bpm_estimate": 120,
-    "confidence": 0.85,
-    "key": "A minor",
-    "genre_hint": "Hip-Hop"
-  },
-  "hottest_hook": {
-    "ballpark_start": 32.5,
-    "ballpark_end": 45.0,
-    "start_phrase": "First 4-5 words of the hook exactly as sung",
-    "end_phrase": "Last 4-5 words of the hook exactly as sung",
-    "score": 95
-  },
   "adlibs": [
     {
-      "text": "exact adlib word or phrase",
-      "preceding_main_phrase": "last 4-5 words of the main vocal line just before this adlib",
-      "ballpark_time": 12.4
+      "start": "MM:SS.mmm",
+      "end": "MM:SS.mmm",
+      "text": "yeah",
+      "tag": "ADLIB",
+      "layer": "background|echo|callout|texture",
+      "confidence": 0.85
     }
   ]
 }
 
-RULES:
-- hottest_hook: null if no clear hook found. start_phrase and end_phrase must be verbatim words sung, not a description.
-- adlibs: exact words of background layers only. preceding_main_phrase is the lead vocal line immediately before it. Max 25 entries. Use [] if none detected.
-- ballpark timestamps are estimates only — they just help locate the region.
-- No extra text outside the JSON.`;
+Rules:
+- Short segments (0.2–2.0s typical)
+- Separate repeated instances
+- Do not merge distinct adlibs
+- Use "[inaudible]" only if clearly present but unintelligible
+- Omit instead of hallucinating
+- Confidence required for every event
+- Max 30 entries
+
+PART 2 — HOTTEST HOOK IDENTIFICATION (A&R STANDARD)
+
+The hottest hook = single strongest continuous 10-second segment with highest combined commercial and replay potential.
+
+Score based on: production lift (beat drop, instrument expansion, bass increase), vocal intensity spike, melodic memorability, repetition strength, emotional peak, crowd/chant potential, loop/replay viability.
+
+Under the key "hottest_hook", return:
+{
+  "hottest_hook": {
+    "start": "MM:SS.mmm",
+    "end": "MM:SS.mmm",
+    "transcript": "exact verbatim words heard during that window",
+    "section_type": "chorus|drop|refrain|post-chorus|hybrid",
+    "confidence": 0.92
+  }
+}
+
+If no dominant 10-second commercial peak exists, set hottest_hook to null.
+
+FINAL OUTPUT — return ONLY valid JSON, no markdown, no explanation:
+{
+  "adlibs": [...],
+  "hottest_hook": {...} or null
+}`;
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -196,13 +228,13 @@ RULES:
             },
             {
               type: "text",
-              text: "Analyze this audio. Return only the JSON.",
+              text: "Analyze this audio. Return only the JSON with adlibs array and hottest_hook.",
             },
           ],
         },
       ],
       temperature: 0.1,
-      max_tokens: 2000,
+      max_tokens: 3000,
     }),
   });
 
@@ -219,6 +251,7 @@ RULES:
 
   console.log(`Gemini response length: ${content.length} chars`);
 
+  // Extract JSON from response
   const jsonStart = content.indexOf("{");
   const jsonEnd = content.lastIndexOf("}");
   if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON in Gemini response");
@@ -230,32 +263,45 @@ RULES:
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 
   const parsed = JSON.parse(rawJson);
+
+  // Parse hottest_hook
+  let hookParsed: GeminiHook | null = null;
+  if (parsed.hottest_hook && parsed.hottest_hook.start) {
+    const startSec = parseTimestamp(parsed.hottest_hook.start);
+    const endSec = parseTimestamp(parsed.hottest_hook.end);
+    hookParsed = {
+      start_sec: startSec,
+      end_sec: endSec > startSec ? endSec : startSec + 10,
+      transcript: String(parsed.hottest_hook.transcript || "").trim(),
+      section_type: String(parsed.hottest_hook.section_type || "").trim(),
+      confidence: Number(parsed.hottest_hook.confidence) || 0,
+    };
+  }
+
+  const adlibsParsed: GeminiAdlib[] = Array.isArray(parsed.adlibs)
+    ? parsed.adlibs.filter((a: any) => a && a.start && a.text)
+    : [];
+
   return {
-    title: String(parsed.title || "Unknown"),
-    artist: String(parsed.artist || "Unknown"),
-    metadata: parsed.metadata || {},
-    hottest_hook: parsed.hottest_hook || null,
-    adlibs: Array.isArray(parsed.adlibs) ? parsed.adlibs : [],
+    hottest_hook: hookParsed,
+    adlibs: adlibsParsed,
   };
 }
 
-// ── Find best matching segment index near a ballpark time ─────────────────────
+// ── Find best matching segment index near a given time ────────────────────────
 function findNearSegment(
   segments: LyricLine[],
-  ballparkTime: number,
+  targetTime: number,
   windowSec = 15
 ): number[] {
-  // Return indices of segments within ±windowSec of ballpark time
   return segments
-    .map((s, i) => ({ i, dist: Math.abs(s.start - ballparkTime) }))
+    .map((s, i) => ({ i, dist: Math.abs(s.start - targetTime) }))
     .filter(({ dist }) => dist <= windowSec)
     .sort((a, b) => a.dist - b.dist)
     .map(({ i }) => i);
 }
 
-// ── Anchor & Align: Tag adlibs using direct text match near ballpark time ────
-// NOTE: preceding_main_phrase is unreliable when Whisper produces long segments
-// (e.g. 28s chunks). Instead we match adlib.text directly within the ballpark window.
+// ── Tag adlibs: Gemini gives us precise timestamps, snap to nearest Whisper segment ──
 function tagAdlibsAnchored(
   segments: LyricLine[],
   adlibs: GeminiAdlib[]
@@ -265,40 +311,54 @@ function tagAdlibsAnchored(
   const result = segments.map(s => ({ ...s }));
 
   for (const adlib of adlibs) {
+    const adlibStartSec = parseTimestamp(adlib.start);
     const normAdlibText = normalize(adlib.text);
-    const ballpark = adlib.ballpark_time;
 
-    // Strategy 1: Find segment near ballpark_time whose text contains or closely
-    // matches the adlib phrase (direct text match, window ±20s)
-    const windowIndices = findNearSegment(segments, ballpark, 20);
-
+    // Strategy 1: find segment whose time window overlaps Gemini's adlib timestamp
+    // A Whisper segment "contains" the adlib if adlibStartSec falls within [seg.start, seg.end]
     let bestIdx = -1;
     let bestScore = 0;
 
-    for (const idx of windowIndices) {
-      const normSeg = normalize(segments[idx].text);
-      // Check both direct similarity AND if adlib text appears as a substring
-      const sim = similarity(normSeg, normAdlibText);
-      const overlap = wordOverlap(normSeg, normAdlibText);
-      // Also check if the adlib words are contained within the longer segment
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const timeOverlap = adlibStartSec >= seg.start - 1.5 && adlibStartSec <= seg.end + 1.5;
+      if (!timeOverlap) continue;
+
+      // Score by time proximity + text match
+      const timeDist = Math.abs(seg.start - adlibStartSec);
+      const normSeg = normalize(seg.text);
       const adlibWords = normAdlibText.split(" ").filter(Boolean);
       const segWords = normSeg.split(" ").filter(Boolean);
       const contained = adlibWords.length > 0 &&
         adlibWords.every(w => segWords.some(sw => levenshtein(sw, w) <= 1));
-      const score = contained ? 0.9 : Math.max(sim, overlap);
-      if (score > bestScore && score >= 0.45) {
+      const textScore = contained ? 0.9 : Math.max(
+        similarity(normSeg, normAdlibText),
+        wordOverlap(normSeg, normAdlibText)
+      );
+      const timeScore = 1 / (1 + timeDist);
+      const score = textScore * 0.6 + timeScore * 0.4;
+
+      if (score > bestScore) {
         bestScore = score;
-        bestIdx = idx;
+        bestIdx = i;
       }
     }
 
-    // Strategy 2: Fallback — search globally with relaxed threshold
+    // Strategy 2: if no time overlap, find closest segment with text match in ±20s window
     if (bestIdx === -1) {
-      for (let idx = 0; idx < segments.length; idx++) {
+      const windowIndices = findNearSegment(segments, adlibStartSec, 20);
+      for (const idx of windowIndices) {
         const normSeg = normalize(segments[idx].text);
-        const overlap = wordOverlap(normSeg, normAdlibText);
-        if (overlap > bestScore && overlap >= 0.55) {
-          bestScore = overlap;
+        const adlibWords = normAdlibText.split(" ").filter(Boolean);
+        const segWords = normSeg.split(" ").filter(Boolean);
+        const contained = adlibWords.length > 0 &&
+          adlibWords.every(w => segWords.some(sw => levenshtein(sw, w) <= 1));
+        const score = contained ? 0.9 : Math.max(
+          similarity(normSeg, normAdlibText),
+          wordOverlap(normSeg, normAdlibText)
+        );
+        if (score > bestScore && score >= 0.4) {
+          bestScore = score;
           bestIdx = idx;
         }
       }
@@ -306,104 +366,71 @@ function tagAdlibsAnchored(
 
     if (bestIdx !== -1) {
       result[bestIdx].tag = "adlib";
-      console.log(`Adlib tagged: "${segments[bestIdx].text}" | phrase="${adlib.text}" score=${bestScore.toFixed(2)}`);
+      console.log(`Adlib tagged: seg[${bestIdx}] "${segments[bestIdx].text.slice(0, 40)}" | gemini="${adlib.text}" @${adlibStartSec.toFixed(1)}s score=${bestScore.toFixed(2)}`);
     } else {
-      console.log(`Adlib not matched: "${adlib.text}" @ ~${ballpark}s`);
+      console.log(`Adlib not matched: "${adlib.text}" @${adlibStartSec.toFixed(1)}s`);
     }
   }
 
   return result;
 }
 
-// ── Anchor & Align: Find hook span using start/end phrases near ballpark ──────
+// ── Build hook from Gemini's transcript snapped to Whisper timestamps ─────────
 function findHookAnchored(
   segments: LyricLine[],
   hook: GeminiHook
 ): { start: number; end: number; score: number; previewText: string } | null {
-  if (!hook) return null;
+  if (!hook || !hook.transcript) return null;
 
-  const normStartPhrase = normalize(hook.start_phrase);
-  const normEndPhrase = normalize(hook.end_phrase);
+  const { start_sec, end_sec, transcript } = hook;
 
-  // Find the best matching start segment near ballpark_start
-  const startCandidates = findNearSegment(segments, hook.ballpark_start, 20);
-  const allIndices = segments.map((_, i) => i);
-  const startSearchOrder = [...new Set([...startCandidates, ...allIndices])];
+  // Use Gemini's timestamps directly as the primary source (they're now explicit)
+  // Find the Whisper segments that overlap the hook window [start_sec, end_sec]
+  const hookSegments = segments.filter(s =>
+    s.start < end_sec + 2 && s.end > start_sec - 2
+  );
 
-  let bestStartIdx = -1;
-  let bestStartScore = 0;
-
-  for (const idx of startSearchOrder) {
-    const normSeg = normalize(segments[idx].text);
-    const sim = similarity(normSeg, normStartPhrase);
-    const overlap = wordOverlap(normSeg, normStartPhrase);
-    const score = Math.max(sim, overlap);
-    if (score > bestStartScore && score >= 0.35) {
-      bestStartScore = score;
-      bestStartIdx = idx;
-    }
-  }
-
-  if (bestStartIdx === -1) {
-    console.warn("Hook start phrase not matched in Whisper segments");
-    return null;
-  }
-
-  // Find the best matching end segment after the start, near ballpark_end
-  const endCandidates = findNearSegment(segments, hook.ballpark_end, 20);
-  const endSearchOrder = [...new Set([...endCandidates, ...allIndices])];
-
-  let bestEndIdx = bestStartIdx; // default to same segment
-  let bestEndScore = 0;
-
-  for (const idx of endSearchOrder) {
-    if (idx < bestStartIdx) continue; // end must be after start
-    const normSeg = normalize(segments[idx].text);
-    const sim = similarity(normSeg, normEndPhrase);
-    const overlap = wordOverlap(normSeg, normEndPhrase);
-    const score = Math.max(sim, overlap);
-    if (score > bestEndScore && score >= 0.35) {
-      bestEndScore = score;
-      bestEndIdx = idx;
-    }
-  }
-
-  const startSeg = segments[bestStartIdx];
-  let endSeg = segments[bestEndIdx];
-  let duration = endSeg.end - startSeg.start;
-
-  // ── Duration guard: hook must be 8–30s ───────────────────────────────────────
-  // If hook is too long (>30s), it means the match landed on a long Whisper segment.
-  // Walk back from bestEndIdx until duration is ≤ 30s.
-  if (duration > 30) {
-    console.warn(`Hook too long (${duration.toFixed(1)}s), trimming...`);
-    let trimmedEnd = bestEndIdx;
-    while (trimmedEnd > bestStartIdx && segments[trimmedEnd].end - startSeg.start > 30) {
-      trimmedEnd--;
-    }
-    bestEndIdx = trimmedEnd;
-    endSeg = segments[bestEndIdx];
-    duration = endSeg.end - startSeg.start;
-  }
-
-  // If hook is still a single very-long segment (>30s), use ballpark times as fallback
-  if (duration > 30) {
-    console.warn(`Hook still too long after trim — using ballpark times`);
+  if (hookSegments.length === 0) {
+    // No Whisper segments overlap — use Gemini times directly
+    console.warn(`Hook: no Whisper segments in window ${start_sec}–${end_sec}s, using Gemini times`);
     return {
-      start: hook.ballpark_start,
-      end: hook.ballpark_end,
-      score: hook.score,
-      previewText: normStartPhrase.slice(0, 80),
+      start: start_sec,
+      end: end_sec,
+      score: Math.round((hook.confidence || 0.8) * 100),
+      previewText: transcript.slice(0, 80),
     };
   }
 
-  console.log(`Hook anchored: segments ${bestStartIdx}–${bestEndIdx} (${startSeg.start}s–${endSeg.end}s = ${duration.toFixed(1)}s), startScore=${bestStartScore.toFixed(2)}, endScore=${bestEndScore.toFixed(2)}`);
+  // Snap start to the Whisper segment closest to start_sec
+  const snapStart = hookSegments.reduce((best, s) =>
+    Math.abs(s.start - start_sec) < Math.abs(best.start - start_sec) ? s : best
+  );
+
+  // Snap end: the last Whisper segment that ends before end_sec + 3s tolerance
+  const snapEnd = hookSegments.reduce((best, s) =>
+    Math.abs(s.end - end_sec) < Math.abs(best.end - end_sec) ? s : best
+  );
+
+  let actualStart = snapStart.start;
+  let actualEnd = snapEnd.end;
+
+  // Duration guard: 6–15s
+  const duration = actualEnd - actualStart;
+  if (duration > 15) {
+    console.warn(`Hook duration ${duration.toFixed(1)}s > 15s, clamping to 12s from start`);
+    actualEnd = actualStart + 12;
+  } else if (duration < 4) {
+    // Too short — extend to end_sec
+    actualEnd = end_sec;
+  }
+
+  console.log(`Hook snapped: ${actualStart.toFixed(1)}s–${actualEnd.toFixed(1)}s (${(actualEnd - actualStart).toFixed(1)}s), conf=${hook.confidence}`);
 
   return {
-    start: startSeg.start,
-    end: endSeg.end,
-    score: hook.score,
-    previewText: segments.slice(bestStartIdx, bestEndIdx + 1).map(s => s.text).join(" ").slice(0, 80),
+    start: actualStart,
+    end: actualEnd,
+    score: Math.round((hook.confidence || 0.8) * 100),
+    previewText: transcript.slice(0, 80),
   };
 }
 
@@ -438,7 +465,7 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
-    console.log(`Anchor & Align v3: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`);
+    console.log(`Anchor & Align v4: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`);
 
     // ── Fire both in parallel ────────────────────────────────────────────────
     const [whisperResult, geminiResult] = await Promise.allSettled([
@@ -468,9 +495,6 @@ serve(async (req) => {
 
     console.log(`Whisper: ${whisperSegments.length} segments`);
 
-    let title = "Unknown";
-    let artist = "Unknown";
-    let metadata: any = undefined;
     let hooks: any[] = [];
     let lines: LyricLine[] = whisperSegments;
     let geminiUsed = false;
@@ -478,23 +502,13 @@ serve(async (req) => {
     if (geminiResult.status === "fulfilled") {
       const g = geminiResult.value;
       geminiUsed = true;
-      title = g.title || "Unknown";
-      artist = g.artist || "Unknown";
 
-      metadata = {
-        mood: String(g.metadata.mood || "").trim() || undefined,
-        bpm_estimate: Number(g.metadata.bpm_estimate) || undefined,
-        confidence: Math.min(1, Math.max(0, Number(g.metadata.confidence) || 0)) || undefined,
-        key: String(g.metadata.key || "").trim() || undefined,
-        genre_hint: String(g.metadata.genre_hint || "").trim() || undefined,
-      };
+      console.log(`Gemini: ${g.adlibs.length} adlibs, hook=${g.hottest_hook ? `${g.hottest_hook.start_sec.toFixed(1)}–${g.hottest_hook.end_sec.toFixed(1)}s` : "none"}`);
 
-      console.log(`Gemini: ${g.adlibs.length} adlibs, hook=${g.hottest_hook ? `"${g.hottest_hook.start_phrase.slice(0, 30)}..."` : "none"}`);
-
-      // Anchor & Align: tag adlibs using preceding_main_phrase + Levenshtein
+      // Anchor adlibs: snap Gemini timestamps to Whisper segments
       lines = tagAdlibsAnchored(whisperSegments, g.adlibs);
 
-      // Anchor & Align: find hook using start/end phrases near ballpark
+      // Anchor hook
       if (g.hottest_hook) {
         const hookSpan = findHookAnchored(whisperSegments, g.hottest_hook);
         if (hookSpan) hooks = [{ ...hookSpan, reasonCodes: [] }];
@@ -509,13 +523,10 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        title,
-        artist,
-        metadata,
         lines,
         hooks,
         _debug: {
-          model: "whisper-1 + gemini-2.5-flash (anchor-align v3)",
+          model: "whisper-1 + gemini-2.5-flash (anchor-align v4)",
           geminiUsed,
           inputBytes: Math.round(estimatedBytes),
           outputLines: lines.length,
