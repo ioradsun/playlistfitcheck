@@ -123,7 +123,7 @@ function CommentItem({
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `STATUS: RESOLVING... (${total}/50)`,
+      label: `STATUS: RESOLVING ${total}/50`,
       sublabel: undefined,
       summary: "CALIBRATING BUILD FIT.",
       bigDisplay: `${pct}%`,

@@ -291,7 +291,7 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             const bypassCount = rows.filter(r => !r.would_replay).length;
             const replayPct = Math.round((replayCount / total) * 100);
             const verbiage = (() => {
-              if (total <= 10) return { label: `STATUS: RESOLVING... (${total}/50)`, sublabel: undefined, summary: "CALIBRATING REPLAY FIT.", bigDisplay: `${replayPct}%`, tier: "resolving" as const };
+              if (total <= 10) return { label: `STATUS: RESOLVING ${total}/50`, sublabel: undefined, summary: "CALIBRATING REPLAY FIT.", bigDisplay: `${replayPct}%`, tier: "resolving" as const };
               if (total < 50) return { label: `STATUS: ${total}/50 SIGNALS`, sublabel: undefined, summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.", bigDisplay: `${total}/50`, tier: "detected" as const };
               return { label: "STATUS: CONSENSUS REACHED", sublabel: undefined, summary: `${replayPct}% FMLY REPLAY FIT.`, bigDisplay: `${replayPct}%`, tier: "consensus" as const };
             })();
