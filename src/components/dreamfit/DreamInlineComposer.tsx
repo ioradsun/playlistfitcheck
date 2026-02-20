@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,28 +55,31 @@ export function DreamInlineComposer({ onCreated }: Props) {
     <div className="border-b border-border/40">
       {/* Input row */}
       <div className="flex gap-3 px-3 pt-3 pb-1 items-start">
-        <Avatar className="h-10 w-10 border border-border shrink-0 mt-1">
+        {/* h-10 avatar with bg-muted fallback, ring-primary/20 */}
+        <Avatar className="h-10 w-10 border border-border/40 ring-2 ring-primary/20 shrink-0 mt-0.5">
           <AvatarImage src={avatarUrl} alt={profile?.display_name ?? "You"} />
-          <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+          <AvatarFallback className="bg-muted text-muted-foreground text-[11px] font-bold">
             {initials}
           </AvatarFallback>
         </Avatar>
 
+        {/* Content Tier: text-sm (14px), text-foreground, placeholder muted/35 */}
         <textarea
           ref={textareaRef}
           value={text}
           onChange={e => setText(e.target.value.slice(0, MAX_LENGTH))}
           placeholder="What's frustrating you?"
           rows={1}
-          className="flex-1 bg-transparent text-foreground text-base placeholder:text-muted-foreground/60 outline-none resize-none py-2 leading-relaxed overflow-hidden"
+          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/35 outline-none resize-none py-2 leading-relaxed overflow-hidden"
           style={{ minHeight: "24px" }}
           disabled={publishing}
         />
       </div>
 
-      {/* Action row — anchored to bottom, button always visible */}
+      {/* Action row */}
       <div className="flex items-center justify-between px-3 pb-2.5">
-        <span className={`text-[10px] font-mono transition-opacity duration-150 ${
+        {/* Metadata Tier: 11px mono char count, muted/40 */}
+        <span className={`font-mono text-[11px] transition-opacity duration-150 ${
           text.length === 0
             ? "opacity-0 pointer-events-none"
             : text.length >= MAX_LENGTH
@@ -86,14 +88,14 @@ export function DreamInlineComposer({ onCreated }: Props) {
         }`}>
           {text.length}/{MAX_LENGTH}
         </span>
-        <Button
-          size="sm"
-          className="h-7 px-4 rounded-full text-xs font-bold"
+        {/* Control Tier: 13px, font-bold, tracking-[0.15em], bg-foreground, text-background */}
+        <button
           disabled={!text.trim() || publishing}
           onClick={publish}
+          className="text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-4 py-1.5 rounded-full hover:opacity-90 disabled:opacity-40 transition-opacity"
         >
-          {publishing ? <Loader2 size={12} className="animate-spin" /> : "Make This Real"}
-        </Button>
+          {publishing ? <Loader2 size={12} className="animate-spin inline" /> : "Make This Real"}
+        </button>
       </div>
     </div>
   );
