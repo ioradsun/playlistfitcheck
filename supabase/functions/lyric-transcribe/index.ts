@@ -130,7 +130,7 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── v5.6: Universal Acoustic Orchestrator Prompt (Absolute Onset) ─────────────
+// ── v5.7: Universal Acoustic Orchestrator Prompt (Universal Hierarchy) ────────
 function buildOrchestratorPrompt(
   whisperWords: WhisperWord[],
   whisperSegments: Array<{ start: number; end: number; text: string }>,
@@ -148,7 +148,7 @@ function buildOrchestratorPrompt(
   const anchorTs2 = anchorWord2?.start.toFixed(3) ?? "0.000";
   const anchorW2 = anchorWord2?.word ?? "unknown";
 
-  return `ROLE: Universal Acoustic Orchestrator (v5.6 Absolute Onset)
+  return `ROLE: Universal Acoustic Orchestrator (v5.7 Universal Hierarchy)
 
 You are simultaneously hearing the raw audio AND receiving the Whisper timing grid. Your mission is to produce a perfect, production-ready merged_lines array.
 
@@ -163,67 +163,76 @@ ${segmentsJson}
 
 TRACK_END: ${trackEnd.toFixed(3)}s
 
-=== PATH 1: ABSOLUTE ONSET CALIBRATION (Execute This First — The Timing Fix) ===
-You must synchronize the intro timeline by calculating BACKWARD from the first high-confidence Whisper anchor.
+=== PATH 1: HIERARCHICAL LEAD DETECTION (Execute This First) ===
+You must classify every vocal event based on its role in the mix — not by whether Whisper captured it.
+
+THE LEAD SIGNAL RULE:
+  - If a vocal is the PRIMARY or ONLY signal playing in a given time block, tag it as tag: "main".
+  - This applies to Intro dialogue, spoken word, and any restored signal that has no concurrent lead vocal.
+  - A vocal does not need to be in WHISPER_SEGMENTS to be tag: "main". If it is the dominant voice, it is main.
+
+THE BACKGROUND SIGNAL RULE:
+  - tag: "adlib" is reserved for echoes, background harmonies, textures, and simultaneous SECONDARY vocals.
+  - "Adlib" means: a distinct, concurrent vocal that exists ALONGSIDE a main signal at the same timestamp.
+  - If there is no overlapping main line, the signal is main by default.
+
+FLOATING STATUS:
+  - Any line you restore that was NOT in the original WHISPER_SEGMENTS must be marked isFloating: true.
+  - This tells the UI the line is AI-restored rather than Whisper-confirmed.
+
+=== PATH 2: ABSOLUTE TEMPORAL CALIBRATION ===
+Synchronize the intro/outro timeline by calculating backward from the first Whisper anchor.
 
 TEMPORAL NORTH STAR: "${anchorW}" at ${anchorTs}s (Whisper master clock — immovable).
 SECONDARY REFERENCE:  "${anchorW2}" at ${anchorTs2}s (cadence verification).
 
-THE SILENCE GUARD — Critical Zero-Fill Prevention:
+THE SILENCE GUARD:
   - DO NOT assume intro dialogue starts at 0.000s.
-  - Listen to the raw audio buffer for the FIRST acoustic onset of any non-silent signal before ${anchorTs}s.
-  - The acoustic signal for speech does NOT begin at the file start. Detect the exact millisecond the first word begins.
+  - Detect the exact millisecond the FIRST spoken word in the file begins.
 
-THE BACKWARD CALCULATION — Absolute Onset Formula:
+THE BACKWARD CALCULATION:
   1. LISTEN: Detect the acoustic onset of "${anchorW}" in the raw audio. Call this T_acoustic_anchor.
-  2. DETECT: For each intro phrase you hear, detect its acoustic onset. Call each T_acoustic_i.
-  3. MEASURE relative gap: relative_gap_i = T_acoustic_anchor − T_acoustic_i
-  4. PROJECT onto master clock: t_final_i = ${anchorTs} − relative_gap_i
-
-  Example: If you hear "${anchorW}" at T_acoustic = 17.2s and the first intro phrase at T_acoustic_i = 3.3s,
-           relative_gap = 17.2 − 3.3 = 13.9s → t_final = ${anchorTs} − 13.9 = ${(parseFloat(anchorTs) - 13.9).toFixed(3)}s ≈ 3.08s
+  2. DETECT: For each intro phrase, detect its acoustic onset. Call each T_acoustic_i.
+  3. MEASURE: relative_gap_i = T_acoustic_anchor − T_acoustic_i
+  4. PROJECT: t_final_i = ${anchorTs} − relative_gap_i
 
 PRECISION MANDATE:
-  - Use 3-decimal precision (e.g., 3.842s). NEVER rounded increments (e.g., 2.5s, 5.0s, 7.5s).
-  - EVENLY SPACED timestamps are the fingerprint of linear estimation (hallucination). Reject them.
-  - Genuine vocal onsets are IRREGULAR — they follow the natural cadence of speech.
+  - Use 3-decimal precision (e.g., 3.082s). NEVER rounded numbers (e.g., 3.0s, 5.0s).
+  - Evenly-spaced timestamps (e.g., 0.0, 2.14, 4.28) = linear estimation = hallucination. Reject them.
 
-VALIDATION — Use secondary anchor for consistency check:
-  - Detect "${anchorW2}" acoustically. Apply same backward formula. Result should match ${anchorTs2}s ± 0.050s.
-  - If error > 50ms, re-examine your T_acoustic_anchor detection and recalculate.
+VALIDATION: Detect "${anchorW2}" acoustically. Apply backward formula. Result must match ${anchorTs2}s ± 0.050s.
 
-CONTINUITY RULE: The final Intro chip's end timestamp MUST be ≤ ${anchorTs}s. No gap to the first lyric.
+CONTINUITY RULE: The final Intro chip's end timestamp MUST be ≤ ${anchorTs}s.
 
-SCOPE: Backward calculation applies ONLY to isOrphaned lines. Main lyric lines ALWAYS use WHISPER_SEGMENTS timestamps verbatim.
+SCOPE: Backward calculation applies ONLY to isFloating/isOrphaned lines. Main lyric lines ALWAYS use WHISPER_SEGMENTS timestamps verbatim.
 
-=== PATH 2: SURGICAL CONFLICT RESOLUTION ===
-- Audit every main lyric segment in WHISPER_SEGMENTS against the raw audio.
-- If Whisper is wrong (phonetic error or contextual hallucination — e.g., "whore" → "boy", "range" → "rain"), replace only the incorrect word.
-- Keep Whisper's EXACT start/end timestamps. Never move them.
-- isCorrection: true.
-- SURGICAL METADATA: geminiConflict = ONLY the single word that was replaced (e.g., "range", "whore"). NOT the corrected word. NOT the surrounding sentence. One word maximum.
-- qaCorrections += 1 per swap.
+=== PATH 3: SURGICAL CONFLICT RESOLUTION & GHOST PRUNING ===
 
-=== PATH 3: OVERLAP & GHOST SPLICING ===
+CONFLICT RESOLUTION:
+  - Audit every main lyric segment in WHISPER_SEGMENTS against the raw audio.
+  - If Whisper is wrong (e.g., "whore" → "boy", "range" → "rain"), replace only the incorrect word.
+  - Keep Whisper's EXACT start/end timestamps. Never move them.
+  - isCorrection: true.
+  - geminiConflict = ONLY the single word that was replaced (e.g., "range"). NOT the corrected word. NOT the sentence. One word only.
+  - qaCorrections += 1 per swap.
 
 GHOST KILLER:
-- A Ghost is a background vocal whose text is identical to (or a phonetic subset of) a concurrent main line (±500ms), same voice layer.
-- Physically delete Ghosts. Do not include in merged_lines under any tag.
-- ghostsRemoved += 1 per deletion.
+  - A Ghost is a background vocal whose text is identical to a concurrent main line (±500ms), same voice layer.
+  - Physically delete Ghosts. Do not include them under any tag.
+  - ghostsRemoved += 1 per deletion.
 
 DENSITY PRESERVATION — Outro/Bridge Overlap:
-- NEVER flatten concurrent voices into one line.
-- If multiple distinct voices/echoes overlap in time, output EACH as a separate adlib entry — even if timestamps overlap. This enables vertical UI stacking.
-- Outro echoes, call-and-response, and background harmonies MUST each get their own line.
-- Tag: tag: "adlib", isFloating: true.
+  - NEVER flatten concurrent voices into one line.
+  - If multiple distinct voices overlap, output EACH as a separate entry — use tag: "main" for the lead, tag: "adlib" for backgrounds.
+  - Outro echoes that are distinct from the lead get tag: "adlib", isFloating: true.
 
 === OUTPUT RULES ===
-- COMPLETE merged_lines: every WHISPER_SEGMENTS main line (corrected if needed) + all legitimate adlibs + all calibrated orphaned signals.
+- COMPLETE merged_lines: every WHISPER_SEGMENTS main line (corrected if needed) + all restored floating lines + all legitimate adlibs.
 - Maximum 80 total lines.
 - ALL timestamps: numeric seconds, 3-decimal precision. NEVER MM:SS format.
 - Hard boundary: discard any line with start > ${Math.min(189.3, trackEnd + 1.0).toFixed(3)}s.
 - Sort ascending by start.
-- qaCorrections = exact swaps in Path 2.
+- qaCorrections = exact swaps in Path 3.
 - ghostsRemoved = exact deletions in Path 3.
 - JSON ROBUSTNESS: Every array element except the last MUST have a trailing comma. Final element must NOT.
 
@@ -393,7 +402,7 @@ async function runGeminiOrchestrator(
 ): Promise<{ lines: LyricLine[]; qaCorrections: number; ghostsRemoved: number; rawContent: string }> {
   const prompt = buildOrchestratorPrompt(whisperWords, whisperSegments, whisperRawText, trackEnd);
 
-  console.log(`[orchestrator] v5.6 sending ${whisperWords.length} words, ${whisperSegments.length} segments to Gemini (absolute-onset anchor: "${whisperWords[0]?.word ?? "none"}" @ ${whisperWords[0]?.start.toFixed(3) ?? "0"}s, secondary: "${whisperWords[1]?.word ?? "none"}" @ ${whisperWords[1]?.start.toFixed(3) ?? "0"}s)`);
+  console.log(`[orchestrator] v5.7 sending ${whisperWords.length} words, ${whisperSegments.length} segments to Gemini (hierarchy anchor: "${whisperWords[0]?.word ?? "none"}" @ ${whisperWords[0]?.start.toFixed(3) ?? "0"}s, secondary: "${whisperWords[1]?.word ?? "none"}" @ ${whisperWords[1]?.start.toFixed(3) ?? "0"}s)`);
 
   const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 6000, "orchestrator");
   const parsed = extractJsonFromContent(content, "merged_lines");
@@ -713,7 +722,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v5.6-absolute-onset",
+          version: "anchor-align-v5.7-universal-hierarchy",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
