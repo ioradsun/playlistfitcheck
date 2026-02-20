@@ -22,6 +22,8 @@ interface LyricWaveformProps {
   waveform: WaveformData | null;
   isPlaying: boolean;
   currentTime: number;
+  /** Playback time with timingOffset already applied — used for the timestamp bubble overlay */
+  adjustedTime?: number;
   onSeek: (time: number) => void;
   onTogglePlay: () => void;
   loopRegion?: LoopRegion | null;
@@ -130,11 +132,13 @@ export function LyricWaveform({
   waveform,
   isPlaying,
   currentTime,
+  adjustedTime,
   onSeek,
   onTogglePlay,
   loopRegion,
   diagnosticDots,
 }: LyricWaveformProps) {
+  const displayTime = adjustedTime ?? currentTime;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -210,12 +214,15 @@ export function LyricWaveform({
             <div className="absolute -top-1 -translate-x-[3px] w-2 h-2 rounded-full bg-primary shadow" />
             {/* Timestamp bubble on playhead */}
             <div
-              className="absolute top-1 left-2 bg-primary text-primary-foreground text-[9px] font-mono px-1 py-0.5 rounded whitespace-nowrap pointer-events-none shadow z-20"
+              className="absolute top-1 left-2 bg-primary text-primary-foreground text-[9px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap pointer-events-none shadow z-20 flex flex-col gap-0"
               style={{
                 transform: playheadPct > 80 ? "translateX(calc(-100% - 6px))" : "translateX(0)",
               }}
             >
-              {currentTime.toFixed(2)}s
+              <span>▶ {currentTime.toFixed(2)}s</span>
+              {adjustedTime !== undefined && Math.abs(adjustedTime - currentTime) > 0.01 && (
+                <span className="opacity-70">≈ {adjustedTime.toFixed(2)}s</span>
+              )}
             </div>
           </div>
         </div>

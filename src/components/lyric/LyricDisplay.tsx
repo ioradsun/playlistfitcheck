@@ -212,7 +212,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   // Timing offset (Bug 3: MP3 codec / processing offset correction)
   const [timingOffset, setTimingOffset] = useState(0);
   const TIMING_OFFSET_STEP = 0.1;
-  const TIMING_OFFSET_MAX = 2.0;
+  const TIMING_OFFSET_MAX = 10.0;
 
   // Clip loop state
   const [activeHookIndex, setActiveHookIndex] = useState<number | null>(null);
@@ -835,6 +835,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   waveform={waveform}
                   isPlaying={isPlaying}
                   currentTime={currentTime}
+                  adjustedTime={adjustedTime}
                   onSeek={seekTo}
                   onTogglePlay={togglePlay}
                   loopRegion={activeHookIndex !== null && hooks[activeHookIndex]
@@ -856,6 +857,22 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {/* Live sync delta — shows gap between playhead and current lyric */}
+                {(() => {
+                  const activeLine = activeLines.find((_, i) => activeLineIndices.has(i));
+                  if (!activeLine || !isPlaying) return null;
+                  const delta = adjustedTime - activeLine.start;
+                  const absDelta = Math.abs(delta);
+                  const color = absDelta < 0.3 ? "text-green-400" : absDelta < 1.5 ? "text-yellow-400" : "text-red-400";
+                  return (
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/20">
+                      <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">Live sync</span>
+                      <span className={`text-[10px] font-mono tabular-nums ${color}`}>
+                        playhead {adjustedTime.toFixed(2)}s · lyric starts {activeLine.start.toFixed(2)}s · drift {delta > 0 ? "+" : ""}{delta.toFixed(2)}s
+                      </span>
+                    </div>
+                  );
+                })()}
                 {/* Timing Offset Control */}
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/20">
                   <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">Offset</span>
@@ -882,7 +899,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       Reset
                     </button>
                   )}
-                  <span className="text-[10px] text-muted-foreground/40 font-mono">lyrics ↔ audio</span>
+                  <span className="text-[10px] text-muted-foreground/40 font-mono">lyrics ↔ audio · ±10s</span>
                   {/* Restore original timestamps */}
                   <button
                     onClick={resetToOriginal}
