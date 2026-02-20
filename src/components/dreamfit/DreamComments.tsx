@@ -9,7 +9,7 @@ import type { DreamComment, Dream } from "./types";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { useSiteCopy } from "@/hooks/useSiteCopy";
+
 
 const QUICK_EMOJIS = ["🔥", "❤️", "🙌", "💯", "😍", "🚀", "👏", "✨"];
 
@@ -120,25 +120,34 @@ function CommentItem({
   );
 }
 
-function getSignalVerbiage(
-  total: number,
-  pct: number,
-  s: { resolving_label: string; resolving_summary: string; detected_label: string; detected_summary: string; consensus_label: string; consensus_summary: string }
-) {
+function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
-    return { label: s.resolving_label, summary: s.resolving_summary, bigDisplay: `${pct}%`, tier: "resolving" as const };
+    return {
+      label: `STATUS: RESOLVING... (${total}/50 SIGNALS)`,
+      summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
+      bigDisplay: `${pct}%`,
+      tier: "resolving" as const,
+    };
   }
   if (total < 50) {
-    const label = s.detected_label.replace("{n}", String(total));
-    return { label, summary: s.detected_summary, bigDisplay: `${total}/50`, tier: "detected" as const };
+    return {
+      label: `STATUS: ${total}/50 SIGNALS`,
+      summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
+      bigDisplay: `${total}/50`,
+      tier: "detected" as const,
+    };
   }
-  const summary = s.consensus_summary.replace("{pct}", String(pct));
-  return { label: s.consensus_label, summary, bigDisplay: `${pct}%`, tier: "consensus" as const };
+  return {
+    label: "STATUS: CONSENSUS REACHED",
+    summary: `${pct}% OF THE FMLY RESONATE WITH THIS.`,
+    bigDisplay: `${pct}%`,
+    tier: "consensus" as const,
+  };
 }
 
 export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props) {
   const { user } = useAuth();
-  const siteCopy = useSiteCopy();
+  
   const [comments, setComments] = useState<DreamComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -289,7 +298,7 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
 
           {/* Stat cards — Signal Status + Signals */}
           {backersCount > 0 && (() => {
-            const verbiage = getSignalVerbiage(backersCount, demandPct, siteCopy.signals);
+            const verbiage = getSignalVerbiage(backersCount, demandPct);
             return (
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
