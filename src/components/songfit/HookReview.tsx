@@ -201,7 +201,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   ? `${replayPct}% of the FMLY would run it back.`
                   : `${replayPct}% are feeling this.`}
               </span>
-              {isOwner && onOpenReviews ? (
+              {onOpenReviews ? (
                 <button
                   onClick={onOpenReviews}
                   className="text-muted-foreground/50 hover:text-foreground transition-colors"
