@@ -30,6 +30,8 @@ export interface LyricLine {
   isFloating?: boolean;      // v2.2: adlib has no Whisper word match within ±1.5s
   geminiConflict?: string;   // v2.2: Whisper alternative text when Gemini text diverges
   confidence?: number;       // v2.2: per-adlib confidence from Gemini
+  isCorrection?: boolean;    // v3.7: line had a phonetic QA word swap applied
+  correctedWord?: string;    // v3.7: the replacement word (e.g. "rain") for purple underline
 }
 
 export interface LyricHook {
@@ -1116,7 +1118,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 </div>
               </div>
             )}
-            <div ref={lyricsContainerRef} className="max-h-[45vh] overflow-y-auto space-y-0.5">
+            {/* v3.7: scroll height anchored to last element's start time so Outro adlibs are reachable */}
+            <div ref={lyricsContainerRef} className="overflow-y-auto space-y-0.5" style={{ maxHeight: "45vh" }}>
               {activeLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   {activeVersion === "fmly"
@@ -1141,6 +1144,90 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   const rawLinesForCheck = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
                   const rawIdx = rawLinesForCheck.findIndex((rl) => rl.start === line.start && rl.tag === line.tag && rl.text === line.text);
                   const isAnchored = rawIdx !== -1 && anchoredLines.has(rawIdx);
+
+                  // v3.7: Orphaned adlib — no overlapping main line → render as standalone centered chip
+                  const isOrphanedAdlib = isAdlib && !activeLines.some(
+                    (other) => other.tag !== "adlib" && other.start <= line.start && other.end >= line.start
+                  );
+
+                  if (isOrphanedAdlib && !isEditing) {
+                    return (
+                      <div
+                        key={`${line.start}-${line.tag ?? "main"}-${i}`}
+                        ref={isPrimary ? activeLineRef : undefined}
+                        className={`flex justify-center py-1 transition-all ${isActive ? "opacity-100" : "opacity-60 hover:opacity-90"}`}
+                      >
+                        <button
+                          onClick={() => seekTo(line.start)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-mono italic transition-all ${
+                            isActive
+                              ? "border-primary/60 bg-primary/10 text-primary"
+                              : "border-primary/20 bg-primary/5 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          }`}
+                          title={`Orphaned adlib @ ${formatTimeLRC(line.start)}`}
+                        >
+                          <span className="text-primary/50">◆</span>
+                          <span>{line.text}</span>
+                          <span className="text-muted-foreground/40 not-italic">{formatTimeLRC(line.start)}</span>
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  // v3.7: render corrected word with purple underline
+                  const renderLineText = () => {
+                    if (!isEditing && !isAdlib && line.isCorrection && line.correctedWord && line.text.includes(line.correctedWord)) {
+                      const parts = line.text.split(line.correctedWord);
+                      return (
+                        <span
+                          className={`leading-relaxed cursor-text flex-1 select-text text-sm ${isActive ? "font-medium text-primary" : ""} ${isSelected ? "bg-primary/10 rounded px-0.5" : ""}`}
+                          onDoubleClick={() => startEditing(i)}
+                          onMouseUp={() => {
+                            const sel = window.getSelection();
+                            if (sel && !sel.isCollapsed) {
+                              setSelectionLineIndex(i);
+                              setCapturedSelectionText(sel.toString());
+                            } else {
+                              setSelectionLineIndex(null);
+                              setCapturedSelectionText("");
+                            }
+                          }}
+                        >
+                          {parts[0]}
+                          <span
+                            className="underline decoration-purple-400 decoration-2 underline-offset-2 text-purple-300"
+                            title={`AI correction: was "${line.geminiConflict ?? "?"}" in transcript`}
+                          >
+                            {line.correctedWord}
+                          </span>
+                          {parts.slice(1).join(line.correctedWord)}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span
+                        className={`leading-relaxed cursor-text flex-1 select-text ${
+                          isAdlib
+                            ? "text-xs italic text-muted-foreground/80"
+                            : `text-sm ${isActive ? "font-medium text-primary" : ""}`
+                        } ${isSelected ? "bg-primary/10 rounded px-0.5" : ""}`}
+                        onDoubleClick={() => startEditing(i)}
+                        onMouseUp={() => {
+                          const sel = window.getSelection();
+                          if (sel && !sel.isCollapsed) {
+                            setSelectionLineIndex(i);
+                            setCapturedSelectionText(sel.toString());
+                          } else {
+                            setSelectionLineIndex(null);
+                            setCapturedSelectionText("");
+                          }
+                        }}
+                      >
+                        {line.text}
+                      </span>
+                    );
+                  };
+
                   return (
                     <div
                       key={`${line.start}-${line.tag ?? "main"}-${i}`}
@@ -1178,32 +1265,17 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                             if (e.key === "Escape") setEditingIndex(null);
                           }}
                         />
-                      ) : (
-                        <span
-                          className={`leading-relaxed cursor-text flex-1 select-text ${
-                            isAdlib
-                              ? "text-xs italic text-muted-foreground/80"
-                              : `text-sm ${isActive ? "font-medium text-primary" : ""}`
-                          } ${isSelected ? "bg-primary/10 rounded px-0.5" : ""}`}
-                          onDoubleClick={() => startEditing(i)}
-                          onMouseUp={() => {
-                            const sel = window.getSelection();
-                            if (sel && !sel.isCollapsed) {
-                              setSelectionLineIndex(i);
-                              setCapturedSelectionText(sel.toString());
-                            } else {
-                              setSelectionLineIndex(null);
-                              setCapturedSelectionText("");
-                            }
-                          }}
-                        >
-                          {line.text}
-                        </span>
-                      )}
+                      ) : renderLineText()}
                       {/* v2.2: Floating chip badge */}
                       {isFloating && (
                         <span className="shrink-0 text-[9px] font-mono text-primary/50 border border-primary/20 rounded px-1 py-0.5 self-center" title="Floating adlib — no matching word in Whisper timeline">
                           float
+                        </span>
+                      )}
+                      {/* v3.7: QA correction badge on main lines */}
+                      {!isAdlib && line.isCorrection && (
+                        <span className="shrink-0 text-[9px] font-mono text-purple-400/70 border border-purple-400/20 rounded px-1 py-0.5 self-center" title={`AI corrected: "${line.geminiConflict}" → "${line.correctedWord}"`}>
+                          ✱ fix
                         </span>
                       )}
                       {/* v2.2: Conflict indicator 💡 */}
