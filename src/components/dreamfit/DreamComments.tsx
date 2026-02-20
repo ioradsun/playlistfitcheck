@@ -123,7 +123,7 @@ function CommentItem({
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `STATUS: RESOLVING ${total}/50`,
+      label: `RESOLVING ${total}/50`,
       sublabel: undefined,
       summary: "CALIBRATING BUILD FIT.",
       bigDisplay: `${pct}%`,
@@ -132,7 +132,7 @@ function getSignalVerbiage(total: number, pct: number) {
   }
   if (total < 50) {
     return {
-      label: `STATUS: ${total}/50 SIGNALS`,
+      label: `${total}/50 SIGNALS`,
       sublabel: undefined,
       summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
       bigDisplay: `${total}/50`,
@@ -140,7 +140,7 @@ function getSignalVerbiage(total: number, pct: number) {
     };
   }
   return {
-    label: "STATUS: CONSENSUS REACHED",
+    label: "CONSENSUS REACHED",
     sublabel: undefined,
     summary: `${pct}% FMLY BUILD FIT.`,
     bigDisplay: `${pct}%`,
