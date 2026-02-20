@@ -188,18 +188,28 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── Gemini Prompt: Adlib Auditor (Hyper-Sensitive, Full-Track Scan) ───────────
-const GEMINI_ADLIB_PROMPT = `ROLE: Lead Vocal Alignment Engineer — Adlib Auditor
+// ── Gemini Prompt: Adlib Auditor v2.4 (Reference-Based, Transcript-Aware) ────
+function buildAdlibPrompt(whisperTranscript: string): string {
+  return `ROLE: Lead Vocal Producer
 
-TASK: Conduct an exhaustive scan of every secondary vocal layer in this audio. The lead vocal melody has already been fully transcribed by a separate system — do NOT re-transcribe it.
+You have been provided:
+1. Raw audio of a musical track
+2. The Main Lead Vocal Transcript (below) — already captured by a word-level transcription engine
 
-STRICT EXCLUSION RULE:
-- If a word or phrase is part of the primary lead vocal melodic line, DO NOT include it.
-- You are hunting ONLY for: background vocals, hype vocals, call-and-response interjections, ad-libs, harmonies underneath the lead, echo repeats, and atmospheric vocal textures.
+MAIN LEAD VOCAL TRANSCRIPT:
+${whisperTranscript}
+
+TASK: Perform SUBTRACTION. Identify every vocal event in the audio that is NOT part of the Main Lead Vocal Transcript above.
+
+SUBTRACTION RULE:
+- If a word appears in the provided transcript, it belongs to the lead vocal — DO NOT include it.
+- You are hunting ONLY for: background vocals, hype interjections, call-and-response layers, echo repeats, harmonies under the lead, and atmospheric vocal textures.
+
+HIGH-SENSITIVITY WINDOW:
+- Pay extreme attention from 2:30 to the end of the track. Outro sections contain dense background layers.
 
 FULL-TRACK SCAN REQUIREMENT:
 - You MUST scan from 0:00 to the very last second of the audio. Do not stop early.
-- Pay EXTREME attention to the window between 2:30 and the end of the track. Outro sections frequently contain dense background layers that AI systems miss.
 - The end of the track is equally important as the beginning.
 
 ADLIB TAXONOMY:
@@ -208,19 +218,19 @@ ADLIB TAXONOMY:
 - "background": Sustained harmonies or stacked background vocals — typically 1.0–6.0s
 - "texture": Atmospheric vocal sounds, hums, breaths with melodic intent — typically 0.5–3.0s
 
-PRECISION RULES:
-- Timestamps: Output start and end in SECONDS as a decimal with 3-decimal precision (e.g., 169.340). NOT MM:SS format.
-- Omit over Guess: If a vocal is unclear, use [inaudible] or omit. Ignore noise < 0.150s unless confidence >= 0.95.
-- Confidence: Provide a 0.0–1.0 score per event. Include only events with confidence >= 0.6.
+PRECISION:
+- Timestamps: seconds with 3-decimal precision (e.g., 169.452). NOT MM:SS format.
+- Confidence floor: 0.95 — only output if you are 95% certain it is a secondary vocal layer.
 - Separate EVERY instance: Even if the same text appears 10 times, each occurrence is a unique event with its own timestamp.
 - No output limit: Return every event you find. Completeness is the primary directive.
 
-OUTPUT — return ONLY valid JSON, no markdown, no explanation:
+OUTPUT — ONLY valid JSON, no markdown, no explanation:
 {
   "adlibs": [
-    { "text": "yeah", "start": 0.000, "end": 0.000, "layer": "callout", "confidence": 0.00 }
+    { "text": "...", "start": 0.000, "end": 0.000, "layer": "callout", "confidence": 0.98 }
   ]
 }`;
+}
 
 // ── Shared: call Gemini gateway ───────────────────────────────────────────────
 async function callGemini(
@@ -322,15 +332,23 @@ async function runGeminiHookAnalysis(
   };
 }
 
-// ── Gemini Call 2: Adlibs only ────────────────────────────────────────────────
+// ── Gemini Call 2: Adlibs (v2.4 — Reference-Based with Whisper transcript) ───
 async function runGeminiAdlibAnalysis(
   audioBase64: string,
   mimeType: string,
   lovableKey: string,
-  model = "google/gemini-3-flash-preview"
-): Promise<{ adlibs: GeminiAdlib[]; rawContent: string }> {
-  const content = await callGemini(GEMINI_ADLIB_PROMPT, audioBase64, mimeType, lovableKey, model, 2500, "adlib");
+  model = "google/gemini-3-flash-preview",
+  whisperTranscript = ""
+): Promise<{ adlibs: GeminiAdlib[]; rawContent: string; transcriptProvided: boolean }> {
+  const prompt = buildAdlibPrompt(whisperTranscript);
+  const transcriptProvided = whisperTranscript.trim().length > 0;
+  console.log(`[adlib] v2.4 reference-based prompt — transcriptProvided=${transcriptProvided} (${whisperTranscript.length} chars)`);
+
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 2500, "adlib");
   const parsed = extractJsonFromContent(content);
+
+  // v2.4: confidence floor raised to 0.95 (Gemini has script as anchor)
+  const CONFIDENCE_FLOOR = transcriptProvided ? 0.95 : 0.6;
 
   const adlibs: GeminiAdlib[] = Array.isArray(parsed.adlibs)
     ? parsed.adlibs
@@ -342,11 +360,11 @@ async function runGeminiAdlibAnalysis(
           layer: a.layer,
           confidence: Math.min(1, Math.max(0, Number(a.confidence) || 0)),
         }))
-        .filter((a: GeminiAdlib) => a.end > a.start && a.confidence >= 0.6)
+        .filter((a: GeminiAdlib) => a.end > a.start && a.confidence >= CONFIDENCE_FLOOR)
     : [];
 
-  console.log(`[adlib] Parsed ${adlibs.length} adlibs from Gemini`);
-  return { adlibs, rawContent: content };
+  console.log(`[adlib] Parsed ${adlibs.length} adlibs from Gemini (floor=${CONFIDENCE_FLOOR})`);
+  return { adlibs, rawContent: content, transcriptProvided };
 }
 
 // ── Build lines from Whisper segments ────────────────────────────────────────
@@ -445,7 +463,8 @@ function extractAdlibsFromWords(
     );
     if (overlappingMain) {
       const ghostScore = tokenOverlap(adlib.text, overlappingMain.text);
-      if (ghostScore >= 0.9) {
+      // v2.4: threshold lowered 0.9 → 0.75; reference-based prompt already does text subtraction
+      if (ghostScore >= 0.75) {
         ghostCount++;
         console.log(`[ghost-dedup] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — overlap ${ghostScore.toFixed(2)} with main`);
         continue;
@@ -624,13 +643,14 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
+
     console.log(
-      `[v2.3] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (2 parallel calls: hook + adlib), ` +
+      `[v2.4] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Option A: whisper+hook parallel, then adlib with transcript), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
-    // ── Run all three stages in parallel ─────────────────────────────────────
+    // ── v2.4 Sequencing: Whisper + Hook in parallel first, then Adlib with rawText ──
     const whisperPromise = useWhisper && OPENAI_API_KEY
       ? runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY)
       : Promise.reject(new Error(useWhisper && !OPENAI_API_KEY ? "OPENAI_API_KEY not set" : "WHISPER_SKIPPED"));
@@ -639,15 +659,25 @@ serve(async (req) => {
       ? runGeminiHookAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel)
       : Promise.reject(new Error("ANALYSIS_DISABLED"));
 
-    const adlibPromise = !analysisDisabled
-      ? runGeminiAdlibAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel)
-      : Promise.reject(new Error("ANALYSIS_DISABLED"));
-
-    const [whisperResult, hookResult, adlibResult] = await Promise.allSettled([
+    // Stage 1: Whisper + Hook in parallel
+    const [whisperResult, hookResult] = await Promise.allSettled([
       whisperPromise,
       hookPromise,
-      adlibPromise,
     ]);
+
+    // Extract Whisper rawText to pass as reference to the adlib auditor
+    const rawTranscript = whisperResult.status === "fulfilled"
+      ? whisperResult.value.rawText
+      : "";
+
+    // Stage 2: Adlib auditor with Whisper transcript injected (reference-based subtraction)
+    const adlibResult = await (
+      !analysisDisabled
+        ? runGeminiAdlibAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, rawTranscript)
+            .then(v => ({ status: "fulfilled" as const, value: v }))
+            .catch(e => ({ status: "rejected" as const, reason: e }))
+        : Promise.resolve({ status: "rejected" as const, reason: new Error("ANALYSIS_DISABLED") })
+    );
 
     // ── Handle transcription result ──────────────────────────────────────────
     let words: WhisperWord[] = [];
@@ -759,6 +789,8 @@ serve(async (req) => {
       }
     }
 
+    const transcriptProvided = adlibSuccess ? adlibResult.value.transcriptProvided : (rawTranscript.length > 0);
+
     const geminiOutput = analysisDisabled ? { status: "disabled" } : {
       status: hookSuccess || adlibSuccess ? "success" : "failed",
       model: resolvedAnalysisModel,
@@ -771,6 +803,7 @@ serve(async (req) => {
         status: adlibSuccess ? "success" : "failed",
         rawLength: adlibSuccess ? adlibResult.value.rawContent.length : 0,
         count: resolvedAdlibs.length,
+        transcriptProvided,
         results: resolvedAdlibs,
       },
       globalOffset,
@@ -779,7 +812,7 @@ serve(async (req) => {
     const adlibCount = lines.filter(l => l.tag === "adlib").length;
     const floatingCount = lines.filter(l => l.isFloating).length;
     const conflictCount = lines.filter(l => l.geminiConflict).length;
-    console.log(`[v2.3] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${conflictCount} conflicts), ${hooks.length} hooks | hook=${hookSuccess} adlib=${adlibSuccess}`);
+    console.log(`[v2.4] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${conflictCount} conflicts), ${hooks.length} hooks | hook=${hookSuccess} adlib=${adlibSuccess} transcriptProvided=${transcriptProvided}`);
 
     return new Response(
       JSON.stringify({
@@ -789,10 +822,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v2.3-split",
+          version: "anchor-align-v2.4-reference",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
+            adlibSequencing: "option-a-sequential",
           },
           geminiUsed,
           geminiError,
