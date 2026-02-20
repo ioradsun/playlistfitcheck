@@ -1,106 +1,43 @@
 
-## Signal Count-Gated Verbiage System
+## Changes to Signal Status Verbiage in Both Comments Panels
 
-### The Problem
-Showing `X% of the FMLY greenlighted this` or `X% of the FMLY would run it back` is misleading with small sample sizes. A single vote = 100%, which is noise, not signal.
+### What's Changing
 
-### The New 3-Tier System
+The Signal Status card in both comments panels (DreamFit and CrowdFit) will collapse to a **single combined line** per tier, removing the separate `RESOLVING {n}/50` label row and merging everything into one compact string.
 
-| Signal Count | Label | Summary Line |
+#### New Tier Format
+
+| Tier | Line 1 (label) | Line 2 (summary) |
 |---|---|---|
-| 1–10 | `SIGNAL RESOLVING...` | Percentage shown grayed out — tells user we need more data |
-| 11–50 | `{n} SIGNALS DETECTED` | Focuses on volume, not percentage |
-| 51+ | `{pct}% UNIT CONSENSUS` | Sample is large enough to claim a community truth |
+| Resolving (≤10) | *(removed)* | `CALIBRATING REPLAY FIT · {n}/50 SIGNALS NEEDED` |
+| Resolving (≤10) DreamFit | *(removed)* | `CALIBRATING BUILD FIT · {n}/50 SIGNALS NEEDED` |
+| Detected (11–49) | *(removed)* | `CALIBRATING REPLAY FIT · {n}/50 SIGNALS NEEDED` |
+| Detected (11–49) DreamFit | *(removed)* | `CALIBRATING BUILD FIT · {n}/50 SIGNALS NEEDED` |
+| Consensus (50+) | `CONSENSUS REACHED` | `{pct}% FMLY REPLAY FIT` / `{pct}% FMLY BUILD FIT` |
 
----
-
-### All Touch Points to Update
-
-**1. `DreamSignal.tsx` — DreamFit**
-
-Three places:
-
-**Idle state** (line ~211): `Demand Strength: {demandStrength}%`
-- Replace with the new tier label logic
-
-**Done state** (lines ~124–127): `Demand Strength: {pct}%` header label + `"${pct}% of the FMLY greenlighted this."` / `"Only ${pct}% greenlighted this."` summary line
-- Replace both with tier-aware versions
-
----
-
-**2. `HookReview.tsx` — CrowdFit (inline on post card)**
-
-**Done state** (lines ~209–219):
-```
-Signal Strength: {replayPct}%
-{replayPct}% of the FMLY would run it back.  ← or →  {replayPct}% are feeling this.
-```
-- Replace label and summary line with tier-aware versions
-
-**Pre-resolved / Billboard mode** — `showPreResolved` renders a scoreboard directly from `preResolved` prop. Need to check if this also renders a % summary line and apply the same logic.
-
----
-
-**3. `HookReviewsSheet.tsx` — CrowdFit reviews slide-up sheet**
-
-Two places:
-
-- **Stat card** (lines ~294–301): `Signal Strength` card header + `{replayPct}%` value + `"of the FMLY would run it back."` / `"are feeling this."` sub-label
-- These are inside the full reviews sheet so they also need the tier-aware copy
-
----
-
-### Shared Helper Function
-
-A single pure function will be created and used in all three files to keep the logic consistent and easy to update later:
-
-```typescript
-function getSignalVerbiage(total: number, pct: number, context: "dreamfit" | "crowdfit") {
-  if (total <= 10) {
-    return {
-      label: "SIGNAL RESOLVING...",
-      pctDisplay: `${pct}%`,   // shown grayed out
-      summary: "Not enough signals yet to read the room.",
-      tier: "resolving"
-    };
-  }
-  if (total <= 50) {
-    return {
-      label: `${total} SIGNALS DETECTED`,
-      pctDisplay: null,         // hide percentage
-      summary: context === "dreamfit"
-        ? `${total} members have weighed in.`
-        : `${total} members have signaled.`,
-      tier: "detected"
-    };
-  }
-  // 51+
-  const verb = context === "dreamfit" ? "greenlighted" : "would run it back";
-  return {
-    label: `${pct}% UNIT CONSENSUS`,
-    pctDisplay: `${pct}%`,
-    summary: pct >= 50
-      ? `${pct}% of the unit ${verb}.`
-      : `Only ${pct}% ${context === "dreamfit" ? "greenlighted" : "are feeling"} this.`,
-    tier: "consensus"
-  };
-}
-```
-
-This helper will be inlined (copy-pasted) into each file since they're in different directories — no need for a shared utils file.
-
----
-
-### Visual Treatment for "RESOLVING" tier
-
-When `tier === "resolving"`:
-- The percentage shown is `opacity-50` / `text-muted-foreground` to visually communicate "unreliable data"
-- The label `SIGNAL RESOLVING...` uses the existing `font-mono uppercase tracking-wider` styling
+The `bigDisplay` value (the large bold number) stays as-is (`{pct}%` for resolving/consensus, unchanged for detected).
 
 ---
 
 ### Files to Change
 
-- `src/components/dreamfit/DreamSignal.tsx` — idle state label + done state label + done state summary line
-- `src/components/songfit/HookReview.tsx` — done state label + summary line (and pre-resolved billboard display if it renders a summary)
-- `src/components/songfit/HookReviewsSheet.tsx` — stat card label + percentage value + sub-label copy
+**1. `src/components/dreamfit/DreamComments.tsx`** — `getSignalVerbiage` function
+
+- Resolving: `label` → `"CONSENSUS REACHED"` only for consensus; for resolving/detected collapse into `summary` only as `CALIBRATING FIT · {n}/50 SIGNALS NEEDED`
+- Specifically, update `label` and `summary` strings, remove the now-redundant separate label line from the rendered stat card (or set `label` to `""` / `undefined` so the render loop skips it)
+
+**2. `src/components/songfit/HookReviewsSheet.tsx`** — inline `verbiage` object (lines 293–297)
+
+- Same restructure: resolving/detected tiers get a single combined `summary` string; consensus tier keeps its two-line format
+
+---
+
+### Technical Detail
+
+The stat card currently renders two `<p>` tags below the big number — `verbiage.label` and `verbiage.summary`. The cleanest approach is:
+
+- For **resolving** and **detected**: set `label` to `undefined`/`""` and put the full combined string in `summary`
+- For **consensus**: keep `label = "CONSENSUS REACHED"` and `summary = "{pct}% FMLY REPLAY/BUILD FIT"`
+- The render side already uses `truncate`, so both lines display cleanly on one line each without wrap
+
+No schema changes, no new components — purely string/logic updates in two files.
