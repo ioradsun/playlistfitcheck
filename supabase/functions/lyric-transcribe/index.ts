@@ -44,10 +44,6 @@ serve(async (req) => {
 
     console.log(`Processing audio via Gemini native API: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
 
-    // Use Gemini native REST API for better audio timestamp accuracy
-    // The OpenAI-compatible endpoint doesn't map audio timestamps as precisely
-    const geminiApiKey = LOVABLE_API_KEY;
-
     const systemPrompt = `You are a professional lyrics transcription engine. Transcribe the song lyrics from the provided audio with PRECISE timestamps.
 
 CRITICAL TIMING RULES:
@@ -73,88 +69,60 @@ Rules:
 - Skip instrumental sections (no text entries for those)
 - Lines in strict chronological order`;
 
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: audioBase64,
-              },
-            },
-            {
-              text: systemPrompt,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 8192,
-      },
-    };
+    // Use Lovable AI gateway with Gemini multimodal (inline_data for audio)
+    console.log(`Sending audio to Lovable AI gateway: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      }
-    );
+    const gatewayRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${audioBase64}`,
+                },
+              },
+              { type: "text", text: "Transcribe the lyrics from this audio file with precise timestamps. Output only the JSON." },
+            ],
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 8192,
+      }),
+    });
 
     let content = "";
-    if (geminiRes.ok) {
-      const geminiData = await geminiRes.json();
-      content = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      console.log(`Gemini native response length: ${content.length}`);
-    } else {
-      const errorText = await geminiRes.text();
-      console.warn("Gemini native API failed, falling back to gateway:", geminiRes.status, errorText.slice(0, 200));
-
-      // Fallback: Lovable AI gateway
-      const gatewayRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "input_audio",
-                  input_audio: { data: audioBase64, format: ext === "wav" ? "wav" : ext === "ogg" || ext === "oga" ? "ogg" : "mp3" },
-                },
-                { type: "text", text: "Transcribe the lyrics with precise timestamps." },
-              ],
-            },
-          ],
-        }),
-      });
-
-      if (!gatewayRes.ok) {
-        const gwError = await gatewayRes.text();
-        if (gatewayRes.status === 429) {
-          return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (gatewayRes.status === 402) {
-          return new Response(JSON.stringify({ error: "AI usage limit reached. Add credits in Settings → Workspace → Usage." }), {
-            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        throw new Error(`Both Gemini endpoints failed. Gateway: ${gatewayRes.status}`);
+    if (!gatewayRes.ok) {
+      const gwError = await gatewayRes.text();
+      console.error("Gateway error:", gatewayRes.status, gwError.slice(0, 300));
+      if (gatewayRes.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+      if (gatewayRes.status === 402) {
+        return new Response(JSON.stringify({ error: "AI usage limit reached. Add credits in Settings → Workspace → Usage." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`Lovable AI gateway error: ${gatewayRes.status}`);
+    }
 
-      const gwData = await gatewayRes.json();
-      content = gwData.choices?.[0]?.message?.content || "";
+    const gwData = await gatewayRes.json();
+    content = gwData.choices?.[0]?.message?.content || "";
+    console.log(`Gateway response length: ${content.length}, finish: ${gwData.choices?.[0]?.finish_reason}`);
+    if (!content) {
+      console.error("Empty content from gateway. Full response:", JSON.stringify(gwData).slice(0, 500));
+      throw new Error("No transcription returned from AI — try again");
     }
 
     // Parse JSON response
@@ -197,7 +165,7 @@ Rules:
         _debug: {
           rawResponse: content,
           rawLines: rawLines,
-          model: geminiRes.ok ? "gemini-native" : "gateway-fallback",
+          model: "lovable-gateway/gemini-2.5-flash",
           inputBytes: Math.round(estimatedBytes),
           outputLines: lines.length,
         },
