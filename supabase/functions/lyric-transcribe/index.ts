@@ -13,6 +13,7 @@ interface LyricLine {
   text: string;
   tag: "main" | "adlib";
   isFloating?: boolean;      // v2.2: adlib has no Whisper word match within ±1.5s
+  isOrphaned?: boolean;      // v3.8: adlib in intro (<17s) or outro (>181s) zone — always render as chip
   geminiConflict?: string;   // v2.2: Gemini text differs significantly from Whisper text
   confidence?: number;       // v2.2: per-adlib confidence from Gemini
   isCorrection?: boolean;    // v3.0: QA correction — Gemini heard a different word than Whisper
@@ -619,21 +620,23 @@ function extractAdlibsFromWords(
         }
       }
 
-      const PHONETIC_THRESHOLD = 0.50; // calibrated to "rain"→"range" score (~0.68 with prefix bonus)
+      // v3.8: Threshold 0.65 — mathematically correct cutoff:
+      //   "range"→"rain" scores ~0.685 (passes ✓)
+      //   "race" →"rain" scores ~0.55  (blocked ✗ — prevents false swaps)
+      const PHONETIC_THRESHOLD = 0.65;
       if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
         const oldWord = bestPhoneticWord.word.trim();
-        // Only apply if the text is genuinely different
+        // Guard: only swap if the words are genuinely different (not near-identical)
         const similarity = 1 - levenshtein(normalize(oldWord), normalize(adlib.text)) / Math.max(oldWord.length, adlib.text.length, 1);
-        if (similarity < 0.85) {
+        if (similarity < 0.95) {
           bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
           bestSeg.lineRef.geminiConflict = oldWord;
-          // v3.7: mark the line so UI can underline the corrected word in purple
           (bestSeg.lineRef as any).isCorrection = true;
           (bestSeg.lineRef as any).correctedWord = adlib.text;
           correctionCount++;
-          console.log(`[qa-swap] v3.7 phonetic swap "${oldWord}" → "${adlib.text}" (score=${bestPhoneticScore.toFixed(2)}, seg="${bestSeg.lineRef.text.slice(0, 40)}")`);
+          console.log(`[qa-swap] v3.8 phonetic swap "${oldWord}" → "${adlib.text}" (score=${bestPhoneticScore.toFixed(2)}, seg="${bestSeg.lineRef.text.slice(0, 40)}")`);
         } else {
-          console.log(`[qa-swap] Skipped correction "${adlib.text}" — too similar to "${oldWord}" (${similarity.toFixed(2)})`);
+          console.log(`[qa-swap] Skipped correction "${adlib.text}" — near-identical to "${oldWord}" (sim=${similarity.toFixed(2)})`);
         }
       } else {
         console.log(`[qa-swap] No phonetic match for correction "${adlib.text}" @ ${correctedStart.toFixed(3)}s — best score ${bestPhoneticScore.toFixed(2)} < ${PHONETIC_THRESHOLD}`);
@@ -641,22 +644,31 @@ function extractAdlibsFromWords(
       continue; // corrections always applied to main lines, never promoted as adlib overlay
     }
 
-    // ── Rule 3: Intro Zone Restoration (v3.6) ────────────────────────────
-    // Adlibs before the first Whisper word (dialogue, hums, count-ins) must
-    // NOT be dropped. Render them as standalone floating chips anchored to
-    // Gemini's raw timestamps (no Whisper snap needed — nothing to snap to).
+    // ── Rule 3: Intro/Outro Zone Preservation (v3.8) ─────────────────────
+    // Explicit time-based zone tagging: do NOT depend solely on Whisper's
+    // first-word timestamp (which can vary). Use hard invariants instead.
+    //   INTRO: 0s–17.0s  — pre-lyric dialogue, hums, count-ins
+    //   OUTRO: 181.0s–end — overlapping echoes, crowd fade, tail textures
+    // All zone items: isFloating: true + isOrphaned: true (always render as chip)
+    const INTRO_ZONE_END = 17.0;
+    const OUTRO_ZONE_START = 181.0;
     const firstWordStart = words.length > 0 ? words[0].start : 0;
-    if (correctedStart < firstWordStart) {
+    const isIntroZone = correctedStart < INTRO_ZONE_END || correctedStart < firstWordStart;
+    const isOutroZone = correctedStart >= OUTRO_ZONE_START;
+
+    if (isIntroZone || isOutroZone) {
+      const zoneLabel = isIntroZone ? "intro-zone" : "outro-zone";
       adlibLines.push({
         start: correctedStart,
         end: correctedEnd,
         text: adlib.text,
         tag: "adlib",
         isFloating: true,
+        isOrphaned: true,
         confidence: adlib.confidence,
         isCorrection: false,
-      });
-      console.log(`[intro-zone] Preserving pre-lyric "${adlib.text}" @ ${correctedStart.toFixed(3)}s as floating chip`);
+      } as LyricLine);
+      console.log(`[${zoneLabel}] Preserving "${adlib.text}" @ ${correctedStart.toFixed(3)}s as orphaned chip`);
       continue;
     }
 
@@ -711,12 +723,10 @@ function extractAdlibsFromWords(
       }
     }
 
-    // ── Token-Overlap Floating Logic + Outro Promotion (Rule 4) ──────────
+    // ── Token-Overlap Floating Logic (main body adlibs only — zone adlibs handled above) ─
     const nearbyWords = words.filter(w => Math.abs(w.start - correctedStart) <= 1.5);
     const hasWordMatch = nearbyWords.some(w => tokenOverlap(adlib.text, w.word) >= 0.6);
-    // Rule 4: Any adlib in 2:45–3:00 window is explicitly promoted as floating
-    const isOutroWindow = correctedStart >= 165.0 && correctedStart <= 180.0;
-    const isFloating = !hasWordMatch || isOutroWindow;
+    const isFloating = !hasWordMatch;
 
     // ── Find best Whisper word match for snapping ──────────────────────
     const windowWords = words.filter(w => w.start >= correctedStart - 5 && w.start <= correctedEnd + 5);
