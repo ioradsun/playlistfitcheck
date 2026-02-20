@@ -12,26 +12,17 @@ interface LyricLine {
   end: number;
   text: string;
   tag: "main" | "adlib";
-  isFloating?: boolean;      // v2.2: adlib has no Whisper word match within ±1.5s
-  isOrphaned?: boolean;      // v3.8: adlib in intro (<17s) or outro (>181s) zone — always render as chip
-  geminiConflict?: string;   // v2.2: Gemini text differs significantly from Whisper text
-  confidence?: number;       // v2.2: per-adlib confidence from Gemini
-  isCorrection?: boolean;    // v3.0: QA correction — Gemini heard a different word than Whisper
+  isFloating?: boolean;
+  isOrphaned?: boolean;
+  geminiConflict?: string;
+  confidence?: number;
+  isCorrection?: boolean;
 }
 
 interface WhisperWord {
   word: string;
   start: number;
   end: number;
-}
-
-interface GeminiAdlib {
-  text: string;
-  start: number;  // seconds (v3.0 raw numeric from Gemini)
-  end: number;
-  layer?: string;  // "echo" | "callout" | "background" | "texture" | "correction"
-  confidence?: number;
-  isCorrection?: boolean;  // v3.0: QA correction flag
 }
 
 interface GeminiHook {
@@ -43,151 +34,6 @@ interface GeminiInsights {
   bpm?: { value: number; confidence: number };
   key?: { value: string; confidence: number };
   mood?: { value: string; confidence: number };
-}
-
-interface GeminiAnalysis {
-  hottest_hook: GeminiHook | null;
-  adlibs: GeminiAdlib[];
-  insights?: GeminiInsights;
-  metadata: {
-    title?: string;
-    artist?: string;
-    bpm_estimate?: number;
-    key?: string;
-    mood?: string;
-    genre_hint?: string;
-    confidence?: number;
-  };
-  rawResponseContent?: string;
-  promptUsed?: string;
-}
-
-// ── Levenshtein distance ──────────────────────────────────────────────────────
-function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
-    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
-  );
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-    }
-  }
-  return dp[m][n];
-}
-
-function normalize(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-}
-
-/** Token overlap similarity (0–1) between two strings */
-function tokenOverlap(a: string, b: string): number {
-  const tokA = normalize(a).split(" ").filter(Boolean);
-  const tokB = normalize(b).split(" ").filter(Boolean);
-  if (!tokA.length || !tokB.length) return 0;
-  let matches = 0;
-  for (const t of tokA) {
-    if (tokB.some(bt => {
-      const dist = levenshtein(t, bt);
-      return 1 - dist / Math.max(t.length, bt.length, 1) >= 0.7;
-    })) matches++;
-  }
-  return matches / Math.max(tokA.length, tokB.length);
-}
-
-// ── Soundex (English, 4-char) ─────────────────────────────────────────────────
-/**
- * Standard Soundex encoding. Used as a phonetic root guard to prevent
- * false swaps like "race"→"rain" vs correct swaps like "range"→"rain".
- *
- * Soundex codes:
- *   "rain"  → R500   "range" → R520   "race"  → R200
- *   R500 vs R520: first 2 chars match "R5" ✓ → swap allowed
- *   R500 vs R200: first 2 chars "R5" vs "R2" ✗ → swap blocked
- */
-function soundex(s: string): string {
-  const clean = s.toLowerCase().replace(/[^a-z]/g, "");
-  if (!clean) return "0000";
-  const MAP: Record<string, string> = {
-    b: "1", f: "1", p: "1", v: "1",
-    c: "2", g: "2", j: "2", k: "2", q: "2", s: "2", x: "2", z: "2",
-    d: "3", t: "3",
-    l: "4",
-    m: "5", n: "5",
-    r: "6",
-  };
-  const first = clean[0].toUpperCase();
-  let code = first;
-  let prev = MAP[clean[0]] ?? "0";
-  for (let i = 1; i < clean.length && code.length < 4; i++) {
-    const c = MAP[clean[i]] ?? "0";
-    if (c !== "0" && c !== prev) code += c;
-    prev = c;
-  }
-  return code.padEnd(4, "0");
-}
-
-/**
- * Returns true if the phonetic roots of two words are compatible for swapping.
- * Guards: (1) Soundex first-2-chars must match. (2) word-length diff must be ≤ 2.
- *
- * rain  / range: soundex R500/R520 → "R5" matches, |4-5|=1 ≤ 2 ✓
- * rain  / race:  soundex R500/R200 → "R5" vs "R2" mismatch        ✗
- * round / range: soundex R530/R520 → "R5" matches, |5-5|=0 ≤ 2   ✓ (expected)
- */
-function phoneticRootMatch(a: string, b: string): boolean {
-  const ca = a.toLowerCase().replace(/[^a-z]/g, "");
-  const cb = b.toLowerCase().replace(/[^a-z]/g, "");
-  if (Math.abs(ca.length - cb.length) > 2) return false;
-  const sa = soundex(ca);
-  const sb = soundex(cb);
-  // First letter must match (same initial consonant)
-  if (sa[0] !== sb[0]) return false;
-  // First Soundex digit must match (same primary consonant class)
-  if (sa[1] !== sb[1]) return false;
-  return true;
-}
-
-// ── Phonetic Similarity (Levenshtein + consonant skeleton + prefix bonus) ─────
-/**
- * Returns a 0–1 phonetic similarity between two short words.
- * v3.5: Added shared-prefix bonus so short rhymes like "rain"→"range" score higher.
- *
- * Breakdown for "rain" vs "range":
- *   levScore  = 1 - 2/5 = 0.60
- *   skelScore = 1 - 1/3 = 0.67  (skeleton: rn vs rng)
- *   prefixBonus = 3/5 * 0.20   = 0.12  (shared prefix "ran")
- *   total ≈ 0.60*0.55 + 0.67*0.35 + 0.12 = 0.68  → clears 0.65 threshold
- */
-function phoneticSimilarity(a: string, b: string): number {
-  const clean = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
-  const ca = clean(a), cb = clean(b);
-  if (!ca || !cb) return 0;
-  if (ca === cb) return 1;
-
-  // Raw Levenshtein score
-  const dist = levenshtein(ca, cb);
-  const maxLen = Math.max(ca.length, cb.length);
-  const levScore = 1 - dist / maxLen;
-
-  // Consonant skeleton (strip vowels except leading)
-  const skeleton = (s: string) =>
-    (s[0] || "") + s.slice(1).replace(/[aeiou]/g, "");
-  const sa = skeleton(ca), sb = skeleton(cb);
-  const sdist = levenshtein(sa, sb);
-  const smaxLen = Math.max(sa.length, sb.length, 1);
-  const skelScore = 1 - sdist / smaxLen;
-
-  // Shared-prefix bonus: rewards words that start the same way (e.g., "rain"/"range" share "ran")
-  let prefixLen = 0;
-  const minLen = Math.min(ca.length, cb.length);
-  while (prefixLen < minLen && ca[prefixLen] === cb[prefixLen]) prefixLen++;
-  const prefixBonus = (prefixLen / maxLen) * 0.20;
-
-  // Weighted blend: 55% raw Levenshtein + 35% consonant skeleton + 10% prefix bonus (max 0.20)
-  return Math.min(1, levScore * 0.55 + skelScore * 0.35 + prefixBonus);
 }
 
 // ── Whisper: word-level granularity ──────────────────────────────────────────
@@ -245,7 +91,7 @@ async function runWhisper(
   return { words, segments, rawText: data.text || "" };
 }
 
-// ── Gemini Prompt 2: Music Intelligence Analyst (Hook + Meta) v3.0 ───────────
+// ── Gemini Prompt: Hook + Insights + Metadata ─────────────────────────────────
 const GEMINI_HOOK_PROMPT = `ROLE: Lead Music Intelligence Analyst
 
 TASK: Identify structural identity and production metadata.
@@ -284,53 +130,89 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── Gemini Prompt 1: Adlib Auditor v3.0 (Reference-Based, QA-Correction-Aware) ─
-function buildAdlibPrompt(whisperTranscript: string): string {
-  return `ROLE: Lead Vocal Alignment Engineer
+// ── v5.0: Universal Acoustic Orchestrator Prompt ──────────────────────────────
+function buildOrchestratorPrompt(
+  whisperWords: WhisperWord[],
+  whisperSegments: Array<{ start: number; end: number; text: string }>,
+  whisperRawText: string,
+  trackEnd: number
+): string {
+  const wordsJson = JSON.stringify(whisperWords.slice(0, 500)); // cap for token budget
+  const segmentsJson = JSON.stringify(whisperSegments.slice(0, 80));
 
-You have been provided:
-1. Raw audio of a musical track
-2. Main Transcript (Reference) — already captured by a word-level transcription engine:
+  return `ROLE: Universal Acoustic Orchestrator
 
-${whisperTranscript}
+You are simultaneously hearing the raw audio AND receiving the Whisper timing grid below. Your mission is to produce a perfect, production-ready merged_lines array by applying four sequential passes over the entire track.
 
-TASK: Audit the audio and identify every Adlib (background vocal, harmony, or interjection) that is NOT part of the provided Main Transcript.
+=== WHISPER TIMING GRID (Ground Truth for Timestamps) ===
+WHISPER_RAW_TEXT: ${whisperRawText.slice(0, 2000)}
 
-1. THE PHONETIC QA RULE ("RAIN" FIX):
-- If the artist sings a word that contradicts the provided Transcript (e.g., the transcript says "range" but the artist clearly sings "rain"), identify this as a CORRECTION.
-- Use lyrical context (e.g., nearby words like "umbrella", "storm", "pouring") to confirm the correction is accurate before tagging it.
-- Output these as adlib objects with layer: "correction".
-- Corrections are the ONLY exception where the text you output overlaps with a transcript word — but the TEXT IS DIFFERENT.
+WHISPER_WORDS (word-level timing skeleton):
+${wordsJson}
 
-2. TOTAL DURATION SCAN:
-- INTRO ZONE (0:00–0:17): Capture ALL dialogue, hums, count-ins, and vocal textures BEFORE the first main lyric starts. These are critical scene-setters.
-- MAIN BODY: Identify all background interjections, harmonies, and "hype" vocals (e.g., "Yeah!", "Let's go!").
-- OUTRO ZONE (2:45–End): Pay extreme attention to the final 15 seconds to capture all overlapping echoes and textures.
-- FULL-TRACK SCAN: You must audit every second from 0:00 to the final millisecond. Do not stop early.
+WHISPER_SEGMENTS (sentence-level boundaries):
+${segmentsJson}
 
-3. IDENTITY FILTER:
-- Do NOT transcribe the lead vocal as an adlib. If the text AND time match the main transcript exactly (within ±50ms), ignore it.
-- You are hunting ONLY for: background vocals, hype interjections, call-and-response layers, echo repeats, harmonies under the lead, and atmospheric vocal textures.
+TRACK_END: ${trackEnd.toFixed(3)}s
 
-ADLIB TAXONOMY:
-- "callout": Short exclamations or interjections ("yeah", "ayy", "uh", "okay", "let's go") — typically 0.2–1.5s
-- "echo": A repeat or echo of a lead vocal phrase, slightly offset in time — typically 0.3–2.5s
-- "background": Sustained harmonies or stacked background vocals — typically 1.0–6.0s
-- "texture": Atmospheric vocal sounds, hums, breaths with melodic intent — typically 0.5–3.0s
-- "correction": A word the artist clearly sang that differs from the transcript text at that timestamp
+=== THE CORE ALIGNMENT INVARIANT (THE DELTA RULE) ===
+Whisper provides the master timing grid. You provide the acoustic reality.
+- For ALL "main" lyric lines: use the EXACT start/end timestamps from Whisper segments verbatim. Do not invent timestamps.
+- For adlibs and orphaned signals: snap timestamps to the nearest Whisper word boundary.
+- If you correct a word, keep the Whisper timestamp slot — only change the text.
 
-PRECISION:
-- Timestamps: seconds with 3-decimal precision (e.g., 169.452). NOT MM:SS format.
-- Confidence floor: 0.95 — only output if you are 95% certain it is a secondary vocal layer or correction.
-- Separate EVERY instance: Even if the same text appears 10 times, each occurrence is a unique event with its own timestamp.
-- OUTPUT LIMIT: Return a MAXIMUM of 30 adlibs. Prioritize corrections first, then most audible/distinct events. This limit ensures valid, complete JSON output.
-- JSON ROBUSTNESS: Every array element except the last MUST be followed by a comma. The final element must NOT have a trailing comma. Close the array with ] and the object with }.
+=== FOUR LOGICAL PASSES ===
 
-OUTPUT — ONLY valid JSON, no markdown, no explanation:
+PASS 1 — THE CORRECTION PASS (Phonetic QA):
+- Audit every main lyric segment in WHISPER_SEGMENTS.
+- If Whisper transcribed a word incorrectly (phonetic error or hallucination), replace it with the acoustically correct word.
+- You MUST use the exact start/end timestamps from that Whisper segment.
+- Mark the line: isCorrection: true, geminiConflict: "<original Whisper word>".
+- Increment qaCorrections for each word swapped.
+
+PASS 2 — THE SIGNAL RESTORATION PASS (Orphaned Signals):
+- Listen to sections where Whisper is silent: Intros (0s–first word), Outros (last word–end), Bridges.
+- Transcribe all legitimate dialogue, textures, hums, or count-ins Whisper missed.
+- Group into natural logical phrases (not single words).
+- Tag these lines: tag: "adlib", isOrphaned: true, isFloating: true.
+- Snap timestamps to nearest Whisper word boundary or use acoustic timing if no word is nearby.
+
+PASS 3 — THE GHOST EXECUTION PASS (Pruning):
+- Identify background adlibs that are acoustic bleed or echoes of the lead vocal.
+- If a vocal event is ALREADY captured verbatim in a "main" segment at the same timestamp (±500ms), it is a Ghost — DO NOT include it in merged_lines at all.
+- Legitimate unique adlibs (different text, or clearly a separate voice) MUST remain.
+- Increment ghostsRemoved for each deleted ghost.
+
+PASS 4 — THE DENSITY MAPPING PASS (Outro/Layering):
+- Identify overlapping background vocals or rapid echoes in the outro zone.
+- Provide distinct timestamps for every layer so the UI can stack them.
+- Tag these: tag: "adlib", isFloating: true.
+
+=== OUTPUT RULES ===
+- Return the COMPLETE merged_lines array: every main segment from WHISPER_SEGMENTS (corrected if needed) PLUS all legitimate adlibs/orphaned signals.
+- Maximum 80 total lines to ensure valid JSON output.
+- ALL timestamps must be numeric seconds with 3-decimal precision (e.g., 17.450). NEVER use MM:SS format.
+- Hard boundary: discard any line with start > ${Math.min(189.3, trackEnd + 1.0).toFixed(3)}s.
+- Sort all lines by start timestamp ascending.
+- JSON ROBUSTNESS: Every array element except the last MUST be followed by a comma. The final element must NOT have a trailing comma.
+
+OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
-  "adlibs": [
-    { "text": "The detected word", "start": 0.000, "end": 0.000, "layer": "callout", "confidence": 0.98 }
-  ]
+  "merged_lines": [
+    {
+      "start": 0.000,
+      "end": 0.000,
+      "text": "...",
+      "tag": "main",
+      "isOrphaned": false,
+      "isFloating": false,
+      "isCorrection": false,
+      "geminiConflict": null,
+      "confidence": 0.98
+    }
+  ],
+  "qaCorrections": 0,
+  "ghostsRemoved": 0
 }`;
 }
 
@@ -379,7 +261,8 @@ async function callGemini(
   return content;
 }
 
-function extractJsonFromContent(content: string): any {
+// ── Robust JSON parser with truncation recovery ───────────────────────────────
+function extractJsonFromContent(content: string, fallbackKey = "merged_lines"): any {
   const jsonStart = content.indexOf("{");
   const jsonEnd = content.lastIndexOf("}");
   if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON in Gemini response");
@@ -389,32 +272,20 @@ function extractJsonFromContent(content: string): any {
     .replace(/,\s*]/g, "]")
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 
-  // ── v3.5: Robust JSON Recovery ────────────────────────────────────────────
-  // Gemini may truncate output mid-array when token budget is exhausted.
-  // safeParseJson attempts standard parse first, then tries progressively
-  // more aggressive repairs to recover as many array elements as possible.
   function safeParseJson(s: string): any {
     try {
       return JSON.parse(s);
     } catch (_e1) {
-      // Strip trailing comma then try again
       let fixed = s.replace(/,\s*$/, "").trim();
       try {
         return JSON.parse(fixed);
       } catch (_e2) {
-        // If last char is neither ] nor }, the array/object was cut off.
-        // Find the last complete array element (ends with }) and close the structure.
         const lastComplete = fixed.lastIndexOf("}");
         if (lastComplete !== -1) {
           fixed = fixed.slice(0, lastComplete + 1);
-          // Determine if we're still inside an array
           const openBracket = fixed.lastIndexOf("[");
           const closeBracket = fixed.lastIndexOf("]");
           if (openBracket > closeBracket) fixed += "]";
-          // Close outer object if needed
-          const openBrace = fixed.lastIndexOf("{");
-          const closeBrace = fixed.lastIndexOf("}");
-          // Count top-level braces
           let depth = 0;
           for (const ch of fixed) { if (ch === "{") depth++; else if (ch === "}") depth--; }
           if (depth > 0) fixed += "}".repeat(depth);
@@ -423,12 +294,11 @@ function extractJsonFromContent(content: string): any {
             console.warn(`[safeParseJson] Recovered truncated JSON — partial data restored`);
             return recovered;
           } catch (_e3) {
-            // Last resort: return empty adlibs object
-            console.warn(`[safeParseJson] JSON unrecoverable — returning empty adlibs`);
-            return { adlibs: [] };
+            console.warn(`[safeParseJson] JSON unrecoverable — returning empty`);
+            return { [fallbackKey]: [] };
           }
         }
-        return { adlibs: [] };
+        return { [fallbackKey]: [] };
       }
     }
   }
@@ -442,9 +312,9 @@ async function runGeminiHookAnalysis(
   mimeType: string,
   lovableKey: string,
   model = "google/gemini-3-flash-preview"
-): Promise<{ hook: GeminiHook | null; insights?: GeminiInsights; metadata: GeminiAnalysis["metadata"]; rawContent: string }> {
+): Promise<{ hook: GeminiHook | null; insights?: GeminiInsights; metadata: any; rawContent: string }> {
   const content = await callGemini(GEMINI_HOOK_PROMPT, audioBase64, mimeType, lovableKey, model, 1200, "hook");
-  const parsed = extractJsonFromContent(content);
+  const parsed = extractJsonFromContent(content, "hottest_hook");
 
   let hook: GeminiHook | null = null;
   if (parsed.hottest_hook && typeof parsed.hottest_hook.start_sec === "number") {
@@ -479,410 +349,71 @@ async function runGeminiHookAnalysis(
   };
 }
 
-// ── Gemini Call 1: Adlibs (v3.0 — Reference-Based, QA-Correction-Aware) ──────
-async function runGeminiAdlibAnalysis(
+// ── v5.0 Gemini Call 2: Universal Acoustic Orchestrator ───────────────────────
+async function runGeminiOrchestrator(
   audioBase64: string,
   mimeType: string,
   lovableKey: string,
-  model = "google/gemini-3-flash-preview",
-  whisperTranscript = ""
-): Promise<{ adlibs: GeminiAdlib[]; rawContent: string; transcriptProvided: boolean }> {
-  const prompt = buildAdlibPrompt(whisperTranscript);
-  const transcriptProvided = whisperTranscript.trim().length > 0;
-  console.log(`[adlib] v3.0 reference-based prompt — transcriptProvided=${transcriptProvided} (${whisperTranscript.length} chars)`);
+  model: string,
+  whisperWords: WhisperWord[],
+  whisperSegments: Array<{ start: number; end: number; text: string }>,
+  whisperRawText: string,
+  trackEnd: number
+): Promise<{ lines: LyricLine[]; qaCorrections: number; ghostsRemoved: number; rawContent: string }> {
+  const prompt = buildOrchestratorPrompt(whisperWords, whisperSegments, whisperRawText, trackEnd);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 4000, "adlib");
-  const parsed = extractJsonFromContent(content);
+  console.log(`[orchestrator] v5.0 sending ${whisperWords.length} words, ${whisperSegments.length} segments to Gemini`);
 
-  // v3.0: confidence floor 0.95 (Gemini has script as anchor)
-  const CONFIDENCE_FLOOR = transcriptProvided ? 0.95 : 0.6;
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 6000, "orchestrator");
+  const parsed = extractJsonFromContent(content, "merged_lines");
 
-  const adlibs: GeminiAdlib[] = Array.isArray(parsed.adlibs)
-    ? parsed.adlibs
-        .filter((a: any) => a && typeof a.start === "number" && a.text && a.text !== "[inaudible]")
-        .map((a: any) => ({
-          text: String(a.text).trim(),
-          start: Math.round(Number(a.start) * 1000) / 1000,
-          end: Math.round(Number(a.end) * 1000) / 1000,
-          layer: a.layer,
-          confidence: Math.min(1, Math.max(0, Number(a.confidence) || 0)),
-          isCorrection: a.layer === "correction",
+  const HARD_MAX_BOUNDARY = Math.min(189.3, trackEnd + 1.0);
+
+  const rawLines: LyricLine[] = Array.isArray(parsed.merged_lines)
+    ? parsed.merged_lines
+        .filter((l: any) => l && typeof l.start === "number" && typeof l.end === "number" && l.text)
+        .map((l: any): LyricLine => ({
+          start: Math.round(Number(l.start) * 1000) / 1000,
+          end: Math.round(Number(l.end) * 1000) / 1000,
+          text: String(l.text).trim(),
+          tag: l.tag === "adlib" ? "adlib" : "main",
+          isOrphaned: Boolean(l.isOrphaned),
+          isFloating: Boolean(l.isFloating),
+          isCorrection: Boolean(l.isCorrection),
+          geminiConflict: l.geminiConflict ? String(l.geminiConflict) : undefined,
+          confidence: l.confidence != null ? Math.min(1, Math.max(0, Number(l.confidence))) : undefined,
         }))
-        .filter((a: GeminiAdlib) => a.end > a.start && a.confidence >= CONFIDENCE_FLOOR)
+        .filter((l: LyricLine) => l.end > l.start && l.start <= HARD_MAX_BOUNDARY && l.text.length > 0)
     : [];
 
-  const correctionCount = adlibs.filter(a => a.isCorrection).length;
-  console.log(`[adlib] Parsed ${adlibs.length} adlibs from Gemini (floor=${CONFIDENCE_FLOOR}, corrections=${correctionCount})`);
-  return { adlibs, rawContent: content, transcriptProvided };
+  // Sort by start time
+  rawLines.sort((a, b) => a.start - b.start);
+
+  const qaCorrections = typeof parsed.qaCorrections === "number" ? parsed.qaCorrections : rawLines.filter(l => l.isCorrection).length;
+  const ghostsRemoved = typeof parsed.ghostsRemoved === "number" ? parsed.ghostsRemoved : 0;
+
+  console.log(`[orchestrator] v5.0 result: ${rawLines.length} lines (${rawLines.filter(l => l.tag === "main").length} main, ${rawLines.filter(l => l.tag === "adlib").length} adlib, ${rawLines.filter(l => l.isOrphaned).length} orphaned, ${qaCorrections} qa-corrections, ${ghostsRemoved} ghosts-removed)`);
+
+  return { lines: rawLines, qaCorrections, ghostsRemoved, rawContent: content };
 }
 
-// ── Build lines from Whisper segments ────────────────────────────────────────
-function buildLinesFromSegments(
-  segments: Array<{ start: number; end: number; text: string }>,
-  _words: WhisperWord[]
-): LyricLine[] {
-  if (segments.length === 0) return [];
-  const GAP_THRESHOLD = 0.5;
-  const lines: LyricLine[] = [];
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
-    const nextSeg = segments[i + 1];
-    let end = seg.end;
-    if (nextSeg && seg.end > nextSeg.start) {
-      end = Math.round((nextSeg.start - 0.05) * 1000) / 1000;
-    }
-    const gap = nextSeg ? nextSeg.start - end : 0;
-    if (gap > GAP_THRESHOLD) console.log(`Gap ${gap.toFixed(2)}s between seg[${i}] and seg[${i + 1}]`);
-    lines.push({ start: Math.round(seg.start * 1000) / 1000, end: Math.round(end * 1000) / 1000, text: seg.text, tag: "main" });
-  }
-  return lines;
-}
-
-// ── v2.2 Global Timebase Guard ────────────────────────────────────────────────
-/**
- * Calculate the median offset between Gemini adlib timestamps and nearest Whisper words,
- * using only high-confidence adlibs (>= 0.9). If the absolute median exceeds 0.150s,
- * shift all Gemini adlib timestamps by -globalOffset to align AI clock with Whisper clock.
- */
-function computeGlobalOffset(adlibs: GeminiAdlib[], words: WhisperWord[]): number {
-  if (words.length === 0) return 0;
-  const highConf = adlibs.filter(a => (a.confidence ?? 0) >= 0.9);
-  if (highConf.length === 0) return 0;
-
-  const deltas: number[] = [];
-  for (const adlib of highConf) {
-    let nearest: WhisperWord | null = null;
-    let nearestDist = Infinity;
-    for (const w of words) {
-      const dist = Math.abs(w.start - adlib.start);
-      if (dist < nearestDist) { nearestDist = dist; nearest = w; }
-    }
-    if (nearest && nearestDist <= 5.0) {
-      deltas.push(adlib.start - nearest.start);
-    }
-  }
-
-  if (deltas.length === 0) return 0;
-  const sorted = [...deltas].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  const median = sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2;
-
-  console.log(`Global timebase: ${deltas.length} reference points, median offset = ${median.toFixed(3)}s`);
-  return Math.abs(median) > 0.150 ? median : 0;
-}
-
-// ── v3.0 Merge & QA Logic ────────────────────────────────────────────────────
-function extractAdlibsFromWords(
-  lines: LyricLine[],
-  adlibs: GeminiAdlib[],
-  words: WhisperWord[],
-  globalOffset: number
-): { lines: LyricLine[]; qaCorrections: number } {
-  if (adlibs.length === 0 || words.length === 0) return { lines, qaCorrections: 0 };
-  // result is mutable — Rule 2 (QA Swap) may patch main line text in place
-  const result: LyricLine[] = lines.map(l => ({ ...l }));
-  const adlibLines: LyricLine[] = [];
-
-  // Pre-build main segment text windows for ghost-adlib de-duplication
-  const mainSegments = result
-    .filter(l => l.tag === "main")
-    .map(l => {
-      const spanWords = words.filter(w => w.start >= l.start - 0.1 && w.end <= l.end + 0.1);
-      return { lineRef: l, start: l.start, end: l.end, text: spanWords.map(w => w.word).join(" ") };
-    });
-
-  let ghostCount = 0;
-  let correctionCount = 0;
-
-  // ── Boundary: last Whisper word timestamp (Rule: discard beyond this) ────
-  const trackEnd = words.length > 0 ? words[words.length - 1].end : Infinity;
-
-  for (const adlib of adlibs) {
-    // Apply global timebase correction
-    const correctedStart = Math.round((adlib.start - globalOffset) * 1000) / 1000;
-    const correctedEnd = Math.round((adlib.end - globalOffset) * 1000) / 1000;
-
-    // ── Boundary Enforcement (Rule 3 v3.8): Hard cap at 189.3s OR trackEnd+1s ─
-    // Explicit 189.3s stops the 211s "Ghost Hook" hallucination.
-    // trackEnd+1s allows legitimate echo tails in shorter tracks.
-    const HARD_MAX_BOUNDARY = 189.3;
-    const MAX_BOUNDARY = Math.min(HARD_MAX_BOUNDARY, trackEnd + 1.0);
-    if (correctedStart > MAX_BOUNDARY) {
-      console.log(`[boundary] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — beyond maxTime+1s (${MAX_BOUNDARY.toFixed(3)}s)`);
-      ghostCount++;
-      continue;
-    }
-
-    const normAdlibText = normalize(adlib.text);
-    const adlibWordTokens = normAdlibText.split(" ").filter(Boolean);
-    if (adlibWordTokens.length === 0) continue;
-
-    // ── Rule 2: Segment-Wide Phonetic QA Swap (v3.8 — "Rain/Range" Fix) ──────
-    // When a correction is detected, IGNORE the timestamp entirely.
-    // Search ALL segments across the ENTIRE transcript for the best phonetic
-    // match. This bridges the 5.4s gap observed in v3.7 where Gemini tags
-    // "rain" at 17.12s but Whisper transcribes "range" at 22.5s.
-    if (adlib.isCorrection || adlib.layer === "correction") {
-      let bestPhoneticWord: WhisperWord | null = null;
-      let bestPhoneticScore = 0;
-      let bestSeg: typeof mainSegments[0] | null = null;
-
-      // v4.2: "Signal Isolation" — Soundex gate applied DURING the corpus scan,
-      // not after. Previous bug: "race" (score 0.55) beat "range" (score 0.53),
-      // Soundex then blocked "race", but we aborted instead of trying "range".
-      // Fix: only track candidates that pass BOTH the Soundex gate AND differ from
-      // the correction text. This ensures "range" wins over "race" for target "rain".
-      const normCorrection = normalize(adlib.text);
-      for (const w of words) {
-        const normW = normalize(w.word);
-        // Skip words already identical to the correction — they don't need swapping
-        if (normW === normCorrection) continue;
-        // Gate 1 (inline): Soundex consonant-class guard applied BEFORE scoring
-        // Blocks: "race"(R200) vs "rain"(R500) → R2≠R5 → SKIP
-        // Allows: "range"(R520) vs "rain"(R500) → R5=R5 → SCORE
-        if (!phoneticRootMatch(w.word, adlib.text)) continue;
-        const score = phoneticSimilarity(normW, normCorrection);
-        if (score > bestPhoneticScore) {
-          bestPhoneticScore = score;
-          bestPhoneticWord = w;
-          // Find the owning segment for this word (±0.5s tolerance for segment edges)
-          bestSeg = mainSegments.find(s => w.start >= s.start - 0.5 && w.end <= s.end + 0.5) ?? null;
-        }
-      }
-
-      // v4.2: Single gate — Levenshtein noise floor 0.40.
-      // Soundex guard already applied inline above; no second gate needed here.
-      const PHONETIC_THRESHOLD = 0.40;
-      if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
-        const oldWord = bestPhoneticWord.word.trim();
-        bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
-        bestSeg.lineRef.geminiConflict = oldWord;
-        bestSeg.lineRef.isCorrection = true;
-        (bestSeg.lineRef as any).correctedWord = adlib.text;
-        correctionCount++;
-        const timeGap = Math.abs(correctedStart - bestPhoneticWord.start).toFixed(2);
-        console.log(`[qa-swap] v4.2 swap "${oldWord}" (${soundex(oldWord)}) → "${adlib.text}" (${soundex(adlib.text)}) score=${bestPhoneticScore.toFixed(2)} gap=${timeGap}s`);
-      } else {
-        console.log(`[qa-swap] No Soundex-compatible match for "${adlib.text}" @ ${correctedStart.toFixed(3)}s — best=${bestPhoneticScore.toFixed(2)} < ${PHONETIC_THRESHOLD}`);
-      }
-      continue;
-    }
-
-    // ── Rule 3: Intro/Outro Zone Preservation (v4.4) ─────────────────────
-    // Explicit time-based zone tagging: do NOT depend solely on Whisper's
-    // first-word timestamp (which can vary). Use hard invariants instead.
-    //   INTRO: 0s–17.0s  — pre-lyric dialogue, hums, count-ins
-    //   OUTRO: dynamic (trackEnd - 8s) — overlapping echoes, crowd fade, tail textures
-    //   v4.4: OUTRO_ZONE_START is dynamic so final echoes (e.g. 186s on a 189s track) aren't cut off
-    // All zone items: isFloating: true + isOrphaned: true (always render as chip)
-    const INTRO_ZONE_END = 17.0;
-    const OUTRO_ZONE_START = Math.max(trackEnd - 8.0, 175.0); // dynamic but never earlier than 175s
-    const firstWordStart = words.length > 0 ? words[0].start : 0;
-    const isIntroZone = correctedStart < INTRO_ZONE_END || correctedStart < firstWordStart;
-    const isOutroZone = correctedStart >= OUTRO_ZONE_START;
-
-    if (isIntroZone || isOutroZone) {
-      const zoneLabel = isIntroZone ? "intro-zone" : "outro-zone";
-      adlibLines.push({
-        start: correctedStart,
-        end: correctedEnd,
-        text: adlib.text,
-        tag: "adlib",
-        isFloating: true,
-        isOrphaned: true,
-        confidence: adlib.confidence,
-        isCorrection: false,
-      } as LyricLine);
-      console.log(`[${zoneLabel}] Preserving "${adlib.text}" @ ${correctedStart.toFixed(3)}s as orphaned chip`);
-      continue;
-    }
-
-    // ── Rule 1: Identity Executioner (Anti-Ghosting, v3.8-final) ────────────
-    // Four-path hard-delete. No floating — if caught here, the adlib is GONE.
-    //  a) token overlap ≥ 0.9 AND time within ±150ms
-    //  b) exact normalized text match within ±150ms
-    //  c) filler word (yeah/ayy/uh/oh/etc.) matches ANY Whisper word within ±500ms
-    //  d) filler word appears in Whisper SEGMENT TEXT within ±2.0s window
-    //     (catches cases where Whisper tokenized it inside a multi-word segment)
-    // v3.8: Expanded identity window (±250ms) for tighter ghost removal
-    const IDENTITY_WINDOW_MS = 0.250;
-    const FILLER_WINDOW_MS = 0.500;
-    const normAdlibNorm = normalize(adlib.text);
-    const isFiller = /^(yeah+|yea|ayy+|ay|uh+|ah+|oh+|mm+|hmm+|woo+|ooh+|aye|ok|okay|let'?s go|come on|whoa+|woah+)$/i.test(normAdlibNorm);
-
-    // Path a + b: tight word-level window (±250ms)
-    const identityMatchTight = words.find(w => {
-      const timeDiff = Math.abs(w.start - correctedStart);
-      if (timeDiff > IDENTITY_WINDOW_MS) return false;
-      if (tokenOverlap(adlib.text, w.word) >= 0.9) return true;
-      return normalize(w.word) === normAdlibNorm;
-    });
-
-    // Path c: wide filler word-level window
-    const identityMatchFiller = !identityMatchTight && isFiller
-      ? words.find(w => {
-          const timeDiff = Math.abs(w.start - correctedStart);
-          if (timeDiff > FILLER_WINDOW_MS) return false;
-          return normalize(w.word) === normAdlibNorm;
-        })
-      : undefined;
-
-    // Path d: filler word appears in a Whisper segment's text (v4.3: check containment, not boundary)
-    // Previous bug: checked distance to segment START or END (boundary check).
-    // If "yeah" is in the MIDDLE of a 10s segment (e.g. "run yeah take it"), the
-    // nearest boundary was >2s away, so Path d missed it entirely.
-    // Fix: check if correctedStart falls WITHIN the segment (with ±1.5s tolerance),
-    // and also extend the look-around window to ±5.0s for long segments.
-    const identityMatchSegment = !identityMatchTight && !identityMatchFiller && isFiller
-      ? mainSegments.find(seg => {
-          // Check containment: is the adlib within or near this segment?
-          const withinSeg = correctedStart >= seg.start - 1.5 && correctedStart <= seg.end + 1.5;
-          // Fallback: within ±5s of segment center for very long segments
-          const segCenter = (seg.start + seg.end) / 2;
-          const nearCenter = Math.abs(correctedStart - segCenter) <= 5.0;
-          if (!withinSeg && !nearCenter) return false;
-          const segTokens = normalize(seg.text).split(" ").filter(Boolean);
-          return segTokens.includes(normAdlibNorm);
-        })
-      : undefined;
-
-    // Path e (v4.4): Wide-net segment scan for fillers that survive containment check.
-    // Catches filler like "yeah" at 42s that appears in a segment whose start/end
-    // boundaries extend far from the adlib's correctedStart, causing Path d to miss it.
-    // Search ALL segments within ±8s for the filler token anywhere in their text.
-    const identityMatchWide = !identityMatchTight && !identityMatchFiller && !identityMatchSegment && isFiller
-      ? mainSegments.find(seg => {
-          if (Math.abs(seg.start - correctedStart) > 8.0 && Math.abs(seg.end - correctedStart) > 8.0) return false;
-          const segTokens = normalize(seg.text).split(" ").filter(Boolean);
-          return segTokens.includes(normAdlibNorm);
-        })
-      : undefined;
-
-    // Synthesize a fake "word" for logging when caught by segment path
-    const identityMatchWord = identityMatchTight ?? identityMatchFiller ?? (identityMatchSegment ? { word: `[segment: ${identityMatchSegment.text.slice(0, 25)}]` } : undefined) ?? (identityMatchWide ? { word: `[wide-scan: ${identityMatchWide.text.slice(0, 25)}]` } : undefined);
-    if (identityMatchWord) {
-      ghostCount++;
-      const path = identityMatchWide ? "±8s wide-scan" : identityMatchSegment ? "containment segment-text" : identityMatchFiller ? "±500ms filler" : "±250ms tight";
-      console.log(`[identity-prune] Hard-deleting "${adlib.text}" @ ${correctedStart.toFixed(3)}s — ghost of "${identityMatchWord.word}" (${path})`);
-      continue;
-    }
-
-    // ── Ghost-Adlib De-Duplication (text-overlap fallback) ────────────────
-    const overlappingMain = mainSegments.find(s =>
-      correctedStart < s.end + 0.5 && correctedEnd > s.start - 0.5
-    );
-    if (overlappingMain) {
-      const ghostScore = tokenOverlap(adlib.text, overlappingMain.text);
-      // v3.0: threshold 0.75; reference-based prompt already does text subtraction
-      if (ghostScore >= 0.75) {
-        ghostCount++;
-        console.log(`[ghost-dedup] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — overlap ${ghostScore.toFixed(2)} with main`);
-        continue;
-      }
-    }
-
-    // ── Token-Overlap Floating Logic (main body adlibs only — zone adlibs handled above) ─
-    const nearbyWords = words.filter(w => Math.abs(w.start - correctedStart) <= 1.5);
-    const hasWordMatch = nearbyWords.some(w => tokenOverlap(adlib.text, w.word) >= 0.6);
-    const isFloating = !hasWordMatch;
-
-    // ── Find best Whisper word match for snapping ──────────────────────
-    const windowWords = words.filter(w => w.start >= correctedStart - 5 && w.start <= correctedEnd + 5);
-
-    let snapStart = correctedStart;
-    let snapEnd = correctedEnd;
-    let geminiConflict: string | undefined;
-
-    if (windowWords.length > 0) {
-      let bestWordIdx = -1, bestScore = 0;
-      for (let wi = 0; wi < windowWords.length; wi++) {
-        const w = windowWords[wi];
-        const normWord = normalize(w.word);
-        const firstToken = adlibWordTokens[0];
-        const dist = levenshtein(normWord, firstToken);
-        const maxLen = Math.max(normWord.length, firstToken.length, 1);
-        const textSim = 1 - dist / maxLen;
-        const timeDist = Math.abs(w.start - correctedStart);
-        const timeScore = 1 / (1 + timeDist * 0.5);
-        const score = textSim * 0.65 + timeScore * 0.35;
-        if (score > bestScore) { bestScore = score; bestWordIdx = wi; }
-      }
-
-      if (bestScore >= 0.3 && bestWordIdx !== -1) {
-        const startWord = windowWords[bestWordIdx];
-        let endWord = startWord;
-        if (adlibWordTokens.length > 1) {
-          let tokenIdx = 1;
-          for (let wi = bestWordIdx + 1; wi < windowWords.length && tokenIdx < adlibWordTokens.length; wi++) {
-            const w = windowWords[wi];
-            const normWord = normalize(w.word);
-            const token = adlibWordTokens[tokenIdx];
-            const dist = levenshtein(normWord, token);
-            const maxLen = Math.max(normWord.length, token.length, 1);
-            if (1 - dist / maxLen >= 0.5) { endWord = w; tokenIdx++; }
-          }
-        }
-        snapStart = Math.round(startWord.start * 1000) / 1000;
-        snapEnd = Math.round(endWord.end * 1000) / 1000;
-
-        // Detect text conflict: Gemini text vs Whisper text differs significantly
-        const whisperText = windowWords
-          .filter(w => w.start >= startWord.start - 0.1 && w.end <= endWord.end + 0.1)
-          .map(w => w.word).join(" ");
-        const overlap = tokenOverlap(adlib.text, whisperText);
-        if (overlap < 0.5 && whisperText.trim()) {
-          geminiConflict = whisperText.trim();
-        }
-      }
-    }
-
-    // ── Rule 3: Floating Promotion ─────────────────────────────────────────
-    // Any adlib remaining after pruning is promoted to the adlibs overlay layer.
-    adlibLines.push({
-      start: snapStart,
-      end: snapEnd,
-      text: adlib.text,
-      tag: "adlib",
-      isFloating,
-      geminiConflict,
-      confidence: adlib.confidence,
-      isCorrection: false,
-    });
-
-    if (isFloating) {
-      console.log(`Floating adlib (no Whisper match): "${adlib.text}" @ ${correctedStart.toFixed(3)}s`);
-    }
-  }
-
-  const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
-  const floatingCount = adlibLines.filter(l => l.isFloating).length;
-  const conflictCount = adlibLines.filter(l => l.geminiConflict).length;
-  console.log(`[v4.4] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
-  return { lines: merged, qaCorrections: correctionCount };
-}
-
-// ── v2.2 Hook Invariant: start_sec + fixed 10.000s duration ──────────────────
+// ── Hook finder: snap to Whisper word boundary ────────────────────────────────
 function findHookFromWords(
   words: WhisperWord[],
   hook: GeminiHook
 ): { start: number; end: number; score: number; previewText: string; status: "confirmed" | "candidate" } | null {
   if (!hook) return null;
 
-  const HOOK_DURATION = 10.000; // Absolute invariant — never override
+  const HOOK_DURATION = 10.000;
   const { start_sec, confidence = 0 } = hook;
 
-  // ── Boundary Enforcement: hook beyond track end OR in last 10s → discard ─
   const trackEnd = words.length > 0 ? words[words.length - 1].end : Infinity;
 
   if (start_sec > trackEnd || start_sec > trackEnd - HOOK_DURATION) {
     console.log(`[hook] Discarding hook @ ${start_sec.toFixed(3)}s — in last 10s or beyond track end (${trackEnd.toFixed(3)}s). Falling back to repetition anchor.`);
-    // Fallback: find the 10s window with the highest word-repetition count
     return findRepetitionAnchor(words, trackEnd, HOOK_DURATION);
   }
 
-  // Confidence gate — already filtered upstream but double-check
   if (confidence < 0.75) {
     return {
       start: start_sec,
@@ -893,7 +424,6 @@ function findHookFromWords(
     };
   }
 
-  // Snap to nearest Whisper word boundary
   const windowWords = words.filter(w => w.start >= start_sec - 2 && w.start <= start_sec + 3);
   let snapStart = start_sec;
 
@@ -918,12 +448,6 @@ function findHookFromWords(
   };
 }
 
-// ── Repetition-anchor fallback for hook selection ─────────────────────────────
-/**
- * Scans the Whisper word list in 10s sliding windows and returns the window
- * with the highest repeated-word density. Used as a fallback when Gemini's
- * hook selection is invalid (out-of-bounds or in the final 10s).
- */
 function findRepetitionAnchor(
   words: WhisperWord[],
   trackEnd: number,
@@ -931,7 +455,11 @@ function findRepetitionAnchor(
 ): { start: number; end: number; score: number; previewText: string; status: "confirmed" | "candidate" } | null {
   if (words.length === 0) return null;
 
-  const STEP = 2.0; // slide every 2s for efficiency
+  function normalize(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  const STEP = 2.0;
   let bestStart = words[0].start;
   let bestScore = 0;
 
@@ -1000,14 +528,13 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
-
     console.log(
-      `[v3.0] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Option A: whisper+hook parallel, then adlib with transcript+QA-correction), ` +
+      `[v5.0] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Universal Acoustic Orchestrator), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
-    // ── v2.4 Sequencing: Whisper + Hook in parallel first, then Adlib with rawText ──
+    // ── Stage 1: Whisper + Hook in parallel ──────────────────────────────────
     const whisperPromise = useWhisper && OPENAI_API_KEY
       ? runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY)
       : Promise.reject(new Error(useWhisper && !OPENAI_API_KEY ? "OPENAI_API_KEY not set" : "WHISPER_SKIPPED"));
@@ -1016,25 +543,7 @@ serve(async (req) => {
       ? runGeminiHookAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel)
       : Promise.reject(new Error("ANALYSIS_DISABLED"));
 
-    // Stage 1: Whisper + Hook in parallel
-    const [whisperResult, hookResult] = await Promise.allSettled([
-      whisperPromise,
-      hookPromise,
-    ]);
-
-    // Extract Whisper rawText to pass as reference to the adlib auditor
-    const rawTranscript = whisperResult.status === "fulfilled"
-      ? whisperResult.value.rawText
-      : "";
-
-    // Stage 2: Adlib auditor with Whisper transcript injected (reference-based subtraction)
-    const adlibResult = await (
-      !analysisDisabled
-        ? runGeminiAdlibAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, rawTranscript)
-            .then(v => ({ status: "fulfilled" as const, value: v }))
-            .catch(e => ({ status: "rejected" as const, reason: e }))
-        : Promise.resolve({ status: "rejected" as const, reason: new Error("ANALYSIS_DISABLED") })
-    );
+    const [whisperResult, hookResult] = await Promise.allSettled([whisperPromise, hookPromise]);
 
     // ── Handle transcription result ──────────────────────────────────────────
     let words: WhisperWord[] = [];
@@ -1054,31 +563,65 @@ serve(async (req) => {
       console.log(`Whisper: ${words.length} words, ${segments.length} segments`);
     }
 
-    const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
-      wordCount: words.length,
-      segmentCount: segments.length,
-      rawText: rawText.slice(0, 1000),
-      words: words.slice(0, 80),
-      segments: segments.slice(0, 30),
-    } : { status: useWhisper ? "failed" : "skipped" };
+    const trackEnd = words.length > 0 ? words[words.length - 1].end : 300;
 
-    const baseLines = useWhisper ? buildLinesFromSegments(segments, words) : [];
+    // ── Stage 2: Gemini Orchestrator (audio + Whisper JSON) ──────────────────
+    let lines: LyricLine[] = [];
+    let qaCorrections = 0;
+    let ghostsRemoved = 0;
+    let orchestratorRawContent = "";
+    let orchestratorError: string | null = null;
 
-    // ── Handle analysis results ───────────────────────────────────────────────
+    if (!analysisDisabled && useWhisper && whisperResult.status === "fulfilled") {
+      try {
+        const orchResult = await runGeminiOrchestrator(
+          audioBase64,
+          mimeType,
+          LOVABLE_API_KEY,
+          resolvedAnalysisModel,
+          words,
+          segments,
+          rawText,
+          trackEnd
+        );
+        lines = orchResult.lines;
+        qaCorrections = orchResult.qaCorrections;
+        ghostsRemoved = orchResult.ghostsRemoved;
+        orchestratorRawContent = orchResult.rawContent;
+      } catch (orchErr) {
+        orchestratorError = (orchErr as Error)?.message || "Orchestrator failed";
+        console.error("[orchestrator] Failed:", orchestratorError);
+        // Fallback: build plain lines from Whisper segments only
+        lines = segments.map(seg => ({
+          start: Math.round(seg.start * 1000) / 1000,
+          end: Math.round(seg.end * 1000) / 1000,
+          text: seg.text,
+          tag: "main" as const,
+        }));
+      }
+    } else if (!analysisDisabled && !useWhisper) {
+      // Gemini-only mode: no Whisper, orchestrator not applicable
+      lines = [];
+    } else if (analysisDisabled && useWhisper && whisperResult.status === "fulfilled") {
+      // Analysis disabled: plain Whisper segments
+      lines = segments.map(seg => ({
+        start: Math.round(seg.start * 1000) / 1000,
+        end: Math.round(seg.end * 1000) / 1000,
+        text: seg.text,
+        tag: "main" as const,
+      }));
+    }
+
+    // ── Handle hook result ───────────────────────────────────────────────────
     let title = "Unknown";
     let artist = "Unknown";
     let metadata: any = undefined;
     let hooks: any[] = [];
-    let lines: LyricLine[] = baseLines;
     let geminiUsed = false;
-    let geminiError: string | null = null;
-    let globalOffset = 0;
-    let mergeQaCorrections = 0; // v4.4: threaded from extractAdlibsFromWords
+    let geminiError: string | null = orchestratorError;
 
     const hookSuccess = !analysisDisabled && hookResult.status === "fulfilled";
-    const adlibSuccess = !analysisDisabled && adlibResult.status === "fulfilled";
 
-    // Metadata/insights always come from hook call (less token pressure = more accurate)
     if (hookSuccess) {
       const h = hookResult.value;
       geminiUsed = true;
@@ -1094,49 +637,12 @@ serve(async (req) => {
         key_confidence: h.insights?.key?.confidence,
         mood_confidence: h.insights?.mood?.confidence,
       };
-    } else if (!analysisDisabled && hookResult.status === "rejected") {
-      const reason = (hookResult.reason as Error)?.message || "unknown";
-      geminiError = `hook: ${reason}`;
-      console.warn("Gemini hook analysis failed:", reason);
-    }
 
-    if (adlibResult.status === "rejected" && !analysisDisabled) {
-      const reason = (adlibResult.reason as Error)?.message || "unknown";
-      geminiError = geminiError ? `${geminiError}; adlib: ${reason}` : `adlib: ${reason}`;
-      console.warn("Gemini adlib analysis failed:", reason);
-    }
-
-    const resolvedAdlibs: GeminiAdlib[] = adlibSuccess ? adlibResult.value.adlibs : [];
-    const resolvedHook: GeminiHook | null = hookSuccess ? hookResult.value.hook : null;
-
-    if (useWhisper) {
-      // ── v2.2: Compute Global Timebase Guard ──────────────────────────────
-      globalOffset = computeGlobalOffset(resolvedAdlibs, words);
-      if (Math.abs(globalOffset) > 0.150) {
-        console.log(`Applying global timebase correction: ${globalOffset.toFixed(3)}s`);
-      }
-
-      // Hybrid: Whisper timing + Gemini adlib semantic tags
-      const mergeResult = extractAdlibsFromWords(baseLines, resolvedAdlibs, words, globalOffset);
-      lines = mergeResult.lines;
-      mergeQaCorrections = mergeResult.qaCorrections;
-
-      // ── v2.2: Hook Invariant — 10s fixed, confidence-gated ───────────────
-      if (resolvedHook) {
+      const resolvedHook: GeminiHook | null = h.hook;
+      if (resolvedHook && useWhisper) {
         const hookSpan = findHookFromWords(words, resolvedHook);
         if (hookSpan) hooks = [{ ...hookSpan, reasonCodes: [] }];
-      }
-    } else if (geminiUsed) {
-      // Gemini-only: use timestamps directly
-      const geminiLines: LyricLine[] = resolvedAdlibs.map(a => ({
-        start: a.start,
-        end: a.end,
-        text: a.text,
-        tag: "adlib" as const,
-        confidence: a.confidence,
-      }));
-      lines = [...baseLines, ...geminiLines].sort((a, b) => a.start - b.start);
-      if (resolvedHook) {
+      } else if (resolvedHook) {
         const HOOK_DURATION = 10.000;
         hooks = [{
           start: resolvedHook.start_sec,
@@ -1147,34 +653,26 @@ serve(async (req) => {
           status: "confirmed",
         }];
       }
+    } else if (!analysisDisabled && hookResult.status === "rejected") {
+      const reason = (hookResult.reason as Error)?.message || "unknown";
+      geminiError = `hook: ${reason}${orchestratorError ? `; orchestrator: ${orchestratorError}` : ""}`;
+      console.warn("Gemini hook analysis failed:", reason);
     }
-
-    const transcriptProvided = adlibSuccess ? adlibResult.value.transcriptProvided : (rawTranscript.length > 0);
-
-    const geminiOutput = analysisDisabled ? { status: "disabled" } : {
-      status: hookSuccess || adlibSuccess ? "success" : "failed",
-      model: resolvedAnalysisModel,
-      hook: {
-        status: hookSuccess ? "success" : "failed",
-        rawLength: hookSuccess ? hookResult.value.rawContent.length : 0,
-        result: resolvedHook,
-      },
-      adlibs: {
-        status: adlibSuccess ? "success" : "failed",
-        rawLength: adlibSuccess ? adlibResult.value.rawContent.length : 0,
-        count: resolvedAdlibs.length,
-        transcriptProvided,
-        results: resolvedAdlibs,
-      },
-      globalOffset,
-    };
 
     const adlibCount = lines.filter(l => l.tag === "adlib").length;
     const floatingCount = lines.filter(l => l.isFloating).length;
-    const conflictCount = lines.filter(l => l.geminiConflict).length;
-    // v4.4: Use qaCorrections threaded from merge function for accurate counter
-    const correctionCount = mergeQaCorrections;
-    console.log(`[v4.4] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${conflictCount} conflicts, ${correctionCount} qa-corrections), ${hooks.length} hooks | hook=${hookSuccess} adlib=${adlibSuccess} transcriptProvided=${transcriptProvided}`);
+    const orphanedCount = lines.filter(l => l.isOrphaned).length;
+    const correctionCount = qaCorrections;
+
+    console.log(`[v5.0] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${floatingCount} floating, ${orphanedCount} orphaned, ${correctionCount} qa-corrections, ${ghostsRemoved} ghosts-removed), ${hooks.length} hooks`);
+
+    const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
+      wordCount: words.length,
+      segmentCount: segments.length,
+      rawText: rawText.slice(0, 1000),
+      words: words.slice(0, 80),
+      segments: segments.slice(0, 30),
+    } : { status: useWhisper ? "failed" : "skipped" };
 
     return new Response(
       JSON.stringify({
@@ -1184,21 +682,22 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v4.4-absolute-truth",
+          version: "anchor-align-v5.0-universal-orchestrator",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            adlibSequencing: "option-a-sequential-with-qa-correction",
+            orchestrator: "v5.0-universal-acoustic-orchestrator",
           },
           geminiUsed,
           geminiError,
-          globalOffset,
+          orchestratorError,
           inputBytes: Math.round(estimatedBytes),
           outputLines: lines.length,
           adlibLines: adlibCount,
           floatingAdlibs: floatingCount,
-          conflictAdlibs: conflictCount,
+          orphanedLines: orphanedCount,
           qaCorrections: correctionCount,
+          ghostsRemoved,
           mainLines: lines.length - adlibCount,
           hooksFound: hooks.length,
           whisper: {
@@ -1207,9 +706,19 @@ serve(async (req) => {
           },
           gemini: {
             input: { model: analysisDisabled ? "disabled" : resolvedAnalysisModel, mimeType },
-            output: geminiOutput,
+            output: {
+              hook: {
+                status: hookSuccess ? "success" : "failed",
+                rawLength: hookSuccess ? hookResult.value.rawContent.length : 0,
+              },
+              orchestrator: {
+                status: orchestratorError ? "failed" : "success",
+                rawLength: orchestratorRawContent.length,
+                linesReturned: lines.length,
+              },
+            },
           },
-          merged: { totalLines: lines.length, mainLines: lines.length - adlibCount, adlibLines: adlibCount, qaCorrections: correctionCount, hooks, title, artist, metadata, allLines: lines },
+          merged: { totalLines: lines.length, mainLines: lines.length - adlibCount, adlibLines: adlibCount, qaCorrections: correctionCount, ghostsRemoved, hooks, title, artist, metadata, allLines: lines },
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
