@@ -1130,7 +1130,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               activeLines.map((line, i) => {
                   const isAdlib = line.tag === "adlib";
                   const isFloating = isAdlib && line.isFloating;
-                  const hasConflict = isAdlib && !!line.geminiConflict;
+                  // v3.8: hide conflict marker on QA-corrected lines (purple badge already shown)
+                  const hasConflict = isAdlib && !!line.geminiConflict && !line.isCorrection;
                   const isActive = activeLineIndices.has(i);
                   const isPrimary = i === primaryActiveLine;
                   const isEditing = i === editingIndex;
@@ -1145,9 +1146,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   const rawIdx = rawLinesForCheck.findIndex((rl) => rl.start === line.start && rl.tag === line.tag && rl.text === line.text);
                   const isAnchored = rawIdx !== -1 && anchoredLines.has(rawIdx);
 
-                  // v3.7: Orphaned adlib — no overlapping main line → render as standalone centered chip
-                  const isOrphanedAdlib = isAdlib && !activeLines.some(
-                    (other) => other.tag !== "adlib" && other.start <= line.start && other.end >= line.start
+                  // v3.8: Orphaned adlib — explicitly floating (intro/outro) OR no overlapping main line
+                  // Render as standalone centered chip instead of indented overlay.
+                  const isOrphanedAdlib = isAdlib && (
+                    line.isFloating ||
+                    !activeLines.some(
+                      (other) => other.tag !== "adlib" && other.start <= line.start && other.end >= line.start
+                    )
                   );
 
                   if (isOrphanedAdlib && !isEditing) {

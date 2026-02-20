@@ -660,23 +660,40 @@ function extractAdlibsFromWords(
       continue;
     }
 
-    // ── Rule 1: Identity Pruning (±150ms — Anti-Ghosting, v3.6) ─────────────
-    // Two paths to catch a ghost:
-    //  a) text AND time match within 150ms
-    //  b) exact normalized text equality within 150ms
+    // ── Rule 1: Identity Pruning (Anti-Ghosting, v3.8) ───────────────────────
+    // Three-path pruning to catch all ghost variants:
+    //  a) text AND time match within ±150ms (tight window for distinct words)
+    //  b) exact normalized text equality within ±150ms
+    //  c) short filler words ("yeah", "ayy", "uh", etc.) within ±500ms of ANY
+    //     Whisper word — these are near-always lead vocal echoes, not adlibs.
+    //     Hard-delete: do NOT tag as floating, remove from array entirely.
     const IDENTITY_WINDOW_MS = 0.150;
+    const FILLER_WINDOW_MS = 0.500;
     const normAdlibNorm = normalize(adlib.text);
-    const identityMatch = words.find(w => {
+    const isFiller = /^(yeah+|yea|ayy+|ay|uh+|ah+|oh+|mm+|hmm+|woo+|ooh+|aye|ok|okay|let'?s go|come on)$/i.test(normAdlibNorm);
+
+    // Path a + b: tight window
+    const identityMatchTight = words.find(w => {
       const timeDiff = Math.abs(w.start - correctedStart);
       if (timeDiff > IDENTITY_WINDOW_MS) return false;
-      // Path a: token overlap
       if (tokenOverlap(adlib.text, w.word) >= 0.9) return true;
-      // Path b: exact normalized text
       return normalize(w.word) === normAdlibNorm;
     });
+
+    // Path c: wide filler window — only for short filler exclamations
+    const identityMatchFiller = !identityMatchTight && isFiller
+      ? words.find(w => {
+          const timeDiff = Math.abs(w.start - correctedStart);
+          if (timeDiff > FILLER_WINDOW_MS) return false;
+          return normalize(w.word) === normAdlibNorm;
+        })
+      : undefined;
+
+    const identityMatch = identityMatchTight ?? identityMatchFiller;
     if (identityMatch) {
       ghostCount++;
-      console.log(`[identity-prune] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — ghost of Whisper word "${identityMatch.word}" (±100ms)`);
+      const window = identityMatchFiller ? "±500ms filler" : "±150ms";
+      console.log(`[identity-prune] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — ghost of Whisper word "${identityMatch.word}" (${window})`);
       continue;
     }
 
@@ -772,7 +789,7 @@ function extractAdlibsFromWords(
   const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
   const floatingCount = adlibLines.filter(l => l.isFloating).length;
   const conflictCount = adlibLines.filter(l => l.geminiConflict).length;
-  console.log(`[v3.7] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
+  console.log(`[v3.8] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
   return merged;
 }
 
