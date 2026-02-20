@@ -43,6 +43,8 @@ interface GeminiAnalysis {
     genre_hint?: string;
     confidence?: number;
   };
+  rawResponseContent?: string;
+  promptUsed?: string;
 }
 
 // ── Levenshtein distance for fuzzy matching ───────────────────────────────────
@@ -93,11 +95,12 @@ async function runWhisper(
   ext: string,
   mimeType: string,
   apiKey: string
-): Promise<{ segments: LyricLine[]; rawText: string }> {
+): Promise<{ segments: LyricLine[]; rawText: string; inputInfo: { format: string; mimeType: string; estimatedBytes: number } }> {
   const binaryStr = atob(audioBase64);
   const bytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
   const blob = new Blob([bytes], { type: mimeType });
+  const estimatedBytes = audioBase64.length * 0.75;
 
   const form = new FormData();
   form.append("file", blob, `audio.${ext}`);
@@ -126,7 +129,11 @@ async function runWhisper(
     }))
     .filter((l: LyricLine) => l.text.length > 0 && l.end > l.start);
 
-  return { segments, rawText: data.text || "" };
+  return {
+    segments,
+    rawText: data.text || "",
+    inputInfo: { format: ext, mimeType, estimatedBytes },
+  };
 }
 
 // ── Parse "MM:SS.mmm" or "HH:MM:SS.mmm" → seconds ───────────────────────────
@@ -138,31 +145,27 @@ function parseTimestamp(ts: string): number {
   return parseFloat(ts) || 0;
 }
 
-// ── GPT: transcript-based adlib + hook + metadata ────────────────────────────
+// ── Gemini: audio-first adlib + hook + metadata ───────────────────────────────
 async function runGeminiAnalysis(
-  _audioBase64: string,
-  _mimeType: string,
-  lovableKey: string,
-  whisperTranscript: string,
-  whisperSegmentsJson: string
+  audioBase64: string,
+  mimeType: string,
+  lovableKey: string
 ): Promise<GeminiAnalysis> {
-  const prompt = `You are a professional music analysis engine specializing in SRT/closed caption generation and commercial A&R analysis.
+  const prompt = `You are an audio-first music transcription and commercial analysis engine built for professional SRT/closed caption generation and social media optimization.
 
-You will receive a time-stamped transcript from a song (produced by Whisper speech recognition). Analyze it to identify adlibs, the hottest hook, and track metadata.
+Analyze the raw audio file only. Use vocal layering, loudness differences, stereo placement, beat drops, instrument expansion, bass impact changes, energy shifts, structural transitions, repetition patterns, dynamic contrast, melodic lift.
 
-TRANSCRIPT SEGMENTS (JSON array with start/end seconds and text):
-${whisperSegmentsJson}
-
-FULL TEXT:
-${whisperTranscript}
+Do NOT rely on assumed lyrics. Do NOT hallucinate unclear words. If uncertain, omit. Prioritize precision over recall.
 
 PART 1 — ADLIB + FILLER DETECTION
 
 Definitions:
 - PRIMARY = Main lyrical vocal line carrying meaning in that moment.
-- ADLIB = Short supporting phrase: background layer, echo, hype callout, interjection, filler (uh, yeah, ayy, mm, huh, etc.)
+- ADLIB = Supporting vocal phrase that is NOT the dominant lyrical line; functions as a background layer, echo, hype callout, or interjection; is short and textural or energy-driven.
+- FILLER = Non-lexical vocalization: uh, um, mm, ah, yeah, ayy, huh, etc.
 
-Look for: very short segments, repeated fillers, interjections that aren't part of the main lyric flow.
+If a vocal phrase is layered, panned, quieter, echoed, or inserted between lines → classify as ADLIB.
+If unclear, omit rather than guess.
 
 OUTPUT — TIME-ALIGNED ADLIB EVENTS (STRICT JSON under key "adlibs"):
 [
@@ -177,21 +180,25 @@ OUTPUT — TIME-ALIGNED ADLIB EVENTS (STRICT JSON under key "adlibs"):
 ]
 
 Rules:
-- Use the segment timestamps from the provided data for start/end
-- Max 30 entries, confidence required for every event
+- Short segments (0.2–2.0s typical)
+- Separate repeated instances
+- Do not merge distinct adlibs
+- Use "[inaudible]" only if clearly present but unintelligible
 - Omit instead of hallucinating
+- Confidence required for every event
+- Max 30 entries
 
 PART 2 — HOTTEST HOOK IDENTIFICATION (A&R STANDARD)
 
-The hottest hook = single strongest continuous ~10-second segment with highest commercial and replay potential.
+The hottest hook = single strongest continuous 10-second segment with highest combined commercial and replay potential.
 
-Score based on: lyrical memorability, repetition, emotional peak, chant potential, loop/replay viability.
+Score based on: production lift (beat drop, instrument expansion, bass increase), vocal intensity spike, melodic memorability, repetition strength, emotional peak, crowd/chant potential, loop/replay viability.
 
 Under key "hottest_hook":
 {
   "start": "MM:SS.mmm",
   "end": "MM:SS.mmm",
-  "transcript": "exact verbatim words during that window",
+  "transcript": "exact verbatim words heard during that window",
   "section_type": "chorus|drop|refrain|post-chorus|hybrid",
   "confidence": 0.92
 }
@@ -200,15 +207,15 @@ If no dominant commercial peak exists, set hottest_hook to null.
 
 PART 3 — TRACK METADATA
 
-Based on lyrical content and style, estimate under key "metadata":
+Using audio analysis (tempo feel, harmonic content, vocal style, energy), estimate under key "metadata":
 {
   "title": "Song title if recognisable, else Unknown",
   "artist": "Artist name if recognisable, else Unknown",
-  "bpm_estimate": null,
-  "key": null,
+  "bpm_estimate": 120,
+  "key": "A minor",
   "mood": "hype",
   "genre_hint": "Hip-Hop",
-  "confidence": 0.75
+  "confidence": 0.85
 }
 
 FINAL OUTPUT — return ONLY valid JSON, no markdown, no explanation:
@@ -218,24 +225,35 @@ FINAL OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   "metadata": {...}
 }`;
 
+  const requestBody = {
+    model: "google/gemini-3-flash-preview",
+    messages: [
+      { role: "system", content: prompt },
+      {
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            image_url: { url: `data:${mimeType};base64,${audioBase64}` },
+          },
+          {
+            type: "text",
+            text: "Analyze this audio. Return only the JSON with adlibs, hottest_hook, and metadata.",
+          },
+        ],
+      },
+    ],
+    temperature: 0.1,
+    max_tokens: 3500,
+  };
+
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${lovableKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model: "openai/gpt-5-mini",
-      messages: [
-        { role: "system", content: prompt },
-        {
-          role: "user",
-          content: "Analyze the transcript above. Return only the JSON with adlibs, hottest_hook, and metadata.",
-        },
-      ],
-      temperature: 0.1,
-      max_tokens: 3500,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!res.ok) {
@@ -295,6 +313,8 @@ FINAL OUTPUT — return ONLY valid JSON, no markdown, no explanation:
       genre_hint: String(meta.genre_hint || "").trim() || undefined,
       confidence: Math.min(1, Math.max(0, Number(meta.confidence) || 0)) || undefined,
     },
+    rawResponseContent: content,
+    promptUsed: prompt,
   };
 }
 
@@ -421,32 +441,30 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
-    console.log(`Anchor & Align v4: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`);
+    console.log(`Anchor & Align v5: ~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}, mime: ${mimeType}`);
 
-    // Run Whisper first, then feed transcript to GPT for semantic analysis
-    const whisperResult = await runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY).then(r => ({ status: "fulfilled" as const, value: r })).catch(e => ({ status: "rejected" as const, reason: e }));
+    // ── Whisper input captured for debug ────────────────────────────────────
+    const whisperInput = {
+      model: "whisper-1",
+      format: ext,
+      mimeType,
+      estimatedMB: Math.round(estimatedBytes / 1024 / 1024 * 10) / 10,
+      endpoint: "https://api.openai.com/v1/audio/transcriptions",
+      params: { response_format: "verbose_json", timestamp_granularities: ["segment"] },
+    };
 
-    if (whisperResult.status === "rejected") {
-      const err = whisperResult.reason?.message || "Whisper failed";
-      console.error("Whisper failed:", err);
-      return new Response(
-        JSON.stringify({ error: `Transcription failed: ${err}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // ── Gemini input captured for debug ─────────────────────────────────────
+    const geminiInput = {
+      model: "google/gemini-3-flash-preview",
+      endpoint: "https://ai.gateway.lovable.dev/v1/chat/completions",
+      mimeType,
+      audioBytesApprox: Math.round(estimatedBytes),
+      contentParts: ["image_url (audio as data URI)", "text instruction"],
+    };
 
-    const { segments: rawSegmentsEarly, rawText: rawTextEarly } = whisperResult.value;
-    const whisperSegmentsEarly = rawSegmentsEarly.map((seg, i) => {
-      if (i < rawSegmentsEarly.length - 1 && seg.end > rawSegmentsEarly[i + 1].start) {
-        return { ...seg, end: Math.round((rawSegmentsEarly[i + 1].start - 0.1) * 10) / 10 };
-      }
-      return seg;
-    });
-
-    const segmentsJson = JSON.stringify(whisperSegmentsEarly.map(s => ({ start: s.start, end: s.end, text: s.text })));
-    const [, geminiResult] = await Promise.allSettled([
-      Promise.resolve(whisperResult),
-      runGeminiAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, rawTextEarly, segmentsJson),
+    const [whisperResult, geminiResult] = await Promise.allSettled([
+      runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY),
+      runGeminiAnalysis(audioBase64, mimeType, LOVABLE_API_KEY),
     ]);
 
     if (whisperResult.status === "rejected") {
@@ -468,12 +486,21 @@ serve(async (req) => {
 
     console.log(`Whisper: ${whisperSegments.length} segments`);
 
+    // ── Whisper output for debug ─────────────────────────────────────────────
+    const whisperOutput = {
+      segmentCount: whisperSegments.length,
+      rawText: rawText.slice(0, 1000),
+      segments: whisperSegments.slice(0, 50).map(s => ({ start: s.start, end: s.end, text: s.text })),
+    };
+
     let title = "Unknown";
     let artist = "Unknown";
     let metadata: any = undefined;
     let hooks: any[] = [];
     let lines: LyricLine[] = whisperSegments;
     let geminiUsed = false;
+    let geminiOutput: any = { status: "not_run" };
+    let geminiError: string | null = null;
 
     if (geminiResult.status === "fulfilled") {
       const g = geminiResult.value;
@@ -496,8 +523,22 @@ serve(async (req) => {
         const hookSpan = findHookAnchored(whisperSegments, g.hottest_hook);
         if (hookSpan) hooks = [{ ...hookSpan, reasonCodes: [] }];
       }
+
+      // Gemini output for debug
+      geminiOutput = {
+        status: "success",
+        rawResponseContent: g.rawResponseContent || "",
+        rawResponseLength: (g.rawResponseContent || "").length,
+        adlibs: g.adlibs,
+        hottest_hook: g.hottest_hook,
+        metadata: g.metadata,
+        adlibsCount: g.adlibs.length,
+        promptLength: (g.promptUsed || "").length,
+      };
     } else {
       const reason = geminiResult.reason?.message || "unknown";
+      geminiError = reason;
+      geminiOutput = { status: "failed", error: reason };
       console.warn("Gemini analysis failed (Whisper-only):", reason);
     }
 
@@ -512,12 +553,35 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          model: "whisper-1 + gemini-3-flash-preview (anchor-align v4)",
+          version: "anchor-align-v5",
           geminiUsed,
+          geminiError,
           inputBytes: Math.round(estimatedBytes),
           outputLines: lines.length,
-          whisperSegments: whisperSegments.length,
-          rawText: rawText.slice(0, 500),
+          adlibLines: adlibCount,
+          mainLines: lines.length - adlibCount,
+          hooksFound: hooks.length,
+          // ── Whisper ─────────────────────────────────────────────────────
+          whisper: {
+            input: whisperInput,
+            output: whisperOutput,
+          },
+          // ── Gemini ──────────────────────────────────────────────────────
+          gemini: {
+            input: geminiInput,
+            output: geminiOutput,
+          },
+          // ── Final merged output ─────────────────────────────────────────
+          merged: {
+            totalLines: lines.length,
+            mainLines: lines.length - adlibCount,
+            adlibLines: adlibCount,
+            hooks,
+            title,
+            artist,
+            metadata,
+            allLines: lines,
+          },
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

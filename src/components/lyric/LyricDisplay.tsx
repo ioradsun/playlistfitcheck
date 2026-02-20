@@ -780,62 +780,105 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               ⚙ Debug
             </button>
             {showDebug && (
-              <div className="absolute right-0 top-full mt-2 w-[500px] z-50 glass-card rounded-xl p-4 border border-border/40 shadow-lg max-h-[80vh] overflow-y-auto">
+              <div className="absolute right-0 top-full mt-2 w-[600px] z-50 glass-card rounded-xl p-4 border border-border/40 shadow-lg max-h-[85vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-widest">AI Debug Panel</span>
+                  <span className="text-[11px] font-mono font-semibold text-foreground">🔬 Full Debug Panel</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono text-muted-foreground/40">
-                      {debugData.model} · {Math.round((debugData.inputBytes || 0) / 1024)}KB
+                      v{debugData.version} · {Math.round((debugData.inputBytes || 0) / 1024)}KB
                     </span>
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(JSON.stringify(debugData, null, 2));
-                        toast.success("Debug data copied");
+                        toast.success("Full debug data copied");
                       }}
-                      className="text-[10px] font-mono text-muted-foreground/50 hover:text-foreground border border-border/30 rounded px-1.5 py-0.5 transition-colors"
+                      className="text-[10px] font-mono text-muted-foreground/60 hover:text-foreground border border-border/30 rounded px-1.5 py-0.5"
                     >
-                      Copy all
+                      Copy All
                     </button>
                   </div>
                 </div>
 
-                {/* Whisper output */}
-                <div className="mb-4">
-                  <p className="text-[10px] font-mono text-primary/80 uppercase tracking-wider mb-1">
-                    🎙 Whisper — {debugData.whisperSegments} segments
-                  </p>
-                  <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap">
-                    {debugData.whisperRawText || "(no raw text)"}
+                {/* ── WHISPER INPUT ── */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">📥 Whisper — Input</p>
+                    <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.whisper?.input, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+                  </div>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
+                    {JSON.stringify(debugData.whisper?.input, null, 2) || "(no data)"}
                   </pre>
                 </div>
 
-                {/* AI metadata */}
-                <div className="mb-4">
-                  <p className="text-[10px] font-mono text-accent-foreground/80 uppercase tracking-wider mb-1">
-                    🤖 {debugData.model?.includes("openai") ? "GPT" : "Gemini"} — Metadata
-                  </p>
-                  <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto whitespace-pre-wrap">
-                    {JSON.stringify({ title: debugData.title, artist: debugData.artist, ...(debugData.geminiMetadata || {}) }, null, 2)}
+                {/* ── WHISPER OUTPUT ── */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">📤 Whisper — Output ({debugData.whisper?.output?.segmentCount} segments)</p>
+                    <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.whisper?.output, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+                  </div>
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Raw text:</p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
+                    {debugData.whisper?.output?.rawText || "(no raw text)"}
+                  </pre>
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Segments (first 20):</p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap">
+                    {JSON.stringify(debugData.whisper?.output?.segments?.slice(0, 20), null, 2) || "(no segments)"}
                   </pre>
                 </div>
 
-                {/* Hook detection */}
-                <div className="mb-4">
-                  <p className="text-[10px] font-mono text-yellow-600/80 uppercase tracking-wider mb-1">
-                    🔥 Hook Detection
-                  </p>
-                  <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto whitespace-pre-wrap">
-                    {debugData.geminiHook ? JSON.stringify(debugData.geminiHook, null, 2) : "No hook detected"}
+                {/* ── GEMINI INPUT ── */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-mono text-purple-400/90 uppercase tracking-wider">📥 Gemini — Input</p>
+                    <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.gemini?.input, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+                  </div>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
+                    {JSON.stringify(debugData.gemini?.input, null, 2) || "(no data)"}
                   </pre>
                 </div>
 
-                {/* Adlibs */}
+                {/* ── GEMINI OUTPUT ── */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-mono text-purple-400/90 uppercase tracking-wider">
+                      📤 Gemini — Output {debugData.gemini?.output?.status === "failed" ? "❌ FAILED" : `✓ (${debugData.gemini?.output?.adlibsCount} adlibs)`}
+                    </p>
+                    <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.gemini?.output, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+                  </div>
+                  {debugData.gemini?.output?.status === "failed" && (
+                    <pre className="text-[10px] font-mono text-red-400 bg-red-950/20 border border-red-500/20 rounded p-2 mb-1 whitespace-pre-wrap">
+                      Error: {debugData.gemini?.output?.error}
+                    </pre>
+                  )}
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Raw response ({debugData.gemini?.output?.rawResponseLength || 0} chars):</p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap mb-1">
+                    {debugData.gemini?.output?.rawResponseContent?.slice(0, 800) || "(no response)"}
+                  </pre>
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Parsed metadata:</p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
+                    {JSON.stringify(debugData.gemini?.output?.metadata, null, 2) || "(none)"}
+                  </pre>
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Hook detected:</p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
+                    {JSON.stringify(debugData.gemini?.output?.hottest_hook, null, 2) || "null"}
+                  </pre>
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Adlibs ({(debugData.gemini?.output?.adlibs || []).length}):</p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap">
+                    {JSON.stringify(debugData.gemini?.output?.adlibs, null, 2) || "[]"}
+                  </pre>
+                </div>
+
+                {/* ── MERGED OUTPUT ── */}
                 <div className="mb-2">
-                  <p className="text-[10px] font-mono text-green-700/80 uppercase tracking-wider mb-1">
-                    🎤 Adlibs Tagged — {(debugData.geminiAdlibs || []).length} matched
-                  </p>
-                  <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/30 rounded p-2 overflow-auto max-h-48 whitespace-pre-wrap">
-                    {JSON.stringify(debugData.geminiAdlibs, null, 2)}
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-mono text-green-400/90 uppercase tracking-wider">
+                      🎯 Merged Output — {debugData.merged?.totalLines} lines ({debugData.merged?.mainLines} main / {debugData.merged?.adlibLines} adlib) · {debugData.merged?.hooks?.length || 0} hooks
+                    </p>
+                    <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.merged, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+                  </div>
+                  <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">All lines:</p>
+                  <pre className="text-[10px] font-mono text-muted-foreground bg-green-950/20 border border-green-500/10 rounded p-2 overflow-auto max-h-48 whitespace-pre-wrap">
+                    {JSON.stringify(debugData.merged?.allLines, null, 2) || "[]"}
                   </pre>
                 </div>
               </div>
