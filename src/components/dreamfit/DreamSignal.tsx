@@ -73,6 +73,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
 
   const demandStrength = localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
   const signalsLabel = localBackers === 1 ? "1 signal" : `${localBackers} signals`;
+  const divider = <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />;
 
   const handleVoteClick = (type: "signal" | "bypass") => {
     setChosenType(type);
@@ -121,8 +122,6 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     }
   };
 
-  const divider = <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />;
-
   // ── Done ─────────────────────────────────────────────────────
   if (step === "done") {
     const pct = localBackers > 0 ? Math.round((localGreenlight / localBackers) * 100) : 0;
@@ -151,36 +150,51 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
     );
   }
 
-  // ── Idle + Active: same outer shell, content swaps with opacity ──
+  // ── Idle + Active: identical two-section structure, only the bottom row swaps ──
+  // Top section: status row (same in both states)
+  // Bottom section: buttons (idle) or textarea+BROADCAST (active)
+  // Heights stay matched so there is zero layout shift on click.
   return (
     <div>
       {divider}
 
-      {/* Single action zone — height stays constant across idle↔active */}
-      <div className="px-3 py-2.5 min-h-[3.5rem]">
-
-        {/* IDLE: Signal / Bypass buttons */}
-        <div
-          className="flex gap-2 transition-opacity duration-150"
-          style={{ opacity: step === "idle" ? 1 : 0, pointerEvents: step === "idle" ? "auto" : "none", position: step === "active" ? "absolute" : "relative" }}
-        >
-          <button
-            onClick={() => handleVoteClick("signal")}
-            className="flex-1 py-2 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[13px] font-bold tracking-[0.15em] text-muted-foreground transition-colors"
-          >
-            Signal
+      {/* Top row — status label, always present */}
+      <div className="px-3 py-1.5">
+        <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+          {localBackers === 0 ? (
+            <>Demand Strength: —</>
+          ) : (() => {
+            const v = getSignalVerbiage(localBackers, demandStrength);
+            return <span className={v.tier === "resolving" ? "opacity-50" : ""}>{v.label}</span>;
+          })()}
+          {" · "}
+          <button onClick={() => onOpenComments(dreamId)} className="hover:text-foreground transition-colors">
+            {signalsLabel}
           </button>
-          <button
-            onClick={() => handleVoteClick("bypass")}
-            className="flex-1 py-2 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[13px] font-bold tracking-[0.15em] text-muted-foreground transition-colors"
-          >
-            Bypass
-          </button>
-        </div>
+        </p>
+      </div>
 
-        {/* ACTIVE: textarea + BROADCAST */}
-        {step === "active" && (
-          <div className="flex flex-col gap-2 animate-fade-in">
+      {divider}
+
+      {/* Bottom row — swaps between buttons and compose area */}
+      <div className="px-3 py-2.5">
+        {step === "idle" ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleVoteClick("signal")}
+              className="flex-1 py-2 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[13px] font-bold tracking-[0.15em] text-muted-foreground transition-colors"
+            >
+              Signal
+            </button>
+            <button
+              onClick={() => handleVoteClick("bypass")}
+              className="flex-1 py-2 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] text-[13px] font-bold tracking-[0.15em] text-muted-foreground transition-colors"
+            >
+              Bypass
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
             <div className="flex items-start gap-2">
               <textarea
                 ref={textareaRef}
@@ -206,28 +220,6 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
             </div>
           </div>
         )}
-      </div>
-
-      {/* Status row — always visible below, fades on active */}
-      <div
-        className="transition-opacity duration-150"
-        style={{ opacity: step === "active" ? 0 : 1, pointerEvents: step === "active" ? "none" : "auto" }}
-      >
-        {divider}
-        <div className="px-3 py-1.5">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-            {localBackers === 0 ? (
-              <>Demand Strength: —</>
-            ) : (() => {
-              const v = getSignalVerbiage(localBackers, demandStrength);
-              return <span className={v.tier === "resolving" ? "opacity-50" : ""}>{v.label}</span>;
-            })()}
-            {" · "}
-            <button onClick={() => onOpenComments(dreamId)} className="hover:text-foreground transition-colors">
-              {signalsLabel}
-            </button>
-          </p>
-        </div>
       </div>
 
       {divider}
