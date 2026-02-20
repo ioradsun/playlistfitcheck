@@ -813,71 +813,88 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             />
           </div>
 
-          {/* Hooks panel */}
-          {hooks.length > 0 && (
-            <div className="glass-card rounded-xl p-3 space-y-2">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Zap size={11} className="text-primary" />
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Hooks</span>
-              </div>
-              {hooks.map((hook, i) => {
-                const isLooping = activeHookIndex === i;
-                const clipDuration = hook.end - hook.start;
-                // SVG ring params
-                const r = 10;
-                const circ = 2 * Math.PI * r;
-                const dashOffset = circ * (1 - (isLooping ? clipProgress : 0));
+          {/* Hottest Hook Hero */}
+          {(() => {
+            const hook = hooks[0] ?? null;
+            const isLooping = activeHookIndex === 0;
+            const r = 20;
+            const circ = 2 * Math.PI * r;
+            const dashOffset = circ * (1 - (isLooping ? clipProgress : 0));
+            const clipDuration = hook ? hook.end - hook.start : 0;
 
-                return (
-                  <div
-                    key={`${hook.start}-${i}`}
-                    className={`rounded-lg border transition-all duration-300 ${
-                      isLooping
-                        ? "border-primary/60 bg-primary/10 shadow-[0_0_14px_2px_hsl(var(--primary)/0.22)]"
-                        : "border-border/30 hover:border-primary/40 hover:bg-primary/5"
-                    }`}
-                  >
-                    {/* Top row: time + score + Play button */}
-                    <div className="flex items-center gap-2 px-3 pt-2 pb-1">
-                      <span className="text-[10px] font-mono text-muted-foreground flex-1">
-                        {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
-                        <span className="ml-1 text-muted-foreground/50">({clipDuration < 60 ? Math.round(clipDuration) : `${Math.floor(clipDuration / 60)}:${String(Math.round(clipDuration % 60)).padStart(2, "0")}`}s)</span>
-                      </span>
-                      <span className={`text-[10px] font-mono font-bold ${hookScoreColor(hook.score)}`}>
-                        {hook.score}
-                      </span>
+            return (
+              <div
+                className={`glass-card rounded-xl p-4 space-y-3 transition-all duration-300 ${
+                  hook && isLooping
+                    ? "border border-primary/60 shadow-[0_0_18px_4px_hsl(var(--primary)/0.22)]"
+                    : "border border-border/30"
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Zap size={11} className="text-primary" />
+                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                      {hook ? "Hottest Hook" : "Hook Analysis"}
+                    </span>
+                  </div>
+                  {hook && (
+                    <span className={`text-sm font-mono font-bold ${hookScoreColor(hook.score)}`}>
+                      {hook.score}
+                    </span>
+                  )}
+                </div>
 
-                      {/* Progress ring + play/stop button */}
+                {hook ? (
+                  <>
+                    {/* Preview text — large & featured */}
+                    <p className="text-sm font-medium text-foreground leading-snug">
+                      "{hook.previewText}"
+                    </p>
+
+                    {/* Timestamp row */}
+                    <p className="text-[10px] font-mono text-muted-foreground">
+                      {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
+                      <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
+                    </p>
+
+                    {/* Reason codes */}
+                    {hook.reasonCodes.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {hook.reasonCodes.slice(0, 4).map((code) => (
+                          <span key={code} className="text-[9px] font-mono bg-secondary/50 text-muted-foreground rounded px-1.5 py-0.5">
+                            {code}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Play Clip CTA — centred, prominent */}
+                    <div className="flex flex-col items-center gap-2 pt-1">
                       <button
-                        onClick={() => playClip(hook, i)}
-                        className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all ${
+                        onClick={() => playClip(hook, 0)}
+                        className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ${
                           isLooping
-                            ? "text-primary"
-                            : "text-muted-foreground hover:text-primary"
+                            ? "text-primary bg-primary/10"
+                            : "text-muted-foreground hover:text-primary hover:bg-primary/10"
                         }`}
                         title={isLooping ? "Stop clip" : "Preview clip"}
                       >
                         <svg
-                          width="28"
-                          height="28"
-                          viewBox="0 0 28 28"
+                          width="56"
+                          height="56"
+                          viewBox="0 0 56 56"
                           className="absolute inset-0"
                           style={{ transform: "rotate(-90deg)" }}
                         >
-                          <circle
-                            cx="14" cy="14" r={r}
-                            fill="none"
-                            stroke="currentColor"
-                            strokeOpacity={0.12}
-                            strokeWidth="2"
-                          />
+                          <circle cx="28" cy="28" r={r} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth="2.5" />
                           {isLooping && (
                             <circle
-                              cx="14" cy="14" r={r}
+                              cx="28" cy="28" r={r}
                               fill="none"
                               stroke="currentColor"
                               strokeOpacity={0.9}
-                              strokeWidth="2"
+                              strokeWidth="2.5"
                               strokeDasharray={circ}
                               strokeDashoffset={dashOffset}
                               strokeLinecap="round"
@@ -885,38 +902,30 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                             />
                           )}
                         </svg>
-                        {isLooping ? <Pause size={10} /> : <Play size={10} />}
+                        {isLooping ? <Pause size={16} /> : <Play size={16} />}
                       </button>
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        {isLooping ? "Looping…" : "Play Clip"}
+                      </span>
                     </div>
 
-                    {/* Preview text */}
-                    <p className="text-[11px] text-foreground/80 leading-snug line-clamp-2 px-3 pb-1.5">
-                      {hook.previewText}
-                    </p>
-
-                    {/* Reason codes + copy clip info */}
-                    <div className="flex items-center justify-between px-3 pb-2 gap-1.5">
-                      <div className="flex flex-wrap gap-1">
-                        {hook.reasonCodes.slice(0, 3).map((code) => (
-                          <span key={code} className="text-[9px] font-mono bg-secondary/50 text-muted-foreground rounded px-1 py-0.5">
-                            {code}
-                          </span>
-                        ))}
-                      </div>
-                      <button
-                        onClick={() => copyClipInfo(hook)}
-                        className="flex items-center gap-0.5 text-[9px] font-mono text-muted-foreground/50 hover:text-foreground transition-colors shrink-0"
-                        title="Copy clip info"
-                      >
-                        <Copy size={8} />
-                        <span>Clip</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                    {/* Copy clip info */}
+                    <button
+                      onClick={() => copyClipInfo(hook)}
+                      className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-muted-foreground/60 hover:text-foreground transition-colors border border-border/30 rounded-lg py-1.5"
+                    >
+                      <Copy size={10} />
+                      <span>Copy Clip Info</span>
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground py-2">
+                    No definitive hook detected for this track.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
