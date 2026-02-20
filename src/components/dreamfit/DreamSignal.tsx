@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 
-type SignalStep = "idle" | "signaled" | "bypassed" | "broadcasting" | "done";
+type SignalStep = "idle" | "signaled" | "bypassed" | "done";
 
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
@@ -135,9 +135,8 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       setLocalBackers((c) => c + 1);
       if (signalType === "greenlight") setLocalGreenlight((c) => c + 1);
       setSubmitting(false);
-      setStep("broadcasting");
+      setStep("done");
       onRefresh();
-      setTimeout(() => setStep("done"), 900);
     } else {
       setSubmitting(false);
     }
@@ -179,19 +178,6 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
               Turn Off Signal
             </button>
           </div>
-        </div>
-        <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-      </div>
-    );
-  }
-
-  // ── Broadcasting flash state ──────────────────────────────────
-  if (step === "broadcasting") {
-    return (
-      <div className="animate-fade-in">
-        <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-        <div className="px-3 py-2">
-          <span className="font-mono text-[11px] tracking-widest text-muted-foreground/60">SIGNALED</span>
         </div>
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
       </div>
