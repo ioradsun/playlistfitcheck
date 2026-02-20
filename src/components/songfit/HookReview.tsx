@@ -9,20 +9,20 @@ type HookRating = "missed" | "almost" | "solid" | "hit";
 function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
-      label: `STATUS: RESOLVING ${total}/50`,
+      label: `RESOLVING ${total}/50`,
       summary: "CALIBRATING REPLAY FIT.",
       tier: "resolving" as const,
     };
   }
   if (total < 50) {
     return {
-      label: `STATUS: ${total}/50 SIGNALS`,
+      label: `${total}/50 SIGNALS`,
       summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
       tier: "detected" as const,
     };
   }
   return {
-    label: "STATUS: CONSENSUS REACHED",
+    label: "CONSENSUS REACHED",
     summary: `${pct}% FMLY REPLAY FIT.`,
     tier: "consensus" as const,
   };
