@@ -23,7 +23,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
   const [debugData, setDebugData] = useState<any | null>(null);
-  const [geminiModel, setGeminiModel] = useState("google/gemini-3-flash-preview");
+  const [transcriptionModel, setTranscriptionModel] = useState("whisper-1");
+  const [analysisModel, setAnalysisModel] = useState("google/gemini-3-flash-preview");
   const { user } = useAuth();
   const quota = useUsageQuota("lyric");
 
@@ -44,11 +45,12 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
     }
   }, [initialLyric, lyricData]);
 
-  // Read Gemini model preference from site_copy
+  // Read pipeline model config from site_copy
   useEffect(() => {
     supabase.from("site_copy").select("copy_json").limit(1).single().then(({ data }) => {
-      const model = (data?.copy_json as any)?.features?.lyric_gemini_model;
-      if (model) setGeminiModel(model);
+      const f = (data?.copy_json as any)?.features || {};
+      if (f.lyric_transcription_model) setTranscriptionModel(f.lyric_transcription_model);
+      if (f.lyric_analysis_model) setAnalysisModel(f.lyric_analysis_model);
     });
   }, []);
 
@@ -104,7 +106,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ audioBase64, format, geminiModel }),
+          body: JSON.stringify({ audioBase64, format, transcriptionModel, analysisModel }),
         }
       );
 
