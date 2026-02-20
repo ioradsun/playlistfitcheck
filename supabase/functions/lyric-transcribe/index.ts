@@ -629,48 +629,43 @@ function extractAdlibsFromWords(
       let bestPhoneticScore = 0;
       let bestSeg: typeof mainSegments[0] | null = null;
 
-      // v4.1: "Temporal Bridge" — scan the ENTIRE raw words array directly.
-      // Previous versions scanned mainSegments which is bounded by ±0.1s of segment
-      // boundaries, causing corrections near segment edges (e.g. "rain" @ 16.45s,
-      // first segment @ 17.0s) to miss "range" @ 22.5s.
-      // Fix: iterate ALL Whisper words regardless of time, then find the owning
-      // mainSegment for the winning word so we can patch lineRef.text.
-      // EXCLUDE words already identical to the correction — we want the word that
-      // NEEDS swapping ("range"), not one already correct ("rain").
+      // v4.2: "Signal Isolation" — Soundex gate applied DURING the corpus scan,
+      // not after. Previous bug: "race" (score 0.55) beat "range" (score 0.53),
+      // Soundex then blocked "race", but we aborted instead of trying "range".
+      // Fix: only track candidates that pass BOTH the Soundex gate AND differ from
+      // the correction text. This ensures "range" wins over "race" for target "rain".
       const normCorrection = normalize(adlib.text);
       for (const w of words) {
         const normW = normalize(w.word);
-        if (normW === normCorrection) continue; // already correct — skip
+        // Skip words already identical to the correction — they don't need swapping
+        if (normW === normCorrection) continue;
+        // Gate 1 (inline): Soundex consonant-class guard applied BEFORE scoring
+        // Blocks: "race"(R200) vs "rain"(R500) → R2≠R5 → SKIP
+        // Allows: "range"(R520) vs "rain"(R500) → R5=R5 → SCORE
+        if (!phoneticRootMatch(w.word, adlib.text)) continue;
         const score = phoneticSimilarity(normW, normCorrection);
         if (score > bestPhoneticScore) {
           bestPhoneticScore = score;
           bestPhoneticWord = w;
-          // Find the owning segment for this word
+          // Find the owning segment for this word (±0.5s tolerance for segment edges)
           bestSeg = mainSegments.find(s => w.start >= s.start - 0.5 && w.end <= s.end + 0.5) ?? null;
         }
       }
 
-      // v4.1: Two-gate phonetic swap guard
-      //   Gate 1 — Soundex root match: "range"→"rain" R520/R500 share "R5" ✓
-      //                                 "race" →"rain" R200/R500 "R2"≠"R5"  ✗
-      //   Gate 2 — Levenshtein threshold 0.40 (noise floor; Soundex is primary gate)
+      // v4.2: Single gate — Levenshtein noise floor 0.40.
+      // Soundex guard already applied inline above; no second gate needed here.
       const PHONETIC_THRESHOLD = 0.40;
       if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
         const oldWord = bestPhoneticWord.word.trim();
-        // Gate 1: Soundex root guard
-        if (!phoneticRootMatch(oldWord, adlib.text)) {
-          console.log(`[qa-swap] Soundex root mismatch: "${oldWord}" (${soundex(oldWord)}) vs "${adlib.text}" (${soundex(adlib.text)}) — swap aborted`);
-        } else {
-          bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
-          bestSeg.lineRef.geminiConflict = oldWord;
-          (bestSeg.lineRef as any).isCorrection = true;
-          (bestSeg.lineRef as any).correctedWord = adlib.text;
-          correctionCount++;
-          const timeGap = Math.abs(correctedStart - bestPhoneticWord.start).toFixed(2);
-          console.log(`[qa-swap] v4.1 swap "${oldWord}" (${soundex(oldWord)}) → "${adlib.text}" (${soundex(adlib.text)}) score=${bestPhoneticScore.toFixed(2)} gap=${timeGap}s`);
-        }
+        bestSeg.lineRef.text = bestSeg.lineRef.text.replace(oldWord, adlib.text);
+        bestSeg.lineRef.geminiConflict = oldWord;
+        bestSeg.lineRef.isCorrection = true;
+        (bestSeg.lineRef as any).correctedWord = adlib.text;
+        correctionCount++;
+        const timeGap = Math.abs(correctedStart - bestPhoneticWord.start).toFixed(2);
+        console.log(`[qa-swap] v4.2 swap "${oldWord}" (${soundex(oldWord)}) → "${adlib.text}" (${soundex(adlib.text)}) score=${bestPhoneticScore.toFixed(2)} gap=${timeGap}s`);
       } else {
-        console.log(`[qa-swap] No differing match for "${adlib.text}" @ ${correctedStart.toFixed(3)}s — best=${bestPhoneticScore.toFixed(2)} < ${PHONETIC_THRESHOLD}`);
+        console.log(`[qa-swap] No Soundex-compatible match for "${adlib.text}" @ ${correctedStart.toFixed(3)}s — best=${bestPhoneticScore.toFixed(2)} < ${PHONETIC_THRESHOLD}`);
       }
       continue;
     }
@@ -848,7 +843,7 @@ function extractAdlibsFromWords(
   const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
   const floatingCount = adlibLines.filter(l => l.isFloating).length;
   const conflictCount = adlibLines.filter(l => l.geminiConflict).length;
-  console.log(`[v4.1] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
+  console.log(`[v4.2] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost/boundary-pruned → ${correctionCount} qa-swapped → ${adlibLines.length} promoted (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
   return merged;
 }
 
@@ -1169,7 +1164,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v4.1-temporal-bridge",
+          version: "anchor-align-v4.2-signal-isolation",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
