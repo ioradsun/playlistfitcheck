@@ -434,9 +434,21 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               <div className="absolute right-0 top-full mt-2 w-[420px] z-50 glass-card rounded-xl p-4 border border-border/40 shadow-lg">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-widest">Gemini Debug</span>
-                  <span className="text-[10px] font-mono text-muted-foreground/40">
-                    {debugData.model} · {Math.round(debugData.inputBytes / 1024)}KB · {debugData.outputLines} lines
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-muted-foreground/40">
+                      {debugData.model} · {Math.round(debugData.inputBytes / 1024)}KB · {debugData.outputLines} lines
+                    </span>
+                    <button
+                      onClick={() => {
+                        const full = JSON.stringify(debugData, null, 2);
+                        navigator.clipboard.writeText(full);
+                        toast.success("Debug data copied");
+                      }}
+                      className="text-[10px] font-mono text-muted-foreground/50 hover:text-foreground border border-border/30 rounded px-1.5 py-0.5 transition-colors"
+                    >
+                      Copy
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-3">
                   <div>
