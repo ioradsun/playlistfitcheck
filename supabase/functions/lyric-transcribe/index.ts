@@ -98,9 +98,27 @@ async function runGeminiAnalysis(
   mimeType: string,
   lovableKey: string
 ): Promise<GeminiAnalysis> {
-  const prompt = `You are a Music Analysis AI. Listen carefully to this audio track.
+  const prompt = `You are a Music Structure AI specializing in vocal layer separation and song architecture. Listen carefully to this audio track.
 
-Return ONLY valid JSON (no markdown, no explanation) with this exact structure:
+DEFINITIONS — read these carefully before analyzing:
+
+ADLIB: A secondary vocal layer that is NOT the lead/main vocal or rap. Adlibs include:
+  - Hype words thrown in the background ("yeah", "uh", "let's go", "ayy", "woo")
+  - Background harmonies or vocal chops under the lead
+  - Call-and-response shouts that answer the lead vocalist
+  - Mumbled/whispered background vocals
+  - Producer tags or sound-alike interjections
+  - Anything that sounds like it was added on top of the lead vocal, not replacing it
+  Do NOT tag lead vocal lines as adlibs. If you cannot clearly distinguish a background layer, leave adlib_phrases empty.
+
+HOTTEST HOOK: The single most impactful, memorable, and repeated section of the song — typically the chorus. Criteria:
+  - It repeats at least twice in the song
+  - It has the highest melodic energy or emotional intensity
+  - It likely contains the song title or central phrase
+  - It's the part listeners would sing along to
+  - It should be 8–20 seconds of continuous lyrics (1–4 lines)
+
+Return ONLY valid JSON (no markdown, no explanation):
 {
   "title": "Song title or Unknown",
   "artist": "Artist name or Unknown",
@@ -111,16 +129,16 @@ Return ONLY valid JSON (no markdown, no explanation) with this exact structure:
     "key": "A minor",
     "genre_hint": "Hip-Hop"
   },
-  "adlib_phrases": ["exact adlib words you hear", "another adlib phrase"],
-  "hook_text": "The exact verbatim lyrics of the single most repeated/impactful hook or chorus",
+  "adlib_phrases": ["exact words of each adlib you hear"],
+  "hook_text": "Verbatim lyrics of the hottest hook/chorus — word for word as sung",
   "hook_score": 90,
-  "hook_reason_codes": ["repetition", "melodic-peak"]
+  "hook_reason_codes": ["repetition", "melodic-peak", "title-drop"]
 }
 
 RULES:
-- adlib_phrases: List the EXACT words/phrases you hear as background vocals, hype words, harmonies, ad-libs (not lead vocal). Max 20 short phrases. If none, use [].
-- hook_text: Copy the actual lyrics word-for-word from the most memorable chorus or hook (the part that repeats most). This should be 1-4 lines of lyrics verbatim.
-- Do NOT include timestamps anywhere. Text only.`;
+- adlib_phrases: EXACT words/phrases of background vocal layers only. Max 20 entries. Use [] if none detected.
+- hook_text: Word-for-word lyrics of the single best hook. Do not summarize — copy the actual words sung.
+- No timestamps anywhere. Text only.`;
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
