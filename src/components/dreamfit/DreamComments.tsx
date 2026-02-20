@@ -125,7 +125,7 @@ function getSignalVerbiage(total: number, pct: number) {
     return {
       label: `RESOLVING ${total}/50`,
       sublabel: undefined,
-      summary: "CALIBRATING BUILD FIT.",
+      summary: "CALIBRATING FIT.",
       bigDisplay: `${pct}%`,
       tier: "resolving" as const,
     };
