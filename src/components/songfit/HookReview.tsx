@@ -81,7 +81,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       setAlreadyChecked(true);
     };
     checkExisting();
-  }, [postId, user, sessionId, showPreResolved]);
+  }, [postId, user, sessionId]);
 
   useEffect(() => {
     if (step !== "revealing") return;
