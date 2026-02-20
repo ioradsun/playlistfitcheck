@@ -7,6 +7,7 @@ import { DreamSignal } from "./DreamSignal";
 import { formatDistanceToNow } from "date-fns";
 import { TrailblazerBadge } from "@/components/TrailblazerBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { ProfileHoverCard } from "@/components/songfit/ProfileHoverCard";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,26 +43,30 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
     <div className="border-b border-border/40">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="relative shrink-0">
-            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
-              {dream.profiles?.avatar_url ? (
-                <img src={dream.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <User size={16} className="text-muted-foreground" />
-              )}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <ProfileHoverCard userId={dream.user_id}>
+            <div className="flex items-center gap-3 cursor-pointer min-w-0">
+              <div className="relative shrink-0">
+                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
+                  {dream.profiles?.avatar_url ? (
+                    <img src={dream.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={16} className="text-muted-foreground" />
+                  )}
+                </div>
+                {dream.profiles?.is_verified && (
+                  <span className="absolute -bottom-0.5 -right-0.5">
+                    <VerifiedBadge size={14} />
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
+                <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
+              </div>
             </div>
-            {dream.profiles?.is_verified && (
-              <span className="absolute -bottom-0.5 -right-0.5">
-                <VerifiedBadge size={14} />
-              </span>
-            )}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
-            <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
-          </div>
-        <TrailblazerBadge userId={dream.user_id} compact />
+          </ProfileHoverCard>
+          <TrailblazerBadge userId={dream.user_id} compact />
         </div>
 
         {isOwnPost && (
