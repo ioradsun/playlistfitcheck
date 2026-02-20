@@ -361,9 +361,18 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   }, [audioFile, decodeFile]);
 
   // ── Auto-scroll active lyric ──────────────────────────────────────────────
+  // Scroll within the lyrics container only — never scroll the page
   useEffect(() => {
-    if (activeLineRef.current) {
-      activeLineRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    const container = lyricsContainerRef.current;
+    const activeLine = activeLineRef.current;
+    if (!container || !activeLine) return;
+    const containerTop = container.scrollTop;
+    const containerBottom = containerTop + container.clientHeight;
+    const lineTop = activeLine.offsetTop;
+    const lineBottom = lineTop + activeLine.offsetHeight;
+    const targetScroll = lineTop - container.clientHeight / 2 + activeLine.offsetHeight / 2;
+    if (lineTop < containerTop || lineBottom > containerBottom) {
+      container.scrollTo({ top: targetScroll, behavior: "smooth" });
     }
   }, [primaryActiveLine]);
 
