@@ -139,18 +139,28 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="px-3 py-2 flex items-start justify-between gap-3">
           <div className="flex-1 space-y-0.5">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-              <span className={v.tier === "resolving" ? "opacity-50" : ""}>{v.label}</span>
+            {/* Metadata Tier: 11px mono, tracking-widest, muted */}
+            <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground${v.tier === "resolving" ? " opacity-50" : ""}`}>
+              {v.label}
             </p>
+            {/* Control Tier: 13px sans, muted/50 */}
             <p className="font-sans text-[13px] leading-relaxed text-muted-foreground/50">
               {v.summary}
             </p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
-            <button onClick={() => onOpenComments(dreamId)} className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors">
+            {/* Metadata Tier: 11px mono, tracking-widest */}
+            <button
+              onClick={() => onOpenComments(dreamId)}
+              className="font-mono text-[11px] tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+            >
               {signalsLabel}
             </button>
-            <button onClick={handleRemoveSignal} className="text-muted-foreground/30 hover:text-muted-foreground transition-colors text-[10px] font-mono">
+            {/* Metadata Tier: 11px mono, muted/30 */}
+            <button
+              onClick={handleRemoveSignal}
+              className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
+            >
               Turn Off Signal
             </button>
           </div>
@@ -166,6 +176,7 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       <div>
         <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         <div className="flex gap-2 px-3 py-2.5">
+          {/* Control Tier: 13px, font-bold, tracking-[0.15em], border-border/40 */}
           <button
             onClick={() => handleVoteClick("signal")}
             className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
@@ -190,18 +201,21 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
       <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
       <div className="px-3 py-2.5 space-y-2.5">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] font-medium text-muted-foreground tracking-wide">
+          {/* Metadata Tier: 11px, tracking-wide, muted */}
+          <p className="font-mono text-[11px] text-muted-foreground tracking-wide uppercase">
             {chosenType === "bypass" ? "Have a better idea?" : "Why does the FMLY need this?"}
           </p>
+          {/* Metadata Tier: 11px, muted/40 */}
           <button
             onClick={handleCancel}
-            className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
+            className="font-mono text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
             aria-label="Cancel"
           >
             ✕
           </button>
         </div>
         <div className="flex items-end gap-2">
+          {/* Content Tier: text-sm (14px), text-foreground, placeholder muted/35 */}
           <textarea
             ref={textareaRef}
             value={contextNote}
@@ -209,8 +223,9 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
             onKeyDown={handleContextKeyDown}
             placeholder="Optional but helpful..."
             rows={2}
-            className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
           />
+          {/* Control Tier: 13px, font-bold, tracking-[0.15em], bg-foreground, text-background */}
           <button
             onClick={handleSubmit}
             disabled={submitting}
@@ -219,6 +234,10 @@ export function DreamSignal({ dreamId, backersCount, greenlightCount, commentsCo
             {submitting ? "..." : "BROADCAST"}
           </button>
         </div>
+        {/* Metadata Tier: 11px char count */}
+        <p className={`font-mono text-[11px] text-right transition-opacity ${contextNote.length === 0 ? "opacity-0" : contextNote.length >= 280 ? "text-destructive" : "text-muted-foreground/40"}`}>
+          {contextNote.length}/280
+        </p>
       </div>
       <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
     </div>

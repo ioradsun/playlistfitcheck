@@ -46,8 +46,9 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <ProfileHoverCard userId={dream.user_id}>
             <div className="flex items-center gap-3 cursor-pointer min-w-0">
+              {/* h-10 avatar, bg-muted fallback, ring-primary/20 */}
               <div className="relative shrink-0">
-                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
+                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
                   {dream.profiles?.avatar_url ? (
                     <img src={dream.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -61,8 +62,10 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold leading-tight truncate">{displayName}</p>
-                <p className="text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
+                {/* Content Tier: text-sm (14px), font-semibold, text-muted-foreground */}
+                <p className="text-sm font-semibold leading-tight truncate text-muted-foreground">{displayName}</p>
+                {/* Metadata Tier: 11px, text-muted-foreground */}
+                <p className="font-mono text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
               </div>
             </div>
           </ProfileHoverCard>
@@ -71,12 +74,14 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
 
         {isOwnPost && (
           <DropdownMenu>
+            {/* hover:bg-accent/50 trigger */}
             <DropdownMenuTrigger asChild>
               <button className="p-1.5 rounded-full hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors shrink-0">
                 <MoreHorizontal size={18} />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
+              {/* text-destructive delete item */}
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDelete}>
                 <Trash2 size={14} className="mr-2" />
                 Delete
@@ -86,7 +91,7 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
         )}
       </div>
 
-      {/* Content */}
+      {/* Content — Content Tier: text-sm, font-semibold display name + body */}
       <div className="px-3 pb-2">
         <p className="text-sm leading-snug">
           <span className="font-semibold mr-1.5">{displayName}</span>
@@ -96,7 +101,8 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
 
       {dream.status === "not_a_fit" && dream.status_note && (
         <div className="px-3 pb-2">
-          <p className="text-[11px] text-muted-foreground italic">"{dream.status_note}"</p>
+          {/* Metadata Tier: 11px, text-muted-foreground */}
+          <p className="font-mono text-[11px] text-muted-foreground italic">"{dream.status_note}"</p>
         </div>
       )}
 
