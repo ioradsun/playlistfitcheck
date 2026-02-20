@@ -224,11 +224,16 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   }
 
   return (
-    <div className="border-t border-border/30 px-4 py-3 min-h-[72px] flex flex-col justify-center">
-
+    <div>
       {/* Revealing */}
       {step === "revealing" && (
-        <span className="text-xs text-muted-foreground">Summing Signals{dots}</span>
+        <div>
+          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+          <div className="px-3 py-2">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Summing Signals{dots}</span>
+          </div>
+          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+        </div>
       )}
 
       {/* Done */}
@@ -237,139 +242,150 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
         const signalLabel = results.total === 1 ? "signal" : "signals";
         const verbiage = getSignalVerbiage(results.total, replayPct);
         return (
-          <div className="flex flex-col gap-0.5">
-            <span className={`text-[11px] font-medium ${verbiage.tier === "resolving" ? "text-muted-foreground/60" : "text-foreground"}`}>
-              {verbiage.label}
-            </span>
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span className={verbiage.tier === "resolving" ? "text-muted-foreground/50" : ""}>
-                {verbiage.summary}
-              </span>
-              <div className="flex items-center gap-3">
-                {onOpenReviews ? (
-                  <button
-                    onClick={onOpenReviews}
-                    className="text-muted-foreground/50 hover:text-foreground transition-colors"
-                  >
-                    {results.total} {signalLabel}
-                  </button>
-                ) : (
-                  <span className="text-muted-foreground/50">{results.total} {signalLabel}</span>
-                )}
+          <div>
+            <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+            <div className="px-3 py-2 space-y-0.5">
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <span className={verbiage.tier === "resolving" ? "opacity-50" : ""}>{verbiage.label}</span>
+                  {" · "}
+                  {onOpenReviews ? (
+                    <button onClick={onOpenReviews} className="hover:text-foreground transition-colors">
+                      {results.total} {signalLabel}
+                    </button>
+                  ) : (
+                    <span>{results.total} {signalLabel}</span>
+                  )}
+                </p>
                 <button
                   onClick={handleRemoveSignal}
-                  className="text-muted-foreground/30 hover:text-muted-foreground transition-colors text-[10px]"
+                  className="text-muted-foreground/30 hover:text-muted-foreground transition-colors text-[10px] font-mono"
                 >
                   Turn Off Signal
                 </button>
               </div>
+              <p className={`text-[11px] font-sans ${verbiage.tier === "resolving" ? "text-muted-foreground/50" : "text-foreground/70"}`}>
+                {verbiage.summary}
+              </p>
             </div>
+            <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
           </div>
         );
       })()}
 
       {/* Step 2: Run it back / Skip */}
       {step === 2 && (
-        <div className="flex gap-2">
-          <button
-            onClick={() => handleVoteClick(true)}
-            className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
-          >
-            <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
-          </button>
-          <button
-            onClick={() => handleVoteClick(false)}
-            className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
-          >
-            <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
-          </button>
+        <div>
+          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+          <div className="flex gap-2 px-3 py-2.5">
+            <button
+              onClick={() => handleVoteClick(true)}
+              className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+            >
+              <span className="text-[12px] leading-none font-medium text-muted-foreground">Run it back</span>
+            </button>
+            <button
+              onClick={() => handleVoteClick(false)}
+              className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+            >
+              <span className="text-[12px] leading-none font-medium text-muted-foreground">Skip</span>
+            </button>
+          </div>
         </div>
       )}
 
       {/* replay_cta: Spotify CTAs + comment + vote */}
       {step === "replay_cta" && (
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2 flex-wrap">
-              {artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
-                <a
-                  href={artistsJson[0].spotifyUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
-                >
-                  Follow {artistsJson[0].name}
-                </a>
-              )}
-              {spotifyTrackUrl && (
-                <a
-                  href={spotifyTrackUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
-                >
-                  Save track
-                </a>
-              )}
+        <div>
+          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+          <div className="px-3 py-2.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex gap-2 flex-wrap">
+                {artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
+                  <a
+                    href={artistsJson[0].spotifyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                  >
+                    Follow {artistsJson[0].name}
+                  </a>
+                )}
+                {spotifyTrackUrl && (
+                  <a
+                    href={spotifyTrackUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                  >
+                    Save track
+                  </a>
+                )}
+              </div>
+              <button
+                onClick={() => setStep(2)}
+                className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
+                aria-label="Cancel"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              onClick={() => setStep(2)}
-              className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
-              aria-label="Cancel"
-            >
-              ✕
-            </button>
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={textareaRef}
+                value={contextNote}
+                onChange={e => setContextNote(e.target.value)}
+                onKeyDown={handleContextKeyDown}
+                placeholder="What hit? (Optional but helpful)"
+                rows={2}
+                className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+              />
+              <button
+                onClick={() => handleSubmit(contextNote)}
+                className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
+              >
+                Send Signal
+              </button>
+            </div>
           </div>
-          <div className="flex items-end gap-2">
-            <textarea
-              ref={textareaRef}
-              value={contextNote}
-              onChange={e => setContextNote(e.target.value)}
-              onKeyDown={handleContextKeyDown}
-              placeholder="What hit? (Optional but helpful)"
-              rows={2}
-              className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
-            />
-            <button
-              onClick={() => handleSubmit(contextNote)}
-              className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
-            >
-              Send Signal
-            </button>
-          </div>
+          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         </div>
       )}
 
       {/* skip_cta: comment + vote (no Spotify CTAs) */}
       {step === "skip_cta" && (
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Real talk: What's missing?</p>
-            <button
-              onClick={() => setStep(2)}
-              className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
-              aria-label="Cancel"
-            >
-              ✕
-            </button>
+        <div>
+          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+          <div className="px-3 py-2.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-medium text-muted-foreground tracking-wide">Real talk: What's missing?</p>
+              <button
+                onClick={() => setStep(2)}
+                className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
+                aria-label="Cancel"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={skipTextareaRef}
+                value={contextNote}
+                onChange={e => setContextNote(e.target.value)}
+                onKeyDown={handleContextKeyDown}
+                placeholder="The missing piece... (Optional but helpful)"
+                rows={2}
+                className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
+              />
+              <button
+                onClick={() => handleSubmit(contextNote)}
+                className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
+              >
+                Send Signal
+              </button>
+            </div>
           </div>
-          <div className="flex items-end gap-2">
-          <textarea
-              ref={skipTextareaRef}
-              value={contextNote}
-              onChange={e => setContextNote(e.target.value)}
-              onKeyDown={handleContextKeyDown}
-              placeholder="The missing piece... (Optional but helpful)"
-              rows={2}
-              className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/35 outline-none resize-none"
-            />
-            <button
-              onClick={() => handleSubmit(contextNote)}
-              className="shrink-0 text-[11px] font-medium bg-foreground text-background px-3 py-1.5 rounded-md hover:bg-foreground/90 transition-colors"
-            >
-              Send Signal
-            </button>
-          </div>
+          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
         </div>
       )}
 
