@@ -9,7 +9,7 @@ function getSignalVerbiage(total: number, pct: number) {
   if (total <= 10) {
     return {
       label: `RESOLVING ${total}/50`,
-      summary: "CALIBRATING BUILD FIT.",
+      summary: "CALIBRATING FIT.",
       tier: "resolving" as const,
     };
   }
