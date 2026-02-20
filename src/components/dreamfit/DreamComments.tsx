@@ -288,7 +288,7 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
               <TooltipProvider delayDuration={350}>
                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none font-mono">
-                    Signal Status
+                    Build Fit
                   </p>
                   <p className={`text-2xl font-bold leading-none tracking-tight text-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
                     {hasSignals ? `${pct}%` : "CALIBRATING"}
@@ -297,19 +297,16 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
                     {!hasSignals ? (
                       "WAITING FOR INPUT"
                     ) : (
-                      <>
-                        {"BUILD FIT · "}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="cursor-default underline-offset-2 decoration-dotted hover:underline">
-                              {signals} OF {total} FMLY MEMBERS
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom">
-                            {signals} out of {total} members backed this feature.
-                          </TooltipContent>
-                        </Tooltip>
-                      </>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-default underline-offset-2 decoration-dotted hover:underline">
+                            {signals} OF {total} FMLY MEMBERS
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          {signals} out of {total} members backed this feature.
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                   </p>
                 </div>
