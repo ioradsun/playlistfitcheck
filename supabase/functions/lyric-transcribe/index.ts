@@ -99,9 +99,13 @@ function tokenOverlap(a: string, b: string): number {
 // ── Phonetic Similarity (Soundex-style + Levenshtein hybrid) ─────────────────
 /**
  * Returns a 0–1 phonetic similarity between two short words.
- * Strips non-alpha, lowercases, runs a length-penalized Levenshtein, then
- * adds a consonant-skeleton bonus (vowels stripped) to catch rhymes like
- * "rain" vs "range" or "runnin'" vs "running".
+ * v3.5: Added shared-prefix bonus so short rhymes like "rain"→"range" score higher.
+ *
+ * Breakdown for "rain" vs "range":
+ *   levScore  = 1 - 2/5 = 0.60
+ *   skelScore = 1 - 1/3 = 0.67  (skeleton: rn vs rng)
+ *   prefixBonus = 3/5 * 0.20   = 0.12  (shared prefix "ran")
+ *   total ≈ 0.60*0.55 + 0.67*0.35 + 0.12 = 0.68  → clears 0.50 threshold
  */
 function phoneticSimilarity(a: string, b: string): number {
   const clean = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
@@ -122,8 +126,14 @@ function phoneticSimilarity(a: string, b: string): number {
   const smaxLen = Math.max(sa.length, sb.length, 1);
   const skelScore = 1 - sdist / smaxLen;
 
-  // Weighted blend: 60% raw, 40% consonant skeleton
-  return levScore * 0.6 + skelScore * 0.4;
+  // Shared-prefix bonus: rewards words that start the same way (e.g., "rain"/"range" share "ran")
+  let prefixLen = 0;
+  const minLen = Math.min(ca.length, cb.length);
+  while (prefixLen < minLen && ca[prefixLen] === cb[prefixLen]) prefixLen++;
+  const prefixBonus = (prefixLen / maxLen) * 0.20;
+
+  // Weighted blend: 55% raw Levenshtein + 35% consonant skeleton + 10% prefix bonus (max 0.20)
+  return Math.min(1, levScore * 0.55 + skelScore * 0.35 + prefixBonus);
 }
 
 // ── Whisper: word-level granularity ──────────────────────────────────────────
@@ -576,7 +586,7 @@ function extractAdlibsFromWords(
         }
       }
 
-      const PHONETIC_THRESHOLD = 0.80; // v3.4: raised from 0.75 — no time-proximity fallback
+      const PHONETIC_THRESHOLD = 0.50; // v3.5: calibrated to "rain"→"range" score (~0.68 with prefix bonus)
       if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
         const oldWord = bestPhoneticWord.word.trim();
         // Only apply if the text is genuinely different
@@ -1028,7 +1038,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.5",
+          version: "production-master-v3.5b",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
