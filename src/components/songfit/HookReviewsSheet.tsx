@@ -291,8 +291,8 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
             const bypassCount = rows.filter(r => !r.would_replay).length;
             const replayPct = Math.round((replayCount / total) * 100);
             const verbiage = (() => {
-              if (total < 50) return { label: "", sublabel: undefined, summary: `CALIBRATING REPLAY FIT · ${total}/50 SIGNALS NEEDED`, bigDisplay: `${replayPct}%`, tier: (total <= 10 ? "resolving" : "detected") as "resolving" | "detected" };
-              return { label: "CONSENSUS REACHED", sublabel: undefined, summary: `${replayPct}% FMLY REPLAY FIT`, bigDisplay: `${replayPct}%`, tier: "consensus" as const };
+              if (total < 50) return { label: "", sublabel: undefined, summary: "CALIBRATING REPLAY FIT", signalLine: `${total}/50 SIGNALS NEEDED`, bigDisplay: `${replayPct}%`, tier: (total <= 10 ? "resolving" : "detected") as "resolving" | "detected" };
+              return { label: "CONSENSUS REACHED", sublabel: undefined, summary: `${replayPct}% FMLY REPLAY FIT`, signalLine: undefined, bigDisplay: `${replayPct}%`, tier: "consensus" as const };
             })();
             return (
               <div className="grid grid-cols-2 gap-2.5">
@@ -305,13 +305,18 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
                     {verbiage.bigDisplay}
                   </p>
                   {verbiage.label && (
-                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5 truncate">
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
                       {verbiage.label}
                     </p>
                   )}
-                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug truncate">
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
                     {verbiage.summary}
                   </p>
+                  {verbiage.signalLine && (
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug">
+                      {verbiage.signalLine}
+                    </p>
+                  )}
                 </div>
                 {/* Signals card */}
                 <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
