@@ -149,23 +149,29 @@ async function runWhisper(
   return { words, segments, rawText: data.text || "" };
 }
 
-// ── Gemini Prompt: Hook Analysis ─────────────────────────────────────────────
-const GEMINI_HOOK_PROMPT = `ROLE: Commercial Hook Engineer
+// ── Gemini Prompt: Macro-Structural (Hook + Metadata) ────────────────────────
+const GEMINI_HOOK_PROMPT = `ROLE: Lead Musicologist
 
-DIRECTIVE: Your ONLY job is to identify the single strongest 10-second hook/chorus in this track. Focus all attention on finding the exact start timestamp. Accuracy over speed.
+TASK: Analyze this audio track for macro-structure and track DNA only.
 
-EVALUATION CRITERIA (score each mentally):
-- Production lift: Does the beat/instrumentation intensify here?
-- Vocal intensity: Is this the most emotionally charged or melodically memorable vocal moment?
-- Repetition: Is this section repeated throughout the track?
-- Emotional peak: Does this represent the emotional climax of the song?
-- Commercial potential: Would this 10 seconds make someone stop scrolling?
+CRITICAL CONSTRAINT: You must COMPLETELY IGNORE all background vocals, adlibs, harmonies, hype vocals, and secondary layers. Your attention is locked exclusively on the PRIMARY lead vocal and the track's musical production.
 
-RULES:
-- Output ONLY the start_sec as a decimal in seconds with 3-decimal precision (e.g., 78.450).
+1. THE 10.000s HOOK ANCHOR
+- Identify the single primary 10-second region that represents the track's core hook or chorus.
+- Evaluation criteria: production lift, lead vocal intensity, melodic memorability, emotional peak, and repetition.
+- Output ONLY start_sec as a decimal in seconds with 3-decimal precision (e.g., 78.450).
 - The 10s duration is a system invariant — do NOT output an end time.
-- Only output the hottest_hook if your confidence is >= 0.75. If below, omit the field entirely.
-- Consider the FULL track before deciding — do not default to the first chorus.
+- Only output hottest_hook if confidence >= 0.75. If below, omit the field entirely.
+- Scan the FULL track. Do not default to the first chorus.
+
+2. TRACK DNA
+- bpm: Estimated beats per minute as an integer.
+- key: Musical key (e.g., "F#m", "Bb", "C major").
+- mood: Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic").
+- title: If audible from lyrics or context; otherwise "Unknown".
+- artist: If known; otherwise "Unknown".
+- genre_hint: Best-guess genre (e.g., "hip-hop", "r&b", "pop").
+- Each field must have its own confidence score (0.0–1.0).
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
@@ -182,24 +188,32 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── Gemini Prompt: Adlib Analysis ─────────────────────────────────────────────
-const GEMINI_ADLIB_PROMPT = `ROLE: Vocal Isolation Engineer
+// ── Gemini Prompt: Adlib Auditor (Hyper-Sensitive, Full-Track Scan) ───────────
+const GEMINI_ADLIB_PROMPT = `ROLE: Lead Vocal Alignment Engineer — Adlib Auditor
 
-DIRECTIVE: Your ONLY job is to map every secondary vocal event (adlibs, ad-libs, background vocals, callouts, echoes, textures) in this track. The main vocal melody has already been transcribed — focus ONLY on what exists UNDERNEATH or ALONGSIDE it.
+TASK: Conduct an exhaustive scan of every secondary vocal layer in this audio. The lead vocal melody has already been fully transcribed by a separate system — do NOT re-transcribe it.
+
+STRICT EXCLUSION RULE:
+- If a word or phrase is part of the primary lead vocal melodic line, DO NOT include it.
+- You are hunting ONLY for: background vocals, hype vocals, call-and-response interjections, ad-libs, harmonies underneath the lead, echo repeats, and atmospheric vocal textures.
+
+FULL-TRACK SCAN REQUIREMENT:
+- You MUST scan from 0:00 to the very last second of the audio. Do not stop early.
+- Pay EXTREME attention to the window between 2:30 and the end of the track. Outro sections frequently contain dense background layers that AI systems miss.
+- The end of the track is equally important as the beginning.
 
 ADLIB TAXONOMY:
-- "callout": Short exclamations ("yeah", "ayy", "let's go", "uh") — typically 0.2–1.5s
-- "echo": A repeat/echo of a main vocal phrase, slightly offset — typically 0.3–2.5s  
-- "background": Sustained background harmonies or layered vocals — typically 1.0–5.0s
-- "texture": Atmospheric vocal sounds, hums, breaths with intent — typically 0.5–3.0s
+- "callout": Short exclamations or interjections ("yeah", "ayy", "uh", "okay", "let's go") — typically 0.2–1.5s
+- "echo": A repeat or echo of a lead vocal phrase, slightly offset in time — typically 0.3–2.5s
+- "background": Sustained harmonies or stacked background vocals — typically 1.0–6.0s
+- "texture": Atmospheric vocal sounds, hums, breaths with melodic intent — typically 0.5–3.0s
 
 PRECISION RULES:
-- Timestamps: Output start and end in SECONDS as a decimal with 3-decimal precision (e.g., 42.105). NOT MM:SS format.
-- Omit over Guess: If a vocal is unclear, use [inaudible] or omit entirely.
-- Ignore noise shorter than 0.150 seconds unless confidence >= 0.95.
-- Provide a 0.0–1.0 confidence score per event. Include only events with confidence >= 0.6.
-- Separate repeated instances even if the text is the same — each occurrence is a unique event.
-- Max 40 entries. Prioritize high-confidence events.
+- Timestamps: Output start and end in SECONDS as a decimal with 3-decimal precision (e.g., 169.340). NOT MM:SS format.
+- Omit over Guess: If a vocal is unclear, use [inaudible] or omit. Ignore noise < 0.150s unless confidence >= 0.95.
+- Confidence: Provide a 0.0–1.0 score per event. Include only events with confidence >= 0.6.
+- Separate EVERY instance: Even if the same text appears 10 times, each occurrence is a unique event with its own timestamp.
+- No output limit: Return every event you find. Completeness is the primary directive.
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
@@ -403,6 +417,17 @@ function extractAdlibsFromWords(
   const result: LyricLine[] = lines.map(l => ({ ...l }));
   const adlibLines: LyricLine[] = [];
 
+  // Pre-build main segment text windows for ghost-adlib de-duplication
+  // Source A: build a lookup of main-line Whisper text spans
+  const mainSegments = lines
+    .filter(l => l.tag === "main")
+    .map(l => {
+      const spanWords = words.filter(w => w.start >= l.start - 0.1 && w.end <= l.end + 0.1);
+      return { start: l.start, end: l.end, text: spanWords.map(w => w.word).join(" ") };
+    });
+
+  let ghostCount = 0;
+
   for (const adlib of adlibs) {
     // Apply global timebase correction
     const correctedStart = Math.round((adlib.start - globalOffset) * 1000) / 1000;
@@ -411,6 +436,21 @@ function extractAdlibsFromWords(
     const normAdlibText = normalize(adlib.text);
     const adlibWordTokens = normAdlibText.split(" ").filter(Boolean);
     if (adlibWordTokens.length === 0) continue;
+
+    // ── Ghost-Adlib De-Duplication ─────────────────────────────────────────
+    // Source C de-dup: if this adlib text overlaps >= 0.9 with the Whisper main vocal
+    // text at the same time window, it is a re-transcription of the lead vocal — discard.
+    const overlappingMain = mainSegments.find(s =>
+      correctedStart < s.end + 0.5 && correctedEnd > s.start - 0.5
+    );
+    if (overlappingMain) {
+      const ghostScore = tokenOverlap(adlib.text, overlappingMain.text);
+      if (ghostScore >= 0.9) {
+        ghostCount++;
+        console.log(`[ghost-dedup] Discarding "${adlib.text}" @ ${correctedStart.toFixed(3)}s — overlap ${ghostScore.toFixed(2)} with main`);
+        continue;
+      }
+    }
 
     // ── Token-Overlap Floating Logic ──────────────────────────────────────
     // Check if any Whisper word within ±1.5s has a normalized token overlap >= 0.6
@@ -471,15 +511,6 @@ function extractAdlibsFromWords(
       }
     }
 
-    // ── Interval-based overlap detection (vs main segments) ───────────────
-    // Check if adlib time range overlaps with any main line's time range
-    // overlapsMain is stored for UI rendering
-    const overlapsMain = lines.some(l =>
-      l.tag !== "adlib" &&
-      snapStart < l.end &&
-      snapEnd > l.start
-    );
-
     adlibLines.push({
       start: snapStart,
       end: snapEnd,
@@ -498,7 +529,7 @@ function extractAdlibsFromWords(
   const merged = [...result, ...adlibLines].sort((a, b) => a.start - b.start);
   const floatingCount = adlibLines.filter(l => l.isFloating).length;
   const conflictCount = adlibLines.filter(l => l.geminiConflict).length;
-  console.log(`Word-level adlib extraction: ${adlibLines.length} adlibs (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
+  console.log(`[v2.3] Adlib merge: ${adlibs.length} raw → ${ghostCount} ghost-deduped → ${adlibLines.length} kept (${floatingCount} floating, ${conflictCount} conflicts), offset=${globalOffset.toFixed(3)}s`);
   return merged;
 }
 
