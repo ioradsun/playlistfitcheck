@@ -642,11 +642,13 @@ function extractAdlibsFromWords(
         }
       }
 
-      // v3.8-final: Two-gate phonetic swap guard
+      // v3.9: Two-gate phonetic swap guard
       //   Gate 1 — Soundex root match: "range"→"rain" R520/R500 share "R5" ✓
       //                                 "race" →"rain" R200/R500 "R2"≠"R5"  ✗
-      //   Gate 2 — Levenshtein threshold 0.65 (empirically safe cutoff)
-      const PHONETIC_THRESHOLD = 0.65;
+      //   Gate 2 — Levenshtein threshold 0.40 (lowered from 0.65 — empirically "rain"/"range"
+      //             scores 0.53 due to edit-distance 3/5, so 0.65 was always too high).
+      //             Soundex guard is the primary quality gate; 0.40 is just a noise floor.
+      const PHONETIC_THRESHOLD = 0.40;
       if (bestPhoneticScore >= PHONETIC_THRESHOLD && bestPhoneticWord && bestSeg) {
         const oldWord = bestPhoneticWord.word.trim();
         // Gate 1: Soundex root guard — abort if phonetic roots don't match
@@ -661,7 +663,7 @@ function extractAdlibsFromWords(
             (bestSeg.lineRef as any).isCorrection = true;
             (bestSeg.lineRef as any).correctedWord = adlib.text;
             correctionCount++;
-            console.log(`[qa-swap] v3.8-final swap "${oldWord}" (${soundex(oldWord)}) → "${adlib.text}" (${soundex(adlib.text)}) score=${bestPhoneticScore.toFixed(2)}`);
+            console.log(`[qa-swap] v3.9 swap "${oldWord}" (${soundex(oldWord)}) → "${adlib.text}" (${soundex(adlib.text)}) score=${bestPhoneticScore.toFixed(2)}`);;
           } else {
             console.log(`[qa-swap] Skipped — near-identical to "${oldWord}" (sim=${similarity.toFixed(2)})`);
           }
@@ -1166,7 +1168,7 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "production-master-v3.8",
+          version: "production-master-v3.9",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
