@@ -10,6 +10,14 @@ export interface LoopRegion {
   duration: number;
 }
 
+export interface DiagnosticDot {
+  /** Position in seconds */
+  time: number;
+  /** Green = high confidence, Yellow = medium, Red = large gap detected */
+  color: "green" | "yellow" | "red";
+  label?: string;
+}
+
 interface LyricWaveformProps {
   waveform: WaveformData | null;
   isPlaying: boolean;
@@ -17,6 +25,7 @@ interface LyricWaveformProps {
   onSeek: (time: number) => void;
   onTogglePlay: () => void;
   loopRegion?: LoopRegion | null;
+  diagnosticDots?: DiagnosticDot[];
 }
 
 function formatTime(s: number): string {
@@ -38,7 +47,9 @@ function drawWaveform(
   canvas: HTMLCanvasElement,
   peaks: number[],
   currentPct: number,
-  loopRegion?: LoopRegion | null
+  loopRegion?: LoopRegion | null,
+  diagnosticDots?: DiagnosticDot[],
+  duration?: number
 ) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
@@ -94,6 +105,25 @@ function drawWaveform(
     }
     ctx.fillRect(x, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
+
+  // Draw diagnostic dots above the waveform
+  if (diagnosticDots && diagnosticDots.length > 0 && duration && duration > 0) {
+    const dotR = 3;
+    const dotY = 4; // near the top
+    diagnosticDots.forEach((dot) => {
+      const pct = Math.min(dot.time / duration, 1);
+      const x = pct * cw;
+      const colorMap = {
+        green: "rgba(74, 222, 128, 0.9)",   // green-400 equivalent
+        yellow: "rgba(251, 191, 36, 0.9)",  // yellow-400 equivalent
+        red: "rgba(248, 113, 113, 0.9)",    // red-400 equivalent
+      };
+      ctx.beginPath();
+      ctx.arc(x, dotY, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = colorMap[dot.color];
+      ctx.fill();
+    });
+  }
 }
 
 export function LyricWaveform({
@@ -103,6 +133,7 @@ export function LyricWaveform({
   onSeek,
   onTogglePlay,
   loopRegion,
+  diagnosticDots,
 }: LyricWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -113,28 +144,28 @@ export function LyricWaveform({
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
-    drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
-  }, [waveform, currentPct, loopRegion]);
+    drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion, diagnosticDots, duration);
+  }, [waveform, currentPct, loopRegion, diagnosticDots, duration]);
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
     const observer = new ResizeObserver(() => {
       if (canvasRef.current && waveform)
-        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
+        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion, diagnosticDots, duration);
     });
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
-  }, [waveform, currentPct, loopRegion]);
+  }, [waveform, currentPct, loopRegion, diagnosticDots, duration]);
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
     const mo = new MutationObserver(() => {
       if (canvasRef.current && waveform)
-        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
+        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion, diagnosticDots, duration);
     });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => mo.disconnect();
-  }, [waveform, currentPct, loopRegion]);
+  }, [waveform, currentPct, loopRegion, diagnosticDots, duration]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
