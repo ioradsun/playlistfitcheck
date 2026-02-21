@@ -1573,8 +1573,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
           hookStart={songDna.hook.start}
           hookEnd={songDna.hook.end}
-          title={data.title}
-          artist={data.artist}
+          title={(data.title && data.title !== "Unknown" && data.title !== "Untitled") ? data.title : audioFile.name.replace(/\.[^.]+$/, "")}
+          artist={(data.artist && data.artist !== "Unknown" && data.artist !== "UNKNOWN") ? data.artist : "—"}
           audioFile={audioFile}
           seed={`${data.title}-${songDna.hook.start.toFixed(3)}`}
         />
