@@ -107,7 +107,7 @@ async function runScribe(
 // ── Gemini Prompt: Hook + Insights + Metadata ─────────────────────────────────
 const GEMINI_HOOK_PROMPT = `ROLE: Lead Music Intelligence Analyst
 
-TASK: Identify structural identity and production metadata.
+TASK: Identify structural identity and describe the track.
 
 1. THE 10.000s HOOK ANCHOR
 - Identify the single primary 10-second segment representing the track's "Hottest Hook."
@@ -117,16 +117,19 @@ TASK: Identify structural identity and production metadata.
 - The 10s duration is a system invariant — do NOT output an end time.
 - Confidence floor: Only return hottest_hook if confidence >= 0.75. If below, omit the field entirely.
 
-2. PRODUCTION INSIGHTS
-- bpm: Estimated beats per minute as an integer. Confidence floor: 0.85 — return null if below.
-- key: Musical key (e.g., "F#m", "Bb", "C major"). Confidence floor: 0.85 — return null if below.
-- mood: Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic"). Confidence floor: 0.85 — return null if below.
-- Each field must have its own confidence score (0.0–1.0). If confidence for a field is < 0.85, set the value to null.
+2. SONG DESCRIPTION
+- Write a single evocative sentence (max 15 words) describing what this song sounds and feels like.
+- Combine sonic texture, lyrical theme, and emotional tone into one line.
+- Examples: "A brooding trap ballad about midnight regret over heavy 808s" or "Sun-drenched indie pop celebrating first love with shimmering guitars"
+- Be specific and vivid — avoid generic phrases like "a good song" or "nice beat."
 
-3. TRACK METADATA
+3. MOOD
+- mood: Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic"). Confidence floor: 0.85 — return null if below.
+- Must have its own confidence score (0.0–1.0).
+
+4. TRACK METADATA
 - title: If audible from lyrics or context; otherwise "Unknown".
 - artist: If known; otherwise "Unknown".
-- genre_hint: Best-guess genre (e.g., "hip-hop", "r&b", "pop").
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
@@ -134,15 +137,12 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   "metadata": {
     "title": "Unknown",
     "artist": "Unknown",
-    "genre_hint": ""
+    "description": "A brooding trap ballad about midnight regret over heavy 808s"
   },
   "insights": {
-    "bpm": { "value": 88, "confidence": 0.00 },
-    "key": { "value": "F#m", "confidence": 0.00 },
     "mood": { "value": "hype", "confidence": 0.00 }
   }
 }`;
-
 // ── Shared: call Gemini gateway ───────────────────────────────────────────────
 async function callGemini(
   systemPrompt: string,
@@ -233,18 +233,14 @@ async function runGeminiHookAnalysis(
   return {
     hook,
     insights: {
-      bpm: ins.bpm ? { value: Number(ins.bpm.value), confidence: Number(ins.bpm.confidence) } : undefined,
-      key: ins.key ? { value: String(ins.key.value), confidence: Number(ins.key.confidence) } : undefined,
       mood: ins.mood ? { value: String(ins.mood.value), confidence: Number(ins.mood.confidence) } : undefined,
     },
     metadata: {
       title: String(meta.title || "Unknown").trim(),
       artist: String(meta.artist || "Unknown").trim(),
-      bpm_estimate: ins.bpm?.value ? Number(ins.bpm.value) : undefined,
-      key: ins.key?.value ? String(ins.key.value) : undefined,
+      description: String(meta.description || "").trim() || undefined,
       mood: ins.mood?.value ? String(ins.mood.value) : undefined,
-      genre_hint: String(meta.genre_hint || "").trim() || undefined,
-      confidence: ins.mood?.confidence ?? ins.bpm?.confidence ?? undefined,
+      confidence: ins.mood?.confidence ?? undefined,
     },
     rawContent: content,
   };
@@ -506,12 +502,8 @@ serve(async (req) => {
       artist = h.metadata.artist || "Unknown";
       metadata = {
         mood: h.insights?.mood?.value || h.metadata.mood,
-        bpm_estimate: h.insights?.bpm?.value || h.metadata.bpm_estimate,
+        description: h.metadata.description,
         confidence: h.insights?.mood?.confidence ?? h.metadata.confidence,
-        key: h.insights?.key?.value || h.metadata.key,
-        genre_hint: h.metadata.genre_hint,
-        bpm_confidence: h.insights?.bpm?.confidence,
-        key_confidence: h.insights?.key?.confidence,
         mood_confidence: h.insights?.mood?.confidence,
       };
 
