@@ -854,9 +854,27 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             {activeLines.length > 0 && (
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] text-muted-foreground">Double-click to edit · Select text + ⋯ to split adlib</p>
-                <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground/50">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-foreground/20 inline-block" /> main</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-primary/20 inline-block" /> adlib</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground/50">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-foreground/20 inline-block" /> main</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-primary/20 inline-block" /> adlib</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (activeVersion === "explicit") {
+                        setExplicitLines([...originalLines.current]);
+                        setExplicitLastEdited(new Date());
+                      } else if (fmlyLines) {
+                        setFmlyLines(null);
+                        setActiveVersion("explicit");
+                      }
+                      toast.success("Lyrics restored to original");
+                    }}
+                    className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <RotateCcw size={10} />
+                    Restore
+                  </button>
                 </div>
               </div>
             )}
@@ -1258,27 +1276,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           {/* Export — under formatting */}
           {activeLines.length > 0 && (
             <div className="glass-card rounded-xl p-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Export · {versionSuffix}
-                </p>
-                <button
-                  onClick={() => {
-                    if (activeVersion === "explicit") {
-                      setExplicitLines([...originalLines.current]);
-                      setExplicitLastEdited(new Date());
-                    } else if (fmlyLines) {
-                      setFmlyLines(null);
-                      setActiveVersion("explicit");
-                    }
-                    toast.success("Lyrics restored to original");
-                  }}
-                  className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <RotateCcw size={10} />
-                  Restore Original
-                </button>
-              </div>
+              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">
+                Export · {versionSuffix}
+              </p>
               <div className="space-y-0">
                 {EXPORT_OPTIONS.map(({ format, label, desc }, idx) => (
                   <div key={format} className={`flex items-center justify-between py-2 ${idx > 0 ? "border-t border-border/30" : ""}`}>
