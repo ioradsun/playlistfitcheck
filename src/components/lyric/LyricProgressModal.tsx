@@ -5,6 +5,9 @@ export type ProgressStage =
   | "compressing"
   | "encoding"
   | "uploading"
+  | "buffering"
+  | "transmitting"
+  | "handshaking"
   | "receiving"
   | "transcribing"
   | "separating"
@@ -30,6 +33,18 @@ const STAGES: Record<ProgressStage, StageConfig> = {
   uploading: {
     label: "Uploading",
     sublabel: "Sending to engine",
+  },
+  buffering: {
+    label: "Buffering",
+    sublabel: "Packaging audio data",
+  },
+  transmitting: {
+    label: "Transmitting",
+    sublabel: "Streaming to server",
+  },
+  handshaking: {
+    label: "Connecting",
+    sublabel: "Establishing secure link",
   },
   receiving: {
     label: "Processing",
@@ -65,6 +80,9 @@ const STAGE_ORDER: ProgressStage[] = [
   "compressing",
   "encoding",
   "uploading",
+  "buffering",
+  "transmitting",
+  "handshaking",
   "receiving",
   "transcribing",
   "separating",
