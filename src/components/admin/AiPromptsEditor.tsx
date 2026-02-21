@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, Save, RotateCcw, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 interface AiPrompt {
@@ -129,37 +128,30 @@ export function AiPromptsEditor() {
               </div>
               <div className="flex items-center gap-2">
                 {edited && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="ghost"
+                  <div className="flex items-center gap-3">
+                    <button
                       onClick={() => handleReset(p.slug)}
-                      className="h-7 text-xs gap-1"
+                      className="text-[13px] font-sans font-bold tracking-[0.15em] uppercase text-muted-foreground/30 hover:text-foreground transition-colors"
                     >
-                      <RotateCcw size={12} /> Reset
-                    </Button>
-                    <Button
-                      size="sm"
+                      Reset
+                    </button>
+                    <button
                       onClick={() => handleSave(p.slug)}
                       disabled={saving === p.slug}
-                      className="h-7 text-xs gap-1"
+                      className="text-[13px] font-sans font-bold tracking-[0.15em] uppercase text-foreground hover:text-foreground/80 transition-colors disabled:opacity-50"
                     >
-                      {saving === p.slug ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                      Save
-                    </Button>
-                  </>
+                      {saving === p.slug ? "Saving…" : "Save"}
+                    </button>
+                  </div>
                 )}
                 {!edited && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
+                  <button
                     onClick={() => handleDelete(p.slug)}
                     disabled={saving === p.slug}
-                    className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                    className="text-[13px] font-sans font-bold tracking-[0.15em] uppercase text-muted-foreground/30 hover:text-destructive transition-colors disabled:opacity-50"
                   >
-                    {saving === p.slug ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                    Use Default
-                  </Button>
+                    {saving === p.slug ? "Deleting…" : "Use Default"}
+                  </button>
                 )}
               </div>
             </div>
