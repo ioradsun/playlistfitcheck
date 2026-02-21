@@ -36,7 +36,82 @@ interface GeminiInsights {
   mood?: { value: string; confidence: number };
 }
 
-// ── Whisper: word-level granularity ──────────────────────────────────────────
+// ── ElevenLabs Scribe: word-level granularity with diarization ───────────────
+async function runScribe(
+  audioBase64: string,
+  ext: string,
+  mimeType: string,
+  apiKey: string
+): Promise<{
+  words: WhisperWord[];
+  segments: Array<{ start: number; end: number; text: string }>;
+  rawText: string;
+  duration: number;
+}> {
+  const binaryStr = atob(audioBase64);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+  const blob = new Blob([bytes], { type: mimeType });
+
+  const form = new FormData();
+  form.append("file", blob, `audio.${ext}`);
+  form.append("model_id", "scribe_v2");
+  form.append("tag_audio_events", "true");
+  form.append("diarize", "true");
+
+  const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+    method: "POST",
+    headers: { "xi-api-key": apiKey },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Scribe error ${res.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+
+  // Scribe returns words with start/end timestamps
+  const words: WhisperWord[] = (data.words || [])
+    .filter((w: any) => w.type === "word" || !w.type) // filter out audio events
+    .map((w: any) => ({
+      word: String(w.text ?? w.word ?? "").trim(),
+      start: Math.round((Number(w.start) || 0) * 1000) / 1000,
+      end: Math.round((Number(w.end) || 0) * 1000) / 1000,
+    }))
+    .filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
+
+  // Build segments from words (group by ~6 words or sentence boundaries)
+  const segments: Array<{ start: number; end: number; text: string }> = [];
+  const MAX_WORDS_PER_SEG = 12;
+  for (let i = 0; i < words.length; i += MAX_WORDS_PER_SEG) {
+    const chunk = words.slice(i, i + MAX_WORDS_PER_SEG);
+    if (chunk.length === 0) continue;
+    segments.push({
+      start: chunk[0].start,
+      end: chunk[chunk.length - 1].end,
+      text: chunk.map(w => w.word).join(" "),
+    });
+  }
+
+  // Estimate duration from last word
+  const lastWord = words.length > 0 ? words[words.length - 1] : null;
+  const duration = lastWord ? lastWord.end + 0.5 : 0;
+
+  const rawText = data.text || words.map(w => w.word).join(" ");
+  console.log(`[scribe] ${words.length} words, ${segments.length} segments, duration: ${duration.toFixed(1)}s`);
+
+  // Log audio events if present
+  const audioEvents = (data.words || []).filter((w: any) => w.type === "audio_event");
+  if (audioEvents.length > 0) {
+    console.log(`[scribe] Audio events: ${audioEvents.map((e: any) => `${e.text}@${e.start?.toFixed(1)}s`).join(", ")}`);
+  }
+
+  return { words, segments, rawText, duration };
+}
+
+// ── Whisper: word-level granularity (legacy fallback) ────────────────────────
 async function runWhisper(
   audioBase64: string,
   ext: string,
@@ -787,11 +862,14 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 
     const { audioBase64, format, transcriptionModel, analysisModel } = await req.json();
     if (!audioBase64) throw new Error("No audio data provided");
 
-    const useWhisper = transcriptionModel !== "gemini";
+    // Transcription engine selection: scribe (default) > whisper > gemini-only
+    const useScribe = transcriptionModel === "scribe" || (!transcriptionModel && ELEVENLABS_API_KEY);
+    const useWhisper = !useScribe && transcriptionModel !== "gemini";
 
     const VALID_ANALYSIS_MODELS = [
       "google/gemini-3-flash-preview",
@@ -820,55 +898,62 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
+    const transcriptionEngine = useScribe ? "scribe_v2" : (useWhisper ? "whisper-1" : "gemini-only");
     console.log(
-      `[v9.0] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Forensic-Intro v9.5), ` +
+      `[v10.0] Pipeline: transcription=${transcriptionEngine}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel}, ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
-    // ── Stage 1: Whisper + Hook in parallel ──────────────────────────────────
-    const whisperPromise = useWhisper && OPENAI_API_KEY
-      ? runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY)
-      : Promise.reject(new Error(useWhisper && !OPENAI_API_KEY ? "OPENAI_API_KEY not set" : "WHISPER_SKIPPED"));
+    // ── Stage 1: Transcription + Hook in parallel ────────────────────────────
+    const transcriptionPromise = useScribe && ELEVENLABS_API_KEY
+      ? runScribe(audioBase64, ext, mimeType, ELEVENLABS_API_KEY)
+      : useWhisper && OPENAI_API_KEY
+        ? runWhisper(audioBase64, ext, mimeType, OPENAI_API_KEY)
+        : Promise.reject(new Error(
+            useScribe && !ELEVENLABS_API_KEY ? "ELEVENLABS_API_KEY not set" :
+            useWhisper && !OPENAI_API_KEY ? "OPENAI_API_KEY not set" : "TRANSCRIPTION_SKIPPED"
+          ));
 
     const hookPromise = !analysisDisabled
       ? runGeminiHookAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel)
       : Promise.reject(new Error("ANALYSIS_DISABLED"));
 
-    const [whisperResult, hookResult] = await Promise.allSettled([whisperPromise, hookPromise]);
+    const [transcriptionResult, hookResult] = await Promise.allSettled([transcriptionPromise, hookPromise]);
 
     // ── Handle transcription result ──────────────────────────────────────────
     let words: WhisperWord[] = [];
     let segments: Array<{ start: number; end: number; text: string }> = [];
     let rawText = "";
 
-    if (useWhisper) {
-      if (whisperResult.status === "rejected") {
-        const err = (whisperResult.reason as Error)?.message || "Whisper failed";
-        console.error("Whisper failed:", err);
+    const hasTranscription = useScribe || useWhisper;
+    if (hasTranscription) {
+      if (transcriptionResult.status === "rejected") {
+        const err = (transcriptionResult.reason as Error)?.message || "Transcription failed";
+        console.error("Transcription failed:", err);
         return new Response(
           JSON.stringify({ error: `Transcription failed: ${err}` }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      ({ words, segments, rawText } = whisperResult.value);
-      const whisperDuration = whisperResult.value.duration;
-      console.log(`Whisper: ${words.length} words, ${segments.length} segments, duration: ${whisperDuration}s`);
+      ({ words, segments, rawText } = transcriptionResult.value);
+      const transcriptionDuration = transcriptionResult.value.duration;
+      console.log(`${transcriptionEngine}: ${words.length} words, ${segments.length} segments, duration: ${transcriptionDuration}s`);
     }
 
-    // Use Whisper's reported duration (full audio length) as trackEnd
+    // Use transcription duration as trackEnd
     const lastWordEnd = words.length > 0 ? words[words.length - 1].end : 0;
-    const whisperDuration = useWhisper && whisperResult.status === "fulfilled" ? whisperResult.value.duration : 0;
-    const trackEnd = whisperDuration > 0 ? whisperDuration : (lastWordEnd > 0 ? lastWordEnd : 300);
-    console.log(`[trackEnd] ${trackEnd.toFixed(3)}s (whisperDuration=${whisperDuration}, lastWordEnd=${lastWordEnd.toFixed(3)})`);
+    const transcriptionDuration = hasTranscription && transcriptionResult.status === "fulfilled" ? transcriptionResult.value.duration : 0;
+    const trackEnd = transcriptionDuration > 0 ? transcriptionDuration : (lastWordEnd > 0 ? lastWordEnd : 300);
+    console.log(`[trackEnd] ${trackEnd.toFixed(3)}s (transcriptionDuration=${transcriptionDuration}, lastWordEnd=${lastWordEnd.toFixed(3)})`);
 
-    // ── Stage 2: v9.0 Triptych — Three parallel Gemini lanes (byte-sliced) ──
+    // ── Stage 2: Triptych — Three parallel Gemini lanes (byte-sliced) ──
     let lines: LyricLine[] = [];
     let qaCorrections = 0;
     let ghostsRemoved = 0;
     let triptychDebug: any = {};
 
-    if (!analysisDisabled && useWhisper && whisperResult.status === "fulfilled") {
+    if (!analysisDisabled && hasTranscription && transcriptionResult.status === "fulfilled") {
       const anchorWord = words.length > 0 ? words[0] : null;
       const anchorTs = anchorWord?.start ?? 0;
       const anchorW = anchorWord?.word ?? "unknown";
@@ -946,8 +1031,8 @@ serve(async (req) => {
         middleCutoff,
       };
 
-    } else if (analysisDisabled && useWhisper && whisperResult.status === "fulfilled") {
-      // Analysis disabled: plain Whisper segments split into phrases
+    } else if (analysisDisabled && hasTranscription && transcriptionResult.status === "fulfilled") {
+      // Analysis disabled: plain segments split into phrases
       for (const seg of segments) {
         lines.push(...splitSegmentIntoPhrases(seg, words));
       }
@@ -1011,13 +1096,13 @@ serve(async (req) => {
 
     console.log(`[v9.2] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections), ${hooks.length} hooks`);
 
-    const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
+    const transcriptionOutput = hasTranscription && transcriptionResult.status === "fulfilled" ? {
       wordCount: words.length,
       segmentCount: segments.length,
       rawText: rawText.slice(0, 1000),
       words: words.slice(0, 80),
       segments: segments.slice(0, 30),
-    } : { status: useWhisper ? "failed" : "skipped" };
+    } : { status: hasTranscription ? "failed" : "skipped" };
 
     return new Response(
       JSON.stringify({
@@ -1027,11 +1112,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v9.7-triptych-literal-outro",
+          version: "v10.0-scribe-triptych",
           pipeline: {
-            transcription: useWhisper ? "whisper-1" : "gemini-only",
+            transcription: transcriptionEngine,
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v9.7-triptych-literal-outro",
+            orchestrator: "v10.0-scribe-triptych",
           },
           geminiUsed,
           geminiError,
@@ -1046,9 +1131,9 @@ serve(async (req) => {
           ghostsRemoved,
           mainLines: lines.length - adlibCount,
           hooksFound: hooks.length,
-          whisper: {
-            input: { model: useWhisper ? "whisper-1" : "skipped", format: ext, mimeType, estimatedMB: Math.round(estimatedBytes / 1024 / 1024 * 10) / 10 },
-            output: whisperOutput,
+          transcription: {
+            input: { model: transcriptionEngine, format: ext, mimeType, estimatedMB: Math.round(estimatedBytes / 1024 / 1024 * 10) / 10 },
+            output: transcriptionOutput,
           },
           gemini: {
             input: { model: analysisDisabled ? "disabled" : resolvedAnalysisModel, mimeType },
