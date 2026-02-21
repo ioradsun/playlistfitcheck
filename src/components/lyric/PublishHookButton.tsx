@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { ExternalLink, Loader2, Check } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ interface Props {
   system: string;
   palette: string[];
   fingerprint?: ArtistDNA | null;
+  onViewBattle?: (url: string) => void;
 }
 
 export function PublishHookButton({
@@ -43,6 +44,7 @@ export function PublishHookButton({
   system,
   palette,
   fingerprint,
+  onViewBattle,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
@@ -181,16 +183,12 @@ export function PublishHookButton({
 
   if (publishedUrl) {
     return (
-      <a
-        href={publishedUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-green-400/80 hover:text-green-400 transition-colors border border-green-500/20 hover:border-green-500/40 rounded-lg py-1.5"
+      <button
+        onClick={onViewBattle ? () => onViewBattle(publishedUrl) : undefined}
+        className={`w-full text-[10px] font-mono transition-colors py-1 text-muted-foreground/60 hover:text-muted-foreground`}
       >
-        <Check size={10} />
-        <span>{secondHook ? "View Hook Battle" : "View Published Hook"}</span>
-        <ExternalLink size={9} />
-      </a>
+        {secondHook ? "View Hook Battle" : "View Published Hook"}
+      </button>
     );
   }
 

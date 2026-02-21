@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video, Sparkles, Loader2, RotateCcw } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video, Sparkles, Loader2, RotateCcw, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -308,6 +308,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [hookDanceOverrides, setHookDanceOverrides] = useState<HookDanceOverrides>({});
   const [showDirectorsCut, setShowDirectorsCut] = useState(false);
   const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(null);
+  const [battlePopupUrl, setBattlePopupUrl] = useState<string | null>(null);
 
   // Load fingerprint from profile
   useEffect(() => {
@@ -1481,7 +1482,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                               : "text-muted-foreground/60 hover:text-muted-foreground"
                           }`}
                         >
-                          {hookDanceRunning ? "Stop Dance" : "See Hook Dance →"}
+                          {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
                         </button>
                       )}
                     </div>
@@ -1504,6 +1505,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     system={hookDanceOverrides.system || songDna.physicsSpec.system}
                     palette={songDna.physicsSpec.palette || ["#ffffff", "#a855f7", "#ec4899"]}
                     fingerprint={artistFingerprint}
+                    onViewBattle={(url) => setBattlePopupUrl(url)}
                   />
                 )}
                 {features?.lyric_video && (
@@ -1714,6 +1716,31 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           seed={`${data.title}-${songDna.hook.start.toFixed(3)}`}
         />
       )}
+
+      {/* Battle Page Popup Overlay */}
+      <AnimatePresence>
+        {battlePopupUrl && (
+          <motion.div
+            className="fixed inset-0 z-50 bg-black"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <iframe
+              src={battlePopupUrl}
+              className="absolute inset-0 w-full h-full border-0"
+              allow="autoplay"
+            />
+            <button
+              onClick={() => setBattlePopupUrl(null)}
+              className="absolute top-4 right-4 z-10 text-white/60 hover:text-white transition-colors"
+            >
+              <X size={24} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
