@@ -66,6 +66,33 @@ function getScoreColor(score: number): string {
   return "text-score-bad";
 }
 
+// Normalize the API response which may return dimensions as object or array
+function normalizeMaster(raw: any): MasterAnalysis {
+  let dims: Dimension[] = [];
+  if (Array.isArray(raw.dimensions)) {
+    dims = raw.dimensions;
+  } else if (raw.dimensions && typeof raw.dimensions === "object") {
+    dims = Object.entries(raw.dimensions).map(([key, val]: [string, any]) => ({
+      name: key,
+      score: val?.score ?? 0,
+      label: val?.note ? "" : "",
+      feedback: val?.note ?? "",
+    }));
+  }
+
+  return {
+    filename: raw.name || raw.filename || "Master",
+    overallScore: raw.score ?? raw.overallScore ?? 0,
+    overallLabel: raw.label ?? raw.overallLabel ?? "",
+    summary: raw.summary ?? "",
+    dimensions: dims,
+    performanceInsights: raw.performanceInsights,
+    topStrength: raw.topStrength ?? "",
+    mainWeakness: raw.mainWeakness ?? "",
+    actionableNote: raw.actionableNote ?? (raw.actionItems ? raw.actionItems.join(" ") : ""),
+  };
+}
+
 function ScorePill({ score, label }: { score: number; label: string }) {
   return (
     <div className="flex items-baseline gap-2">
@@ -171,6 +198,10 @@ export function HitFitResults({ analysis, onBack, onHeaderProject }: Props) {
     return () => onHeaderProject?.(null);
   }, [onBack, onHeaderProject]);
 
+  const strengths = analysis.referenceProfile?.strengths ?? [];
+  const gaps = analysis.referenceProfile?.gaps ?? [];
+  const masters = (analysis.masters ?? []).map(normalizeMaster);
+
   return (
     <div className="w-full max-w-2xl mx-auto pb-24 divide-y divide-border/30">
 
@@ -202,13 +233,13 @@ export function HitFitResults({ analysis, onBack, onHeaderProject }: Props) {
       {/* Reference Profile */}
       <div className="py-8 space-y-4">
         <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Reference Profile</p>
-        <p className="text-sm text-foreground leading-relaxed">{analysis.referenceProfile.description}</p>
+        <p className="text-sm text-foreground leading-relaxed">{analysis.referenceProfile?.description}</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {analysis.referenceProfile.strengths.length > 0 && (
+          {strengths.length > 0 && (
             <div className="space-y-2">
               <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Strengths</p>
               <ul className="space-y-1">
-                {analysis.referenceProfile.strengths.map((s, i) => (
+                {strengths.map((s, i) => (
                   <li key={i} className="text-[11px] text-foreground flex items-start gap-2">
                     <span className="text-score-excellent shrink-0">✓</span> {s}
                   </li>
@@ -216,11 +247,11 @@ export function HitFitResults({ analysis, onBack, onHeaderProject }: Props) {
               </ul>
             </div>
           )}
-          {analysis.referenceProfile.gaps.length > 0 && (
+          {gaps.length > 0 && (
             <div className="space-y-2">
               <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Gaps</p>
               <ul className="space-y-1">
-                {analysis.referenceProfile.gaps.map((g, i) => (
+                {gaps.map((g, i) => (
                   <li key={i} className="text-[11px] text-foreground flex items-start gap-2">
                     <span className="text-score-ok shrink-0">—</span> {g}
                   </li>
@@ -234,13 +265,13 @@ export function HitFitResults({ analysis, onBack, onHeaderProject }: Props) {
       {/* Master Cards */}
       <div className="py-8 space-y-0">
         <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase mb-2">Masters</p>
-        {analysis.masters.map((master, i) => (
+        {masters.map((master, i) => (
           <MasterCard key={i} master={master} index={i} />
         ))}
       </div>
 
       {/* Head to Head */}
-      {analysis.masters.length > 1 && analysis.headToHead.winner && (
+      {masters.length > 1 && analysis.headToHead?.winner && (
         <div className="py-8 space-y-3">
           <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Head to Head</p>
           <p className="text-sm text-foreground">
