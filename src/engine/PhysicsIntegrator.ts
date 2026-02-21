@@ -121,15 +121,16 @@ export class PhysicsIntegrator {
   constructor(rawSpec: PhysicsSpec) {
     // Hydrate material + response from system presets, merging AI params
     const preset = SYSTEM_PRESETS[rawSpec.system] ?? SYSTEM_PRESETS.pressure;
+    const p = rawSpec.params || {};
     const material: PhysicsMaterial = {
       ...preset.material,
-      mass: rawSpec.params.mass ?? preset.material.mass,
-      elasticity: rawSpec.params.elasticity ?? preset.material.elasticity,
-      damping: rawSpec.params.damping ?? preset.material.damping,
-      brittleness: rawSpec.params.brittleness ?? preset.material.brittleness,
-      heat: rawSpec.params.heat ?? preset.material.heat,
+      mass: p.mass ?? preset.material.mass,
+      elasticity: p.elasticity ?? preset.material.elasticity,
+      damping: p.damping ?? preset.material.damping,
+      brittleness: p.brittleness ?? preset.material.brittleness,
+      heat: p.heat ?? preset.material.heat,
     };
-    this.spec = { ...rawSpec, material, response: preset.response };
+    this.spec = { ...rawSpec, params: { ...p }, material, response: preset.response };
     this.heat = material.heat;
   }
 

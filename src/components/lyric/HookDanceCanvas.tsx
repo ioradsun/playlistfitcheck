@@ -5,12 +5,13 @@
  * looks up the AI-assigned effect for the current line, and draws it.
  */
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { X, Download } from "lucide-react";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
+import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
 
 interface Props {
   physicsState: PhysicsState | null;
@@ -23,6 +24,7 @@ interface Props {
   prng: () => number;
   onClose: () => void;
   onExport?: () => void;
+  onOverrides?: (overrides: HookDanceOverrides) => void;
 }
 
 export function HookDanceCanvas({
@@ -36,9 +38,21 @@ export function HookDanceCanvas({
   prng,
   onClose,
   onExport,
+  onOverrides,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [overrides, setOverrides] = useState<HookDanceOverrides>({});
+
+  // Propagate overrides to parent (for engine system changes)
+  const handleOverrides = useCallback((newOverrides: HookDanceOverrides) => {
+    setOverrides(newOverrides);
+    onOverrides?.(newOverrides);
+  }, [onOverrides]);
+
+  // Merge spec with overrides
+  const activePalette = overrides.palette || spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
+  const activeSystem = overrides.system || spec.system;
 
   // Resize canvas to fill container
   useEffect(() => {
@@ -122,7 +136,7 @@ export function HookDanceCanvas({
         age,
         progress,
         rng: prng,
-        palette: spec.palette || ["#ffffff", "#a855f7", "#ec4899"],
+        palette: activePalette,
       };
 
       drawFn(ctx, effectState);
@@ -139,13 +153,13 @@ export function HookDanceCanvas({
 
     // Progress bar at bottom
     const hookProgress = (currentTime - hookStart) / (hookEnd - hookStart);
-    ctx.fillStyle = spec.palette?.[1] || "#a855f7";
+    ctx.fillStyle = activePalette[1] || "#a855f7";
     ctx.globalAlpha = 0.6;
     ctx.fillRect(0, h - 3, w * Math.max(0, Math.min(1, hookProgress)), 3);
     ctx.globalAlpha = 1;
 
     ctx.restore();
-  }, [physicsState, currentTime, beatCount, lines, hookStart, hookEnd, spec, prng]);
+  }, [physicsState, currentTime, beatCount, lines, hookStart, hookEnd, spec, prng, activePalette]);
 
   return (
     <motion.div
@@ -176,8 +190,15 @@ export function HookDanceCanvas({
       </div>
       {/* System label */}
       <div className="absolute bottom-4 left-4 z-10 text-[10px] font-mono text-white/30 uppercase tracking-wider">
-        {spec.system} · hook dance
+        {activeSystem} · hook dance
       </div>
+      {/* Creative controls */}
+      <HookDanceControls
+        currentSystem={spec.system}
+        currentPalette={spec.palette || ["#ffffff", "#a855f7", "#ec4899"]}
+        overrides={overrides}
+        onChange={handleOverrides}
+      />
     </motion.div>
   );
 }
