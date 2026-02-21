@@ -159,18 +159,21 @@ OUTPUT — return ONLY valid JSON, no markdown:
 }
 
 function buildOutroPrompt(middleCutoff: number, trackEnd: number): string {
-  return `ROLE: Outro Recovery Specialist (v9.0 Triptych — Lane C)
+  return `ROLE: Literal Outro Forensic (v9.7 Triptych — Lane C)
 
 TASK: Transcribe ALL vocal events from ${middleCutoff.toFixed(3)}s to the end of the track at ${trackEnd.toFixed(3)}s.
 
 RULES:
-1. COMPLETE COVERAGE: You must capture every vocal sound (singing, speaking, ad-libs, echoes, fading vocals) from ${middleCutoff.toFixed(3)}s to ${trackEnd.toFixed(3)}s.
-2. TAGGING: Tag all lines as "adlib" since these are outro/tail vocals.
-3. PHRASE DENSITY: Outro lines can be longer (8-12 words OK) since these are typically fading/repeating sections.
-4. LAST LINE: The end time of your last line must be within 2.0s of ${trackEnd.toFixed(3)}s.
-5. SCHEMA: Every object MUST include ALL keys: start, end, text, tag, isCorrection (false), isFloating (false), confidence (1.0), geminiConflict (null).
-6. TIMESTAMPS: All timestamps must have 3-decimal precision.
-7. EXPECTED OUTPUT: 5-15 lines covering the outro section.
+1. ZERO HALLUCINATION: Transcribe ONLY what you actually hear. If you only hear a faint echo of the chorus, transcribe the chorus words. Do NOT invent new lyrics based on the song's mood or theme.
+2. NO POETRY: Do NOT write original lyrics. If the outro is a repeated phrase ("Yeah I'm running away"), transcribe that phrase each time it occurs.
+3. SILENCE POLICY: If the audio is just static, instrumental, or silence, return an EMPTY array [].
+4. LITERAL ECHOES: If you hear a fading echo of a word (e.g., "away...away..."), transcribe each audible repetition separately.
+5. COMPLETE COVERAGE: Capture every vocal sound (singing, speaking, ad-libs, echoes) from ${middleCutoff.toFixed(3)}s to ${trackEnd.toFixed(3)}s.
+6. TAGGING: Tag all lines as "adlib" since these are outro/tail vocals.
+7. PHRASE DENSITY: Outro lines can be longer (8-12 words OK) since these are typically fading/repeating sections.
+8. LAST LINE: The end time of your last line must be within 2.0s of ${trackEnd.toFixed(3)}s.
+9. SCHEMA: Every object MUST include ALL keys: start, end, text, tag, isCorrection (false), isFloating (false), confidence (1.0), geminiConflict (null).
+10. TIMESTAMPS: All timestamps must have 3-decimal precision.
 
 OUTPUT — return ONLY valid JSON, no markdown:
 {"outro_lines": [{"start": 181.500, "end": 183.200, "text": "example outro", "tag": "adlib", "isCorrection": false, "isFloating": false, "confidence": 1.0, "geminiConflict": null}]}`;
@@ -729,7 +732,7 @@ serve(async (req) => {
     const analysisDisabled = analysisModel === "disabled";
     const resolvedAnalysisModel: string = VALID_ANALYSIS_MODELS.includes(analysisModel)
       ? analysisModel
-      : "google/gemini-3-flash-preview";
+      : "google/gemini-2.5-flash";
 
     const estimatedBytes = audioBase64.length * 0.75;
     if (estimatedBytes > 25 * 1024 * 1024) {
@@ -929,7 +932,11 @@ serve(async (req) => {
     const adlibCount = lines.filter(l => l.tag === "adlib").length;
     const floatingCount = lines.filter(l => l.isFloating).length;
     const orphanedCount = lines.filter(l => l.isOrphaned).length;
+    // qaCorrections = total word-match count from stitcher; also count distinct corrected lines
+    const correctedLineCount = lines.filter(l => l.isCorrection).length;
     const correctionCount = qaCorrections;
+
+    console.log(`[v9.7] qaCorrections=${qaCorrections} (word matches), correctedLines=${correctedLineCount}`);
 
     console.log(`[v9.2] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections), ${hooks.length} hooks`);
 
@@ -949,11 +956,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v9.6-triptych-phonetic-heatmap",
+          version: "anchor-align-v9.7-triptych-literal-outro",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v9.6-triptych-phonetic-heatmap",
+            orchestrator: "v9.7-triptych-literal-outro",
           },
           geminiUsed,
           geminiError,
@@ -964,6 +971,7 @@ serve(async (req) => {
           floatingAdlibs: floatingCount,
           orphanedLines: orphanedCount,
           qaCorrections: correctionCount,
+          correctedLines: correctedLineCount,
           ghostsRemoved,
           mainLines: lines.length - adlibCount,
           hooksFound: hooks.length,
