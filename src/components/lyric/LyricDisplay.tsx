@@ -751,7 +751,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   // Report project title + right content (save indicator + debug) to header
   useEffect(() => {
-    const title = data.title || audioFile.name.replace(/\.[^.]+$/, "");
+    const title = (data.title && data.title !== "Unknown" && data.title !== "Untitled") ? data.title : audioFile.name.replace(/\.[^.]+$/, "");
     const rightContent = (
       <>
         {user && saveStatus !== "idle" && (
