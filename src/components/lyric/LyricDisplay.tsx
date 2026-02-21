@@ -23,6 +23,7 @@ import { LyricFormatControls, type LineFormat, type SocialPreset } from "./Lyric
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import { HookDanceCanvas } from "./HookDanceCanvas";
+import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { HookDanceExporter } from "./HookDanceExporter";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
@@ -302,6 +303,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [hookDanceExportOpen, setHookDanceExportOpen] = useState(false);
   const hookDanceBeatsRef = useRef<BeatTick[]>([]);
   const [hookDanceOverrides, setHookDanceOverrides] = useState<HookDanceOverrides>({});
+  const [showDirectorsCut, setShowDirectorsCut] = useState(false);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1409,43 +1411,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         hookDanceRef.current?.stop();
                         return;
                       }
-                      const audio = audioRef.current;
-                      if (!audio || !beatGrid?.beats) return;
-
-                      // Build BeatTick array from beat grid
-                      const beats: BeatTick[] = beatGrid.beats.map((t, i) => ({
-                        time: t,
-                        isDownbeat: i % 4 === 0,
-                        strength: i % 4 === 0 ? 1 : 0.6,
-                      }));
-
-                      const hook = songDna.hook!;
-                      const engine = new HookDanceEngine(
-                        songDna.physicsSpec as PhysicsSpec,
-                        beats,
-                        hook.start,
-                        hook.end,
-                        audio,
-                        {
-                          onFrame: (state, time, bc) => {
-                            setHookDanceState(state);
-                            setHookDanceTime(time);
-                            setHookDanceBeatCount(bc);
-                          },
-                          onEnd: () => {
-                            setHookDanceRunning(false);
-                            setHookDanceState(null);
-                            setHookDanceTime(0);
-                            setHookDanceBeatCount(0);
-                          },
-                        },
-                        `${data.title}-${hook.start.toFixed(3)}`,
-                      );
-                      hookDanceRef.current = engine;
-                      hookDancePrngRef.current = engine.prng;
-                      hookDanceBeatsRef.current = beats;
-                      setHookDanceRunning(true);
-                      engine.start();
+                      // Open Director's Cut instead of starting engine directly
+                      setShowDirectorsCut(true);
                     }}
                     className={`w-full text-[13px] font-semibold tracking-[0.15em] uppercase transition-colors border rounded-lg py-1.5 ${
                       hookDanceRunning
@@ -1474,6 +1441,66 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       </div>
 
       <SignUpToSaveBanner />
+
+      {/* Director's Cut overlay — system selection */}
+      <AnimatePresence>
+        {showDirectorsCut && songDna?.physicsSpec && songDna.hook && beatGrid?.beats && audioUrlRef.current && (
+          <DirectorsCutScreen
+            baseSpec={songDna.physicsSpec as PhysicsSpec}
+            beats={beatGrid.beats.map((t, i) => ({
+              time: t,
+              isDownbeat: i % 4 === 0,
+              strength: i % 4 === 0 ? 1 : 0.6,
+            }))}
+            lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
+            hookStart={songDna.hook.start}
+            hookEnd={songDna.hook.end}
+            audioSrc={audioUrlRef.current}
+            seedBase={`${data.title}-${songDna.hook.start.toFixed(3)}`}
+            onSelect={(system) => {
+              setShowDirectorsCut(false);
+              // Launch Hook Dance with the selected system
+              const audio = audioRef.current;
+              if (!audio || !beatGrid?.beats) return;
+              const beats: BeatTick[] = beatGrid.beats.map((t, i) => ({
+                time: t,
+                isDownbeat: i % 4 === 0,
+                strength: i % 4 === 0 ? 1 : 0.6,
+              }));
+              const hook = songDna.hook!;
+              setHookDanceOverrides({ system });
+              const spec = { ...(songDna.physicsSpec as PhysicsSpec), system };
+              const engine = new HookDanceEngine(
+                spec,
+                beats,
+                hook.start,
+                hook.end,
+                audio,
+                {
+                  onFrame: (state, time, bc) => {
+                    setHookDanceState(state);
+                    setHookDanceTime(time);
+                    setHookDanceBeatCount(bc);
+                  },
+                  onEnd: () => {
+                    setHookDanceRunning(false);
+                    setHookDanceState(null);
+                    setHookDanceTime(0);
+                    setHookDanceBeatCount(0);
+                  },
+                },
+                `${data.title}-${hook.start.toFixed(3)}`,
+              );
+              hookDanceRef.current = engine;
+              hookDancePrngRef.current = engine.prng;
+              hookDanceBeatsRef.current = beats;
+              setHookDanceRunning(true);
+              engine.start();
+            }}
+            onClose={() => setShowDirectorsCut(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Hook Dance full-bleed canvas overlay */}
       <AnimatePresence>
