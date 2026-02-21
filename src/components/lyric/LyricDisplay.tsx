@@ -25,6 +25,7 @@ import { LyricVideoComposer } from "./LyricVideoComposer";
 import { HookDanceCanvas } from "./HookDanceCanvas";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { HookDanceExporter } from "./HookDanceExporter";
+import { PublishHookButton } from "./PublishHookButton";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
@@ -1448,6 +1449,20 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   >
                     {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
                   </button>
+                )}
+                {songDna?.physicsSpec && beatGrid && (
+                  <PublishHookButton
+                    hook={hook}
+                    physicsSpec={songDna.physicsSpec as PhysicsSpec}
+                    lines={data.lines}
+                    beatGrid={{ bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence }}
+                    audioFile={audioFile}
+                    songTitle={data.title}
+                    artistName={data.artist}
+                    system={hookDanceOverrides.system || songDna.physicsSpec.system}
+                    palette={songDna.physicsSpec.palette || ["#ffffff", "#a855f7", "#ec4899"]}
+                    fingerprint={artistFingerprint}
+                  />
                 )}
                 {features?.lyric_video && (
                   <button
