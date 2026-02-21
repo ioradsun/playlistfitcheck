@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Search, RefreshCw, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music } from "lucide-react";
+import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -109,11 +109,14 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-background px-4 py-8">
       <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center gap-3">
-          <BarChart3 size={20} className="text-primary" />
-          <h1 className="text-xl font-bold">Admin Dashboard</h1>
-          <button onClick={handleRefresh} disabled={refreshing} className="ml-auto p-1.5 rounded-md hover:bg-muted transition-colors disabled:opacity-50" title="Refresh">
-            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+        <div className="flex items-center justify-between">
+          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Admin Dashboard</p>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="text-[13px] font-sans font-bold tracking-[0.15em] uppercase text-muted-foreground/30 hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </div>
 
