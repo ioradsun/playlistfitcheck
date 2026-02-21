@@ -10,6 +10,8 @@ const DEFAULT_DNA_PROMPT = `ROLE: Universal Music & Physics Orchestrator (v6.0)
 
 TASK: Analyze the full audio track, beat grid, and timestamped lyrics to extract the "Song DNA" and define a deterministic "Physics Spec" for the entire track.
 
+CRITICAL: Your response MUST be complete, valid JSON. Do NOT truncate. Keep the lexicon section compact — use at most 8 line_mods and 6 word_marks total.
+
 1. ADAPTIVE HOOK ANCHOR (8–12s, Bar-Aligned)
 
 Identify the single primary bar-aligned segment representing the track's definitive "Hottest Hook."
@@ -39,25 +41,21 @@ System Selection:
 
 Material Constants: Assign specific values for mass, elasticity, damping, brittleness, and heat.
 
-4. CREATIVE DICTIONARY (Intelligence Layer)
-
-Scan the full song lyrics and assign modifiers from the strict dictionary below.
+4. CREATIVE DICTIONARY (Intelligence Layer — KEEP COMPACT)
 
 Semantic Tags (Max 5): FIRE, ICE, GHOST, MACHINE, HEART, FALL, RISE, WATER, LIGHT, DARK.
 
-Line Mods (Per-line overrides): GHOST_FADE (opacity/blur), HEAT_SPIKE (heat boost), FREEZE_2F (velocity lock), RGB_SPLIT_4F (glitch).
+Line Mods (Max 8 total): GHOST_FADE, HEAT_SPIKE, FREEZE_2F, RGB_SPLIT_4F.
 
-Word Marks (Max 6 total for song): POP (scale), SHAKE (vibration), GLITCH (jitter), GLOW (bloom).
+Word Marks (Max 6 total): POP, SHAKE, GLITCH, GLOW.
 
 5. FULL-LENGTH SCALABILITY (The Pool Rule)
 
-To support a full-song visualizer without JSON bloat:
+Effect Pool: Provide 4–6 effect_keys.
 
-Effect Pool: Provide 4–6 effect_keys matching the song's arc (e.g., SHATTER_IN, TUNNEL_RUSH, PULSE_BLOOM).
+Logic Seed: Provide an integer logic_seed.
 
-Logic Seed: Provide an integer logic_seed. The engine uses this to procedurally sequence the pool across all lyrics.
-
-Hook Lock: The lines within the hottest_hook window MUST use the HOOK_FRACTURE effect.
+Hook Lock: Lines within the hottest_hook window MUST use the HOOK_FRACTURE effect.
 
 OUTPUT — Valid JSON only, no markdown, no explanation:
 {
@@ -90,7 +88,6 @@ const LYRICS_ONLY_PROMPT = `You are a music analyst. Given song lyrics, provide 
 
 No markdown, no explanation — just JSON.`;
 
-// Runtime prompt fetcher — checks ai_prompts table, falls back to hardcoded default
 async function getDnaPrompt(): Promise<string> {
   try {
     const sbUrl = Deno.env.get("SUPABASE_URL");
@@ -108,6 +105,29 @@ async function getDnaPrompt(): Promise<string> {
   return DEFAULT_DNA_PROMPT;
 }
 
+/** Try to parse JSON from a potentially messy AI response */
+function extractJson(raw: string): any | null {
+  let cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const jsonStart = cleaned.indexOf("{");
+  const jsonEnd = cleaned.lastIndexOf("}");
+  if (jsonStart === -1 || jsonEnd <= jsonStart) return null;
+  let jsonStr = cleaned.slice(jsonStart, jsonEnd + 1)
+    .replace(/,\s*}/g, "}").replace(/,\s*]/g, "]")
+    .replace(/[\x00-\x1F\x7F]/g, "");
+  try { return JSON.parse(jsonStr); } catch { return null; }
+}
+
+/** Check if parsed result has the critical fields */
+function isComplete(parsed: any): boolean {
+  return !!(
+    parsed?.hottest_hook?.start_sec != null &&
+    parsed?.physics_spec?.system &&
+    parsed?.physics_spec?.params &&
+    Object.keys(parsed.physics_spec.params).length >= 3 &&
+    parsed?.mood
+  );
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -122,7 +142,6 @@ serve(async (req) => {
     let parsed: any;
 
     if (hasAudio) {
-      // ── Audio + Lyrics mode: full Song DNA via Gemini with audio ──
       const mimeMap: Record<string, string> = {
         wav: "audio/wav", mp3: "audio/mpeg", m4a: "audio/mp4", mp4: "audio/mp4",
         flac: "audio/flac", ogg: "audio/ogg", webm: "audio/webm",
@@ -134,15 +153,14 @@ serve(async (req) => {
         { type: "image_url", image_url: { url: `data:${mimeType};base64,${audioBase64}` } },
       ];
 
-      // Build text instruction with optional beat grid context
       let textInstruction = "";
       if (beatGrid?.bpm) {
         textInstruction += `[Beat Grid Context] Detected BPM: ${beatGrid.bpm} (confidence: ${beatGrid.confidence?.toFixed?.(2) ?? "N/A"}). Use this as ground truth for tempo.\n\n`;
       }
       if (lyrics) {
-        textInstruction += `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return only the JSON schema specified.`;
+        textInstruction += `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return only the JSON schema specified. Keep lexicon compact.`;
       } else {
-        textInstruction += "Analyze this audio. Return only the JSON schema specified.";
+        textInstruction += "Analyze this audio. Return only the JSON schema specified. Keep lexicon compact.";
       }
       userContent.push({ type: "text", text: textInstruction });
 
@@ -151,65 +169,75 @@ serve(async (req) => {
       const dnaPrompt = await getDnaPrompt();
       console.log(`[song-dna] Prompt source: ${dnaPrompt.includes("ADAPTIVE HOOK ANCHOR") ? "v2-adaptive" : "v1-legacy"}, length: ${dnaPrompt.length}`);
 
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: dnaPrompt },
-            { role: "user", content: userContent },
-          ],
-          temperature: 0.1,
-          max_tokens: 4096,
-        }),
-      });
+      // Try up to 2 attempts with increasing token limits
+      const attempts = [
+        { max_tokens: 8192, model: "google/gemini-2.5-flash" },
+        { max_tokens: 12000, model: "google/gemini-2.5-flash" },
+      ];
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: "Rate limited, try again shortly" }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+      for (let attempt = 0; attempt < attempts.length; attempt++) {
+        const { max_tokens, model } = attempts[attempt];
+        console.log(`[song-dna] Attempt ${attempt + 1}: model=${model}, max_tokens=${max_tokens}`);
+
+        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: dnaPrompt },
+              { role: "user", content: userContent },
+            ],
+            temperature: 0.1,
+            max_tokens,
+          }),
+        });
+
+        if (!response.ok) {
+          if (response.status === 429) {
+            return new Response(JSON.stringify({ error: "Rate limited, try again shortly" }), {
+              status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          if (response.status === 402) {
+            return new Response(JSON.stringify({ error: "AI credits exhausted" }), {
+              status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          const t = await response.text();
+          console.error("AI gateway error:", response.status, t);
+          throw new Error("AI gateway error");
         }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: "AI credits exhausted" }), {
-            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+
+        const data = await response.json();
+        const raw = data.choices?.[0]?.message?.content ?? "";
+        const finishReason = data.choices?.[0]?.finish_reason ?? "unknown";
+
+        console.log(`[song-dna] Response length: ${raw.length}, finish_reason: ${finishReason}`);
+
+        parsed = extractJson(raw);
+
+        if (parsed && isComplete(parsed)) {
+          console.log(`[song-dna] ✓ Complete on attempt ${attempt + 1}: mood=${parsed.mood}, system=${parsed.physics_spec.system}, hook=${parsed.hottest_hook.start_sec}`);
+          break;
         }
-        const t = await response.text();
-        console.error("AI gateway error:", response.status, t);
-        throw new Error("AI gateway error");
+
+        // If truncated (finish_reason=length or missing fields), retry with more tokens
+        console.warn(`[song-dna] Attempt ${attempt + 1} incomplete (finish_reason=${finishReason}). ${attempt < attempts.length - 1 ? "Retrying..." : "Using partial result."}`);
+        console.warn(`[song-dna] Raw ends with: "${raw.slice(-120)}"`);
+
+        if (attempt === attempts.length - 1 && !parsed) {
+          parsed = {};
+        }
       }
 
-      const data = await response.json();
-      const raw = data.choices?.[0]?.message?.content ?? "";
-
-      // Robust JSON extraction
-      let cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-      const jsonStart = cleaned.indexOf("{");
-      const jsonEnd = cleaned.lastIndexOf("}");
-      if (jsonStart === -1 || jsonEnd <= jsonStart) throw new Error("No JSON in response");
-      let jsonStr = cleaned.slice(jsonStart, jsonEnd + 1)
-        .replace(/,\s*}/g, "}").replace(/,\s*]/g, "]")
-        .replace(/[\x00-\x1F\x7F]/g, ""); // strip control chars
-
-      try { parsed = JSON.parse(jsonStr); } catch { parsed = {}; }
-
-      // Detect truncation: if physics_spec.params is missing, log warning
-      const hasParams = parsed?.physics_spec?.params && Object.keys(parsed.physics_spec.params).length > 0;
-      if (!hasParams) {
-        console.warn("[song-dna] WARNING: physics_spec.params missing or empty — possible truncation");
-        console.warn(`[song-dna] Raw response length: ${raw.length}, ends with: "${raw.slice(-100)}"`);
-      }
-
-      console.log(`[song-dna] Audio analysis complete: mood=${parsed.mood}, hook=${parsed.hottest_hook?.start_sec ?? "none"}, duration=${parsed.hottest_hook?.duration_sec ?? "none"}, conf=${parsed.hottest_hook?.confidence ?? "none"}, system=${parsed.physics_spec?.system ?? "none"}, params=${JSON.stringify(parsed.physics_spec?.params ?? {})}`);
-      console.log(`[song-dna] Raw AI response: ${raw.slice(0, 500)}`);
+      console.log(`[song-dna] Final result: mood=${parsed?.mood ?? "none"}, hook=${parsed?.hottest_hook?.start_sec ?? "none"}, system=${parsed?.physics_spec?.system ?? "none"}, params=${JSON.stringify(parsed?.physics_spec?.params ?? {})}`);
 
     } else {
-      // ── Lyrics-only mode: text analysis ──
+      // ── Lyrics-only mode ──
       if (!lyrics || typeof lyrics !== "string") {
         return new Response(JSON.stringify({ error: "Missing lyrics or audio" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
