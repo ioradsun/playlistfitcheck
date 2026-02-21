@@ -1219,38 +1219,61 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     : "border border-border/30"
                 }`}
               >
-                {/* Header */}
+                {/* Header with inline play */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <Zap size={11} className={isCandidate ? "text-yellow-500" : "text-primary"} />
+                    <Zap size={11} className="text-primary" />
                     <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                      {hook ? (isCandidate ? "Hook Candidate" : "Hottest Hook") : "Hook Analysis"}
+                      Hottest Hook
                     </span>
                   </div>
                   {hook && (
-                    <span className={`text-sm font-mono font-bold ${hookScoreColor(hook.score)}`}>
-                      {hook.score}
-                    </span>
+                    <button
+                      onClick={() => playClip(hook, 0)}
+                      className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300 ${
+                        isLooping
+                          ? "text-primary bg-primary/10"
+                          : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                      }`}
+                      title={isLooping ? "Stop clip" : "Play clip"}
+                    >
+                      <svg
+                        width="28"
+                        height="28"
+                        viewBox="0 0 28 28"
+                        className="absolute inset-0"
+                        style={{ transform: "rotate(-90deg)" }}
+                      >
+                        <circle cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth="2" />
+                        {isLooping && (
+                          <circle
+                            cx="14" cy="14" r={10}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeOpacity={0.9}
+                            strokeWidth="2"
+                            strokeDasharray={Math.PI * 2 * 10}
+                            strokeDashoffset={Math.PI * 2 * 10 * (1 - clipProgress)}
+                            strokeLinecap="round"
+                            style={{ transition: "stroke-dashoffset 0.1s linear" }}
+                          />
+                        )}
+                      </svg>
+                      {isLooping ? <Pause size={10} /> : <Play size={10} />}
+                    </button>
                   )}
                 </div>
 
-                {/* v2.2: Candidate notice */}
-                {isCandidate && (
-                  <p className="text-[10px] text-yellow-500/80 font-mono border border-yellow-500/20 rounded px-2 py-1">
-                    Low confidence — confirm or skip this hook
-                  </p>
-                )}
-
                 {hook ? (
                   <>
-                    {/* Preview text — large & featured */}
+                    {/* Preview text */}
                     {hook.previewText && (
                       <p className="text-sm font-medium text-foreground leading-snug">
                         "{hook.previewText}"
                       </p>
                     )}
 
-                    {/* Timestamp row — v2.2: always shows 10s duration */}
+                    {/* Timestamp */}
                     <p className="text-[10px] font-mono text-muted-foreground">
                       {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
                       <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
@@ -1266,46 +1289,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         ))}
                       </div>
                     )}
-
-                    {/* Play Clip CTA — centred, prominent */}
-                    <div className="flex flex-col items-center gap-2 pt-1">
-                      <button
-                        onClick={() => playClip(hook, 0)}
-                        className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ${
-                          isLooping
-                            ? "text-primary bg-primary/10"
-                            : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                        }`}
-                        title={isLooping ? "Stop clip" : "Preview clip"}
-                      >
-                        <svg
-                          width="56"
-                          height="56"
-                          viewBox="0 0 56 56"
-                          className="absolute inset-0"
-                          style={{ transform: "rotate(-90deg)" }}
-                        >
-                          <circle cx="28" cy="28" r={r} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth="2.5" />
-                          {isLooping && (
-                            <circle
-                              cx="28" cy="28" r={r}
-                              fill="none"
-                              stroke="currentColor"
-                              strokeOpacity={0.9}
-                              strokeWidth="2.5"
-                              strokeDasharray={circ}
-                              strokeDashoffset={dashOffset}
-                              strokeLinecap="round"
-                              style={{ transition: "stroke-dashoffset 0.1s linear" }}
-                            />
-                          )}
-                        </svg>
-                        {isLooping ? <Pause size={16} /> : <Play size={16} />}
-                      </button>
-                      <span className="text-[10px] font-mono text-muted-foreground">
-                        {isLooping ? "Looping…" : "Play Clip"}
-                      </span>
-                    </div>
 
                     {/* Lyric Video — gated by admin toggle */}
                     {features?.lyric_video && (
