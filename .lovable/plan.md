@@ -1,155 +1,125 @@
 
-# v5.0 "Universal Acoustic Orchestrator" — Architecture Redesign
 
-## What the User is Proposing
+# v8.0 "Triptych" Parallel Architecture
 
-Replace the current multi-stage JavaScript merge engine (Soundex, phonetic similarity scoring, ghost-dedup, 5-path identity executioner) with a **single Gemini call** that receives both the audio and the Whisper JSON, then returns the final `merged.allLines` array directly.
+## Overview
 
-The idea: instead of orchestrating corrections in TypeScript, let Gemini reason acoustically over the raw audio + timing grid simultaneously and output the final, production-ready merged transcript.
+Replace the single monolithic Gemini Orchestrator call (which must produce 80+ lines in one shot and risks truncation, deletion, and timing drift) with **three specialized, parallel Gemini calls** that each handle a small, focused task. The Whisper skeleton remains the backbone for the middle of the track, with Gemini acting as a surgical editor rather than a full re-transcriber.
 
----
+## Why This Solves the Remaining Issues
 
-## Current Architecture (v4.4)
+Every regression from v5.0 through v7.3 traces back to one root cause: asking a single Gemini call to do too many things at once (intro timing, full coverage, contextual QA, outro recovery, rhythmic pulsing). When the model prioritizes one rule, it drops another. The Triptych eliminates this by giving each "rule" its own dedicated call with a tiny output budget.
 
-```text
-Stage 1: Whisper → words[], segments[], rawText        (timing skeleton)
-Stage 2a: Gemini Hook Call → hottest_hook + insights   (parallel with Whisper)
-Stage 2b: Gemini Adlib Call → adlibs[] (30 max)        (sequential, receives rawText)
-Stage 3: JS Merge Engine (~450 lines)                  (correction, ghost-pruning, snapping)
-  ├── phoneticRootMatch (Soundex gating)
-  ├── phoneticSimilarity (Levenshtein + skeleton)
-  ├── Identity Executioner (5-path ghost deletion)
-  ├── Intro/Outro Zone Preservation
-  └── Global Timebase Guard (median offset correction)
-Output: merged.allLines (LyricLine[])
-```
-
-## Proposed v5.0 Architecture
+## Architecture
 
 ```text
-Stage 1: Whisper → words[], segments[], rawText        (timing skeleton, unchanged)
-Stage 2a: Gemini Hook Call → hottest_hook + insights   (unchanged, audio only)
-Stage 2b: Gemini Orchestrator Call                     (audio + whisper JSON payload)
-  Input: audioBase64 + whisperWords + whisperSegments + rawText
-  Prompt: Universal Acoustic Orchestrator
-  Output: final merged.allLines[] directly
-Stage 3: Thin JS validator                             (schema validation, boundary guard only)
-Output: merged.allLines (LyricLine[])
+t=0:   Whisper starts + Hook starts (parallel, unchanged)
+t+W:   Whisper done
+t+W:   Three Gemini lanes fire in parallel:
+         Lane B: Intro Patch    (audio slice 0s - anchor)     -> intro lines[]
+         Lane C: Outro Patch    (audio slice middleCut - end)  -> outro lines[]
+         Lane D: Phonetic Audit (audio + rawText)              -> corrections map {}
+t+max: All 3 resolve
+t+max: JS Stitcher: intro + corrected-middle + outro -> final allLines[]
 ```
-
----
-
-## Why This is a Genuine Architectural Improvement
-
-The root cause of every iteration from v3.7 to v4.4 is that a **JavaScript function is trying to do linguistic reasoning**. The Soundex gate, the 5-path identity executioner, and the phonetic similarity scoring are all approximations of what Gemini can do directly by listening to the audio. The "Rain/Range" problem persisted through 8 versions because JavaScript cannot hear — it can only compare strings.
-
-By giving Gemini both the audio AND the Whisper timing grid simultaneously, Gemini can:
-- Hear that "range" is sung as "rain" acoustically, not infer it from string distance
-- Know with certainty whether a "Yeah!" at 42s is a ghost (heard in lead) or a genuine background vocal (from a different voice/position)
-- Group orphaned intro dialogue into natural phrases without guessing at segment boundaries
-
----
 
 ## What Changes
 
-### `supabase/functions/lyric-transcribe/index.ts`
+### File: `supabase/functions/lyric-transcribe/index.ts`
 
-**1. New Gemini Orchestrator Prompt**
+**1. Three new prompt builders replace `buildOrchestratorPrompt()`**
 
-Replace `buildAdlibPrompt()` with `buildOrchestratorPrompt(whisperJson)` that includes the full Whisper output as a structured payload alongside the 4 Logical Workflows from the user's spec:
+- `buildIntroPrompt(anchorWord, anchorTs)` -- Asks Gemini to detect the acoustic onset of spoken dialogue before the anchor word and return 3-8 lines with precise timestamps. Output budget: ~800 tokens.
+- `buildOutroPrompt(middleCutoff, trackEnd)` -- Asks Gemini to transcribe all vocal events from the Whisper cutoff to the end of the file. All lines tagged "adlib". Output budget: ~800 tokens.
+- `buildAuditorPrompt(rawText, anchorTs, middleCutoff)` -- Asks Gemini to listen to the middle section and return ONLY a JSON corrections map (`{"whore": "boy", "range": "rain"}`). No timestamps, no lines. Output budget: ~400 tokens.
 
+**2. Three new lane functions replace `runGeminiOrchestrator()`**
+
+- `runGeminiIntro()` -- Calls `callGemini()` with the intro prompt. Returns `LyricLine[]`.
+- `runGeminiOutro()` -- Calls `callGemini()` with the outro prompt. Returns `LyricLine[]`.
+- `runGeminiAuditor()` -- Calls `callGemini()` with the auditor prompt. Returns `Record<string, string>` (corrections map).
+
+**3. New JS stitcher function: `stitchTriptych()`**
+
+This replaces the orchestrator's line processing:
+
+- Takes the Whisper segments for the middle section (anchor to middleCutoff)
+- Applies the corrections map via regex word-swap
+- Splits long segments into 6-word phrases with interpolated timestamps
+- Prepends intro lines, appends outro lines
+- Sorts by start time and validates coverage
+
+**4. Parallel execution in the main handler**
+
+The current sequential flow:
 ```text
-System: You are the Universal Acoustic Orchestrator...
-Input payload (injected into prompt):
-  - WHISPER_WORDS: [{word, start, end}, ...]   (full word-level grid)
-  - WHISPER_SEGMENTS: [{start, end, text}, ...] (sentence-level segments)
-  - WHISPER_RAW_TEXT: "..."
-
-Output: merged_lines[] following the exact LyricLine schema
+Whisper + Hook (parallel) -> Orchestrator (sequential)
 ```
 
-**2. New Output Schema for the Orchestrator Call**
-
-Gemini is asked to return the complete `merged_lines` array directly, not just `adlibs[]`. The schema it must follow:
-
-```json
-{
-  "merged_lines": [
-    {
-      "start": 0.000,
-      "end": 0.000,
-      "text": "...",
-      "tag": "main" | "adlib",
-      "isOrphaned": false,
-      "isFloating": false,
-      "isCorrection": false,
-      "geminiConflict": "original whisper word if corrected",
-      "confidence": 0.98
-    }
-  ],
-  "qaCorrections": 0,
-  "ghostsRemoved": 0
-}
-```
-
-**3. Sequencing remains Option A** (Whisper + Hook parallel first, then Orchestrator call)
-
+Becomes:
 ```text
-t=0:  Whisper starts + Hook starts (parallel)
-t+W:  Whisper done → full JSON passed to Orchestrator
-t+W:  Orchestrator call starts (audio + whisper JSON)
-t+W+O: Orchestrator returns merged_lines[]
+Whisper + Hook (parallel) -> Intro + Outro + Auditor (parallel) -> JS Stitch
 ```
 
-**4. Remove the JS merge engine** (`extractAdlibsFromWords`, `computeGlobalOffset`, `buildLinesFromSegments`, all Soundex/phonetic helpers)
+Using `Promise.allSettled()` so any single lane failure degrades gracefully (e.g., if intro fails, fall back to starting at the anchor word).
 
-These ~500 lines of merge logic are replaced by a thin validator that:
-- Validates the schema of each returned line
-- Enforces the hard boundary cap (189.3s / trackEnd+1s) as a safety net
-- Sorts lines by `start` timestamp
+**5. Phrase splitting utility**
 
-**5. Token Budget**
-
-The orchestrator call needs a larger token budget than the current adlib call (4000 tokens) because it is returning the full merged lines array. Recommended: **6000 tokens** to accommodate a 3–4 minute track with 60–80 lines + adlibs.
-
----
+A new helper `splitSegmentIntoPhrases(segment, maxWords)` that:
+- Breaks a Whisper segment into chunks of N words max
+- Interpolates start/end timestamps proportionally based on word count
+- Preserves 3-decimal precision
 
 ## What Does NOT Change
 
-- `runWhisper()` — unchanged, still provides the timing skeleton
-- `runGeminiHookAnalysis()` — unchanged, still finds hook + BPM/key/mood
-- `callGemini()` / `extractJsonFromContent()` / `safeParseJson()` — reused as-is
-- `findHookFromWords()` / `findRepetitionAnchor()` — unchanged
-- The frontend (`LyricDisplay.tsx`, `LyricFitTab.tsx`) — no changes needed; the output schema is compatible with what they already consume (`lines[]` with `tag`, `isOrphaned`, `isFloating`, `isCorrection`, `geminiConflict`)
+- `runWhisper()` -- unchanged, still provides the timing skeleton
+- `runGeminiHookAnalysis()` -- unchanged, still finds hook + BPM/key/mood
+- `callGemini()` / `extractJsonFromContent()` / `safeParseJson()` -- reused as-is
+- `findHookFromWords()` / `findRepetitionAnchor()` -- unchanged
+- The frontend (`LyricDisplay.tsx`, `LyricFitTab.tsx`) -- no changes; output schema is identical
+- The `_debug` payload structure -- updated with per-lane telemetry
 
----
+## Prompt Details
+
+**Lane B (Intro Lock) -- ~200 word prompt:**
+- Input: full audio + anchor word/timestamp
+- Task: detect acoustic onset, transcribe intro dialogue, project timestamps backward from anchor
+- Output: `{"intro_lines": [LyricLine...]}` (3-8 lines expected)
+- Key invariant: first line start must not be 0.000s
+
+**Lane C (Outro Endcap) -- ~150 word prompt:**
+- Input: full audio + middleCutoff + trackEnd
+- Task: transcribe all vocals from middleCutoff to trackEnd
+- Output: `{"outro_lines": [LyricLine...]}` (5-15 lines expected)
+- Key invariant: last line end within 2s of trackEnd
+
+**Lane D (Phonetic Auditor) -- ~150 word prompt:**
+- Input: full audio + Whisper rawText + time range
+- Task: compare acoustic signal to text, find mismatches
+- Output: `{"corrections": {"wrong_word": "right_word", ...}, "count": N}`
+- Key invariant: returns ONLY word-level swaps, no timestamps
+
+## Token Budget Comparison
+
+```text
+v7.3 (monolithic):  8192 tokens for one call
+v8.0 (triptych):    800 + 800 + 400 = 2000 tokens across three calls
+```
+
+Total token usage drops by 75%, and each call is small enough that JSON truncation becomes virtually impossible.
 
 ## Risks and Mitigations
 
-**Risk: Gemini returns invalid JSON for a 60+ line response**
+**Risk: Audio cannot be "sliced" -- Gemini receives the full file each time**
+Mitigation: The prompts specify the time range to focus on. Gemini processes the full audio but only returns data for the requested window. This is how v7.x already works (one full audio, scoped output).
 
-The current `safeParseJson()` recovery function is already robust (strips trailing commas, closes truncated arrays). This will be preserved and applied to the orchestrator response.
+**Risk: Corrections map misses context-dependent errors**
+Mitigation: The auditor receives the full rawText for context. If the map is empty, no corrections are applied -- the Whisper text passes through unchanged (safe default).
 
-Additionally, the **OUTPUT LIMIT guidance** from v4.4 (max 30 adlibs) will be adapted: the orchestrator will be instructed to return a maximum of 80 total lines to keep the response within the token budget.
-
-**Risk: Gemini ignores Whisper timestamps and invents its own**
-
-The prompt instructs Gemini to use Whisper `start`/`end` values for main lines verbatim and to snap adlib timestamps to the nearest Whisper word boundary. A JS post-pass will validate that main line timestamps fall within ±0.5s of the original Whisper segments.
-
-**Risk: Ghost adlibs reappear because Gemini's identity filter is imprecise**
-
-The identity filter becomes Gemini's own acoustic judgment ("is this the same voice as the lead?") rather than JavaScript string matching. This is strictly more accurate but could have edge cases. The JS boundary guard remains as a final safety net.
-
----
-
-## Files to Modify
-
-- `supabase/functions/lyric-transcribe/index.ts` — single file, redeployed automatically
-
-No frontend changes required.
-
----
+**Risk: Phrase splitting produces unnatural breaks**
+Mitigation: Split on word boundaries using Whisper's word-level timestamps (already available) rather than interpolating. Each sub-phrase gets the exact start/end of its first/last word.
 
 ## Version String
 
-`anchor-align-v5.0-universal-orchestrator`
+`anchor-align-v8.0-triptych-parallel`
+
