@@ -81,10 +81,10 @@ interface ConstellationNode {
 
 // Static river row configuration
 const RIVER_ROWS = [
-  { y: 0.25, speed: 0.2, opacity: 0.07, direction: -1 },
-  { y: 0.38, speed: 0.3, opacity: 0.05, direction: 1 },
-  { y: 0.62, speed: 0.4, opacity: 0.04, direction: -1 },
-  { y: 0.75, speed: 0.55, opacity: 0.03, direction: 1 },
+  { y: 0.35, speed: 0.2, opacity: 0.07, direction: -1 },
+  { y: 0.43, speed: 0.3, opacity: 0.05, direction: 1 },
+  { y: 0.57, speed: 0.4, opacity: 0.04, direction: -1 },
+  { y: 0.65, speed: 0.55, opacity: 0.03, direction: 1 },
 ];
 
 interface FireParticle {
