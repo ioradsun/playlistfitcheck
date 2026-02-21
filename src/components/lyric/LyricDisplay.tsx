@@ -1495,10 +1495,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             beatCount={hookDanceBeatCount}
             prng={hookDancePrngRef.current}
             onClose={() => hookDanceRef.current?.stop()}
-            onExport={() => {
-              hookDanceRef.current?.stop();
-              setHookDanceExportOpen(true);
-            }}
+            onExport={() => setHookDanceExportOpen(true)}
             onOverrides={setHookDanceOverrides}
           />
         )}
@@ -1578,7 +1575,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         <HookDanceExporter
           open={hookDanceExportOpen}
           onOpenChange={setHookDanceExportOpen}
-          spec={songDna.physicsSpec as PhysicsSpec}
+          spec={hookDanceOverrides.system
+            ? { ...(songDna.physicsSpec as PhysicsSpec), system: hookDanceOverrides.system, palette: hookDanceOverrides.palette || (songDna.physicsSpec as PhysicsSpec).palette }
+            : hookDanceOverrides.palette
+              ? { ...(songDna.physicsSpec as PhysicsSpec), palette: hookDanceOverrides.palette }
+              : songDna.physicsSpec as PhysicsSpec}
           beats={hookDanceBeatsRef.current}
           lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
           hookStart={songDna.hook.start}

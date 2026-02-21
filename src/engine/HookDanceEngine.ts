@@ -105,15 +105,19 @@ export class HookDanceEngine {
     this.callbacks.onEnd();
   }
 
-  /** Internal 60fps loop slaved to audio.currentTime */
+  /** Internal 60fps loop slaved to audio.currentTime — loops at hookEnd */
   private tick = () => {
     if (!this.running) return;
 
     const currentTime = this.audioRef.currentTime;
 
-    // End of hook region
-    if (currentTime >= this.hookEnd) {
-      this.stop();
+    // Loop back to hookStart when we reach hookEnd
+    if (currentTime >= this.hookEnd || currentTime < this.hookStart) {
+      this.audioRef.currentTime = this.hookStart;
+      this.integrator.reset();
+      this.beatIndex = 0;
+      this.prevTime = this.hookStart;
+      this.rafId = requestAnimationFrame(this.tick);
       return;
     }
 
