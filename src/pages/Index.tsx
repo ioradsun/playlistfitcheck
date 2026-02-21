@@ -483,7 +483,7 @@ const Index = () => {
       <SidebarInset className="h-svh !min-h-0 overflow-hidden">
         {/* Minimal top header with pill badge */}
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
-          <SidebarTrigger data-sidebar="trigger" className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+          <SidebarTrigger data-sidebar="trigger" className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground md:hidden">
             <ChevronRight size={16} />
           </SidebarTrigger>
           {headerProject ? (
