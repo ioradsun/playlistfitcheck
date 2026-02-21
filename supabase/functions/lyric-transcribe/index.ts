@@ -104,10 +104,10 @@ async function runScribe(
   return { words, segments, rawText, duration };
 }
 
-// ── Gemini Prompt: Hook + Insights + Metadata ─────────────────────────────────
-const DEFAULT_HOOK_PROMPT = `ROLE: Lead Music Intelligence Analyst
+// ── Gemini Prompt: Song DNA (Hook + Insights + Metadata + Meaning) ────────────
+const DEFAULT_HOOK_PROMPT = `ROLE: Lead Music Intelligence Analyst — Song DNA Engine
 
-TASK: Identify structural identity and describe the track.
+TASK: Analyze the full audio track and extract its structural identity ("Song DNA").
 
 1. THE 10.000s HOOK ANCHOR
 - Identify the single primary 10-second segment representing the track's "Hottest Hook."
@@ -120,16 +120,23 @@ TASK: Identify structural identity and describe the track.
 2. SONG DESCRIPTION
 - Write a single evocative sentence (max 15 words) describing what this song sounds and feels like.
 - Combine sonic texture, lyrical theme, and emotional tone into one line.
-- Examples: "A brooding trap ballad about midnight regret over heavy 808s" or "Sun-drenched indie pop celebrating first love with shimmering guitars"
 - Be specific and vivid — avoid generic phrases like "a good song" or "nice beat."
 
 3. MOOD
 - mood: Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic"). Confidence floor: 0.85 — return null if below.
-- Must have its own confidence score (0.0–1.0).
 
 4. TRACK METADATA
 - title: If audible from lyrics or context; otherwise "Unknown".
 - artist: If known; otherwise "Unknown".
+
+5. BPM
+- Estimate the tempo in beats per minute. Return as integer.
+- Confidence: 0.0–1.0.
+
+6. SONG MEANING (from lyrics heard in the audio)
+- theme: The core theme in 2-4 words
+- summary: A 2-3 sentence plain-language explanation of what the song is about
+- imagery: 2-3 notable metaphors or images used (array of short strings)
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
@@ -140,7 +147,13 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
     "description": "A brooding trap ballad about midnight regret over heavy 808s"
   },
   "insights": {
-    "mood": { "value": "hype", "confidence": 0.00 }
+    "mood": { "value": "hype", "confidence": 0.00 },
+    "bpm": { "value": 140, "confidence": 0.90 }
+  },
+  "meaning": {
+    "theme": "Midnight Regret",
+    "summary": "The artist reflects on a relationship that fell apart...",
+    "imagery": ["broken glass", "empty streets", "fading headlights"]
   }
 }`;
 
@@ -239,9 +252,9 @@ async function runGeminiHookAnalysis(
   mimeType: string,
   lovableKey: string,
   model = "google/gemini-3-flash-preview"
-): Promise<{ hook: GeminiHook | null; insights?: GeminiInsights; metadata: any; rawContent: string }> {
+): Promise<{ hook: GeminiHook | null; insights?: GeminiInsights; metadata: any; meaning?: any; rawContent: string }> {
   const hookPrompt = await getPrompt("lyric-hook", DEFAULT_HOOK_PROMPT);
-  const content = await callGemini(hookPrompt, audioBase64, mimeType, lovableKey, model, 1200, "hook");
+  const content = await callGemini(hookPrompt, audioBase64, mimeType, lovableKey, model, 2000, "hook");
   const parsed = extractJsonFromContent(content);
 
   let hook: GeminiHook | null = null;
@@ -254,11 +267,13 @@ async function runGeminiHookAnalysis(
 
   const ins = parsed.insights || {};
   const meta = parsed.metadata || {};
+  const meaning = parsed.meaning || null;
 
   return {
     hook,
     insights: {
       mood: ins.mood ? { value: String(ins.mood.value), confidence: Number(ins.mood.confidence) } : undefined,
+      bpm: ins.bpm ? { value: Number(ins.bpm.value), confidence: Number(ins.bpm.confidence) } : undefined,
     },
     metadata: {
       title: String(meta.title || "Unknown").trim(),
@@ -267,6 +282,11 @@ async function runGeminiHookAnalysis(
       mood: ins.mood?.value ? String(ins.mood.value) : undefined,
       confidence: ins.mood?.confidence ?? undefined,
     },
+    meaning: meaning ? {
+      theme: meaning.theme ? String(meaning.theme) : undefined,
+      summary: meaning.summary ? String(meaning.summary) : undefined,
+      imagery: Array.isArray(meaning.imagery) ? meaning.imagery.map(String) : undefined,
+    } : undefined,
     rawContent: content,
   };
 }
@@ -682,6 +702,9 @@ serve(async (req) => {
         description: h.metadata.description,
         confidence: h.insights?.mood?.confidence ?? h.metadata.confidence,
         mood_confidence: h.insights?.mood?.confidence,
+        bpm: h.insights?.bpm?.value || undefined,
+        bpm_confidence: h.insights?.bpm?.confidence || undefined,
+        meaning: h.meaning || undefined,
       };
 
       if (h.hook) {
