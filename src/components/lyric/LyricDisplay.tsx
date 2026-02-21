@@ -339,10 +339,26 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         const durationSec = Number(result.hottest_hook.duration_sec) || 10;
         const conf = Number(result.hottest_hook.confidence) || 0;
         if (conf >= 0.75) {
-          // Find preview text from lyrics that overlap the hook window
+          // Find preview text using per-word timestamp interpolation
           const hookEnd = startSec + durationSec;
-          const hookLines = data.lines.filter(l => l.end >= startSec && l.start <= hookEnd);
-          const previewText = hookLines.map(l => l.text).join(" ").trim();
+          const hookWords: string[] = [];
+          for (const line of data.lines) {
+            if (line.end < startSec || line.start > hookEnd) continue;
+            const words = line.text.split(/\s+/).filter(w => w.length > 0);
+            if (words.length === 0) continue;
+            const lineDur = line.end - line.start;
+            const totalChars = words.reduce((s, w) => s + w.length, 0);
+            let charsSoFar = 0;
+            for (const w of words) {
+              const wordStart = line.start + (charsSoFar / totalChars) * lineDur;
+              charsSoFar += w.length;
+              const wordEnd = line.start + (charsSoFar / totalChars) * lineDur;
+              if (wordEnd >= startSec && wordStart <= hookEnd) {
+                hookWords.push(w);
+              }
+            }
+          }
+          const previewText = hookWords.join(" ").trim();
           hook = {
             start: startSec,
             end: startSec + durationSec,
