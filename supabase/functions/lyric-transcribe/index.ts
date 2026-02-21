@@ -137,18 +137,19 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 // ── v9.0 Triptych: Three specialized prompt builders ─────────────────────────
 
 function buildIntroPrompt(anchorWord: string, anchorTs: number): string {
-  return `ROLE: Literal Spoken Transcriber (v9.2 Triptych — Lane B)
+  return `ROLE: Literal Spoken Transcriber (v9.4 Triptych — Lane B)
 
-AUDIO CONTEXT: You are receiving the full track. Focus ONLY on the first ${Math.ceil(anchorTs + 1)} seconds.
+AUDIO CONTEXT: You are receiving the first ~${Math.ceil(anchorTs + 2)} seconds of the track as a byte-sliced clip.
 
 YOUR MISSION:
-1. LITERAL ONLY: Transcribe every spoken word, mutter, and vocal sound EXACTLY as heard. Do NOT hallucinate singing or common song lyrics. If someone says "Oh, what the hell is that melody," transcribe exactly that. If you hear humming, transcribe "[humming]".
-2. ACOUSTIC ONSET: Identify the exact start time of the first vocal sound (spoken word, mutter, or exclamation). It is NOT at 0.000s — there is always a silence/instrumental gap.
-3. THE ANCHOR: The very last word of your transcription MUST be "${anchorWord}" at exactly ${anchorTs.toFixed(3)}s. Work backward from the anchor to place earlier dialogue.
-4. PHRASE DENSITY: Max 6 words per line.
-5. TAGGING: All intro dialogue = tag "main". Background vocals = tag "adlib".
-6. SCHEMA: Every object MUST include ALL keys: start, end, text, tag, isCorrection (false), isFloating (false), confidence (1.0), geminiConflict (null).
-7. CONSTRAINT: Do NOT invent lyrics. If you are unsure what a word is, use your best phonetic guess and set confidence to 0.7. Never substitute generic song phrases.
+1. LITERAL ONLY: Transcribe ONLY what is actually spoken or muttered. If you hear humming, write "[humming]". Do NOT invent dialogue. Do NOT add creative lyrics or generic song phrases.
+2. BOUNDARY: The anchor word "${anchorWord}" occurs at exactly ${anchorTs.toFixed(3)}s. You MUST project backward from this anchor. The first human vocal sound is approximately 3-4 seconds into the track — NOT at 0.000s.
+3. SILENCE RULE: Any audio before the first vocal onset is instrumental/silence. No dialogue line may start before 1.0s. If you detect onset later than 5.0s, trust your ears.
+4. THE ANCHOR: Your LAST line must end at or very near ${anchorTs.toFixed(3)}s. The last word must be "${anchorWord}".
+5. PHRASE DENSITY: Max 6 words per line.
+6. TAGGING: All intro dialogue = tag "main". Background vocals = tag "adlib".
+7. SCHEMA: Every object MUST include ALL keys: start, end, text, tag, isCorrection (false), isFloating (false), confidence (1.0), geminiConflict (null).
+8. NO INVENTION: If you are unsure of a word, set confidence to 0.7. Never add words that aren't in the audio.
 
 EXPECTED OUTPUT: 3-8 lines of literal spoken dialogue before the anchor.
 
@@ -175,7 +176,7 @@ OUTPUT — return ONLY valid JSON, no markdown:
 }
 
 function buildAuditorPrompt(rawText: string, anchorTs: number, middleCutoff: number): string {
-  return `ROLE: Phonetic Auditor (v9.0 Triptych — Lane D)
+  return `ROLE: Word-Level Phonetic Auditor (v9.4 Triptych — Lane D)
 
 TASK: Find phonetic errors in the Whisper text between ${anchorTs.toFixed(3)}s and ${middleCutoff.toFixed(3)}s.
 
@@ -184,11 +185,14 @@ ${rawText.slice(0, 3000)}
 
 GUARDRAILS:
 1. ANCHOR: Do NOT audit anything before ${anchorTs.toFixed(3)}s.
-2. IDIOM GUARD: Do NOT correct common English idioms or phrases (e.g., "pay them no mind", "taking a chance", "sit back"). If a phrase makes sense idiomatically, leave it alone.
-3. CONTRACTION GUARD: Do NOT suggest corrections for words that are parts of common contractions (can, don, won, ain, wasn, isn, doesn, hasn, wouldn, couldn, shouldn). Unless the ENTIRE contraction is wrong, skip it.
-4. HIGH CONFIDENCE ONLY: Only return a swap if you are 95% certain Whisper is acoustically wrong. If unsure, return an empty map.
-5. SURGICAL: Only correct actual phonetic/word-sound mismatches (e.g., "whore" should be "boy"). Do NOT correct grammar, punctuation, or stylistic choices.
-6. NO TIMESTAMPS: Return ONLY the corrections map.
+2. SINGLE-WORD ONLY: Your corrections map MUST use single words as keys. Never use phrases.
+   INCORRECT: {"I'm a whore": "I'm a boy"}
+   CORRECT: {"whore": "boy"}
+3. IDIOM GUARD: Do NOT correct common English idioms or phrases (e.g., "pay them no mind", "sit back").
+4. CONTRACTION GUARD: Do NOT suggest corrections for words that are parts of contractions (can, don, won, ain, etc.). Unless the ENTIRE contraction is wrong, skip it.
+5. HIGH CONFIDENCE ONLY: Only return a swap if you are 95% certain Whisper is acoustically wrong. If unsure, return an empty map.
+6. SURGICAL: Only correct actual phonetic/word-sound mismatches (e.g., "whore" should be "boy"). Do NOT correct grammar, punctuation, or stylistic choices.
+7. NO TIMESTAMPS: Return ONLY the corrections map.
 
 OUTPUT — return ONLY valid JSON, no markdown:
 {"corrections": {}, "count": 0}`;
@@ -531,19 +535,24 @@ function stitchTriptych(
       let geminiConflict: string | undefined;
 
       for (const [wrong, right] of Object.entries(corrections)) {
-        // Pre-filter: skip if the wrong word only exists as part of a contraction
-        const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const contractionCheck = new RegExp(`\\b${escaped}[''\u2019]`, "i");
-        const standaloneCheck = new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "i");
-        if (contractionCheck.test(text) && !standaloneCheck.test(text)) {
+        // Skip multi-word corrections (Lane D should return single words only)
+        if (wrong.includes(" ")) {
+          console.warn(`[stitcher] Skipping multi-word correction: "${wrong}" → "${right}"`);
           continue;
         }
 
-        // Boundary-safe regex to prevent contraction corruption
-        const regex = new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "gi");
+        const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Pre-filter: skip if the wrong word only exists as part of a contraction
+        const contractionCheck = new RegExp(`\\b${escaped}[''\u2019]`, "i");
+        const standaloneCheck = new RegExp(`\\b${escaped}\\b`, "i");
+        if (contractionCheck.test(text) && !new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "i").test(text)) {
+          continue;
+        }
+
+        // Word-boundary regex (punctuation-agnostic)
+        const regex = new RegExp(`\\b${escaped}\\b`, "gi");
         if (regex.test(text)) {
-          // Reset lastIndex after test() before replace()
-          text = text.replace(new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "gi"), right);
+          text = text.replace(new RegExp(`\\b${escaped}\\b`, "gi"), right);
           isCorrection = true;
           geminiConflict = wrong;
           qaCorrections++;
@@ -559,12 +568,12 @@ function stitchTriptych(
     }
   }
 
-  // 2. Boundary Guard: remove intro lines that overlap with the first middle line
+  // 2. Boundary Guard: remove intro lines that overlap with or duplicate the anchor
   if (introLines.length > 0 && middleLines.length > 0) {
     const firstMiddleStart = middleLines[0].start;
     const beforeDedup = introLines.length;
-    // Remove intro lines whose end overlaps into the middle section
-    const dedupedIntro = introLines.filter(l => l.end <= firstMiddleStart + 0.05);
+    // Intro lines must END strictly before the first middle line starts
+    const dedupedIntro = introLines.filter(l => l.end < anchorTs);
     if (dedupedIntro.length < beforeDedup) {
       console.log(`[stitcher] Boundary guard: removed ${beforeDedup - dedupedIntro.length} overlapping intro lines at ${firstMiddleStart.toFixed(3)}s`);
     }
@@ -790,15 +799,16 @@ serve(async (req) => {
       // Determine middle cutoff: where Whisper words thin out (last word - small buffer)
       const middleCutoff = lastWordEnd > 10 ? lastWordEnd - 2.0 : lastWordEnd;
 
-      // v9.2: Lane B gets FULL audio (slicing caused hallucination in v9.0)
-      // Lane C still gets sliced audio (outro context is self-contained)
+      // v9.4: Lane B gets sliced audio (first anchorTs+2s) to reduce ingestion & prevent hallucination
+      // Lane C gets sliced audio (outro is self-contained)
       // Lane D gets full audio for phonetic context
+      const introAudioB64 = sliceAudioBase64(audioBase64, trackEnd, 0, anchorTs + 2.0);
       const outroAudioB64 = sliceAudioBase64(audioBase64, trackEnd, middleCutoff - 2.0, trackEnd);
 
-      console.log(`[triptych] v9.2: Lane B(full audio), Lane C(sliced ${middleCutoff.toFixed(3)}-${trackEnd.toFixed(3)}), Lane D(full audio)`);
+      console.log(`[triptych] v9.4: Lane B(sliced 0-${(anchorTs + 2).toFixed(1)}s), Lane C(sliced ${middleCutoff.toFixed(1)}-${trackEnd.toFixed(1)}s), Lane D(full)`);
 
       const [introResult, outroResult, auditorResult] = await Promise.allSettled([
-        runGeminiIntro(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, anchorW, anchorTs),
+        runGeminiIntro(introAudioB64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, anchorW, anchorTs),
         runGeminiOutro(outroAudioB64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, middleCutoff, trackEnd),
         runGeminiAuditor(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, rawText, anchorTs, middleCutoff),
       ]);
@@ -935,11 +945,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v9.3-triptych-production-master",
+          version: "anchor-align-v9.4-triptych-literal-bound",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v9.3-triptych-production-master",
+            orchestrator: "v9.4-triptych-literal-bound",
           },
           geminiUsed,
           geminiError,
