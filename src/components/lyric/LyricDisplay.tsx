@@ -1545,6 +1545,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               // Launch Hook Dance with the selected system
               const audio = audioRef.current;
               if (!audio || !beatGrid?.beats) return;
+
+              // Unlock audio synchronously within user gesture context
+              audio.currentTime = songDna.hook!.start;
+              audio.play().catch(() => {});
+
               const beats: BeatTick[] = beatGrid.beats.map((t, i) => ({
                 time: t,
                 isDownbeat: i % 4 === 0,
