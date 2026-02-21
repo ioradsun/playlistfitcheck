@@ -313,7 +313,7 @@ function useHookCanvas(
     for (const node of nodes) {
       if (node.phase === "center") {
         const elapsed = now - node.phaseStartTime;
-        ctx.font = "28px system-ui, -apple-system, sans-serif";
+        ctx.font = "15px system-ui, -apple-system, sans-serif";
         ctx.globalAlpha = 1;
         ctx.fillStyle = "#ffffff";
         const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
@@ -333,7 +333,7 @@ function useHookCanvas(
         const curX = cx + (node.seedX - cx) * t * 0.3; // drift partway
         const curY = cy + (targetY - cy) * t;
         // Interpolate size and opacity
-        const size = 28 - (28 - 15) * t;
+        const size = 15 - (15 - 13) * t;
         const opacity = 1 - (1 - (targetRow?.opacity || 0.18)) * t;
 
         ctx.font = `${Math.round(size)}px system-ui, -apple-system, sans-serif`;
@@ -692,7 +692,7 @@ export default function ShareableHook() {
         phase: "center",
         phaseStartTime: Date.now(),
         riverRowIndex,
-        currentSize: 28,
+        currentSize: 15,
         baseOpacity: 0.12,
       });
     }
