@@ -1437,14 +1437,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       setHookDanceRunning(true);
                       engine.start();
                     }}
-                    className={`w-full flex items-center justify-center gap-1.5 text-[10px] font-mono transition-colors border rounded-lg py-1.5 ${
+                    className={`w-full text-[13px] font-semibold tracking-[0.15em] uppercase transition-colors border rounded-lg py-1.5 ${
                       hookDanceRunning
                         ? "text-primary bg-primary/10 border-primary/40"
-                        : "text-primary/70 hover:text-primary border-primary/20 hover:border-primary/40"
+                        : "text-muted-foreground hover:text-foreground border-border/30 hover:border-foreground/40"
                     }`}
                   >
-                    {hookDanceRunning ? <Pause size={10} /> : <Sparkles size={10} />}
-                    <span>{hookDanceRunning ? "Stop dance" : "See hook dance"}</span>
+                    {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
                   </button>
                 )}
                 {features?.lyric_video && (
