@@ -359,23 +359,29 @@ function findRepetitionAnchor(
 }
 
 // ── Gemini Transcription: full audio-to-lyrics via Gemini ─────────────────────
-const DEFAULT_TRANSCRIBE_PROMPT = `ROLE: Audio Transcription Engine
+const DEFAULT_TRANSCRIBE_PROMPT = `ROLE: Lead Audio Transcription Engine (Global Clock Sync)
 
-TASK: Transcribe ALL sung/rapped/spoken lyrics from this audio file with precise timestamps.
+TASK: Transcribe all vocals with millisecond-precision anchored to the Absolute File Start (0.000).
 
-RULES:
-- Transcribe every word exactly as heard, preserving slang, ad-libs, and pronunciation.
-- Group words into natural lyric lines (4-8 words per line).
-- Each line needs a start and end timestamp in seconds with 3-decimal precision.
-- Tag lines as "main" for lead vocals or "adlib" for background/ad-lib vocals.
-- Cover the ENTIRE track from start to finish — do not skip sections.
-- If a section has no vocals (instrumental), skip it — do not invent lyrics.
+1. GLOBAL CLOCK ANCHORING
+Reference Zero: The first millisecond of the audio file is 0.000. Every timestamp must be relative to this absolute start point.
+Silence Accounting: If the song starts with an instrumental intro, your first entry MUST NOT begin until the first vocal phoneme, but that time must reflect the offset from file start.
+Continuous Tracking: Do not "reset" the clock for different sections.
 
-OUTPUT — return ONLY valid JSON array, no markdown, no explanation:
+2. TRANSCRIPTION RULES
+Verbatim: Capture slang, ad-libs, and vocal textures exactly.
+Categorization: Use "main" for lead vocals and "adlib" for background/shouts.
+Granularity: 4-8 words per line.
+
+3. TECHNICAL CONSTRAINTS
+Precision: 3-decimal float (e.g., 12.402).
+No Overlaps: Ensure end times for main vocals do not exceed the start time of the next main vocal.
+Format: Output ONLY the raw JSON array. No markdown, no explanation, no backticks.
+
+OUTPUT TEMPLATE:
 [
-  { "start": 0.000, "end": 1.500, "text": "First lyric line", "tag": "main" },
-  { "start": 1.600, "end": 3.200, "text": "Second lyric line", "tag": "main" },
-  { "start": 3.300, "end": 4.800, "text": "yeah yeah", "tag": "adlib" }
+  { "start": 5.210, "end": 7.400, "text": "I'm starting on the beat now", "tag": "main" },
+  { "start": 7.450, "end": 8.100, "text": "yeah yeah", "tag": "adlib" }
 ]`;
 
 async function runGeminiTranscribe(
