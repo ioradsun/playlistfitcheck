@@ -1302,6 +1302,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               </div>
             </div>
           )}
+          {/* Spacer so floating widget doesn't block last card */}
+          <div className="h-20" />
         </div>
       </div>
 
