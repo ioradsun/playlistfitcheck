@@ -87,11 +87,24 @@ export function HookDanceCanvas({
       : -1;
 
     if (activeLine) {
-      // Look up effect from AI sequence
-      const seqEntry = spec.effect_sequence?.find(
-        e => e.line_index === activeLineIndex
-      );
-      const effectKey = seqEntry?.effect_key ?? "STATIC_RESOLVE";
+      // Resolve effect: v6 pool-based or v5 sequence-based
+      let effectKey = "STATIC_RESOLVE";
+      if (spec.effect_sequence) {
+        // Legacy v5: direct lookup
+        const seqEntry = spec.effect_sequence.find(e => e.line_index === activeLineIndex);
+        effectKey = seqEntry?.effect_key ?? "STATIC_RESOLVE";
+      } else if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
+        // v6: procedural selection from pool using logic_seed + line index
+        // Hook Lock: lines within hook window use HOOK_FRACTURE
+        const isInHook = currentTime >= hookStart && currentTime <= hookEnd;
+        const isLastHookLine = isInHook && activeLine.end >= hookEnd - 0.5;
+        if (isLastHookLine) {
+          effectKey = "HOOK_FRACTURE";
+        } else {
+          const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
+          effectKey = spec.effect_pool[poolIdx];
+        }
+      }
       const drawFn = getEffect(effectKey);
 
       const age = (currentTime - activeLine.start) * 1000;

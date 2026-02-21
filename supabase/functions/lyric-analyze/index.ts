@@ -6,112 +6,80 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DEFAULT_DNA_PROMPT = `ROLE: Lead Music Intelligence Analyst — Song DNA Engine
+const DEFAULT_DNA_PROMPT = `ROLE: Universal Music & Physics Orchestrator (v6.0)
 
-TASK: Analyze the full audio track AND its timestamped lyrics to extract the song's structural identity ("Song DNA").
-
-You have access to:
-- Full audio track
-- Beat grid (bar and downbeat alignment)
-- Timestamped lyrics
-
-Use all three signals in combination.
+TASK: Analyze the full audio track, beat grid, and timestamped lyrics to extract the "Song DNA" and define a deterministic "Physics Spec" for the entire track.
 
 1. ADAPTIVE HOOK ANCHOR (8–12s, Bar-Aligned)
+
 Identify the single primary bar-aligned segment representing the track's definitive "Hottest Hook."
 
-Duration Rules:
-- The hook window MUST be between 8.000 and 12.000 seconds.
-- It must be fully bar-aligned (start on a musical downbeat).
-- Select the smallest bar-aligned window within 8–12 seconds that fully captures the dominant hook phrase and its peak production lift.
-- Do NOT cut off a lyrical phrase mid-line.
-- Do NOT extend beyond the emotional or production peak unnecessarily.
+Rules: Must be 8.000–12.000s, bar-aligned, and capture the peak production lift without cutting off lyrical phrases.
 
-Evaluation Priority (strict order):
-1. Production lift and instrumental intensity
-2. Overlap between peak production and the most frequently repeated lyrical phrase (using timestamped lyrics)
-3. Melodic memorability
-4. Emotional peak
-5. Lead vocal intensity
-6. Repetition frequency across the full track
+Evaluation Priority: 1. Production lift, 2. Lyrical repetition, 3. Melodic peak.
 
-Additional Requirements:
-- Scan the FULL track. Do not default to the first chorus.
-- Evaluate the final chorus separately for added instrumentation or layered lift.
-- Use timestamped lyrics to detect the most frequently repeated lyrical phrase.
-- Prefer windows where that phrase overlaps with maximum production intensity.
-- A purely instrumental drop may be selected only if its memorability and lift clearly exceed all lyrical sections.
+2. SONG IDENTITY & MEANING
 
-Output Rules:
-- Output ONLY: start_sec (3-decimal precision), duration_sec (3-decimal precision, between 8.000 and 12.000), confidence
-- Confidence floor: Only return hottest_hook if confidence >= 0.85. If below, omit the field entirely.
+Description: One evocative sentence (max 15 words) with sonic texture and emotional descriptors.
 
-2. SONG DESCRIPTION
-Write a single evocative sentence (max 15 words) describing what this song sounds and feels like.
-Requirements:
-- Must include at least one sonic texture descriptor (e.g., distorted, glossy, cinematic, gritty, orchestral, minimal).
-- Must include at least one emotional descriptor.
-- Avoid clichés and generic phrasing.
-- Do not stack genre labels.
+Mood: Single dominant emotional driver (e.g., euphoric, brooding).
 
-3. MOOD
-Return the single most dominant emotional descriptor (e.g., melancholic, euphoric, anthemic, brooding, aggressive).
-- Do NOT return null.
-- If blended, choose the primary emotional driver.
-- Confidence floor target: >= 0.85 (if below, return the closest dominant mood anyway).
+Meaning: Theme (2–4 words), Summary (2–3 sentences), and Imagery (2–3 physically renderable objects/scenes).
 
-4. SONG MEANING (from lyrics)
-- theme: Core theme in 2–4 words
-- summary: 2–3 sentence plain-language explanation of what the song is about
-- imagery: 2–3 visually concrete, physically renderable images used in the lyrics
+3. PHYSICS SPEC (The Laws of Nature)
 
-Imagery Rules:
-- Must be physically visualizable (objects, environments, physical scenes).
-- No abstract emotional phrases (e.g., "broken heart," "shattered dreams," "lost love").
-- Prefer specific environments, objects, or physical actions.
+Generate a physics_spec object that maps acoustic energy to a visual physics simulation.
 
-5. PHYSICS SPEC (Hook Dance Choreography)
+System Selection:
+- Aggressive/Distorted → fracture (mass: 0.8, brittleness: 0.9)
+- Anthemic/Powerful → pressure (mass: 2.0, elasticity: 0.4)
+- Melancholic/Slow → breath (mass: 1.2, damping: 0.8)
+- Dark/Haunted → combustion (heat: 0.5)
+- Smooth/Flowing → orbit (mass: 1.0, elasticity: 0.7)
 
-Generate a physics_spec object that maps the song's acoustic energy to a visual physics simulation.
+Material Constants: Assign specific values for mass, elasticity, damping, brittleness, and heat.
 
-Task A — Physics System Selection:
-Map the song's energy and mood to one of these systems:
-- Aggressive/Distorted → "fracture" (mass: 0.8, brittleness: 0.9)
-- Anthemic/Powerful → "pressure" (mass: 2.0, elasticity: 0.4)
-- Melancholic/Slow → "breath" (mass: 1.2, damping: 0.8)
-- Dark/Haunted → "combustion" (heat: 0.5)
+4. CREATIVE DICTIONARY (Intelligence Layer)
 
-Task B — Effect Sequencing:
-For every lyric line within the detected hook window, assign a unique effect_key from:
-SHATTER_IN, TUNNEL_RUSH, GRAVITY_DROP, PULSE_BLOOM, RIPPLE_OUT, GLITCH_FLASH, WAVE_SURGE, EMBER_RISE, HOOK_FRACTURE
-The FINAL line of the hook MUST use HOOK_FRACTURE.
+Scan the full song lyrics and assign modifiers from the strict dictionary below.
 
-Task C — Micro-Surprise:
-Define a structured micro_surprise for visual accents (e.g., every_n_beats: 4, action: "rgb_split").
+Semantic Tags (Max 5): FIRE, ICE, GHOST, MACHINE, HEART, FALL, RISE, WATER, LIGHT, DARK.
 
-Task D — Color Palette:
-Extract 3–5 HSL colors from the song's mood/energy for the visual palette.
+Line Mods (Per-line overrides): GHOST_FADE (opacity/blur), HEAT_SPIKE (heat boost), FREEZE_2F (velocity lock), RGB_SPLIT_4F (glitch).
 
-OUTPUT — return ONLY valid JSON, no markdown, no explanation:
+Word Marks (Max 6 total for song): POP (scale), SHAKE (vibration), GLITCH (jitter), GLOW (bloom).
+
+5. FULL-LENGTH SCALABILITY (The Pool Rule)
+
+To support a full-song visualizer without JSON bloat:
+
+Effect Pool: Provide 4–6 effect_keys matching the song's arc (e.g., SHATTER_IN, TUNNEL_RUSH, PULSE_BLOOM).
+
+Logic Seed: Provide an integer logic_seed. The engine uses this to procedurally sequence the pool across all lyrics.
+
+Hook Lock: The lines within the hottest_hook window MUST use the HOOK_FRACTURE effect.
+
+OUTPUT — Valid JSON only, no markdown, no explanation:
 {
-  "hottest_hook": { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.00, "justification": "Brief 1-2 sentence explanation of why this window was chosen — reference production lift, lyrical repetition, or melodic peak." },
-  "description": "A cinematic, euphoric anthem pulsing with restless longing",
-  "mood": "anthemic",
+  "hottest_hook": { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.00, "justification": "..." },
+  "description": "...",
+  "mood": "...",
   "meaning": {
-    "theme": "Midnight Redemption",
-    "summary": "The artist confronts past mistakes while chasing emotional closure...",
-    "imagery": ["neon skyline", "rearview mirror", "rain-soaked street"]
+    "theme": "...",
+    "summary": "...",
+    "imagery": ["...", "..."]
   },
   "physics_spec": {
-    "system": "pressure",
-    "params": { "mass": 2.0, "elasticity": 0.4 },
-    "palette": ["hsl(270,80%,60%)", "hsl(320,70%,50%)", "hsl(200,90%,40%)"],
-    "effect_sequence": [
-      { "line_index": 0, "effect_key": "TUNNEL_RUSH" },
-      { "line_index": 1, "effect_key": "PULSE_BLOOM" },
-      { "line_index": 2, "effect_key": "HOOK_FRACTURE" }
-    ],
-    "micro_surprise": { "every_n_beats": 4, "action": "rgb_split" }
+    "system": "fracture",
+    "params": { "mass": 0.8, "elasticity": 0.5, "damping": 0.6, "brittleness": 0.9, "heat": 0.2 },
+    "palette": ["hsl(0, 100%, 50%)", "hsl(240, 100%, 50%)", "hsl(0, 0%, 100%)"],
+    "effect_pool": ["SHATTER_IN", "GLITCH_FLASH", "WAVE_SURGE"],
+    "logic_seed": 12345,
+    "lexicon": {
+      "semantic_tags": [{"tag": "FIRE", "strength": 0.8}],
+      "line_mods": [{ "t_lyric": 12, "mods": ["HEAT_SPIKE"] }],
+      "word_marks": [{ "t_lyric": 12, "wordIndex": 3, "mark": "GLITCH" }]
+    }
   }
 }`;
 

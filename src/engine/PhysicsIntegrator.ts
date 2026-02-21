@@ -25,11 +25,20 @@ export interface PhysicsResponse {
 }
 
 export interface PhysicsSpec {
-  system: string; // "fracture" | "pressure" | "breath" | "combustion"
+  system: string; // "fracture" | "pressure" | "breath" | "combustion" | "orbit"
   params: Record<string, number>;
   palette: string[];
-  effect_sequence: { line_index: number; effect_key: string }[];
-  micro_surprise: { every_n_beats: number; action: string };
+  // v6.0 pool-based fields
+  effect_pool?: string[];
+  logic_seed?: number;
+  lexicon?: {
+    semantic_tags?: { tag: string; strength: number }[];
+    line_mods?: { t_lyric: number; mods: string[] }[];
+    word_marks?: { t_lyric: number; wordIndex: number; mark: string }[];
+  };
+  // Legacy v5 fields (backwards compat)
+  effect_sequence?: { line_index: number; effect_key: string }[];
+  micro_surprise?: { every_n_beats: number; action: string };
   // Derived at construction time:
   material: PhysicsMaterial;
   response: PhysicsResponse;
@@ -70,6 +79,10 @@ const SYSTEM_PRESETS: Record<string, { material: PhysicsMaterial; response: Phys
   combustion: {
     material: { mass: 1.0, elasticity: 5, damping: 0.5, brittleness: 1.0, heat: 0.5 },
     response: { beat_impulse: 1.5, downbeat_impulse: 3.0 },
+  },
+  orbit: {
+    material: { mass: 1.0, elasticity: 3, damping: 0.7, brittleness: 1.8, heat: 0.1 },
+    response: { beat_impulse: 0.9, downbeat_impulse: 2.0 },
   },
 };
 
