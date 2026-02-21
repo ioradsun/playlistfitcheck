@@ -1,86 +1,81 @@
 
 
-## Add Optional Lyrics Input to LyricFit
+# Director's Cut Screen
 
-### Overview
-Add an optional "Paste Your Lyrics" textarea to the LyricUploader screen. When lyrics are provided, the transcription pipeline shifts from **detective mode** (phonetic guessing) to **editor mode** (forced alignment), significantly improving accuracy.
+## Overview
+After Song DNA analysis reveals the AI's recommended physics system, a new full-screen "Director's Cut" overlay lets the artist see all 5 physics systems rendered simultaneously on the same hook. They pick the one that feels right -- no sliders, no parameters. Just instinct.
 
-### User Experience
-- A collapsible or always-visible textarea appears above the upload button labeled something like "Have lyrics? Paste them for better accuracy"
-- The field is **optional** -- if empty, the pipeline works exactly as it does today
-- When lyrics are pasted, a subtle indicator shows "Editor Mode" so the user knows the AI will align rather than guess
-- The existing upload + sync flow remains unchanged
+## Flow Change
 
-### Frontend Changes
-
-**1. `src/components/lyric/LyricUploader.tsx`**
-- Add a `Textarea` field for pasting lyrics (optional)
-- Store in local state, pass to `onTranscribe` callback
-- Update the callback signature: `onTranscribe: (file: File, referenceLyrics?: string) => void`
-- Add a helper label: "Paste lyrics for better sync accuracy (optional)"
-
-**2. `src/components/lyric/LyricFitTab.tsx`**
-- Update `handleTranscribe` to accept and forward the optional `referenceLyrics` string
-- Include `referenceLyrics` in the POST body to the edge function
-
-### Backend Changes
-
-**3. `supabase/functions/lyric-transcribe/index.ts`**
-
-- Parse optional `referenceLyrics` from the request body
-- **Scribe path (editor mode)**: After Scribe returns word-level timestamps, run a post-processing step that diffs the Scribe output against the reference lyrics. Replace misheard words with the reference text while preserving Scribe's native timestamps. This gives you Scribe-quality timing with lyric-perfect text.
-- **Gemini path (editor mode)**: Swap the transcription prompt from the current "detective" prompt to a new "forced alignment" prompt. Instead of asking Gemini to figure out what's being said, the prompt says: "Here are the lyrics. Align each line to the audio and return timestamps." This is a fundamentally simpler task for the model.
-- Add a new `DEFAULT_ALIGN_PROMPT` constant as fallback, and a corresponding `lyric-align` slug for the admin prompt editor
-- The hook analysis pipeline remains untouched -- it always works from audio
-
-### Technical Details
-
-**New alignment prompt (Gemini path):**
-```
-ROLE: Precision Lyric Alignment Engine (Global Clock Sync)
-
-TASK: You are given the complete lyrics below. Your ONLY job is to listen
-to the audio and assign precise start/end timestamps to each line.
-Do NOT alter, rewrite, or reorder the lyrics. Align them exactly as given.
-
-REFERENCE LYRICS:
-{referenceLyrics}
-
-RULES:
-- Timestamps anchored to Absolute File Start (0.000)
-- 3-decimal precision (e.g., 12.402)
-- No overlaps between consecutive main vocal lines
-- Tag lines as "main" or "adlib" based on what you hear
-- If a reference line isn't audible, still include it with your best
-  estimate based on surrounding context
-
-OUTPUT: Raw JSON array only, no markdown.
+```text
+Upload --> Transcribe --> Song DNA Reveal --> Director's Cut --> Hook Dance Playback --> Export
 ```
 
-**Scribe post-processing (diff/correction):**
-- Tokenize both Scribe output and reference lyrics
-- Use a simple word-level sequence alignment (longest common subsequence)
-- Where Scribe's word differs from reference, replace the text but keep the timestamp
-- This preserves Scribe's millisecond-precision timing while fixing phonetic errors
+The "See Hook Dance" button in Song DNA will now open the Director's Cut screen instead of jumping directly into the single-system Hook Dance.
 
-**Request body change:**
-```json
-{
-  "audioBase64": "...",
-  "format": "mp3",
-  "analysisModel": "google/gemini-2.5-flash",
-  "transcriptionModel": "scribe",
-  "referenceLyrics": "optional string of pasted lyrics"
-}
-```
+## New Component: `DirectorsCutScreen.tsx`
 
-**Debug output additions:**
-- `mode: "detective" | "editor"` to indicate which path was used
-- `referenceProvided: boolean`
+A full-screen overlay (`fixed inset-0 z-50`) with:
 
-### What stays the same
-- Hook analysis (Gemini) is unaffected -- always uses audio
-- The upload zone, progress modal, and file handling are unchanged
-- If no lyrics are pasted, the entire pipeline runs identically to today
-- Admin prompt management still works -- the new alignment prompt gets its own `lyric-align` slug
+- **5 mini-canvases** in a 2-col grid (2 / 2 / 1 centered) on desktop; stacked vertically on mobile
+- Each canvas runs its own `PhysicsIntegrator` with the same beat grid, same lyrics, same hook window -- just a different system
+- **Silent playback**: audio plays once (shared), all 5 canvases render from the same `audio.currentTime`
+- **AI Pick badge**: the AI-recommended system gets a small "AI PICK" label above its canvas in red
+- **System labels**: Bebas Neue font, with poetic subtitle underneath (e.g., "FRACTURE -- Your words are glass")
+- **Selection**: tap/click a canvas to highlight it (thin red border, white label). Hover scales to 1.02x
+- **"THIS ONE" button**: glows red when a system is selected. Clicking it transitions to the full Hook Dance with that system applied as an override
+
+### System Variants (derived from AI base spec)
+
+Each system starts from the AI's base `PhysicsSpec` params and applies multipliers:
+
+| System | Modifications |
+|---|---|
+| FRACTURE | Use spec params as-is |
+| PRESSURE | mass x1.2, elasticity x0.8 |
+| BREATH | damping x1.3, heat x1.6 |
+| COMBUSTION | heat x2.0, brittleness x0.5 |
+| ORBIT | elasticity x1.4, damping x0.7 |
+
+### Performance Strategy
+
+- **Desktop (hardwareConcurrency >= 4)**: Render all 5 canvases. Non-hovered canvases render at 0.5x resolution (CSS scaled up). Hovered/selected canvas gets full resolution.
+- **Mobile / low-end (hardwareConcurrency < 4)**: Show one canvas at a time with left/right swipe navigation. System name + subtitle visible; dots indicator for position.
+
+### Deterministic Seeding
+
+Each system gets a unique but deterministic seed: `baseSeed + systemIndex` (0-4), ensuring each canvas produces different but reproducible visuals.
+
+## Changes Summary
+
+### New Files
+1. **`src/components/lyric/DirectorsCutScreen.tsx`** -- The full Director's Cut overlay component. Contains:
+   - 5 mini-canvas elements, each with its own `PhysicsIntegrator` instance
+   - A shared `requestAnimationFrame` loop driving all 5 integrators from one `audio.currentTime`
+   - System labels with Bebas Neue font (loaded via Google Fonts or CSS)
+   - Low-end device detection and single-canvas fallback mode
+   - "THIS ONE" button that returns the selected system key
+
+### Modified Files
+2. **`src/components/lyric/LyricDisplay.tsx`** -- Wire the Director's Cut into the flow:
+   - "See Hook Dance" button opens `DirectorsCutScreen` instead of directly starting `HookDanceEngine`
+   - New state: `showDirectorsCut: boolean`
+   - On system selection from Director's Cut, set `hookDanceOverrides.system` to the chosen system and launch the existing Hook Dance playback
+   - The existing `HookDanceCanvas` and `HookDanceExporter` remain unchanged
+
+3. **`index.html`** -- Add Bebas Neue font link (Google Fonts) for the system labels
+
+### No Backend Changes
+The AI prompt does NOT need to change. The current v6 spec already provides `effect_pool` + `logic_seed` which the Director's Cut will reuse per-system. Each canvas uses the same pool but with its own seeded index offset, creating visual variety without requiring 5 separate effect sequences from the AI.
+
+## Technical Details
+
+### Shared Audio Architecture
+One `HTMLAudioElement` plays the hook region. A single `requestAnimationFrame` loop reads `audio.currentTime` and fans it out to all 5 `PhysicsIntegrator` instances. Each integrator scans the same `BeatTick[]` array independently with its own `beatIndex` pointer.
+
+### Canvas Rendering
+Each mini-canvas gets its own draw pass using the existing `EffectRegistry`. The effect key resolution uses the same `(logic_seed + systemOffset + lineIndex * 7) % pool.length` formula, where `systemOffset` varies per system to create visual differentiation.
+
+### Transition to Playback
+When the artist clicks "THIS ONE", the Director's Cut fades out, the selected system key is passed as a `hookDanceOverrides.system` override, and the existing full-screen `HookDanceCanvas` takes over with audio. This reuses all existing infrastructure -- no new engine code needed.
 
