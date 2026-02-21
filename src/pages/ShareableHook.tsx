@@ -794,8 +794,6 @@ export default function ShareableHook() {
               setTappedSides(prev => new Set(prev).add("a"));
               hookACanvas.restart();
               setMuted(false);
-              // Only vote once both sides have been heard
-              if (!hasVoted && tappedSides.has("b")) handleVote(hookData.id);
             }}
           >
             <div ref={containerRef} className="absolute inset-0">
@@ -834,8 +832,6 @@ export default function ShareableHook() {
               setTappedSides(prev => new Set(prev).add("b"));
               hookBCanvas.restart();
               setMuted(false);
-              // Only vote once both sides have been heard
-              if (!hasVoted && tappedSides.has("a")) handleVote(rivalHook!.id);
             }}
           >
             <div ref={containerRefB} className="absolute inset-0">
@@ -876,25 +872,31 @@ export default function ShareableHook() {
         {/* Bottom panel — 3-state machine */}
         <div className="px-5 py-4 max-h-[35vh] pb-[env(safe-area-inset-bottom,16px)]" style={{ background: bgBase }}>
           <AnimatePresence mode="wait">
-            {/* State 1: Pre-Vote — must hear both sides first */}
+            {/* State 1: Pre-Vote — tap to play, vote with button */}
             {!hasVoted && (
               <motion.div
                 key="prevote"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-center py-2"
+                className="text-center space-y-3 py-2"
               >
-                {tappedSides.size < 2 ? (
+                {tappedSides.size === 0 ? (
                   <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/20">
-                    {tappedSides.size === 0
-                      ? "Tap each side to hear"
-                      : `Now tap the ${tappedSides.has("a") ? "other" : "first"} side`}
+                    Tap each side to hear
                   </p>
                 ) : (
-                  <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/20">
-                    Tap the one that hits harder
-                  </p>
+                  <>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30">
+                      {activeHookSide === "a" ? hookALabel : hookBLabel}
+                    </p>
+                    <button
+                      onClick={() => handleVote(activeHookSide === "a" ? hookData.id : rivalHook!.id)}
+                      className="px-8 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-colors min-h-[44px]"
+                    >
+                      I'M HOOKED
+                    </button>
+                  </>
                 )}
               </motion.div>
             )}
@@ -909,18 +911,26 @@ export default function ShareableHook() {
                 transition={{ duration: 0.3 }}
                 className="space-y-4"
               >
-                <div className="text-center space-y-1">
-                  <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40 truncate max-w-[120px] mx-auto">
-                    {votedA ? hookALabel : hookBLabel}
-                  </p>
-                  <motion.p
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.4, ease: "easeOut" }}
-                    className="text-4xl font-bold tabular-nums text-white/90"
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40 truncate max-w-[120px]">
+                      {votedA ? hookALabel : hookBLabel}
+                    </p>
+                    <motion.p
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                      className="text-4xl font-bold tabular-nums text-white/90"
+                    >
+                      {votedA ? pctA : pctB}%
+                    </motion.p>
+                  </div>
+                  <button
+                    onClick={() => handleVote(votedA ? rivalHook!.id : hookData.id)}
+                    className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/20 hover:text-white/40 transition-colors min-h-[44px] px-3"
                   >
-                    {votedA ? pctA : pctB}%
-                  </motion.p>
+                    Switch
+                  </button>
                 </div>
 
                 <input
