@@ -94,7 +94,7 @@ export function DreamInlineComposer({ onCreated }: Props) {
           onClick={publish}
           className="text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-4 py-1.5 rounded-full hover:opacity-90 disabled:opacity-40 transition-opacity"
         >
-          {publishing ? <Loader2 size={12} className="animate-spin inline" /> : "Make This Real"}
+          {publishing ? <Loader2 size={12} className="animate-spin inline" /> : "MAKE FIT"}
         </button>
       </div>
     </div>
