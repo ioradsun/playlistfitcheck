@@ -71,6 +71,26 @@ const SYSTEM_STYLES: Record<string, SystemStyle> = {
     italics: false,
     lineHeight: 1.2,
   },
+  paper: {
+    font: '"EB Garamond", serif',
+    weight: "600",
+    letterSpacing: 1,
+    textTransform: "none",
+    layout: "center",
+    colorMode: "solid",
+    italics: false,
+    lineHeight: 1.3,
+  },
+  glass: {
+    font: '"Inter", sans-serif',
+    weight: "300",
+    letterSpacing: 4,
+    textTransform: "uppercase",
+    layout: "wide",
+    colorMode: "gradient",
+    italics: false,
+    lineHeight: 1.1,
+  },
 };
 
 const DEFAULT_STYLE: SystemStyle = SYSTEM_STYLES.fracture;

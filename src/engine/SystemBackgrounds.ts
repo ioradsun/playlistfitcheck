@@ -501,6 +501,218 @@ function drawOrbitBackground(ctx: CanvasRenderingContext2D, s: BackgroundState) 
   }
 }
 
+// ── PAPER — Warm off-white with ink splatter and bleed ─────────────────────
+
+interface PaperInkSplat {
+  x: number; y: number; size: number; alpha: number; rotation: number;
+}
+
+const paperSplats = new WeakMap<CanvasRenderingContext2D, PaperInkSplat[]>();
+
+function drawPaperBackground(ctx: CanvasRenderingContext2D, s: BackgroundState) {
+  const { w, h, physState, beatCount, rng, palette, time } = s;
+
+  // Warm paper base
+  const paperGrad = ctx.createLinearGradient(0, 0, w, h);
+  paperGrad.addColorStop(0, "#f5f0e8");
+  paperGrad.addColorStop(0.3, "#ede7db");
+  paperGrad.addColorStop(0.7, "#f0eade");
+  paperGrad.addColorStop(1, "#e8e0d2");
+  ctx.fillStyle = paperGrad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Paper grain texture
+  ctx.globalAlpha = 0.06;
+  for (let i = 0; i < 120; i++) {
+    const nx = rng() * w;
+    const ny = rng() * h;
+    const ns = 1 + rng() * 3;
+    ctx.fillStyle = rng() > 0.5 ? "#c8bfb0" : "#d5cab8";
+    ctx.fillRect(nx, ny, ns, ns);
+  }
+  ctx.globalAlpha = 1;
+
+  // Ink color from palette
+  const inkHex = palette[1] || palette[0] || "#1a1a2e";
+  const iR = parseInt(inkHex.slice(1, 3), 16) || 26;
+  const iG = parseInt(inkHex.slice(3, 5), 16) || 26;
+  const iB = parseInt(inkHex.slice(5, 7), 16) || 46;
+
+  // Ink splats — spawn on beats
+  if (!paperSplats.has(ctx)) {
+    paperSplats.set(ctx, []);
+  }
+  const splats = paperSplats.get(ctx)!;
+
+  if (beatCount > 0 && physState.velocity > 0.2) {
+    const count = 2 + Math.floor(rng() * 3);
+    for (let i = 0; i < count; i++) {
+      splats.push({
+        x: w * 0.15 + rng() * w * 0.7,
+        y: h * 0.15 + rng() * h * 0.7,
+        size: 3 + rng() * 15,
+        alpha: 0.03 + rng() * 0.06,
+        rotation: rng() * Math.PI * 2,
+      });
+    }
+    if (splats.length > 80) splats.splice(0, splats.length - 80);
+  }
+
+  // Draw ink splats
+  for (const splat of splats) {
+    ctx.globalAlpha = splat.alpha;
+    ctx.fillStyle = `rgb(${iR},${iG},${iB})`;
+    ctx.save();
+    ctx.translate(splat.x, splat.y);
+    ctx.rotate(splat.rotation);
+    ctx.beginPath();
+    // Organic blob shape
+    for (let a = 0; a < Math.PI * 2; a += 0.3) {
+      const r = splat.size * (0.7 + rng() * 0.6);
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      a === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+
+  // Subtle ink bleed lines on downbeats
+  if (physState.scale > 1.05) {
+    const bleedAlpha = Math.min(0.08, (physState.scale - 1) * 0.3);
+    ctx.globalAlpha = bleedAlpha;
+    ctx.strokeStyle = `rgb(${iR},${iG},${iB})`;
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i < 5; i++) {
+      const y = h * (0.2 + rng() * 0.6);
+      ctx.beginPath();
+      ctx.moveTo(w * 0.1, y);
+      ctx.bezierCurveTo(w * 0.3, y + rng() * 20 - 10, w * 0.7, y + rng() * 20 - 10, w * 0.9, y);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Gentle coffee ring stain (permanent, decorative)
+  const stainX = w * 0.72;
+  const stainY = h * 0.28;
+  const stainR = Math.min(w, h) * 0.08;
+  ctx.globalAlpha = 0.035;
+  ctx.strokeStyle = "#8a7560";
+  ctx.lineWidth = stainR * 0.3;
+  ctx.beginPath();
+  ctx.arc(stainX, stainY, stainR, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// ── GLASS — Bright white with prismatic refractions ────────────────────────
+
+interface GlassPrism {
+  x: number; y: number; angle: number; size: number; speed: number;
+}
+
+const glassPrisms = new WeakMap<CanvasRenderingContext2D, GlassPrism[]>();
+
+function drawGlassBackground(ctx: CanvasRenderingContext2D, s: BackgroundState) {
+  const { w, h, physState, beatCount, rng, palette, time } = s;
+
+  // Bright white base with subtle blue tint
+  const baseGrad = ctx.createLinearGradient(0, 0, w * 0.5, h);
+  baseGrad.addColorStop(0, "#f8faff");
+  baseGrad.addColorStop(0.5, "#f0f4ff");
+  baseGrad.addColorStop(1, "#edf1fa");
+  ctx.fillStyle = baseGrad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Rainbow refraction colors
+  const refractionColors = [
+    "rgba(255, 0, 80, 0.04)",
+    "rgba(255, 140, 0, 0.035)",
+    "rgba(255, 230, 0, 0.03)",
+    "rgba(0, 200, 100, 0.035)",
+    "rgba(0, 130, 255, 0.04)",
+    "rgba(120, 0, 255, 0.035)",
+  ];
+
+  // Prismatic bands — diagonal light beams
+  const beamAngle = Math.PI * 0.15 + Math.sin(time * 0.2) * 0.05;
+  for (let i = 0; i < refractionColors.length; i++) {
+    const offset = i * (w * 0.12) + Math.sin(time * 0.3 + i) * 20;
+    ctx.save();
+    ctx.translate(w * 0.3 + offset, 0);
+    ctx.rotate(beamAngle);
+    ctx.fillStyle = refractionColors[i];
+    ctx.fillRect(-15, -h * 0.5, 30 + physState.heat * 20, h * 2);
+    ctx.restore();
+  }
+
+  // Prism shapes — spawn on beats
+  if (!glassPrisms.has(ctx)) {
+    const initial: GlassPrism[] = [];
+    for (let i = 0; i < 5; i++) {
+      initial.push({
+        x: rng() * w,
+        y: rng() * h,
+        angle: rng() * Math.PI * 2,
+        size: 20 + rng() * 40,
+        speed: 0.2 + rng() * 0.3,
+      });
+    }
+    glassPrisms.set(ctx, initial);
+  }
+  const prisms = glassPrisms.get(ctx)!;
+
+  // Draw floating prism shapes
+  for (const prism of prisms) {
+    prism.angle += prism.speed * 0.01;
+    prism.x += Math.sin(time * prism.speed) * 0.2;
+    prism.y += Math.cos(time * prism.speed * 0.7) * 0.15;
+
+    ctx.save();
+    ctx.translate(prism.x, prism.y);
+    ctx.rotate(prism.angle);
+    ctx.globalAlpha = 0.04 + physState.heat * 0.03;
+    ctx.strokeStyle = palette[1] || "#4488ff";
+    ctx.lineWidth = 0.5;
+    // Triangle
+    ctx.beginPath();
+    ctx.moveTo(0, -prism.size * 0.6);
+    ctx.lineTo(-prism.size * 0.5, prism.size * 0.4);
+    ctx.lineTo(prism.size * 0.5, prism.size * 0.4);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+
+  // Lens flare on beat
+  if (physState.scale > 1.03) {
+    const flareIntensity = Math.min(0.12, (physState.scale - 1) * 0.5);
+    const flareGrad = ctx.createRadialGradient(w * 0.7, h * 0.3, 0, w * 0.7, h * 0.3, w * 0.4);
+    flareGrad.addColorStop(0, `rgba(255, 255, 255, ${flareIntensity})`);
+    flareGrad.addColorStop(0.3, `rgba(200, 220, 255, ${flareIntensity * 0.4})`);
+    flareGrad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = flareGrad;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  // Subtle grid lines — architectural
+  ctx.globalAlpha = 0.03;
+  ctx.strokeStyle = "#8888aa";
+  ctx.lineWidth = 0.5;
+  const step = 80;
+  for (let x = 0; x < w; x += step) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let y = 0; y < h; y += step) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
 // ── Public dispatcher ──────────────────────────────────────────────────────
 
 const BG_RENDERERS: Record<string, (ctx: CanvasRenderingContext2D, s: BackgroundState) => void> = {
@@ -509,6 +721,8 @@ const BG_RENDERERS: Record<string, (ctx: CanvasRenderingContext2D, s: Background
   breath: drawBreathBackground,
   combustion: drawCombustionBackground,
   orbit: drawOrbitBackground,
+  paper: drawPaperBackground,
+  glass: drawGlassBackground,
 };
 
 export function drawSystemBackground(ctx: CanvasRenderingContext2D, s: BackgroundState): void {
