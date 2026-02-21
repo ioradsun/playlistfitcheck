@@ -6,6 +6,7 @@ import { compressAudioFile } from "@/lib/compressAudio";
 import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData } from "./LyricDisplay";
+import { LyricProgressModal, type ProgressStage } from "./LyricProgressModal";
 
 interface Props {
   initialLyric?: any;
@@ -16,6 +17,9 @@ interface Props {
 export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Syncing...");
+  const [progressStage, setProgressStage] = useState<ProgressStage>("compressing");
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [progressFileName, setProgressFileName] = useState<string>("");
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [hasRealAudio, setHasRealAudio] = useState(false);
@@ -60,31 +64,34 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
       return;
     }
     setLoading(true);
+    setProgressFileName(file.name);
+    setProgressStage("compressing");
+    setProgressOpen(true);
+
     try {
-      // Compress large files client-side before uploading
-      setLoadingMsg("Compressing…");
+      // Stage 1: Compress
+      setProgressStage("compressing");
       let uploadFile: File;
       try {
         uploadFile = await compressAudioFile(file);
       } catch (compErr) {
         toast.error(compErr instanceof Error ? compErr.message : "Compression failed");
         setLoading(false);
+        setProgressOpen(false);
         return;
       }
-      // Compression happens silently — no need to notify the user
 
-      // Encode to base64 on the client to avoid edge function memory issues
-      setLoadingMsg("Encoding…");
+      // Stage 2: Encode
+      setProgressStage("encoding");
       const arrayBuffer = await uploadFile.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuffer);
       let binary = "";
-      // Encode in chunks to avoid call stack limits
       const chunkSize = 8192;
       for (let i = 0; i < uint8.length; i += chunkSize) {
         binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
       }
       const audioBase64 = btoa(binary);
-      // Detect actual format from the file being uploaded
+
       const name = uploadFile.name.toLowerCase();
       const mime = (uploadFile.type || "").toLowerCase();
       let format: string;
@@ -96,7 +103,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
       else if (name.endsWith(".webm") || mime.includes("webm")) format = "webm";
       else format = "mp3";
 
-      setLoadingMsg("Syncing…");
+      // Stage 3: Upload
+      setProgressStage("uploading");
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
         {
@@ -110,15 +118,31 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
         }
       );
 
+      // Once request is sent, simulate backend stages with timers
+      // The backend runs transcription + analysis in parallel
+      setProgressStage("transcribing");
+      const transcribeTimer = setTimeout(() => setProgressStage("analyzing"), 8000);
+      const finalizeTimer = setTimeout(() => setProgressStage("finalizing"), 16000);
+
       if (!response.ok) {
+        clearTimeout(transcribeTimer);
+        clearTimeout(finalizeTimer);
         const err = await response.json().catch(() => ({ error: "Transcription failed" }));
         throw new Error(err.error || `Error ${response.status}`);
       }
 
       const data = await response.json();
+      clearTimeout(transcribeTimer);
+      clearTimeout(finalizeTimer);
+
+      // Brief finalizing flash
+      setProgressStage("finalizing");
 
       if (data.error) throw new Error(data.error);
       if (!data.lines) throw new Error("Invalid response format");
+
+      // Small delay so user sees "Quality Check" complete
+      await new Promise((r) => setTimeout(r, 600));
 
       setLyricData({
         title: data.title || file.name.replace(/\.[^/.]+$/, "") || "Unknown",
@@ -137,8 +161,9 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
       toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");
     } finally {
       setLoading(false);
+      setProgressOpen(false);
     }
-  }, []);
+  }, [analysisModel, transcriptionModel, quota]);
 
   const handleBack = useCallback(() => {
     setLyricData(null);
@@ -166,6 +191,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
           onSaved={(id) => { setSavedId(id); onProjectSaved?.(); }}
           onReuploadAudio={(file) => { setAudioFile(file); setHasRealAudio(true); }}
         />
+        <LyricProgressModal open={progressOpen} currentStage={progressStage} fileName={progressFileName} />
       </div>
     );
   }
@@ -181,6 +207,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
         setAudioFile(dummyFile);
         setHasRealAudio(false);
       }} loading={loading} loadingMsg={loadingMsg} />
+      <LyricProgressModal open={progressOpen} currentStage={progressStage} fileName={progressFileName} />
     </div>
   );
 }
