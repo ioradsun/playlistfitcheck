@@ -792,50 +792,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         </div>
       )}
 
-      {/* Song meaning analysis */}
-      <div className="glass-card rounded-xl px-4 py-3">
-        {!meaningRequested ? (
-          <button
-            onClick={fetchSongMeaning}
-            className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Sparkles size={14} className="text-primary" />
-            What's this song about?
-          </button>
-        ) : meaningLoading ? (
-          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
-            <Loader2 size={14} className="animate-spin text-primary" />
-            Analyzing lyrics…
-          </div>
-        ) : songMeaning ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-primary shrink-0" />
-              <span className="text-[11px] font-mono text-foreground/50 uppercase tracking-wider">Song Meaning</span>
-            </div>
-            {songMeaning.theme && (
-              <p className="text-sm font-semibold text-foreground">{songMeaning.theme}</p>
-            )}
-            {songMeaning.summary && (
-              <p className="text-sm text-muted-foreground leading-relaxed">{songMeaning.summary}</p>
-            )}
-            <div className="flex flex-wrap gap-2 mt-1">
-              {songMeaning.mood && (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                  {songMeaning.mood}
-                </span>
-              )}
-              {songMeaning.imagery?.map((img, idx) => (
-                <span key={idx} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                  {img}
-                </span>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">Couldn't analyze — try again later.</p>
-        )}
-      </div>
+      
 
       <div className="flex flex-col lg:flex-row gap-4 items-start">
 
@@ -1116,97 +1073,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             </div>
           </div>
 
-          {/* Export — below lyrics */}
-          {activeLines.length > 0 && (
-            <div className="glass-card rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Export · {versionSuffix}
-                </p>
-                <button
-                  onClick={() => {
-                    if (activeVersion === "explicit") {
-                      setExplicitLines([...originalLines.current]);
-                      setExplicitLastEdited(new Date());
-                    } else if (fmlyLines) {
-                      setFmlyLines(null);
-                      setActiveVersion("explicit");
-                    }
-                    toast.success("Lyrics restored to original");
-                  }}
-                  className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <RotateCcw size={10} />
-                  Restore Original
-                </button>
-              </div>
-              <div className="space-y-0">
-                {EXPORT_OPTIONS.map(({ format, label, desc }, idx) => (
-                  <div key={format} className={`flex items-center justify-between py-2 ${idx > 0 ? "border-t border-border/30" : ""}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-medium text-foreground w-7">{label}</span>
-                      <span className="text-[10px] text-muted-foreground">{desc}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors" onClick={() => handleCopy(format)}>
-                        {copied === format ? "✓ Copied" : "Copy"}
-                      </button>
-                      <button className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors" onClick={() => handleDownload(format)}>
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── RIGHT: Controls panel ── */}
-        <div className="w-full lg:w-56 lg:shrink-0 space-y-4">
-
-          {/* Version toggle */}
-          <div className="glass-card rounded-xl p-3">
-            <VersionToggle
-              active={activeVersion}
-              explicitLastEdited={explicitLastEdited}
-              fmlyLastEdited={fmlyLastEdited}
-              hasFmly={fmlyLines !== null}
-              onChange={setActiveVersion}
-            />
-            {activeVersion === "fmly" && (
-              <div className="mt-3 pt-3 border-t border-border/40">
-                <FmlyFriendlyPanel
-                  hasFmly={fmlyLines !== null}
-                  report={fmlyReport}
-                  onGenerate={handleGenerateFmly}
-                  onSeek={seekTo}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Format controls */}
-          <div className="glass-card rounded-xl p-3">
-            <LyricFormatControls
-              activeVersion={activeVersion}
-              lineFormat={activeMeta.lineFormat}
-              socialPreset={activeMeta.socialPreset}
-              strictness={fmlyMeta.strictness}
-              onLineFormatChange={(v) => updateMeta(activeVersion, { lineFormat: v })}
-              onSocialPresetChange={(v) => updateMeta(activeVersion, { socialPreset: v })}
-              onStrictnessChange={(v) => setFmlyMeta((m) => ({ ...m, strictness: v }))}
-            />
-          </div>
-
-          {/* Hottest Hook Hero */}
+          {/* Hottest Hook — below lyrics */}
           {(() => {
             const hook = hooks[0] ?? null;
             const isLooping = activeHookIndex === 0;
             const isCandidate = hook?.status === "candidate";
-            const r = 20;
-            const circ = 2 * Math.PI * r;
-            const dashOffset = circ * (1 - (isLooping ? clipProgress : 0));
             const clipDuration = hook ? hook.end - hook.start : 0;
 
             return (
@@ -1214,8 +1085,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 className={`glass-card rounded-xl p-4 space-y-3 transition-all duration-300 ${
                   hook && isLooping
                     ? "border border-primary/60 shadow-[0_0_18px_4px_hsl(var(--primary)/0.22)]"
-                    : isCandidate
-                    ? "border border-yellow-500/30"
                     : "border border-border/30"
                 }`}
               >
@@ -1266,20 +1135,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
                 {hook ? (
                   <>
-                    {/* Preview text */}
                     {hook.previewText && (
                       <p className="text-sm font-medium text-foreground leading-snug">
                         "{hook.previewText}"
                       </p>
                     )}
-
-                    {/* Timestamp */}
                     <p className="text-[10px] font-mono text-muted-foreground">
                       {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
                       <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
                     </p>
-
-                    {/* Reason codes */}
                     {hook.reasonCodes.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {hook.reasonCodes.slice(0, 4).map((code) => (
@@ -1289,8 +1153,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         ))}
                       </div>
                     )}
-
-                    {/* Lyric Video — gated by admin toggle */}
                     {features?.lyric_video && (
                       <button
                         onClick={() => setVideoComposerOpen(true)}
@@ -1309,6 +1171,134 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               </div>
             );
           })()}
+
+          {/* Song meaning analysis — below hottest hook */}
+          <div className="glass-card rounded-xl px-4 py-3">
+            {!meaningRequested ? (
+              <button
+                onClick={fetchSongMeaning}
+                className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Sparkles size={14} className="text-primary" />
+                What's this song about?
+              </button>
+            ) : meaningLoading ? (
+              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+                <Loader2 size={14} className="animate-spin text-primary" />
+                Analyzing lyrics…
+              </div>
+            ) : songMeaning ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-primary shrink-0" />
+                  <span className="text-[11px] font-mono text-foreground/50 uppercase tracking-wider">Song Meaning</span>
+                </div>
+                {songMeaning.theme && (
+                  <p className="text-sm font-semibold text-foreground">{songMeaning.theme}</p>
+                )}
+                {songMeaning.summary && (
+                  <p className="text-sm text-muted-foreground leading-relaxed">{songMeaning.summary}</p>
+                )}
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {songMeaning.mood && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                      {songMeaning.mood}
+                    </span>
+                  )}
+                  {songMeaning.imagery?.map((img, idx) => (
+                    <span key={idx} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                      {img}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">Couldn't analyze — try again later.</p>
+            )}
+          </div>
+        </div>
+
+        {/* ── RIGHT: Controls panel ── */}
+        <div className="w-full lg:w-56 lg:shrink-0 space-y-4">
+
+          {/* Version toggle */}
+          <div className="glass-card rounded-xl p-3">
+            <VersionToggle
+              active={activeVersion}
+              explicitLastEdited={explicitLastEdited}
+              fmlyLastEdited={fmlyLastEdited}
+              hasFmly={fmlyLines !== null}
+              onChange={setActiveVersion}
+            />
+            {activeVersion === "fmly" && (
+              <div className="mt-3 pt-3 border-t border-border/40">
+                <FmlyFriendlyPanel
+                  hasFmly={fmlyLines !== null}
+                  report={fmlyReport}
+                  onGenerate={handleGenerateFmly}
+                  onSeek={seekTo}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Format controls */}
+          <div className="glass-card rounded-xl p-3">
+            <LyricFormatControls
+              activeVersion={activeVersion}
+              lineFormat={activeMeta.lineFormat}
+              socialPreset={activeMeta.socialPreset}
+              strictness={fmlyMeta.strictness}
+              onLineFormatChange={(v) => updateMeta(activeVersion, { lineFormat: v })}
+              onSocialPresetChange={(v) => updateMeta(activeVersion, { socialPreset: v })}
+              onStrictnessChange={(v) => setFmlyMeta((m) => ({ ...m, strictness: v }))}
+            />
+          </div>
+
+          {/* Export — under formatting */}
+          {activeLines.length > 0 && (
+            <div className="glass-card rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                  Export · {versionSuffix}
+                </p>
+                <button
+                  onClick={() => {
+                    if (activeVersion === "explicit") {
+                      setExplicitLines([...originalLines.current]);
+                      setExplicitLastEdited(new Date());
+                    } else if (fmlyLines) {
+                      setFmlyLines(null);
+                      setActiveVersion("explicit");
+                    }
+                    toast.success("Lyrics restored to original");
+                  }}
+                  className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <RotateCcw size={10} />
+                  Restore Original
+                </button>
+              </div>
+              <div className="space-y-0">
+                {EXPORT_OPTIONS.map(({ format, label, desc }, idx) => (
+                  <div key={format} className={`flex items-center justify-between py-2 ${idx > 0 ? "border-t border-border/30" : ""}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-medium text-foreground w-7">{label}</span>
+                      <span className="text-[10px] text-muted-foreground">{desc}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors" onClick={() => handleCopy(format)}>
+                        {copied === format ? "✓ Copied" : "Copy"}
+                      </button>
+                      <button className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors" onClick={() => handleDownload(format)}>
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
