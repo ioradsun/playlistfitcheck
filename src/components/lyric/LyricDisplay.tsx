@@ -295,33 +295,59 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     setDnaLoading(true);
     setDnaRequested(true);
     try {
-      // If metadata already has DNA from transcription pipeline, use it
-      if (data.metadata?.meaning || data.metadata?.bpm || data.metadata?.mood) {
-        setSongDna({
-          mood: data.metadata.mood,
-          bpm: data.metadata.bpm,
-          description: data.metadata.description,
-          meaning: data.metadata.meaning,
-          hook: (data.hooks ?? [])[0] ?? null,
-        });
-        setDnaLoading(false);
-        return;
-      }
-      // Otherwise fetch via lyric-analyze
       const lyricsText = data.lines.filter(l => l.tag !== "adlib").map(l => l.text).join("\n");
+
+      // If we have real audio, encode it and send along for full audio+lyrics DNA
+      let audioBase64: string | undefined;
+      let format: string | undefined;
+      if (hasRealAudio && audioFile.size > 0) {
+        const arrayBuffer = await audioFile.arrayBuffer();
+        const uint8 = new Uint8Array(arrayBuffer);
+        let binary = "";
+        const chunkSize = 8192;
+        for (let i = 0; i < uint8.length; i += chunkSize) {
+          binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+        }
+        audioBase64 = btoa(binary);
+        const name = audioFile.name.toLowerCase();
+        if (name.endsWith(".wav")) format = "wav";
+        else if (name.endsWith(".m4a")) format = "m4a";
+        else if (name.endsWith(".flac")) format = "flac";
+        else if (name.endsWith(".ogg")) format = "ogg";
+        else if (name.endsWith(".webm")) format = "webm";
+        else format = "mp3";
+      }
+
       const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
-        body: { title: data.title, artist: data.artist, lyrics: lyricsText },
+        body: { title: data.title, artist: data.artist, lyrics: lyricsText, audioBase64, format },
       });
       if (error) throw error;
+
+      // Parse hook from result
+      let hook: LyricHook | null = null;
+      if (result?.hottest_hook?.start_sec != null) {
+        const startSec = Number(result.hottest_hook.start_sec);
+        const conf = Number(result.hottest_hook.confidence) || 0;
+        if (conf >= 0.75) {
+          // Find preview text from lyrics near the hook
+          const hookLines = data.lines.filter(l => l.start >= startSec - 1 && l.start <= startSec + 12);
+          const previewText = hookLines.map(l => l.text).join(" ").slice(0, 100);
+          hook = {
+            start: startSec,
+            end: startSec + 10,
+            score: Math.round(conf * 100),
+            reasonCodes: [],
+            previewText,
+          };
+        }
+      }
+
       setSongDna({
-        mood: result?.mood || data.metadata?.mood,
-        description: data.metadata?.description,
-        meaning: {
-          theme: result?.theme,
-          summary: result?.summary,
-          imagery: result?.imagery,
-        },
-        hook: (data.hooks ?? [])[0] ?? null,
+        mood: result?.mood,
+        bpm: result?.bpm,
+        description: result?.description,
+        meaning: result?.meaning,
+        hook,
       });
     } catch (e) {
       console.error("Song DNA error:", e);
@@ -329,7 +355,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     } finally {
       setDnaLoading(false);
     }
-  }, [data, dnaLoading, songDna]);
+  }, [data, audioFile, hasRealAudio, dnaLoading, songDna]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
@@ -1112,16 +1138,21 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             </div>
           </div>
 
-          {/* ── Song DNA — click to generate ── */}
+          {/* ── Song DNA — click Reveal to generate ── */}
           <div className="glass-card rounded-xl p-4 border border-border/30">
             {!dnaRequested ? (
-              <button
-                onClick={fetchSongDna}
-                className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors w-full"
-              >
-                <Sparkles size={14} className="text-primary" />
-                Song DNA
-              </button>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-primary" />
+                  <span className="text-[11px] font-mono text-muted-foreground">Song DNA</span>
+                </div>
+                <button
+                  onClick={fetchSongDna}
+                  className="text-[11px] font-mono text-primary hover:text-primary/80 transition-colors"
+                >
+                  Reveal
+                </button>
+              </div>
             ) : dnaLoading ? (
               <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
                 <Loader2 size={14} className="animate-spin text-primary" />
@@ -1162,7 +1193,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
                 {/* Hottest Hook */}
                 {(() => {
-                  const hook = songDna.hook ?? hooks[0] ?? null;
+                  const hook = songDna.hook ?? null;
                   const isLooping = activeHookIndex === 0;
                   const clipDuration = hook ? hook.end - hook.start : 0;
 
