@@ -174,54 +174,90 @@ function drawFrame(
     }
   }
   activeLineIdxs.sort((a, b) => a - b);
-  const visibleLines = activeLineIdxs.slice(-2);
+
+  // Calculate how many lines fit in the safe zone (middle 60% of canvas height)
+  const lineHeight = fontSize * 1.6;
+  const safeZoneHeight = ch * 0.6;
+  const maxVisibleLines = Math.max(1, Math.floor(safeZoneHeight / lineHeight));
+  const visibleLines = activeLineIdxs.slice(-maxVisibleLines);
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const lineHeight = fontSize * 1.6;
   const totalHeight = visibleLines.length * lineHeight;
   const startY = ch * 0.5 - totalHeight / 2 + lineHeight / 2;
 
+  // Helper: wrap a line of text to fit within canvas width with padding
+  const maxTextWidth = cw * 0.85;
+
   visibleLines.forEach((lineIdx, vi) => {
     const lineWords = lineGroups.get(lineIdx) || [];
-    const y = startY + vi * lineHeight;
-
     ctx.font = `bold ${fontSize}px ${fontCss}`;
-    const fullText = lineWords.map(w => w.word).join(" ");
-    const totalWidth = ctx.measureText(fullText).width;
-    let x = (cw - totalWidth) / 2;
+
+    // Word-wrap: split into rows that fit within maxTextWidth
+    const wrappedRows: WordEntry[][] = [];
+    let currentRow: WordEntry[] = [];
+    let currentRowWidth = 0;
 
     lineWords.forEach((w) => {
-      const wordAge = time - w.start;
-      const bounce = bounceEase(wordAge / 0.25);
-      const alpha = Math.min(1, Math.max(0, wordAge * 4));
-      const scale = bounce;
-
-      ctx.save();
       const wordWidth = ctx.measureText(w.word + " ").width;
-      const wx = x + wordWidth / 2;
-
-      ctx.translate(wx, y);
-      ctx.scale(scale, scale);
-      ctx.translate(-wx, -y);
-
-      ctx.shadowColor = "rgba(0,0,0,0.7)";
-      ctx.shadowBlur = 12;
-      ctx.shadowOffsetY = 4;
-
-      if (wordAge < 0.5 && wordAge >= 0) {
-        ctx.shadowColor = "rgba(255,255,255,0.4)";
-        ctx.shadowBlur = 20;
+      if (currentRow.length > 0 && currentRowWidth + wordWidth > maxTextWidth) {
+        wrappedRows.push(currentRow);
+        currentRow = [w];
+        currentRowWidth = wordWidth;
+      } else {
+        currentRow.push(w);
+        currentRowWidth += wordWidth;
       }
+    });
+    if (currentRow.length > 0) wrappedRows.push(currentRow);
 
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = wordAge >= 0 ? "#FFFFFF" : "rgba(255,255,255,0.2)";
-      ctx.font = `bold ${fontSize}px ${fontCss}`;
-      ctx.fillText(w.word, wx, y);
+    // If this line wraps, adjust y position
+    const rowHeight = fontSize * 1.3;
+    const lineBlockHeight = wrappedRows.length * rowHeight;
+    const lineBaseY = startY + vi * lineHeight;
+    const lineStartY = lineBaseY - (lineBlockHeight - rowHeight) / 2;
 
-      ctx.restore();
-      x += wordWidth;
+    wrappedRows.forEach((rowWords, ri) => {
+      const rowY = lineStartY + ri * rowHeight;
+      // Skip if row is outside canvas bounds
+      if (rowY < fontSize || rowY > ch - fontSize) return;
+
+      const rowText = rowWords.map(w => w.word).join(" ");
+      const rowWidth = ctx.measureText(rowText).width;
+      let x = (cw - rowWidth) / 2;
+
+      rowWords.forEach((w) => {
+        const wordAge = time - w.start;
+        const bounce = bounceEase(wordAge / 0.25);
+        const alpha = Math.min(1, Math.max(0, wordAge * 4));
+        const scale = bounce;
+
+        ctx.save();
+        const wordWidth = ctx.measureText(w.word + " ").width;
+        const wx = x + wordWidth / 2;
+
+        ctx.translate(wx, rowY);
+        ctx.scale(scale, scale);
+        ctx.translate(-wx, -rowY);
+
+        ctx.shadowColor = "rgba(0,0,0,0.7)";
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 4;
+
+        if (wordAge < 0.5 && wordAge >= 0) {
+          ctx.shadowColor = "rgba(255,255,255,0.4)";
+          ctx.shadowBlur = 20;
+        }
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = wordAge >= 0 ? "#FFFFFF" : "rgba(255,255,255,0.2)";
+        ctx.font = `bold ${fontSize}px ${fontCss}`;
+        ctx.fillText(w.word, wx, rowY);
+
+        ctx.restore();
+        x += wordWidth;
+      });
     });
   });
 
@@ -358,7 +394,6 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
 
     // Set up audio source for mixing
     let audioCtx: AudioContext | null = null;
-    let audioSourceNode: MediaElementAudioSourceNode | null = null;
     let audioDest: MediaStreamAudioDestinationNode | null = null;
     let audioEl: HTMLAudioElement | null = null;
 
@@ -368,12 +403,25 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
         audioDest = audioCtx.createMediaStreamDestination();
         const audioUrl = URL.createObjectURL(audioFile);
         audioEl = new Audio(audioUrl);
+        audioEl.crossOrigin = "anonymous";
         audioEl.currentTime = regionStart;
-        audioSourceNode = audioCtx.createMediaElementSource(audioEl);
-        audioSourceNode.connect(audioDest);
-        // Also connect to speakers so it decodes properly
-        audioSourceNode.connect(audioCtx.destination);
-        audioEl.volume = 0; // mute speakers, audio still goes to dest
+
+        // Wait for audio to be ready
+        await new Promise<void>((resolve) => {
+          audioEl!.addEventListener("canplaythrough", () => resolve(), { once: true });
+          audioEl!.load();
+        });
+
+        const sourceNode = audioCtx.createMediaElementSource(audioEl);
+
+        // Route to recording destination at full volume
+        sourceNode.connect(audioDest);
+
+        // Route to speakers through a silent gain node (so browser decodes but user doesn't hear)
+        const muteGain = audioCtx.createGain();
+        muteGain.gain.value = 0;
+        sourceNode.connect(muteGain);
+        muteGain.connect(audioCtx.destination);
       } catch (e) {
         console.warn("Could not set up audio for recording:", e);
       }
