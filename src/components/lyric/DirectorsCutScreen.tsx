@@ -168,7 +168,7 @@ export function DirectorsCutScreen({
 
       const safeW = w * 0.85;
       const charCount = Math.max(1, activeLine.text.length);
-      const dynamicFs = Math.min(w * 0.06, 42, (safeW / charCount) * 1.6);
+      const dynamicFs = Math.min(w * 0.07, (safeW / charCount) * 1.8);
       const fs = Math.max(Math.round(dynamicFs), 10);
 
       const palette = spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
