@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { compressAudioFile } from "@/lib/compressAudio";
+import { sessionAudio } from "@/lib/sessionAudioCache";
 import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData } from "./LyricDisplay";
@@ -63,9 +64,17 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       // Restore saved beat grid
       const savedBg = (initialLyric as any).beat_grid;
       if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
-      const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
-      setAudioFile(dummyFile);
-      setHasRealAudio(false);
+
+      // Check session cache for real audio first
+      const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
+      if (cachedAudio) {
+        setAudioFile(cachedAudio);
+        setHasRealAudio(true);
+      } else {
+        const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+        setAudioFile(dummyFile);
+        setHasRealAudio(false);
+      }
     }
   }, [initialLyric, lyricData]);
 
@@ -189,6 +198,9 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       setHasRealAudio(true);
       setSavedId(null);
       setDebugData(data._debug ?? null);
+      // Cache audio in session so it survives remounts
+      // Will be keyed to savedId once the project is saved
+      sessionAudio.set("lyric", "__unsaved__", file);
       await quota.increment();
     } catch (e) {
       console.error("Transcription error:", e);
@@ -225,8 +237,21 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
           debugData={debugData}
           initialBeatGrid={precomputedBeatGrid}
           onBack={handleBack}
-          onSaved={(id) => { setSavedId(id); onProjectSaved?.(); onSavedId?.(id); }}
-          onReuploadAudio={(file) => { setAudioFile(file); setHasRealAudio(true); }}
+          onSaved={(id) => {
+            setSavedId(id);
+            // Move cached audio to the saved project ID
+            if (audioFile && hasRealAudio) sessionAudio.set("lyric", id, audioFile);
+            sessionAudio.remove("lyric", "__unsaved__");
+            onProjectSaved?.();
+            onSavedId?.(id);
+          }}
+          onReuploadAudio={(file) => {
+            setAudioFile(file);
+            setHasRealAudio(true);
+            // Cache re-uploaded audio
+            const cacheId = savedId || "__unsaved__";
+            sessionAudio.set("lyric", cacheId, file);
+          }}
           onHeaderProject={onHeaderProject}
         />
         <LyricProgressModal open={progressOpen} currentStage={progressStage} fileName={progressFileName} />
@@ -244,9 +269,16 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
         const savedBg = (l as any).beat_grid;
         if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
         else setPrecomputedBeatGrid(null);
-        const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
-        setAudioFile(dummyFile);
-        setHasRealAudio(false);
+        // Check session cache for audio
+        const cachedAudio = l.id ? sessionAudio.get("lyric", l.id) : undefined;
+        if (cachedAudio) {
+          setAudioFile(cachedAudio);
+          setHasRealAudio(true);
+        } else {
+          const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+          setAudioFile(dummyFile);
+          setHasRealAudio(false);
+        }
       }} loading={loading} loadingMsg={loadingMsg} />
       <LyricProgressModal open={progressOpen} currentStage={progressStage} fileName={progressFileName} />
     </div>

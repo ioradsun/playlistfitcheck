@@ -12,6 +12,7 @@ import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
+import { sessionAudio } from "@/lib/sessionAudioCache";
 import MixFitCheck from "@/pages/MixFitCheck";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 import { LyricFitTab } from "@/components/lyric/LyricFitTab";
@@ -404,6 +405,8 @@ const Index = () => {
       setVibeFitLoadKey(k => k + 1);
       setSidebarRefreshKey(k => k + 1);
       setHeaderProject(null);
+      // Clear all cached audio on logout
+      sessionAudio.clearAll();
     }
     prevUserRef.current = user;
   }, [user, authLoading]);
