@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Trophy, Target, AlertTriangle, CheckCircle2, ChevronDown, Flame, Zap, TrendingUp, Radio } from "lucide-react";
+import { Trophy, Target, AlertTriangle, CheckCircle2, ChevronDown, Flame, Zap, TrendingUp, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
@@ -161,21 +162,21 @@ function MasterCard({ master, index }: { master: MasterAnalysis; index: number }
 interface Props {
   analysis: HitFitAnalysis;
   onBack: () => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
-export function HitFitResults({ analysis, onBack }: Props) {
+export function HitFitResults({ analysis, onBack, onHeaderProject }: Props) {
+  useEffect(() => {
+    onHeaderProject?.({ title: "Hit Potential Analysis", onBack });
+    return () => onHeaderProject?.(null);
+  }, [onBack, onHeaderProject]);
+
   return (
     <div className="w-full max-w-2xl mx-auto pb-24 divide-y divide-border/30">
 
-      {/* Header */}
-      <div className="flex items-center gap-3 pb-6">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft size={18} strokeWidth={1.5} />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-[18px] font-semibold tracking-tight">Hit Potential Analysis</h1>
-          <p className="font-mono text-[11px] text-muted-foreground mt-0.5 leading-snug">{analysis.overallVerdict}</p>
-        </div>
+      {/* Verdict */}
+      <div className="pb-6">
+        <p className="font-mono text-[11px] text-muted-foreground mt-0.5 leading-snug">{analysis.overallVerdict}</p>
       </div>
 
       {/* Hit + Short-Form Potential */}

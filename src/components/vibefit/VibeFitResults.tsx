@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Copy, Download, RefreshCw, Check, Image, MessageSquare, Hash } from "lucide-react";
+import { Copy, Download, RefreshCw, Check, Image, MessageSquare, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 
@@ -22,6 +22,7 @@ interface VibeFitResultsProps {
   onBack: () => void;
   onRegenerate: () => void;
   regenerating: boolean;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -54,16 +55,14 @@ function downloadImage(dataUrl: string, index: number) {
   document.body.removeChild(link);
 }
 
-export function VibeFitResults({ result, songTitle, onBack, onRegenerate, regenerating }: VibeFitResultsProps) {
+export function VibeFitResults({ result, songTitle, onBack, onRegenerate, regenerating, onHeaderProject }: VibeFitResultsProps) {
+  useEffect(() => {
+    onHeaderProject?.({ title: songTitle || "Your Vibe", onBack });
+    return () => onHeaderProject?.(null);
+  }, [songTitle, onBack, onHeaderProject]);
+
   return (
     <div className="w-full max-w-2xl mx-auto space-y-8 pb-24">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
-          <ArrowLeft size={18} strokeWidth={1.5} />
-        </Button>
-        <h1 className="text-xl font-semibold">{songTitle || "Your Vibe"}</h1>
-      </div>
 
       {/* Cover Art */}
       {result.coverArt.length > 0 && (

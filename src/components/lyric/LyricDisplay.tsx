@@ -78,6 +78,7 @@ interface Props {
   onBack: () => void;
   onSaved?: (id: string) => void;
   onReuploadAudio?: (file: File) => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -203,7 +204,7 @@ function hookScoreColor(score: number): string {
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
-export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, onBack, onSaved, onReuploadAudio }: Props) {
+export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, onBack, onSaved, onReuploadAudio, onHeaderProject }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
   const features = (siteCopy as any)?.features;
@@ -630,6 +631,12 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     toast.success(`"${selectedText}" split to new Adlib line`);
   }, [capturedSelectionText, activeLines, activeVersion]);
 
+  // Report project title to header
+  useEffect(() => {
+    const title = data.title || audioFile.name.replace(/\.[^.]+$/, "");
+    onHeaderProject?.({ title, onBack });
+    return () => onHeaderProject?.(null);
+  }, [data.title, audioFile.name, onBack, onHeaderProject]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -638,15 +645,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      {/* Header bar */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
-          <ArrowLeft size={18} strokeWidth={1.5} />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold truncate">{audioFile.name.replace(/\.[^.]+$/, "")}</h2>
-          <p className="text-[10px] text-muted-foreground">{data.artist !== "Unknown" ? data.artist : ""}</p>
-        </div>
+      {/* Save status + Admin debug */}
+      <div className="flex items-center justify-end gap-2">
         {user && (
           <span className="text-[10px] text-muted-foreground shrink-0">
             {saveStatus === "saving" ? "● Saving…" : saveStatus === "saved" ? "✓ Saved" : ""}

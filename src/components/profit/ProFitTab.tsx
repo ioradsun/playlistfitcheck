@@ -21,9 +21,10 @@ interface ProFitTabProps {
   initialArtistUrl?: string | null;
   initialSavedReport?: { reportId: string; shareToken: string; blueprint: Blueprint; artist: ArtistData } | null;
   onProjectSaved?: () => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
-export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved }: ProFitTabProps = {}) => {
+export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved, onHeaderProject }: ProFitTabProps = {}) => {
   const [view, setView] = useState<View>("landing");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportState | null>(null);
@@ -104,6 +105,7 @@ export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved
         artist={report.artist}
         blueprint={report.blueprint}
         onBack={() => setView("report")}
+        onHeaderProject={onHeaderProject}
       />
     );
   }
@@ -118,6 +120,7 @@ export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved
           shareToken={report.shareToken}
           onBack={() => { setReport(null); setView("landing"); }}
           onOpenChat={() => setView("chat")}
+          onHeaderProject={onHeaderProject}
         />
       </div>
     );
