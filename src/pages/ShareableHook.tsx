@@ -14,7 +14,7 @@ import { Volume2, VolumeX } from "lucide-react";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground, type BackgroundState } from "@/engine/SystemBackgrounds";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
-import { getSystemStyle, buildFont, applyTransform } from "@/engine/SystemStyles";
+import { getSystemStyle, buildFont, applyTransform, computeFitFontSize } from "@/engine/SystemStyles";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
@@ -466,10 +466,7 @@ export default function ShareableHook() {
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
 
-      const safeW = w * 0.85;
-      const charCount = Math.max(1, activeLine.text.length);
-      const dynamicFs = Math.min(w * 0.07, (safeW / charCount) * 1.8);
-      const fs = Math.max(Math.round(dynamicFs), 14);
+      const fs = computeFitFontSize(ctx, activeLine.text, w, hookData.system_type);
 
       const effectState: EffectState = {
         text: activeLine.text,

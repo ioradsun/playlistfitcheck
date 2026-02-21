@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Download } from "lucide-react";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
+import { computeFitFontSize } from "@/engine/SystemStyles";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
@@ -165,11 +166,8 @@ export function HookDanceCanvas({
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
 
-      // Dynamic font sizing: scale to canvas width, no hard pixel cap
-      const safeW = w * 0.85;
-      const charCount = Math.max(1, activeLine.text.length);
-      const dynamicFs = Math.min(w * 0.07, (safeW / charCount) * 1.8);
-      const fs = Math.max(Math.round(dynamicFs), 14);
+      // Use measureText-based sizing that accounts for letter-spacing
+      const fs = computeFitFontSize(ctx, activeLine.text, w, activeSystem);
 
       const effectState: EffectState = {
         text: activeLine.text,

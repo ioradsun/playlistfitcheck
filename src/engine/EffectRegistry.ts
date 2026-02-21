@@ -9,6 +9,13 @@
 import type { PhysicsState } from "./PhysicsIntegrator";
 import { type SystemStyle, getSystemStyle, buildFont, applyTransform, createGradientFill } from "./SystemStyles";
 
+/** Measure actual char width using the canvas context + font, for accurate char-by-char positioning */
+function measureCharWidth(ctx: CanvasRenderingContext2D, st: SystemStyle): number {
+  // Use 'M' as reference — widest common glyph
+  const m = ctx.measureText("M").width;
+  return m + st.letterSpacing;
+}
+
 export interface EffectState {
   text: string;
   physState: PhysicsState;
@@ -66,7 +73,7 @@ const drawShatterIn: EffectFn = (ctx, s) => {
   const shakeY = (rng() - 0.5) * physState.shake;
 
   const chars = displayText.split("");
-  const charW = fs * (st.letterSpacing > 4 ? 0.7 : 0.55);
+  const charW = measureCharWidth(ctx, st);
   const totalW = chars.length * charW;
   const startX = w / 2 - totalW / 2 + shakeX;
 
@@ -201,7 +208,7 @@ const drawRippleOut: EffectFn = (ctx, s) => {
   // Wide layout: extra letter-spacing via char-by-char
   if (st.layout === "wide") {
     const chars = displayText.split("");
-    const charW = fs * 0.7 + st.letterSpacing;
+    const charW = measureCharWidth(ctx, st);
     const totalW = chars.length * charW;
     chars.forEach((char, i) => {
       ctx.fillStyle = palette[0] || "#fff";
@@ -269,7 +276,7 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
   ctx.font = buildFont(st, fs);
 
   const chars = displayText.split("");
-  const charW = fs * 0.55 + st.letterSpacing * 0.5;
+  const charW = measureCharWidth(ctx, st);
   const totalW = chars.length * charW;
   const startX = w / 2 - totalW / 2;
   const waveAmp = Math.min(15, 15 * Math.min(physState.scale, 1.3));
@@ -370,7 +377,7 @@ const drawHookFracture: EffectFn = (ctx, s) => {
 
   if (physState.isFractured) {
     const chars = displayText.split("");
-    const charW = fs * 0.6;
+    const charW = measureCharWidth(ctx, st);
     const totalW = chars.length * charW;
     const driftMult = Math.min(physState.heat * 25, w * 0.15);
     chars.forEach((char, i) => {

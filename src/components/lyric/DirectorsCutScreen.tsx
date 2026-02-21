@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
+import { computeFitFontSize } from "@/engine/SystemStyles";
 import type { LyricLine } from "./LyricDisplay";
 import type { BeatTick } from "@/engine/HookDanceEngine";
 
@@ -166,10 +167,7 @@ export function DirectorsCutScreen({
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
 
-      const safeW = w * 0.85;
-      const charCount = Math.max(1, activeLine.text.length);
-      const dynamicFs = Math.min(w * 0.07, (safeW / charCount) * 1.8);
-      const fs = Math.max(Math.round(dynamicFs), 10);
+      const fs = computeFitFontSize(ctx, activeLine.text, w, renderer.system);
 
       const palette = spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
 

@@ -124,3 +124,37 @@ export function createGradientFill(
   palette.forEach((c, i) => grad.addColorStop(i / Math.max(1, palette.length - 1), c));
   return grad;
 }
+
+/**
+ * Compute the largest font size that fits text within a safe zone,
+ * accounting for system-specific letter-spacing and char-by-char layout.
+ *
+ * Solves: charCount × (glyphRatio × fs + letterSpacing) ≤ safeW
+ * → fs ≤ (safeW / charCount − letterSpacing) / glyphRatio
+ */
+export function computeFitFontSize(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  canvasW: number,
+  system: string,
+  safeRatio = 0.85,
+  maxRatio = 0.07,
+): number {
+  const st = getSystemStyle(system);
+  const displayText = applyTransform(text, st);
+  const safeW = canvasW * safeRatio;
+  const charCount = Math.max(1, displayText.length);
+
+  // Measure glyph-width-to-font-size ratio at a reference size
+  const refFs = 100;
+  ctx.font = buildFont(st, refFs);
+  const refM = ctx.measureText("M").width;
+  const glyphRatio = refM / refFs; // e.g. ~0.6 for most fonts
+
+  // Solve: charCount × (glyphRatio × fs + letterSpacing) = safeW
+  const maxFromFit = (safeW / charCount - st.letterSpacing) / glyphRatio;
+  const maxFromCap = canvasW * maxRatio;
+
+  const fs = Math.min(maxFromFit, maxFromCap);
+  return Math.max(Math.round(fs), 12);
+}
