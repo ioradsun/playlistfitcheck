@@ -970,21 +970,23 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                           const timing = wordTimings[timingIdx++];
                           const isWordActive = isActive && timing && currentTime >= timing.start && currentTime < timing.end + HIGHLIGHT_EPSILON;
                           const isWordPast = isActive && timing && currentTime >= timing.end + HIGHLIGHT_EPSILON;
-                          // FMLY: highlight censored words (all asterisks)
+                          // FMLY: highlight censored words (all asterisks) in green
                           const isCensored = activeVersion === "fmly" && /^\*+$/.test(token.trim());
                           return (
                             <span
                               key={ti}
                               className={
                                 isCensored
-                                  ? "bg-destructive/20 text-destructive rounded px-0.5 font-semibold"
-                                  : isAdlib
-                                    ? ""
-                                    : isWordActive
-                                      ? "font-semibold text-primary"
-                                      : isWordPast
-                                        ? "text-primary/60"
-                                        : ""
+                                  ? "bg-primary/20 text-primary rounded px-0.5 font-semibold"
+                                  : activeVersion === "fmly"
+                                    ? "" // in FMLY mode, don't highlight non-censored words
+                                    : isAdlib
+                                      ? ""
+                                      : isWordActive
+                                        ? "font-semibold text-primary"
+                                        : isWordPast
+                                          ? "text-primary/60"
+                                          : ""
                               }
                             >
                               {token}
