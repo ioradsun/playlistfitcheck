@@ -46,6 +46,7 @@ const App = () => (
                 <Route path="/PlaylistFit" element={<Index />} />
                 <Route path="/MixFit" element={<Index />} />
                 <Route path="/LyricFit" element={<Index />} />
+                <Route path="/LyricFit/:projectId" element={<Index />} />
                 <Route path="/HitFit" element={<Index />} />
                 <Route path="/DreamFit" element={<Index />} />
                 <Route path="/VibeFit" element={<Index />} />

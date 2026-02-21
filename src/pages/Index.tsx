@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
@@ -74,6 +74,7 @@ const PATH_TO_TAB: Record<string, string> = {
 const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
   const siteCopy = useSiteCopy();
+  const { projectId } = useParams<{ projectId?: string }>();
   const TAB_LABELS: Record<string, string> = Object.fromEntries(
     Object.entries(siteCopy.tools).map(([k, v]) => [k, v.label])
   );
@@ -87,13 +88,15 @@ const Index = () => {
   const playlistQuota = useUsageQuota("playlist");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   
-  // Derive active tab from URL path
-  const tabFromPath = PATH_TO_TAB[location.pathname] || "songfit";
+  // Derive active tab from URL path (strip /:projectId suffix)
+  const basePath = location.pathname.replace(/\/[0-9a-f-]{36}$/, "");
+  const tabFromPath = PATH_TO_TAB[basePath] || PATH_TO_TAB[location.pathname] || "songfit";
   const [activeTab, setActiveTabState] = useState(tabFromPath);
   
   // Sync tab when path changes (e.g. browser back/forward)
   useEffect(() => {
-    const t = PATH_TO_TAB[location.pathname];
+    const bp = location.pathname.replace(/\/[0-9a-f-]{36}$/, "");
+    const t = PATH_TO_TAB[bp] || PATH_TO_TAB[location.pathname];
     if (t && t !== activeTab) setActiveTabState(t);
     // Redirect bare "/" to "/CrowdFit" — but NOT if there's a code/token in the URL (auth callback)
     // If there's a ref param, redirect to signup
@@ -109,6 +112,32 @@ const Index = () => {
       navigate("/CrowdFit", { replace: true });
     }
   }, [location.pathname]);
+
+  // Auto-load LyricFit project from URL param
+  const lyricProjectLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!projectId || lyricProjectLoadedRef.current === projectId) return;
+    // If already loaded via sidebar, skip
+    if (loadedLyric?.id === projectId) {
+      lyricProjectLoadedRef.current = projectId;
+      return;
+    }
+    lyricProjectLoadedRef.current = projectId;
+    (async () => {
+      const { data, error } = await supabase
+        .from("saved_lyrics")
+        .select("*")
+        .eq("id", projectId)
+        .single();
+      if (error || !data) {
+        toast.error("Project not found");
+        navigate("/LyricFit", { replace: true });
+        return;
+      }
+      setLoadedLyric(data);
+      setActiveTabState("lyric");
+    })();
+  }, [projectId]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
@@ -339,7 +368,7 @@ const Index = () => {
     prevUserRef.current = user;
   }, [user, authLoading]);
 
-  const handleNewLyric = useCallback(() => setLoadedLyric(null), []);
+  const handleNewLyric = useCallback(() => { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }, [navigate]);
   const handleNewMix = useCallback(() => setLoadedMixProject(null), []);
   const handleNewHitFit = useCallback(() => setLoadedHitFitAnalysis(null), []);
 
@@ -422,6 +451,7 @@ const Index = () => {
       case "lyric": {
         if (data) {
           setLoadedLyric(data);
+          if (data.id) navigate(`/LyricFit/${data.id}`, { replace: true });
         }
         break;
       }
@@ -512,7 +542,11 @@ const Index = () => {
           </div>
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
-            <LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} />
+            <LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => {
+              if (id && location.pathname !== `/LyricFit/${id}`) {
+                navigate(`/LyricFit/${id}`, { replace: true });
+              }
+            }} />
           </div>
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "mix" ? "" : "hidden"}`}>
