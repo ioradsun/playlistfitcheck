@@ -13,6 +13,8 @@ interface GlobalTimelineProps {
   onMarkersChangeEnd?: (start: number, end: number) => void;
   onPlay: () => void;
   onStop: () => void;
+  beats?: number[] | null;
+  beatGridLoading?: boolean;
 }
 
 function formatTime(s: number) {
@@ -26,7 +28,7 @@ function getCssHsl(variable: string, alpha = 1): string {
   return `hsla(${val}, ${alpha})`;
 }
 
-function drawWaveform(canvas: HTMLCanvasElement, peaks: number[]) {
+function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], beats?: number[] | null, duration?: number) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
   canvas.height = canvas.clientHeight * dpr;
@@ -44,11 +46,24 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[]) {
     ctx.fillStyle = color;
     ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
+
+  // Beat grid ticks
+  if (beats && beats.length > 0 && duration && duration > 0) {
+    ctx.strokeStyle = getCssHsl("--primary", 0.25);
+    ctx.lineWidth = 1;
+    beats.forEach((beatTime) => {
+      const x = (beatTime / duration) * cw;
+      ctx.beginPath();
+      ctx.moveTo(x, ch - 4);
+      ctx.lineTo(x, ch);
+      ctx.stroke();
+    });
+  }
 }
 
 export function GlobalTimeline({
   waveform, referenceName, markerStart, markerEnd, isPlaying, playheadPct,
-  onMarkersChange, onMarkersChangeEnd, onPlay, onStop,
+  onMarkersChange, onMarkersChangeEnd, onPlay, onStop, beats, beatGridLoading,
 }: GlobalTimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,13 +75,13 @@ export function GlobalTimeline({
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
-    drawWaveform(canvasRef.current, waveform.peaks);
+    drawWaveform(canvasRef.current, waveform.peaks, beats, duration);
     const observer = new ResizeObserver(() => {
-      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks);
+      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks, beats, duration);
     });
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
-  }, [waveform]);
+  }, [waveform, beats, duration]);
 
   const getTimeFromClientX = useCallback(
     (clientX: number) => {
@@ -168,7 +183,7 @@ export function GlobalTimeline({
       {/* Footer */}
       <div className="flex justify-between text-[10px] font-mono text-muted-foreground/40">
         <span>0:00</span>
-        <span>Drag markers to set loop zone</span>
+        <span>{beatGridLoading ? "Detecting beats…" : beats && beats.length > 0 ? `${beats.length} beats · Drag markers to set loop zone` : "Drag markers to set loop zone"}</span>
         <span>{formatTime(duration)}</span>
       </div>
     </div>

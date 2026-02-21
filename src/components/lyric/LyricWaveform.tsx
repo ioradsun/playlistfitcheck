@@ -17,6 +17,8 @@ interface LyricWaveformProps {
   onSeek: (time: number) => void;
   onTogglePlay: () => void;
   loopRegion?: LoopRegion | null;
+  beats?: number[] | null;
+  beatGridLoading?: boolean;
 }
 
 function formatTime(s: number): string {
@@ -38,7 +40,9 @@ function drawWaveform(
   canvas: HTMLCanvasElement,
   peaks: number[],
   currentPct: number,
-  loopRegion?: LoopRegion | null
+  loopRegion?: LoopRegion | null,
+  beats?: number[] | null,
+  duration?: number
 ) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
@@ -94,6 +98,19 @@ function drawWaveform(
     }
     ctx.fillRect(x, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
+
+  // Draw beat grid ticks
+  if (beats && beats.length > 0 && duration && duration > 0) {
+    ctx.strokeStyle = getCssHsl("--primary", 0.25);
+    ctx.lineWidth = 1;
+    beats.forEach((beatTime) => {
+      const x = (beatTime / duration) * cw;
+      ctx.beginPath();
+      ctx.moveTo(x, ch - 4);
+      ctx.lineTo(x, ch);
+      ctx.stroke();
+    });
+  }
 }
 
 export function LyricWaveform({
@@ -103,6 +120,8 @@ export function LyricWaveform({
   onSeek,
   onTogglePlay,
   loopRegion,
+  beats,
+  beatGridLoading,
 }: LyricWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -113,28 +132,28 @@ export function LyricWaveform({
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
-    drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
-  }, [waveform, currentPct, loopRegion]);
+    drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion, beats, duration);
+  }, [waveform, currentPct, loopRegion, beats, duration]);
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
     const observer = new ResizeObserver(() => {
       if (canvasRef.current && waveform)
-        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
+        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion, beats, duration);
     });
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
-  }, [waveform, currentPct, loopRegion]);
+  }, [waveform, currentPct, loopRegion, beats, duration]);
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
     const mo = new MutationObserver(() => {
       if (canvasRef.current && waveform)
-        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
+        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion, beats, duration);
     });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => mo.disconnect();
-  }, [waveform, currentPct, loopRegion]);
+  }, [waveform, currentPct, loopRegion, beats, duration]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -194,7 +213,9 @@ export function LyricWaveform({
       </div>
       <div className="flex justify-between text-[10px] font-mono text-muted-foreground/40 px-9">
         <span>0:00</span>
-        <span>{formatTime(duration / 2)}</span>
+        <span>
+          {beatGridLoading ? "Detecting beats…" : beats && beats.length > 0 ? `${beats.length} beats detected` : formatTime(duration / 2)}
+        </span>
         <span>{formatTime(duration)}</span>
       </div>
     </div>
