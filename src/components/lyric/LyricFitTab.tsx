@@ -108,8 +108,13 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       else if (name.endsWith(".webm") || mime.includes("webm")) format = "webm";
       else format = "mp3";
 
-      // Stage 3: Upload
+      // Stage 3: Upload — auto-advance through sub-stages every 3s while request is in flight
       setProgressStage("uploading");
+      const uploadTimers: ReturnType<typeof setTimeout>[] = [];
+      uploadTimers.push(setTimeout(() => setProgressStage("buffering"), 3000));
+      uploadTimers.push(setTimeout(() => setProgressStage("transmitting"), 6000));
+      uploadTimers.push(setTimeout(() => setProgressStage("handshaking"), 9000));
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
         {
@@ -123,8 +128,10 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
         }
       );
 
+      // Upload finished — clear upload sub-stage timers
+      uploadTimers.forEach(clearTimeout);
+
       // Once request is sent, simulate backend stages with timers
-      // The backend runs transcription + analysis in parallel — we step through granular stages
       setProgressStage("receiving");
       const timers: ReturnType<typeof setTimeout>[] = [];
       timers.push(setTimeout(() => setProgressStage("transcribing"), 3000));
