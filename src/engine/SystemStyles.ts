@@ -137,8 +137,8 @@ export function computeFitFontSize(
   text: string,
   canvasW: number,
   system: string,
-  safeRatio = 0.85,
-  maxRatio = 0.07,
+  safeRatio = 0.52,
+  maxRatio = 0.06,
 ): number {
   const st = getSystemStyle(system);
   const displayText = applyTransform(text, st);
