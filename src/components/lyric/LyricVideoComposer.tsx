@@ -16,6 +16,7 @@ interface Props {
   metadata?: LyricMetadata | null;
   title: string;
   artist: string;
+  audioFile?: File | null;
 }
 
 // ── Aspect ratio → canvas dimensions ────────────────────────────────────────
@@ -69,15 +70,14 @@ interface WordEntry { word: string; start: number; lineIdx: number; }
 function buildWordTimeline(lines: LyricLine[], regionStart: number, regionEnd: number): WordEntry[] {
   const words: WordEntry[] = [];
   lines.forEach((line, lineIdx) => {
+    // Include any line that overlaps with the region at all
     if (line.end < regionStart || line.start > regionEnd) return;
     const lineWords = line.text.split(/\s+/).filter(Boolean);
     const lineDur = line.end - line.start;
     const wordDur = lineDur / Math.max(lineWords.length, 1);
     lineWords.forEach((w, wi) => {
       const wStart = line.start + wi * wordDur;
-      if (wStart >= regionStart - 0.5 && wStart <= regionEnd + 0.5) {
-        words.push({ word: w, start: wStart, lineIdx });
-      }
+      words.push({ word: w, start: wStart, lineIdx });
     });
   });
   return words;
@@ -229,7 +229,7 @@ function drawFrame(
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
-export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, title, artist }: Props) {
+export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, title, artist, audioFile }: Props) {
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number | null>(null);
   const playStartRef = useRef<number>(0);
@@ -356,9 +356,40 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     setIsRecording(true);
     setRecordingProgress(0);
 
-    const stream = canvas.captureStream(FPS);
-    const mediaRecorder = new MediaRecorder(stream, {
-      mimeType: "video/webm;codecs=vp9",
+    // Set up audio source for mixing
+    let audioCtx: AudioContext | null = null;
+    let audioSourceNode: MediaElementAudioSourceNode | null = null;
+    let audioDest: MediaStreamAudioDestinationNode | null = null;
+    let audioEl: HTMLAudioElement | null = null;
+
+    if (audioFile) {
+      try {
+        audioCtx = new AudioContext();
+        audioDest = audioCtx.createMediaStreamDestination();
+        const audioUrl = URL.createObjectURL(audioFile);
+        audioEl = new Audio(audioUrl);
+        audioEl.currentTime = regionStart;
+        audioSourceNode = audioCtx.createMediaElementSource(audioEl);
+        audioSourceNode.connect(audioDest);
+        // Also connect to speakers so it decodes properly
+        audioSourceNode.connect(audioCtx.destination);
+        audioEl.volume = 0; // mute speakers, audio still goes to dest
+      } catch (e) {
+        console.warn("Could not set up audio for recording:", e);
+      }
+    }
+
+    const videoStream = canvas.captureStream(FPS);
+
+    // Combine video + audio tracks
+    const combinedStream = new MediaStream();
+    videoStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
+    if (audioDest) {
+      audioDest.stream.getAudioTracks().forEach(t => combinedStream.addTrack(t));
+    }
+
+    const mediaRecorder = new MediaRecorder(combinedStream, {
+      mimeType: "video/webm;codecs=vp9,opus",
       videoBitsPerSecond: 8_000_000,
     });
     const chunks: Blob[] = [];
@@ -367,11 +398,18 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     const totalFrames = Math.ceil(duration * FPS);
     let frame = 0;
 
+    // Start audio playback
+    if (audioEl) {
+      try { await audioEl.play(); } catch (e) { console.warn("Audio play failed:", e); }
+    }
+
     mediaRecorder.start();
 
     const renderNextFrame = () => {
       if (frame >= totalFrames) {
         mediaRecorder.stop();
+        if (audioEl) { audioEl.pause(); audioEl.src = ""; }
+        if (audioCtx) audioCtx.close();
         return;
       }
       const time = regionStart + (frame / FPS);
@@ -395,7 +433,7 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     };
 
     renderNextFrame();
-  }, [duration, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgImage]);
+  }, [duration, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgImage, audioFile]);
 
   // ── Wizard navigation ─────────────────────────────────────────────────────
   const canGoNext = () => {
