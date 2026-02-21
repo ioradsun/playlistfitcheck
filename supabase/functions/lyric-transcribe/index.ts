@@ -216,12 +216,15 @@ GUARDRAILS:
 2. SINGLE-WORD ONLY: Your corrections map MUST use single words as keys and single words as values.
    INCORRECT: {"I'm a whore": "I'm a boy"}
    CORRECT: {"whore": "boy", "range": "rain"}
-3. IDIOM GUARD: Do NOT correct common English idioms or phrases (e.g., "pay them no mind", "sit back").
-4. CONTRACTION GUARD: Do NOT suggest corrections for words that are parts of contractions (can, don, won, ain, etc.). Unless the ENTIRE contraction is wrong, skip it.
-5. SEMANTIC SAFETY: Reject any change that breaks basic English grammar. Do NOT change "can't" to "caving" or similar nonsense.
-6. HIGH CONFIDENCE ONLY: Only return a swap if you are 95% certain Whisper is acoustically wrong. If unsure, return an empty map.
-7. SURGICAL: Only correct actual phonetic/word-sound mismatches. Do NOT correct grammar, punctuation, or stylistic choices.
-8. NO TIMESTAMPS: Return ONLY the corrections map.
+3. NO IDENTITY MAPPINGS: Do NOT include entries where the key equals the value (e.g., "same": "same" or "fire": "fire"). Only include entries where the word ACTUALLY CHANGES.
+4. MAX 10 CORRECTIONS: Return at most 10 corrections. Focus on the highest-confidence phonetic errors only.
+5. IDIOM GUARD: Do NOT correct common English idioms or phrases (e.g., "pay them no mind", "sit back").
+6. CONTRACTION GUARD: Do NOT suggest corrections for words that are parts of contractions (can, don, won, ain, etc.). Unless the ENTIRE contraction is wrong, skip it.
+7. SEMANTIC SAFETY: Reject any change that breaks basic English grammar. Do NOT change "can't" to "caving" or similar nonsense.
+8. HIGH CONFIDENCE ONLY: Only return a swap if you are 95% certain Whisper is acoustically wrong. If unsure, return an empty map.
+9. SURGICAL: Only correct actual phonetic/word-sound mismatches. Do NOT correct grammar, punctuation, or stylistic choices.
+10. NO TIMESTAMPS: Return ONLY the corrections map.
+11. NO MARKDOWN: Do NOT wrap your response in \`\`\`json code fences. Return raw JSON only.
 
 OUTPUT — return ONLY this JSON schema, nothing else:
 {"corrections": {}, "count": 0}`;
@@ -274,10 +277,24 @@ async function callGemini(
 
 // ── Robust JSON parser with truncation recovery ───────────────────────────────
 function extractJsonFromContent(content: string, fallbackKey = "merged_lines"): any {
-  const jsonStart = content.indexOf("{");
-  const jsonEnd = content.lastIndexOf("}");
-  if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON in Gemini response");
-  let rawJson = content.slice(jsonStart, jsonEnd + 1);
+  // Strip markdown code fences that Gemini often wraps around JSON
+  let cleaned = content.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  
+  const jsonStart = cleaned.indexOf("{");
+  if (jsonStart === -1) throw new Error("No JSON in Gemini response");
+  
+  let jsonEnd = cleaned.lastIndexOf("}");
+  // If truncated (no closing brace), try to recover by closing the JSON ourselves
+  if (jsonEnd === -1 || jsonEnd <= jsonStart) {
+    console.warn(`[extractJson] No closing brace found — attempting truncation recovery`);
+    cleaned = cleaned.slice(jsonStart);
+    // Close any open strings, add closing braces
+    if (cleaned.endsWith('"')) cleaned += '}';
+    cleaned += '}}'; // worst case: close corrections obj + root obj
+    jsonEnd = cleaned.lastIndexOf("}");
+  }
+  
+  let rawJson = cleaned.slice(jsonStart, jsonEnd + 1);
   rawJson = rawJson
     .replace(/,\s*}/g, "}")
     .replace(/,\s*]/g, "]")
@@ -473,7 +490,7 @@ async function runGeminiAuditor(
   const prompt = buildAuditorPrompt(rawText, anchorTs, middleCutoff);
   console.log(`[triptych-auditor] Lane D: ${anchorTs.toFixed(3)}s to ${middleCutoff.toFixed(3)}s, text length=${rawText.length}`);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 800, "auditor");
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 1200, "auditor");
   console.log(`[triptych-auditor] Lane D raw response (first 500 chars): ${content.slice(0, 500)}`);
   
   // Graceful fallback: if Gemini returned prose instead of JSON, return empty corrections
@@ -488,7 +505,8 @@ async function runGeminiAuditor(
   const corrections: Record<string, string> = {};
   if (parsed.corrections && typeof parsed.corrections === "object") {
     for (const [wrong, right] of Object.entries(parsed.corrections)) {
-      if (typeof right === "string" && wrong.length > 0 && right.length > 0) {
+      // Filter out identity mappings (e.g., "same" → "same") and invalid entries
+      if (typeof right === "string" && wrong.length > 0 && right.length > 0 && wrong.toLowerCase() !== right.toLowerCase()) {
         corrections[wrong] = right;
       }
     }
