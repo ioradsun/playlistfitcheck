@@ -50,7 +50,7 @@ const App = () => (
                 <Route path="/DreamFit" element={<Index />} />
                 <Route path="/VibeFit" element={<Index />} />
                 <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
-                <Route path="/admin" element={<PageLayout title="Admin"><Admin /></PageLayout>} />
+                <Route path="/admin" element={<Admin />} />
                 <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout>} />
                 <Route path="/terms" element={<PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout>} />
                 <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />

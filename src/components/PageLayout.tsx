@@ -6,9 +6,10 @@ interface PageLayoutProps {
   children: ReactNode;
   title?: string;
   subtitle?: string;
+  headerRight?: ReactNode;
 }
 
-export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
+export function PageLayout({ children, title, subtitle, headerRight }: PageLayoutProps) {
   return (
     <>
       <AppSidebar />
@@ -20,6 +21,7 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
               {subtitle}
             </span>
           )}
+          {headerRight && <div className="ml-auto flex items-center gap-3">{headerRight}</div>}
         </header>
         <div id="page-scroll-container" className="flex-1 flex flex-col overflow-y-auto" style={{ paddingBottom: 120 }}>
           {children}

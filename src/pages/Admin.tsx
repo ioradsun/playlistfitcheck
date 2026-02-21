@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music } from "lucide-react";
+import { PageLayout } from "@/components/PageLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -99,27 +100,27 @@ export default function Admin() {
     finally { setDeleting(false); setDeleteTarget(null); }
   };
 
+  const refreshButton = (
+    <button
+      onClick={handleRefresh}
+      disabled={refreshing}
+      className="text-[13px] font-sans font-bold tracking-[0.15em] uppercase text-muted-foreground/30 hover:text-foreground transition-colors disabled:opacity-50"
+    >
+      {refreshing ? "Refreshing…" : "Refresh"}
+    </button>
+  );
+
   if (authLoading || loading) {
-    return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={24} /></div>;
+    return <PageLayout subtitle="Admin"><div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={24} /></div></PageLayout>;
   }
   if (error) {
-    return <div className="min-h-screen bg-background flex items-center justify-center px-4"><p className="text-destructive text-sm">{error}</p></div>;
+    return <PageLayout subtitle="Admin"><div className="flex-1 flex items-center justify-center px-4"><p className="text-destructive text-sm">{error}</p></div></PageLayout>;
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
+    <PageLayout subtitle="Admin" headerRight={refreshButton}>
+    <div className="px-4 py-8">
       <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Admin Dashboard</p>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="text-[13px] font-sans font-bold tracking-[0.15em] uppercase text-muted-foreground/30 hover:text-foreground transition-colors disabled:opacity-50"
-          >
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
-
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex flex-wrap gap-x-4 gap-y-1 max-w-3xl mb-2">
             <TabsTrigger value="users">Users</TabsTrigger>
@@ -341,5 +342,6 @@ export default function Admin() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </PageLayout>
   );
 }
