@@ -633,16 +633,12 @@ serve(async (req) => {
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
-    // ── Stage 1: Transcription + Hook in parallel ───────────────────────────
+    // ── Stage 1: Transcription only (Song DNA is now a separate on-demand call) ──
     const transcribePromise = useGeminiTranscription
       ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics.trim() : undefined)
       : runScribe(audioBase64, ext, mimeType, ELEVENLABS_API_KEY!);
 
-    const hookPromise = !analysisDisabled
-      ? runGeminiHookAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel)
-      : Promise.reject(new Error("ANALYSIS_DISABLED"));
-
-    const [transcribeResult, hookResult] = await Promise.allSettled([transcribePromise, hookPromise]);
+    const [transcribeResult] = await Promise.allSettled([transcribePromise]);
 
     if (transcribeResult.status === "rejected") {
       const err = (transcribeResult.reason as Error)?.message || "Transcription failed";
@@ -682,62 +678,24 @@ serve(async (req) => {
       confidence: 1.0,
     }));
 
-    // ── Handle hook result ──────────────────────────────────────────────────
-    let title = "Unknown";
-    let artist = "Unknown";
-    let metadata: any = undefined;
-    let hooks: any[] = [];
-    let geminiUsed = false;
-    let geminiError: string | null = null;
+    // ── Title/artist defaults (Song DNA analysis is now separate) ──────────
+    const title = "Unknown";
+    const artist = "Unknown";
 
-    const hookSuccess = !analysisDisabled && hookResult.status === "fulfilled";
-
-    if (hookSuccess) {
-      const h = hookResult.value;
-      geminiUsed = true;
-      title = h.metadata.title || "Unknown";
-      artist = h.metadata.artist || "Unknown";
-      metadata = {
-        mood: h.insights?.mood?.value || h.metadata.mood,
-        description: h.metadata.description,
-        confidence: h.insights?.mood?.confidence ?? h.metadata.confidence,
-        mood_confidence: h.insights?.mood?.confidence,
-        bpm: h.insights?.bpm?.value || undefined,
-        bpm_confidence: h.insights?.bpm?.confidence || undefined,
-        meaning: h.meaning || undefined,
-      };
-
-      if (h.hook) {
-        const hookSpan = findHookFromWords(words, h.hook);
-        if (hookSpan) hooks = [{ ...hookSpan, reasonCodes: [] }];
-      }
-    } else if (!analysisDisabled && hookResult.status === "rejected") {
-      geminiError = (hookResult.reason as Error)?.message || "unknown";
-      console.warn("Gemini hook analysis failed:", geminiError);
-    }
-
-    console.log(`[v12.0] Final: ${lines.length} lines, ${hooks.length} hooks, title="${title}", artist="${artist}"`);
+    console.log(`[v14.0] Final: ${lines.length} lines, title="${title}", artist="${artist}"`);
 
     return new Response(
       JSON.stringify({
         title,
         artist,
-        metadata,
         lines,
-        hooks,
         _debug: {
-          version: "v13.0-editor-mode",
+          version: "v14.0-transcription-only",
           mode: editorMode ? "editor" : "detective",
           referenceProvided: editorMode,
-          pipeline: {
-            transcription: transcriptionEngine,
-            analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-          },
-          geminiUsed,
-          geminiError,
+          pipeline: { transcription: transcriptionEngine },
           inputBytes: Math.round(estimatedBytes),
           outputLines: lines.length,
-          hooksFound: hooks.length,
           transcription: {
             input: { model: transcriptionEngine, format: ext, mimeType, estimatedMB: Math.round(estimatedBytes / 1024 / 1024 * 10) / 10 },
             output: {
