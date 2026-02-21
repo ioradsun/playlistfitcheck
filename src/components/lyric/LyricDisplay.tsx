@@ -293,6 +293,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     meaning?: { theme?: string; summary?: string; imagery?: string[] };
     hook?: LyricHook | null;
     hookJustification?: string;
+    physicsSpec?: {
+      system: string;
+      params: Record<string, number>;
+      palette: string[];
+      effect_sequence: { line_index: number; effect_key: string }[];
+      micro_surprise: { every_n_beats: number; action: string };
+    } | null;
   } | null>(null);
   const [dnaLoading, setDnaLoading] = useState(false);
   const [dnaRequested, setDnaRequested] = useState(false);
@@ -376,6 +383,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         meaning: result?.meaning,
         hook,
         hookJustification: result?.hottest_hook?.justification || undefined,
+        physicsSpec: result?.physics_spec || null,
       });
     } catch (e) {
       console.error("Song DNA error:", e);
@@ -1365,6 +1373,19 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
                   <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
                 </p>
+                {songDna?.physicsSpec && (
+                  <button
+                    onClick={() => {
+                      // Phase 2: Mount Canvas renderer. For now, log + toast.
+                      console.log("[hook-dance] physics_spec ready:", songDna.physicsSpec);
+                      toast.info("Hook Dance renderer coming in Phase 2");
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
+                  >
+                    <Sparkles size={10} />
+                    <span>See hook dance</span>
+                  </button>
+                )}
                 {features?.lyric_video && (
                   <button
                     onClick={() => setVideoComposerOpen(true)}

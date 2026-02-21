@@ -70,6 +70,28 @@ Imagery Rules:
 - No abstract emotional phrases (e.g., "broken heart," "shattered dreams," "lost love").
 - Prefer specific environments, objects, or physical actions.
 
+5. PHYSICS SPEC (Hook Dance Choreography)
+
+Generate a physics_spec object that maps the song's acoustic energy to a visual physics simulation.
+
+Task A — Physics System Selection:
+Map the song's energy and mood to one of these systems:
+- Aggressive/Distorted → "fracture" (mass: 0.8, brittleness: 0.9)
+- Anthemic/Powerful → "pressure" (mass: 2.0, elasticity: 0.4)
+- Melancholic/Slow → "breath" (mass: 1.2, damping: 0.8)
+- Dark/Haunted → "combustion" (heat: 0.5)
+
+Task B — Effect Sequencing:
+For every lyric line within the detected hook window, assign a unique effect_key from:
+SHATTER_IN, TUNNEL_RUSH, GRAVITY_DROP, PULSE_BLOOM, RIPPLE_OUT, GLITCH_FLASH, WAVE_SURGE, EMBER_RISE, HOOK_FRACTURE
+The FINAL line of the hook MUST use HOOK_FRACTURE.
+
+Task C — Micro-Surprise:
+Define a structured micro_surprise for visual accents (e.g., every_n_beats: 4, action: "rgb_split").
+
+Task D — Color Palette:
+Extract 3–5 HSL colors from the song's mood/energy for the visual palette.
+
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
   "hottest_hook": { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.00, "justification": "Brief 1-2 sentence explanation of why this window was chosen — reference production lift, lyrical repetition, or melodic peak." },
@@ -79,6 +101,17 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
     "theme": "Midnight Redemption",
     "summary": "The artist confronts past mistakes while chasing emotional closure...",
     "imagery": ["neon skyline", "rearview mirror", "rain-soaked street"]
+  },
+  "physics_spec": {
+    "system": "pressure",
+    "params": { "mass": 2.0, "elasticity": 0.4 },
+    "palette": ["hsl(270,80%,60%)", "hsl(320,70%,50%)", "hsl(200,90%,40%)"],
+    "effect_sequence": [
+      { "line_index": 0, "effect_key": "TUNNEL_RUSH" },
+      { "line_index": 1, "effect_key": "PULSE_BLOOM" },
+      { "line_index": 2, "effect_key": "HOOK_FRACTURE" }
+    ],
+    "micro_surprise": { "every_n_beats": 4, "action": "rgb_split" }
   }
 }`;
 
