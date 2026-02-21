@@ -754,6 +754,7 @@ export type Database = {
       saved_lyrics: {
         Row: {
           artist: string
+          beat_grid: Json | null
           created_at: string
           filename: string | null
           fmly_lines: Json | null
@@ -766,6 +767,7 @@ export type Database = {
         }
         Insert: {
           artist?: string
+          beat_grid?: Json | null
           created_at?: string
           filename?: string | null
           fmly_lines?: Json | null
@@ -778,6 +780,7 @@ export type Database = {
         }
         Update: {
           artist?: string
+          beat_grid?: Json | null
           created_at?: string
           filename?: string | null
           fmly_lines?: Json | null

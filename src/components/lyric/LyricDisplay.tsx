@@ -286,7 +286,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   // Song DNA — on-demand generation
   const [songDna, setSongDna] = useState<{
-    mood?: string; bpm?: number; description?: string;
+    mood?: string; description?: string;
     meaning?: { theme?: string; summary?: string; imagery?: string[] };
     hook?: LyricHook | null;
   } | null>(null);
@@ -347,7 +347,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
       setSongDna({
         mood: result?.mood,
-        bpm: result?.bpm,
         description: result?.description,
         meaning: result?.meaning,
         hook,
@@ -529,6 +528,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           explicit: { lineFormat: explicitMeta.lineFormat, socialPreset: explicitMeta.socialPreset, lastEdited: new Date().toISOString() },
           fmly: { lineFormat: fmlyMeta.lineFormat, socialPreset: fmlyMeta.socialPreset, strictness: fmlyMeta.strictness, lastEdited: new Date().toISOString() },
         } as any,
+        beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } as any : null,
       };
 
       if (currentSavedId) {
@@ -552,7 +552,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       console.error("Autosave error:", e);
       setSaveStatus("idle");
     }
-  }, [user, currentSavedId, data, explicitLines, fmlyLines, explicitMeta, fmlyMeta, audioFile.name, onSaved]);
+  }, [user, currentSavedId, data, explicitLines, fmlyLines, explicitMeta, fmlyMeta, audioFile.name, onSaved, beatGrid]);
 
   const scheduleAutosave = useCallback(() => {
     if (!user) return;
@@ -565,7 +565,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   useEffect(() => {
     scheduleAutosave();
-  }, [explicitLines, fmlyLines, explicitMeta, fmlyMeta]);
+  }, [explicitLines, fmlyLines, explicitMeta, fmlyMeta, beatGrid]);
 
   // ── Editing ───────────────────────────────────────────────────────────────
   const startEditing = (index: number) => {
@@ -1183,17 +1183,17 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   </p>
                 )}
 
-                {/* Tags row: mood, BPM */}
-                {(songDna.mood || songDna.bpm) && (
+                {/* Tags row: mood, BPM (from beat grid) */}
+                {(songDna.mood || beatGrid?.bpm) && (
                   <div className="flex flex-wrap gap-2">
                     {songDna.mood && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                         {songDna.mood}
                       </span>
                     )}
-                    {songDna.bpm && (
+                    {beatGrid?.bpm && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                        {songDna.bpm} BPM
+                        {beatGrid.bpm} BPM
                       </span>
                     )}
                   </div>
