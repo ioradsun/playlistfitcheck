@@ -244,15 +244,16 @@ serve(async (req) => {
           // If AI returned only 1 hook, synthesize a second from a different region
           if (Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
             const first = parsed.hottest_hooks[0];
-            const secondStart = first.start_sec > 60 ? Math.max(first.start_sec - 40, 10) : first.start_sec + 30;
+            const firstStart = Number(first.start_sec) || 60;
+            const secondStart = firstStart > 60 ? Math.max(firstStart - 40, 10) : firstStart + 30;
             parsed.hottest_hooks.push({
               start_sec: secondStart,
               duration_sec: 10,
-              confidence: Math.max(first.confidence - 0.15, 0.5),
+              confidence: Math.max((Number(first.confidence) || 0.8) - 0.15, 0.5),
               justification: "Secondary hook region (auto-detected)",
               label: "The Other Side",
             });
-            console.log(`[song-dna] Synthesized 2nd hook at ${secondStart}s (1st was at ${first.start_sec}s)`);
+            console.log(`[song-dna] Synthesized 2nd hook at ${secondStart}s (1st was at ${firstStart}s)`);
           }
           const firstHook = parsed.hottest_hooks?.[0] || parsed.hottest_hook;
           console.log(`[song-dna] ✓ Complete on attempt ${attempt + 1}: mood=${parsed.mood}, system=${parsed.physics_spec.system}, hook=${firstHook?.start_sec}, hooks=${parsed.hottest_hooks?.length ?? 1}`);
@@ -285,15 +286,16 @@ serve(async (req) => {
           // Ensure we always have 2 hooks in salvage path
           if (Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
             const first = parsed.hottest_hooks[0];
-            const secondStart = first.start_sec > 60 ? Math.max(first.start_sec - 40, 10) : first.start_sec + 30;
+            const firstStart = Number(first.start_sec) || 60;
+            const secondStart = firstStart > 60 ? Math.max(firstStart - 40, 10) : firstStart + 30;
             parsed.hottest_hooks.push({
               start_sec: secondStart,
               duration_sec: 10,
-              confidence: Math.max((first.confidence || 0.8) - 0.15, 0.5),
+              confidence: Math.max((Number(first.confidence) || 0.8) - 0.15, 0.5),
               justification: "Secondary hook region (auto-detected)",
               label: "The Other Side",
             });
-            console.log(`[song-dna] Salvage: synthesized 2nd hook at ${secondStart}s`);
+            console.log(`[song-dna] Salvage: synthesized 2nd hook at ${secondStart}s (1st at ${firstStart}s)`);
           }
           if (!parsed.physics_spec || !parsed.physics_spec.system) {
             parsed.physics_spec = {
