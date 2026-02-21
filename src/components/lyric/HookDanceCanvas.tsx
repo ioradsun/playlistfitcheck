@@ -7,7 +7,7 @@
 
 import { useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Download } from "lucide-react";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
@@ -22,6 +22,7 @@ interface Props {
   beatCount: number;
   prng: () => number;
   onClose: () => void;
+  onExport?: () => void;
 }
 
 export function HookDanceCanvas({
@@ -34,6 +35,7 @@ export function HookDanceCanvas({
   beatCount,
   prng,
   onClose,
+  onExport,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -142,12 +144,23 @@ export function HookDanceCanvas({
       transition={{ duration: 0.3 }}
     >
       <canvas ref={canvasRef} className="absolute inset-0" />
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 z-10 text-white/60 hover:text-white transition-colors"
-      >
-        <X size={24} />
-      </button>
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        {onExport && (
+          <button
+            onClick={onExport}
+            className="text-white/40 hover:text-white transition-colors"
+            title="Export video"
+          >
+            <Download size={20} />
+          </button>
+        )}
+        <button
+          onClick={onClose}
+          className="text-white/60 hover:text-white transition-colors"
+        >
+          <X size={24} />
+        </button>
+      </div>
       {/* System label */}
       <div className="absolute bottom-4 left-4 z-10 text-[10px] font-mono text-white/30 uppercase tracking-wider">
         {spec.system} · hook dance
