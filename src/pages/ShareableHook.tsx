@@ -159,6 +159,7 @@ function useHookCanvas(
 
     engineRef.current = engine;
     prngRef.current = engine.prng;
+    activeRef.current = active;
 
     if (active) {
       engine.start();
@@ -167,8 +168,14 @@ function useHookCanvas(
     return () => { engine.stop(); audio.pause(); };
   }, [hookData]);
 
+  // Track active prop in a ref to avoid re-running setup effect
+  const activeRef = useRef(active);
+
   // Handle active state changes — start/stop engine accordingly
   useEffect(() => {
+    // Skip if this is the initial mount (engine already started/stopped above)
+    if (activeRef.current === active) return;
+    activeRef.current = active;
     const engine = engineRef.current;
     if (!engine) return;
     if (active) {
@@ -179,10 +186,15 @@ function useHookCanvas(
     }
   }, [active]);
 
-  // Restart from beginning
+  // Restart from beginning and unmute
   const restart = useCallback(() => {
     const engine = engineRef.current;
+    const audio = audioRef.current;
     if (!engine) return;
+    // Unmute on user gesture
+    if (audio) {
+      audio.muted = false;
+    }
     engine.stop();
     engine.start();
   }, []);
@@ -706,6 +718,7 @@ export default function ShareableHook() {
             onClick={() => {
               setActiveHookSide("a");
               hookACanvas.restart();
+              setMuted(false);
               if (!hasVoted) handleVote(hookData.id);
             }}
           >
@@ -743,6 +756,7 @@ export default function ShareableHook() {
             onClick={() => {
               setActiveHookSide("b");
               hookBCanvas.restart();
+              setMuted(false);
               if (!hasVoted) handleVote(rivalHook!.id);
             }}
           >
