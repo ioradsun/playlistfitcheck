@@ -42,6 +42,8 @@ export class HookDanceEngine {
   private callbacks: HookDanceCallbacks;
   private audioRef: HTMLAudioElement;
   private running = false;
+  private audioPlaying = false;
+  private syntheticStart = 0; // performance.now() when engine started
 
   constructor(
     spec: PhysicsSpec,
@@ -82,14 +84,18 @@ export class HookDanceEngine {
   start() {
     if (this.running) return;
     this.running = true;
+    this.audioPlaying = false;
     this.integrator.reset();
     this.beatIndex = 0;
     this.totalBeats = 0;
     this.prevTime = this.hookStart;
+    this.syntheticStart = performance.now();
 
     // Seek audio
     this.audioRef.currentTime = this.hookStart;
-    this.audioRef.play().catch(() => {});
+    this.audioRef.play()
+      .then(() => { this.audioPlaying = true; })
+      .catch(() => { this.audioPlaying = false; });
 
     this.tick();
   }
@@ -109,14 +115,27 @@ export class HookDanceEngine {
   private tick = () => {
     if (!this.running) return;
 
-    const currentTime = this.audioRef.currentTime;
+    const hookDuration = this.hookEnd - this.hookStart;
+
+    // Use audio time if playing, otherwise synthetic clock
+    let currentTime: number;
+    if (this.audioPlaying && !isNaN(this.audioRef.currentTime) && this.audioRef.currentTime > 0) {
+      currentTime = this.audioRef.currentTime;
+    } else {
+      const elapsed = (performance.now() - this.syntheticStart) / 1000;
+      currentTime = this.hookStart + (elapsed % hookDuration);
+    }
 
     // Loop back to hookStart when we reach hookEnd
     if (currentTime >= this.hookEnd || currentTime < this.hookStart) {
       this.audioRef.currentTime = this.hookStart;
+      this.audioRef.play()
+        .then(() => { this.audioPlaying = true; })
+        .catch(() => { this.audioPlaying = false; });
       this.integrator.reset();
       this.beatIndex = 0;
       this.prevTime = this.hookStart;
+      this.syntheticStart = performance.now();
       this.rafId = requestAnimationFrame(this.tick);
       return;
     }
