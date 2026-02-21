@@ -134,78 +134,63 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── v7.3: Universal Acoustic Orchestrator (Pulse & Coverage Final) ──
-function buildOrchestratorPrompt(
-  whisperWords: WhisperWord[],
-  whisperSegments: Array<{ start: number; end: number; text: string }>,
-  whisperRawText: string,
-  trackEnd: number
-): string {
-  const wordsJson = JSON.stringify(whisperWords.slice(0, 500));
-  const segmentsJson = JSON.stringify(whisperSegments.slice(0, 80));
+// ── v8.0 Triptych: Three specialized prompt builders ─────────────────────────
 
-  const anchorWord = whisperWords.length > 0 ? whisperWords[0] : null;
-  const anchorTs = anchorWord?.start.toFixed(3) ?? "0.000";
-  const anchorW = anchorWord?.word ?? "unknown";
+function buildIntroPrompt(anchorWord: string, anchorTs: number): string {
+  return `ROLE: Intro Onset Specialist (v8.0 Triptych — Lane B)
 
-  const lastWhisperEnd = whisperWords.length > 0
-    ? whisperWords[whisperWords.length - 1].end.toFixed(3)
-    : "0.000";
+TASK: Detect the acoustic onset of the first spoken/sung word in this audio track and transcribe all vocal dialogue from that onset up to the anchor word "${anchorWord}" at ${anchorTs.toFixed(3)}s.
 
-  return `ROLE: Universal Acoustic Orchestrator (v7.3 Pulse & Coverage). Harmonize the Whisper JSON with the Raw Audio into a production-ready merged_lines array.
+RULES:
+1. SILENCE DETECTION: Listen carefully for the exact moment the first voice appears. Do NOT start at 0.000s — there is always a silence/instrumental gap before vocals begin.
+2. BACKWARD PROJECTION: The anchor word "${anchorWord}" occurs at ${anchorTs.toFixed(3)}s. Measure the cadence of any intro dialogue and project timestamps backward from the anchor with 3-decimal precision.
+3. PHRASE DENSITY: Keep phrases short (max 6 words per line).
+4. TAGGING: All intro dialogue = tag "main". Background vocals = tag "adlib".
+5. SCHEMA: Every object MUST include ALL keys: start, end, text, tag, isCorrection (false), isFloating (false), confidence (1.0), geminiConflict (null).
+6. FIRST LINE: The start time of your first line must NOT be 0.000s. It must reflect the true acoustic onset.
+7. EXPECTED OUTPUT: 3-8 lines covering the intro dialogue before the anchor.
 
-=== WHISPER TIMING GRID ===
-WHISPER_RAW_TEXT: ${whisperRawText.slice(0, 2000)}
+OUTPUT — return ONLY valid JSON, no markdown:
+{"intro_lines": [{"start": 3.842, "end": 5.210, "text": "example", "tag": "main", "isCorrection": false, "isFloating": false, "confidence": 1.0, "geminiConflict": null}]}`;
+}
 
-WHISPER_WORDS (word-level timing skeleton):
-${wordsJson}
+function buildOutroPrompt(middleCutoff: number, trackEnd: number): string {
+  return `ROLE: Outro Recovery Specialist (v8.0 Triptych — Lane C)
 
-WHISPER_SEGMENTS (sentence-level boundaries):
-${segmentsJson}
+TASK: Transcribe ALL vocal events from ${middleCutoff.toFixed(3)}s to the end of the track at ${trackEnd.toFixed(3)}s.
 
-TRACK_END: ${trackEnd.toFixed(3)}s
-WHISPER_LAST_WORD_END: ${lastWhisperEnd}s
+RULES:
+1. COMPLETE COVERAGE: You must capture every vocal sound (singing, speaking, ad-libs, echoes, fading vocals) from ${middleCutoff.toFixed(3)}s to ${trackEnd.toFixed(3)}s.
+2. TAGGING: Tag all lines as "adlib" since these are outro/tail vocals.
+3. PHRASE DENSITY: Outro lines can be longer (8-12 words OK) since these are typically fading/repeating sections.
+4. LAST LINE: The end time of your last line must be within 2.0s of ${trackEnd.toFixed(3)}s.
+5. SCHEMA: Every object MUST include ALL keys: start, end, text, tag, isCorrection (false), isFloating (false), confidence (1.0), geminiConflict (null).
+6. TIMESTAMPS: All timestamps must have 3-decimal precision.
+7. EXPECTED OUTPUT: 5-15 lines covering the outro section.
 
-=== RULE 1: THE COVERAGE INVARIANT (No Skips) ===
-100% COMPLETION: You must process the audio until the very end (${trackEnd.toFixed(3)}s). You are strictly prohibited from returning a partial list.
-WHISPER CHECKLIST: You must include EVERY lyric provided in WHISPER_WORDS and WHISPER_SEGMENTS. Do not skip the middle of the song.
-SEQUENTIAL PROCESSING: Work through the song chronologically from start to end.
-VERIFICATION: Every Whisper segment's time range must be covered. Any gap > 3s mid-track = CRITICAL FAILURE.
-ACOUSTIC OVERDRIVE: Continue transcribing vocal events until ${trackEnd.toFixed(3)}s even if Whisper ends at ${lastWhisperEnd}s. Tag manually transcribed outro lines as tag: "adlib".
+OUTPUT — return ONLY valid JSON, no markdown:
+{"outro_lines": [{"start": 181.500, "end": 183.200, "text": "example outro", "tag": "adlib", "isCorrection": false, "isFloating": false, "confidence": 1.0, "geminiConflict": null}]}`;
+}
 
-=== RULE 2: ABSOLUTE ACOUSTIC LOCK (Intro Fix) ===
-THE ANCHOR: "${anchorW}" at ${anchorTs}s = temporal North Star. MANDATORY SYNC to this timestamp.
-SILENCE DETECTION: Detect the exact acoustic onset of the intro dialogue. Do NOT start at 0.000s.
-RELATIVE PROJECTION: Measure the cadence of intro dialogue and project backward from ${anchorTs}s to find the Absolute Start Time (~3.842s). Use 3-decimal precision.
-FORMULA: start_time = ${anchorTs} - (T_acoustic_anchor - T_acoustic_i)
+function buildAuditorPrompt(rawText: string, anchorTs: number, middleCutoff: number): string {
+  return `ROLE: Phonetic Auditor (v8.0 Triptych — Lane D)
 
-=== RULE 3: RHYTHMIC PULSE & SIGNAL HIERARCHY ===
-MAX PHRASE DENSITY: Keep phrases short (max 6 words). Break long Whisper segments into multiple rhythmic lines with precise acoustic onsets.
-TAGGING: Spoken intro dialogue and primary singing = tag: "main". Overlapping echoes or background vocals = tag: "adlib".
-COLLISION RULE: Only ONE main line can exist at a time.
-Outro (beyond 85% of track): 8-12 words per line OK.
+TASK: Compare the audio signal between ${anchorTs.toFixed(3)}s and ${middleCutoff.toFixed(3)}s against the following transcription text, and identify any words that Whisper got wrong.
 
-=== RULE 4: ACOUSTIC AUTHORITY & SCHEMA STABILITY ===
-SURGICAL QA: Correct Whisper's text only where it is acoustically wrong (e.g., "whore" → "boy"). Store the error in geminiConflict.
-FULL SCHEMA: You MUST include ALL keys in every single object: start, end, text, tag, isCorrection, isFloating, confidence, geminiConflict.
-  - For non-corrections: isCorrection: false, isFloating: false, confidence: 1.0, geminiConflict: null
-  - For corrections: isCorrection: true, geminiConflict: "<the wrong whisper word>"
-NEW DIALOGUE in silent zones (pre-${anchorTs}s and post-${lastWhisperEnd}s): isCorrection: false, geminiConflict: null.
+WHISPER TEXT:
+${rawText.slice(0, 3000)}
 
-=== OUTPUT ===
-Sort ascending by start. Hard boundary: start > ${Math.min(trackEnd + 1.0, 300).toFixed(3)}s = discard.
-ALL timestamps: 3-decimal precision. Last line end within 2.0s of trackEnd.
-Missing ANY section (intro, middle, OR outro) = CRITICAL FAILURE.
-TARGET: 55-85 lines.
+RULES:
+1. LISTEN CAREFULLY to the audio in the range ${anchorTs.toFixed(3)}s to ${middleCutoff.toFixed(3)}s.
+2. Compare each word in the Whisper text against what you actually hear.
+3. Return ONLY a JSON map of corrections: {"wrong_word": "correct_word"}.
+4. Common errors include phonetic mishearings (e.g., "whore" should be "boy", "range" should be "rain").
+5. If Whisper's text is correct, return an empty corrections map.
+6. Do NOT return timestamps, line objects, or any other data — ONLY the corrections map.
+7. Be conservative: only flag words you are confident are wrong.
 
-OUTPUT — ONLY valid JSON, no markdown:
-{
-  "merged_lines": [
-    {"start": 3.842, "end": 5.210, "text": "example lyric", "tag": "main", "isCorrection": false, "isFloating": false, "confidence": 1.0, "geminiConflict": null}
-  ],
-  "qaCorrections": 0,
-  "ghostsRemoved": 0
-}`;
+OUTPUT — return ONLY valid JSON, no markdown:
+{"corrections": {}, "count": 0}`;
 }
 
 // ── Shared: call Gemini gateway ───────────────────────────────────────────────
@@ -341,61 +326,223 @@ async function runGeminiHookAnalysis(
   };
 }
 
-// ── v5.0 Gemini Call 2: Universal Acoustic Orchestrator ───────────────────────
-async function runGeminiOrchestrator(
+// ── v8.0 Triptych Lane B: Intro Patch ─────────────────────────────────────────
+async function runGeminiIntro(
   audioBase64: string,
   mimeType: string,
   lovableKey: string,
   model: string,
-  whisperWords: WhisperWord[],
-  whisperSegments: Array<{ start: number; end: number; text: string }>,
-  whisperRawText: string,
-  trackEnd: number
-): Promise<{ lines: LyricLine[]; qaCorrections: number; ghostsRemoved: number; rawContent: string }> {
-  const prompt = buildOrchestratorPrompt(whisperWords, whisperSegments, whisperRawText, trackEnd);
+  anchorWord: string,
+  anchorTs: number
+): Promise<{ lines: LyricLine[]; rawContent: string }> {
+  const prompt = buildIntroPrompt(anchorWord, anchorTs);
+  console.log(`[triptych-intro] Lane B: anchor="${anchorWord}" @ ${anchorTs.toFixed(3)}s`);
 
-  console.log(`[orchestrator] v7.3 sending ${whisperWords.length} words, ${whisperSegments.length} segments, trackEnd=${trackEnd.toFixed(3)}s to Gemini`);
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 800, "intro");
+  const parsed = extractJsonFromContent(content, "intro_lines");
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 8192, "orchestrator");
-  const parsed = extractJsonFromContent(content, "merged_lines");
-
-  const HARD_MAX_BOUNDARY = Math.min(trackEnd + 1.0, 300);
-
-  const rawLines: LyricLine[] = Array.isArray(parsed.merged_lines)
-    ? parsed.merged_lines
+  const lines: LyricLine[] = Array.isArray(parsed.intro_lines)
+    ? parsed.intro_lines
         .filter((l: any) => l && typeof l.start === "number" && typeof l.end === "number" && l.text)
         .map((l: any): LyricLine => ({
           start: Math.round(Number(l.start) * 1000) / 1000,
           end: Math.round(Number(l.end) * 1000) / 1000,
           text: String(l.text).trim(),
           tag: l.tag === "adlib" ? "adlib" : "main",
-          isOrphaned: false,
           isFloating: false,
-          isCorrection: Boolean(l.isCorrection),
-          geminiConflict: l.geminiConflict ? String(l.geminiConflict) : undefined,
-          confidence: l.confidence != null ? Math.min(1, Math.max(0, Number(l.confidence))) : undefined,
+          isOrphaned: false,
+          isCorrection: false,
+          confidence: l.confidence != null ? Math.min(1, Math.max(0, Number(l.confidence))) : 1.0,
         }))
-        .filter((l: LyricLine) => l.end > l.start && l.start <= HARD_MAX_BOUNDARY && l.text.length > 0)
+        .filter((l: LyricLine) => l.end > l.start && l.start > 0.5 && l.text.length > 0)
     : [];
 
-  // Sort by start time
-  rawLines.sort((a, b) => a.start - b.start);
-
-  const qaCorrections = typeof parsed.qaCorrections === "number" ? parsed.qaCorrections : rawLines.filter(l => l.isCorrection).length;
-  const ghostsRemoved = typeof parsed.ghostsRemoved === "number" ? parsed.ghostsRemoved : 0;
-
-  // Post-process: verify coverage reaches trackEnd
-  const lastLineEnd = rawLines.length > 0 ? rawLines[rawLines.length - 1].end : 0;
-  const coverageGap = trackEnd - lastLineEnd;
-  if (coverageGap > 2.0) {
-    console.warn(`[orchestrator] v7.3 WARNING: coverage gap of ${coverageGap.toFixed(3)}s — last line ends at ${lastLineEnd.toFixed(3)}s vs trackEnd ${trackEnd.toFixed(3)}s`);
-  } else {
-    console.log(`[orchestrator] v7.3 coverage OK: last line at ${lastLineEnd.toFixed(3)}s, trackEnd ${trackEnd.toFixed(3)}s (gap: ${coverageGap.toFixed(3)}s)`);
+  // Validate: first line must not start at 0.000
+  if (lines.length > 0 && lines[0].start < 0.5) {
+    console.warn(`[triptych-intro] First line starts at ${lines[0].start}s — suspiciously early, discarding`);
+    lines.shift();
   }
 
-  console.log(`[orchestrator] v7.3 result: ${rawLines.length} lines (${rawLines.filter(l => l.tag === "main").length} main, ${rawLines.filter(l => l.tag === "adlib").length} adlib, ${qaCorrections} qa-corrections, ${ghostsRemoved} ghosts-removed)`);
+  console.log(`[triptych-intro] Lane B result: ${lines.length} intro lines`);
+  return { lines, rawContent: content };
+}
 
-  return { lines: rawLines, qaCorrections, ghostsRemoved, rawContent: content };
+// ── v8.0 Triptych Lane C: Outro Patch ─────────────────────────────────────────
+async function runGeminiOutro(
+  audioBase64: string,
+  mimeType: string,
+  lovableKey: string,
+  model: string,
+  middleCutoff: number,
+  trackEnd: number
+): Promise<{ lines: LyricLine[]; rawContent: string }> {
+  const prompt = buildOutroPrompt(middleCutoff, trackEnd);
+  console.log(`[triptych-outro] Lane C: ${middleCutoff.toFixed(3)}s to ${trackEnd.toFixed(3)}s`);
+
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 800, "outro");
+  const parsed = extractJsonFromContent(content, "outro_lines");
+
+  const HARD_MAX = Math.min(trackEnd + 2.0, 350);
+
+  const lines: LyricLine[] = Array.isArray(parsed.outro_lines)
+    ? parsed.outro_lines
+        .filter((l: any) => l && typeof l.start === "number" && typeof l.end === "number" && l.text)
+        .map((l: any): LyricLine => ({
+          start: Math.round(Number(l.start) * 1000) / 1000,
+          end: Math.round(Number(l.end) * 1000) / 1000,
+          text: String(l.text).trim(),
+          tag: "adlib",
+          isFloating: false,
+          isOrphaned: false,
+          isCorrection: false,
+          confidence: l.confidence != null ? Math.min(1, Math.max(0, Number(l.confidence))) : 1.0,
+        }))
+        .filter((l: LyricLine) => l.end > l.start && l.start >= middleCutoff - 1.0 && l.start <= HARD_MAX && l.text.length > 0)
+    : [];
+
+  console.log(`[triptych-outro] Lane C result: ${lines.length} outro lines`);
+  return { lines, rawContent: content };
+}
+
+// ── v8.0 Triptych Lane D: Phonetic Auditor ────────────────────────────────────
+async function runGeminiAuditor(
+  audioBase64: string,
+  mimeType: string,
+  lovableKey: string,
+  model: string,
+  rawText: string,
+  anchorTs: number,
+  middleCutoff: number
+): Promise<{ corrections: Record<string, string>; rawContent: string }> {
+  const prompt = buildAuditorPrompt(rawText, anchorTs, middleCutoff);
+  console.log(`[triptych-auditor] Lane D: ${anchorTs.toFixed(3)}s to ${middleCutoff.toFixed(3)}s, text length=${rawText.length}`);
+
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 400, "auditor");
+  const parsed = extractJsonFromContent(content, "corrections");
+
+  const corrections: Record<string, string> = {};
+  if (parsed.corrections && typeof parsed.corrections === "object") {
+    for (const [wrong, right] of Object.entries(parsed.corrections)) {
+      if (typeof right === "string" && wrong.length > 0 && right.length > 0) {
+        corrections[wrong] = right;
+      }
+    }
+  }
+
+  console.log(`[triptych-auditor] Lane D result: ${Object.keys(corrections).length} corrections — ${JSON.stringify(corrections)}`);
+  return { corrections, rawContent: content };
+}
+
+// ── v8.0 Phrase splitter: break Whisper segments into 6-word max phrases ──────
+function splitSegmentIntoPhrases(
+  segment: { start: number; end: number; text: string },
+  words: WhisperWord[],
+  maxWords = 6
+): LyricLine[] {
+  // Find words that fall within this segment's time range
+  const segWords = words.filter(w => w.start >= segment.start - 0.1 && w.end <= segment.end + 0.1);
+
+  if (segWords.length === 0) {
+    // No word-level data — use the segment as-is
+    return [{
+      start: Math.round(segment.start * 1000) / 1000,
+      end: Math.round(segment.end * 1000) / 1000,
+      text: segment.text.trim(),
+      tag: "main",
+      isFloating: false,
+      isOrphaned: false,
+      isCorrection: false,
+      confidence: 1.0,
+    }];
+  }
+
+  const phrases: LyricLine[] = [];
+  for (let i = 0; i < segWords.length; i += maxWords) {
+    const chunk = segWords.slice(i, i + maxWords);
+    if (chunk.length === 0) continue;
+
+    phrases.push({
+      start: Math.round(chunk[0].start * 1000) / 1000,
+      end: Math.round(chunk[chunk.length - 1].end * 1000) / 1000,
+      text: chunk.map(w => w.word).join(" ").trim(),
+      tag: "main",
+      isFloating: false,
+      isOrphaned: false,
+      isCorrection: false,
+      confidence: 1.0,
+    });
+  }
+
+  return phrases;
+}
+
+// ── v8.0 Stitcher: combine intro + corrected middle + outro ───────────────────
+function stitchTriptych(
+  introLines: LyricLine[],
+  outroLines: LyricLine[],
+  corrections: Record<string, string>,
+  whisperSegments: Array<{ start: number; end: number; text: string }>,
+  whisperWords: WhisperWord[],
+  anchorTs: number,
+  middleCutoff: number,
+  trackEnd: number
+): { lines: LyricLine[]; qaCorrections: number } {
+  // 1. Process middle section from Whisper segments
+  const middleSegments = whisperSegments.filter(
+    seg => seg.start >= anchorTs - 0.1 && seg.end <= middleCutoff + 0.1
+  );
+
+  let qaCorrections = 0;
+  const middleLines: LyricLine[] = [];
+
+  for (const seg of middleSegments) {
+    // Split into phrases first
+    const phrases = splitSegmentIntoPhrases(seg, whisperWords);
+
+    // Apply corrections map to each phrase
+    for (const phrase of phrases) {
+      let text = phrase.text;
+      let isCorrection = false;
+      let geminiConflict: string | undefined;
+
+      for (const [wrong, right] of Object.entries(corrections)) {
+        const regex = new RegExp(`\\b${wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "gi");
+        if (regex.test(text)) {
+          text = text.replace(regex, right);
+          isCorrection = true;
+          geminiConflict = wrong;
+          qaCorrections++;
+        }
+      }
+
+      middleLines.push({
+        ...phrase,
+        text,
+        isCorrection,
+        geminiConflict,
+      });
+    }
+  }
+
+  // 2. Combine all three sections
+  const allLines = [...introLines, ...middleLines, ...outroLines];
+
+  // 3. Sort by start time
+  allLines.sort((a, b) => a.start - b.start);
+
+  // 4. Validate coverage
+  const firstStart = allLines.length > 0 ? allLines[0].start : 0;
+  const lastEnd = allLines.length > 0 ? allLines[allLines.length - 1].end : 0;
+  const coverageGap = trackEnd - lastEnd;
+
+  console.log(`[stitcher] v8.0 stitched: ${allLines.length} total lines (${introLines.length} intro + ${middleLines.length} middle + ${outroLines.length} outro)`);
+  console.log(`[stitcher] Coverage: ${firstStart.toFixed(3)}s to ${lastEnd.toFixed(3)}s (trackEnd=${trackEnd.toFixed(3)}s, gap=${coverageGap.toFixed(3)}s)`);
+
+  if (coverageGap > 2.0) {
+    console.warn(`[stitcher] WARNING: coverage gap of ${coverageGap.toFixed(3)}s at end of track`);
+  }
+
+  return { lines: allLines, qaCorrections };
 }
 
 // ── Hook finder: snap to Whisper word boundary ────────────────────────────────
@@ -530,8 +677,8 @@ serve(async (req) => {
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
     console.log(
-      `[v7.3] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Universal Acoustic Orchestrator v7.3 Pulse & Coverage), ` +
+      `[v8.0] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Parallel v8.0), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
@@ -565,57 +712,94 @@ serve(async (req) => {
       console.log(`Whisper: ${words.length} words, ${segments.length} segments, duration: ${whisperDuration}s`);
     }
 
-    // Use Whisper's reported duration (full audio length) as trackEnd, falling back to last word
+    // Use Whisper's reported duration (full audio length) as trackEnd
     const lastWordEnd = words.length > 0 ? words[words.length - 1].end : 0;
     const whisperDuration = useWhisper && whisperResult.status === "fulfilled" ? whisperResult.value.duration : 0;
     const trackEnd = whisperDuration > 0 ? whisperDuration : (lastWordEnd > 0 ? lastWordEnd : 300);
     console.log(`[trackEnd] ${trackEnd.toFixed(3)}s (whisperDuration=${whisperDuration}, lastWordEnd=${lastWordEnd.toFixed(3)})`);
 
-    // ── Stage 2: Gemini Orchestrator (audio + Whisper JSON) ──────────────────
+    // ── Stage 2: v8.0 Triptych — Three parallel Gemini lanes ────────────────
     let lines: LyricLine[] = [];
     let qaCorrections = 0;
     let ghostsRemoved = 0;
-    let orchestratorRawContent = "";
-    let orchestratorError: string | null = null;
+    let triptychDebug: any = {};
 
     if (!analysisDisabled && useWhisper && whisperResult.status === "fulfilled") {
-      try {
-        const orchResult = await runGeminiOrchestrator(
-          audioBase64,
-          mimeType,
-          LOVABLE_API_KEY,
-          resolvedAnalysisModel,
-          words,
-          segments,
-          rawText,
-          trackEnd
-        );
-        lines = orchResult.lines;
-        qaCorrections = orchResult.qaCorrections;
-        ghostsRemoved = orchResult.ghostsRemoved;
-        orchestratorRawContent = orchResult.rawContent;
-      } catch (orchErr) {
-        orchestratorError = (orchErr as Error)?.message || "Orchestrator failed";
-        console.error("[orchestrator] Failed:", orchestratorError);
-        // Fallback: build plain lines from Whisper segments only
-        lines = segments.map(seg => ({
-          start: Math.round(seg.start * 1000) / 1000,
-          end: Math.round(seg.end * 1000) / 1000,
-          text: seg.text,
-          tag: "main" as const,
-        }));
+      const anchorWord = words.length > 0 ? words[0] : null;
+      const anchorTs = anchorWord?.start ?? 0;
+      const anchorW = anchorWord?.word ?? "unknown";
+
+      // Determine middle cutoff: where Whisper words thin out (last word - small buffer)
+      const middleCutoff = lastWordEnd > 10 ? lastWordEnd - 2.0 : lastWordEnd;
+
+      console.log(`[triptych] Firing 3 parallel lanes: intro(0-${anchorTs.toFixed(3)}), outro(${middleCutoff.toFixed(3)}-${trackEnd.toFixed(3)}), auditor(${anchorTs.toFixed(3)}-${middleCutoff.toFixed(3)})`);
+
+      const [introResult, outroResult, auditorResult] = await Promise.allSettled([
+        runGeminiIntro(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, anchorW, anchorTs),
+        runGeminiOutro(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, middleCutoff, trackEnd),
+        runGeminiAuditor(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, rawText, anchorTs, middleCutoff),
+      ]);
+
+      // Extract results with graceful fallbacks
+      const introLines = introResult.status === "fulfilled" ? introResult.value.lines : [];
+      const outroLines = outroResult.status === "fulfilled" ? outroResult.value.lines : [];
+      const corrections = auditorResult.status === "fulfilled" ? auditorResult.value.corrections : {};
+
+      if (introResult.status === "rejected") {
+        console.warn(`[triptych] Lane B (intro) failed: ${(introResult.reason as Error)?.message}`);
       }
-    } else if (!analysisDisabled && !useWhisper) {
-      // Gemini-only mode: no Whisper, orchestrator not applicable
-      lines = [];
+      if (outroResult.status === "rejected") {
+        console.warn(`[triptych] Lane C (outro) failed: ${(outroResult.reason as Error)?.message}`);
+      }
+      if (auditorResult.status === "rejected") {
+        console.warn(`[triptych] Lane D (auditor) failed: ${(auditorResult.reason as Error)?.message}`);
+      }
+
+      // Stitch the three lanes together
+      const stitched = stitchTriptych(
+        introLines,
+        outroLines,
+        corrections,
+        segments,
+        words,
+        anchorTs,
+        middleCutoff,
+        trackEnd
+      );
+
+      lines = stitched.lines;
+      qaCorrections = stitched.qaCorrections;
+
+      triptychDebug = {
+        laneB: {
+          status: introResult.status,
+          linesReturned: introLines.length,
+          rawLength: introResult.status === "fulfilled" ? introResult.value.rawContent.length : 0,
+          error: introResult.status === "rejected" ? (introResult.reason as Error)?.message : null,
+        },
+        laneC: {
+          status: outroResult.status,
+          linesReturned: outroLines.length,
+          rawLength: outroResult.status === "fulfilled" ? outroResult.value.rawContent.length : 0,
+          error: outroResult.status === "rejected" ? (outroResult.reason as Error)?.message : null,
+        },
+        laneD: {
+          status: auditorResult.status,
+          correctionsCount: Object.keys(corrections).length,
+          corrections,
+          rawLength: auditorResult.status === "fulfilled" ? auditorResult.value.rawContent.length : 0,
+          error: auditorResult.status === "rejected" ? (auditorResult.reason as Error)?.message : null,
+        },
+        anchorWord: anchorW,
+        anchorTs,
+        middleCutoff,
+      };
+
     } else if (analysisDisabled && useWhisper && whisperResult.status === "fulfilled") {
-      // Analysis disabled: plain Whisper segments
-      lines = segments.map(seg => ({
-        start: Math.round(seg.start * 1000) / 1000,
-        end: Math.round(seg.end * 1000) / 1000,
-        text: seg.text,
-        tag: "main" as const,
-      }));
+      // Analysis disabled: plain Whisper segments split into phrases
+      for (const seg of segments) {
+        lines.push(...splitSegmentIntoPhrases(seg, words));
+      }
     }
 
     // ── Handle hook result ───────────────────────────────────────────────────
@@ -624,7 +808,7 @@ serve(async (req) => {
     let metadata: any = undefined;
     let hooks: any[] = [];
     let geminiUsed = false;
-    let geminiError: string | null = orchestratorError;
+    let geminiError: string | null = null;
 
     const hookSuccess = !analysisDisabled && hookResult.status === "fulfilled";
 
@@ -661,7 +845,7 @@ serve(async (req) => {
       }
     } else if (!analysisDisabled && hookResult.status === "rejected") {
       const reason = (hookResult.reason as Error)?.message || "unknown";
-      geminiError = `hook: ${reason}${orchestratorError ? `; orchestrator: ${orchestratorError}` : ""}`;
+      geminiError = `hook: ${reason}`;
       console.warn("Gemini hook analysis failed:", reason);
     }
 
@@ -670,7 +854,7 @@ serve(async (req) => {
     const orphanedCount = lines.filter(l => l.isOrphaned).length;
     const correctionCount = qaCorrections;
 
-    console.log(`[v7.3] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections, ${ghostsRemoved} ghosts-removed), ${hooks.length} hooks`);
+    console.log(`[v8.0] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections), ${hooks.length} hooks`);
 
     const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
       wordCount: words.length,
@@ -688,15 +872,15 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v7.3-pulse-coverage",
+          version: "anchor-align-v8.0-triptych-parallel",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v7.3-pulse-coverage",
+            orchestrator: "v8.0-triptych-parallel",
           },
           geminiUsed,
           geminiError,
-          orchestratorError,
+          triptych: triptychDebug,
           inputBytes: Math.round(estimatedBytes),
           outputLines: lines.length,
           adlibLines: adlibCount,
@@ -716,11 +900,6 @@ serve(async (req) => {
               hook: {
                 status: hookSuccess ? "success" : "failed",
                 rawLength: hookSuccess ? hookResult.value.rawContent.length : 0,
-              },
-              orchestrator: {
-                status: orchestratorError ? "failed" : "success",
-                rawLength: orchestratorRawContent.length,
-                linesReturned: lines.length,
               },
             },
           },
