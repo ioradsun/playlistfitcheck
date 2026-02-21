@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData } from "./LyricDisplay";
 import { LyricProgressModal, type ProgressStage } from "./LyricProgressModal";
+import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 
 import type { ReactNode } from "react";
 
@@ -38,6 +39,16 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
   const { user } = useAuth();
   const quota = useUsageQuota("lyric");
 
+  // Beat grid: decode audio early and run in parallel with transcription
+  const [earlyAudioBuffer, setEarlyAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [precomputedBeatGrid, setPrecomputedBeatGrid] = useState<BeatGridData | null>(null);
+  const { beatGrid: detectedGrid } = useBeatGrid(earlyAudioBuffer);
+
+  // When beat grid detection finishes, store it
+  useEffect(() => {
+    if (detectedGrid) setPrecomputedBeatGrid(detectedGrid);
+  }, [detectedGrid]);
+
   // Load saved lyric from dashboard navigation
   useEffect(() => {
     if (initialLyric && !lyricData) {
@@ -49,6 +60,9 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       setSavedId(initialLyric.id);
       setFmlyLines((initialLyric as any).fmly_lines ?? null);
       setVersionMeta((initialLyric as any).version_meta ?? null);
+      // Restore saved beat grid
+      const savedBg = (initialLyric as any).beat_grid;
+      if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
       const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
       setAudioFile(dummyFile);
       setHasRealAudio(false);
@@ -73,6 +87,14 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
     setProgressFileName(file.name);
     setProgressStage("compressing");
     setProgressOpen(true);
+
+    // Kick off beat grid detection in parallel (decode original file)
+    setPrecomputedBeatGrid(null);
+    setEarlyAudioBuffer(null);
+    const audioCtx = new AudioContext();
+    file.arrayBuffer().then(ab => audioCtx.decodeAudioData(ab)).then(buf => {
+      setEarlyAudioBuffer(buf);
+    }).catch(err => console.warn("[beat-grid] Early decode failed:", err));
 
     try {
       // Stage 1: Compress
@@ -109,7 +131,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       else if (name.endsWith(".webm") || mime.includes("webm")) format = "webm";
       else format = "mp3";
 
-      // Stage 3: Upload — auto-advance through sub-stages every 3s while request is in flight
+      // Stage 3: Upload
       setProgressStage("uploading");
       const uploadTimers: ReturnType<typeof setTimeout>[] = [];
       uploadTimers.push(setTimeout(() => setProgressStage("buffering"), 3000));
@@ -129,10 +151,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
         }
       );
 
-      // Upload finished — clear upload sub-stage timers
       uploadTimers.forEach(clearTimeout);
 
-      // Once request is sent, simulate backend stages with timers
       setProgressStage("receiving");
       const timers: ReturnType<typeof setTimeout>[] = [];
       timers.push(setTimeout(() => setProgressStage("transcribing"), 3000));
@@ -151,13 +171,11 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       const data = await response.json();
       timers.forEach(clearTimeout);
 
-      // Brief finalizing flash
       setProgressStage("finalizing");
 
       if (data.error) throw new Error(data.error);
       if (!data.lines) throw new Error("Invalid response format");
 
-      // Small delay so user sees "Quality Check" complete
       await new Promise((r) => setTimeout(r, 600));
 
       setLyricData({
@@ -189,6 +207,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
     setFmlyLines(null);
     setVersionMeta(null);
     setDebugData(null);
+    setPrecomputedBeatGrid(null);
+    setEarlyAudioBuffer(null);
     onNewProject?.();
   }, [onNewProject]);
 
@@ -203,6 +223,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
           fmlyLines={fmlyLines}
           versionMeta={versionMeta}
           debugData={debugData}
+          initialBeatGrid={precomputedBeatGrid}
           onBack={handleBack}
           onSaved={(id) => { setSavedId(id); onProjectSaved?.(); onSavedId?.(id); }}
           onReuploadAudio={(file) => { setAudioFile(file); setHasRealAudio(true); }}
@@ -220,6 +241,9 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
         setSavedId(l.id);
         setFmlyLines((l as any).fmly_lines ?? null);
         setVersionMeta((l as any).version_meta ?? null);
+        const savedBg = (l as any).beat_grid;
+        if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
+        else setPrecomputedBeatGrid(null);
         const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
         setAudioFile(dummyFile);
         setHasRealAudio(false);

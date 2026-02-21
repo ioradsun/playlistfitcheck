@@ -16,7 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
-import { useBeatGrid } from "@/hooks/useBeatGrid";
+import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import { LyricWaveform } from "./LyricWaveform";
 import { VersionToggle, type ActiveVersion } from "./VersionToggle";
 import { LyricFormatControls, type LineFormat, type SocialPreset } from "./LyricFormatControls";
@@ -83,6 +83,7 @@ interface Props {
   fmlyLines?: LyricLine[] | null;
   versionMeta?: { explicit?: Partial<VersionMeta>; fmly?: Partial<VersionMeta> } | null;
   debugData?: any | null;
+  initialBeatGrid?: BeatGridData | null;
   onBack: () => void;
   onSaved?: (id: string) => void;
   onReuploadAudio?: (file: File) => void;
@@ -212,7 +213,7 @@ function hookScoreColor(score: number): string {
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
-export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, onBack, onSaved, onReuploadAudio, onHeaderProject }: Props) {
+export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, initialBeatGrid, onBack, onSaved, onReuploadAudio, onHeaderProject }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
   const features = (siteCopy as any)?.features;
@@ -227,7 +228,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [isPlaying, setIsPlaying] = useState(false);
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
-  const { beatGrid, loading: beatGridLoading } = useBeatGrid(audioBuffer);
+  // Use pre-computed beat grid if available, otherwise run detection from decoded audio
+  const { beatGrid: detectedBeatGrid, loading: beatGridLoading } = useBeatGrid(initialBeatGrid ? null : audioBuffer);
+  const beatGrid = initialBeatGrid ?? detectedBeatGrid;
   const rafRef = useRef<number | null>(null);
 
   // (timing offset removed — Scribe timestamps are accurate)
@@ -1183,19 +1186,12 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   </p>
                 )}
 
-                {/* Tags row: mood, BPM (from beat grid) */}
-                {(songDna.mood || beatGrid?.bpm) && (
+                {/* Tags row: mood */}
+                {songDna.mood && (
                   <div className="flex flex-wrap gap-2">
-                    {songDna.mood && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                        {songDna.mood}
-                      </span>
-                    )}
-                    {beatGrid?.bpm && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                        {beatGrid.bpm} BPM
-                      </span>
-                    )}
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                      {songDna.mood}
+                    </span>
                   </div>
                 )}
 
