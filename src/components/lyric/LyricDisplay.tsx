@@ -335,6 +335,17 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [dnaLoading, setDnaLoading] = useState(false);
   const [dnaRequested, setDnaRequested] = useState(false);
 
+  // Reset Song DNA when audio file changes (e.g. reupload)
+  const audioFileRef = useRef(audioFile);
+  useEffect(() => {
+    if (audioFile !== audioFileRef.current) {
+      audioFileRef.current = audioFile;
+      setSongDna(null);
+      setDnaRequested(false);
+      setDnaLoading(false);
+    }
+  }, [audioFile]);
+
   const fetchSongDna = useCallback(async () => {
     if (dnaLoading || songDna) return;
     setDnaLoading(true);
