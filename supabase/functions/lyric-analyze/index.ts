@@ -72,7 +72,7 @@ Imagery Rules:
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
-  "hottest_hook": { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.00 },
+  "hottest_hook": { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.00, "justification": "Brief 1-2 sentence explanation of why this window was chosen — reference production lift, lyrical repetition, or melodic peak." },
   "description": "A cinematic, euphoric anthem pulsing with restless longing",
   "mood": "anthemic",
   "meaning": {

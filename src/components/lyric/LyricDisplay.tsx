@@ -214,7 +214,7 @@ function hookScoreColor(score: number): string {
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
 export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, initialBeatGrid, onBack, onSaved, onReuploadAudio, onHeaderProject }: Props) {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const siteCopy = useSiteCopy();
   const features = (siteCopy as any)?.features;
   const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
@@ -292,6 +292,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     mood?: string; description?: string;
     meaning?: { theme?: string; summary?: string; imagery?: string[] };
     hook?: LyricHook | null;
+    hookJustification?: string;
   } | null>(null);
   const [dnaLoading, setDnaLoading] = useState(false);
   const [dnaRequested, setDnaRequested] = useState(false);
@@ -374,6 +375,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         description: result?.description,
         meaning: result?.meaning,
         hook,
+        hookJustification: result?.hottest_hook?.justification || undefined,
       });
     } catch (e) {
       console.error("Song DNA error:", e);
@@ -1363,6 +1365,12 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
                   <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
                 </p>
+                {songDna?.hookJustification && roles.includes("curator") && (
+                  <p className="text-[10px] font-mono text-muted-foreground/60 italic border-t border-border/20 pt-2">
+                    <span className="text-muted-foreground/40 uppercase tracking-wider not-italic">AI Justification:</span>{" "}
+                    {songDna.hookJustification}
+                  </p>
+                )}
                 {features?.lyric_video && (
                   <button
                     onClick={() => setVideoComposerOpen(true)}
