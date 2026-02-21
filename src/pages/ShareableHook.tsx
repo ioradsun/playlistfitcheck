@@ -928,7 +928,7 @@ export default function ShareableHook() {
             }}
           >
             <div ref={containerRef} className="absolute inset-0">
-              <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+              <canvas ref={canvasRef} className="absolute top-0 left-0" />
             </div>
 
             {/* Label overlay */}
@@ -967,7 +967,7 @@ export default function ShareableHook() {
             }}
           >
             <div ref={containerRefB} className="absolute inset-0">
-              <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
+              <canvas ref={canvasRefB} className="absolute top-0 left-0" />
             </div>
 
             {/* Label overlay */}
@@ -1139,7 +1139,7 @@ export default function ShareableHook() {
         className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer"
         onClick={handleMuteToggle}
       >
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+        <canvas ref={canvasRef} className="absolute top-0 left-0" />
         <AnimatePresence>
           {showMuteIcon && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute bottom-4 left-4 z-10 text-white/50">
