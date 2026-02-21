@@ -247,13 +247,13 @@ function useHookCanvas(
       hookStart: hookData.hook_start, hookEnd: hookData.hook_end,
     });
 
-    // Constellation with fly-in animation
+    // Constellation with fly-in animation + continuous orbit
     const nodes = constellationRef.current;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (const node of nodes) {
+      node.age += 1; // frame counter
       if (node.phase === "flying") {
-        // Lerp toward center
         const dx = node.targetX - node.x;
         const dy = node.targetY - node.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -266,30 +266,27 @@ function useHookCanvas(
         }
         node.scale = Math.max(1, node.scale - 0.01);
       } else if (node.phase === "settling") {
-        // Hold bright at center, then slowly assign a drift target and fade
         node.settleTimer += 1;
-        if (node.settleTimer > 90) { // ~1.5s at 60fps
-          const rng2 = mulberry32(hashSeed(node.id + "_settle"));
-          const angle = rng2() * Math.PI * 2;
-          const settledDist = 0.1 + rng2() * 0.3;
-          node.targetX = 0.5 + Math.cos(angle) * settledDist;
-          node.targetY = 0.5 + Math.sin(angle) * settledDist;
+        if (node.settleTimer > 90) {
           node.phase = "drifting";
         }
         node.alpha = Math.max(node.maxAlpha, node.alpha - 0.003);
         node.scale = Math.max(1, node.scale - 0.005);
       } else {
-        // Drifting — slow permanent drift
-        node.x += node.vx; node.y += node.vy;
-        // Lerp toward settled target
-        node.x += (node.targetX - node.x) * 0.0005;
-        node.y += (node.targetY - node.y) * 0.0005;
-        if (node.x < -0.1) node.x = 1.1; if (node.x > 1.1) node.x = -0.1;
-        if (node.y < -0.1) node.y = 1.1; if (node.y > 1.1) node.y = -0.1;
-        node.alpha = Math.max(node.maxAlpha, node.alpha - 0.001);
+        // Drifting — continuous slow orbit around center
+        // Use a deterministic angle based on id seed + age for smooth looping
+        const rng2 = mulberry32(hashSeed(node.id));
+        const baseAngle = rng2() * Math.PI * 2;
+        const orbitRadius = 0.12 + rng2() * 0.32;
+        const orbitSpeed = (0.0003 + rng2() * 0.0004) * (rng2() > 0.5 ? 1 : -1);
+        const angle = baseAngle + node.age * orbitSpeed;
+        node.x = 0.5 + Math.cos(angle) * orbitRadius;
+        node.y = 0.5 + Math.sin(angle) * orbitRadius;
+        // Gentle alpha pulsing so they feel alive
+        node.alpha = node.maxAlpha + Math.sin(node.age * 0.008) * 0.02;
         node.scale = 1;
       }
-      ctx.globalAlpha = node.alpha;
+      ctx.globalAlpha = Math.max(0, node.alpha);
       ctx.fillStyle = "#ffffff";
       const fontSize = Math.round(11 * node.scale);
       ctx.font = `${fontSize}px system-ui, sans-serif`;
