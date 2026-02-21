@@ -1,0 +1,1 @@
+ALTER TABLE public.saved_lyrics ADD COLUMN beat_grid jsonb DEFAULT NULL;
