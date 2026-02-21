@@ -801,7 +801,7 @@ export default function ShareableHook() {
 
             {/* Label overlay */}
             <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
-              <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40">
+              <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40 truncate max-w-[120px]">
                 {hookALabel}
               </p>
             </div>
@@ -839,7 +839,7 @@ export default function ShareableHook() {
 
             {/* Label overlay */}
             <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
-              <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40">
+              <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40 truncate max-w-[120px]">
                 {hookBLabel}
               </p>
             </div>
@@ -868,107 +868,103 @@ export default function ShareableHook() {
           )}
         </AnimatePresence>
 
-        {/* Vote results + CTA */}
-        <div className="px-5 py-4 space-y-3" style={{ background: bgBase }}>
-          {/* Vote bars */}
-          <div className="flex items-center gap-3">
-            {/* A bar */}
-            <div className="flex-1 space-y-1">
-              <div className="flex items-baseline justify-between">
-                <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/40">{hookALabel}</span>
-                <motion.span
-                  key={pctA}
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-2xl font-bold tabular-nums text-white/90"
-                >
-                  {hasVoted ? `${pctA}%` : ""}
-                </motion.span>
-              </div>
-              <div className="h-[2px] rounded-full bg-white/10 overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{ background: hookData.palette?.[1] || '#a855f7' }}
-                  initial={{ width: "0%" }}
-                  animate={{ width: hasVoted ? `${pctA}%` : "0%" }}
-                  transition={{ duration: 0.6, ease: "easeOut" }}
-                />
-              </div>
-            </div>
+        {/* Bottom panel — 3-state machine */}
+        <div className="px-5 py-4 max-h-[35vh] pb-[env(safe-area-inset-bottom,16px)]" style={{ background: bgBase }}>
+          <AnimatePresence mode="wait">
+            {/* State 1: Pre-Vote */}
+            {!hasVoted && (
+              <motion.p
+                key="prevote"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-[10px] font-mono uppercase tracking-[0.3em] text-center text-white/20 py-2"
+              >
+                Tap to vote
+              </motion.p>
+            )}
 
-            <span className="text-white/10 text-xs font-mono">vs</span>
+            {/* State 2: Post-Vote, Pre-Comment */}
+            {hasVoted && !hasSubmitted && (
+              <motion.div
+                key="postVote"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                {/* Winning hook result */}
+                <div className="text-center space-y-2">
+                  <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40 truncate max-w-[120px] mx-auto">
+                    {votedA ? hookALabel : hookBLabel}
+                  </p>
+                  <motion.p
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                    className="text-4xl font-bold tabular-nums text-white/90"
+                  >
+                    {votedA ? pctA : pctB}%
+                  </motion.p>
+                  <div className="h-[2px] rounded-full bg-white/10 overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{ background: votedA ? (hookData.palette?.[1] || '#a855f7') : (rivalHook?.palette?.[1] || '#ec4899') }}
+                      initial={{ width: "0%" }}
+                      animate={{ width: `${votedA ? pctA : pctB}%` }}
+                      transition={{ duration: 0.6, ease: "easeOut" }}
+                    />
+                  </div>
+                </div>
 
-            {/* B bar */}
-            <div className="flex-1 space-y-1">
-              <div className="flex items-baseline justify-between">
-                <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/40">{hookBLabel}</span>
-                <motion.span
-                  key={pctB}
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-2xl font-bold tabular-nums text-white/90"
-                >
-                  {hasVoted ? `${pctB}%` : ""}
-                </motion.span>
-              </div>
-              <div className="h-[2px] rounded-full bg-white/10 overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{ background: rivalHook?.palette?.[1] || '#ec4899' }}
-                  initial={{ width: "0%" }}
-                  animate={{ width: hasVoted ? `${pctB}%` : "0%" }}
-                  transition={{ duration: 0.6, ease: "easeOut" }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* CTA / comment input */}
-          {!hasVoted ? (
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-center text-white/20">
-              Tap each side to hear it. Vote for the one that hits harder.
-            </p>
-          ) : hasSubmitted ? (
-            <p className="text-center text-sm text-white/30">
-              your words are on the video
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-center text-white/20">
-                What did {votedA ? hookALabel : hookBLabel} do to you?
-              </p>
-              <div className="relative">
+                {/* Comment input — underline style */}
                 <input
                   type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-                  placeholder={placeholder}
+                  placeholder={`what did ${votedA ? hookALabel.toLowerCase() : hookBLabel.toLowerCase()} do to you?`}
                   maxLength={200}
-                  className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                  className="w-full bg-transparent border-0 border-b border-white/15 px-0 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/40 transition-colors min-h-[44px]"
                 />
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
 
-          {/* Total votes */}
-          {totalVotes > 0 && (
-            <p className="text-[10px] font-mono text-center text-white/15">
-              {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
-            </p>
-          )}
+            {/* State 3: Post-Comment */}
+            {hasVoted && hasSubmitted && (
+              <motion.div
+                key="postComment"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-3 text-center"
+              >
+                <p className="text-[10px] font-mono text-white/30">
+                  your words are on the video
+                </p>
 
-          {/* Share button */}
-          <button
-            onClick={handleShare}
-            className="w-full py-3 text-sm font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
-          >
-            {copied ? "Copied" : "SEND THIS"}
-          </button>
+                <div className="flex items-center justify-center gap-3">
+                  {totalVotes > 0 && (
+                    <span className="text-[10px] font-mono text-white/15">
+                      {totalVotes} vote{totalVotes !== 1 ? "s" : ""} —
+                    </span>
+                  )}
+                  <button
+                    onClick={handleShare}
+                    className="px-6 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-colors min-h-[44px]"
+                  >
+                    {copied ? "Copied" : "SEND THIS"}
+                  </button>
+                </div>
 
-          <p className="text-center text-[10px] text-white/15 pb-4">
-            Built on tools.fm — every artist's fingerprint is unique to them
-          </p>
+                <p className="text-[10px] text-white/15">
+                  Built on tools.fm — every artist's fingerprint is unique to them
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     );
