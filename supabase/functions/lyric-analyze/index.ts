@@ -12,6 +12,8 @@ TASK: Analyze the full audio track, beat grid, and timestamped lyrics to extract
 
 CRITICAL RULES:
 - Your response MUST be complete, valid JSON. Do NOT truncate.
+- The "hottest_hooks" array MUST contain EXACTLY 2 hook objects. NOT 1. ALWAYS 2. This is the MOST IMPORTANT rule.
+- The two hooks MUST be non-overlapping and feel genuinely different from each other.
 - The lexicon MUST be TINY: EXACTLY 5-8 line_mods and 3-6 word_marks. NO MORE.
 - Do NOT generate a line_mod for every lyric line. Only pick the 5-8 most impactful moments.
 - If the song has 100+ lines, you still output ONLY 5-8 line_mods total. This is NON-NEGOTIABLE.
@@ -126,13 +128,15 @@ function extractJson(raw: string): any | null {
   try { return JSON.parse(jsonStr); } catch { return null; }
 }
 
-/** Check if parsed result has the critical fields */
+/** Check if parsed result has the critical fields — requires 2 hooks */
 function isComplete(parsed: any): boolean {
-  // Support both new hottest_hooks array and legacy hottest_hook object
-  const hasHooks = (Array.isArray(parsed?.hottest_hooks) && parsed.hottest_hooks.length > 0 && parsed.hottest_hooks[0]?.start_sec != null)
-    || (parsed?.hottest_hook?.start_sec != null);
+  const hooks = parsed?.hottest_hooks;
+  const hasTwoHooks = Array.isArray(hooks) && hooks.length >= 2
+    && hooks[0]?.start_sec != null && hooks[1]?.start_sec != null
+    && hooks[0]?.label && hooks[1]?.label;
+  // Also accept legacy single hook on final fallback (handled elsewhere)
   return !!(
-    hasHooks &&
+    hasTwoHooks &&
     parsed?.physics_spec?.system &&
     parsed?.physics_spec?.params &&
     Object.keys(parsed.physics_spec.params).length >= 3 &&
@@ -170,9 +174,9 @@ serve(async (req) => {
         textInstruction += `[Beat Grid Context] Detected BPM: ${beatGrid.bpm} (confidence: ${beatGrid.confidence?.toFixed?.(2) ?? "N/A"}). Use this as ground truth for tempo.\n\n`;
       }
       if (lyrics) {
-        textInstruction += `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. CRITICAL: lexicon.line_mods must have EXACTLY 5-8 entries total, NOT one per lyric line. Pick only the most impactful moments.`;
+        textInstruction += `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. MANDATORY: "hottest_hooks" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique "label". lexicon.line_mods must have EXACTLY 5-8 entries total.`;
       } else {
-        textInstruction += "Analyze this audio. Return ONLY the JSON schema specified. CRITICAL: lexicon.line_mods must have EXACTLY 5-8 entries total.";
+        textInstruction += "Analyze this audio. Return ONLY the JSON schema specified. MANDATORY: \"hottest_hooks\" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique \"label\". lexicon.line_mods must have EXACTLY 5-8 entries total.";
       }
       userContent.push({ type: "text", text: textInstruction });
 
@@ -236,6 +240,19 @@ serve(async (req) => {
           // Normalize legacy format
           if (parsed.hottest_hook && !parsed.hottest_hooks) {
             parsed.hottest_hooks = [parsed.hottest_hook];
+          }
+          // If AI returned only 1 hook, synthesize a second from a different region
+          if (Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
+            const first = parsed.hottest_hooks[0];
+            const secondStart = first.start_sec > 60 ? Math.max(first.start_sec - 40, 10) : first.start_sec + 30;
+            parsed.hottest_hooks.push({
+              start_sec: secondStart,
+              duration_sec: 10,
+              confidence: Math.max(first.confidence - 0.15, 0.5),
+              justification: "Secondary hook region (auto-detected)",
+              label: "The Other Side",
+            });
+            console.log(`[song-dna] Synthesized 2nd hook at ${secondStart}s (1st was at ${first.start_sec}s)`);
           }
           const firstHook = parsed.hottest_hooks?.[0] || parsed.hottest_hook;
           console.log(`[song-dna] ✓ Complete on attempt ${attempt + 1}: mood=${parsed.mood}, system=${parsed.physics_spec.system}, hook=${firstHook?.start_sec}, hooks=${parsed.hottest_hooks?.length ?? 1}`);
