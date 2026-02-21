@@ -85,152 +85,242 @@ function seededRandom(seed: number): () => number {
 // ── Procedural animated backgrounds ─────────────────────────────────────────
 
 function drawBgParticles(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
-  // Dark base
-  const grad = ctx.createLinearGradient(0, 0, 0, ch);
+  // Slowly rotating gradient base
+  ctx.save();
+  ctx.translate(cw / 2, ch / 2);
+  ctx.rotate(Math.sin(t * 0.15) * 0.08);
+  ctx.translate(-cw / 2, -ch / 2);
+  const grad = ctx.createLinearGradient(0, 0, cw * Math.sin(t * 0.2), ch);
   grad.addColorStop(0, gradient[0]);
+  grad.addColorStop(0.5, gradient[2]);
   grad.addColorStop(1, gradient[1]);
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cw, ch);
+  ctx.fillRect(-cw * 0.1, -ch * 0.1, cw * 1.2, ch * 1.2);
+  ctx.restore();
 
   const rng = seededRandom(42);
-  const count = 80;
+  const count = 160;
   for (let i = 0; i < count; i++) {
     const baseX = rng() * cw;
     const baseY = rng() * ch;
-    const speed = 0.2 + rng() * 0.8;
-    const size = 1 + rng() * 3;
+    const speed = 0.5 + rng() * 1.5;
+    const size = 1 + rng() * 4;
     const phase = rng() * Math.PI * 2;
+    const orbitRadius = 30 + rng() * 80;
 
-    const x = (baseX + Math.sin(t * speed * 0.3 + phase) * 40) % cw;
-    const y = (baseY + t * speed * 15) % ch;
-    const alpha = 0.2 + 0.6 * Math.sin(t * speed + phase);
+    const x = (baseX + Math.sin(t * speed * 0.6 + phase) * orbitRadius + Math.cos(t * 0.3 + i) * 20) % cw;
+    const y = (baseY + t * speed * 40 + Math.sin(t * 0.4 + phase) * 30) % ch;
+    const alpha = 0.3 + 0.7 * Math.sin(t * speed * 1.5 + phase);
 
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255,255,255,${Math.max(0.05, alpha)})`;
+    ctx.fillStyle = `rgba(255,255,255,${Math.max(0.08, alpha)})`;
     ctx.fill();
 
-    // Glow
-    if (size > 2) {
-      const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 6);
-      glow.addColorStop(0, `rgba(255,255,255,${alpha * 0.15})`);
+    // Bright glow
+    if (size > 1.5) {
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 8);
+      glow.addColorStop(0, `rgba(255,255,255,${alpha * 0.25})`);
       glow.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = glow;
-      ctx.fillRect(x - size * 6, y - size * 6, size * 12, size * 12);
+      ctx.fillRect(x - size * 8, y - size * 8, size * 16, size * 16);
+    }
+  }
+
+  // Shooting stars
+  for (let i = 0; i < 3; i++) {
+    const cycle = (t * 0.3 + i * 1.7) % 4;
+    if (cycle < 1) {
+      const progress = cycle;
+      const sx = cw * (0.2 + i * 0.3);
+      const sy = ch * 0.1;
+      const ex = sx + cw * 0.4;
+      const ey = sy + ch * 0.3;
+      const cx = sx + (ex - sx) * progress;
+      const cy = sy + (ey - sy) * progress;
+      const tailLen = 60;
+      const tailGrad = ctx.createLinearGradient(cx - tailLen * 0.7, cy - tailLen * 0.3, cx, cy);
+      tailGrad.addColorStop(0, "rgba(255,255,255,0)");
+      tailGrad.addColorStop(1, `rgba(255,255,255,${0.6 * (1 - progress)})`);
+      ctx.strokeStyle = tailGrad;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - tailLen * 0.7, cy - tailLen * 0.3);
+      ctx.lineTo(cx, cy);
+      ctx.stroke();
     }
   }
 }
 
 function drawBgAurora(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
-  // Deep dark base
-  ctx.fillStyle = "#050510";
+  ctx.fillStyle = "#030308";
   ctx.fillRect(0, 0, cw, ch);
 
-  // Draw flowing aurora bands
-  for (let band = 0; band < 4; band++) {
-    const bandY = ch * (0.25 + band * 0.15);
-    const hue = (band * 60 + t * 15) % 360;
+  // Multiple flowing aurora bands with heavy wave motion
+  for (let band = 0; band < 6; band++) {
+    const bandY = ch * (0.15 + band * 0.12);
+    const hue = (band * 50 + t * 30) % 360;
     ctx.beginPath();
     ctx.moveTo(0, bandY);
 
-    for (let x = 0; x <= cw; x += 4) {
-      const wave1 = Math.sin(x * 0.003 + t * 0.5 + band) * ch * 0.08;
-      const wave2 = Math.sin(x * 0.007 + t * 0.3 + band * 2) * ch * 0.04;
-      const wave3 = Math.sin(x * 0.001 + t * 0.8) * ch * 0.06;
-      ctx.lineTo(x, bandY + wave1 + wave2 + wave3);
+    for (let x = 0; x <= cw; x += 3) {
+      const wave1 = Math.sin(x * 0.004 + t * 1.2 + band * 0.8) * ch * 0.12;
+      const wave2 = Math.sin(x * 0.009 + t * 0.8 + band * 1.5) * ch * 0.06;
+      const wave3 = Math.sin(x * 0.002 + t * 1.8) * ch * 0.09;
+      const wave4 = Math.cos(x * 0.006 + t * 0.5 + band) * ch * 0.04;
+      ctx.lineTo(x, bandY + wave1 + wave2 + wave3 + wave4);
     }
 
     ctx.lineTo(cw, ch);
     ctx.lineTo(0, ch);
     ctx.closePath();
 
-    const grad = ctx.createLinearGradient(0, bandY - ch * 0.1, 0, bandY + ch * 0.3);
-    grad.addColorStop(0, `hsla(${hue}, 80%, 50%, 0)`);
-    grad.addColorStop(0.3, `hsla(${hue}, 80%, 50%, 0.15)`);
-    grad.addColorStop(0.5, `hsla(${hue}, 70%, 60%, 0.08)`);
-    grad.addColorStop(1, `hsla(${hue}, 80%, 50%, 0)`);
-    ctx.fillStyle = grad;
+    const bandGrad = ctx.createLinearGradient(0, bandY - ch * 0.15, 0, bandY + ch * 0.35);
+    bandGrad.addColorStop(0, `hsla(${hue}, 85%, 55%, 0)`);
+    bandGrad.addColorStop(0.2, `hsla(${hue}, 85%, 55%, 0.2)`);
+    bandGrad.addColorStop(0.5, `hsla(${hue}, 75%, 60%, 0.12)`);
+    bandGrad.addColorStop(1, `hsla(${hue}, 85%, 55%, 0)`);
+    ctx.fillStyle = bandGrad;
     ctx.fill();
+  }
+
+  // Pulsing bright spots
+  for (let i = 0; i < 5; i++) {
+    const px = cw * (0.15 + i * 0.18);
+    const py = ch * (0.3 + Math.sin(t * 0.8 + i * 2) * 0.15);
+    const pr = ch * 0.08 * (0.5 + 0.5 * Math.sin(t * 1.5 + i));
+    const hue2 = (i * 70 + t * 25) % 360;
+    const spotGrad = ctx.createRadialGradient(px, py, 0, px, py, pr);
+    spotGrad.addColorStop(0, `hsla(${hue2}, 80%, 70%, 0.15)`);
+    spotGrad.addColorStop(1, `hsla(${hue2}, 80%, 50%, 0)`);
+    ctx.fillStyle = spotGrad;
+    ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
   }
 }
 
 function drawBgNebula(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
-  // Very deep base
   ctx.fillStyle = gradient[0];
   ctx.fillRect(0, 0, cw, ch);
 
-  // Multiple overlapping radial gradients that shift
+  // Orbiting, pulsing cloud masses
   const clouds = [
-    { cx: 0.3, cy: 0.4, r: 0.5, hue: 270, speed: 0.2 },
-    { cx: 0.7, cy: 0.3, r: 0.4, hue: 200, speed: 0.15 },
-    { cx: 0.5, cy: 0.7, r: 0.6, hue: 320, speed: 0.1 },
-    { cx: 0.2, cy: 0.6, r: 0.35, hue: 240, speed: 0.25 },
-    { cx: 0.8, cy: 0.5, r: 0.45, hue: 180, speed: 0.18 },
+    { cx: 0.3, cy: 0.4, r: 0.55, hue: 270, speed: 0.5, orbit: 0.12 },
+    { cx: 0.7, cy: 0.3, r: 0.45, hue: 200, speed: 0.4, orbit: 0.1 },
+    { cx: 0.5, cy: 0.7, r: 0.65, hue: 320, speed: 0.3, orbit: 0.15 },
+    { cx: 0.2, cy: 0.6, r: 0.4,  hue: 240, speed: 0.6, orbit: 0.08 },
+    { cx: 0.8, cy: 0.5, r: 0.5,  hue: 180, speed: 0.45, orbit: 0.11 },
+    { cx: 0.4, cy: 0.2, r: 0.35, hue: 300, speed: 0.55, orbit: 0.09 },
+    { cx: 0.6, cy: 0.8, r: 0.4,  hue: 160, speed: 0.35, orbit: 0.13 },
   ];
 
   for (const cloud of clouds) {
-    const cx = (cloud.cx + Math.sin(t * cloud.speed) * 0.08) * cw;
-    const cy = (cloud.cy + Math.cos(t * cloud.speed * 0.7) * 0.06) * ch;
-    const r = cloud.r * Math.max(cw, ch);
-    const hue = (cloud.hue + t * 5) % 360;
+    const cx = (cloud.cx + Math.sin(t * cloud.speed) * cloud.orbit + Math.cos(t * cloud.speed * 0.6) * cloud.orbit * 0.5) * cw;
+    const cy = (cloud.cy + Math.cos(t * cloud.speed * 0.7) * cloud.orbit + Math.sin(t * cloud.speed * 0.4) * cloud.orbit * 0.3) * ch;
+    const pulse = 1 + 0.2 * Math.sin(t * cloud.speed * 2);
+    const r = cloud.r * Math.max(cw, ch) * pulse;
+    const hue = (cloud.hue + t * 12) % 360;
 
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    grad.addColorStop(0, `hsla(${hue}, 60%, 40%, 0.2)`);
-    grad.addColorStop(0.4, `hsla(${hue}, 50%, 30%, 0.1)`);
-    grad.addColorStop(1, `hsla(${hue}, 50%, 20%, 0)`);
-    ctx.fillStyle = grad;
+    const cloudGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    cloudGrad.addColorStop(0, `hsla(${hue}, 70%, 45%, 0.25)`);
+    cloudGrad.addColorStop(0.3, `hsla(${hue}, 60%, 35%, 0.15)`);
+    cloudGrad.addColorStop(0.6, `hsla(${hue}, 50%, 25%, 0.05)`);
+    cloudGrad.addColorStop(1, `hsla(${hue}, 50%, 20%, 0)`);
+    ctx.fillStyle = cloudGrad;
     ctx.fillRect(0, 0, cw, ch);
   }
 
-  // Stars
+  // Twinkling stars with drift
   const rng = seededRandom(99);
-  for (let i = 0; i < 60; i++) {
-    const x = rng() * cw;
-    const y = rng() * ch;
-    const size = 0.5 + rng() * 1.5;
-    const twinkle = 0.3 + 0.7 * Math.sin(t * (1 + rng() * 2) + rng() * 10);
+  for (let i = 0; i < 120; i++) {
+    const baseX = rng() * cw;
+    const baseY = rng() * ch;
+    const drift = rng() * 0.3;
+    const x = (baseX + Math.sin(t * drift + i) * 8) % cw;
+    const y = (baseY + Math.cos(t * drift * 0.7 + i) * 6) % ch;
+    const size = 0.5 + rng() * 2;
+    const twinkle = 0.2 + 0.8 * Math.sin(t * (1.5 + rng() * 3) + rng() * 10);
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255,255,255,${twinkle * 0.6})`;
+    ctx.fillStyle = `rgba(255,255,255,${twinkle * 0.7})`;
     ctx.fill();
+
+    // Cross sparkle for larger stars
+    if (size > 1.5 && twinkle > 0.7) {
+      ctx.strokeStyle = `rgba(255,255,255,${twinkle * 0.3})`;
+      ctx.lineWidth = 0.5;
+      const sLen = size * 4;
+      ctx.beginPath(); ctx.moveTo(x - sLen, y); ctx.lineTo(x + sLen, y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, y - sLen); ctx.lineTo(x, y + sLen); ctx.stroke();
+    }
   }
 }
 
 function drawBgRain(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
-  // Dark moody base
-  const grad = ctx.createLinearGradient(0, 0, 0, ch);
-  grad.addColorStop(0, "#0a0a1a");
-  grad.addColorStop(1, "#1a1a2e");
-  ctx.fillStyle = grad;
+  // Dark moody base with pulsing glow
+  const baseGrad = ctx.createLinearGradient(0, 0, 0, ch);
+  baseGrad.addColorStop(0, "#080818");
+  baseGrad.addColorStop(0.6, "#0d0d28");
+  baseGrad.addColorStop(1, "#1a1a30");
+  ctx.fillStyle = baseGrad;
   ctx.fillRect(0, 0, cw, ch);
 
-  // Subtle city glow at bottom
-  const glowGrad = ctx.createRadialGradient(cw * 0.5, ch, 0, cw * 0.5, ch, ch * 0.5);
-  glowGrad.addColorStop(0, `${gradient[1]}33`);
-  glowGrad.addColorStop(1, "transparent");
-  ctx.fillStyle = glowGrad;
-  ctx.fillRect(0, 0, cw, ch);
+  // Animated city glow at bottom — shifting
+  for (let i = 0; i < 3; i++) {
+    const gx = cw * (0.2 + i * 0.3 + Math.sin(t * 0.3 + i) * 0.1);
+    const pulse = 0.7 + 0.3 * Math.sin(t * 0.8 + i * 2);
+    const glowGrad = ctx.createRadialGradient(gx, ch, 0, gx, ch, ch * 0.45 * pulse);
+    glowGrad.addColorStop(0, `${gradient[1]}44`);
+    glowGrad.addColorStop(0.5, `${gradient[2]}22`);
+    glowGrad.addColorStop(1, "transparent");
+    ctx.fillStyle = glowGrad;
+    ctx.fillRect(0, 0, cw, ch);
+  }
 
-  // Rain streaks
+  // Lightning flash
+  const lightningCycle = (t * 0.4) % 6;
+  if (lightningCycle < 0.08) {
+    ctx.fillStyle = `rgba(200,210,255,${0.15 * (1 - lightningCycle / 0.08)})`;
+    ctx.fillRect(0, 0, cw, ch);
+  }
+
+  // Heavy rain streaks
   const rng = seededRandom(77);
-  ctx.strokeStyle = "rgba(180,200,255,0.15)";
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1.5;
 
-  for (let i = 0; i < 150; i++) {
+  for (let i = 0; i < 300; i++) {
     const baseX = rng() * cw;
-    const speed = 400 + rng() * 600;
-    const len = 20 + rng() * 40;
+    const speed = 600 + rng() * 900;
+    const len = 30 + rng() * 60;
     const phase = rng() * ch;
+    const windSway = Math.sin(t * 0.4 + i * 0.1) * 8 + Math.sin(t * 1.2) * 4;
 
     const y = (phase + t * speed) % (ch + len) - len;
-    const x = baseX + Math.sin(t * 0.5 + i) * 3; // slight wind sway
+    const x = baseX + windSway;
 
-    ctx.globalAlpha = 0.1 + rng() * 0.2;
+    const rainAlpha = 0.08 + rng() * 0.25;
+    ctx.strokeStyle = `rgba(160,190,255,${rainAlpha})`;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineTo(x - 1, y + len);
+    ctx.lineTo(x - 2 + windSway * 0.1, y + len);
     ctx.stroke();
   }
+
+  // Splashes at bottom
+  for (let i = 0; i < 20; i++) {
+    const sx = (seededRandom(i + 200)() * cw + t * 50 * (i % 3 + 1)) % cw;
+    const cycle = (t * 2 + i * 0.5) % 1;
+    if (cycle < 0.3) {
+      const progress = cycle / 0.3;
+      const splashY = ch - ch * 0.05;
+      const splashR = 3 + progress * 8;
+      ctx.beginPath();
+      ctx.arc(sx, splashY, splashR, Math.PI, 0);
+      ctx.strokeStyle = `rgba(160,190,255,${0.2 * (1 - progress)})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
   ctx.globalAlpha = 1;
 }
 
@@ -253,17 +343,27 @@ function drawAnimatedBackground(
         const scale = Math.max(cw / bgImage.width, ch / bgImage.height);
         const w = bgImage.width * scale;
         const h = bgImage.height * scale;
-        const zoom = 1 + 0.03 * Math.sin(time * 0.5);
+        // Ken Burns: slow pan + zoom
+        const zoom = 1.05 + 0.06 * Math.sin(time * 0.4);
+        const panX = Math.sin(time * 0.25) * cw * 0.03;
+        const panY = Math.cos(time * 0.18) * ch * 0.03;
         ctx.save();
-        ctx.translate(cw / 2, ch / 2);
+        ctx.translate(cw / 2 + panX, ch / 2 + panY);
         ctx.scale(zoom, zoom);
         ctx.translate(-cw / 2, -ch / 2);
         ctx.drawImage(bgImage, (cw - w) / 2, (ch - h) / 2, w, h);
         ctx.restore();
-        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        // Animated vignette
+        const vignetteAlpha = 0.35 + 0.1 * Math.sin(time * 0.6);
+        ctx.fillStyle = `rgba(0,0,0,${vignetteAlpha})`;
+        ctx.fillRect(0, 0, cw, ch);
+        // Edge vignette
+        const vig = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.3, cw / 2, ch / 2, Math.max(cw, ch) * 0.7);
+        vig.addColorStop(0, "rgba(0,0,0,0)");
+        vig.addColorStop(1, "rgba(0,0,0,0.5)");
+        ctx.fillStyle = vig;
         ctx.fillRect(0, 0, cw, ch);
       } else {
-        // Fallback gradient
         drawBgNebula(ctx, time, cw, ch, gradient);
       }
       return;
