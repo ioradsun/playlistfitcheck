@@ -35,7 +35,7 @@ function getCharPositions(ctx: CanvasRenderingContext2D, displayText: string, st
 }
 
 /** Clamp a desired scale so that text of `textWidth` doesn't exceed `canvasW * safeRatio` */
-function safeScale(textWidth: number, canvasW: number, desiredScale: number, safeRatio = 0.9): number {
+function safeScale(textWidth: number, canvasW: number, desiredScale: number, safeRatio = 0.85): number {
   if (textWidth <= 0) return desiredScale;
   const maxScale = (canvasW * safeRatio) / textWidth;
   return Math.min(desiredScale, maxScale);
@@ -133,7 +133,7 @@ const drawTunnelRush: EffectFn = (ctx, s) => {
   const t = Math.min(1, age / 500);
   const zoom = 0.3 + t * 0.7;
   const alpha = Math.min(1, age / 200);
-  const measured = ctx.measureText(displayText).width;
+  const measured = measureCharByCharWidth(ctx, displayText, st);
   const combinedScale = safeScale(measured, w, Math.min(1.6, zoom * physState.scale));
 
   ctx.globalAlpha = alpha;
@@ -206,7 +206,7 @@ const drawPulseBloom: EffectFn = (ctx, s) => {
   ctx.font = buildFont(st, fs);
 
   const pulse = 1 + Math.sin(age * 0.008) * 0.15 * physState.heat;
-  const measured = ctx.measureText(displayText).width;
+  const measured = measureCharByCharWidth(ctx, displayText, st);
   const combinedScale = safeScale(measured, w, Math.min(1.6, pulse * physState.scale));
   ctx.translate(w / 2, h / 2);
   ctx.scale(combinedScale, combinedScale);
@@ -393,7 +393,7 @@ const drawHookFracture: EffectFn = (ctx, s) => {
 
   const shakeX = (rng() - 0.5) * physState.shake;
   const shakeY = (rng() - 0.5) * physState.shake;
-  const measured = ctx.measureText(displayText).width;
+  const measured = measureCharByCharWidth(ctx, displayText, st);
   const clampedScale = safeScale(measured, w, Math.min(1.5, physState.scale));
   ctx.translate(w / 2 + shakeX, h / 2 + shakeY);
   ctx.scale(clampedScale, clampedScale);
@@ -450,7 +450,7 @@ const drawStaticResolve: EffectFn = (ctx, s) => {
   ctx.filter = blur > 0.5 ? `blur(${blur}px)` : "none";
   ctx.globalAlpha = t;
 
-  const measured = ctx.measureText(displayText).width;
+  const measured = measureCharByCharWidth(ctx, displayText, st);
   const clampedScale = safeScale(measured, w, Math.min(1.5, physState.scale));
   ctx.translate(w / 2, h / 2);
   ctx.scale(clampedScale, clampedScale);
