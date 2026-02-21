@@ -57,7 +57,7 @@ interface Props {
   lines: LyricLine[];
   hookStart: number;
   hookEnd: number;
-  audioSrc: string;
+  audioFile: File;
   seedBase: string;
   onSelect: (system: string) => void;
   onClose: () => void;
@@ -79,7 +79,7 @@ export function DirectorsCutScreen({
   lines,
   hookStart,
   hookEnd,
-  audioSrc,
+  audioFile,
   seedBase,
   onSelect,
   onClose,
@@ -195,6 +195,7 @@ export function DirectorsCutScreen({
 
   // Audio + animation loop
   useEffect(() => {
+    const ownUrl = URL.createObjectURL(audioFile);
     const audio = new Audio();
     audio.muted = true;       // muted required for autoplay policy
     audio.volume = 0;
@@ -216,7 +217,7 @@ export function DirectorsCutScreen({
     audio.addEventListener("error", (e) => {
       console.warn("[DirectorsCut] audio error, using synthetic clock:", e);
     });
-    audio.src = audioSrc;
+    audio.src = ownUrl;
     audio.load();
 
     const syntheticStartTime = performance.now();
@@ -278,8 +279,9 @@ export function DirectorsCutScreen({
       audio.pause();
       audio.src = "";
       audioRef.current = null;
+      URL.revokeObjectURL(ownUrl);
     };
-  }, [audioSrc, hookStart, hookEnd, hookBeats, leftIndex, rightIndex, drawSystemCanvas]);
+  }, [audioFile, hookStart, hookEnd, hookBeats, leftIndex, rightIndex, drawSystemCanvas]);
 
   const handleConfirm = useCallback(() => {
     onSelect(selected);

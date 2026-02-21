@@ -1527,7 +1527,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
       {/* Director's Cut overlay — system selection */}
       <AnimatePresence>
-        {showDirectorsCut && songDna?.physicsSpec && songDna.hook && beatGrid?.beats && audioUrlRef.current && (
+        {showDirectorsCut && songDna?.physicsSpec && songDna.hook && beatGrid?.beats && (
           <DirectorsCutScreen
             baseSpec={songDna.physicsSpec as PhysicsSpec}
             beats={beatGrid.beats.map((t, i) => ({
@@ -1538,7 +1538,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
             hookStart={songDna.hook.start}
             hookEnd={songDna.hook.end}
-            audioSrc={audioUrlRef.current}
+            audioFile={audioFile}
             seedBase={`${data.title}-${songDna.hook.start.toFixed(3)}`}
             onSelect={(system) => {
               setShowDirectorsCut(false);
@@ -1548,11 +1548,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
               // Unlock audio synchronously within user gesture context
               audio.currentTime = songDna.hook!.start;
-              const playPromise = audio.play();
-              if (playPromise) {
-                playPromise.then(() => console.log("[HookDance] audio playing OK, time:", audio.currentTime.toFixed(2)))
-                  .catch((e) => console.warn("[HookDance] audio play FAILED:", e));
-              }
+              audio.play().catch(() => {});
 
               const beats: BeatTick[] = beatGrid.beats.map((t, i) => ({
                 time: t,
