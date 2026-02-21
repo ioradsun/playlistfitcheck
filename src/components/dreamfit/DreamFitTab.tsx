@@ -24,6 +24,7 @@ export function DreamFitTab() {
   const [loading, setLoading] = useState(true);
   const [commentDreamId, setCommentDreamId] = useState<string | null>(null);
   const [view, setView] = useState<DreamView>("recent");
+  const [resolvedDropdownOpen, setResolvedDropdownOpen] = useState(false);
 
   const fetchDreams = useCallback(async () => {
     setLoading(true);
@@ -96,13 +97,21 @@ export function DreamFitTab() {
 
           {/* Resolved tab with dropdown */}
           <div className="flex-1 flex items-center justify-center">
-            <DropdownMenu>
+            <DropdownMenu
+              open={resolvedDropdownOpen}
+              onOpenChange={(o) => {
+                if (o && !isResolvedActive) return;
+                setResolvedDropdownOpen(o);
+              }}
+            >
               <DropdownMenuTrigger asChild>
                 <button
                   onClick={(e) => {
+                    e.stopPropagation();
                     if (!isResolvedActive) {
-                      e.preventDefault();
                       setView("resolved");
+                    } else {
+                      setResolvedDropdownOpen((prev) => !prev);
                     }
                   }}
                   className={cn(
@@ -122,22 +131,20 @@ export function DreamFitTab() {
                   />
                 </button>
               </DropdownMenuTrigger>
-              {isResolvedActive && (
-                <DropdownMenuContent align="center" className="w-40 bg-popover z-50">
-                  <DropdownMenuItem
-                    onClick={() => setView("resolved")}
-                    className={cn("text-sm", view === "resolved" && "text-foreground font-medium")}
-                  >
-                    Resolved
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setView("bypassed")}
-                    className={cn("text-sm", view === "bypassed" && "text-foreground font-medium")}
-                  >
-                    Bypassed
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              )}
+              <DropdownMenuContent align="center" className="w-40 bg-popover z-50">
+                <DropdownMenuItem
+                  onClick={() => { setView("resolved"); setResolvedDropdownOpen(false); }}
+                  className={cn("text-sm", view === "resolved" && "text-foreground font-medium")}
+                >
+                  Resolved
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => { setView("bypassed"); setResolvedDropdownOpen(false); }}
+                  className={cn("text-sm", view === "bypassed" && "text-foreground font-medium")}
+                >
+                  Bypassed
+                </DropdownMenuItem>
+              </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
