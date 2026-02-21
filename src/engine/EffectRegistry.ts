@@ -51,14 +51,19 @@ export interface EffectState {
   progress: number;
   rng: () => number;
   palette: string[];
-  system?: string;  // physics system name for style lookup
+  system?: string;
+  effectiveLetterSpacing?: number;  // overridden spacing from font sizer
 }
 
 type EffectFn = (ctx: CanvasRenderingContext2D, s: EffectState) => void;
 
-// Helper: get style for current effect
+// Helper: get style for current effect, with effective letter-spacing override
 function style(s: EffectState): SystemStyle {
-  return getSystemStyle(s.system || "fracture");
+  const st = getSystemStyle(s.system || "fracture");
+  if (s.effectiveLetterSpacing !== undefined) {
+    return { ...st, letterSpacing: s.effectiveLetterSpacing };
+  }
+  return st;
 }
 
 // Helper: apply styled fill (solid, gradient, per-char, duotone)

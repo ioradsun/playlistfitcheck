@@ -344,8 +344,8 @@ function useHookCanvas(
       const age = (currentTime - activeLine.start) * 1000;
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-      const fs = computeFitFontSize(ctx, activeLine.text, w, hookData.system_type);
-      drawFn(ctx, { text: activeLine.text, physState: physicsState, w, h, fs, age, progress, rng: prngRef.current, palette, system: hookData.system_type });
+      const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, hookData.system_type);
+      drawFn(ctx, { text: activeLine.text, physState: physicsState, w, h, fs, age, progress, rng: prngRef.current, palette, system: hookData.system_type, effectiveLetterSpacing });
     }
 
     // Progress bar

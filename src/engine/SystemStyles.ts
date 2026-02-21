@@ -126,43 +126,49 @@ export function createGradientFill(
 }
 
 /**
- * First-principles font sizing: find the largest font where
- * rendered text (glyphs + letter-spacing) fits within 80% of canvas width.
+ * First-principles font sizing: text always fills ~80% of canvas width.
+ * If letter-spacing makes that impossible, reduce spacing proportionally.
  *
- * Rule: text is the focal point → fill most of the width.
- * Overflow prevention lives here, not in effects.
+ * Rule: text is the focal point → it MUST be big.
  */
 export function computeFitFontSize(
   ctx: CanvasRenderingContext2D,
   text: string,
   canvasW: number,
   system: string,
-): number {
+): { fs: number; effectiveLetterSpacing: number } {
   const st = getSystemStyle(system);
   const displayText = applyTransform(text, st);
   const charCount = displayText.length;
-  if (charCount === 0) return 12;
+  if (charCount === 0) return { fs: 12, effectiveLetterSpacing: st.letterSpacing };
 
-  const targetW = canvasW * 0.80;  // text fills 80% of width
+  const targetW = canvasW * 0.80;
+  const minFs = canvasW * 0.03;  // floor: 3% of canvas width
 
-  // Measure at reference size to get glyph-to-size ratio
+  // Measure glyph widths at reference size
   const REF = 100;
   ctx.font = buildFont(st, REF);
   let glyphSum = 0;
   for (let i = 0; i < charCount; i++) {
     glyphSum += ctx.measureText(displayText[i]).width;
   }
+  if (glyphSum <= 0) return { fs: Math.max(12, minFs), effectiveLetterSpacing: st.letterSpacing };
 
-  if (glyphSum <= 0) return 12;
-
-  // At font size `fs`, rendered width = glyphSum*(fs/REF) + charCount*letterSpacing
   // Solve: glyphSum*(fs/REF) + charCount*ls = targetW
-  // → fs = (targetW - charCount*ls) * REF / glyphSum
-  const spacingTotal = charCount * st.letterSpacing;
-  const availableForGlyphs = targetW - spacingTotal;
+  let ls = st.letterSpacing;
+  let spacingTotal = charCount * ls;
+  let availableForGlyphs = targetW - spacingTotal;
 
-  if (availableForGlyphs <= 0) return 12;
+  // If spacing eats too much, reduce it so glyphs get at least 60% of targetW
+  if (availableForGlyphs < targetW * 0.6) {
+    availableForGlyphs = targetW * 0.6;
+    ls = (targetW - availableForGlyphs) / charCount;
+  }
 
-  const fs = (availableForGlyphs / glyphSum) * REF;
-  return Math.max(Math.round(fs), 12);
+  let fs = (availableForGlyphs / glyphSum) * REF;
+
+  // Enforce minimum font size — text must stay prominent
+  fs = Math.max(fs, minFs);
+
+  return { fs: Math.round(fs), effectiveLetterSpacing: ls };
 }

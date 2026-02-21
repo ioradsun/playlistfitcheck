@@ -167,7 +167,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
 
       // Use measureText-based sizing that accounts for letter-spacing
-      const fs = computeFitFontSize(ctx, activeLine.text, w, activeSystem);
+      const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, activeSystem);
 
       const effectState: EffectState = {
         text: activeLine.text,
@@ -180,6 +180,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         rng: prng,
         palette: activePalette,
         system: activeSystem,
+        effectiveLetterSpacing,
       };
 
       drawFn(ctx, effectState);
