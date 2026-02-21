@@ -489,6 +489,31 @@ async function runGeminiAuditor(
   return { corrections, rawContent: content };
 }
 
+// ── Lane D with model fallback: retry with gemini-2.5-pro on JSON failure ─────
+async function runGeminiAuditorWithFallback(
+  audioBase64: string,
+  mimeType: string,
+  lovableKey: string,
+  primaryModel: string,
+  rawText: string,
+  anchorTs: number,
+  middleCutoff: number
+): Promise<{ corrections: Record<string, string>; rawContent: string }> {
+  try {
+    const result = await runGeminiAuditor(audioBase64, mimeType, lovableKey, primaryModel, rawText, anchorTs, middleCutoff);
+    return result;
+  } catch (e) {
+    const msg = (e as Error)?.message || "";
+    // If JSON parsing failed and we're not already on pro, retry with pro
+    const FALLBACK_MODEL = "google/gemini-2.5-pro";
+    if (primaryModel !== FALLBACK_MODEL && (msg.includes("No JSON") || msg.includes("Empty Gemini"))) {
+      console.warn(`[triptych-auditor] Lane D failed with ${primaryModel} (${msg}), retrying with ${FALLBACK_MODEL}`);
+      return runGeminiAuditor(audioBase64, mimeType, lovableKey, FALLBACK_MODEL, rawText, anchorTs, middleCutoff);
+    }
+    throw e;
+  }
+}
+
 // ── v9.0 Phrase splitter: break Whisper segments into 6-word max phrases ──────
 function splitSegmentIntoPhrases(
   segment: { start: number; end: number; text: string },
@@ -821,8 +846,9 @@ serve(async (req) => {
       const anchorTs = anchorWord?.start ?? 0;
       const anchorW = anchorWord?.word ?? "unknown";
 
-      // Determine middle cutoff: where Whisper words thin out (last word - small buffer)
-      const middleCutoff = lastWordEnd > 10 ? lastWordEnd - 2.0 : lastWordEnd;
+      // Determine middle cutoff: use lastWordEnd directly so Lane C captures final ad-libs
+      // Previous: lastWordEnd - 2.0 was too aggressive, truncating late vocals
+      const middleCutoff = lastWordEnd;
 
       // v9.4: Lane B gets sliced audio (first anchorTs+2s) to reduce ingestion & prevent hallucination
       // Lane C gets sliced audio (outro is self-contained)
@@ -835,7 +861,7 @@ serve(async (req) => {
       const [introResult, outroResult, auditorResult] = await Promise.allSettled([
         runGeminiIntro(introAudioB64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, anchorW, anchorTs),
         runGeminiOutro(outroAudioB64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, middleCutoff, trackEnd),
-        runGeminiAuditor(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, rawText, anchorTs, middleCutoff),
+        runGeminiAuditorWithFallback(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, rawText, anchorTs, middleCutoff),
       ]);
 
       // Extract results with graceful fallbacks
