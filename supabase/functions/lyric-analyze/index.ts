@@ -10,7 +10,11 @@ const DEFAULT_DNA_PROMPT = `ROLE: Universal Music & Physics Orchestrator (v6.0)
 
 TASK: Analyze the full audio track, beat grid, and timestamped lyrics to extract the "Song DNA" and define a deterministic "Physics Spec" for the entire track.
 
-CRITICAL: Your response MUST be complete, valid JSON. Do NOT truncate. Keep the lexicon section compact — use at most 8 line_mods and 6 word_marks total.
+CRITICAL RULES:
+- Your response MUST be complete, valid JSON. Do NOT truncate.
+- The lexicon MUST be TINY: EXACTLY 5-8 line_mods and 3-6 word_marks. NO MORE.
+- Do NOT generate a line_mod for every lyric line. Only pick the 5-8 most impactful moments.
+- If the song has 100+ lines, you still output ONLY 5-8 line_mods total. This is NON-NEGOTIABLE.
 
 1. ADAPTIVE HOOK ANCHOR (8–12s, Bar-Aligned)
 
@@ -158,9 +162,9 @@ serve(async (req) => {
         textInstruction += `[Beat Grid Context] Detected BPM: ${beatGrid.bpm} (confidence: ${beatGrid.confidence?.toFixed?.(2) ?? "N/A"}). Use this as ground truth for tempo.\n\n`;
       }
       if (lyrics) {
-        textInstruction += `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return only the JSON schema specified. Keep lexicon compact.`;
+        textInstruction += `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. CRITICAL: lexicon.line_mods must have EXACTLY 5-8 entries total, NOT one per lyric line. Pick only the most impactful moments.`;
       } else {
-        textInstruction += "Analyze this audio. Return only the JSON schema specified. Keep lexicon compact.";
+        textInstruction += "Analyze this audio. Return ONLY the JSON schema specified. CRITICAL: lexicon.line_mods must have EXACTLY 5-8 entries total.";
       }
       userContent.push({ type: "text", text: textInstruction });
 
@@ -171,8 +175,8 @@ serve(async (req) => {
 
       // Try up to 2 attempts with increasing token limits
       const attempts = [
-        { max_tokens: 8192, model: "google/gemini-2.5-flash" },
-        { max_tokens: 12000, model: "google/gemini-2.5-flash" },
+        { max_tokens: 4096, model: "google/gemini-2.5-flash" },
+        { max_tokens: 6000, model: "google/gemini-2.5-flash" },
       ];
 
       for (let attempt = 0; attempt < attempts.length; attempt++) {
