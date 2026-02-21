@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, Copy, ChevronDown, ChevronUp } from "lucide-react";
+import { Copy, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import type { ArtistData, Blueprint, PlanVariantType } from "./types";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,7 @@ interface ProFitReportProps {
   shareToken: string;
   onBack: () => void;
   onOpenChat: () => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
 const FOCUS_PLAN_OPTIONS: { type: PlanVariantType; label: string }[] = [
@@ -34,7 +35,7 @@ const tierColors: Record<string, string> = {
   "Major": "bg-foreground text-background",
 };
 
-export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBack, onOpenChat }: ProFitReportProps) => {
+export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBack, onOpenChat, onHeaderProject }: ProFitReportProps) => {
   const [signalsOpen, setSignalsOpen] = useState(false);
   const [focusPlan, setFocusPlan] = useState<any>(null);
   const [focusLoading, setFocusLoading] = useState<PlanVariantType | null>(null);
@@ -60,14 +61,16 @@ export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBa
     }
   }, [bp, artist]);
 
+  useEffect(() => {
+    onHeaderProject?.({ title: artist.name, onBack });
+    return () => onHeaderProject?.(null);
+  }, [artist.name, onBack, onHeaderProject]);
+
   return (
     <div className="w-full max-w-4xl mx-auto pb-12 divide-y divide-border/30">
 
       {/* Top bar */}
-      <div className="flex items-center justify-between gap-4 pb-6 flex-wrap">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft size={18} strokeWidth={1.5} />
-        </Button>
+      <div className="flex items-center justify-end gap-4 pb-6 flex-wrap">
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={copyBlueprint}>Copy Blueprint</Button>
           <Button variant="outline" size="sm" onClick={onOpenChat}>Refine Strategy</Button>

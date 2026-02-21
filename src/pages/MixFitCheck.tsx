@@ -19,9 +19,10 @@ interface MixFitCheckProps {
   initialProject?: MixProjectData | null;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
-export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject }: MixFitCheckProps = {}) {
+export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject, onHeaderProject }: MixFitCheckProps = {}) {
   const { user } = useAuth();
   const mixQuota = useUsageQuota("mix");
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
@@ -247,21 +248,25 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     );
   }
 
+  // Report project to header
+  useEffect(() => {
+    if (projectId) {
+      onHeaderProject?.({ title, onBack: resetProject });
+      return () => onHeaderProject?.(null);
+    }
+  }, [projectId, title, resetProject, onHeaderProject]);
+
   return (
     <div className="w-full max-w-5xl mx-auto py-6 px-4 space-y-5">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={resetProject}>
-          <ArrowLeft size={18} strokeWidth={1.5} />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold truncate">{title}</h2>
-          {notes && <p className="text-[10px] text-muted-foreground">{notes}</p>}
-        </div>
-        {user && lastSavedAt && (
+      {/* Notes */}
+      {notes && (
+        <p className="text-[10px] text-muted-foreground">{notes}</p>
+      )}
+      {user && lastSavedAt && (
+        <div className="flex justify-end">
           <span className="text-[10px] text-muted-foreground shrink-0">✓ Saved {lastSavedAt}</span>
-        )}
-      </div>
+        </div>
+      )}
 
       
 

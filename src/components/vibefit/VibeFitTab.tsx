@@ -54,9 +54,10 @@ const LoadingScreen = () => (
 interface VibeFitTabProps {
   initialResult?: { input: VibeFitInput; result: VibeFitOutput } | null;
   onProjectSaved?: () => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
-export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = {}) {
+export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject }: VibeFitTabProps = {}) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VibeFitOutput | null>(initialResult?.result || null);
   const [lastInput, setLastInput] = useState<VibeFitInput | null>(initialResult?.input || null);
@@ -156,6 +157,7 @@ export function VibeFitTab({ initialResult, onProjectSaved }: VibeFitTabProps = 
         onBack={handleBack}
         onRegenerate={handleRegenerate}
         regenerating={loading}
+        onHeaderProject={onHeaderProject}
       />
     );
   }

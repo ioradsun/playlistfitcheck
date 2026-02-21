@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, Send, Loader2, CheckCircle, AlertTriangle, HelpCircle } from "lucide-react";
+import { Send, Loader2, CheckCircle, AlertTriangle, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ArtistData, Blueprint, ChatMessage } from "./types";
@@ -14,6 +14,7 @@ interface ProFitChatProps {
   artist: ArtistData;
   blueprint: Blueprint;
   onBack: () => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
 const GUIDED_CHIPS = [
@@ -27,7 +28,7 @@ const GUIDED_CHIPS = [
   "Low-risk stable version",
 ];
 
-export const ProFitChat = ({ artist, blueprint, onBack }: ProFitChatProps) => {
+export const ProFitChat = ({ artist, blueprint, onBack, onHeaderProject }: ProFitChatProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -73,6 +74,11 @@ export const ProFitChat = ({ artist, blueprint, onBack }: ProFitChatProps) => {
     e.preventDefault();
     sendMessage(input);
   };
+  // Report to header
+  useEffect(() => {
+    onHeaderProject?.({ title: `Strategy Chat: ${artist.name}`, onBack });
+    return () => onHeaderProject?.(null);
+  }, [artist.name, onBack, onHeaderProject]);
 
   return (
     <motion.div
@@ -80,11 +86,6 @@ export const ProFitChat = ({ artist, blueprint, onBack }: ProFitChatProps) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      {/* Header */}
-      <div className="flex items-center gap-3 pb-3">
-        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft size={18} strokeWidth={1.5} /></Button>
-        <h2 className="text-sm font-semibold truncate">Strategy Chat: {artist.name}</h2>
-      </div>
 
       <div className="flex-1 flex gap-4 min-h-0">
         {/* Left: Blueprint summary */}

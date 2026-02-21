@@ -8,13 +8,16 @@ import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData } from "./LyricDisplay";
 import { LyricProgressModal, type ProgressStage } from "./LyricProgressModal";
 
+export type HeaderProjectSetter = (project: { title: string; onBack: () => void } | null) => void;
+
 interface Props {
   initialLyric?: any;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
+  onHeaderProject?: HeaderProjectSetter;
 }
 
-export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Props) {
+export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHeaderProject }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Syncing...");
   const [progressStage, setProgressStage] = useState<ProgressStage>("compressing");
@@ -190,6 +193,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
           onBack={handleBack}
           onSaved={(id) => { setSavedId(id); onProjectSaved?.(); }}
           onReuploadAudio={(file) => { setAudioFile(file); setHasRealAudio(true); }}
+          onHeaderProject={onHeaderProject}
         />
         <LyricProgressModal open={progressOpen} currentStage={progressStage} fileName={progressFileName} />
       </div>

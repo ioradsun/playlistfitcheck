@@ -11,9 +11,10 @@ interface HitFitTabProps {
   initialAnalysis?: HitFitAnalysis | null;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
-export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject }: HitFitTabProps = {}) {
+export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHeaderProject }: HitFitTabProps = {}) {
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<HitFitAnalysis | null>(initialAnalysis || null);
   const { user } = useAuth();
@@ -102,7 +103,7 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject }: Hit
   }, [onNewProject]);
 
   if (analysis) {
-    return <HitFitResults analysis={analysis} onBack={handleBack} />;
+    return <HitFitResults analysis={analysis} onBack={handleBack} onHeaderProject={onHeaderProject} />;
   }
 
   return (

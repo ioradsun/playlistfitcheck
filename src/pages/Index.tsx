@@ -23,7 +23,7 @@ import { VibeFitTab } from "@/components/vibefit/VibeFitTab";
 import { AppSidebar } from "@/components/AppSidebar";
 
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { Music, ChevronRight } from "lucide-react";
+import { Music, ChevronRight, ArrowLeft } from "lucide-react";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -112,10 +112,12 @@ const Index = () => {
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
+    setHeaderProject(null);
   }, []);
   
   // profitAutoRef kept for other auto-run logic
   
+  const [headerProject, setHeaderProject] = useState<{ title: string; onBack: () => void } | null>(null);
   const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
@@ -332,6 +334,7 @@ const Index = () => {
       setProfitLoadKey(k => k + 1);
       setVibeFitLoadKey(k => k + 1);
       setSidebarRefreshKey(k => k + 1);
+      setHeaderProject(null);
     }
     prevUserRef.current = user;
   }, [user, authLoading]);
@@ -435,7 +438,7 @@ const Index = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case "profit":
-        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onProjectSaved={refreshSidebar} onHeaderProject={setHeaderProject} /></div>;
       case "playlist":
         return result ? (
           <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -453,6 +456,7 @@ const Index = () => {
                   songFitAnalysis={songFitAnalysis}
                   songFitLoading={false}
                   onBack={handleBack}
+                  onHeaderProject={setHeaderProject}
                 />
               </div>
             )}
@@ -465,7 +469,7 @@ const Index = () => {
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><DreamFitTab /></div>;
       case "vibefit":
-        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onProjectSaved={refreshSidebar} /></div>;
+        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onProjectSaved={refreshSidebar} onHeaderProject={setHeaderProject} /></div>;
       default:
         return null;
     }
@@ -482,10 +486,19 @@ const Index = () => {
           <SidebarTrigger data-sidebar="trigger" className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
             <ChevronRight size={16} />
           </SidebarTrigger>
-          {TAB_SUBTITLES[activeTab] && (
-            <span className="font-mono text-[11px] tracking-widest text-primary">
-              {TAB_SUBTITLES[activeTab]}
-            </span>
+          {headerProject ? (
+            <>
+              <button onClick={headerProject.onBack} className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+                <ArrowLeft size={16} />
+              </button>
+              <span className="text-xs font-semibold truncate max-w-[200px]">{headerProject.title}</span>
+            </>
+          ) : (
+            TAB_SUBTITLES[activeTab] && (
+              <span className="font-mono text-[11px] tracking-widest text-primary">
+                {TAB_SUBTITLES[activeTab]}
+              </span>
+            )
           )}
         </header>
         <div className="flex-1 flex flex-col min-h-0">
@@ -498,17 +511,17 @@ const Index = () => {
           </div>
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
-            <LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} />
+            <LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} />
           </div>
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "mix" ? "" : "hidden"}`}>
-            <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} />
+            <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} />
           </div>
           {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
             {loadedHitFitAnalysis
-              ? <HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} />
-              : <HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} />
+              ? <HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} />
+              : <HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} />
             }
           </div>
           {!persistedTabs.includes(activeTab) && renderTabContent()}

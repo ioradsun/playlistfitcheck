@@ -1,5 +1,5 @@
+import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { CategoryBar } from "@/components/CategoryBar";
@@ -21,6 +21,7 @@ interface Props {
   songFitAnalysis?: SongFitAnalysis | null;
   songFitLoading?: boolean;
   onBack: () => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
 }
 
 function fmt(n: number | undefined): string {
@@ -81,7 +82,7 @@ function getDataLabel(key: string, input?: PlaylistInput): string | undefined {
   }
 }
 
-export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis, vibeLoading, songFitAnalysis, songFitLoading, onBack }: Props) {
+export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis, vibeLoading, songFitAnalysis, songFitLoading, onBack, onHeaderProject }: Props) {
   const hasBlendedScore = !!songFitAnalysis;
 
   const BLENDED_TO_HEALTH: Record<string, HealthOutput["summary"]["healthLabel"]> = {
@@ -98,27 +99,26 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
     : result.summary.healthLabel;
   const fit = hasBlendedScore ? (FIT_CONFIG[songFitAnalysis.blendedLabel] || FIT_CONFIG.DECENT_FIT) : null;
 
+  const headerTitle = hasBlendedScore && songFitAnalysis.songName
+    ? `${songFitAnalysis.songName}${songFitAnalysis.artistName ? ` · ${songFitAnalysis.artistName}` : ""}`
+    : playlistName || "Playlist Analysis";
+
+  useEffect(() => {
+    onHeaderProject?.({ title: headerTitle, onBack });
+    return () => onHeaderProject?.(null);
+  }, [headerTitle, onBack, onHeaderProject]);
+
   return (
     <div className="w-full max-w-3xl mx-auto space-y-0 pb-24 divide-y divide-border/30 px-0 sm:px-0">
 
-      {/* Header */}
-      <div className="flex items-center gap-3 pb-6">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft size={18} strokeWidth={1.5} />
-        </Button>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-[18px] font-semibold tracking-tight truncate">
-            {hasBlendedScore && songFitAnalysis.songName
-              ? `${songFitAnalysis.songName}${songFitAnalysis.artistName ? ` · ${songFitAnalysis.artistName}` : ""}`
-              : playlistName || "Playlist Analysis"}
-          </h1>
-          {hasBlendedScore && playlistName && (
-            <p className="text-[11px] font-mono text-muted-foreground tracking-wide mt-0.5">vs {playlistName}</p>
-          )}
-          {!hasBlendedScore && (
-            <p className="text-[11px] font-mono text-muted-foreground/60 truncate mt-0.5">{result.input.playlistUrl}</p>
-          )}
-        </div>
+      {/* Sub-header info */}
+      <div className="pb-6">
+        {hasBlendedScore && playlistName && (
+          <p className="text-[11px] font-mono text-muted-foreground tracking-wide">vs {playlistName}</p>
+        )}
+        {!hasBlendedScore && (
+          <p className="text-[11px] font-mono text-muted-foreground/60 truncate">{result.input.playlistUrl}</p>
+        )}
       </div>
 
       {/* Score + Breakdown */}
