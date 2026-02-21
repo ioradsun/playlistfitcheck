@@ -17,9 +17,10 @@ interface Props {
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;
+  onSavedId?: (id: string) => void;
 }
 
-export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHeaderProject }: Props) {
+export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHeaderProject, onSavedId }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Syncing...");
   const [progressStage, setProgressStage] = useState<ProgressStage>("compressing");
@@ -203,7 +204,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
           versionMeta={versionMeta}
           debugData={debugData}
           onBack={handleBack}
-          onSaved={(id) => { setSavedId(id); onProjectSaved?.(); }}
+          onSaved={(id) => { setSavedId(id); onProjectSaved?.(); onSavedId?.(id); }}
           onReuploadAudio={(file) => { setAudioFile(file); setHasRealAudio(true); }}
           onHeaderProject={onHeaderProject}
         />
