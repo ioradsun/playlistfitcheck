@@ -63,13 +63,15 @@ const drawTunnelRush: EffectFn = (ctx, s) => {
   const t = Math.min(1, age / 500);
   const zoom = 0.3 + t * 0.7;
   const alpha = Math.min(1, age / 200);
+  // Clamp combined scale so text stays within canvas
+  const combinedScale = Math.min(1.6, zoom * physState.scale);
 
   ctx.globalAlpha = alpha;
   ctx.translate(w / 2, h / 2);
-  ctx.scale(zoom * physState.scale, zoom * physState.scale);
+  ctx.scale(combinedScale, combinedScale);
 
   // Trailing glow
-  ctx.shadowBlur = physState.glow;
+  ctx.shadowBlur = Math.min(20, physState.glow);
   ctx.shadowColor = palette[1] || palette[0] || "#8b5cf6";
   ctx.fillStyle = palette[0] || "#fff";
   ctx.fillText(text, 0, 0);
@@ -104,10 +106,12 @@ const drawPulseBloom: EffectFn = (ctx, s) => {
   ctx.font = `bold ${fs}px "Geist", system-ui, sans-serif`;
 
   const pulse = 1 + Math.sin(age * 0.008) * 0.15 * physState.heat;
+  // Clamp combined scale
+  const combinedScale = Math.min(1.6, pulse * physState.scale);
   ctx.translate(w / 2, h / 2);
-  ctx.scale(pulse * physState.scale, pulse * physState.scale);
+  ctx.scale(combinedScale, combinedScale);
 
-  ctx.shadowBlur = physState.glow + Math.sin(age * 0.005) * 10;
+  ctx.shadowBlur = Math.min(20, physState.glow + Math.sin(age * 0.005) * 10);
   ctx.shadowColor = palette[2] || palette[0] || "#ec4899";
   ctx.fillStyle = palette[0] || "#fff";
   ctx.globalAlpha = 0.9 + physState.heat * 0.1;
@@ -181,9 +185,11 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
   const chars = text.split("");
   const totalW = chars.length * fs * 0.55;
   const startX = w / 2 - totalW / 2;
+  // Clamp wave amplitude to prevent text going off-screen
+  const waveAmp = Math.min(15, 15 * Math.min(physState.scale, 1.3));
 
   chars.forEach((char, i) => {
-    const wave = Math.sin(age * 0.006 + i * 0.5) * 15 * physState.scale;
+    const wave = Math.sin(age * 0.006 + i * 0.5) * waveAmp;
     ctx.fillStyle = palette[i % palette.length] || "#fff";
     ctx.globalAlpha = 0.85 + physState.heat * 0.15;
     ctx.fillText(char, startX + i * fs * 0.55, h / 2 + wave);
@@ -225,22 +231,26 @@ const drawHookFracture: EffectFn = (ctx, s) => {
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `bold ${Math.round(fs * 1.2)}px "Geist", system-ui, sans-serif`;
+  ctx.font = `bold ${Math.round(fs * 1.1)}px "Geist", system-ui, sans-serif`;
 
-  const shakeX = (rng() - 0.5) * physState.shake * 1.5;
-  const shakeY = (rng() - 0.5) * physState.shake * 1.5;
+  const shakeX = (rng() - 0.5) * physState.shake;
+  const shakeY = (rng() - 0.5) * physState.shake;
+  // Clamp scale for hook fracture
+  const clampedScale = Math.min(1.5, physState.scale);
   ctx.translate(w / 2 + shakeX, h / 2 + shakeY);
-  ctx.scale(physState.scale, physState.scale);
+  ctx.scale(clampedScale, clampedScale);
 
   if (physState.isFractured) {
     // Character-level shattering
     const chars = text.split("");
     const totalW = chars.length * fs * 0.6;
+    // Clamp drift so chars don't fly off-screen
+    const driftMult = Math.min(physState.heat * 25, w * 0.15);
     chars.forEach((char, i) => {
       ctx.save();
-      const drift = (i - chars.length / 2) * physState.heat * 25;
-      const yOff = Math.sin(age * 0.01 + i * 1.7) * physState.glow * 0.15;
-      const rot = (rng() - 0.5) * physState.heat * 0.4;
+      const drift = (i - chars.length / 2) * (driftMult / chars.length);
+      const yOff = Math.sin(age * 0.01 + i * 1.7) * Math.min(physState.glow * 0.15, 15);
+      const rot = (rng() - 0.5) * Math.min(physState.heat * 0.4, 0.3);
       ctx.translate(drift, yOff);
       ctx.rotate(rot);
 
@@ -258,7 +268,7 @@ const drawHookFracture: EffectFn = (ctx, s) => {
     });
   } else {
     // Pre-fracture: intense glow buildup
-    ctx.shadowBlur = physState.glow * 2;
+    ctx.shadowBlur = Math.min(25, physState.glow * 2);
     ctx.shadowColor = palette[1] || palette[0] || "#a855f7";
     ctx.fillStyle = palette[0] || "#fff";
     ctx.fillText(text, 0, 0);
@@ -280,10 +290,11 @@ const drawStaticResolve: EffectFn = (ctx, s) => {
   ctx.filter = blur > 0.5 ? `blur(${blur}px)` : "none";
   ctx.globalAlpha = t;
 
+  const clampedScale = Math.min(1.5, physState.scale);
   ctx.translate(w / 2, h / 2);
-  ctx.scale(physState.scale, physState.scale);
+  ctx.scale(clampedScale, clampedScale);
   ctx.fillStyle = palette[0] || "#fff";
-  ctx.shadowBlur = physState.glow * 0.5;
+  ctx.shadowBlur = Math.min(15, physState.glow * 0.5);
   ctx.shadowColor = palette[1] || "#8b5cf6";
   ctx.fillText(text, 0, 0);
   ctx.restore();
