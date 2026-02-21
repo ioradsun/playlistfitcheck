@@ -174,9 +174,8 @@ function useHookCanvas(
     prngRef.current = engine.prng;
     activeRef.current = active;
 
-    if (active) {
-      engine.start();
-    }
+    // Always start engine so both battle sides render on load
+    engine.start();
 
     return () => { engine.stop(); audio.pause(); };
   }, [hookData]);
@@ -184,18 +183,14 @@ function useHookCanvas(
   // Track active prop in a ref to avoid re-running setup effect
   const activeRef = useRef(active);
 
-  // Handle active state changes — start/stop engine accordingly
+  // Track active prop — keep engine always running, just mute/unmute audio
   useEffect(() => {
-    // Skip if this is the initial mount (engine already started/stopped above)
-    if (activeRef.current === active) return;
     activeRef.current = active;
-    const engine = engineRef.current;
-    if (!engine) return;
-    if (active) {
-      engine.stop();
-      engine.start();
-    } else {
-      engine.stop();
+    const audio = audioRef.current;
+    if (!audio) return;
+    // In battle mode, mute inactive side's audio
+    if (!active) {
+      audio.muted = true;
     }
   }, [active]);
 
@@ -234,7 +229,7 @@ function useHookCanvas(
   // Canvas draw
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !physicsState || !hookData || !prngRef.current || !activeRef.current) return;
+    if (!canvas || !physicsState || !hookData || !prngRef.current) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -846,7 +841,9 @@ export default function ShareableHook() {
             onClick={() => {
               setActiveHookSide("a");
               setTappedSides(prev => new Set(prev).add("a"));
-              hookACanvas.restart();
+              // Unmute this side, mute the other
+              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
+              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
               setMuted(false);
             }}
           >
@@ -883,7 +880,8 @@ export default function ShareableHook() {
             onClick={() => {
               setActiveHookSide("b");
               setTappedSides(prev => new Set(prev).add("b"));
-              hookBCanvas.restart();
+              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
+              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
               setMuted(false);
             }}
           >
