@@ -134,7 +134,7 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── v7.2: Universal Production Orchestrator (Generalized Final) ──
+// ── v7.3: Universal Acoustic Orchestrator (Pulse & Coverage Final) ──
 function buildOrchestratorPrompt(
   whisperWords: WhisperWord[],
   whisperSegments: Array<{ start: number; end: number; text: string }>,
@@ -152,7 +152,7 @@ function buildOrchestratorPrompt(
     ? whisperWords[whisperWords.length - 1].end.toFixed(3)
     : "0.000";
 
-  return `ROLE: Universal Acoustic Orchestrator (v7.2 Universal Production). Harmonize the provided Whisper JSON Timing Grid with the Raw Audio Signal into a production-ready merged_lines array.
+  return `ROLE: Universal Acoustic Orchestrator (v7.3 Pulse & Coverage). Harmonize the Whisper JSON with the Raw Audio into a production-ready merged_lines array.
 
 === WHISPER TIMING GRID ===
 WHISPER_RAW_TEXT: ${whisperRawText.slice(0, 2000)}
@@ -166,42 +166,42 @@ ${segmentsJson}
 TRACK_END: ${trackEnd.toFixed(3)}s
 WHISPER_LAST_WORD_END: ${lastWhisperEnd}s
 
-=== RULE 1: ABSOLUTE TEMPORAL ANCHOR (Timing Lock) ===
-CALIBRATE CLOCK: "${anchorW}" at ${anchorTs}s = temporal North Star.
-SILENCE GUARD: Identify the exact duration of silence/instrumental at the start. Do NOT start at 0.000s unless a voice is present.
-PROJECT BACKWARD: Measure the cadence of any intro dialogue relative to your anchor word and project their timestamps backward with 3-decimal precision.
-start_time = ${anchorTs} - (T_acoustic_anchor - T_acoustic_i)
-
-=== RULE 2: THE FULL-TRACK INVARIANT (Completion Rule) ===
-ZERO-SKIP POLICY: Account for 100% of words in WHISPER_WORDS. Jumps or deletions are STRICTLY PROHIBITED.
+=== RULE 1: THE COVERAGE INVARIANT (No Skips) ===
+100% COMPLETION: You must process the audio until the very end (${trackEnd.toFixed(3)}s). You are strictly prohibited from returning a partial list.
+WHISPER CHECKLIST: You must include EVERY lyric provided in WHISPER_WORDS and WHISPER_SEGMENTS. Do not skip the middle of the song.
 SEQUENTIAL PROCESSING: Work through the song chronologically from start to end.
 VERIFICATION: Every Whisper segment's time range must be covered. Any gap > 3s mid-track = CRITICAL FAILURE.
-ACOUSTIC OVERDRIVE: Continue transcribing vocal events until ${trackEnd.toFixed(3)}s even if Whisper ends at ${lastWhisperEnd}s. Tag manually transcribed outro lines as "adlib".
+ACOUSTIC OVERDRIVE: Continue transcribing vocal events until ${trackEnd.toFixed(3)}s even if Whisper ends at ${lastWhisperEnd}s. Tag manually transcribed outro lines as tag: "adlib".
+
+=== RULE 2: ABSOLUTE ACOUSTIC LOCK (Intro Fix) ===
+THE ANCHOR: "${anchorW}" at ${anchorTs}s = temporal North Star. MANDATORY SYNC to this timestamp.
+SILENCE DETECTION: Detect the exact acoustic onset of the intro dialogue. Do NOT start at 0.000s.
+RELATIVE PROJECTION: Measure the cadence of intro dialogue and project backward from ${anchorTs}s to find the Absolute Start Time (~3.842s). Use 3-decimal precision.
+FORMULA: start_time = ${anchorTs} - (T_acoustic_anchor - T_acoustic_i)
 
 === RULE 3: RHYTHMIC PULSE & SIGNAL HIERARCHY ===
-MAX PHRASE DENSITY: Keep phrases short (max 6 words). Break long segments into multiple lines with precise acoustic onset times.
-SIGNAL MONOPOLY: ONE "main" lyric at a time. All simultaneous vocals (echoes, layers) = "adlib".
+MAX PHRASE DENSITY: Keep phrases short (max 6 words). Break long Whisper segments into multiple rhythmic lines with precise acoustic onsets.
+TAGGING: Spoken intro dialogue and primary singing = tag: "main". Overlapping echoes or background vocals = tag: "adlib".
+COLLISION RULE: Only ONE main line can exist at a time.
 Outro (beyond 85% of track): 8-12 words per line OK.
 
-=== RULE 4: ACOUSTIC AUTHORITY (QA) ===
-AUDITOR ROLE: If Whisper's text is contextually or acoustically incorrect (phonetic errors, profanity hallucinations), REPLACE with the acoustic truth.
-SURGICAL METADATA: Use isCorrection: true and geminiConflict ONLY for word-level replacements in existing segments. geminiConflict = only the single mismatched Whisper word.
-NEW DIALOGUE in silent zones (pre-${anchorTs}s and post-${lastWhisperEnd}s): Tag as "main"/"adlib". Do NOT set isCorrection or geminiConflict.
-
-=== RULE 5: JSON COMPRESSION (Token Guard) ===
-STRIP KEYS: Do NOT include isCorrection, isFloating, or geminiConflict if their value is false or null.
-Only output: "start", "end", "text", "tag" — plus isCorrection + geminiConflict for actual corrections only.
-TARGET: 55-85 lines.
+=== RULE 4: ACOUSTIC AUTHORITY & SCHEMA STABILITY ===
+SURGICAL QA: Correct Whisper's text only where it is acoustically wrong (e.g., "whore" → "boy"). Store the error in geminiConflict.
+FULL SCHEMA: You MUST include ALL keys in every single object: start, end, text, tag, isCorrection, isFloating, confidence, geminiConflict.
+  - For non-corrections: isCorrection: false, isFloating: false, confidence: 1.0, geminiConflict: null
+  - For corrections: isCorrection: true, geminiConflict: "<the wrong whisper word>"
+NEW DIALOGUE in silent zones (pre-${anchorTs}s and post-${lastWhisperEnd}s): isCorrection: false, geminiConflict: null.
 
 === OUTPUT ===
 Sort ascending by start. Hard boundary: start > ${Math.min(trackEnd + 1.0, 300).toFixed(3)}s = discard.
 ALL timestamps: 3-decimal precision. Last line end within 2.0s of trackEnd.
 Missing ANY section (intro, middle, OR outro) = CRITICAL FAILURE.
+TARGET: 55-85 lines.
 
 OUTPUT — ONLY valid JSON, no markdown:
 {
   "merged_lines": [
-    {"start": 3.842, "end": 5.210, "text": "example lyric", "tag": "main"}
+    {"start": 3.842, "end": 5.210, "text": "example lyric", "tag": "main", "isCorrection": false, "isFloating": false, "confidence": 1.0, "geminiConflict": null}
   ],
   "qaCorrections": 0,
   "ghostsRemoved": 0
@@ -354,9 +354,9 @@ async function runGeminiOrchestrator(
 ): Promise<{ lines: LyricLine[]; qaCorrections: number; ghostsRemoved: number; rawContent: string }> {
   const prompt = buildOrchestratorPrompt(whisperWords, whisperSegments, whisperRawText, trackEnd);
 
-  console.log(`[orchestrator] v7.2 sending ${whisperWords.length} words, ${whisperSegments.length} segments, trackEnd=${trackEnd.toFixed(3)}s to Gemini`);
+  console.log(`[orchestrator] v7.3 sending ${whisperWords.length} words, ${whisperSegments.length} segments, trackEnd=${trackEnd.toFixed(3)}s to Gemini`);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 8000, "orchestrator");
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 8192, "orchestrator");
   const parsed = extractJsonFromContent(content, "merged_lines");
 
   const HARD_MAX_BOUNDARY = Math.min(trackEnd + 1.0, 300);
@@ -388,12 +388,12 @@ async function runGeminiOrchestrator(
   const lastLineEnd = rawLines.length > 0 ? rawLines[rawLines.length - 1].end : 0;
   const coverageGap = trackEnd - lastLineEnd;
   if (coverageGap > 2.0) {
-    console.warn(`[orchestrator] v7.2 WARNING: coverage gap of ${coverageGap.toFixed(3)}s — last line ends at ${lastLineEnd.toFixed(3)}s vs trackEnd ${trackEnd.toFixed(3)}s`);
+    console.warn(`[orchestrator] v7.3 WARNING: coverage gap of ${coverageGap.toFixed(3)}s — last line ends at ${lastLineEnd.toFixed(3)}s vs trackEnd ${trackEnd.toFixed(3)}s`);
   } else {
-    console.log(`[orchestrator] v7.2 coverage OK: last line at ${lastLineEnd.toFixed(3)}s, trackEnd ${trackEnd.toFixed(3)}s (gap: ${coverageGap.toFixed(3)}s)`);
+    console.log(`[orchestrator] v7.3 coverage OK: last line at ${lastLineEnd.toFixed(3)}s, trackEnd ${trackEnd.toFixed(3)}s (gap: ${coverageGap.toFixed(3)}s)`);
   }
 
-  console.log(`[orchestrator] v7.2 result: ${rawLines.length} lines (${rawLines.filter(l => l.tag === "main").length} main, ${rawLines.filter(l => l.tag === "adlib").length} adlib, ${qaCorrections} qa-corrections, ${ghostsRemoved} ghosts-removed)`);
+  console.log(`[orchestrator] v7.3 result: ${rawLines.length} lines (${rawLines.filter(l => l.tag === "main").length} main, ${rawLines.filter(l => l.tag === "adlib").length} adlib, ${qaCorrections} qa-corrections, ${ghostsRemoved} ghosts-removed)`);
 
   return { lines: rawLines, qaCorrections, ghostsRemoved, rawContent: content };
 }
@@ -530,8 +530,8 @@ serve(async (req) => {
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
     console.log(
-      `[v7.2] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Universal Production Orchestrator v7.2), ` +
+      `[v7.3] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Universal Acoustic Orchestrator v7.3 Pulse & Coverage), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
@@ -670,7 +670,7 @@ serve(async (req) => {
     const orphanedCount = lines.filter(l => l.isOrphaned).length;
     const correctionCount = qaCorrections;
 
-    console.log(`[v7.2] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections, ${ghostsRemoved} ghosts-removed), ${hooks.length} hooks`);
+    console.log(`[v7.3] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections, ${ghostsRemoved} ghosts-removed), ${hooks.length} hooks`);
 
     const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
       wordCount: words.length,
@@ -688,11 +688,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v7.2-universal-production",
+          version: "anchor-align-v7.3-pulse-coverage",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v7.2-universal-production",
+            orchestrator: "v7.3-pulse-coverage",
           },
           geminiUsed,
           geminiError,
