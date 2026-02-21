@@ -117,6 +117,7 @@ function useHookCanvas(
   hookData: HookData | null,
   constellationRef: React.MutableRefObject<ConstellationNode[]>,
   riverRowsRef: React.MutableRefObject<RiverRow[]>,
+  active: boolean = true,
 ) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const engineRef = useRef<HookDanceEngine | null>(null);
@@ -158,11 +159,33 @@ function useHookCanvas(
 
     engineRef.current = engine;
     prngRef.current = engine.prng;
-    engine.start();
+
+    if (active) {
+      engine.start();
+    }
 
     return () => { engine.stop(); audio.pause(); };
   }, [hookData]);
 
+  // Handle active state changes — start/stop engine accordingly
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    if (active) {
+      engine.stop();
+      engine.start();
+    } else {
+      engine.stop();
+    }
+  }, [active]);
+
+  // Restart from beginning
+  const restart = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.stop();
+    engine.start();
+  }, []);
   // Canvas resize
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -270,7 +293,7 @@ function useHookCanvas(
     ctx.restore();
   }, [physicsState, currentTime, beatCount, hookData]);
 
-  return { audioRef, currentTime, physicsState };
+  return { audioRef, currentTime, physicsState, restart };
 }
 
 // ── Main Component ──────────────────────────────────────────────────────────
@@ -294,6 +317,7 @@ export default function ShareableHook() {
   const [voteCountA, setVoteCountA] = useState(0);
   const [voteCountB, setVoteCountB] = useState(0);
   const [fireParticles, setFireParticles] = useState<FireParticle[]>([]);
+  const [activeHookSide, setActiveHookSide] = useState<"a" | "b">("a");
   const particleIdRef = useRef(0);
 
   const isBattle = !!(hookData?.battle_id && rivalHook);
@@ -423,8 +447,8 @@ export default function ShareableHook() {
 
   // ── Hook canvas engines ───────────────────────────────────────────────────
 
-  const hookACanvas = useHookCanvas(canvasRef, containerRef, hookData, constellationRef, riverRowsRef);
-  const hookBCanvas = useHookCanvas(canvasRefB, containerRefB, rivalHook, constellationRefB, riverRowsRefB);
+  const hookACanvas = useHookCanvas(canvasRef, containerRef, hookData, constellationRef, riverRowsRef, !isBattle || activeHookSide === "a");
+  const hookBCanvas = useHookCanvas(canvasRefB, containerRefB, rivalHook, constellationRefB, riverRowsRefB, isBattle && activeHookSide === "b");
 
   // ── Handle canvas tap (unmute) ────────────────────────────────────────────
 
@@ -673,16 +697,16 @@ export default function ShareableHook() {
         <div className="flex-1 flex flex-col sm:flex-row gap-1 px-1 min-h-0">
           {/* Hook A */}
           <motion.div
-            className="relative flex-1 min-h-[35vh] sm:min-h-0 cursor-pointer rounded-lg overflow-hidden"
+            className={`relative flex-1 min-h-[35vh] sm:min-h-0 cursor-pointer rounded-lg overflow-hidden ${activeHookSide !== "a" ? "opacity-40" : ""}`}
             animate={{
-              opacity: hasVoted && !votedA ? 0.4 : 1,
+              opacity: activeHookSide !== "a" ? 0.4 : hasVoted && !votedA ? 0.7 : 1,
               scale: hasVoted && votedA ? 1.01 : 1,
             }}
             transition={{ duration: 0.6, ease: "easeOut" }}
             onClick={() => {
+              setActiveHookSide("a");
+              hookACanvas.restart();
               if (!hasVoted) handleVote(hookData.id);
-              else if (!votedA) handleVote(hookData.id);
-              else handleMuteToggle();
             }}
           >
             <div ref={containerRef} className="absolute inset-0">
@@ -710,16 +734,16 @@ export default function ShareableHook() {
 
           {/* Hook B */}
           <motion.div
-            className="relative flex-1 min-h-[35vh] sm:min-h-0 cursor-pointer rounded-lg overflow-hidden"
+            className={`relative flex-1 min-h-[35vh] sm:min-h-0 cursor-pointer rounded-lg overflow-hidden ${activeHookSide !== "b" ? "opacity-40" : ""}`}
             animate={{
-              opacity: hasVoted && !votedB ? 0.4 : 1,
+              opacity: activeHookSide !== "b" ? 0.4 : hasVoted && !votedB ? 0.7 : 1,
               scale: hasVoted && votedB ? 1.01 : 1,
             }}
             transition={{ duration: 0.6, ease: "easeOut" }}
             onClick={() => {
+              setActiveHookSide("b");
+              hookBCanvas.restart();
               if (!hasVoted) handleVote(rivalHook!.id);
-              else if (!votedB) handleVote(rivalHook!.id);
-              else handleMuteToggle();
             }}
           >
             <div ref={containerRefB} className="absolute inset-0">
@@ -815,7 +839,7 @@ export default function ShareableHook() {
           {/* CTA / comment input */}
           {!hasVoted ? (
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-center text-white/20">
-              Tap the side that hits harder.
+              Tap each side to hear it. Vote for the one that hits harder.
             </p>
           ) : hasSubmitted ? (
             <p className="text-center text-sm text-white/30">
