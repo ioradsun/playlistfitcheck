@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video, Sparkles, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -269,6 +269,30 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   // Lyric video composer
   const [videoComposerOpen, setVideoComposerOpen] = useState(false);
+
+  // Song meaning analysis
+  const [songMeaning, setSongMeaning] = useState<{ theme?: string; summary?: string; mood?: string; imagery?: string[] } | null>(null);
+  const [meaningLoading, setMeaningLoading] = useState(false);
+  const [meaningRequested, setMeaningRequested] = useState(false);
+
+  const fetchSongMeaning = useCallback(async () => {
+    if (meaningLoading || songMeaning) return;
+    setMeaningLoading(true);
+    setMeaningRequested(true);
+    try {
+      const lyricsText = data.lines.filter(l => l.tag !== "adlib").map(l => l.text).join("\n");
+      const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
+        body: { title: data.title, artist: data.artist, lyrics: lyricsText },
+      });
+      if (error) throw error;
+      setSongMeaning(result);
+    } catch (e) {
+      console.error("Song meaning error:", e);
+      toast.error("Couldn't analyze song meaning");
+    } finally {
+      setMeaningLoading(false);
+    }
+  }, [data, meaningLoading, songMeaning]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
@@ -765,7 +789,51 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         </div>
       )}
 
-      {/* Two-column layout */}
+      {/* Song meaning analysis */}
+      <div className="glass-card rounded-xl px-4 py-3">
+        {!meaningRequested ? (
+          <button
+            onClick={fetchSongMeaning}
+            className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Sparkles size={14} className="text-primary" />
+            What's this song about?
+          </button>
+        ) : meaningLoading ? (
+          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+            <Loader2 size={14} className="animate-spin text-primary" />
+            Analyzing lyrics…
+          </div>
+        ) : songMeaning ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} className="text-primary shrink-0" />
+              <span className="text-[11px] font-mono text-foreground/50 uppercase tracking-wider">Song Meaning</span>
+            </div>
+            {songMeaning.theme && (
+              <p className="text-sm font-semibold text-foreground">{songMeaning.theme}</p>
+            )}
+            {songMeaning.summary && (
+              <p className="text-sm text-muted-foreground leading-relaxed">{songMeaning.summary}</p>
+            )}
+            <div className="flex flex-wrap gap-2 mt-1">
+              {songMeaning.mood && (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                  {songMeaning.mood}
+                </span>
+              )}
+              {songMeaning.imagery?.map((img, idx) => (
+                <span key={idx} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  {img}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">Couldn't analyze — try again later.</p>
+        )}
+      </div>
+
       <div className="flex flex-col lg:flex-row gap-4 items-start">
 
         {/* ── LEFT: Waveform + Lyrics + Export ── */}
