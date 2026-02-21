@@ -508,6 +508,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          artist_fingerprint: Json | null
           avatar_url: string | null
           bio: string | null
           created_at: string
@@ -526,6 +527,7 @@ export type Database = {
           youtube_url: string | null
         }
         Insert: {
+          artist_fingerprint?: Json | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
@@ -544,6 +546,7 @@ export type Database = {
           youtube_url?: string | null
         }
         Update: {
+          artist_fingerprint?: Json | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string

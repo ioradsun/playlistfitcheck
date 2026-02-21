@@ -30,6 +30,7 @@ import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
 import type { HookDanceOverrides } from "./HookDanceControls";
 import type { WaveformData } from "@/hooks/useAudioEngine";
+import type { ArtistDNA, FingerprintSongContext } from "./ArtistFingerprintTypes";
 
 export interface LyricLine {
   start: number;
@@ -304,6 +305,18 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const hookDanceBeatsRef = useRef<BeatTick[]>([]);
   const [hookDanceOverrides, setHookDanceOverrides] = useState<HookDanceOverrides>({});
   const [showDirectorsCut, setShowDirectorsCut] = useState(false);
+  const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(null);
+
+  // Load fingerprint from profile
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("profiles").select("artist_fingerprint").eq("id", user.id).single()
+      .then(({ data }) => {
+        if (data?.artist_fingerprint) {
+          setArtistFingerprint(data.artist_fingerprint as unknown as ArtistDNA);
+        }
+      });
+  }, [user]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1535,6 +1548,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             onClose={() => hookDanceRef.current?.stop()}
             onExport={() => setHookDanceExportOpen(true)}
             onOverrides={setHookDanceOverrides}
+            fingerprint={artistFingerprint}
+            onFingerprintChange={(dna) => setArtistFingerprint(dna)}
+            songContext={{
+              bpm: beatGrid?.bpm,
+              mood: songDna?.mood,
+              physics_system: hookDanceOverrides.system || songDna?.physicsSpec?.system,
+              hook_lyric: songDna?.hook?.previewText,
+              description: songDna?.description,
+            }}
           />
         )}
       </AnimatePresence>
