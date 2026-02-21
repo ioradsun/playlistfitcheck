@@ -137,23 +137,36 @@ export function computeFitFontSize(
   text: string,
   canvasW: number,
   system: string,
-  safeRatio = 0.50,
-  maxRatio = 0.055,
+  safeRatio = 0.46,
+  maxRatio = 0.05,
 ): number {
   const st = getSystemStyle(system);
   const displayText = applyTransform(text, st);
   const safeW = canvasW * safeRatio;
   const charCount = Math.max(1, displayText.length);
 
-  // Measure actual text width at a reference size for accuracy
+  // Measure actual text width at reference size (no letter-spacing applied by canvas)
   const refFs = 100;
   ctx.font = buildFont(st, refFs);
-  const actualRefWidth = ctx.measureText(displayText).width;
-  // Add letter-spacing contribution
-  const totalRefWidth = actualRefWidth + (charCount - 1) * st.letterSpacing;
-
-  // Scale: targetFs = refFs * (safeW / totalRefWidth)
-  const maxFromFit = totalRefWidth > 0 ? refFs * (safeW / totalRefWidth) : refFs;
+  const naturalWidth = ctx.measureText(displayText).width;
+  // Effects render char-by-char, adding letterSpacing between each pair.
+  // At reference size the total rendered width would be:
+  //   naturalWidth + (charCount - 1) * letterSpacing
+  // When we scale to fs, naturalWidth scales proportionally but letterSpacing
+  // also scales proportionally in char-by-char renderers (they use st.letterSpacing * (fs/refFs)):
+  //   totalWidth(fs) = naturalWidth * (fs / refFs) + (charCount - 1) * st.letterSpacing
+  // But most effects apply letterSpacing at the raw px value regardless of fs,
+  // so the conservative formula is:
+  //   totalWidth(fs) = naturalWidth * (fs / refFs) + (charCount - 1) * st.letterSpacing
+  // Solve for fs: fs = (safeW - (charCount-1) * st.letterSpacing) * refFs / naturalWidth
+  const spacingTotal = (charCount - 1) * st.letterSpacing;
+  const availableForGlyphs = safeW - spacingTotal;
+  
+  if (availableForGlyphs <= 0 || naturalWidth <= 0) {
+    return 12;
+  }
+  
+  const maxFromFit = (availableForGlyphs / naturalWidth) * refFs;
   const maxFromCap = canvasW * maxRatio;
 
   const fs = Math.min(maxFromFit, maxFromCap);
