@@ -64,7 +64,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
     });
   }, []);
 
-  const handleTranscribe = useCallback(async (file: File) => {
+  const handleTranscribe = useCallback(async (file: File, referenceLyrics?: string) => {
     if (!quota.canUse) {
       toast.error(quota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
       return;
@@ -125,7 +125,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ audioBase64, format, analysisModel, transcriptionModel }),
+          body: JSON.stringify({ audioBase64, format, analysisModel, transcriptionModel, referenceLyrics }),
         }
       );
 

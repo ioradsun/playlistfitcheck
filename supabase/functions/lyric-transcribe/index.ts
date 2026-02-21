@@ -358,6 +358,80 @@ function findRepetitionAnchor(
   };
 }
 
+// ── Scribe Editor Mode: diff/correct words against reference lyrics ──────────
+function applyReferenceLyricsDiff(
+  words: WhisperWord[],
+  referenceLyrics: string
+): WhisperWord[] {
+  // Tokenize reference lyrics into flat word list
+  const refWords = referenceLyrics
+    .split(/\n/)
+    .flatMap(line => line.trim().split(/\s+/))
+    .filter(w => w.length > 0);
+
+  if (refWords.length === 0) return words;
+
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  // Simple LCS-based alignment: walk both sequences greedily
+  const result: WhisperWord[] = [];
+  let ri = 0; // reference index
+
+  for (let wi = 0; wi < words.length; wi++) {
+    const scribeNorm = normalize(words[wi].word);
+
+    // Look ahead in reference to find a match
+    let matched = false;
+    for (let look = ri; look < Math.min(ri + 5, refWords.length); look++) {
+      if (normalize(refWords[look]) === scribeNorm) {
+        // Fill any skipped reference words by interpolating timestamps
+        for (let skip = ri; skip < look; skip++) {
+          const interpStart = result.length > 0 ? result[result.length - 1].end : words[wi].start;
+          const interpEnd = words[wi].start;
+          const frac = (skip - ri + 1) / (look - ri + 1);
+          result.push({
+            word: refWords[skip],
+            start: Math.round((interpStart + (interpEnd - interpStart) * (frac - 1 / (look - ri + 1))) * 1000) / 1000,
+            end: Math.round((interpStart + (interpEnd - interpStart) * frac) * 1000) / 1000,
+          });
+        }
+        // Use reference text with Scribe timestamp
+        result.push({ word: refWords[look], start: words[wi].start, end: words[wi].end });
+        ri = look + 1;
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      // Replace Scribe word with next reference word if available
+      if (ri < refWords.length) {
+        result.push({ word: refWords[ri], start: words[wi].start, end: words[wi].end });
+        ri++;
+      } else {
+        result.push(words[wi]); // Keep Scribe word as-is
+      }
+    }
+  }
+
+  // Append remaining reference words with estimated timestamps
+  if (ri < refWords.length && result.length > 0) {
+    const lastEnd = result[result.length - 1].end;
+    const remaining = refWords.slice(ri);
+    const gap = 0.3;
+    for (let i = 0; i < remaining.length; i++) {
+      result.push({
+        word: remaining[i],
+        start: Math.round((lastEnd + i * gap) * 1000) / 1000,
+        end: Math.round((lastEnd + (i + 1) * gap) * 1000) / 1000,
+      });
+    }
+  }
+
+  console.log(`[editor-mode] Scribe diff: ${words.length} scribe words → ${result.length} corrected words, ${refWords.length} ref words`);
+  return result;
+}
+
 // ── Gemini Transcription: full audio-to-lyrics via Gemini ─────────────────────
 const DEFAULT_TRANSCRIBE_PROMPT = `ROLE: Lead Audio Transcription Engine (Global Clock Sync)
 
@@ -384,18 +458,49 @@ OUTPUT TEMPLATE:
   { "start": 7.450, "end": 8.100, "text": "yeah yeah", "tag": "adlib" }
 ]`;
 
+const DEFAULT_ALIGN_PROMPT = `ROLE: Precision Lyric Alignment Engine (Global Clock Sync)
+
+TASK: You are given the complete lyrics below. Your ONLY job is to listen
+to the audio and assign precise start/end timestamps to each line.
+Do NOT alter, rewrite, or reorder the lyrics. Align them exactly as given.
+
+REFERENCE LYRICS:
+{referenceLyrics}
+
+RULES:
+- Timestamps anchored to Absolute File Start (0.000)
+- 3-decimal precision (e.g., 12.402)
+- No overlaps between consecutive main vocal lines
+- Tag lines as "main" or "adlib" based on what you hear
+- If a reference line isn't audible, still include it with your best
+  estimate based on surrounding context
+
+OUTPUT: Raw JSON array only, no markdown.
+[
+  { "start": 5.210, "end": 7.400, "text": "exact lyric line from reference", "tag": "main" },
+  { "start": 7.450, "end": 8.100, "text": "yeah yeah", "tag": "adlib" }
+]`;
+
 async function runGeminiTranscribe(
   audioBase64: string,
   mimeType: string,
   lovableKey: string,
-  model: string
+  model: string,
+  referenceLyrics?: string
 ): Promise<{
   words: WhisperWord[];
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
   duration: number;
 }> {
-  const transcribePrompt = await getPrompt("lyric-transcribe", DEFAULT_TRANSCRIBE_PROMPT);
+  let transcribePrompt: string;
+  if (referenceLyrics) {
+    const alignTemplate = await getPrompt("lyric-align", DEFAULT_ALIGN_PROMPT);
+    transcribePrompt = alignTemplate.replace("{referenceLyrics}", referenceLyrics);
+    console.log("[editor-mode] Using Gemini forced alignment with reference lyrics");
+  } else {
+    transcribePrompt = await getPrompt("lyric-transcribe", DEFAULT_TRANSCRIBE_PROMPT);
+  }
   const content = await callGemini(transcribePrompt, audioBase64, mimeType, lovableKey, model, 8000, "transcribe");
 
   // Parse — could be a raw array or wrapped in an object
@@ -458,7 +563,9 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 
-    const { audioBase64, format, analysisModel, transcriptionModel } = await req.json();
+    const { audioBase64, format, analysisModel, transcriptionModel, referenceLyrics } = await req.json();
+    const editorMode = typeof referenceLyrics === "string" && referenceLyrics.trim().length > 0;
+    if (editorMode) console.log(`[editor-mode] Reference lyrics provided (${referenceLyrics.trim().split("\n").length} lines)`);
     if (!audioBase64) throw new Error("No audio data provided");
 
     // Resolve transcription engine
@@ -508,7 +615,7 @@ serve(async (req) => {
 
     // ── Stage 1: Transcription + Hook in parallel ───────────────────────────
     const transcribePromise = useGeminiTranscription
-      ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel)
+      ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics.trim() : undefined)
       : runScribe(audioBase64, ext, mimeType, ELEVENLABS_API_KEY!);
 
     const hookPromise = !analysisDisabled
@@ -526,7 +633,25 @@ serve(async (req) => {
       );
     }
 
-    const { words, segments, rawText, duration } = transcribeResult.value;
+    let { words, segments, rawText, duration } = transcribeResult.value;
+
+    // ── Editor Mode: apply reference lyrics diff for Scribe path ────────────
+    if (editorMode && !useGeminiTranscription) {
+      words = applyReferenceLyricsDiff(words, referenceLyrics.trim());
+      // Rebuild segments from corrected words
+      const MAX_WORDS_PER_SEG = 6;
+      segments = [];
+      for (let i = 0; i < words.length; i += MAX_WORDS_PER_SEG) {
+        const chunk = words.slice(i, i + MAX_WORDS_PER_SEG);
+        if (chunk.length === 0) continue;
+        segments.push({
+          start: chunk[0].start,
+          end: chunk[chunk.length - 1].end,
+          text: chunk.map(w => w.word).join(" "),
+        });
+      }
+      rawText = words.map(w => w.word).join(" ");
+    }
 
     // ── Build lyric lines from Scribe segments ──────────────────────────────
     const lines: LyricLine[] = segments.map(seg => ({
@@ -578,7 +703,9 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "v12.0-dual-engine",
+          version: "v13.0-editor-mode",
+          mode: editorMode ? "editor" : "detective",
+          referenceProvided: editorMode,
           pipeline: {
             transcription: transcriptionEngine,
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
