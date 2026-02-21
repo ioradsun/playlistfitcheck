@@ -317,6 +317,90 @@ function findRepetitionAnchor(
   };
 }
 
+// ── Gemini Transcription: full audio-to-lyrics via Gemini ─────────────────────
+const GEMINI_TRANSCRIBE_PROMPT = `ROLE: Audio Transcription Engine
+
+TASK: Transcribe ALL sung/rapped/spoken lyrics from this audio file with precise timestamps.
+
+RULES:
+- Transcribe every word exactly as heard, preserving slang, ad-libs, and pronunciation.
+- Group words into natural lyric lines (4-8 words per line).
+- Each line needs a start and end timestamp in seconds with 3-decimal precision.
+- Tag lines as "main" for lead vocals or "adlib" for background/ad-lib vocals.
+- Cover the ENTIRE track from start to finish — do not skip sections.
+- If a section has no vocals (instrumental), skip it — do not invent lyrics.
+
+OUTPUT — return ONLY valid JSON array, no markdown, no explanation:
+[
+  { "start": 0.000, "end": 1.500, "text": "First lyric line", "tag": "main" },
+  { "start": 1.600, "end": 3.200, "text": "Second lyric line", "tag": "main" },
+  { "start": 3.300, "end": 4.800, "text": "yeah yeah", "tag": "adlib" }
+]`;
+
+async function runGeminiTranscribe(
+  audioBase64: string,
+  mimeType: string,
+  lovableKey: string,
+  model: string
+): Promise<{
+  words: WhisperWord[];
+  segments: Array<{ start: number; end: number; text: string }>;
+  rawText: string;
+  duration: number;
+}> {
+  const content = await callGemini(GEMINI_TRANSCRIBE_PROMPT, audioBase64, mimeType, lovableKey, model, 8000, "transcribe");
+
+  // Parse — could be a raw array or wrapped in an object
+  let lines: any[];
+  const cleaned = content.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  if (cleaned.startsWith("[")) {
+    const arrEnd = cleaned.lastIndexOf("]");
+    const raw = cleaned.slice(0, arrEnd + 1)
+      .replace(/,\s*]/g, "]")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+    try { lines = JSON.parse(raw); } catch { lines = []; }
+  } else {
+    const parsed = extractJsonFromContent(content);
+    lines = Array.isArray(parsed) ? parsed : (parsed.lines || parsed.lyrics || []);
+  }
+
+  if (!Array.isArray(lines) || lines.length === 0) {
+    throw new Error("Gemini transcription returned no lyrics");
+  }
+
+  // Normalize to our format
+  const segments: Array<{ start: number; end: number; text: string }> = [];
+  const words: WhisperWord[] = [];
+
+  for (const line of lines) {
+    const start = Math.round((Number(line.start) || 0) * 1000) / 1000;
+    const end = Math.round((Number(line.end) || 0) * 1000) / 1000;
+    const text = String(line.text || "").trim();
+    if (!text || end <= start) continue;
+
+    segments.push({ start, end, text });
+
+    // Synthesize word-level entries for hook snapping
+    const lineWords = text.split(/\s+/);
+    const wordDuration = (end - start) / Math.max(lineWords.length, 1);
+    for (let i = 0; i < lineWords.length; i++) {
+      words.push({
+        word: lineWords[i],
+        start: Math.round((start + i * wordDuration) * 1000) / 1000,
+        end: Math.round((start + (i + 1) * wordDuration) * 1000) / 1000,
+      });
+    }
+  }
+
+  const lastSeg = segments[segments.length - 1];
+  const duration = lastSeg ? lastSeg.end + 0.5 : 0;
+  const rawText = segments.map(s => s.text).join(" ");
+
+  console.log(`[gemini-transcribe] ${segments.length} lines, ${words.length} words, duration: ${duration.toFixed(1)}s`);
+
+  return { words, segments, rawText, duration };
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -325,10 +409,15 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
-    if (!ELEVENLABS_API_KEY) throw new Error("ELEVENLABS_API_KEY is not configured");
 
-    const { audioBase64, format, analysisModel } = await req.json();
+    const { audioBase64, format, analysisModel, transcriptionModel } = await req.json();
     if (!audioBase64) throw new Error("No audio data provided");
+
+    // Resolve transcription engine
+    const useGeminiTranscription = transcriptionModel === "gemini";
+    if (!useGeminiTranscription && !ELEVENLABS_API_KEY) {
+      throw new Error("ELEVENLABS_API_KEY is not configured (required for Scribe engine)");
+    }
 
     const VALID_ANALYSIS_MODELS = [
       "google/gemini-3-flash-preview",
@@ -340,6 +429,11 @@ serve(async (req) => {
     const resolvedAnalysisModel: string = VALID_ANALYSIS_MODELS.includes(analysisModel)
       ? analysisModel
       : "google/gemini-2.5-flash";
+
+    // Gemini transcription model — use analysis model or default
+    const geminiTranscribeModel = VALID_ANALYSIS_MODELS.includes(transcriptionModel)
+      ? transcriptionModel
+      : resolvedAnalysisModel;
 
     const estimatedBytes = audioBase64.length * 0.75;
     if (estimatedBytes > 25 * 1024 * 1024) {
@@ -357,30 +451,34 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
+    const transcriptionEngine = useGeminiTranscription ? "gemini" : "scribe_v2";
     console.log(
-      `[v11.0] Pipeline: transcription=scribe_v2, ` +
+      `[v12.0] Pipeline: transcription=${transcriptionEngine}, ` +
       `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel}, ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
-    // ── Stage 1: Scribe + Hook in parallel ──────────────────────────────────
-    const scribePromise = runScribe(audioBase64, ext, mimeType, ELEVENLABS_API_KEY);
+    // ── Stage 1: Transcription + Hook in parallel ───────────────────────────
+    const transcribePromise = useGeminiTranscription
+      ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel)
+      : runScribe(audioBase64, ext, mimeType, ELEVENLABS_API_KEY!);
+
     const hookPromise = !analysisDisabled
       ? runGeminiHookAnalysis(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel)
       : Promise.reject(new Error("ANALYSIS_DISABLED"));
 
-    const [scribeResult, hookResult] = await Promise.allSettled([scribePromise, hookPromise]);
+    const [transcribeResult, hookResult] = await Promise.allSettled([transcribePromise, hookPromise]);
 
-    if (scribeResult.status === "rejected") {
-      const err = (scribeResult.reason as Error)?.message || "Transcription failed";
-      console.error("Scribe failed:", err);
+    if (transcribeResult.status === "rejected") {
+      const err = (transcribeResult.reason as Error)?.message || "Transcription failed";
+      console.error("Transcription failed:", err);
       return new Response(
         JSON.stringify({ error: `Transcription failed: ${err}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { words, segments, rawText, duration } = scribeResult.value;
+    const { words, segments, rawText, duration } = transcribeResult.value;
 
     // ── Build lyric lines from Scribe segments ──────────────────────────────
     const lines: LyricLine[] = segments.map(seg => ({
@@ -426,7 +524,7 @@ serve(async (req) => {
       console.warn("Gemini hook analysis failed:", geminiError);
     }
 
-    console.log(`[v11.0] Final: ${lines.length} lines, ${hooks.length} hooks, title="${title}", artist="${artist}"`);
+    console.log(`[v12.0] Final: ${lines.length} lines, ${hooks.length} hooks, title="${title}", artist="${artist}"`);
 
     return new Response(
       JSON.stringify({
@@ -436,9 +534,9 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "v11.0-scribe-only",
+          version: "v12.0-dual-engine",
           pipeline: {
-            transcription: "scribe_v2",
+            transcription: transcriptionEngine,
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
           },
           geminiUsed,
@@ -447,7 +545,7 @@ serve(async (req) => {
           outputLines: lines.length,
           hooksFound: hooks.length,
           transcription: {
-            input: { model: "scribe_v2", format: ext, mimeType, estimatedMB: Math.round(estimatedBytes / 1024 / 1024 * 10) / 10 },
+            input: { model: transcriptionEngine, format: ext, mimeType, estimatedMB: Math.round(estimatedBytes / 1024 / 1024 * 10) / 10 },
             output: {
               wordCount: words.length,
               segmentCount: segments.length,

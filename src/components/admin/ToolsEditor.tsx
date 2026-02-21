@@ -19,7 +19,7 @@ const ALL_TOOLS = [
 const DEFAULT_ORDER = ALL_TOOLS.map(t => t.key);
 
 // ── LyricFit pipeline model types ─────────────────────────────────────────────
-type TranscriptionModel = "whisper-1" | "gemini";
+type TranscriptionModel = "scribe" | "gemini";
 type AnalysisModel =
   | "google/gemini-3-flash-preview"
   | "google/gemini-2.5-flash"
@@ -45,7 +45,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   tools_enabled: Object.fromEntries(ALL_TOOLS.map(t => [t.key, true])),
   tools_order: DEFAULT_ORDER,
   crowdfit_mode: "reactions",
-  lyric_transcription_model: "whisper-1",
+  lyric_transcription_model: "scribe",
   lyric_analysis_model: "google/gemini-3-flash-preview",
 };
 
@@ -171,7 +171,7 @@ export function ToolsEditor() {
           tools_order: merged,
           crowdfit_mode: f.crowdfit_mode ?? "reactions",
           // Support old field names for backwards compat
-          lyric_transcription_model: f.lyric_transcription_model ?? (f.lyric_transcribe_model === "gemini" ? "gemini" : "whisper-1"),
+          lyric_transcription_model: f.lyric_transcription_model === "gemini" ? "gemini" : "scribe",
           lyric_analysis_model: f.lyric_analysis_model ?? f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
         });
         setOrderedKeys(merged);
@@ -249,7 +249,7 @@ export function ToolsEditor() {
     setSavingKey("lyric_transcription");
     try {
       await patchFeatures({ lyric_transcription_model: model });
-      toast.success(model === "whisper-1" ? "Transcription → Whisper-1" : "Transcription → Gemini (audio-only)");
+      toast.success(model === "scribe" ? "Transcription → ElevenLabs Scribe" : "Transcription → Gemini (audio-only)");
     } catch {
       setFeatures(f => ({ ...f, lyric_transcription_model: prev }));
       toast.error("Failed to update");
@@ -390,11 +390,11 @@ export function ToolsEditor() {
         </div>
         <div className="divide-y divide-border">
           <RadioOption
-            active={features.lyric_transcription_model === "whisper-1"}
+            active={features.lyric_transcription_model === "scribe"}
             disabled={savingKey === "lyric_transcription"}
-            onClick={() => setTranscriptionModel("whisper-1")}
-            title="OpenAI Whisper-1"
-            desc="Word-level timestamps, highest timing precision. Requires OPENAI_API_KEY."
+            onClick={() => setTranscriptionModel("scribe")}
+            title="ElevenLabs Scribe v2"
+            desc="Native word-level timestamps, diarization, audio event tagging. Requires ELEVENLABS_API_KEY."
             badge="recommended"
           />
           <RadioOption
@@ -402,7 +402,7 @@ export function ToolsEditor() {
             disabled={savingKey === "lyric_transcription"}
             onClick={() => setTranscriptionModel("gemini")}
             title="Gemini (audio-only)"
-            desc="No Whisper dependency. Gemini handles timestamps — less precise, uses one model for everything."
+            desc="No ElevenLabs dependency. Gemini handles timestamps — less precise but zero extra API keys."
           />
         </div>
 
