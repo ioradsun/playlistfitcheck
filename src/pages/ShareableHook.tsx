@@ -405,6 +405,7 @@ export default function ShareableHook() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsB, setCommentsB] = useState<Comment[]>([]);
   const [fireCount, setFireCount] = useState(0);
 
   // Battle state
@@ -501,7 +502,7 @@ export default function ShareableHook() {
           }
         }
 
-        // Load comments
+        // Load comments for primary hook
         const { data: commentsData } = await supabase
           .from("hook_comments" as any)
           .select("id, text, submitted_at")
@@ -510,6 +511,25 @@ export default function ShareableHook() {
           .limit(500);
 
         if (commentsData) setComments(commentsData as any as Comment[]);
+
+        // Load comments for rival hook (battle mode)
+        if (hook.battle_id) {
+          const { data: rivalData2 } = await supabase
+            .from("shareable_hooks" as any)
+            .select("id")
+            .eq("battle_id", hook.battle_id)
+            .neq("id", hook.id)
+            .maybeSingle();
+          if (rivalData2) {
+            const { data: commentsBData } = await supabase
+              .from("hook_comments" as any)
+              .select("id, text, submitted_at")
+              .eq("hook_id", (rivalData2 as any).id)
+              .order("submitted_at", { ascending: true })
+              .limit(500);
+            if (commentsBData) setCommentsB(commentsBData as any as Comment[]);
+          }
+        }
 
         setLoading(false);
       });
@@ -568,6 +588,54 @@ export default function ShareableHook() {
     constellationRef.current = nodes;
     riverOffsetsRef.current = [0, 0, 0, 0];
   }, [comments, hookData]);
+
+  // ── Build constellation for rival hook (B) ────────────────────────────────
+
+  useEffect(() => {
+    if (!rivalHook || commentsB.length === 0) return;
+    const now = Date.now();
+    const timestamps = commentsB.map(c => new Date(c.submitted_at).getTime());
+    const oldest = Math.min(...timestamps);
+    const newest = Math.max(...timestamps);
+    const timeSpan = Math.max(newest - oldest, 1);
+
+    const riverCount = Math.min(commentsB.length, RIVER_ROWS.length * 5);
+    const riverStartIdx = Math.max(0, commentsB.length - riverCount);
+
+    const nodes: ConstellationNode[] = commentsB.map((c, idx) => {
+      const ts = new Date(c.submitted_at).getTime();
+      const rng = mulberry32(hashSeed(c.id));
+      const ageRatio = timeSpan > 0 ? (newest - ts) / timeSpan : 0;
+
+      const angle = rng() * Math.PI * 2;
+      const maxRadius = 0.2 + ageRatio * 0.3;
+      const radius = rng() * maxRadius;
+      const seedX = 0.5 + Math.cos(angle) * radius;
+      const seedY = 0.5 + Math.sin(angle) * radius;
+
+      const driftSpeed = 0.008 + rng() * 0.012;
+      const driftAngle = rng() * Math.PI * 2;
+      const baseOpacity = 0.06 - ageRatio * 0.03;
+
+      const isRiver = idx >= riverStartIdx;
+      const riverRowIndex = isRiver ? (idx - riverStartIdx) % RIVER_ROWS.length : 0;
+
+      return {
+        id: c.id, text: c.text,
+        submittedAt: ts,
+        seedX, seedY,
+        x: seedX, y: seedY,
+        driftSpeed, driftAngle,
+        phase: (isRiver ? "river" : "constellation") as ConstellationNode["phase"],
+        phaseStartTime: now,
+        riverRowIndex,
+        currentSize: isRiver ? 12 : 11,
+        baseOpacity,
+      };
+    });
+    constellationRefB.current = nodes;
+    riverOffsetsRefB.current = [0, 0, 0, 0];
+  }, [commentsB, rivalHook]);
 
   // ── Hook canvas engines ───────────────────────────────────────────────────
 
