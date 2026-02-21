@@ -666,9 +666,12 @@ export default function ShareableHook() {
     const text = inputText.trim().slice(0, 200);
     const sessionId = getSessionId();
 
+    // Save comment against the voted hook (or primary hook if no vote)
+    const targetHookId = (isBattle && votedHookId) ? votedHookId : hookData.id;
+
     const { data: inserted } = await supabase
       .from("hook_comments" as any)
-      .insert({ hook_id: hookData.id, text, session_id: sessionId })
+      .insert({ hook_id: targetHookId, text, session_id: sessionId })
       .select("id, text, submitted_at")
       .single();
 
@@ -704,7 +707,7 @@ export default function ShareableHook() {
         baseOpacity: 0.06,
       });
     }
-  }, [inputText, hookData, hasSubmitted, isBattle, activeHookSide]);
+  }, [inputText, hookData, hasSubmitted, isBattle, activeHookSide, votedHookId]);
 
   // ── Placeholder cycling ───────────────────────────────────────────────────
 
