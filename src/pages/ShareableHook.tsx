@@ -685,7 +685,9 @@ export default function ShareableHook() {
       const driftAngle = rng() * Math.PI * 2;
       const riverRowIndex = Math.floor(rng() * RIVER_ROWS.length);
 
-      constellationRef.current.push({
+      // Push to the active side's constellation
+      const targetRef = (isBattle && activeHookSide === "b") ? constellationRefB : constellationRef;
+      targetRef.current.push({
         id: newComment.id, text: newComment.text,
         submittedAt: Date.now(),
         seedX, seedY,
@@ -698,7 +700,7 @@ export default function ShareableHook() {
         baseOpacity: 0.12,
       });
     }
-  }, [inputText, hookData, hasSubmitted]);
+  }, [inputText, hookData, hasSubmitted, isBattle, activeHookSide]);
 
   // ── Placeholder cycling ───────────────────────────────────────────────────
 
