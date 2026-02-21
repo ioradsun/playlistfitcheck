@@ -91,6 +91,7 @@ interface Props {
   versionMeta?: { explicit?: Partial<VersionMeta>; fmly?: Partial<VersionMeta> } | null;
   debugData?: any | null;
   initialBeatGrid?: BeatGridData | null;
+  initialSongDna?: any | null;
   onBack: () => void;
   onSaved?: (id: string) => void;
   onReuploadAudio?: (file: File) => void;
@@ -220,7 +221,7 @@ function hookScoreColor(score: number): string {
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
-export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, initialBeatGrid, onBack, onSaved, onReuploadAudio, onHeaderProject }: Props) {
+export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, initialBeatGrid, initialSongDna, onBack, onSaved, onReuploadAudio, onHeaderProject }: Props) {
   const { user, roles } = useAuth();
   const siteCopy = useSiteCopy();
   const features = (siteCopy as any)?.features;
@@ -344,9 +345,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       effect_sequence?: { line_index: number; effect_key: string }[];
       micro_surprise?: { every_n_beats: number; action: string };
     } | null;
-  } | null>(null);
+  } | null>(initialSongDna ?? null);
   const [dnaLoading, setDnaLoading] = useState(false);
-  const [dnaRequested, setDnaRequested] = useState(false);
+  const [dnaRequested, setDnaRequested] = useState(!!initialSongDna);
 
   // Reset Song DNA when audio file changes (e.g. reupload)
   const audioFileRef = useRef(audioFile);
@@ -618,6 +619,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           fmly: { lineFormat: fmlyMeta.lineFormat, socialPreset: fmlyMeta.socialPreset, strictness: fmlyMeta.strictness, lastEdited: new Date().toISOString() },
         } as any,
         beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } as any : null,
+        song_dna: songDna as any ?? null,
       };
 
       if (currentSavedId) {
@@ -641,7 +643,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       console.error("Autosave error:", e);
       setSaveStatus("idle");
     }
-  }, [user, currentSavedId, data, explicitLines, fmlyLines, explicitMeta, fmlyMeta, audioFile.name, onSaved, beatGrid]);
+  }, [user, currentSavedId, data, explicitLines, fmlyLines, explicitMeta, fmlyMeta, audioFile.name, onSaved, beatGrid, songDna]);
 
   const scheduleAutosave = useCallback(() => {
     if (!user) return;
@@ -654,7 +656,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   useEffect(() => {
     scheduleAutosave();
-  }, [explicitLines, fmlyLines, explicitMeta, fmlyMeta, beatGrid]);
+  }, [explicitLines, fmlyLines, explicitMeta, fmlyMeta, beatGrid, songDna]);
 
   // ── Editing ───────────────────────────────────────────────────────────────
   const startEditing = (index: number) => {
