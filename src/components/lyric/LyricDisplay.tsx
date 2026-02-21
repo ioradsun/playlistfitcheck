@@ -1199,72 +1199,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   </div>
                 )}
 
-                {/* Hottest Hook */}
-                {(() => {
-                  const hook = songDna.hook ?? null;
-                  const isLooping = activeHookIndex === 0;
-                  const clipDuration = hook ? hook.end - hook.start : 0;
-
-                  if (!hook) return (
-                    <p className="text-xs text-muted-foreground pt-2 border-t border-border/30">
-                      No definitive hook detected for this track.
-                    </p>
-                  );
-
-                  return (
-                    <div className="space-y-2 pt-2 border-t border-border/30">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <Zap size={11} className="text-primary" />
-                          <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                            Hottest Hook
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => playClip(hook, 0)}
-                          className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300 ${
-                            isLooping
-                              ? "text-primary bg-primary/10"
-                              : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                          }`}
-                          title={isLooping ? "Stop clip" : "Play clip"}
-                        >
-                          <svg width="28" height="28" viewBox="0 0 28 28" className="absolute inset-0" style={{ transform: "rotate(-90deg)" }}>
-                            <circle cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth="2" />
-                            {isLooping && (
-                              <circle
-                                cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.9} strokeWidth="2"
-                                strokeDasharray={Math.PI * 2 * 10}
-                                strokeDashoffset={Math.PI * 2 * 10 * (1 - clipProgress)}
-                                strokeLinecap="round"
-                                style={{ transition: "stroke-dashoffset 0.1s linear" }}
-                              />
-                            )}
-                          </svg>
-                          {isLooping ? <Pause size={10} /> : <Play size={10} />}
-                        </button>
-                      </div>
-                      {hook.previewText && (
-                        <p className="text-sm font-medium text-foreground leading-snug">
-                          "{hook.previewText}"
-                        </p>
-                      )}
-                      <p className="text-[10px] font-mono text-muted-foreground">
-                        {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
-                        <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
-                      </p>
-                      {features?.lyric_video && (
-                        <button
-                          onClick={() => setVideoComposerOpen(true)}
-                          className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
-                        >
-                          <Video size={10} />
-                          <span>Create Lyric Video</span>
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
 
                 {/* Song Meaning */}
                 {songDna.meaning && (songDna.meaning.theme || songDna.meaning.summary) && (
@@ -1356,6 +1290,66 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               </div>
             </div>
           )}
+
+          {/* ── Hottest Hook — appears after Song DNA is revealed ── */}
+          {songDna?.hook && (() => {
+            const hook = songDna.hook;
+            const isLooping = activeHookIndex === 0;
+            const clipDuration = hook.end - hook.start;
+            return (
+              <div className="glass-card rounded-xl p-4 border border-border/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Zap size={11} className="text-primary" />
+                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                      Hottest Hook
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => playClip(hook, 0)}
+                    className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300 ${
+                      isLooping
+                        ? "text-primary bg-primary/10"
+                        : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                    }`}
+                    title={isLooping ? "Stop clip" : "Play clip"}
+                  >
+                    <svg width="28" height="28" viewBox="0 0 28 28" className="absolute inset-0" style={{ transform: "rotate(-90deg)" }}>
+                      <circle cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth="2" />
+                      {isLooping && (
+                        <circle
+                          cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.9} strokeWidth="2"
+                          strokeDasharray={Math.PI * 2 * 10}
+                          strokeDashoffset={Math.PI * 2 * 10 * (1 - clipProgress)}
+                          strokeLinecap="round"
+                          style={{ transition: "stroke-dashoffset 0.1s linear" }}
+                        />
+                      )}
+                    </svg>
+                    {isLooping ? <Pause size={10} /> : <Play size={10} />}
+                  </button>
+                </div>
+                {hook.previewText && (
+                  <p className="text-sm font-medium text-foreground leading-snug">
+                    "{hook.previewText}"
+                  </p>
+                )}
+                <p className="text-[10px] font-mono text-muted-foreground">
+                  {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
+                  <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
+                </p>
+                {features?.lyric_video && (
+                  <button
+                    onClick={() => setVideoComposerOpen(true)}
+                    className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
+                  >
+                    <Video size={10} />
+                    <span>Create Lyric Video</span>
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           {/* Spacer so floating widget doesn't block last card */}
           <div className="h-20" />
         </div>
