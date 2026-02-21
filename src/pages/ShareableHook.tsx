@@ -830,7 +830,7 @@ export default function ShareableHook() {
         </div>
 
         {/* Split-screen canvases */}
-        <div className="flex-1 flex flex-col sm:flex-row gap-1 px-1 min-h-0">
+        <div className="flex-1 flex flex-col sm:flex-row gap-1 px-1 min-h-0 shrink-0">
           {/* Hook A */}
           <motion.div
             className="relative flex-1 min-h-[35vh] sm:min-h-0 cursor-pointer rounded-lg overflow-hidden"
@@ -923,7 +923,7 @@ export default function ShareableHook() {
         </AnimatePresence>
 
         {/* Bottom panel — 3-state machine */}
-        <div className="px-5 py-4 pb-[env(safe-area-inset-bottom,16px)]" style={{ background: bgBase, minHeight: '80px' }}>
+        <div className="px-5 py-4 pb-[env(safe-area-inset-bottom,16px)] shrink-0 overflow-hidden" style={{ background: bgBase, height: '120px' }}>
           <AnimatePresence mode="wait">
             {/* State 1: Pre-Vote — tap to play, vote with button */}
             {!hasVoted && (
