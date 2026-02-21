@@ -864,7 +864,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       const parts = line.text.split(line.correctedWord);
                       return (
                         <span
-                          className={`leading-relaxed cursor-text flex-1 select-text text-sm ${isActive ? "font-medium text-primary" : ""} ${isSelected ? "bg-primary/10 rounded px-0.5" : ""}`}
+                          className={`leading-relaxed cursor-text flex-1 select-text text-sm ${isSelected ? "bg-primary/10 rounded px-0.5" : ""}`}
                           onDoubleClick={() => startEditing(i)}
                           onMouseUp={() => {
                             const sel = window.getSelection();
@@ -888,12 +888,27 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         </span>
                       );
                     }
+                    // Word-level highlighting: interpolate timestamps per word
+                    const words = line.text.split(/(\s+)/);
+                    const nonSpaceWords = words.filter(w => w.trim().length > 0);
+                    const totalChars = nonSpaceWords.reduce((s, w) => s + w.length, 0);
+                    const lineDuration = line.end - line.start;
+
+                    let charsSoFar = 0;
+                    const wordTimings = nonSpaceWords.map(w => {
+                      const wordStart = line.start + (charsSoFar / totalChars) * lineDuration;
+                      charsSoFar += w.length;
+                      const wordEnd = line.start + (charsSoFar / totalChars) * lineDuration;
+                      return { word: w, start: wordStart, end: wordEnd };
+                    });
+
+                    let timingIdx = 0;
                     return (
                       <span
                         className={`leading-relaxed cursor-text flex-1 select-text ${
                           isAdlib
                             ? "text-xs italic text-muted-foreground/80"
-                            : `text-sm ${isActive ? "font-medium text-primary" : ""}`
+                            : "text-sm"
                         } ${isSelected ? "bg-primary/10 rounded px-0.5" : ""}`}
                         onDoubleClick={() => startEditing(i)}
                         onMouseUp={() => {
@@ -907,7 +922,28 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                           }
                         }}
                       >
-                        {line.text}
+                        {words.map((token, ti) => {
+                          if (token.trim().length === 0) return <span key={ti}>{token}</span>;
+                          const timing = wordTimings[timingIdx++];
+                          const isWordActive = isActive && timing && currentTime >= timing.start && currentTime < timing.end + HIGHLIGHT_EPSILON;
+                          const isWordPast = isActive && timing && currentTime >= timing.end + HIGHLIGHT_EPSILON;
+                          return (
+                            <span
+                              key={ti}
+                              className={
+                                isAdlib
+                                  ? ""
+                                  : isWordActive
+                                    ? "font-semibold text-primary"
+                                    : isWordPast
+                                      ? "text-primary/60"
+                                      : ""
+                              }
+                            >
+                              {token}
+                            </span>
+                          );
+                        })}
                       </span>
                     );
                   };
