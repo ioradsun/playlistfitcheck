@@ -247,12 +247,21 @@ function useHookCanvas(
       hookStart: hookData.hook_start, hookEnd: hookData.hook_end,
     });
 
-    // Constellation with fly-in animation + continuous orbit
+    // Constellation — tiny, non-overlapping, subtle orbits at edges
     const nodes = constellationRef.current;
-    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    // Pre-compute positions to avoid overlap
+    const placedRects: { x: number; y: number; hw: number; hh: number }[] = [];
+    const doesOverlap = (px: number, py: number, hw: number, hh: number) => {
+      for (const r of placedRects) {
+        if (Math.abs(px - r.x) < (hw + r.hw + 8) && Math.abs(py - r.y) < (hh + r.hh + 4)) return true;
+      }
+      // Also avoid center where lyrics render (middle 40% of screen)
+      if (px > w * 0.3 && px < w * 0.7 && py > h * 0.25 && py < h * 0.75) return true;
+      return false;
+    };
     for (const node of nodes) {
-      node.age += 1; // frame counter
+      node.age += 1;
       if (node.phase === "flying") {
         const dx = node.targetX - node.x;
         const dy = node.targetY - node.y;
@@ -264,34 +273,38 @@ function useHookCanvas(
           node.x += dx * node.flySpeed * 3;
           node.y += dy * node.flySpeed * 3;
         }
-        node.scale = Math.max(1, node.scale - 0.01);
+        node.scale = Math.max(0.7, node.scale - 0.015);
       } else if (node.phase === "settling") {
         node.settleTimer += 1;
-        if (node.settleTimer > 90) {
-          node.phase = "drifting";
-        }
-        node.alpha = Math.max(node.maxAlpha, node.alpha - 0.003);
-        node.scale = Math.max(1, node.scale - 0.005);
+        if (node.settleTimer > 60) node.phase = "drifting";
+        node.alpha = Math.max(node.maxAlpha, node.alpha - 0.005);
+        node.scale = Math.max(0.7, node.scale - 0.008);
       } else {
-        // Drifting — continuous slow orbit around center
-        // Use a deterministic angle based on id seed + age for smooth looping
+        // Orbit in the edges/corners — away from center lyrics
         const rng2 = mulberry32(hashSeed(node.id));
         const baseAngle = rng2() * Math.PI * 2;
-        const orbitRadius = 0.12 + rng2() * 0.32;
-        const orbitSpeed = (0.0003 + rng2() * 0.0004) * (rng2() > 0.5 ? 1 : -1);
+        // Push orbits to outer ring (0.35–0.48 from center)
+        const orbitRadius = 0.35 + rng2() * 0.13;
+        const orbitSpeed = (0.00015 + rng2() * 0.00025) * (rng2() > 0.5 ? 1 : -1);
         const angle = baseAngle + node.age * orbitSpeed;
         node.x = 0.5 + Math.cos(angle) * orbitRadius;
         node.y = 0.5 + Math.sin(angle) * orbitRadius;
-        // Gentle alpha pulsing so they feel alive
-        node.alpha = node.maxAlpha + Math.sin(node.age * 0.008) * 0.02;
-        node.scale = 1;
+        node.alpha = node.maxAlpha * 0.6 + Math.sin(node.age * 0.006) * 0.015;
+        node.scale = 0.7;
       }
-      ctx.globalAlpha = Math.max(0, node.alpha);
-      ctx.fillStyle = "#ffffff";
-      const fontSize = Math.round(11 * node.scale);
+      const fontSize = Math.round(8 * node.scale); // much smaller base
       ctx.font = `${fontSize}px system-ui, sans-serif`;
-      const maxChars = 40;
-      ctx.fillText(node.text.length > maxChars ? node.text.slice(0, maxChars) + "…" : node.text, node.x * w, node.y * h);
+      ctx.textAlign = "center";
+      const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
+      const textW = ctx.measureText(truncated).width;
+      const px = node.x * w;
+      const py = node.y * h;
+      // Skip rendering if it would overlap another comment or the lyric zone
+      if (doesOverlap(px, py, textW / 2, fontSize / 2)) continue;
+      placedRects.push({ x: px, y: py, hw: textW / 2, hh: fontSize / 2 });
+      ctx.globalAlpha = Math.max(0, Math.min(0.15, node.alpha)); // cap opacity very low
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(truncated, px, py);
     }
 
     // River
