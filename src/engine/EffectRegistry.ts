@@ -9,10 +9,29 @@
 import type { PhysicsState } from "./PhysicsIntegrator";
 import { type SystemStyle, getSystemStyle, buildFont, applyTransform, createGradientFill } from "./SystemStyles";
 
-/** Measure actual char width using the canvas context + font, for accurate char-by-char positioning */
-function measureCharWidth(ctx: CanvasRenderingContext2D, st: SystemStyle): number {
-  const m = ctx.measureText("M").width;
-  return m + st.letterSpacing;
+/** Measure total char-by-char width for the full string, matching how effects render */
+function measureCharByCharWidth(ctx: CanvasRenderingContext2D, displayText: string, st: SystemStyle): number {
+  let total = 0;
+  for (let i = 0; i < displayText.length; i++) {
+    total += ctx.measureText(displayText[i]).width + st.letterSpacing;
+  }
+  return total;
+}
+
+/** Get per-character x positions for centered char-by-char rendering */
+function getCharPositions(ctx: CanvasRenderingContext2D, displayText: string, st: SystemStyle, centerX: number): number[] {
+  const widths: number[] = [];
+  for (let i = 0; i < displayText.length; i++) {
+    widths.push(ctx.measureText(displayText[i]).width);
+  }
+  const totalW = widths.reduce((s, w) => s + w + st.letterSpacing, 0);
+  const positions: number[] = [];
+  let x = centerX - totalW / 2;
+  for (let i = 0; i < displayText.length; i++) {
+    positions.push(x + widths[i] / 2); // center of each char
+    x += widths[i] + st.letterSpacing;
+  }
+  return positions;
 }
 
 /** Clamp a desired scale so that text of `textWidth` doesn't exceed `canvasW * safeRatio` */
@@ -79,9 +98,7 @@ const drawShatterIn: EffectFn = (ctx, s) => {
   const shakeY = (rng() - 0.5) * physState.shake;
 
   const chars = displayText.split("");
-  const charW = measureCharWidth(ctx, st);
-  const totalW = chars.length * charW;
-  const startX = w / 2 - totalW / 2 + shakeX;
+  const charPositions = getCharPositions(ctx, displayText, st, w / 2 + shakeX);
 
   chars.forEach((char, i) => {
     const delay = i * 40;
@@ -99,7 +116,7 @@ const drawShatterIn: EffectFn = (ctx, s) => {
     } else {
       ctx.fillStyle = palette[0] || "#fff";
     }
-    ctx.fillText(char, startX + i * charW, h / 2 + offsetY + shakeY);
+    ctx.fillText(char, charPositions[i], h / 2 + offsetY + shakeY);
   });
   ctx.restore();
 };
@@ -216,11 +233,10 @@ const drawRippleOut: EffectFn = (ctx, s) => {
   // Wide layout: extra letter-spacing via char-by-char
   if (st.layout === "wide") {
     const chars = displayText.split("");
-    const charW = measureCharWidth(ctx, st);
-    const totalW = chars.length * charW;
+    const charPositions = getCharPositions(ctx, displayText, st, w / 2);
     chars.forEach((char, i) => {
       ctx.fillStyle = palette[0] || "#fff";
-      ctx.fillText(char, w / 2 - totalW / 2 + i * charW + charW / 2, h / 2);
+      ctx.fillText(char, charPositions[i], h / 2);
     });
   } else {
     const measured = ctx.measureText(displayText).width;
@@ -284,9 +300,7 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
   ctx.font = buildFont(st, fs);
 
   const chars = displayText.split("");
-  const charW = measureCharWidth(ctx, st);
-  const totalW = chars.length * charW;
-  const startX = w / 2 - totalW / 2;
+  const charPositions = getCharPositions(ctx, displayText, st, w / 2);
   const waveAmp = Math.min(15, 15 * Math.min(physState.scale, 1.3));
 
   // Arc layout: arrange chars in an arc
@@ -314,7 +328,7 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
         ctx.fillStyle = palette[0] || "#fff";
       }
       ctx.globalAlpha = 0.85 + physState.heat * 0.15;
-      ctx.fillText(char, startX + i * charW, h / 2 + wave);
+      ctx.fillText(char, charPositions[i], h / 2 + wave);
     });
   }
   ctx.restore();
@@ -386,8 +400,7 @@ const drawHookFracture: EffectFn = (ctx, s) => {
 
   if (physState.isFractured) {
     const chars = displayText.split("");
-    const charW = measureCharWidth(ctx, st);
-    const totalW = chars.length * charW;
+    const charPositions = getCharPositions(ctx, displayText, st, 0);
     const driftMult = Math.min(physState.heat * 25, w * 0.15);
     chars.forEach((char, i) => {
       ctx.save();
@@ -397,7 +410,7 @@ const drawHookFracture: EffectFn = (ctx, s) => {
       ctx.translate(drift, yOff);
       ctx.rotate(rot);
 
-      const x = (i * charW) - totalW / 2;
+      const x = charPositions[i];
       // Chromatic aberration
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = "cyan";
