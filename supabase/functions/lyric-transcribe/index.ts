@@ -473,7 +473,16 @@ async function runGeminiAuditor(
   const prompt = buildAuditorPrompt(rawText, anchorTs, middleCutoff);
   console.log(`[triptych-auditor] Lane D: ${anchorTs.toFixed(3)}s to ${middleCutoff.toFixed(3)}s, text length=${rawText.length}`);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 200, "auditor");
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 800, "auditor");
+  console.log(`[triptych-auditor] Lane D raw response (first 500 chars): ${content.slice(0, 500)}`);
+  
+  // Graceful fallback: if Gemini returned prose instead of JSON, return empty corrections
+  const jsonStart = content.indexOf("{");
+  if (jsonStart === -1) {
+    console.warn(`[triptych-auditor] Lane D returned non-JSON prose, returning empty corrections`);
+    return { corrections: {}, rawContent: content };
+  }
+  
   const parsed = extractJsonFromContent(content, "corrections");
 
   const corrections: Record<string, string> = {};
