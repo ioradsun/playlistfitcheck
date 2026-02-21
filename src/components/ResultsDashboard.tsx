@@ -1,6 +1,4 @@
 import { useEffect } from "react";
-import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { CategoryBar } from "@/components/CategoryBar";
 import { PitchBadge } from "@/components/PitchBadge";
@@ -82,6 +80,14 @@ function getDataLabel(key: string, input?: PlaylistInput): string | undefined {
   }
 }
 
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-medium tracking-wide uppercase text-muted-foreground/50 mb-3">
+      {children}
+    </p>
+  );
+}
+
 export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis, vibeLoading, songFitAnalysis, songFitLoading, onBack, onHeaderProject }: Props) {
   const hasBlendedScore = !!songFitAnalysis;
 
@@ -109,32 +115,30 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
   }, [headerTitle, onBack, onHeaderProject]);
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-0 pb-24 divide-y divide-border/30 px-0 sm:px-0">
+    <div className="w-full max-w-3xl mx-auto pb-24 space-y-10 px-0 sm:px-0">
 
-      {/* Sub-header info */}
-      <div className="pb-6">
+      {/* Sub-header */}
+      <div>
         {hasBlendedScore && playlistName && (
-          <p className="text-[11px] font-mono text-muted-foreground tracking-wide">vs {playlistName}</p>
+          <p className="text-xs text-muted-foreground">vs {playlistName}</p>
         )}
         {!hasBlendedScore && (
-          <p className="text-[11px] font-mono text-muted-foreground/60 truncate">{result.input.playlistUrl}</p>
+          <p className="text-xs text-muted-foreground/60 truncate">{result.input.playlistUrl}</p>
         )}
       </div>
 
       {/* Score + Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col items-center justify-center gap-4 py-4">
           {songFitLoading ? (
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-32 h-32 rounded-full border border-border/40 flex items-center justify-center">
-                <span className="font-mono text-[11px] text-muted-foreground tracking-widest">ANALYZING…</span>
-              </div>
+            <div className="w-32 h-32 rounded-full border border-border/40 flex items-center justify-center">
+              <span className="text-xs text-muted-foreground tracking-wide">Analyzing…</span>
             </div>
           ) : (
             <>
               <ScoreGauge score={displayScore} label={displayLabel} hideLabel={hasBlendedScore} />
               {hasBlendedScore && fit ? (
-                <span className={`font-mono text-[11px] tracking-widest uppercase border border-border/40 px-3 py-1 rounded-sm ${fit.className}`}>
+                <span className={`text-xs font-medium tracking-wide uppercase border border-border/40 px-3 py-1 rounded-sm ${fit.className}`}>
                   {fit.text}
                 </span>
               ) : (
@@ -145,9 +149,7 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
         </div>
 
         <div className="space-y-3 py-4">
-          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">
-            {hasBlendedScore ? "Playlist Breakdown" : "Score Breakdown"}
-          </p>
+          <Label>{hasBlendedScore ? "Playlist Breakdown" : "Score Breakdown"}</Label>
           {CATEGORY_META.map((cat) => {
             const indicator = getScoreIndicator(result.scoreBreakdown[cat.key], cat.max);
             return (
@@ -170,24 +172,30 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
       {hasBlendedScore && (
         <>
           {/* Fit Analysis */}
-          <div className="py-8 space-y-4">
-            <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">
+          <div className="space-y-4">
+            <Label>
               {songFitAnalysis.songName ? `"${songFitAnalysis.songName}" · Fit Analysis` : "Fit Analysis"}
-            </p>
-            <p className="text-sm text-foreground leading-relaxed">{songFitAnalysis.summary}</p>
+            </Label>
+            <p className="text-sm text-foreground/80 leading-relaxed">{songFitAnalysis.summary}</p>
 
             {(songFitAnalysis.sonicFitScore != null || songFitAnalysis.playlistQualityScore != null) && (
-              <div className="flex gap-6 pt-2 border-t border-border/20">
+              <div className="flex gap-6 pt-2">
                 {songFitAnalysis.sonicFitScore != null && (
-                  <div className="space-y-0.5">
-                    <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Sonic Fit</p>
-                    <p className="font-mono text-lg font-semibold">{songFitAnalysis.sonicFitScore}<span className="text-[10px] text-muted-foreground">/100</span></p>
+                  <div>
+                    <p className="text-xs text-muted-foreground/50 mb-0.5">Sonic Fit</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-mono text-lg font-semibold">{songFitAnalysis.sonicFitScore}</span>
+                      <span className="text-xs text-muted-foreground">/100</span>
+                    </div>
                   </div>
                 )}
                 {songFitAnalysis.playlistQualityScore != null && (
-                  <div className="space-y-0.5">
-                    <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Playlist Quality</p>
-                    <p className="font-mono text-lg font-semibold">{songFitAnalysis.playlistQualityScore}<span className="text-[10px] text-muted-foreground">/100</span></p>
+                  <div>
+                    <p className="text-xs text-muted-foreground/50 mb-0.5">Playlist Quality</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-mono text-lg font-semibold">{songFitAnalysis.playlistQualityScore}</span>
+                      <span className="text-xs text-muted-foreground">/100</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -196,26 +204,26 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
 
           {/* Strengths & Concerns */}
           {(songFitAnalysis.strengths.length > 0 || songFitAnalysis.concerns.length > 0) && (
-            <div className="py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {songFitAnalysis.strengths.length > 0 && (
-                <div className="space-y-3">
-                  <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Strengths</p>
-                  <ul className="space-y-2">
+                <div>
+                  <Label>Strengths</Label>
+                  <ul className="space-y-1.5">
                     {songFitAnalysis.strengths.map((s, i) => (
-                      <li key={i} className="text-sm text-foreground flex items-start gap-2.5">
-                        <span className="font-mono text-score-excellent shrink-0 mt-0.5">✓</span> {s}
+                      <li key={i} className="text-sm text-foreground/70 flex items-start gap-2">
+                        <span className="text-score-excellent shrink-0 text-xs mt-0.5">✓</span> {s}
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
               {songFitAnalysis.concerns.length > 0 && (
-                <div className="space-y-3">
-                  <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Concerns</p>
-                  <ul className="space-y-2">
+                <div>
+                  <Label>Concerns</Label>
+                  <ul className="space-y-1.5">
                     {songFitAnalysis.concerns.map((c, i) => (
-                      <li key={i} className="text-sm text-foreground flex items-start gap-2.5">
-                        <span className="font-mono text-score-ok shrink-0 mt-0.5">—</span> {c}
+                      <li key={i} className="text-sm text-foreground/70 flex items-start gap-2">
+                        <span className="text-muted-foreground/40 shrink-0 text-xs mt-0.5">—</span> {c}
                       </li>
                     ))}
                   </ul>
@@ -226,9 +234,9 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
 
           {/* Suggestion */}
           {songFitAnalysis.suggestion && (
-            <div className="py-8 space-y-3">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Suggestion</p>
-              <p className="text-sm text-foreground leading-relaxed">{songFitAnalysis.suggestion}</p>
+            <div>
+              <Label>Suggestion</Label>
+              <p className="text-sm text-foreground/80 leading-relaxed">{songFitAnalysis.suggestion}</p>
             </div>
           )}
         </>
@@ -236,51 +244,45 @@ export function ResultsDashboard({ result, inputData, playlistName, vibeAnalysis
 
       {/* Narrative */}
       {!hasBlendedScore && result.narrative && (
-        <div className="py-8 space-y-3">
-          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">
+        <div>
+          <Label>
             Why this {result.summary.healthScore >= 75 ? "works" : result.summary.healthScore >= 60 ? "might work" : "doesn't work"} for you
-          </p>
-          <p className="text-sm text-foreground leading-relaxed">{result.narrative}</p>
+          </Label>
+          <p className="text-sm text-foreground/80 leading-relaxed">{result.narrative}</p>
         </div>
       )}
 
       {/* Recommendation */}
       {!hasBlendedScore && result.recommendation && (
-        <div className="py-8 space-y-3">
-          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">What to do</p>
-          <p className="text-sm text-foreground leading-relaxed">{result.recommendation}</p>
+        <div>
+          <Label>What to do</Label>
+          <p className="text-sm text-foreground/80 leading-relaxed">{result.recommendation}</p>
         </div>
       )}
 
       {/* Pitch Draft */}
       {hasBlendedScore && songFitAnalysis.songName && playlistName && (
-        <div className="py-8">
-          <PitchDraftCard
-            songName={songFitAnalysis.songName}
-            artistName={songFitAnalysis.artistName}
-            soundDescription={songFitAnalysis.soundDescription}
-            playlistName={playlistName}
-            curatorName={inputData?.ownerName}
-            fitLabel={songFitAnalysis.blendedLabel}
-            strengths={songFitAnalysis.strengths}
-            concerns={songFitAnalysis.concerns}
-            suggestion={songFitAnalysis.suggestion}
-            inputData={inputData}
-            blendedScore={songFitAnalysis.blendedScore}
-          />
-        </div>
+        <PitchDraftCard
+          songName={songFitAnalysis.songName}
+          artistName={songFitAnalysis.artistName}
+          soundDescription={songFitAnalysis.soundDescription}
+          playlistName={playlistName}
+          curatorName={inputData?.ownerName}
+          fitLabel={songFitAnalysis.blendedLabel}
+          strengths={songFitAnalysis.strengths}
+          concerns={songFitAnalysis.concerns}
+          suggestion={songFitAnalysis.suggestion}
+          inputData={inputData}
+          blendedScore={songFitAnalysis.blendedScore}
+        />
       )}
 
       {/* Vibe Analysis */}
       {(vibeLoading || vibeAnalysis) && (
-        <div className="py-8">
-          <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} playlistName={playlistName} />
-        </div>
+        <VibeCard analysis={vibeAnalysis || null} loading={!!vibeLoading} playlistName={playlistName} />
       )}
 
-      <div className="pt-8">
-        <SignUpToSaveBanner />
-      </div>
+      <SignUpToSaveBanner />
     </div>
   );
 }
