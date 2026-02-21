@@ -923,7 +923,7 @@ export default function ShareableHook() {
         </AnimatePresence>
 
         {/* Bottom panel — 3-state machine */}
-        <div className="px-5 py-4 max-h-[35vh] pb-[env(safe-area-inset-bottom,16px)]" style={{ background: bgBase }}>
+        <div className="px-5 py-4 pb-[env(safe-area-inset-bottom,16px)]" style={{ background: bgBase, minHeight: '80px' }}>
           <AnimatePresence mode="wait">
             {/* State 1: Pre-Vote — tap to play, vote with button */}
             {!hasVoted && (
