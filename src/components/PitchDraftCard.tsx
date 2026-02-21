@@ -158,15 +158,15 @@ export function PitchDraftCard(props: Props) {
     >
       <div className="flex items-center justify-between">
         <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Sample Pitch</p>
-        <div className="flex gap-0 border-b border-border/30">
+        <div className="flex gap-3">
           {(["email", "dm"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-1.5 text-[13px] font-sans font-bold tracking-[0.15em] uppercase transition-colors border-b-2 -mb-[1px] ${
+              className={`text-[13px] font-sans font-bold tracking-[0.15em] uppercase transition-colors ${
                 tab === t
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground/30 hover:text-muted-foreground"
+                  ? "text-foreground"
+                  : "text-muted-foreground/30 hover:text-muted-foreground"
               }`}
             >
               {t}
