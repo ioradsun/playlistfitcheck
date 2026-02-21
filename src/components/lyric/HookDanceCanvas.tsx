@@ -215,7 +215,7 @@ export function HookDanceCanvas({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <canvas ref={canvasRef} className="absolute inset-0" />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
       <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
         {onExport && (
           <button
