@@ -1475,13 +1475,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                             }
                             setShowDirectorsCut(true);
                           }}
-                          className={`w-full text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-1.5 ${
+                          className={`w-full text-[10px] font-mono transition-colors py-1 ${
                             hookDanceRunning
-                              ? "text-primary bg-primary/10 border-primary/40"
-                              : "text-muted-foreground hover:text-foreground border-border/30 hover:border-foreground/40"
+                              ? "text-primary"
+                              : "text-muted-foreground/60 hover:text-muted-foreground"
                           }`}
                         >
-                          {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
+                          {hookDanceRunning ? "Stop Dance" : "See Hook Dance →"}
                         </button>
                       )}
                     </div>

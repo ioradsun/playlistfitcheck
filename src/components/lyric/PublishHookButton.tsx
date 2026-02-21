@@ -198,18 +198,15 @@ export function PublishHookButton({
     <button
       onClick={handlePublish}
       disabled={publishing}
-      className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors border border-border/30 hover:border-foreground/40 rounded-lg py-1.5 disabled:opacity-50"
+      className="w-full text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 disabled:opacity-50 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
     >
       {publishing ? (
         <>
-          <Loader2 size={10} className="animate-spin" />
-          <span>Publishing…</span>
+          <Loader2 size={10} className="inline animate-spin mr-1.5" />
+          Publishing…
         </>
       ) : (
-        <>
-          <ExternalLink size={10} />
-          <span>{secondHook ? "Publish Hook Battle" : "Publish Hook Page"}</span>
-        </>
+        secondHook ? "Publish Hook Battle" : "Publish Hook Page"
       )}
     </button>
   );
