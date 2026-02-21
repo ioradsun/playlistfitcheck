@@ -841,9 +841,10 @@ export default function ShareableHook() {
             onClick={() => {
               setActiveHookSide("a");
               setTappedSides(prev => new Set(prev).add("a"));
-              // Unmute this side, mute the other
-              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
-              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
+              // Unmute this side, mute the other, restart from beginning
+              if (hookACanvas.audioRef.current) { hookACanvas.audioRef.current.muted = false; }
+              if (hookBCanvas.audioRef.current) { hookBCanvas.audioRef.current.muted = true; }
+              hookACanvas.restart();
               setMuted(false);
             }}
           >
@@ -880,8 +881,9 @@ export default function ShareableHook() {
             onClick={() => {
               setActiveHookSide("b");
               setTappedSides(prev => new Set(prev).add("b"));
-              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
-              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
+              if (hookBCanvas.audioRef.current) { hookBCanvas.audioRef.current.muted = false; }
+              if (hookACanvas.audioRef.current) { hookACanvas.audioRef.current.muted = true; }
+              hookBCanvas.restart();
               setMuted(false);
             }}
           >
