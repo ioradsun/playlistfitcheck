@@ -1400,76 +1400,92 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             </div>
           )}
 
-          {/* ── Hottest Hook — appears after Song DNA is revealed ── */}
+          {/* ── Hottest Hooks — appears after Song DNA is revealed ── */}
           {songDna?.hook && (() => {
-            const hook = songDna.hook;
-            const isLooping = activeHookIndex === 0;
-            const clipDuration = hook.end - hook.start;
+            const hooks2 = [songDna.hook, songDna.secondHook].filter(Boolean) as LyricHook[];
+            const labels = [songDna.hookLabel, songDna.secondHookLabel];
+            const justifications = [songDna.hookJustification, songDna.secondHookJustification];
+            const hasBattle = hooks2.length === 2;
             return (
-              <div className="glass-card rounded-xl p-4 border border-border/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Zap size={11} className="text-primary" />
-                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                      Hottest Hook
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => playClip(hook, 0)}
-                    className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300 ${
-                      isLooping
-                        ? "text-primary bg-primary/10"
-                        : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                    }`}
-                    title={isLooping ? "Stop clip" : "Play clip"}
-                  >
-                    <svg width="28" height="28" viewBox="0 0 28 28" className="absolute inset-0" style={{ transform: "rotate(-90deg)" }}>
-                      <circle cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth="2" />
-                      {isLooping && (
-                        <circle
-                          cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.9} strokeWidth="2"
-                          strokeDasharray={Math.PI * 2 * 10}
-                          strokeDashoffset={Math.PI * 2 * 10 * (1 - clipProgress)}
-                          strokeLinecap="round"
-                          style={{ transition: "stroke-dashoffset 0.1s linear" }}
-                        />
-                      )}
-                    </svg>
-                    {isLooping ? <Pause size={10} /> : <Play size={10} />}
-                  </button>
+              <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
+                <div className="flex items-center gap-1.5">
+                  <Zap size={11} className="text-primary" />
+                  <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    {hasBattle ? "Hook Battle" : "Hottest Hook"}
+                  </span>
                 </div>
-                {hook.previewText && (
-                  <p className="text-sm font-medium text-foreground leading-snug">
-                    "{hook.previewText}"
-                  </p>
-                )}
-                <p className="text-[10px] font-mono text-muted-foreground" title={songDna?.hookJustification || undefined}>
-                  {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
-                  <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
-                </p>
-                {songDna?.physicsSpec && (
-                  <button
-                    onClick={() => {
-                      if (hookDanceRunning) {
-                        hookDanceRef.current?.stop();
-                        return;
-                      }
-                      // Open Director's Cut instead of starting engine directly
-                      setShowDirectorsCut(true);
-                    }}
-                    className={`w-full text-[13px] font-semibold tracking-[0.15em] uppercase transition-colors border rounded-lg py-1.5 ${
-                      hookDanceRunning
-                        ? "text-primary bg-primary/10 border-primary/40"
-                        : "text-muted-foreground hover:text-foreground border-border/30 hover:border-foreground/40"
-                    }`}
-                  >
-                    {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
-                  </button>
-                )}
+
+                {hooks2.map((hook, idx) => {
+                  const isLooping = activeHookIndex === idx;
+                  const clipDuration = hook.end - hook.start;
+                  return (
+                    <div key={idx} className={`space-y-1.5 ${idx > 0 ? "pt-2 border-t border-border/20" : ""}`}>
+                      {hasBattle && (
+                        <span className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">
+                          {labels[idx] || `Hook ${idx + 1}`}
+                        </span>
+                      )}
+                      <div className="flex items-center justify-between">
+                        {hook.previewText && (
+                          <p className="text-sm font-medium text-foreground leading-snug flex-1">
+                            "{hook.previewText}"
+                          </p>
+                        )}
+                        <button
+                          onClick={() => playClip(hook, idx)}
+                          className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300 flex-shrink-0 ml-2 ${
+                            isLooping
+                              ? "text-primary bg-primary/10"
+                              : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          }`}
+                          title={isLooping ? "Stop clip" : "Play clip"}
+                        >
+                          <svg width="28" height="28" viewBox="0 0 28 28" className="absolute inset-0" style={{ transform: "rotate(-90deg)" }}>
+                            <circle cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth="2" />
+                            {isLooping && (
+                              <circle
+                                cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.9} strokeWidth="2"
+                                strokeDasharray={Math.PI * 2 * 10}
+                                strokeDashoffset={Math.PI * 2 * 10 * (1 - clipProgress)}
+                                strokeLinecap="round"
+                                style={{ transition: "stroke-dashoffset 0.1s linear" }}
+                              />
+                            )}
+                          </svg>
+                          {isLooping ? <Pause size={10} /> : <Play size={10} />}
+                        </button>
+                      </div>
+                      <p className="text-[10px] font-mono text-muted-foreground" title={justifications[idx] || undefined}>
+                        {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
+                        <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
+                      </p>
+                      {songDna?.physicsSpec && (
+                        <button
+                          onClick={() => {
+                            if (hookDanceRunning) {
+                              hookDanceRef.current?.stop();
+                              return;
+                            }
+                            setShowDirectorsCut(true);
+                          }}
+                          className={`w-full text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-1.5 ${
+                            hookDanceRunning
+                              ? "text-primary bg-primary/10 border-primary/40"
+                              : "text-muted-foreground hover:text-foreground border-border/30 hover:border-foreground/40"
+                          }`}
+                        >
+                          {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Publish Hook Battle / Hook Page — below both hooks */}
                 {songDna?.physicsSpec && beatGrid && (
                   <PublishHookButton
-                    hook={hook}
-                    secondHook={songDna.secondHook}
+                    hook={hooks2[0]}
+                    secondHook={hooks2[1] || null}
                     hookLabel={songDna.hookLabel}
                     secondHookLabel={songDna.secondHookLabel}
                     physicsSpec={songDna.physicsSpec as PhysicsSpec}
