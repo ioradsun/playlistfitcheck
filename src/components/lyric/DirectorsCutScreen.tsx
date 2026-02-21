@@ -1,11 +1,12 @@
 /**
- * DirectorsCutScreen — Full-screen overlay showing all 5 physics systems
- * rendered simultaneously on the same hook. The artist picks one by feel.
+ * DirectorsCutScreen — Split A/B comparison gallery.
+ * Two canvases side by side, cycle through systems to compare.
+ * Select button always visible at bottom.
  */
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { motion } from "framer-motion";
+import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
@@ -14,15 +15,17 @@ import type { BeatTick } from "@/engine/HookDanceEngine";
 
 // ── System definitions ──────────────────────────────────────────────────────
 
-const SYSTEMS = ["fracture", "pressure", "breath", "combustion", "orbit"] as const;
+const SYSTEMS = ["fracture", "pressure", "breath", "combustion", "orbit", "paper", "glass"] as const;
 type SystemKey = typeof SYSTEMS[number];
 
-const SYSTEM_LABELS: Record<SystemKey, { name: string; subtitle: string }> = {
-  fracture:   { name: "FRACTURE",   subtitle: "Your words are glass" },
-  pressure:   { name: "PRESSURE",   subtitle: "Your words have mass" },
-  breath:     { name: "BREATH",     subtitle: "Your words are heat" },
-  combustion: { name: "COMBUSTION", subtitle: "Your words smolder" },
-  orbit:      { name: "ORBIT",      subtitle: "Your words have gravity" },
+const SYSTEM_LABELS: Record<SystemKey, { name: string; subtitle: string; light?: boolean }> = {
+  fracture:   { name: "FRACTURE",    subtitle: "Your words are glass" },
+  pressure:   { name: "PRESSURE",    subtitle: "Your words have mass" },
+  breath:     { name: "BREATH",      subtitle: "Your words are heat" },
+  combustion: { name: "COMBUSTION",  subtitle: "Your words smolder" },
+  orbit:      { name: "ORBIT",       subtitle: "Your words have gravity" },
+  paper:      { name: "PAPER",       subtitle: "Your words bleed ink", light: true },
+  glass:      { name: "GLASS",       subtitle: "Your words refract light", light: true },
 };
 
 /** Multipliers applied to base AI spec per system */
@@ -32,6 +35,8 @@ const SYSTEM_MULTIPLIERS: Record<SystemKey, Record<string, number>> = {
   breath:     { damping: 1.3, heat: 1.6 },
   combustion: { heat: 2.0, brittleness: 0.5 },
   orbit:      { elasticity: 1.4, damping: 0.7 },
+  paper:      { damping: 1.1 },
+  glass:      { elasticity: 1.2, damping: 0.9 },
 };
 
 function deriveSpec(baseSpec: PhysicsSpec, system: SystemKey): PhysicsSpec {
@@ -51,7 +56,7 @@ interface Props {
   lines: LyricLine[];
   hookStart: number;
   hookEnd: number;
-  audioSrc: string;       // object URL for audio
+  audioSrc: string;
   seedBase: string;
   onSelect: (system: string) => void;
   onClose: () => void;
@@ -78,17 +83,17 @@ export function DirectorsCutScreen({
   onSelect,
   onClose,
 }: Props) {
-  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([null, null, null, null, null]);
+  const leftCanvasRef = useRef<HTMLCanvasElement>(null);
+  const rightCanvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const renderersRef = useRef<SystemRenderer[]>([]);
   const prevTimeRef = useRef(hookStart);
 
+  const [leftIndex, setLeftIndex] = useState(0);
+  const [rightIndex, setRightIndex] = useState(1);
   const [selected, setSelected] = useState<SystemKey>(baseSpec.system as SystemKey || "fracture");
-  const [hovered, setHovered] = useState<SystemKey | null>(null);
-  const [mobileIndex, setMobileIndex] = useState(0);
 
-  const isLowEnd = useMemo(() => (navigator.hardwareConcurrency ?? 2) < 4, []);
   const aiPick = (baseSpec.system as SystemKey) || "fracture";
 
   // Filter beats to hook region
@@ -97,7 +102,7 @@ export function DirectorsCutScreen({
     [beats, hookStart, hookEnd]
   );
 
-  // Initialize renderers
+  // Initialize renderers for all systems
   useEffect(() => {
     renderersRef.current = SYSTEMS.map((system, idx) => {
       const spec = deriveSpec(baseSpec, system);
@@ -107,100 +112,6 @@ export function DirectorsCutScreen({
       return { integrator, beatIndex: 0, prng, system, spec };
     });
   }, [baseSpec, seedBase]);
-
-  // Audio setup + animation loop
-  useEffect(() => {
-    const audio = new Audio(audioSrc);
-    audio.volume = 0; // silent preview
-    audioRef.current = audio;
-
-    // Try to play audio for timing, but start the loop regardless
-    let audioReady = false;
-    audio.addEventListener("canplay", () => {
-      audioReady = true;
-      audio.currentTime = hookStart;
-      audio.play().catch(() => {});
-    });
-    audio.load();
-
-    // Fallback: use a synthetic clock if audio never loads
-    const syntheticStartTime = performance.now();
-    const hookDuration = hookEnd - hookStart;
-
-    function startLoop() {
-      const tick = () => {
-        let ct: number;
-        if (audioReady && audioRef.current && !isNaN(audioRef.current.currentTime)) {
-          ct = audioRef.current.currentTime;
-        } else {
-          // Synthetic clock loops over hook region
-          const elapsed = (performance.now() - syntheticStartTime) / 1000;
-          ct = hookStart + (elapsed % hookDuration);
-        }
-
-        // Loop audio if needed
-        if (audioReady && audioRef.current && (ct >= hookEnd || ct < hookStart)) {
-          audioRef.current.currentTime = hookStart;
-          prevTimeRef.current = hookStart;
-          renderersRef.current.forEach(r => {
-            r.integrator.reset();
-            r.beatIndex = 0;
-          });
-          rafRef.current = requestAnimationFrame(tick);
-          return;
-        }
-
-        // Synthetic loop reset
-        if (!audioReady && ct >= hookEnd) {
-          prevTimeRef.current = hookStart;
-          renderersRef.current.forEach(r => {
-            r.integrator.reset();
-            r.beatIndex = 0;
-          });
-        }
-
-        const prev = prevTimeRef.current;
-
-        // Update each renderer
-        for (const renderer of renderersRef.current) {
-          while (
-            renderer.beatIndex < hookBeats.length &&
-            hookBeats[renderer.beatIndex].time <= ct
-          ) {
-            const beat = hookBeats[renderer.beatIndex];
-            if (beat.time > prev) {
-              renderer.integrator.onBeat(beat.strength, beat.isDownbeat);
-            }
-            renderer.beatIndex++;
-          }
-          const state = renderer.integrator.tick();
-
-          const sysIdx = SYSTEMS.indexOf(renderer.system);
-          const canvas = canvasRefs.current[sysIdx];
-          if (!canvas) continue;
-
-          if (isLowEnd && sysIdx !== mobileIndex) continue;
-
-          drawSystemCanvas(canvas, state, renderer, ct);
-        }
-
-        prevTimeRef.current = ct;
-        rafRef.current = requestAnimationFrame(tick);
-      };
-
-      rafRef.current = requestAnimationFrame(tick);
-    }
-
-    // Start loop immediately — don't wait for audio
-    startLoop();
-
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      audio.pause();
-      audio.src = "";
-      audioRef.current = null;
-    };
-  }, [audioSrc, hookStart, hookEnd, hookBeats, isLowEnd, mobileIndex]);
 
   // Canvas drawing
   const drawSystemCanvas = useCallback((
@@ -212,11 +123,8 @@ export function DirectorsCutScreen({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Resize
     const rect = canvas.getBoundingClientRect();
-    const isFocus = renderer.system === selected || renderer.system === hovered;
-    const res = isFocus ? 1 : 0.5;
-    const dpr = (window.devicePixelRatio || 1) * res;
+    const dpr = window.devicePixelRatio || 1;
     if (canvas.width !== Math.round(rect.width * dpr) || canvas.height !== Math.round(rect.height * dpr)) {
       canvas.width = Math.round(rect.width * dpr);
       canvas.height = Math.round(rect.height * dpr);
@@ -228,13 +136,11 @@ export function DirectorsCutScreen({
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // System-specific background
     const bgPalette = renderer.spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
     drawSystemBackground(ctx, {
       system: renderer.system,
-      physState: physState,
-      w,
-      h,
+      physState,
+      w, h,
       time: currentTime,
       beatCount: renderer.beatIndex,
       rng: renderer.prng,
@@ -243,7 +149,6 @@ export function DirectorsCutScreen({
       hookEnd,
     });
 
-    // Find active line
     const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
     const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
 
@@ -270,12 +175,8 @@ export function DirectorsCutScreen({
 
       const effectState: EffectState = {
         text: activeLine.text,
-        physState: physState,
-        w,
-        h,
-        fs,
-        age,
-        progress,
+        physState,
+        w, h, fs, age, progress,
         rng: renderer.prng,
         palette,
         system: renderer.system,
@@ -292,188 +193,238 @@ export function DirectorsCutScreen({
     ctx.globalAlpha = 1;
 
     ctx.restore();
-  }, [lines, hookStart, hookEnd, selected, hovered]);
+  }, [lines, hookStart, hookEnd]);
+
+  // Audio + animation loop
+  useEffect(() => {
+    const audio = new Audio(audioSrc);
+    audio.volume = 0;
+    audioRef.current = audio;
+
+    let audioReady = false;
+    audio.addEventListener("canplay", () => {
+      audioReady = true;
+      audio.currentTime = hookStart;
+      audio.play().catch(() => {});
+    });
+    audio.load();
+
+    const syntheticStartTime = performance.now();
+    const hookDuration = hookEnd - hookStart;
+
+    const tick = () => {
+      let ct: number;
+      if (audioReady && audioRef.current && !isNaN(audioRef.current.currentTime)) {
+        ct = audioRef.current.currentTime;
+      } else {
+        const elapsed = (performance.now() - syntheticStartTime) / 1000;
+        ct = hookStart + (elapsed % hookDuration);
+      }
+
+      if (audioReady && audioRef.current && (ct >= hookEnd || ct < hookStart)) {
+        audioRef.current.currentTime = hookStart;
+        prevTimeRef.current = hookStart;
+        renderersRef.current.forEach(r => { r.integrator.reset(); r.beatIndex = 0; });
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      if (!audioReady && ct >= hookEnd) {
+        prevTimeRef.current = hookStart;
+        renderersRef.current.forEach(r => { r.integrator.reset(); r.beatIndex = 0; });
+      }
+
+      const prev = prevTimeRef.current;
+
+      // Only update & draw the two visible systems
+      for (const idx of [leftIndex, rightIndex]) {
+        const renderer = renderersRef.current[idx];
+        if (!renderer) continue;
+
+        while (
+          renderer.beatIndex < hookBeats.length &&
+          hookBeats[renderer.beatIndex].time <= ct
+        ) {
+          const beat = hookBeats[renderer.beatIndex];
+          if (beat.time > prev) {
+            renderer.integrator.onBeat(beat.strength, beat.isDownbeat);
+          }
+          renderer.beatIndex++;
+        }
+        const state = renderer.integrator.tick();
+
+        const canvas = idx === leftIndex ? leftCanvasRef.current : rightCanvasRef.current;
+        if (canvas) drawSystemCanvas(canvas, state, renderer, ct);
+      }
+
+      prevTimeRef.current = ct;
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      audio.pause();
+      audio.src = "";
+      audioRef.current = null;
+    };
+  }, [audioSrc, hookStart, hookEnd, hookBeats, leftIndex, rightIndex, drawSystemCanvas]);
 
   const handleConfirm = useCallback(() => {
     onSelect(selected);
   }, [selected, onSelect]);
 
-  // ── Mobile navigation ─────────────────────────────────────────────────────
+  const cycleSide = (side: "left" | "right", dir: number) => {
+    const setter = side === "left" ? setLeftIndex : setRightIndex;
+    const other = side === "left" ? rightIndex : leftIndex;
+    setter(prev => {
+      let next = (prev + dir + SYSTEMS.length) % SYSTEMS.length;
+      // Skip the index shown on the other side
+      if (next === other) next = (next + dir + SYSTEMS.length) % SYSTEMS.length;
+      return next;
+    });
+  };
 
-  if (isLowEnd) {
-    const sys = SYSTEMS[mobileIndex];
-    const label = SYSTEM_LABELS[sys];
-    return (
-      <motion.div
-        className="fixed inset-0 z-50 bg-black flex flex-col"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-      >
-        {/* AI Pick badge */}
-        {sys === aiPick && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 text-[10px] font-mono text-red-500 tracking-[0.2em] uppercase">
-            AI Pick
-          </div>
-        )}
-
-        {/* Canvas */}
-        <div className="flex-1 relative">
-          <canvas
-            ref={el => { canvasRefs.current[mobileIndex] = el; }}
-            className={`absolute inset-0 w-full h-full ${selected === sys ? "ring-1 ring-red-500" : ""}`}
-            onClick={() => setSelected(sys)}
-          />
-        </div>
-
-        {/* Label */}
-        <div className="text-center py-3">
-          <p className="text-lg font-bold tracking-[0.15em] text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-            {label.name}
-          </p>
-          <p className="text-[11px] text-white/40 italic">{label.subtitle}</p>
-        </div>
-
-        {/* Navigation */}
-        <div className="flex items-center justify-between px-6 pb-4">
-          <button
-            onClick={() => setMobileIndex(Math.max(0, mobileIndex - 1))}
-            className="text-white/40 hover:text-white disabled:opacity-20"
-            disabled={mobileIndex === 0}
-          >
-            <ChevronLeft size={28} />
-          </button>
-
-          {/* Dots */}
-          <div className="flex gap-2">
-            {SYSTEMS.map((s, i) => (
-              <div
-                key={s}
-                className={`w-2 h-2 rounded-full transition-colors ${i === mobileIndex ? "bg-white" : "bg-white/20"}`}
-              />
-            ))}
-          </div>
-
-          <button
-            onClick={() => setMobileIndex(Math.min(4, mobileIndex + 1))}
-            className="text-white/40 hover:text-white disabled:opacity-20"
-            disabled={mobileIndex === 4}
-          >
-            <ChevronRight size={28} />
-          </button>
-        </div>
-
-        {/* Confirm */}
-        <div className="px-6 pb-6">
-          <button
-            onClick={handleConfirm}
-            className="w-full py-3 rounded-lg text-sm font-bold tracking-[0.15em] uppercase transition-all bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30"
-          >
-            This One →
-          </button>
-        </div>
-      </motion.div>
-    );
-  }
-
-  // ── Desktop: 5-canvas grid ────────────────────────────────────────────────
+  const leftSys = SYSTEMS[leftIndex];
+  const rightSys = SYSTEMS[rightIndex];
+  const leftLabel = SYSTEM_LABELS[leftSys];
+  const rightLabel = SYSTEM_LABELS[rightSys];
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center overflow-hidden"
+      className="fixed inset-0 z-50 bg-black flex flex-col"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      {/* Close */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 z-10 text-white/30 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors"
-      >
-        ✕ Close
-      </button>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+        <p className="text-[10px] font-mono text-white/20 uppercase tracking-[0.3em]">
+          Director's Cut
+        </p>
+        <button
+          onClick={onClose}
+          className="text-white/30 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors"
+        >
+          ✕
+        </button>
+      </div>
 
-      {/* Title */}
-      <p className="text-[10px] font-mono text-white/20 uppercase tracking-[0.3em] mb-4 mt-2">
-        Director's Cut — Choose your physics
-      </p>
+      {/* Split canvas area */}
+      <div className="flex-1 flex gap-[2px] min-h-0 px-1">
+        {/* Left panel */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 relative rounded-lg overflow-hidden">
+            <canvas
+              ref={leftCanvasRef}
+              className="absolute inset-0 w-full h-full cursor-pointer"
+              onClick={() => setSelected(leftSys)}
+            />
+            {/* Selection ring */}
+            {selected === leftSys && (
+              <div className="absolute inset-0 ring-2 ring-red-500 rounded-lg pointer-events-none" />
+            )}
+            {/* AI pick badge */}
+            {leftSys === aiPick && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-red-500 tracking-[0.15em] uppercase bg-black/40 px-2 py-0.5 rounded">
+                AI Pick
+              </div>
+            )}
+            {/* Selected check */}
+            {selected === leftSys && (
+              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                <Check size={12} className="text-white" />
+              </div>
+            )}
+          </div>
+          {/* Label + nav */}
+          <div className="flex items-center justify-between py-2 px-1">
+            <button onClick={() => cycleSide("left", -1)} className="text-white/30 hover:text-white p-1">
+              <ChevronLeft size={16} />
+            </button>
+            <div className="text-center min-w-0">
+              <p className={`text-sm font-bold tracking-[0.12em] ${selected === leftSys ? "text-white" : "text-white/50"}`}
+                style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                {leftLabel.name}
+                {leftLabel.light && <span className="ml-1 text-[9px] text-white/30 font-mono">☀</span>}
+              </p>
+              <p className="text-[9px] text-white/25 italic">{leftLabel.subtitle}</p>
+            </div>
+            <button onClick={() => cycleSide("left", 1)} className="text-white/30 hover:text-white p-1">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
 
-      {/* Grid: 2-2-1 layout */}
-      <div className="flex flex-col gap-3 items-center w-full max-w-[92vw]">
-        {/* Row 1 */}
-        <div className="flex gap-3 w-full justify-center">
-          {renderSystemCard(0)}
-          {renderSystemCard(1)}
-        </div>
-        {/* Row 2 */}
-        <div className="flex gap-3 w-full justify-center">
-          {renderSystemCard(2)}
-          {renderSystemCard(3)}
-        </div>
-        {/* Row 3 — centered */}
-        <div className="flex justify-center w-full">
-          {renderSystemCard(4)}
+        {/* Right panel */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 relative rounded-lg overflow-hidden">
+            <canvas
+              ref={rightCanvasRef}
+              className="absolute inset-0 w-full h-full cursor-pointer"
+              onClick={() => setSelected(rightSys)}
+            />
+            {selected === rightSys && (
+              <div className="absolute inset-0 ring-2 ring-red-500 rounded-lg pointer-events-none" />
+            )}
+            {rightSys === aiPick && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-red-500 tracking-[0.15em] uppercase bg-black/40 px-2 py-0.5 rounded">
+                AI Pick
+              </div>
+            )}
+            {selected === rightSys && (
+              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                <Check size={12} className="text-white" />
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between py-2 px-1">
+            <button onClick={() => cycleSide("right", -1)} className="text-white/30 hover:text-white p-1">
+              <ChevronLeft size={16} />
+            </button>
+            <div className="text-center min-w-0">
+              <p className={`text-sm font-bold tracking-[0.12em] ${selected === rightSys ? "text-white" : "text-white/50"}`}
+                style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                {rightLabel.name}
+                {rightLabel.light && <span className="ml-1 text-[9px] text-white/30 font-mono">☀</span>}
+              </p>
+              <p className="text-[9px] text-white/25 italic">{rightLabel.subtitle}</p>
+            </div>
+            <button onClick={() => cycleSide("right", 1)} className="text-white/30 hover:text-white p-1">
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* THIS ONE button */}
-      <div className="mt-4 mb-2">
+      {/* System dots */}
+      <div className="flex justify-center gap-1.5 py-1 shrink-0">
+        {SYSTEMS.map((s, i) => (
+          <button
+            key={s}
+            onClick={() => {
+              if (i !== rightIndex) setLeftIndex(i);
+              else setRightIndex(leftIndex);
+            }}
+            className={`w-2 h-2 rounded-full transition-all ${
+              selected === s ? "bg-red-500 scale-125" :
+              i === leftIndex || i === rightIndex ? "bg-white/60" : "bg-white/15"
+            }`}
+            title={SYSTEM_LABELS[s].name}
+          />
+        ))}
+      </div>
+
+      {/* Confirm button — always visible */}
+      <div className="px-4 pb-4 pt-2 shrink-0">
         <button
           onClick={handleConfirm}
-          className="px-10 py-2.5 rounded-lg text-sm font-bold tracking-[0.15em] uppercase transition-all bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30"
+          className="w-full py-3 rounded-lg text-sm font-bold tracking-[0.15em] uppercase transition-all bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30"
         >
-          This One →
+          {SYSTEM_LABELS[selected].name} → Play
         </button>
       </div>
     </motion.div>
   );
-
-  function renderSystemCard(idx: number) {
-    const sys = SYSTEMS[idx];
-    const label = SYSTEM_LABELS[sys];
-    const isSelected = selected === sys;
-    const isAiPick = sys === aiPick;
-
-    return (
-      <div
-        key={sys}
-        className="flex flex-col items-center gap-1 cursor-pointer group"
-        onClick={() => setSelected(sys)}
-        onMouseEnter={() => setHovered(sys)}
-        onMouseLeave={() => setHovered(null)}
-      >
-        {/* AI Pick badge */}
-        <div className="h-4">
-          {isAiPick && (
-            <span className="text-[9px] font-mono text-red-500 tracking-[0.15em] uppercase">
-              AI Pick
-            </span>
-          )}
-        </div>
-
-        {/* Canvas */}
-        <div
-          className={`relative w-[44vw] max-w-[380px] aspect-video rounded overflow-hidden transition-all duration-150 ${
-            isSelected ? "ring-2 ring-red-500" : "ring-1 ring-white/10"
-          } group-hover:scale-[1.02]`}
-        >
-          <canvas
-            ref={el => { canvasRefs.current[idx] = el; }}
-            className="absolute inset-0 w-full h-full"
-          />
-        </div>
-
-        {/* Label */}
-        <p
-          className={`text-sm tracking-[0.12em] transition-colors ${
-            isSelected ? "text-white" : "text-white/30 group-hover:text-white/60"
-          }`}
-          style={{ fontFamily: "'Bebas Neue', sans-serif" }}
-        >
-          {label.name}
-        </p>
-        <p className="text-[10px] text-white/25 italic -mt-1">{label.subtitle}</p>
-      </div>
-    );
-  }
 }
