@@ -11,9 +11,15 @@ import { type SystemStyle, getSystemStyle, buildFont, applyTransform, createGrad
 
 /** Measure actual char width using the canvas context + font, for accurate char-by-char positioning */
 function measureCharWidth(ctx: CanvasRenderingContext2D, st: SystemStyle): number {
-  // Use 'M' as reference — widest common glyph
   const m = ctx.measureText("M").width;
   return m + st.letterSpacing;
+}
+
+/** Clamp a desired scale so that text of `textWidth` doesn't exceed `canvasW * safeRatio` */
+function safeScale(textWidth: number, canvasW: number, desiredScale: number, safeRatio = 0.9): number {
+  if (textWidth <= 0) return desiredScale;
+  const maxScale = (canvasW * safeRatio) / textWidth;
+  return Math.min(desiredScale, maxScale);
 }
 
 export interface EffectState {
@@ -110,7 +116,8 @@ const drawTunnelRush: EffectFn = (ctx, s) => {
   const t = Math.min(1, age / 500);
   const zoom = 0.3 + t * 0.7;
   const alpha = Math.min(1, age / 200);
-  const combinedScale = Math.min(1.6, zoom * physState.scale);
+  const measured = ctx.measureText(displayText).width;
+  const combinedScale = safeScale(measured, w, Math.min(1.6, zoom * physState.scale));
 
   ctx.globalAlpha = alpha;
   ctx.translate(w / 2, h / 2);
@@ -119,8 +126,8 @@ const drawTunnelRush: EffectFn = (ctx, s) => {
   ctx.shadowBlur = Math.min(20, physState.glow);
   ctx.shadowColor = palette[1] || palette[0] || "#8b5cf6";
 
-  const measured = ctx.measureText(displayText).width;
-  applyStyledFill(ctx, st, palette, 0, 0, measured);
+  const measuredFill = ctx.measureText(displayText).width;
+  applyStyledFill(ctx, st, palette, 0, 0, measuredFill);
   ctx.fillText(displayText, 0, 0);
 
   // Duotone: second pass with offset
@@ -182,15 +189,16 @@ const drawPulseBloom: EffectFn = (ctx, s) => {
   ctx.font = buildFont(st, fs);
 
   const pulse = 1 + Math.sin(age * 0.008) * 0.15 * physState.heat;
-  const combinedScale = Math.min(1.6, pulse * physState.scale);
+  const measured = ctx.measureText(displayText).width;
+  const combinedScale = safeScale(measured, w, Math.min(1.6, pulse * physState.scale));
   ctx.translate(w / 2, h / 2);
   ctx.scale(combinedScale, combinedScale);
 
   ctx.shadowBlur = Math.min(20, physState.glow + Math.sin(age * 0.005) * 10);
   ctx.shadowColor = palette[2] || palette[0] || "#ec4899";
 
-  const measured = ctx.measureText(displayText).width;
-  applyStyledFill(ctx, st, palette, 0, 0, measured);
+  const measuredFill = ctx.measureText(displayText).width;
+  applyStyledFill(ctx, st, palette, 0, 0, measuredFill);
   ctx.globalAlpha = 0.9 + physState.heat * 0.1;
   ctx.fillText(displayText, 0, 0);
   ctx.restore();
@@ -371,7 +379,8 @@ const drawHookFracture: EffectFn = (ctx, s) => {
 
   const shakeX = (rng() - 0.5) * physState.shake;
   const shakeY = (rng() - 0.5) * physState.shake;
-  const clampedScale = Math.min(1.5, physState.scale);
+  const measured = ctx.measureText(displayText).width;
+  const clampedScale = safeScale(measured, w, Math.min(1.5, physState.scale));
   ctx.translate(w / 2 + shakeX, h / 2 + shakeY);
   ctx.scale(clampedScale, clampedScale);
 
@@ -428,15 +437,16 @@ const drawStaticResolve: EffectFn = (ctx, s) => {
   ctx.filter = blur > 0.5 ? `blur(${blur}px)` : "none";
   ctx.globalAlpha = t;
 
-  const clampedScale = Math.min(1.5, physState.scale);
+  const measured = ctx.measureText(displayText).width;
+  const clampedScale = safeScale(measured, w, Math.min(1.5, physState.scale));
   ctx.translate(w / 2, h / 2);
   ctx.scale(clampedScale, clampedScale);
 
   ctx.shadowBlur = Math.min(15, physState.glow * 0.5);
   ctx.shadowColor = palette[1] || "#8b5cf6";
 
-  const measured = ctx.measureText(displayText).width;
-  applyStyledFill(ctx, st, palette, 0, 0, measured);
+  const measuredFill = ctx.measureText(displayText).width;
+  applyStyledFill(ctx, st, palette, 0, 0, measuredFill);
   ctx.fillText(displayText, 0, 0);
   ctx.restore();
 };
