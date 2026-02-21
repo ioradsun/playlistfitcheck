@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video, Sparkles, Loader2, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -1116,9 +1116,27 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           {/* Export — below lyrics */}
           {activeLines.length > 0 && (
             <div className="glass-card rounded-xl p-4">
-              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">
-                Export · {versionSuffix}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                  Export · {versionSuffix}
+                </p>
+                <button
+                  onClick={() => {
+                    if (activeVersion === "explicit") {
+                      setExplicitLines([...originalLines.current]);
+                      setExplicitLastEdited(new Date());
+                    } else if (fmlyLines) {
+                      setFmlyLines(null);
+                      setActiveVersion("explicit");
+                    }
+                    toast.success("Lyrics restored to original");
+                  }}
+                  className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <RotateCcw size={10} />
+                  Restore Original
+                </button>
+              </div>
               <div className="space-y-0">
                 {EXPORT_OPTIONS.map(({ format, label, desc }, idx) => (
                   <div key={format} className={`flex items-center justify-between py-2 ${idx > 0 ? "border-t border-border/30" : ""}`}>
