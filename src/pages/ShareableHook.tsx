@@ -906,22 +906,21 @@ export default function ShareableHook() {
           </p>
         </div>
 
-        {/* Hooked badge — top left neon green */}
+        {/* Hooked badge — editorial, overlaid on video top-left */}
         <AnimatePresence>
           {hasVoted && (
             <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.3 }}
-              className="fixed top-4 left-4 z-[60] px-3 py-1.5 rounded-full border"
-              style={{ background: 'rgba(57,255,20,0.15)', borderColor: '#39FF14' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="absolute top-12 left-3 z-[60] pointer-events-none"
             >
-              <span className="text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: '#39FF14' }}>
+              <p className="text-[9px] font-mono uppercase tracking-[0.3em]" style={{ color: 'rgba(57,255,20,0.45)' }}>
                 {totalVotes <= 1
-                  ? "You're Hooked"
-                  : `You and ${totalVotes - 1} FMLY Hooked`}
-              </span>
+                  ? "Hooked"
+                  : `You + ${totalVotes - 1} fmly`}
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
