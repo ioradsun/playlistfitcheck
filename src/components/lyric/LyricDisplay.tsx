@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, Anchor, AlertCircle } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
-import { LyricWaveform, type DiagnosticDot } from "./LyricWaveform";
+import { LyricWaveform } from "./LyricWaveform";
 import { VersionToggle, type ActiveVersion } from "./VersionToggle";
 import { LyricFormatControls, type LineFormat, type SocialPreset } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
@@ -220,10 +220,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // Timing offset (Bug 3: MP3 codec / processing offset correction)
-  const [timingOffset, setTimingOffset] = useState(0);
-  const TIMING_OFFSET_STEP = 0.1;
-  const TIMING_OFFSET_MAX = 10.0;
+  // (timing offset removed — Scribe timestamps are accurate)
 
   // Clip loop state
   const [activeHookIndex, setActiveHookIndex] = useState<number | null>(null);
@@ -235,7 +232,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [activeVersion, setActiveVersion] = useState<ActiveVersion>("explicit");
   const [explicitLines, setExplicitLines] = useState<LyricLine[]>(data.lines);
   const [fmlyLines, setFmlyLines] = useState<LyricLine[] | null>(initFmlyLines ?? null);
-  // Store the original AI-generated lines so users can reset after manual edits/anchors
   const originalLines = useRef<LyricLine[]>(data.lines);
   const [fmlyReport, setFmlyReport] = useState<ProfanityReport | null>(null);
 
@@ -270,8 +266,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   // Copy state
   const [copied, setCopied] = useState<ExportFormat | null>(null);
 
-  // Auto-Anchor state — tracks which raw line indices have been manually snapped
-  const [anchoredLines, setAnchoredLines] = useState<Set<number>>(new Set());
+  // (anchor state removed)
 
   // v2.2: Conflict resolution modal
   const [conflictLine, setConflictLine] = useState<{ lineIndex: number; whisperText: string; geminiText: string } | null>(null);
@@ -281,16 +276,14 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const activeMeta = activeVersion === "explicit" ? explicitMeta : fmlyMeta;
   const activeLines = applyLineFormat(activeLinesRaw, activeMeta.lineFormat);
 
-  // Bug 3: adjustedTime accounts for MP3 codec/processing offset
-  const adjustedTime = currentTime - timingOffset;
-
+  // Use currentTime directly (no offset)
   // Bug 2: epsilon prevents flickering at floating-point boundaries
   const HIGHLIGHT_EPSILON = 0.08;
 
   // ── Multi-active highlighting — supports overlapping adlibs ───────────────
   const activeLineIndices = new Set<number>(
     activeLines.reduce<number[]>((acc, l, i) => {
-      if (adjustedTime >= l.start && adjustedTime < l.end + HIGHLIGHT_EPSILON) acc.push(i);
+      if (currentTime >= l.start && currentTime < l.end + HIGHLIGHT_EPSILON) acc.push(i);
       return acc;
     }, [])
   );
@@ -298,25 +291,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   if (activeLineIndices.size === 0) {
     let lastPassed = -1;
     for (let i = 0; i < activeLines.length; i++) {
-      if (activeLines[i].tag !== "adlib" && adjustedTime >= activeLines[i].start) lastPassed = i;
+      if (activeLines[i].tag !== "adlib" && currentTime >= activeLines[i].start) lastPassed = i;
     }
     if (lastPassed !== -1) activeLineIndices.add(lastPassed);
   }
   const primaryActiveLine = Math.min(...(activeLineIndices.size > 0 ? [...activeLineIndices] : [-1]));
-
-  // ── Sync Diagnostic: confidence heatmap dots ───────────────────────────────
-  const diagnosticDots: DiagnosticDot[] = (() => {
-    const mainLines = activeLinesRaw.filter((l) => l.tag !== "adlib");
-    return mainLines.map((line, i) => {
-      // Gap detection: flag if gap to next line > 1s (potential drift region)
-      const nextLine = mainLines[i + 1];
-      const gap = nextLine ? nextLine.start - line.end : 0;
-      let color: DiagnosticDot["color"] = "green";
-      if (gap > 1.0) color = "red";
-      else if (gap > 0.4) color = "yellow";
-      return { time: line.start, color, label: line.text.slice(0, 20) };
-    });
-  })();
 
   // ── Audio setup ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -406,110 +385,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     }
   }, [isPlaying]);
 
-  // ── Auto-Anchor: snap current line to playhead ────────────────────────────
-  const snapCurrentLine = useCallback(() => {
-    if (!isPlaying) {
-      toast.error("Press S while the song is playing to sync a line");
-      return;
-    }
-    const snapTime = audioRef.current?.currentTime ?? currentTime;
-    const adjustedSnap = snapTime - timingOffset;
-
-    // Find the primary active main line index in the raw (unformatted) lines
-    const rawLines = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
-    // Find which raw line is currently highlighted
-    let targetRawIdx = -1;
-    for (let i = 0; i < rawLines.length; i++) {
-      const l = rawLines[i];
-      if (l.tag === "adlib") continue;
-      if (adjustedSnap >= l.start && adjustedSnap < l.end + HIGHLIGHT_EPSILON) {
-        targetRawIdx = i;
-      }
-    }
-    // Fallback: last passed main line
-    if (targetRawIdx === -1) {
-      for (let i = 0; i < rawLines.length; i++) {
-        if (rawLines[i].tag !== "adlib" && adjustedSnap >= rawLines[i].start) targetRawIdx = i;
-      }
-    }
-    if (targetRawIdx === -1) {
-      toast.error("No lyric line active — seek to a lyric first");
-      return;
-    }
-
-    const targetLine = rawLines[targetRawIdx];
-    const delta = Math.round((snapTime - targetLine.start) * 100) / 100;
-
-    if (Math.abs(delta) < 0.05) {
-      toast("Already in sync ✓", { description: `Line "${targetLine.text.slice(0, 30)}…" is accurate` });
-      return;
-    }
-
-    // Shift the snapped line
-    const applyShift = (lines: LyricLine[], shift: boolean): LyricLine[] => {
-      if (!shift) {
-        return lines.map((l, i) =>
-          i === targetRawIdx ? { ...l, start: Math.round((l.start + delta) * 100) / 100 } : l
-        );
-      }
-      // Ripple: shift this line + all subsequent lines
-      return lines.map((l, i) =>
-        i >= targetRawIdx
-          ? { ...l, start: Math.round((l.start + delta) * 100) / 100, end: Math.round((l.end + delta) * 100) / 100 }
-          : l
-      );
-    };
-
-    const confirmRipple = () => {
-      const updater = (lines: LyricLine[]) => applyShift(lines, true);
-      if (activeVersion === "explicit") {
-        setExplicitLines(updater);
-        setExplicitLastEdited(new Date());
-      } else {
-        setFmlyLines((prev) => (prev ? updater(prev) : prev));
-        setFmlyLastEdited(new Date());
-      }
-      setAnchoredLines((prev) => new Set([...prev, targetRawIdx]));
-      toast.dismiss("anchor-ripple");
-      toast.success(`All lines from here shifted by ${delta > 0 ? "+" : ""}${delta.toFixed(2)}s`);
-    };
-
-    // Snap only this line first; offer ripple as a toast action
-    const snapOnly = (lines: LyricLine[]) => applyShift(lines, false);
-    if (activeVersion === "explicit") {
-      setExplicitLines(snapOnly);
-      setExplicitLastEdited(new Date());
-    } else {
-      setFmlyLines((prev) => (prev ? snapOnly(prev) : prev));
-      setFmlyLastEdited(new Date());
-    }
-    setAnchoredLines((prev) => new Set([...prev, targetRawIdx]));
-
-    toast(`⚓ Line anchored (${delta > 0 ? "+" : ""}${delta.toFixed(2)}s)`, {
-      id: "anchor-ripple",
-      description: `"${targetLine.text.slice(0, 35)}${targetLine.text.length > 35 ? "…" : ""}"`,
-      action: {
-        label: "Ripple all →",
-        onClick: confirmRipple,
-      },
-      duration: 6000,
-    });
-  }, [isPlaying, currentTime, timingOffset, activeVersion, explicitLines, fmlyLines, HIGHLIGHT_EPSILON, setExplicitLastEdited, setFmlyLastEdited]);
-
-  // ── S key listener for Auto-Anchor ───────────────────────────────────────
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't fire when typing in an input/textarea
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-      if (e.key === "s" || e.key === "S") {
-        e.preventDefault();
-        snapCurrentLine();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [snapCurrentLine]);
 
   // ── Clip loop: play a hook region on repeat ───────────────────────────────
   const playClip = useCallback((hook: LyricHook, hookIdx: number) => {
@@ -675,49 +550,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const hooks = data.hooks ?? [];
   const metadata = data.metadata;
 
-  // ── Reset timestamps to original AI output ────────────────────────────────
-  const resetToOriginal = useCallback(() => {
-    setExplicitLines([...originalLines.current]);
-    setTimingOffset(0);
-    setAnchoredLines(new Set());
-    toast.success("Timestamps restored to original AI output");
-  }, []);
-
-  // ── Linear drift correction (clock skew) ──────────────────────────────────
-  // If drift = currentTime - activeLine.start at some point T into the track,
-  // it means the AI clock ran at rate: activeLine.start / currentTime.
-  // We stretch all timestamps by the inverse: currentTime / activeLine.start.
-  const applyDriftCorrection = useCallback(() => {
-    const activeLine = activeLines.find((_, i) => activeLineIndices.has(i));
-    if (!activeLine) {
-      toast.error("Play the song until you see a lyric highlighted, then press Fix Drift");
-      return;
-    }
-    const realTime = audioRef.current?.currentTime ?? currentTime;
-    const lyricTime = activeLine.start;
-    if (lyricTime < 1) {
-      toast.error("Seek further into the track — need a reference point past the intro");
-      return;
-    }
-    const stretchFactor = realTime / lyricTime;
-    if (Math.abs(stretchFactor - 1) < 0.001) {
-      toast("Already in sync — no correction needed ✓");
-      return;
-    }
-    const stretch = (lines: LyricLine[]): LyricLine[] =>
-      lines.map((l) => ({
-        ...l,
-        start: Math.round(l.start * stretchFactor * 100) / 100,
-        end: Math.round(l.end * stretchFactor * 100) / 100,
-      }));
-    setExplicitLines((prev) => stretch(prev));
-    if (fmlyLines) setFmlyLines((prev) => (prev ? stretch(prev) : prev));
-    setAnchoredLines(new Set());
-    const pct = ((stretchFactor - 1) * 100).toFixed(2);
-    toast.success(`Drift corrected — timestamps stretched by ${pct}%`, {
-      description: `Factor: ${stretchFactor.toFixed(4)} (measured at ${realTime.toFixed(2)}s audio / ${lyricTime.toFixed(2)}s lyric)`,
-    });
-  }, [activeLines, activeLineIndices, currentTime, fmlyLines]);
+  // (drift/reset/offset removed — Scribe timestamps are accurate)
 
   // ── Tag toggle ─────────────────────────────────────────────────────────────
   const toggleLineTag = useCallback((lineIndex: number) => {
@@ -971,13 +804,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   waveform={waveform}
                   isPlaying={isPlaying}
                   currentTime={currentTime}
-                  adjustedTime={adjustedTime}
                   onSeek={seekTo}
                   onTogglePlay={togglePlay}
                   loopRegion={activeHookIndex !== null && hooks[activeHookIndex]
                     ? { start: hooks[activeHookIndex].start, end: hooks[activeHookIndex].end, duration: waveform?.duration ?? 1 }
                     : null}
-                  diagnosticDots={diagnosticDots}
                 />
                 <AnimatePresence>
                   {activeHookIndex !== null && (
@@ -993,98 +824,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* Live sync delta — shows gap between playhead and current lyric */}
-                {(() => {
-                  const activeLine = activeLines.find((_, i) => activeLineIndices.has(i));
-                  if (!activeLine) return null;
-                  const delta = adjustedTime - activeLine.start;
-                  const absDelta = Math.abs(delta);
-                  const color = absDelta < 0.3 ? "text-green-400" : absDelta < 1.5 ? "text-yellow-400" : "text-red-400";
-                  return (
-                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/20">
-                      <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">Live sync</span>
-                      <span className={`text-[10px] font-mono tabular-nums ${color} flex-1`}>
-                        ▶ {adjustedTime.toFixed(2)}s · lyric {activeLine.start.toFixed(2)}s · drift {delta > 0 ? "+" : ""}{delta.toFixed(2)}s
-                      </span>
-                      {absDelta > 0.5 && isPlaying && (
-                        <button
-                          onClick={applyDriftCorrection}
-                          className="text-[10px] font-mono text-primary hover:text-primary/80 border border-primary/30 hover:border-primary/50 rounded px-1.5 py-0.5 shrink-0 transition-colors"
-                          title="Stretch all timestamps to correct progressive clock skew"
-                        >
-                          Fix Drift ↗
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
-                {/* Timing Offset Control */}
-                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/20">
-                  <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">Offset</span>
-                  <button
-                    onClick={() => setTimingOffset((v) => Math.max(-TIMING_OFFSET_MAX, +(v - TIMING_OFFSET_STEP).toFixed(1)))}
-                    className="text-[10px] font-mono w-5 h-5 flex items-center justify-center rounded border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
-                  >
-                    −
-                  </button>
-                  <span className="text-[10px] font-mono text-foreground w-16 text-center tabular-nums">
-                    {timingOffset === 0 ? "0.0s" : `${timingOffset > 0 ? "+" : ""}${timingOffset.toFixed(1)}s`}
-                  </span>
-                  <button
-                    onClick={() => setTimingOffset((v) => Math.min(TIMING_OFFSET_MAX, +(v + TIMING_OFFSET_STEP).toFixed(1)))}
-                    className="text-[10px] font-mono w-5 h-5 flex items-center justify-center rounded border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
-                  >
-                    +
-                  </button>
-                  {timingOffset !== 0 && (
-                    <button
-                      onClick={() => setTimingOffset(0)}
-                      className="text-[10px] font-mono text-muted-foreground/50 hover:text-foreground transition-colors ml-1"
-                    >
-                      Reset
-                    </button>
-                  )}
-                  <span className="text-[10px] text-muted-foreground/40 font-mono">lyrics ↔ audio · ±10s</span>
-                  {/* Restore original timestamps */}
-                  <button
-                    onClick={resetToOriginal}
-                    className="ml-auto text-[10px] font-mono text-muted-foreground/40 hover:text-destructive transition-colors border border-border/20 rounded px-1.5 py-0.5 shrink-0"
-                    title="Undo all manual anchor shifts and restore original AI timestamps"
-                  >
-                    Restore original
-                  </button>
-                </div>
-                {/* Sync Diagnostic legend */}
-                {diagnosticDots.length > 0 && (
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <span className="text-[10px] font-mono text-muted-foreground/50 shrink-0">Sync</span>
-                    <span className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground/50">
-                      <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: "rgba(74,222,128,0.8)" }} />tight
-                    </span>
-                    <span className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground/50">
-                      <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: "rgba(251,191,36,0.8)" }} />gap
-                    </span>
-                    <span className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground/50">
-                      <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: "rgba(248,113,113,0.8)" }} />drift risk
-                    </span>
-                    <span className="text-[10px] font-mono text-muted-foreground/30 ml-auto">
-                      {diagnosticDots.filter(d => d.color === "red").length} drift risk{diagnosticDots.filter(d => d.color === "red").length !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                )}
-                {/* Auto-Anchor hint */}
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <Anchor size={9} className="text-muted-foreground/40 shrink-0" />
-                  <span className="text-[10px] text-muted-foreground/40 font-mono">
-                    Press <kbd className="px-1 py-0.5 rounded bg-secondary/60 text-muted-foreground/60 text-[9px] font-mono">S</kbd> while playing to snap a line to the playhead
-                  </span>
-                  <button
-                    onClick={snapCurrentLine}
-                    className="ml-auto text-[10px] font-mono text-muted-foreground/50 hover:text-primary transition-colors border border-border/30 rounded px-1.5 py-0.5 shrink-0"
-                  >
-                    Sync Now
-                  </button>
-                </div>
               </>
             ) : (
               <div className="h-16 flex items-center gap-3">
@@ -1141,10 +880,6 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     ? line.start >= activeHook.start && line.start < activeHook.end
                     : false;
                   const isSelected = selectionLineIndex === i;
-                  // Check if this line has been manually anchored
-                  const rawLinesForCheck = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
-                  const rawIdx = rawLinesForCheck.findIndex((rl) => rl.start === line.start && rl.tag === line.tag && rl.text === line.text);
-                  const isAnchored = rawIdx !== -1 && anchoredLines.has(rawIdx);
 
                   // v6.0: No standalone chips — all adlibs render inline regardless of orphan/floating status
 
@@ -1221,11 +956,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       }`}
                     >
                       <span
-                        className="text-[10px] font-mono text-muted-foreground/60 pt-0.5 shrink-0 w-12 cursor-pointer hover:text-primary flex items-center gap-0.5"
+                        className="text-[10px] font-mono text-muted-foreground/60 pt-0.5 shrink-0 w-12 cursor-pointer hover:text-primary"
                         onClick={() => seekTo(line.start)}
                       >
                         {formatTimeLRC(line.start)}
-                        {isAnchored && <Anchor size={7} className="text-primary/70 ml-0.5 shrink-0" />}
                       </span>
                       {isEditing ? (
                         <input
