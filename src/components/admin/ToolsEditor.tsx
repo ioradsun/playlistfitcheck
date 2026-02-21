@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Coins, Rocket, Wrench, GripVertical, Target, Mic } from "lucide-react";
+import { Loader2, Coins, Rocket, Wrench, GripVertical, Target, Mic, Video } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Reorder, useDragControls } from "framer-motion";
@@ -36,6 +36,7 @@ interface FeaturesState {
   crowdfit_mode: "reactions" | "hook_review";
   lyric_transcription_model: TranscriptionModel;
   lyric_analysis_model: AnalysisModel;
+  lyric_video: boolean;
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -47,6 +48,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   crowdfit_mode: "reactions",
   lyric_transcription_model: "scribe",
   lyric_analysis_model: "google/gemini-3-flash-preview",
+  lyric_video: false,
 };
 
 async function patchFeatures(patch: Partial<FeaturesState & Record<string, any>>) {
@@ -170,9 +172,9 @@ export function ToolsEditor() {
           tools_enabled,
           tools_order: merged,
           crowdfit_mode: f.crowdfit_mode ?? "reactions",
-          // Support old field names for backwards compat
           lyric_transcription_model: f.lyric_transcription_model === "gemini" ? "gemini" : "scribe",
           lyric_analysis_model: f.lyric_analysis_model ?? f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
+          lyric_video: f.lyric_video ?? false,
         });
         setOrderedKeys(merged);
         setGuestQuota(f.growth_quotas?.guest ?? 5);
@@ -428,6 +430,38 @@ export function ToolsEditor() {
               badge={badge}
             />
           ))}
+        </div>
+      </div>
+
+      {/* ── Lyric Video Creator ── */}
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Video size={14} className="text-primary" />
+          <span className="text-sm font-mono font-medium">Lyric Video Creator</span>
+        </div>
+        <div className="px-4 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Create Lyric Video button</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Show in Hottest Hook section of LyricFit</p>
+          </div>
+          <Switch
+            checked={features.lyric_video}
+            onCheckedChange={async (enabled) => {
+              const prev = features.lyric_video;
+              setFeatures(f => ({ ...f, lyric_video: enabled }));
+              setSavingKey("lyric_video");
+              try {
+                await patchFeatures({ lyric_video: enabled });
+                toast.success(enabled ? "Lyric Video enabled" : "Lyric Video disabled");
+              } catch {
+                setFeatures(f => ({ ...f, lyric_video: prev }));
+                toast.error("Failed to update");
+              } finally {
+                setSavingKey(null);
+              }
+            }}
+            disabled={savingKey === "lyric_video"}
+          />
         </div>
       </div>
 

@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { LyricWaveform } from "./LyricWaveform";
@@ -204,6 +205,8 @@ const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
 export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, onBack, onSaved, onReuploadAudio }: Props) {
   const { user } = useAuth();
+  const siteCopy = useSiteCopy();
+  const features = (siteCopy as any)?.features;
   const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
   const [showDebug, setShowDebug] = useState(false);
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
@@ -1304,23 +1307,16 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       </span>
                     </div>
 
-                    {/* Copy clip info */}
-                    <button
-                      onClick={() => copyClipInfo(hook)}
-                      className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-muted-foreground/60 hover:text-foreground transition-colors border border-border/30 rounded-lg py-1.5"
-                    >
-                      <Copy size={10} />
-                      <span>Copy Clip Info</span>
-                    </button>
-
-                    {/* Lyric Video */}
-                    <button
-                      onClick={() => setVideoComposerOpen(true)}
-                      className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
-                    >
-                      <Video size={10} />
-                      <span>Create Lyric Video</span>
-                    </button>
+                    {/* Lyric Video — gated by admin toggle */}
+                    {features?.lyric_video && (
+                      <button
+                        onClick={() => setVideoComposerOpen(true)}
+                        className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
+                      >
+                        <Video size={10} />
+                        <span>Create Lyric Video</span>
+                      </button>
+                    )}
                   </>
                 ) : (
                   <p className="text-xs text-muted-foreground py-2">
