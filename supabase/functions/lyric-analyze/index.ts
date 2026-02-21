@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DNA_PROMPT = `ROLE: Lead Music Intelligence Analyst — Song DNA Engine
+const DEFAULT_DNA_PROMPT = `ROLE: Lead Music Intelligence Analyst — Song DNA Engine
 
 TASK: Analyze the full audio track AND its lyrics to extract the song's structural identity ("Song DNA").
 
@@ -55,6 +55,24 @@ const LYRICS_ONLY_PROMPT = `You are a music analyst. Given song lyrics, provide 
 
 No markdown, no explanation — just JSON.`;
 
+// Runtime prompt fetcher — checks ai_prompts table, falls back to hardcoded default
+async function getDnaPrompt(): Promise<string> {
+  try {
+    const sbUrl = Deno.env.get("SUPABASE_URL");
+    const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (sbUrl && sbKey) {
+      const res = await fetch(`${sbUrl}/rest/v1/ai_prompts?slug=eq.lyric-hook&select=prompt`, {
+        headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` },
+      });
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows.length > 0 && rows[0].prompt) return rows[0].prompt;
+      }
+    }
+  } catch {}
+  return DEFAULT_DNA_PROMPT;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -88,6 +106,8 @@ serve(async (req) => {
 
       console.log(`[song-dna] Audio mode: ~${(audioBase64.length * 0.75 / 1024 / 1024).toFixed(1)} MB, format: ${ext}`);
 
+      const dnaPrompt = await getDnaPrompt();
+
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -97,7 +117,7 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages: [
-            { role: "system", content: DNA_PROMPT },
+            { role: "system", content: dnaPrompt },
             { role: "user", content: userContent },
           ],
           temperature: 0.1,
