@@ -330,6 +330,41 @@ export type Database = {
         }
         Relationships: []
       }
+      hook_comments: {
+        Row: {
+          hook_id: string
+          id: string
+          session_id: string | null
+          submitted_at: string
+          text: string
+          user_id: string | null
+        }
+        Insert: {
+          hook_id: string
+          id?: string
+          session_id?: string | null
+          submitted_at?: string
+          text: string
+          user_id?: string | null
+        }
+        Update: {
+          hook_id?: string
+          id?: string
+          session_id?: string | null
+          submitted_at?: string
+          text?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hook_comments_hook_id_fkey"
+            columns: ["hook_id"]
+            isOneToOne: false
+            referencedRelation: "shareable_hooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invites: {
         Row: {
           converted_at: string | null
@@ -914,6 +949,86 @@ export type Database = {
           song_url?: string | null
         }
         Relationships: []
+      }
+      shareable_hooks: {
+        Row: {
+          artist_dna: Json | null
+          artist_name: string
+          artist_slug: string
+          audio_url: string
+          beat_grid: Json
+          created_at: string
+          fire_count: number
+          hook_end: number
+          hook_phrase: string
+          hook_slug: string
+          hook_start: number
+          id: string
+          lyrics: Json
+          palette: Json
+          physics_spec: Json
+          signature_line: string | null
+          song_name: string
+          song_slug: string
+          system_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          artist_dna?: Json | null
+          artist_name: string
+          artist_slug: string
+          audio_url: string
+          beat_grid: Json
+          created_at?: string
+          fire_count?: number
+          hook_end: number
+          hook_phrase: string
+          hook_slug: string
+          hook_start: number
+          id?: string
+          lyrics: Json
+          palette?: Json
+          physics_spec: Json
+          signature_line?: string | null
+          song_name: string
+          song_slug: string
+          system_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          artist_dna?: Json | null
+          artist_name?: string
+          artist_slug?: string
+          audio_url?: string
+          beat_grid?: Json
+          created_at?: string
+          fire_count?: number
+          hook_end?: number
+          hook_phrase?: string
+          hook_slug?: string
+          hook_start?: number
+          id?: string
+          lyrics?: Json
+          palette?: Json
+          physics_spec?: Json
+          signature_line?: string | null
+          song_name?: string
+          song_slug?: string
+          system_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shareable_hooks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       site_copy: {
         Row: {

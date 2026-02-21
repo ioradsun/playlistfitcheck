@@ -23,6 +23,7 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import ArtistStage from "./pages/ArtistStage";
+import ShareableHook from "./pages/ShareableHook";
 
 const queryClient = new QueryClient();
 
@@ -64,6 +65,7 @@ const App = () => (
                 <Route path="/u/:userId" element={<PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout>} />
                 <Route path="/song/:postId" element={<PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout>} />
                 <Route path="/artist/:username" element={<ArtistStage />} />
+                <Route path="/:artistSlug/:songSlug/:hookSlug" element={<ShareableHook />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
               </Routes>
