@@ -603,7 +603,7 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
       }
     }
 
-    const videoStream = canvas.captureStream(FPS);
+    const videoStream = canvas.captureStream(0); // 0 = manual frame capture
     const combinedStream = new MediaStream();
     videoStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
     if (audioDest) {
@@ -626,6 +626,8 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
 
     mediaRecorder.start();
 
+    const videoTrack = videoStream.getVideoTracks()[0] as any;
+
     const renderNextFrame = () => {
       if (frame >= totalFrames) {
         mediaRecorder.stop();
@@ -635,9 +637,13 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
       }
       const time = regionStart + (frame / FPS);
       drawFrame(ctx, time, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgStyle, bgImage);
+      // Manually request a frame capture so the recorder gets this exact frame
+      if (videoTrack && typeof videoTrack.requestFrame === "function") {
+        videoTrack.requestFrame();
+      }
       frame++;
       setRecordingProgress(frame / totalFrames);
-      setTimeout(renderNextFrame, 1000 / FPS);
+      requestAnimationFrame(renderNextFrame);
     };
 
     mediaRecorder.onstop = () => {
