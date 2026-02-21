@@ -34,10 +34,10 @@ function getCharPositions(ctx: CanvasRenderingContext2D, displayText: string, st
   return positions;
 }
 
-/** Clamp a desired scale so that text of `textWidth` doesn't exceed `canvasW * safeRatio` */
-function safeScale(textWidth: number, canvasW: number, desiredScale: number, safeRatio = 0.85): number {
+/** Clamp scale so rendered text never exceeds 90% of canvas width */
+function safeScale(textWidth: number, canvasW: number, desiredScale: number): number {
   if (textWidth <= 0) return desiredScale;
-  const maxScale = (canvasW * safeRatio) / textWidth;
+  const maxScale = (canvasW * 0.90) / textWidth;
   return Math.min(desiredScale, maxScale);
 }
 
