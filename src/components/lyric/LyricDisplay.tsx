@@ -1177,11 +1177,19 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             ) : songDna ? (
               <div className="space-y-4">
                 {/* Header */}
-                <div className="flex items-center gap-1.5">
-                  <Sparkles size={12} className="text-primary" />
-                  <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                    Song DNA
-                  </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles size={12} className="text-primary" />
+                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                      Song DNA
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => { setSongDna(null); setDnaRequested(false); }}
+                    className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    Reveal Again
+                  </button>
                 </div>
 
                 {/* Description */}
