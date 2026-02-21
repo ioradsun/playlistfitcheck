@@ -137,22 +137,23 @@ export function computeFitFontSize(
   text: string,
   canvasW: number,
   system: string,
-  safeRatio = 0.52,
-  maxRatio = 0.06,
+  safeRatio = 0.50,
+  maxRatio = 0.055,
 ): number {
   const st = getSystemStyle(system);
   const displayText = applyTransform(text, st);
   const safeW = canvasW * safeRatio;
   const charCount = Math.max(1, displayText.length);
 
-  // Measure glyph-width-to-font-size ratio at a reference size
+  // Measure actual text width at a reference size for accuracy
   const refFs = 100;
   ctx.font = buildFont(st, refFs);
-  const refM = ctx.measureText("M").width;
-  const glyphRatio = refM / refFs; // e.g. ~0.6 for most fonts
+  const actualRefWidth = ctx.measureText(displayText).width;
+  // Add letter-spacing contribution
+  const totalRefWidth = actualRefWidth + (charCount - 1) * st.letterSpacing;
 
-  // Solve: charCount × (glyphRatio × fs + letterSpacing) = safeW
-  const maxFromFit = (safeW / charCount - st.letterSpacing) / glyphRatio;
+  // Scale: targetFs = refFs * (safeW / totalRefWidth)
+  const maxFromFit = totalRefWidth > 0 ? refFs * (safeW / totalRefWidth) : refFs;
   const maxFromCap = canvasW * maxRatio;
 
   const fs = Math.min(maxFromFit, maxFromCap);
