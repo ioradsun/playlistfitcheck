@@ -55,9 +55,10 @@ interface VibeFitTabProps {
   initialResult?: { input: VibeFitInput; result: VibeFitOutput } | null;
   onProjectSaved?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
+  onSavedId?: (id: string) => void;
 }
 
-export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject }: VibeFitTabProps = {}) {
+export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onSavedId }: VibeFitTabProps = {}) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VibeFitOutput | null>(initialResult?.result || null);
   const [lastInput, setLastInput] = useState<VibeFitInput | null>(initialResult?.input || null);
@@ -109,14 +110,15 @@ export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject }: V
       // Save for authenticated users
       if (user) {
         try {
-          await supabase.from("saved_vibefit").insert({
+          const { data: inserted } = await supabase.from("saved_vibefit").insert({
             user_id: user.id,
             song_title: input.songTitle,
             genre: "",
             moods: input.moods,
             result_json: { input, result: output } as any,
-          });
+          }).select("id").single();
           onProjectSaved?.();
+          if (inserted) onSavedId?.(inserted.id);
         } catch (e) {
           console.error("Failed to save VibeFit:", e);
         }

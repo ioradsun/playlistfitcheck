@@ -43,13 +43,18 @@ const App = () => (
                 <Route path="/HookFit" element={<Index />} />
                 <Route path="/SongFit" element={<Index />} />
                 <Route path="/ProFit" element={<Index />} />
+                <Route path="/ProFit/:projectId" element={<Index />} />
                 <Route path="/PlaylistFit" element={<Index />} />
+                <Route path="/PlaylistFit/:projectId" element={<Index />} />
                 <Route path="/MixFit" element={<Index />} />
+                <Route path="/MixFit/:projectId" element={<Index />} />
                 <Route path="/LyricFit" element={<Index />} />
                 <Route path="/LyricFit/:projectId" element={<Index />} />
                 <Route path="/HitFit" element={<Index />} />
+                <Route path="/HitFit/:projectId" element={<Index />} />
                 <Route path="/DreamFit" element={<Index />} />
                 <Route path="/VibeFit" element={<Index />} />
+                <Route path="/VibeFit/:projectId" element={<Index />} />
                 <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout>} />

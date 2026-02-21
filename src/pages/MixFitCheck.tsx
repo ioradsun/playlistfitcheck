@@ -20,9 +20,10 @@ interface MixFitCheckProps {
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void; rightContent?: React.ReactNode } | null) => void;
+  onSavedId?: (id: string) => void;
 }
 
-export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject, onHeaderProject }: MixFitCheckProps = {}) {
+export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject, onHeaderProject, onSavedId }: MixFitCheckProps = {}) {
   const { user } = useAuth();
   const mixQuota = useUsageQuota("mix");
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
@@ -88,7 +89,9 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       toast.error(mixQuota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
       return;
     }
-    setProjectId(crypto.randomUUID());
+    const newId = crypto.randomUUID();
+    setProjectId(newId);
+    onSavedId?.(newId);
     setTitle(t);
     setNotes(n);
     // Decode uploaded files
