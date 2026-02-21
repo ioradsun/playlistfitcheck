@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { RefreshCw, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +30,22 @@ interface FmlyFriendlyPanelProps {
 export function FmlyFriendlyPanel({ hasFmly, report, onGenerate, onSeek }: FmlyFriendlyPanelProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reportExpanded, setReportExpanded] = useState(false);
+  const cycleIndexRef = useRef(0);
+
+  // Collect all flagged timestamps in order for cycling
+  const allTimestamps = report?.flaggedWords.flatMap(fw => {
+    // We only have firstTimestamp and lastTimestamp per word, so use firstTimestamp
+    return Array.from({ length: fw.count }, (_, i) => 
+      i === 0 ? fw.firstTimestamp : fw.lastTimestamp
+    );
+  }).sort((a, b) => a - b) ?? [];
+
+  const handleCycleFlagged = () => {
+    if (!onSeek || allTimestamps.length === 0) return;
+    const idx = cycleIndexRef.current % allTimestamps.length;
+    onSeek(allTimestamps[idx]);
+    cycleIndexRef.current = idx + 1;
+  };
 
   const handleClick = () => {
     if (hasFmly) {
@@ -64,10 +80,14 @@ export function FmlyFriendlyPanel({ hasFmly, report, onGenerate, onSeek }: FmlyF
           </button>
 
           <div className="grid grid-cols-2 gap-2 text-[10px]">
-            <div className="bg-muted/30 rounded p-1.5 text-center">
-              <div className="text-lg font-bold text-foreground">{report.totalFlagged}</div>
-              <div className="text-muted-foreground">Total flagged</div>
-            </div>
+            <button
+              className="bg-muted/30 rounded p-1.5 text-center hover:bg-primary/10 transition-colors cursor-pointer"
+              onClick={handleCycleFlagged}
+              title="Click to scroll through flagged words"
+            >
+              <div className="text-lg font-bold text-primary">{report.totalFlagged}</div>
+              <div className="text-muted-foreground">Total flagged <span className="text-primary/60">↓</span></div>
+            </button>
             <div className="bg-muted/30 rounded p-1.5 text-center">
               <div className="text-lg font-bold text-foreground">{report.uniqueFlagged}</div>
               <div className="text-muted-foreground">Unique words</div>
