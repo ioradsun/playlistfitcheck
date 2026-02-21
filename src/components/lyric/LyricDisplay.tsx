@@ -22,6 +22,7 @@ import { VersionToggle, type ActiveVersion } from "./VersionToggle";
 import { LyricFormatControls, type LineFormat, type SocialPreset } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
+import { HookDanceCanvas } from "./HookDanceCanvas";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
@@ -293,6 +294,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const hookDanceRef = useRef<HookDanceEngine | null>(null);
   const [hookDanceState, setHookDanceState] = useState<PhysicsState | null>(null);
   const [hookDanceRunning, setHookDanceRunning] = useState(false);
+  const [hookDanceTime, setHookDanceTime] = useState(0);
+  const [hookDanceBeatCount, setHookDanceBeatCount] = useState(0);
+  const hookDancePrngRef = useRef<(() => number) | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1410,17 +1414,22 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         hook.end,
                         audio,
                         {
-                          onFrame: (state, _time, _beatCount) => {
+                          onFrame: (state, time, bc) => {
                             setHookDanceState(state);
+                            setHookDanceTime(time);
+                            setHookDanceBeatCount(bc);
                           },
                           onEnd: () => {
                             setHookDanceRunning(false);
                             setHookDanceState(null);
+                            setHookDanceTime(0);
+                            setHookDanceBeatCount(0);
                           },
                         },
                         `${data.title}-${hook.start.toFixed(3)}`,
                       );
                       hookDanceRef.current = engine;
+                      hookDancePrngRef.current = engine.prng;
                       setHookDanceRunning(true);
                       engine.start();
                     }}
@@ -1452,6 +1461,23 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       </div>
 
       <SignUpToSaveBanner />
+
+      {/* Hook Dance full-bleed canvas overlay */}
+      <AnimatePresence>
+        {hookDanceRunning && songDna?.physicsSpec && songDna.hook && hookDancePrngRef.current && (
+          <HookDanceCanvas
+            physicsState={hookDanceState}
+            spec={songDna.physicsSpec as PhysicsSpec}
+            lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
+            hookStart={songDna.hook.start}
+            hookEnd={songDna.hook.end}
+            currentTime={hookDanceTime}
+            beatCount={hookDanceBeatCount}
+            prng={hookDancePrngRef.current}
+            onClose={() => hookDanceRef.current?.stop()}
+          />
+        )}
+      </AnimatePresence>
 
       {/* v2.2: Conflict Resolution Modal — keeps Whisper timestamps, lets artist swap text */}
       <Dialog open={!!conflictLine} onOpenChange={(open) => { if (!open) setConflictLine(null); }}>
