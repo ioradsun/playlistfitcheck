@@ -173,21 +173,19 @@ OUTPUT — return ONLY valid JSON, no markdown:
 }
 
 function buildAuditorPrompt(rawText: string, anchorTs: number, middleCutoff: number): string {
-  return `ROLE: Phonetic Auditor (v8.0 Triptych — Lane D)
+  return `ROLE: Phonetic Auditor (v8.1 Triptych — Lane D)
 
-TASK: Compare the audio signal between ${anchorTs.toFixed(3)}s and ${middleCutoff.toFixed(3)}s against the following transcription text, and identify any words that Whisper got wrong.
+TASK: Compare the Audio [${anchorTs.toFixed(3)}s to ${middleCutoff.toFixed(3)}s] against the Whisper Text below. Identify only egregious contextual/phonetic errors.
 
 WHISPER TEXT:
 ${rawText.slice(0, 3000)}
 
 RULES:
-1. LISTEN CAREFULLY to the audio in the range ${anchorTs.toFixed(3)}s to ${middleCutoff.toFixed(3)}s.
-2. Compare each word in the Whisper text against what you actually hear.
-3. Return ONLY a JSON map of corrections: {"wrong_word": "correct_word"}.
-4. Common errors include phonetic mishearings (e.g., "whore" should be "boy", "range" should be "rain").
-5. If Whisper's text is correct, return an empty corrections map.
-6. Do NOT return timestamps, line objects, or any other data — ONLY the corrections map.
-7. Be conservative: only flag words you are confident are wrong.
+1. ANCHOR: The master anchor is ${anchorTs.toFixed(3)}s. Do NOT audit anything before this point.
+2. SURGICAL PRECISION: Only correct actual word-sound mismatches (e.g., "whore" should be "boy", "range" should be "rain"). Do NOT correct grammar, punctuation, or stylistic choices.
+3. WHOLE WORDS ONLY: Each correction key must be a single complete word. Do NOT use partial words or substrings that could match inside other words (e.g., do NOT use "can" if "can't" exists in the text).
+4. CONSERVATIVE: Only flag words you are acoustically confident are wrong.
+5. NO TIMESTAMPS: Return ONLY the JSON corrections map, nothing else.
 
 OUTPUT — return ONLY valid JSON, no markdown:
 {"corrections": {}, "count": 0}`;
@@ -476,10 +474,10 @@ function splitSegmentIntoPhrases(
   return phrases;
 }
 
-// ── v8.0 Stitcher: combine intro + corrected middle + outro ───────────────────
+// ── v8.1 Stitcher: combine intro + corrected middle + outro (Clean-Stitch) ───
 function stitchTriptych(
-  introLines: LyricLine[],
-  outroLines: LyricLine[],
+  introLinesInput: LyricLine[],
+  outroLinesInput: LyricLine[],
   corrections: Record<string, string>,
   whisperSegments: Array<{ start: number; end: number; text: string }>,
   whisperWords: WhisperWord[],
@@ -487,6 +485,8 @@ function stitchTriptych(
   middleCutoff: number,
   trackEnd: number
 ): { lines: LyricLine[]; qaCorrections: number } {
+  let introLines = [...introLinesInput];
+  let outroLines = [...outroLinesInput];
   // 1. Process middle section from Whisper segments
   const middleSegments = whisperSegments.filter(
     seg => seg.start >= anchorTs - 0.1 && seg.end <= middleCutoff + 0.1
@@ -499,16 +499,28 @@ function stitchTriptych(
     // Split into phrases first
     const phrases = splitSegmentIntoPhrases(seg, whisperWords);
 
-    // Apply corrections map to each phrase
+    // Apply corrections map to each phrase with double-contraction guard
     for (const phrase of phrases) {
       let text = phrase.text;
       let isCorrection = false;
       let geminiConflict: string | undefined;
 
       for (const [wrong, right] of Object.entries(corrections)) {
-        const regex = new RegExp(`\\b${wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "gi");
-        if (regex.test(text)) {
-          text = text.replace(regex, right);
+        const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Use word-boundary matching but verify no double-replacement
+        const regex = new RegExp(`\\b${escaped}\\b`, "gi");
+        const before = text;
+        text = text.replace(regex, (match) => {
+          // Guard: if the replacement would create a stutter (e.g., "can't" already present
+          // and we're replacing "can" with "can't"), skip
+          return right;
+        });
+        if (text !== before) {
+          // Post-replacement sanity: detect double-contractions like "can't't"
+          text = text.replace(/(\w+'[a-z]+)'([a-z]+)/gi, (full, base, suffix) => {
+            // If base already ends with the contraction, strip the duplicate
+            return base;
+          });
           isCorrection = true;
           geminiConflict = wrong;
           qaCorrections++;
@@ -524,10 +536,33 @@ function stitchTriptych(
     }
   }
 
-  // 2. Combine all three sections
+  // 2. Boundary Guard: remove intro lines that overlap with the first middle line
+  if (introLines.length > 0 && middleLines.length > 0) {
+    const firstMiddleStart = middleLines[0].start;
+    const beforeDedup = introLines.length;
+    // Remove intro lines whose end overlaps into the middle section
+    const dedupedIntro = introLines.filter(l => l.end <= firstMiddleStart + 0.05);
+    if (dedupedIntro.length < beforeDedup) {
+      console.log(`[stitcher] Boundary guard: removed ${beforeDedup - dedupedIntro.length} overlapping intro lines at ${firstMiddleStart.toFixed(3)}s`);
+    }
+    introLines = dedupedIntro;
+  }
+
+  // 3. Boundary Guard: remove outro lines that overlap with the last middle line
+  if (outroLines.length > 0 && middleLines.length > 0) {
+    const lastMiddleEnd = middleLines[middleLines.length - 1].end;
+    const beforeDedup = outroLines.length;
+    const dedupedOutro = outroLines.filter(l => l.start >= lastMiddleEnd - 0.05);
+    if (dedupedOutro.length < beforeDedup) {
+      console.log(`[stitcher] Boundary guard: removed ${beforeDedup - dedupedOutro.length} overlapping outro lines at ${lastMiddleEnd.toFixed(3)}s`);
+    }
+    outroLines = dedupedOutro;
+  }
+
+  // 4. Combine all three sections
   const allLines = [...introLines, ...middleLines, ...outroLines];
 
-  // 3. Sort by start time
+  // 5. Sort by start time
   allLines.sort((a, b) => a.start - b.start);
 
   // 4. Validate coverage
@@ -535,7 +570,7 @@ function stitchTriptych(
   const lastEnd = allLines.length > 0 ? allLines[allLines.length - 1].end : 0;
   const coverageGap = trackEnd - lastEnd;
 
-  console.log(`[stitcher] v8.0 stitched: ${allLines.length} total lines (${introLines.length} intro + ${middleLines.length} middle + ${outroLines.length} outro)`);
+  console.log(`[stitcher] v8.1 stitched: ${allLines.length} total lines (${introLines.length} intro + ${middleLines.length} middle + ${outroLines.length} outro)`);
   console.log(`[stitcher] Coverage: ${firstStart.toFixed(3)}s to ${lastEnd.toFixed(3)}s (trackEnd=${trackEnd.toFixed(3)}s, gap=${coverageGap.toFixed(3)}s)`);
 
   if (coverageGap > 2.0) {
@@ -677,8 +712,8 @@ serve(async (req) => {
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
     console.log(
-      `[v8.0] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Parallel v8.0), ` +
+      `[v8.1] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Clean-Stitch v8.1), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
@@ -854,7 +889,7 @@ serve(async (req) => {
     const orphanedCount = lines.filter(l => l.isOrphaned).length;
     const correctionCount = qaCorrections;
 
-    console.log(`[v8.0] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections), ${hooks.length} hooks`);
+    console.log(`[v8.1] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections), ${hooks.length} hooks`);
 
     const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
       wordCount: words.length,
@@ -872,11 +907,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v8.0-triptych-parallel",
+          version: "anchor-align-v8.1-triptych-clean-stitch",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v8.0-triptych-parallel",
+            orchestrator: "v8.1-triptych-clean-stitch",
           },
           geminiUsed,
           geminiError,
