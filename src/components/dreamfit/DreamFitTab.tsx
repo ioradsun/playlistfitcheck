@@ -46,6 +46,25 @@ export function DreamFitTab() {
 
   return (
     <div className="w-full max-w-[470px] mx-auto">
+      {/* Composer */}
+      {user ? (
+        <DreamInlineComposer onCreated={() => { fetchDreams(); }} />
+      ) : (
+        <div
+          className="border-b border-border/40 cursor-pointer"
+          onClick={() => navigate("/auth?mode=signup")}
+        >
+          <div className="flex gap-3 px-4 pt-3 pb-3">
+            <div className="h-10 w-10 rounded-full bg-muted border border-border shrink-0 mt-1 flex items-center justify-center">
+              <User size={16} className="text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0 flex items-center">
+              <span className="text-base text-muted-foreground/60">Share your idea for the next Fit</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="border-b border-border/40">
         <div className="flex">
@@ -65,25 +84,6 @@ export function DreamFitTab() {
           ))}
         </div>
       </div>
-
-      {/* Composer */}
-      {user ? (
-        <DreamInlineComposer onCreated={() => { fetchDreams(); }} />
-      ) : (
-        <div
-          className="border-b border-border/40 cursor-pointer"
-          onClick={() => navigate("/auth?mode=signup")}
-        >
-          <div className="flex gap-3 px-4 pt-3 pb-3">
-            <div className="h-10 w-10 rounded-full bg-muted border border-border shrink-0 mt-1 flex items-center justify-center">
-              <User size={16} className="text-muted-foreground" />
-            </div>
-            <div className="flex-1 min-w-0 flex items-center">
-              <span className="text-base text-muted-foreground/60">Share your idea for the next Fit</span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Feed */}
       {loading ? (
