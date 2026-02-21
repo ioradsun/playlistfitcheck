@@ -8,7 +8,9 @@ import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData } from "./LyricDisplay";
 import { LyricProgressModal, type ProgressStage } from "./LyricProgressModal";
 
-export type HeaderProjectSetter = (project: { title: string; onBack: () => void } | null) => void;
+import type { ReactNode } from "react";
+
+export type HeaderProjectSetter = (project: { title: string; onBack: () => void; rightContent?: ReactNode } | null) => void;
 
 interface Props {
   initialLyric?: any;

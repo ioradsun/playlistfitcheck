@@ -117,7 +117,7 @@ const Index = () => {
   
   // profitAutoRef kept for other auto-run logic
   
-  const [headerProject, setHeaderProject] = useState<{ title: string; onBack: () => void } | null>(null);
+  const [headerProject, setHeaderProject] = useState<{ title: string; onBack: () => void; rightContent?: React.ReactNode } | null>(null);
   const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
@@ -492,6 +492,7 @@ const Index = () => {
                 <ArrowLeft size={16} />
               </button>
               <span className="text-xs font-semibold truncate max-w-[200px]">{headerProject.title}</span>
+              {headerProject.rightContent && <div className="ml-auto flex items-center gap-2">{headerProject.rightContent}</div>}
             </>
           ) : (
             TAB_SUBTITLES[activeTab] && (
