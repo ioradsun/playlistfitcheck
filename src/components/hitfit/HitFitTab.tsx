@@ -6,6 +6,7 @@ import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { HitFitUploader, type ReferenceSource } from "./HitFitUploader";
 import { HitFitResults, type HitFitAnalysis } from "./HitFitResults";
 import { compressAudioFile } from "@/lib/compressAudio";
+import { sessionAudio } from "@/lib/sessionAudioCache";
 
 interface HitFitTabProps {
   initialAnalysis?: HitFitAnalysis | null;
@@ -29,6 +30,11 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHea
   const handleAnalyze = useCallback(async (master1: File, master2: File | null, reference: ReferenceSource) => {
     setLoading(true);
     try {
+      // Cache uploaded files for session persistence
+      sessionAudio.set("hitfit", "master1", master1);
+      if (master2) sessionAudio.set("hitfit", "master2", master2);
+      if (reference.type === "file") sessionAudio.set("hitfit", "reference", reference.file);
+
       // Compress all uploaded audio files before sending
       const [compressedMaster1, compressedMaster2, compressedRef] = await Promise.all([
         compressAudioFile(master1).catch((e) => { throw new Error(`Master A: ${e.message}`); }),

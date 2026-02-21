@@ -13,6 +13,7 @@ import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProject
 
 import { toast } from "sonner";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
+import { sessionAudio } from "@/lib/sessionAudioCache";
 
 const MAX_MIXES = 6;
 
@@ -102,14 +103,17 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     for (const file of files) {
       try {
         const { buffer, waveform } = await decodeFile(file);
+        const mixName = file.name.replace(/\.(mp3|wav|m4a)$/i, "");
         const newMix: AudioMix = {
           id: crypto.randomUUID(),
-          name: file.name.replace(/\.(mp3|wav|m4a)$/i, ""),
+          name: mixName,
           buffer,
           waveform,
           rank: null,
           comments: "",
         };
+        // Cache file for session persistence
+        sessionAudio.set("mix", `${newId}::${mixName}`, file);
         setMixes((prev) => {
           const updated = [...prev, newMix];
           if (updated.filter((m) => m.buffer).length === 1) {
@@ -124,27 +128,58 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     await mixQuota.increment();
   }, [decodeFile, mixQuota]);
 
-  const handleLoadProject = useCallback((project: MixProjectData) => {
+  const handleLoadProject = useCallback(async (project: MixProjectData) => {
     stop();
     setProjectId(project.id);
     setTitle(project.title);
     setNotes(project.notes);
     setMarkerStart(project.markerStart);
     setMarkerEnd(project.markerEnd);
-    // Restore mix metadata without audio buffers
-    setMixes(
-      project.mixes.map((m, i) => ({
+
+    // Try to restore audio from session cache
+    const restoredMixes: AudioMix[] = [];
+    let anyMissing = false;
+    for (const m of project.mixes) {
+      const cached = sessionAudio.get("mix", `${project.id}::${m.name}`);
+      if (cached) {
+        try {
+          const { buffer, waveform } = await decodeFile(cached);
+          restoredMixes.push({
+            id: crypto.randomUUID(),
+            name: m.name,
+            buffer,
+            waveform,
+            rank: m.rank,
+            comments: m.comments,
+          });
+          continue;
+        } catch {
+          // fall through to placeholder
+        }
+      }
+      anyMissing = true;
+      restoredMixes.push({
         id: crypto.randomUUID(),
         name: m.name,
         buffer: null as any,
         waveform: { peaks: [], duration: 0 },
         rank: m.rank,
         comments: m.comments,
-      }))
-    );
-    setNeedsReupload(project.mixes.length > 0);
-    toast.info("Project loaded — re-upload audio files to resume playback.");
-  }, [stop]);
+      });
+    }
+    setMixes(restoredMixes);
+    setNeedsReupload(anyMissing && project.mixes.length > 0);
+
+    // Update marker end from first decoded mix
+    const firstDecoded = restoredMixes.find((m) => m.buffer);
+    if (firstDecoded) {
+      setMarkerEnd(firstDecoded.waveform.duration);
+    }
+
+    if (anyMissing && project.mixes.length > 0) {
+      toast.info("Project loaded — re-upload audio files to resume playback.");
+    }
+  }, [stop, decodeFile]);
 
   // Load initial project from dashboard navigation
   useEffect(() => {
@@ -162,16 +197,19 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       const toProcess = Array.from(files).slice(0, remaining);
 
       for (const file of toProcess) {
-        try {
+      try {
           const { buffer, waveform } = await decodeFile(file);
+          const mixName = file.name.replace(/\.(mp3|wav|m4a)$/i, "");
           const newMix: AudioMix = {
             id: crypto.randomUUID(),
-            name: file.name.replace(/\.(mp3|wav)$/i, ""),
+            name: mixName,
             buffer,
             waveform,
             rank: null,
             comments: "",
           };
+          // Cache file for session persistence
+          if (projectId) sessionAudio.set("mix", `${projectId}::${mixName}`, file);
           setMixes((prev) => {
             const updated = [...prev, newMix];
             // Set marker end to duration of first mix if this is the first
