@@ -72,67 +72,7 @@ interface RiverRow {
   offset: number;
 }
 
-// ── Badge system micro-animation ────────────────────────────────────────────
-
-function drawBadgeMicro(ctx: CanvasRenderingContext2D, system: string, x: number, y: number, size: number, time: number) {
-  ctx.save();
-  ctx.translate(x, y);
-  switch (system) {
-    case "fracture": {
-      const crackLen = size * 0.8;
-      const progress = (time * 0.3) % 1;
-      ctx.strokeStyle = "rgba(255,255,255,0.6)";
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(-crackLen / 2, 0);
-      ctx.lineTo(-crackLen / 2 + crackLen * progress, (Math.sin(progress * 4) * size * 0.2));
-      ctx.stroke();
-      break;
-    }
-    case "breath": {
-      const pulse = 1 + Math.sin(time * 1.5) * 0.3;
-      ctx.strokeStyle = "rgba(255,255,255,0.4)";
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, size * 0.3 * pulse, 0, Math.PI * 2);
-      ctx.stroke();
-      break;
-    }
-    case "orbit": {
-      const angle = time * 1.2;
-      const r = size * 0.35;
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
-      ctx.beginPath();
-      ctx.arc(Math.cos(angle) * r, Math.sin(angle) * r, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-      break;
-    }
-    case "combustion": {
-      const emberY = -((time * 8) % (size * 0.6));
-      const emberAlpha = 1 - Math.abs(emberY) / (size * 0.6);
-      ctx.fillStyle = `rgba(249,115,22,${emberAlpha * 0.8})`;
-      ctx.beginPath();
-      ctx.arc(0, emberY, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-      break;
-    }
-    case "pressure": {
-      const compress = Math.sin(time * 2) * 0.3;
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(-size * 0.3, -size * 0.15 * (1 + compress));
-      ctx.lineTo(size * 0.3, -size * 0.15 * (1 + compress));
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(-size * 0.3, size * 0.15 * (1 + compress));
-      ctx.lineTo(size * 0.3, size * 0.15 * (1 + compress));
-      ctx.stroke();
-      break;
-    }
-  }
-  ctx.restore();
-}
+// (Badge is now a DOM element — drawBadgeMicro removed)
 
 // ── Fire streak animation ───────────────────────────────────────────────────
 
@@ -202,7 +142,6 @@ export default function ShareableHook() {
 
   // Badge
   const [badgeVisible, setBadgeVisible] = useState(false);
-  const [badgeHovered, setBadgeHovered] = useState(false);
   const startTimeRef = useRef(Date.now());
 
   // Share
@@ -316,11 +255,18 @@ export default function ShareableHook() {
       strength: i % 4 === 0 ? 1 : 0.6,
     }));
 
+    // Constrain loop to actual lyric coverage so audio doesn't play past visible lyrics
+    const lines = hookData.lyrics as LyricLine[];
+    const lyricsStart = lines.length > 0 ? Math.min(hookData.hook_start, lines[0].start) : hookData.hook_start;
+    const lyricsEnd = lines.length > 0 ? Math.min(hookData.hook_end, lines[lines.length - 1].end + 0.3) : hookData.hook_end;
+    const effectiveStart = Math.max(hookData.hook_start, lyricsStart);
+    const effectiveEnd = Math.max(effectiveStart + 1, lyricsEnd);
+
     const engine = new HookDanceEngine(
       { ...spec, system: hookData.system_type },
       beats,
-      hookData.hook_start,
-      hookData.hook_end,
+      effectiveStart,
+      effectiveEnd,
       audio,
       {
         onFrame: (state, time, bc) => {
@@ -381,7 +327,6 @@ export default function ShareableHook() {
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.width / dpr;
     const h = canvas.height / dpr;
-    const elapsedSec = (Date.now() - startTimeRef.current) / 1000;
     const palette = hookData.palette || ["#ffffff", "#a855f7", "#ec4899"];
 
     ctx.save();
@@ -479,32 +424,7 @@ export default function ShareableHook() {
       drawFn(ctx, effectState);
     }
 
-    // === LAYER 3: tools.fm badge ===
-    if (badgeVisible) {
-      const badgeW = badgeHovered ? 110 : 90;
-      const badgeH = 26;
-      const badgeX = w - badgeW - 12;
-      const badgeY = h - badgeH - 12;
-      const badgeR = 13;
-
-      // Badge bg
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = "rgba(10,10,10,0.8)";
-      ctx.beginPath();
-      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, badgeR);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      // Micro animation on left
-      drawBadgeMicro(ctx, hookData.system_type, badgeX + 16, badgeY + badgeH / 2, 12, elapsedSec);
-
-      // Text on right
-      ctx.font = '11px "Space Mono", monospace';
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillText(badgeHovered ? "make yours" : "tools.fm", badgeX + 30, badgeY + badgeH / 2);
-    }
+    // Badge is now a DOM element (see below)
 
     // Progress bar
     const hookProgress = (currentTime - hookData.hook_start) / (hookData.hook_end - hookData.hook_start);
@@ -514,7 +434,7 @@ export default function ShareableHook() {
     ctx.globalAlpha = 1;
 
     ctx.restore();
-  }, [physicsState, currentTime, beatCount, hookData, badgeVisible, badgeHovered]);
+  }, [physicsState, currentTime, beatCount, hookData]);
 
   // ── Handle canvas tap (unmute) ────────────────────────────────────────────
 
@@ -536,29 +456,10 @@ export default function ShareableHook() {
     muteIconTimerRef.current = window.setTimeout(() => setShowMuteIcon(false), 2000);
   }, [muted]);
 
-  // ── Handle badge hover/click ──────────────────────────────────────────────
-
-  const handleBadgeArea = useCallback((e: React.MouseEvent) => {
+  // Badge click handler
+  const handleBadgeClick = useCallback(() => {
     if (!hookData) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const badgeW = 100;
-    const badgeH = 26;
-    const badgeX = rect.width - badgeW - 12;
-    const badgeY = rect.height - badgeH - 12;
-
-    if (x >= badgeX && x <= badgeX + badgeW && y >= badgeY && y <= badgeY + badgeH) {
-      if (e.type === "click") {
-        navigate(`/?from=hook&song=${encodeURIComponent(hookData.song_name)}`);
-      } else {
-        setBadgeHovered(true);
-      }
-    } else {
-      setBadgeHovered(false);
-    }
+    navigate(`/?from=hook&song=${encodeURIComponent(hookData.song_name)}`);
   }, [hookData, navigate]);
 
   // ── Submit comment ────────────────────────────────────────────────────────
@@ -660,12 +561,7 @@ export default function ShareableHook() {
       <div
         ref={containerRef}
         className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer"
-        onClick={(e) => {
-          handleBadgeArea(e);
-          if (!badgeHovered) handleCanvasTap();
-        }}
-        onMouseMove={(e) => handleBadgeArea(e)}
-        onMouseLeave={() => setBadgeHovered(false)}
+        onClick={handleCanvasTap}
       >
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
@@ -680,6 +576,24 @@ export default function ShareableHook() {
             >
               {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* tools.fm badge — DOM element like Lovable's badge */}
+        <AnimatePresence>
+          {badgeVisible && (
+            <motion.button
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              onClick={(e) => { e.stopPropagation(); handleBadgeClick(); }}
+              className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
+            >
+              <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
+                tools.fm
+              </span>
+            </motion.button>
           )}
         </AnimatePresence>
       </div>
