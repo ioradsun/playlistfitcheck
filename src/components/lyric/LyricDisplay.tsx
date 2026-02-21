@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ import { LyricWaveform } from "./LyricWaveform";
 import { VersionToggle, type ActiveVersion } from "./VersionToggle";
 import { LyricFormatControls, type LineFormat, type SocialPreset } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
+import { LyricVideoComposer } from "./LyricVideoComposer";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
@@ -265,6 +266,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   // v2.2: Conflict resolution modal
   const [conflictLine, setConflictLine] = useState<{ lineIndex: number; whisperText: string; geminiText: string } | null>(null);
+
+  // Lyric video composer
+  const [videoComposerOpen, setVideoComposerOpen] = useState(false);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
@@ -1186,6 +1190,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       <Copy size={10} />
                       <span>Copy Clip Info</span>
                     </button>
+
+                    {/* Lyric Video */}
+                    <button
+                      onClick={() => setVideoComposerOpen(true)}
+                      className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
+                    >
+                      <Video size={10} />
+                      <span>Create Lyric Video</span>
+                    </button>
                   </>
                 ) : (
                   <p className="text-xs text-muted-foreground py-2">
@@ -1258,6 +1271,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         </DialogContent>
       </Dialog>
 
+      <LyricVideoComposer
+        open={videoComposerOpen}
+        onOpenChange={setVideoComposerOpen}
+        lines={activeLines}
+        hook={hooks[0] ?? null}
+        metadata={data.metadata}
+        title={data.title}
+        artist={data.artist}
+      />
     </motion.div>
   );
 }
