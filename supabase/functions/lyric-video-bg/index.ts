@@ -12,12 +12,12 @@ serve(async (req) => {
   }
 
   try {
-    const { title, artist, mood, description } = await req.json();
+    const { title, artist, mood, description, userPrompt } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const prompt = `Create a stunning abstract background image for a lyric video. The song is "${title}" by ${artist}. Mood: ${mood}. ${description ? `Song description: ${description}.` : ""} Style: cinematic, atmospheric, abstract shapes with deep colors, subtle light effects, no text, no people, no faces. The image should be vertical (9:16 aspect ratio) and work as a background with white text overlaid on top. Make it moody and visually rich but not too busy.`;
-
+    const vibeDesc = userPrompt ? `User's visual direction: ${userPrompt}. ` : "";
+    const prompt = `Create a stunning abstract background image for a lyric video. ${vibeDesc}The song is "${title}" by ${artist}. Mood: ${mood}. ${description ? `Song description: ${description}.` : ""} Style: cinematic, atmospheric, abstract shapes with deep colors, subtle light effects, no text, no people, no faces. The image should work as a background with white text overlaid on top. Make it moody and visually rich but not too busy.`;
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
