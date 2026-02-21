@@ -316,8 +316,16 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       system: string;
       params: Record<string, number>;
       palette: string[];
-      effect_sequence: { line_index: number; effect_key: string }[];
-      micro_surprise: { every_n_beats: number; action: string };
+      effect_pool?: string[];
+      logic_seed?: number;
+      lexicon?: {
+        semantic_tags?: { tag: string; strength: number }[];
+        line_mods?: { t_lyric: number; mods: string[] }[];
+        word_marks?: { t_lyric: number; wordIndex: number; mark: string }[];
+      };
+      // Legacy v5 fields (backwards compat)
+      effect_sequence?: { line_index: number; effect_key: string }[];
+      micro_surprise?: { every_n_beats: number; action: string };
     } | null;
   } | null>(null);
   const [dnaLoading, setDnaLoading] = useState(false);
