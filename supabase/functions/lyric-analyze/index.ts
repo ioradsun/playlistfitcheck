@@ -8,43 +8,77 @@ const corsHeaders = {
 
 const DEFAULT_DNA_PROMPT = `ROLE: Lead Music Intelligence Analyst — Song DNA Engine
 
-TASK: Analyze the full audio track AND its lyrics to extract the song's structural identity ("Song DNA").
+TASK: Analyze the full audio track AND its timestamped lyrics to extract the song's structural identity ("Song DNA").
 
-1. THE 10.000s HOOK ANCHOR
-- Identify the single primary 10-second segment representing the track's "Hottest Hook."
-- Evaluation criteria: production lift, lead vocal intensity, melodic memorability, emotional peak, and repetition.
+You have access to:
+- Full audio track
+- Beat grid (bar and downbeat alignment)
+- Timestamped lyrics
+
+Use all three signals in combination.
+
+1. ADAPTIVE HOOK ANCHOR (8–12s, Bar-Aligned)
+Identify the single primary bar-aligned segment representing the track's definitive "Hottest Hook."
+
+Duration Rules:
+- The hook window MUST be between 8.000 and 12.000 seconds.
+- It must be fully bar-aligned (start on a musical downbeat).
+- Select the smallest bar-aligned window within 8–12 seconds that fully captures the dominant hook phrase and its peak production lift.
+- Do NOT cut off a lyrical phrase mid-line.
+- Do NOT extend beyond the emotional or production peak unnecessarily.
+
+Evaluation Priority (strict order):
+1. Production lift and instrumental intensity
+2. Overlap between peak production and the most frequently repeated lyrical phrase (using timestamped lyrics)
+3. Melodic memorability
+4. Emotional peak
+5. Lead vocal intensity
+6. Repetition frequency across the full track
+
+Additional Requirements:
 - Scan the FULL track. Do not default to the first chorus.
-- Output ONLY start_sec as a decimal in seconds with 3-decimal precision (e.g., 78.450).
-- The 10s duration is a system invariant — do NOT output an end time.
-- Confidence floor: Only return hottest_hook if confidence >= 0.75. If below, omit the field entirely.
+- Evaluate the final chorus separately for added instrumentation or layered lift.
+- Use timestamped lyrics to detect the most frequently repeated lyrical phrase.
+- Prefer windows where that phrase overlaps with maximum production intensity.
+- A purely instrumental drop may be selected only if its memorability and lift clearly exceed all lyrical sections.
+
+Output Rules:
+- Output ONLY: start_sec (3-decimal precision), duration_sec (3-decimal precision, between 8.000 and 12.000), confidence
+- Confidence floor: Only return hottest_hook if confidence >= 0.85. If below, omit the field entirely.
 
 2. SONG DESCRIPTION
-- Write a single evocative sentence (max 15 words) describing what this song sounds and feels like.
-- Combine sonic texture, lyrical theme, and emotional tone into one line.
-- Be specific and vivid — avoid generic phrases like "a good song" or "nice beat."
+Write a single evocative sentence (max 15 words) describing what this song sounds and feels like.
+Requirements:
+- Must include at least one sonic texture descriptor (e.g., distorted, glossy, cinematic, gritty, orchestral, minimal).
+- Must include at least one emotional descriptor.
+- Avoid clichés and generic phrasing.
+- Do not stack genre labels.
 
 3. MOOD
-- mood: Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic"). Confidence floor: 0.85 — return null if below.
+Return the single most dominant emotional descriptor (e.g., melancholic, euphoric, anthemic, brooding, aggressive).
+- Do NOT return null.
+- If blended, choose the primary emotional driver.
+- Confidence floor target: >= 0.85 (if below, return the closest dominant mood anyway).
 
-4. BPM
-- Estimate the tempo in beats per minute. Return as integer.
-- Confidence: 0.0–1.0.
+4. SONG MEANING (from lyrics)
+- theme: Core theme in 2–4 words
+- summary: 2–3 sentence plain-language explanation of what the song is about
+- imagery: 2–3 visually concrete, physically renderable images used in the lyrics
 
-5. SONG MEANING (from lyrics)
-- theme: The core theme in 2-4 words
-- summary: A 2-3 sentence plain-language explanation of what the song is about
-- imagery: 2-3 notable metaphors or images used (array of short strings)
+Imagery Rules:
+- Must be physically visualizable (objects, environments, physical scenes).
+- No abstract emotional phrases (e.g., "broken heart," "shattered dreams," "lost love").
+- Prefer specific environments, objects, or physical actions.
 
 OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 {
-  "hottest_hook": { "start_sec": 0.000, "confidence": 0.00 },
-  "description": "A brooding trap ballad about midnight regret over heavy 808s",
-  "mood": "melancholic",
-  "bpm": 140,
+  "hottest_hook": { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.00 },
+  "description": "A cinematic, euphoric anthem pulsing with restless longing",
+  "mood": "anthemic",
   "meaning": {
-    "theme": "Midnight Regret",
-    "summary": "The artist reflects on a relationship that fell apart...",
-    "imagery": ["broken glass", "empty streets", "fading headlights"]
+    "theme": "Midnight Redemption",
+    "summary": "The artist confronts past mistakes while chasing emotional closure...",
+    "imagery": ["neon skyline", "rearview mirror", "rain-soaked street"]
   }
 }`;
 
