@@ -1,9 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
-import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Copy, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import type { ArtistData, Blueprint, PlanVariantType } from "./types";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +32,14 @@ const tierColors: Record<string, string> = {
   "Established": "bg-primary/20 text-primary",
   "Major": "bg-foreground text-background",
 };
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-medium tracking-wide uppercase text-muted-foreground/50 mb-3">
+      {children}
+    </p>
+  );
+}
 
 export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBack, onOpenChat, onHeaderProject }: ProFitReportProps) => {
   const [signalsOpen, setSignalsOpen] = useState(false);
@@ -67,53 +73,51 @@ export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBa
   }, [artist.name, onBack, onHeaderProject]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto pb-12 divide-y divide-border/30">
+    <div className="w-full max-w-4xl mx-auto pb-12 space-y-10">
 
       {/* Top bar */}
-      <div className="flex items-center justify-end gap-4 pb-6 flex-wrap">
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={copyBlueprint}>Copy Blueprint</Button>
-          <Button variant="outline" size="sm" onClick={onOpenChat}>Refine Strategy</Button>
-        </div>
+      <div className="flex items-center justify-end gap-2 flex-wrap">
+        <Button variant="outline" size="sm" onClick={copyBlueprint}>Copy Blueprint</Button>
+        <Button variant="outline" size="sm" onClick={onOpenChat}>Refine Strategy</Button>
       </div>
 
       {/* Artist Header */}
-      <div className="py-8 flex gap-6 items-start flex-wrap sm:flex-nowrap">
+      <div className="flex gap-6 items-start flex-wrap sm:flex-nowrap">
         {artist.image_url && (
           <img src={artist.image_url} alt={artist.name} className="w-20 h-20 rounded-sm object-cover flex-shrink-0 border border-border/20" />
         )}
         <div className="flex-1 min-w-0 space-y-2">
           <div className="flex items-baseline gap-3 flex-wrap">
-            <h1 className="text-[24px] font-bold tracking-tight truncate">{artist.name}</h1>
-            <span className={`font-mono text-[9px] tracking-widest uppercase border border-border/40 px-2 py-0.5 rounded-sm ${tierColors[bp.tier.name] || "bg-muted text-foreground"}`}>
+            <h1 className="text-[24px] font-bold tracking-tight">{artist.name}</h1>
+            <span className={`text-[11px] font-medium tracking-wide uppercase border border-border/40 px-2 py-0.5 rounded-sm ${tierColors[bp.tier.name] || "bg-muted text-foreground"}`}>
               {bp.tier.name}
             </span>
           </div>
           <p className="text-sm text-muted-foreground">{bp.tier.reason}</p>
           <div className="flex flex-wrap gap-2 pt-1">
             {artist.genres.slice(0, 5).map(g => (
-              <span key={g} className="font-mono text-[9px] tracking-widest border border-border/40 px-2 py-0.5 rounded-sm text-muted-foreground">{g}</span>
+              <span key={g} className="text-xs border border-border/40 px-2 py-0.5 rounded-sm text-muted-foreground">{g}</span>
             ))}
           </div>
           <div className="flex gap-4 pt-1">
-            <p className="font-mono text-[11px] text-muted-foreground">{artist.followers_total.toLocaleString()} followers</p>
-            <p className="font-mono text-[11px] text-muted-foreground">Popularity: {artist.popularity}/100</p>
+            <p className="text-xs text-muted-foreground">{artist.followers_total.toLocaleString()} followers</p>
+            <p className="text-xs text-muted-foreground">Popularity: {artist.popularity}/100</p>
           </div>
         </div>
       </div>
 
       {/* Artist Snapshot */}
-      <div className="py-8 space-y-4">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Artist Snapshot</p>
-        <p className="text-sm text-foreground leading-relaxed">{bp.artistSnapshot.positioning}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t border-border/20">
-          <div className="space-y-1">
-            <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Bottleneck</p>
-            <p className="text-sm text-foreground">{bp.artistSnapshot.bottleneck}</p>
+      <div>
+        <Label>Artist Snapshot</Label>
+        <p className="text-sm text-foreground/80 leading-relaxed mb-4">{bp.artistSnapshot.positioning}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div>
+            <p className="text-xs text-muted-foreground/50 mb-0.5">Bottleneck</p>
+            <p className="text-sm text-foreground/80">{bp.artistSnapshot.bottleneck}</p>
           </div>
-          <div className="space-y-1">
-            <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Best Lane</p>
-            <p className="text-sm text-foreground">{bp.artistSnapshot.bestLane}</p>
+          <div>
+            <p className="text-xs text-muted-foreground/50 mb-0.5">Best Lane</p>
+            <p className="text-sm text-foreground/80">{bp.artistSnapshot.bestLane}</p>
           </div>
         </div>
       </div>
@@ -121,17 +125,17 @@ export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBa
       {/* Signals (collapsible) */}
       <Collapsible open={signalsOpen} onOpenChange={setSignalsOpen}>
         <CollapsibleTrigger asChild>
-          <button className="w-full flex items-center justify-between py-5 text-left">
-            <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Signals Used</p>
-            {signalsOpen ? <ChevronUp size={14} strokeWidth={1.5} className="text-muted-foreground" /> : <ChevronDown size={14} strokeWidth={1.5} className="text-muted-foreground" />}
+          <button className="w-full flex items-center justify-between py-3 text-left">
+            <span className="text-[11px] font-medium tracking-wide uppercase text-muted-foreground/50">Signals Used</span>
+            <ChevronDown size={14} strokeWidth={1.5} className={`text-muted-foreground/40 transition-transform ${signalsOpen ? "rotate-180" : ""}`} />
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="pb-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="pb-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
             {bp.signalsUsed.map((s, i) => (
-              <div key={i} className="space-y-0.5 border-b border-border/20 pb-2">
-                <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">{s.label}</p>
-                <p className="text-[11px] text-foreground font-medium">{s.value}</p>
+              <div key={i} className="space-y-0.5">
+                <p className="text-xs text-muted-foreground/50">{s.label}</p>
+                <p className="text-sm text-foreground/80 font-medium">{s.value}</p>
               </div>
             ))}
           </div>
@@ -139,84 +143,88 @@ export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBa
       </Collapsible>
 
       {/* Revenue Scorecard */}
-      <div className="py-8 space-y-5">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Revenue Leverage Scorecard</p>
-        {bp.scorecard.map((s) => (
-          <div key={s.pillar} className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-foreground">{s.pillar}</span>
-              <span className="font-mono text-sm font-semibold">{s.score}/10</span>
+      <div>
+        <Label>Revenue Leverage Scorecard</Label>
+        <div className="space-y-4">
+          {bp.scorecard.map((s) => (
+            <div key={s.pillar} className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-foreground/80">{s.pillar}</span>
+                <span className="font-mono text-sm font-semibold">{s.score}/10</span>
+              </div>
+              <div className="h-px bg-border/20 w-full relative">
+                <div className="absolute inset-y-0 left-0 bg-foreground/20" style={{ width: `${s.score * 10}%` }} />
+              </div>
+              <p className="text-xs text-muted-foreground">{s.why}</p>
             </div>
-            <div className="h-[1px] bg-border/30 w-full relative">
-              <div className="absolute top-0 left-0 h-full bg-foreground/25" style={{ width: `${s.score * 10}%` }} />
-            </div>
-            <p className="text-[11px] text-muted-foreground">{s.why}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Top 3 Moves */}
-      <div className="py-8 space-y-6">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Top 3 Money Moves · Next 30 Days</p>
-        {bp.topMoves.map((move) => (
-          <div key={move.rank} className="space-y-4 border-b border-border/20 pb-6 last:border-0 last:pb-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <span className="font-mono text-[11px] text-muted-foreground/60 w-5 shrink-0 pt-0.5">0{move.rank}</span>
-                <h3 className="text-sm font-semibold text-foreground">{move.title}</h3>
+      <div>
+        <Label>Top 3 Money Moves · Next 30 Days</Label>
+        <div className="space-y-6">
+          {bp.topMoves.map((move) => (
+            <div key={move.rank} className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="font-mono text-xs text-muted-foreground/40 w-5 shrink-0 pt-0.5">0{move.rank}</span>
+                  <h3 className="text-sm font-medium text-foreground">{move.title}</h3>
+                </div>
+                <span className="text-xs text-muted-foreground/50 shrink-0">{move.timeCost}</span>
               </div>
-              <span className="font-mono text-[9px] tracking-widest text-muted-foreground/60 border border-border/30 px-2 py-0.5 rounded-sm shrink-0">{move.timeCost}</span>
+              <div className="pl-8 space-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground/50 mb-1">Why this fits</p>
+                  <ul className="space-y-1">
+                    {move.whyFits.map((w, i) => <li key={i} className="text-sm text-foreground/70">— {w}</li>)}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground/50 mb-1">Steps</p>
+                  <ol className="space-y-1 list-decimal list-inside">
+                    {move.steps.map((s, i) => <li key={i} className="text-sm text-foreground/70">{s}</li>)}
+                  </ol>
+                </div>
+                <p className="text-sm text-muted-foreground">{move.outcome}</p>
+                {move.measurement.length > 0 && (
+                  <p className="text-xs text-muted-foreground/40">Measure: {move.measurement.join(" · ")}</p>
+                )}
+              </div>
             </div>
-            <div className="pl-8 space-y-3">
-              <div>
-                <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase mb-1.5">Why this fits</p>
-                <ul className="space-y-1">
-                  {move.whyFits.map((w, i) => <li key={i} className="text-[11px] text-foreground">— {w}</li>)}
-                </ul>
-              </div>
-              <div>
-                <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase mb-1.5">Steps</p>
-                <ol className="space-y-1 list-decimal list-inside">
-                  {move.steps.map((s, i) => <li key={i} className="text-[11px] text-foreground">{s}</li>)}
-                </ol>
-              </div>
-              <p className="text-[11px] text-muted-foreground">{move.outcome}</p>
-              {move.measurement.length > 0 && (
-                <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60">Measure: {move.measurement.join(" · ")}</p>
-              )}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* What to Ignore */}
-      <div className="py-8 space-y-3">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">What to Ignore Right Now</p>
-        <ul className="space-y-2">
+      <div>
+        <Label>What to Ignore Right Now</Label>
+        <ul className="space-y-1.5">
           {bp.ignoreNow.map((item, i) => (
-            <li key={i} className="text-sm text-foreground flex items-start gap-2.5">
-              <span className="font-mono text-score-bad shrink-0 mt-0.5">✕</span> {item}
+            <li key={i} className="text-sm text-foreground/70 flex items-start gap-2">
+              <span className="text-score-bad shrink-0 text-xs mt-0.5">✕</span> {item}
             </li>
           ))}
         </ul>
       </div>
 
       {/* 90-Day Roadmap */}
-      <div className="py-8 space-y-4">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">90-Day Monetization Roadmap</p>
-        <div className="grid gap-4 sm:grid-cols-3">
+      <div>
+        <Label>90-Day Monetization Roadmap</Label>
+        <div className="grid gap-6 sm:grid-cols-3">
           {(["month1", "month2", "month3"] as const).map((month, idx) => (
-            <div key={month} className="space-y-3 border-t border-border/30 pt-4">
+            <div key={month} className="space-y-2">
               <div>
-                <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Month {idx + 1}</p>
-                <p className="text-[11px] font-semibold text-foreground mt-0.5">
+                <p className="text-xs text-muted-foreground/50">Month {idx + 1}</p>
+                <p className="text-sm font-medium text-foreground/80">
                   {idx === 0 ? "Cash Injection" : idx === 1 ? "Audience Density" : "Asset Building"}
                 </p>
               </div>
-              <ul className="space-y-1.5">
+              <ul className="space-y-1">
                 {bp.roadmap90[month].map((item, i) => (
-                  <li key={i} className="text-[11px] text-foreground flex items-start gap-2">
-                    <span className="text-muted-foreground shrink-0">→</span> {item}
+                  <li key={i} className="text-sm text-foreground/70 flex items-start gap-2">
+                    <span className="text-muted-foreground/40 shrink-0">→</span> {item}
                   </li>
                 ))}
               </ul>
@@ -226,15 +234,15 @@ export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBa
       </div>
 
       {/* Weekly Checklist */}
-      <div className="py-8 space-y-4">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Weekly Execution Checklist</p>
-        <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <Label>Weekly Execution Checklist</Label>
+        <div className="grid gap-6 sm:grid-cols-2">
           {(["week1", "week2"] as const).map((week, idx) => (
-            <div key={week} className="space-y-3 border-t border-border/30 pt-4">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Week {idx + 1}</p>
+            <div key={week} className="space-y-2">
+              <p className="text-xs text-muted-foreground/50">Week {idx + 1}</p>
               <ul className="space-y-1.5">
                 {bp.weeklyChecklist[week].map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-[11px] text-foreground">
+                  <li key={i} className="flex items-start gap-2 text-sm text-foreground/70">
                     <input type="checkbox" className="mt-0.5 accent-foreground" />
                     <span>{item}</span>
                   </li>
@@ -246,15 +254,15 @@ export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBa
       </div>
 
       {/* Single ROI Focus */}
-      <div className="py-8 space-y-2">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">If You Only Do One Thing</p>
+      <div>
+        <Label>If You Only Do One Thing</Label>
         <h2 className="text-[18px] font-semibold tracking-tight">{bp.singleROIFocus.focus}</h2>
-        <p className="text-sm text-muted-foreground leading-relaxed max-w-xl">{bp.singleROIFocus.why}</p>
+        <p className="text-sm text-muted-foreground leading-relaxed mt-1 max-w-xl">{bp.singleROIFocus.why}</p>
       </div>
 
       {/* Generate Focus Plan */}
-      <div className="py-8 space-y-4">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Generate a Focus Plan</p>
+      <div>
+        <Label>Generate a Focus Plan</Label>
         <div className="flex flex-wrap gap-2">
           {FOCUS_PLAN_OPTIONS.map(({ type, label }) => (
             <Button
@@ -272,26 +280,29 @@ export const ProFitReport = ({ artist, blueprint: bp, reportId, shareToken, onBa
 
       {/* Focus Plan Result */}
       {focusPlan && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="py-8 space-y-4">
-          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">{focusPlan.title}</p>
+        <div className="space-y-4">
+          <Label>{focusPlan.title}</Label>
           <p className="text-sm text-muted-foreground">{focusPlan.summary}</p>
           <div className="space-y-2">
             {(focusPlan.tasks || []).map((t: any, i: number) => (
-              <div key={i} className="flex items-start gap-3 py-2 border-b border-border/20">
-                <span className="font-mono text-[9px] tracking-widest text-muted-foreground/60 w-16 shrink-0 pt-0.5">{t.day}</span>
-                <span className="flex-1 text-[11px] text-foreground">{t.task}</span>
-                <span className={`font-mono text-[9px] tracking-widest uppercase shrink-0 ${t.priority === "high" ? "text-score-bad" : "text-muted-foreground/60"}`}>{t.priority}</span>
+              <div key={i} className="flex items-start gap-3 py-2 border-b border-border/10">
+                <span className="text-xs text-muted-foreground/40 w-16 shrink-0 pt-0.5">{t.day}</span>
+                <span className="flex-1 text-sm text-foreground/70">{t.task}</span>
+                <span className={`text-xs uppercase shrink-0 ${t.priority === "high" ? "text-score-bad" : "text-muted-foreground/40"}`}>{t.priority}</span>
               </div>
             ))}
           </div>
           {focusPlan.expectedOutcome && (
-            <p className="text-[11px] text-foreground"><span className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase mr-2">Outcome:</span>{focusPlan.expectedOutcome}</p>
+            <div>
+              <p className="text-xs text-muted-foreground/50 mb-0.5">Outcome</p>
+              <p className="text-sm text-foreground/80">{focusPlan.expectedOutcome}</p>
+            </div>
           )}
-        </motion.div>
+        </div>
       )}
 
       {/* Bottom CTA */}
-      <div className="py-8 flex justify-start">
+      <div className="flex justify-start">
         <Button onClick={onOpenChat}>Refine This Strategy</Button>
       </div>
 
