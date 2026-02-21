@@ -167,7 +167,7 @@ export function DirectorsCutScreen({
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
 
-      const fs = computeFitFontSize(ctx, activeLine.text, w, renderer.system);
+      const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, renderer.system);
 
       const palette = spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
 
@@ -178,6 +178,7 @@ export function DirectorsCutScreen({
         rng: renderer.prng,
         palette,
         system: renderer.system,
+        effectiveLetterSpacing,
       };
 
       drawFn(ctx, effectState);
