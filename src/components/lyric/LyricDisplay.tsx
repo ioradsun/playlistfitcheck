@@ -45,13 +45,8 @@ export interface LyricHook {
 
 export interface LyricMetadata {
   mood?: string;
-  bpm_estimate?: number;
+  description?: string;
   confidence?: number;
-  key?: string;
-  genre_hint?: string;
-  // v2.2: per-field confidence scores
-  bpm_confidence?: number;
-  key_confidence?: number;
   mood_confidence?: number;
 }
 
@@ -750,7 +745,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       </div>
 
       {/* Metadata strip */}
-      {metadata && (metadata.mood || metadata.bpm_estimate || metadata.confidence !== undefined || metadata.key) && (
+      {metadata && (metadata.mood || metadata.description) && (
         <div className="glass-card rounded-xl px-4 py-2.5 flex flex-wrap gap-x-4 gap-y-1 items-center">
           {metadata.mood && (
             <span className="text-[11px] text-muted-foreground">
@@ -758,33 +753,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               <span className="capitalize font-medium text-foreground">{metadata.mood}</span>
             </span>
           )}
-          {metadata.bpm_estimate && (
-            <span className="text-[11px] text-muted-foreground">
-              <span className="text-foreground/50 font-mono">BPM</span>{" "}
-              <span className="font-medium text-foreground">{metadata.bpm_estimate}</span>
-            </span>
-          )}
-          {metadata.key && (
-            <span className="text-[11px] text-muted-foreground">
-              <span className="text-foreground/50 font-mono">Key</span>{" "}
-              <span className="font-medium text-foreground">{metadata.key}</span>
-            </span>
-          )}
-          {metadata.genre_hint && (
-            <span className="text-[11px] text-muted-foreground">
-              <span className="text-foreground/50 font-mono">Genre</span>{" "}
-              <span className="font-medium text-foreground capitalize">{metadata.genre_hint}</span>
-            </span>
-          )}
-          {/* v2.2: per-field confidence scores or overall confidence */}
-          {(metadata.mood_confidence !== undefined || metadata.confidence !== undefined) && (
-            <span className="text-[11px] text-muted-foreground ml-auto flex items-center gap-1.5">
-              <span className="text-foreground/50 font-mono">AI</span>{" "}
-              {(() => {
-                const conf = metadata.mood_confidence ?? metadata.confidence ?? 0;
-                const cls = conf >= 0.8 ? "text-green-400" : conf >= 0.5 ? "text-yellow-400" : "text-red-400";
-                return <span className={`font-medium ${cls}`} title={`Mood: ${Math.round((metadata.mood_confidence ?? 0) * 100)}% · BPM: ${Math.round((metadata.bpm_confidence ?? 0) * 100)}% · Key: ${Math.round((metadata.key_confidence ?? 0) * 100)}%`}>{Math.round(conf * 100)}%</span>;
-              })()}
+          {metadata.description && (
+            <span className="text-[11px] text-muted-foreground italic">
+              {metadata.description}
             </span>
           )}
         </div>
