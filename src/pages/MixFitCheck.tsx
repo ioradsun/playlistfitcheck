@@ -239,6 +239,14 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   const usedRanks = mixes.map((m) => m.rank).filter((r): r is number => r !== null);
   const activeMixes = mixes.filter((m) => m.buffer);
 
+  // Report project to header
+  useEffect(() => {
+    if (projectId) {
+      onHeaderProject?.({ title, onBack: resetProject });
+      return () => onHeaderProject?.(null);
+    }
+  }, [projectId, title, resetProject, onHeaderProject]);
+
   // If no project created yet, show form + saved projects
   if (!projectId) {
     return (
@@ -247,14 +255,6 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       </div>
     );
   }
-
-  // Report project to header
-  useEffect(() => {
-    if (projectId) {
-      onHeaderProject?.({ title, onBack: resetProject });
-      return () => onHeaderProject?.(null);
-    }
-  }, [projectId, title, resetProject, onHeaderProject]);
 
   return (
     <div className="w-full max-w-5xl mx-auto py-6 px-4 space-y-5">
