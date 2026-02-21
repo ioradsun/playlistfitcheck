@@ -1361,16 +1361,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     "{hook.previewText}"
                   </p>
                 )}
-                <p className="text-[10px] font-mono text-muted-foreground">
+                <p className="text-[10px] font-mono text-muted-foreground" title={songDna?.hookJustification || undefined}>
                   {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
                   <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
                 </p>
-                {songDna?.hookJustification && roles.includes("curator") && (
-                  <p className="text-[10px] font-mono text-muted-foreground/60 italic border-t border-border/20 pt-2">
-                    <span className="text-muted-foreground/40 uppercase tracking-wider not-italic">AI Justification:</span>{" "}
-                    {songDna.hookJustification}
-                  </p>
-                )}
                 {features?.lyric_video && (
                   <button
                     onClick={() => setVideoComposerOpen(true)}
