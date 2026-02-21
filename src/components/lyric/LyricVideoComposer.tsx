@@ -39,8 +39,17 @@ const FONT_OPTIONS = [
   { key: "Impact", label: "Impact", css: 'Impact, "Arial Black", sans-serif' },
 ];
 
+type BgStyle = "particles" | "aurora" | "nebula" | "rain" | "ai";
+
+const BG_STYLE_OPTIONS: { key: BgStyle; label: string; sub: string }[] = [
+  { key: "particles", label: "Particles", sub: "Floating light field" },
+  { key: "aurora",    label: "Aurora",    sub: "Flowing wave gradients" },
+  { key: "nebula",    label: "Nebula",    sub: "Deep space clouds" },
+  { key: "rain",      label: "Rain",      sub: "Falling streaks" },
+  { key: "ai",        label: "AI Generated", sub: "Custom from prompt" },
+];
+
 const FPS = 30;
-const BG_LOOP_SECONDS = 6;
 
 // ── Gradient presets ────────────────────────────────────────────────────────
 const MOOD_GRADIENTS: Record<string, [string, string, string]> = {
@@ -64,20 +73,215 @@ function getMoodGradient(mood?: string): [string, string, string] {
   return MOOD_GRADIENTS.default;
 }
 
+// ── Seeded random for deterministic particles ───────────────────────────────
+function seededRandom(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return s / 2147483647;
+  };
+}
+
+// ── Procedural animated backgrounds ─────────────────────────────────────────
+
+function drawBgParticles(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
+  // Dark base
+  const grad = ctx.createLinearGradient(0, 0, 0, ch);
+  grad.addColorStop(0, gradient[0]);
+  grad.addColorStop(1, gradient[1]);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+
+  const rng = seededRandom(42);
+  const count = 80;
+  for (let i = 0; i < count; i++) {
+    const baseX = rng() * cw;
+    const baseY = rng() * ch;
+    const speed = 0.2 + rng() * 0.8;
+    const size = 1 + rng() * 3;
+    const phase = rng() * Math.PI * 2;
+
+    const x = (baseX + Math.sin(t * speed * 0.3 + phase) * 40) % cw;
+    const y = (baseY + t * speed * 15) % ch;
+    const alpha = 0.2 + 0.6 * Math.sin(t * speed + phase);
+
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${Math.max(0.05, alpha)})`;
+    ctx.fill();
+
+    // Glow
+    if (size > 2) {
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 6);
+      glow.addColorStop(0, `rgba(255,255,255,${alpha * 0.15})`);
+      glow.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(x - size * 6, y - size * 6, size * 12, size * 12);
+    }
+  }
+}
+
+function drawBgAurora(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
+  // Deep dark base
+  ctx.fillStyle = "#050510";
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Draw flowing aurora bands
+  for (let band = 0; band < 4; band++) {
+    const bandY = ch * (0.25 + band * 0.15);
+    const hue = (band * 60 + t * 15) % 360;
+    ctx.beginPath();
+    ctx.moveTo(0, bandY);
+
+    for (let x = 0; x <= cw; x += 4) {
+      const wave1 = Math.sin(x * 0.003 + t * 0.5 + band) * ch * 0.08;
+      const wave2 = Math.sin(x * 0.007 + t * 0.3 + band * 2) * ch * 0.04;
+      const wave3 = Math.sin(x * 0.001 + t * 0.8) * ch * 0.06;
+      ctx.lineTo(x, bandY + wave1 + wave2 + wave3);
+    }
+
+    ctx.lineTo(cw, ch);
+    ctx.lineTo(0, ch);
+    ctx.closePath();
+
+    const grad = ctx.createLinearGradient(0, bandY - ch * 0.1, 0, bandY + ch * 0.3);
+    grad.addColorStop(0, `hsla(${hue}, 80%, 50%, 0)`);
+    grad.addColorStop(0.3, `hsla(${hue}, 80%, 50%, 0.15)`);
+    grad.addColorStop(0.5, `hsla(${hue}, 70%, 60%, 0.08)`);
+    grad.addColorStop(1, `hsla(${hue}, 80%, 50%, 0)`);
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+}
+
+function drawBgNebula(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
+  // Very deep base
+  ctx.fillStyle = gradient[0];
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Multiple overlapping radial gradients that shift
+  const clouds = [
+    { cx: 0.3, cy: 0.4, r: 0.5, hue: 270, speed: 0.2 },
+    { cx: 0.7, cy: 0.3, r: 0.4, hue: 200, speed: 0.15 },
+    { cx: 0.5, cy: 0.7, r: 0.6, hue: 320, speed: 0.1 },
+    { cx: 0.2, cy: 0.6, r: 0.35, hue: 240, speed: 0.25 },
+    { cx: 0.8, cy: 0.5, r: 0.45, hue: 180, speed: 0.18 },
+  ];
+
+  for (const cloud of clouds) {
+    const cx = (cloud.cx + Math.sin(t * cloud.speed) * 0.08) * cw;
+    const cy = (cloud.cy + Math.cos(t * cloud.speed * 0.7) * 0.06) * ch;
+    const r = cloud.r * Math.max(cw, ch);
+    const hue = (cloud.hue + t * 5) % 360;
+
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    grad.addColorStop(0, `hsla(${hue}, 60%, 40%, 0.2)`);
+    grad.addColorStop(0.4, `hsla(${hue}, 50%, 30%, 0.1)`);
+    grad.addColorStop(1, `hsla(${hue}, 50%, 20%, 0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, cw, ch);
+  }
+
+  // Stars
+  const rng = seededRandom(99);
+  for (let i = 0; i < 60; i++) {
+    const x = rng() * cw;
+    const y = rng() * ch;
+    const size = 0.5 + rng() * 1.5;
+    const twinkle = 0.3 + 0.7 * Math.sin(t * (1 + rng() * 2) + rng() * 10);
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${twinkle * 0.6})`;
+    ctx.fill();
+  }
+}
+
+function drawBgRain(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
+  // Dark moody base
+  const grad = ctx.createLinearGradient(0, 0, 0, ch);
+  grad.addColorStop(0, "#0a0a1a");
+  grad.addColorStop(1, "#1a1a2e");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Subtle city glow at bottom
+  const glowGrad = ctx.createRadialGradient(cw * 0.5, ch, 0, cw * 0.5, ch, ch * 0.5);
+  glowGrad.addColorStop(0, `${gradient[1]}33`);
+  glowGrad.addColorStop(1, "transparent");
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Rain streaks
+  const rng = seededRandom(77);
+  ctx.strokeStyle = "rgba(180,200,255,0.15)";
+  ctx.lineWidth = 1;
+
+  for (let i = 0; i < 150; i++) {
+    const baseX = rng() * cw;
+    const speed = 400 + rng() * 600;
+    const len = 20 + rng() * 40;
+    const phase = rng() * ch;
+
+    const y = (phase + t * speed) % (ch + len) - len;
+    const x = baseX + Math.sin(t * 0.5 + i) * 3; // slight wind sway
+
+    ctx.globalAlpha = 0.1 + rng() * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - 1, y + len);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawAnimatedBackground(
+  ctx: CanvasRenderingContext2D,
+  style: BgStyle,
+  time: number,
+  cw: number,
+  ch: number,
+  gradient: [string, string, string],
+  bgImage?: HTMLImageElement | null,
+) {
+  switch (style) {
+    case "particles": return drawBgParticles(ctx, time, cw, ch, gradient);
+    case "aurora":    return drawBgAurora(ctx, time, cw, ch, gradient);
+    case "nebula":    return drawBgNebula(ctx, time, cw, ch, gradient);
+    case "rain":      return drawBgRain(ctx, time, cw, ch, gradient);
+    case "ai":
+      if (bgImage) {
+        const scale = Math.max(cw / bgImage.width, ch / bgImage.height);
+        const w = bgImage.width * scale;
+        const h = bgImage.height * scale;
+        const zoom = 1 + 0.03 * Math.sin(time * 0.5);
+        ctx.save();
+        ctx.translate(cw / 2, ch / 2);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-cw / 2, -ch / 2);
+        ctx.drawImage(bgImage, (cw - w) / 2, (ch - h) / 2, w, h);
+        ctx.restore();
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(0, 0, cw, ch);
+      } else {
+        // Fallback gradient
+        drawBgNebula(ctx, time, cw, ch, gradient);
+      }
+      return;
+  }
+}
+
 // ── Word animation helpers ──────────────────────────────────────────────────
 interface WordEntry { word: string; start: number; lineIdx: number; }
 
 function buildWordTimeline(lines: LyricLine[], regionStart: number, regionEnd: number): WordEntry[] {
   const words: WordEntry[] = [];
   lines.forEach((line, lineIdx) => {
-    // Include any line that overlaps with the region at all
     if (line.end < regionStart || line.start > regionEnd) return;
     const lineWords = line.text.split(/\s+/).filter(Boolean);
     const lineDur = line.end - line.start;
     const wordDur = lineDur / Math.max(lineWords.length, 1);
     lineWords.forEach((w, wi) => {
-      const wStart = line.start + wi * wordDur;
-      words.push({ word: w, start: wStart, lineIdx });
+      words.push({ word: w, start: line.start + wi * wordDur, lineIdx });
     });
   });
   return words;
@@ -104,41 +308,13 @@ function drawFrame(
   fontSize: number,
   titleText: string,
   artistText: string,
+  bgStyle: BgStyle,
   bgImage?: HTMLImageElement | null,
 ) {
   const relTime = time - regionStart;
-  // Looping background animation time
-  const bgTime = relTime % BG_LOOP_SECONDS;
 
   // Background
-  if (bgImage) {
-    const scale = Math.max(cw / bgImage.width, ch / bgImage.height);
-    const w = bgImage.width * scale;
-    const h = bgImage.height * scale;
-    const zoom = 1 + 0.03 * Math.sin(bgTime * 0.5);
-    ctx.save();
-    ctx.translate(cw / 2, ch / 2);
-    ctx.scale(zoom, zoom);
-    ctx.translate(-cw / 2, -ch / 2);
-    ctx.drawImage(bgImage, (cw - w) / 2, (ch - h) / 2, w, h);
-    ctx.restore();
-    ctx.fillStyle = "rgba(0,0,0,0.45)";
-    ctx.fillRect(0, 0, cw, ch);
-  } else {
-    const grad = ctx.createLinearGradient(0, 0, cw * 0.3, ch);
-    grad.addColorStop(0, gradient[0]);
-    grad.addColorStop(0.5, gradient[1]);
-    grad.addColorStop(1, gradient[2]);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, cw, ch);
-    const glowX = cw * 0.5 + Math.sin(bgTime * 0.8) * cw * 0.15;
-    const glowY = ch * 0.45 + Math.cos(bgTime * 0.6) * ch * 0.08;
-    const radGrad = ctx.createRadialGradient(glowX, glowY, 0, glowX, glowY, cw * 0.6);
-    radGrad.addColorStop(0, "rgba(255,255,255,0.06)");
-    radGrad.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = radGrad;
-    ctx.fillRect(0, 0, cw, ch);
-  }
+  drawAnimatedBackground(ctx, bgStyle, relTime, cw, ch, gradient, bgImage);
 
   // ── Artist / Title metadata (top corners) ──────────────────────────────────
   const metaSize = Math.round(cw * 0.02);
@@ -175,7 +351,6 @@ function drawFrame(
   }
   activeLineIdxs.sort((a, b) => a - b);
 
-  // Calculate how many lines fit in the safe zone (middle 60% of canvas height)
   const lineHeight = fontSize * 1.6;
   const safeZoneHeight = ch * 0.6;
   const maxVisibleLines = Math.max(1, Math.floor(safeZoneHeight / lineHeight));
@@ -186,15 +361,13 @@ function drawFrame(
 
   const totalHeight = visibleLines.length * lineHeight;
   const startY = ch * 0.5 - totalHeight / 2 + lineHeight / 2;
-
-  // Helper: wrap a line of text to fit within canvas width with padding
   const maxTextWidth = cw * 0.85;
 
   visibleLines.forEach((lineIdx, vi) => {
     const lineWords = lineGroups.get(lineIdx) || [];
     ctx.font = `bold ${fontSize}px ${fontCss}`;
 
-    // Word-wrap: split into rows that fit within maxTextWidth
+    // Word-wrap
     const wrappedRows: WordEntry[][] = [];
     let currentRow: WordEntry[] = [];
     let currentRowWidth = 0;
@@ -212,7 +385,6 @@ function drawFrame(
     });
     if (currentRow.length > 0) wrappedRows.push(currentRow);
 
-    // If this line wraps, adjust y position
     const rowHeight = fontSize * 1.3;
     const lineBlockHeight = wrappedRows.length * rowHeight;
     const lineBaseY = startY + vi * lineHeight;
@@ -220,7 +392,6 @@ function drawFrame(
 
     wrappedRows.forEach((rowWords, ri) => {
       const rowY = lineStartY + ri * rowHeight;
-      // Skip if row is outside canvas bounds
       if (rowY < fontSize || rowY > ch - fontSize) return;
 
       const rowText = rowWords.map(w => w.word).join(" ");
@@ -231,14 +402,13 @@ function drawFrame(
         const wordAge = time - w.start;
         const bounce = bounceEase(wordAge / 0.25);
         const alpha = Math.min(1, Math.max(0, wordAge * 4));
-        const scale = bounce;
 
         ctx.save();
         const wordWidth = ctx.measureText(w.word + " ").width;
         const wx = x + wordWidth / 2;
 
         ctx.translate(wx, rowY);
-        ctx.scale(scale, scale);
+        ctx.scale(bounce, bounce);
         ctx.translate(-wx, -rowY);
 
         ctx.shadowColor = "rgba(0,0,0,0.7)";
@@ -272,6 +442,7 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
   const currentTimeRef = useRef<number>(0);
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [bgStyle, setBgStyle] = useState<BgStyle>("particles");
   const [bgPrompt, setBgPrompt] = useState("");
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const [generatingBg, setGeneratingBg] = useState(false);
@@ -296,7 +467,6 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
   const wordTimeline = buildWordTimeline(lines, regionStart, regionEnd);
   const fontCss = FONT_OPTIONS.find(f => f.key === fontFamily)?.css ?? FONT_OPTIONS[0].css;
 
-  // Preview scale — fit to max 480px wide or 420px tall
   const previewScale = Math.min(480 / cw, 420 / ch);
 
   // Reset on open
@@ -320,9 +490,9 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     if (!ctx) return;
     ctx.save();
     ctx.scale(previewScale, previewScale);
-    drawFrame(ctx, time, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgImage);
+    drawFrame(ctx, time, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgStyle, bgImage);
     ctx.restore();
-  }, [regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgImage, previewScale]);
+  }, [regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgStyle, bgImage, previewScale]);
 
   // Animation loop
   useEffect(() => {
@@ -349,7 +519,7 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     }
   }, [open, step, isPlaying, drawPreview, regionStart]);
 
-  // ── Generate background ────────────────────────────────────────────────────
+  // ── Generate AI background ────────────────────────────────────────────────
   const generateBackground = useCallback(async () => {
     setGeneratingBg(true);
     try {
@@ -406,18 +576,14 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
         audioEl.crossOrigin = "anonymous";
         audioEl.currentTime = regionStart;
 
-        // Wait for audio to be ready
         await new Promise<void>((resolve) => {
           audioEl!.addEventListener("canplaythrough", () => resolve(), { once: true });
           audioEl!.load();
         });
 
         const sourceNode = audioCtx.createMediaElementSource(audioEl);
-
-        // Route to recording destination at full volume
         sourceNode.connect(audioDest);
 
-        // Route to speakers through a silent gain node (so browser decodes but user doesn't hear)
         const muteGain = audioCtx.createGain();
         muteGain.gain.value = 0;
         sourceNode.connect(muteGain);
@@ -428,8 +594,6 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     }
 
     const videoStream = canvas.captureStream(FPS);
-
-    // Combine video + audio tracks
     const combinedStream = new MediaStream();
     videoStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
     if (audioDest) {
@@ -446,7 +610,6 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     const totalFrames = Math.ceil(duration * FPS);
     let frame = 0;
 
-    // Start audio playback
     if (audioEl) {
       try { await audioEl.play(); } catch (e) { console.warn("Audio play failed:", e); }
     }
@@ -461,7 +624,7 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
         return;
       }
       const time = regionStart + (frame / FPS);
-      drawFrame(ctx, time, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgImage);
+      drawFrame(ctx, time, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgStyle, bgImage);
       frame++;
       setRecordingProgress(frame / totalFrames);
       setTimeout(renderNextFrame, 1000 / FPS);
@@ -481,11 +644,11 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     };
 
     renderNextFrame();
-  }, [duration, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgImage, audioFile]);
+  }, [duration, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgStyle, bgImage, audioFile]);
 
   // ── Wizard navigation ─────────────────────────────────────────────────────
   const canGoNext = () => {
-    if (step === 1) return true; // prompt is optional
+    if (step === 1) return true;
     if (step === 2) return duration >= 6;
     if (step === 3) return true;
     return false;
@@ -523,52 +686,74 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
           ))}
         </div>
 
-        {/* ── Step 1: Describe ───────────────────────────────────────────── */}
+        {/* ── Step 1: Background ─────────────────────────────────────────── */}
         {step === 1 && (
           <div className="space-y-4 mt-2">
             <div>
               <label className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground block mb-2">
-                Describe the visual vibe
+                Background Style
               </label>
-              <Textarea
-                value={bgPrompt}
-                onChange={(e) => setBgPrompt(e.target.value)}
-                placeholder={metadata?.mood ? `e.g. ${metadata.mood} atmosphere, abstract shapes, deep colors` : "neon rain on dark streets, cinematic haze"}
-                className="min-h-[80px] text-sm resize-none"
-                rows={3}
-              />
+              <div className="grid grid-cols-5 gap-1.5">
+                {BG_STYLE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setBgStyle(opt.key)}
+                    className={`py-2 px-1 rounded-md text-center transition-colors ${
+                      bgStyle === opt.key
+                        ? "bg-foreground text-background"
+                        : "bg-secondary text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block leading-tight">{opt.label}</span>
+                    <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5 leading-tight">{opt.sub}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="border-t border-border/30 pt-3">
-              <div className="flex items-center justify-between">
+            {/* AI prompt — only when AI style selected */}
+            {bgStyle === "ai" && (
+              <div className="space-y-3">
                 <div>
-                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
-                    {artist}
-                  </p>
-                  <p className="text-sm font-medium mt-0.5">{title}</p>
+                  <label className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground block mb-2">
+                    Describe the visual vibe
+                  </label>
+                  <Textarea
+                    value={bgPrompt}
+                    onChange={(e) => setBgPrompt(e.target.value)}
+                    placeholder={metadata?.mood ? `e.g. ${metadata.mood} atmosphere, abstract shapes, deep colors` : "neon rain on dark streets, cinematic haze"}
+                    className="min-h-[80px] text-sm resize-none"
+                    rows={3}
+                  />
                 </div>
-                <Button
-                  size="sm"
-                  onClick={generateBackground}
-                  disabled={generatingBg}
-                  className="text-[13px] font-semibold tracking-[0.15em] uppercase"
-                >
-                  {generatingBg ? (
-                    <><Loader2 size={12} className="animate-spin mr-2" />Generating</>
-                  ) : (
-                    bgImage ? "Regenerate" : "Generate Background"
-                  )}
-                </Button>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">{artist}</p>
+                    <p className="text-sm font-medium mt-0.5">{title}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={generateBackground}
+                    disabled={generatingBg}
+                    className="text-[13px] font-semibold tracking-[0.15em] uppercase"
+                  >
+                    {generatingBg ? (
+                      <><Loader2 size={12} className="animate-spin mr-2" />Generating</>
+                    ) : (
+                      bgImage ? "Regenerate" : "Generate Background"
+                    )}
+                  </Button>
+                </div>
               </div>
-              {bgImage && (
-                <button
-                  onClick={() => setBgImage(null)}
-                  className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/60 hover:text-muted-foreground mt-2 transition-colors"
-                >
-                  Use gradient instead
-                </button>
-              )}
-            </div>
+            )}
+
+            {/* Song metadata — shown for non-AI styles */}
+            {bgStyle !== "ai" && (
+              <div className="border-t border-border/30 pt-3">
+                <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">{artist}</p>
+                <p className="text-sm font-medium mt-0.5">{title}</p>
+              </div>
+            )}
 
             <div className="flex justify-end pt-2">
               <Button
@@ -721,7 +906,7 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
             </div>
 
             <div className="text-center text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
-              {duration.toFixed(1)}s • {aspectRatio} • {fontFamily} {fontSize}px
+              {duration.toFixed(1)}s • {aspectRatio} • {fontFamily} {fontSize}px • {bgStyle}
             </div>
 
             <div className="flex justify-between pt-2">
@@ -744,7 +929,7 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
               <p className="text-sm font-medium">{title}</p>
               <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">{artist}</p>
               <p className="text-[10px] font-mono text-muted-foreground mt-2">
-                {duration.toFixed(1)}s • {aspectRatio} • {cw}×{ch} • {fontFamily}
+                {duration.toFixed(1)}s • {aspectRatio} • {cw}×{ch} • {fontFamily} • {bgStyle}
               </p>
             </div>
 
