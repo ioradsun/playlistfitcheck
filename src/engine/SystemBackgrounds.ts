@@ -119,8 +119,9 @@ function drawFractureBackground(ctx: CanvasRenderingContext2D, s: BackgroundStat
   // Shockwave rings
   st.shockwaves = st.shockwaves.filter(sw => {
     const age = time - sw.birth;
-    if (age > 0.5) return false;
-    const r = age * Math.max(w, h) * 1.5;
+    if (age > 0.5 || age < 0) return false;
+    const r = Math.abs(age * Math.max(w, h) * 1.5);
+    if (r <= 0) return true;
     const alpha = Math.max(0, 1 - age * 2) * 0.3;
     ctx.strokeStyle = "#ffffff";
     ctx.globalAlpha = alpha;
