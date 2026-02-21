@@ -124,21 +124,24 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       );
 
       // Once request is sent, simulate backend stages with timers
-      // The backend runs transcription + analysis in parallel
-      setProgressStage("transcribing");
-      const transcribeTimer = setTimeout(() => setProgressStage("analyzing"), 8000);
-      const finalizeTimer = setTimeout(() => setProgressStage("finalizing"), 16000);
+      // The backend runs transcription + analysis in parallel — we step through granular stages
+      setProgressStage("receiving");
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      timers.push(setTimeout(() => setProgressStage("transcribing"), 3000));
+      timers.push(setTimeout(() => setProgressStage("separating"), 7000));
+      timers.push(setTimeout(() => setProgressStage("analyzing"), 11000));
+      timers.push(setTimeout(() => setProgressStage("detecting_hook"), 15000));
+      timers.push(setTimeout(() => setProgressStage("aligning"), 19000));
+      timers.push(setTimeout(() => setProgressStage("finalizing"), 23000));
 
       if (!response.ok) {
-        clearTimeout(transcribeTimer);
-        clearTimeout(finalizeTimer);
+        timers.forEach(clearTimeout);
         const err = await response.json().catch(() => ({ error: "Transcription failed" }));
         throw new Error(err.error || `Error ${response.status}`);
       }
 
       const data = await response.json();
-      clearTimeout(transcribeTimer);
-      clearTimeout(finalizeTimer);
+      timers.forEach(clearTimeout);
 
       // Brief finalizing flash
       setProgressStage("finalizing");

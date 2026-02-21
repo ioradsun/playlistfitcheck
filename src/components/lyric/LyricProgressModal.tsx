@@ -5,8 +5,12 @@ export type ProgressStage =
   | "compressing"
   | "encoding"
   | "uploading"
+  | "receiving"
   | "transcribing"
+  | "separating"
   | "analyzing"
+  | "detecting_hook"
+  | "aligning"
   | "finalizing";
 
 interface StageConfig {
@@ -27,17 +31,33 @@ const STAGES: Record<ProgressStage, StageConfig> = {
     label: "Uploading",
     sublabel: "Sending to engine",
   },
+  receiving: {
+    label: "Processing",
+    sublabel: "Engine received your track",
+  },
   transcribing: {
     label: "Transcribing",
     sublabel: "Listening for every word",
   },
+  separating: {
+    label: "Separating",
+    sublabel: "Isolating vocals from mix",
+  },
   analyzing: {
     label: "Analyzing",
-    sublabel: "Detecting hook, key & tempo",
+    sublabel: "Detecting key, tempo & mood",
+  },
+  detecting_hook: {
+    label: "Finding the Hook",
+    sublabel: "Scoring catchiest moments",
+  },
+  aligning: {
+    label: "Aligning",
+    sublabel: "Matching words to timestamps",
   },
   finalizing: {
     label: "Finishing",
-    sublabel: "Aligning timestamps",
+    sublabel: "Final quality check",
   },
 };
 
@@ -45,8 +65,12 @@ const STAGE_ORDER: ProgressStage[] = [
   "compressing",
   "encoding",
   "uploading",
+  "receiving",
   "transcribing",
+  "separating",
   "analyzing",
+  "detecting_hook",
+  "aligning",
   "finalizing",
 ];
 
