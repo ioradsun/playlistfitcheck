@@ -206,7 +206,7 @@ export function PublishHookButton({
           Publishing…
         </>
       ) : (
-        secondHook ? "Publish Hook Battle" : "Publish Hook Page"
+        secondHook ? "Start Battle" : "Publish Hook Page"
       )}
     </button>
   );
