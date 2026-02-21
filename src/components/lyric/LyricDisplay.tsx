@@ -1548,7 +1548,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
               // Unlock audio synchronously within user gesture context
               audio.currentTime = songDna.hook!.start;
-              audio.play().catch(() => {});
+              const playPromise = audio.play();
+              if (playPromise) {
+                playPromise.then(() => console.log("[HookDance] audio playing OK, time:", audio.currentTime.toFixed(2)))
+                  .catch((e) => console.warn("[HookDance] audio play FAILED:", e));
+              }
 
               const beats: BeatTick[] = beatGrid.beats.map((t, i) => ({
                 time: t,
