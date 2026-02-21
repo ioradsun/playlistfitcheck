@@ -165,11 +165,11 @@ export function HookDanceCanvas({
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
 
-      // Dynamic font sizing: scale down for long lines to stay within 85% safe zone
+      // Dynamic font sizing: scale to canvas width, no hard pixel cap
       const safeW = w * 0.85;
       const charCount = Math.max(1, activeLine.text.length);
-      const dynamicFs = Math.min(w * 0.06, 42, (safeW / charCount) * 1.6);
-      const fs = Math.max(Math.round(dynamicFs), 12);
+      const dynamicFs = Math.min(w * 0.07, (safeW / charCount) * 1.8);
+      const fs = Math.max(Math.round(dynamicFs), 14);
 
       const effectState: EffectState = {
         text: activeLine.text,

@@ -91,19 +91,33 @@ export class HookDanceEngine {
     this.prevTime = this.hookStart;
     this.syntheticStart = performance.now();
 
-    // Seek audio
-    this.audioRef.currentTime = this.hookStart;
-    this.audioRef.play()
-      .then(() => {
-        this.audioPlaying = true;
-        // Sync synthetic clock to audio position to prevent drift
-        this.syntheticStart = performance.now() - (this.audioRef.currentTime - this.hookStart) * 1000;
-        console.log("[HookDanceEngine] audio playing, synced at", this.audioRef.currentTime);
-      })
-      .catch((e) => {
-        this.audioPlaying = false;
-        console.warn("[HookDanceEngine] audio play failed, using synthetic clock:", e);
-      });
+    // Wait for audio to be seekable before seeking
+    const trySeekAndPlay = () => {
+      try {
+        this.audioRef.currentTime = this.hookStart;
+      } catch (e) {
+        console.warn("[HookDanceEngine] seek failed, retrying after load:", e);
+      }
+      this.audioRef.play()
+        .then(() => {
+          this.audioPlaying = true;
+          // Sync synthetic clock to audio position to prevent drift
+          this.syntheticStart = performance.now() - (this.audioRef.currentTime - this.hookStart) * 1000;
+          console.log("[HookDanceEngine] audio playing at", this.audioRef.currentTime.toFixed(2));
+        })
+        .catch((e) => {
+          this.audioPlaying = false;
+          console.warn("[HookDanceEngine] audio play failed, using synthetic clock:", e);
+        });
+    };
+
+    // If audio metadata is loaded, seek immediately; otherwise wait
+    if (this.audioRef.readyState >= 1) {
+      trySeekAndPlay();
+    } else {
+      this.audioRef.addEventListener("loadedmetadata", () => trySeekAndPlay(), { once: true });
+      // Start synthetic clock ticking immediately regardless
+    }
 
     this.tick();
   }
@@ -125,19 +139,25 @@ export class HookDanceEngine {
 
     const hookDuration = this.hookEnd - this.hookStart;
 
-    // Use audio time if playing, otherwise synthetic clock
+    // Use audio time if playing AND within hook range, otherwise synthetic clock
     let currentTime: number;
     const audioUsable = this.audioPlaying && !this.audioRef.paused && !isNaN(this.audioRef.currentTime);
-    if (audioUsable) {
+    if (audioUsable && this.audioRef.currentTime >= this.hookStart && this.audioRef.currentTime <= this.hookEnd) {
       currentTime = this.audioRef.currentTime;
+      // Keep synthetic clock synced so transitions are smooth
+      this.syntheticStart = performance.now() - (currentTime - this.hookStart) * 1000;
     } else {
       const elapsed = (performance.now() - this.syntheticStart) / 1000;
       currentTime = this.hookStart + (elapsed % hookDuration);
+      // If audio is playing but outside hook range, re-seek it
+      if (audioUsable && (this.audioRef.currentTime < this.hookStart || this.audioRef.currentTime > this.hookEnd)) {
+        try { this.audioRef.currentTime = this.hookStart; } catch {}
+      }
     }
 
     // Loop back to hookStart when we reach hookEnd
-    if (currentTime >= this.hookEnd || currentTime < this.hookStart) {
-      this.audioRef.currentTime = this.hookStart;
+    if (currentTime >= this.hookEnd) {
+      try { this.audioRef.currentTime = this.hookStart; } catch {}
       this.audioRef.play()
         .then(() => { this.audioPlaying = true; })
         .catch(() => { this.audioPlaying = false; });
