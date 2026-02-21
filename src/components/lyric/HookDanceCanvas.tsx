@@ -85,7 +85,7 @@ export function HookDanceCanvas({
   const activePalette = overrides.palette || fpPalette || spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
   const activeSystem = overrides.system || spec.system;
 
-  // Resize canvas to fill container
+  // Resize canvas to fill container — use ResizeObserver for crisp rendering at any size
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -94,16 +94,18 @@ export function HookDanceCanvas({
     const resize = () => {
       const rect = container.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      const ctx = canvas.getContext("2d");
-      if (ctx) ctx.scale(dpr, dpr);
+      const newW = Math.round(rect.width * dpr);
+      const newH = Math.round(rect.height * dpr);
+      if (canvas.width !== newW || canvas.height !== newH) {
+        canvas.width = newW;
+        canvas.height = newH;
+      }
     };
     resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+    return () => ro.disconnect();
   }, []);
 
   // Draw every time physicsState updates

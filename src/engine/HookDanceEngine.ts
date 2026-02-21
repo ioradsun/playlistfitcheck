@@ -96,7 +96,9 @@ export class HookDanceEngine {
     this.audioRef.play()
       .then(() => {
         this.audioPlaying = true;
-        console.log("[HookDanceEngine] audio playing");
+        // Sync synthetic clock to audio position to prevent drift
+        this.syntheticStart = performance.now() - (this.audioRef.currentTime - this.hookStart) * 1000;
+        console.log("[HookDanceEngine] audio playing, synced at", this.audioRef.currentTime);
       })
       .catch((e) => {
         this.audioPlaying = false;
