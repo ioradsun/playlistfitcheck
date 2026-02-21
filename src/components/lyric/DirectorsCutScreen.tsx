@@ -114,19 +114,32 @@ export function DirectorsCutScreen({
     audio.volume = 0; // silent preview
     audioRef.current = audio;
 
+    // Try to play audio for timing, but start the loop regardless
+    let audioReady = false;
     audio.addEventListener("canplay", () => {
+      audioReady = true;
       audio.currentTime = hookStart;
       audio.play().catch(() => {});
-      startLoop();
     });
+    audio.load();
+
+    // Fallback: use a synthetic clock if audio never loads
+    const syntheticStartTime = performance.now();
+    const hookDuration = hookEnd - hookStart;
 
     function startLoop() {
       const tick = () => {
-        if (!audioRef.current) return;
-        const ct = audioRef.current.currentTime;
+        let ct: number;
+        if (audioReady && audioRef.current && !isNaN(audioRef.current.currentTime)) {
+          ct = audioRef.current.currentTime;
+        } else {
+          // Synthetic clock loops over hook region
+          const elapsed = (performance.now() - syntheticStartTime) / 1000;
+          ct = hookStart + (elapsed % hookDuration);
+        }
 
-        // Loop
-        if (ct >= hookEnd || ct < hookStart) {
+        // Loop audio if needed
+        if (audioReady && audioRef.current && (ct >= hookEnd || ct < hookStart)) {
           audioRef.current.currentTime = hookStart;
           prevTimeRef.current = hookStart;
           renderersRef.current.forEach(r => {
@@ -137,11 +150,19 @@ export function DirectorsCutScreen({
           return;
         }
 
+        // Synthetic loop reset
+        if (!audioReady && ct >= hookEnd) {
+          prevTimeRef.current = hookStart;
+          renderersRef.current.forEach(r => {
+            r.integrator.reset();
+            r.beatIndex = 0;
+          });
+        }
+
         const prev = prevTimeRef.current;
 
         // Update each renderer
         for (const renderer of renderersRef.current) {
-          // Process beats
           while (
             renderer.beatIndex < hookBeats.length &&
             hookBeats[renderer.beatIndex].time <= ct
@@ -154,12 +175,10 @@ export function DirectorsCutScreen({
           }
           const state = renderer.integrator.tick();
 
-          // Draw to canvas
           const sysIdx = SYSTEMS.indexOf(renderer.system);
           const canvas = canvasRefs.current[sysIdx];
           if (!canvas) continue;
 
-          // On mobile low-end, only draw the visible one
           if (isLowEnd && sysIdx !== mobileIndex) continue;
 
           drawSystemCanvas(canvas, state, renderer, ct);
@@ -171,6 +190,9 @@ export function DirectorsCutScreen({
 
       rafRef.current = requestAnimationFrame(tick);
     }
+
+    // Start loop immediately — don't wait for audio
+    startLoop();
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
