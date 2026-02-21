@@ -66,6 +66,14 @@ interface ConstellationNode {
   vy: number;
   alpha: number;
   age: number;
+  // Fly-in animation fields
+  phase: "flying" | "settling" | "drifting";
+  targetX: number;
+  targetY: number;
+  flySpeed: number;
+  settleTimer: number;
+  maxAlpha: number;
+  scale: number;
 }
 
 interface RiverRow {
@@ -239,17 +247,52 @@ function useHookCanvas(
       hookStart: hookData.hook_start, hookEnd: hookData.hook_end,
     });
 
-    // Constellation
+    // Constellation with fly-in animation
     const nodes = constellationRef.current;
-    ctx.font = "11px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (const node of nodes) {
-      node.x += node.vx; node.y += node.vy;
-      if (node.x < -0.1) node.x = 1.1; if (node.x > 1.1) node.x = -0.1;
-      if (node.y < -0.1) node.y = 1.1; if (node.y > 1.1) node.y = -0.1;
+      if (node.phase === "flying") {
+        // Lerp toward center
+        const dx = node.targetX - node.x;
+        const dy = node.targetY - node.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 0.02) {
+          node.x = node.targetX; node.y = node.targetY;
+          node.phase = "settling"; node.settleTimer = 0;
+        } else {
+          node.x += dx * node.flySpeed * 3;
+          node.y += dy * node.flySpeed * 3;
+        }
+        node.scale = Math.max(1, node.scale - 0.01);
+      } else if (node.phase === "settling") {
+        // Hold bright at center, then slowly assign a drift target and fade
+        node.settleTimer += 1;
+        if (node.settleTimer > 90) { // ~1.5s at 60fps
+          const rng2 = mulberry32(hashSeed(node.id + "_settle"));
+          const angle = rng2() * Math.PI * 2;
+          const settledDist = 0.1 + rng2() * 0.3;
+          node.targetX = 0.5 + Math.cos(angle) * settledDist;
+          node.targetY = 0.5 + Math.sin(angle) * settledDist;
+          node.phase = "drifting";
+        }
+        node.alpha = Math.max(node.maxAlpha, node.alpha - 0.003);
+        node.scale = Math.max(1, node.scale - 0.005);
+      } else {
+        // Drifting — slow permanent drift
+        node.x += node.vx; node.y += node.vy;
+        // Lerp toward settled target
+        node.x += (node.targetX - node.x) * 0.0005;
+        node.y += (node.targetY - node.y) * 0.0005;
+        if (node.x < -0.1) node.x = 1.1; if (node.x > 1.1) node.x = -0.1;
+        if (node.y < -0.1) node.y = 1.1; if (node.y > 1.1) node.y = -0.1;
+        node.alpha = Math.max(node.maxAlpha, node.alpha - 0.001);
+        node.scale = 1;
+      }
       ctx.globalAlpha = node.alpha;
       ctx.fillStyle = "#ffffff";
+      const fontSize = Math.round(11 * node.scale);
+      ctx.font = `${fontSize}px system-ui, sans-serif`;
       const maxChars = 40;
       ctx.fillText(node.text.length > maxChars ? node.text.slice(0, maxChars) + "…" : node.text, node.x * w, node.y * h);
     }
@@ -438,11 +481,15 @@ export default function ShareableHook() {
       const normalizedAge = Math.min(ageSec / maxAge, 1);
       const dist = 0.1 + normalizedAge * 0.4;
       const angle = rng() * Math.PI * 2;
+      const finalX = 0.5 + Math.cos(angle) * dist;
+      const finalY = 0.5 + Math.sin(angle) * dist;
       return {
         id: c.id, text: c.text,
-        x: 0.5 + Math.cos(angle) * dist, y: 0.5 + Math.sin(angle) * dist,
+        x: finalX, y: finalY,
         vx: (rng() - 0.5) * 0.00002, vy: (rng() - 0.5) * 0.00002,
         alpha: 0.06 + (1 - normalizedAge) * 0.06, age: ageSec,
+        phase: "drifting" as const, targetX: finalX, targetY: finalY,
+        flySpeed: 0, settleTimer: 0, maxAlpha: 0.06 + (1 - normalizedAge) * 0.06, scale: 1,
       };
     });
     constellationRef.current = nodes;
@@ -567,11 +614,27 @@ export default function ShareableHook() {
       setHasSubmitted(true);
       setInputText("");
 
+      // Spawn from a random edge, fly bright to center, then drift into constellation
+      const edge = Math.random();
+      let spawnX: number, spawnY: number;
+      if (edge < 0.25) { spawnX = -0.15; spawnY = Math.random(); }
+      else if (edge < 0.5) { spawnX = 1.15; spawnY = Math.random(); }
+      else if (edge < 0.75) { spawnX = Math.random(); spawnY = -0.15; }
+      else { spawnX = Math.random(); spawnY = 1.15; }
+
+      const rng = mulberry32(hashSeed(newComment.id));
+      const settledAngle = rng() * Math.PI * 2;
+      const settledDist = 0.1 + rng() * 0.15;
       constellationRef.current.push({
         id: newComment.id, text: newComment.text,
-        x: 0.5, y: 0.5,
-        vx: (Math.random() - 0.5) * 0.0001, vy: (Math.random() - 0.5) * 0.0001,
+        x: spawnX, y: spawnY,
+        vx: (rng() - 0.5) * 0.00002, vy: (rng() - 0.5) * 0.00002,
         alpha: 1, age: 0,
+        phase: "flying", targetX: 0.5, targetY: 0.5,
+        flySpeed: 0.008 + Math.random() * 0.006,
+        settleTimer: 0,
+        maxAlpha: 0.12,
+        scale: 1.8,
       });
     }
   }, [inputText, hookData, hasSubmitted]);
