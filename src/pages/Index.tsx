@@ -572,7 +572,7 @@ const Index = () => {
               <button onClick={headerProject.onBack} className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
                 <ArrowLeft size={16} />
               </button>
-              <span className="text-xs font-semibold truncate max-w-[200px]">{headerProject.title}</span>
+              <span className="text-xs font-semibold">{headerProject.title}</span>
               {headerProject.rightContent && <div className="ml-auto flex items-center gap-2">{headerProject.rightContent}</div>}
             </>
           ) : (
