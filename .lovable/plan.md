@@ -1,175 +1,76 @@
 
 
-# Hook Battle: Editorial A/B Poll on the Share Page
+# Hook Battle: Interaction Redesign
 
-## Vision
+The current bottom panel has too many layers competing for attention: vote bars with percentages, a question prompt, a comment input, a vote count, a share button, and a tagline -- all stacked vertically with inconsistent spacing and text that clips on mobile.
 
-Transform the share page from a single-hook showcase into a split-screen "Hook Battle" where audiences vote on which of two AI-identified hooks hits harder. Think editorial music magazine meets Instagram Stories poll -- minimal, typographic, and visceral. The winning hook accumulates fire and floating comments in real-time while the losing side fades quiet.
+## The Problem
 
-## Architecture Overview
+1. Vote labels ("EVEREST PEAK", "STEP BY STEP") clip at small widths
+2. Too many visual layers: bars, percentages, question, input, count, button, tagline
+3. The hierarchy is unclear -- what should the user do first?
+4. On mobile, this stack pushes critical actions below the fold
 
-```text
-+--------------------------------------------------+
-|  AI (lyric-analyze)                               |
-|  Returns top 2 hooks ranked by confidence         |
-+--------------------------------------------------+
-         |
-         v
-+--------------------------------------------------+
-|  LyricDisplay (client)                            |
-|  Parses both hooks, publishes both to             |
-|  shareable_hooks with a shared battle_id          |
-+--------------------------------------------------+
-         |
-         v
-+--------------------------------------------------+
-|  ShareableHook (/:artist/:song/:hook)             |
-|  Detects battle_id, loads both hooks,             |
-|  renders split-screen poll with voting            |
-+--------------------------------------------------+
-```
+## The Principle
 
-## Changes Required
+One action at a time. The interface should breathe. Every element earns its place.
 
-### 1. Backend: AI Returns Two Hooks
+## The New Flow
 
-**File: `supabase/functions/lyric-analyze/index.ts`**
+Three states, each owning the full bottom panel:
 
-- Update the system prompt to request the top 2 hooks instead of 1
-- Change the JSON schema from `hottest_hook` (single object) to `hottest_hooks` (array of 2)
-- Each entry: `{ start_sec, duration_sec, confidence, justification, label }`
-- The `label` is a short editorial name the AI gives each hook (e.g. "The Drop", "The Confession")
-- Keep backward compatibility: if only 1 hook returned, still works
+**State 1: Pre-Vote** -- Just the canvases. A single whisper of instruction at the bottom center: "TAP TO VOTE". Nothing else. The art speaks.
 
-### 2. Database: Battle Support
+**State 2: Post-Vote, Pre-Comment** -- The vote result appears as a single centered line: "HOOK A 67%" with the winning bar below. Below that, a full-width input with the question as placeholder ("what did [hook] do to you?"). Typing and hitting Enter submits. No separate button -- Enter is the action.
 
-**New columns on `shareable_hooks`:**
-- `battle_id` (uuid, nullable) -- groups two hooks into a battle pair
-- `battle_position` (smallint, nullable) -- 1 or 2 within the battle
-- `hook_label` (text, nullable) -- AI-generated editorial label for the hook
-- `vote_count` (integer, default 0) -- total votes for this hook
+**State 3: Post-Comment (or dismissed)** -- The input collapses. "SEND THIS" becomes the sole CTA. Vote count appears as a quiet footnote. The tagline stays.
 
-**New table: `hook_votes`**
-- `id` (uuid, PK)
-- `battle_id` (uuid, not null)
-- `hook_id` (uuid, not null) -- which hook was voted for
-- `user_id` (uuid, nullable)
-- `session_id` (text, nullable)
-- `created_at` (timestamptz)
-- Unique constraint on `(battle_id, session_id)` -- one vote per visitor per battle
-- RLS: anyone can view, anyone can insert (anon or auth), no update/delete
+## Key Design Decisions
 
-**Trigger:** On insert into `hook_votes`, increment `shareable_hooks.vote_count` for the voted hook.
+- Vote percentages: Show only the voted hook's percentage as a single large number, not both side-by-side. The rival percentage is implied (100 minus).
+- Hook labels: Truncate with ellipsis at 12 characters on mobile to prevent clipping.
+- Comment input: Full-width, no border-radius change, just a clean underline-style input (border-bottom only) to feel lighter.
+- "SEND THIS" button: Only appears after comment or if user scrolls past the input. Rounded-full pill shape, not full-width rectangle.
+- Remove the "vs" divider entirely from the bottom -- the canvases already show the split.
+- Total votes: Shown inline with SEND THIS as "3 votes -- SEND THIS" to reduce vertical layers.
 
-### 3. Client: LyricDisplay Parses Two Hooks
+## Technical Changes
 
-**File: `src/components/lyric/LyricDisplay.tsx`**
+### `src/pages/ShareableHook.tsx`
 
-- Update the Song DNA parser to handle `hottest_hooks` (array) in addition to `hottest_hook`
-- Store both hooks in state (primary + challenger)
-- The "Hottest Hook" card shows the top-ranked hook (unchanged UX)
-- PublishHookButton publishes both hooks with a shared `battle_id`
+**Battle bottom panel (lines 872-972):**
 
-### 4. Client: PublishHookButton Publishes a Battle
-
-**File: `src/components/lyric/PublishHookButton.tsx`**
-
-- Accept an optional second hook prop
-- When two hooks exist, generate a `battle_id` (crypto.randomUUID)
-- Upsert both hooks to `shareable_hooks` with `battle_id`, `battle_position` (1 or 2), and `hook_label`
-- The published URL remains the same (primary hook's slug) -- the share page detects the battle
-
-### 5. Share Page: Split-Screen Battle UI
-
-**File: `src/pages/ShareableHook.tsx`**
-
-This is the centrepiece -- a Jony Ive-inspired editorial poll.
-
-**Data loading:**
-- After loading the primary hook, check if `battle_id` exists
-- If yes, load the second hook from `shareable_hooks` where `battle_id` matches and `id` differs
-- Load vote counts for both hooks
-- Check if current session has already voted
-
-**Layout (mobile-first, full viewport):**
+Replace the entire bottom panel with a state-machine approach:
 
 ```text
-+---------------------------------------+
-|  [artist] x [song]                    |  <- editorial header, 10px mono
-|                                       |
-|  +---------------+  +---------------+ |
-|  |               |  |               | |
-|  |   HOOK A      |  |   HOOK B      | |  <- two canvases, each running
-|  |   (canvas)    |  |   (canvas)    | |     its own HookDanceEngine
-|  |               |  |               | |
-|  +---------------+  +---------------+ |
-|                                       |
-|  "THE DROP"          "THE CONFESSION" |  <- AI-generated labels
-|   62%  ████░░         38%  ███░░░░░░  |  <- live vote bars
-|                                       |
-|  Tap the side that hits harder.       |  <- CTA
-|                                       |
-|  [Fit by toolsFM]                     |  <- badge, bottom-right
-+---------------------------------------+
+State 1 (pre-vote):
+  <p "TAP TO VOTE" centered, 10px mono, white/20>
+
+State 2 (voted, not commented):
+  <div centered>
+    <p hookLabel truncated, 11px mono white/40>
+    <p percentage, text-4xl bold tabular-nums white/90>
+    <div single vote bar, 2px, full-width>
+  </div>
+  <input underline-style, placeholder="what did [hook] do to you?">
+
+State 3 (commented or dismissed):
+  <p "your words are on the video" white/30>
+  <button pill "SEND THIS">
+  <p vote count + tagline>
 ```
 
-**On mobile (< 640px):** Stack vertically -- top canvas / bottom canvas, each 45vh.
+- Remove the dual side-by-side vote bar layout
+- Remove the standalone "vs" text element
+- Remove the separate question prompt (move into input placeholder)
+- Consolidate vote count and tagline into one line
+- Add `truncate max-w-[120px]` to hook labels in the canvas overlays to prevent clipping
+- Use `text-4xl` for the winning percentage (single focal number)
+- Input uses `border-b border-white/15` instead of full border for lighter feel
 
-**Interaction:**
-- Tapping either canvas side casts a vote (or switches vote if already cast)
-- On vote: the chosen side gets a burst of fire emojis and floating comment particles gravitating toward it
-- The losing side dims to 40% opacity
-- Vote percentages animate in with a typographic counter
-- Comments submitted via the input float exclusively around the winning hook's canvas
+### Mobile-specific refinements
 
-**After voting:**
-- The voted hook's canvas expands slightly (scale 1.02)
-- A subtle pulse of the palette's accent color radiates from the chosen side
-- The input prompt changes from "Tap the side that hits harder" to "What did [label] do to you?"
+- Bottom panel gets `pb-safe` (safe area inset) for notched phones
+- Max vertical height of bottom panel: `max-h-[35vh]` to ensure canvases always dominate
+- Touch targets: minimum 44px height on all interactive elements
 
-**Single-hook fallback:**
-- If no `battle_id`, render the existing single-hook experience (no regression)
-
-### 6. Shared Audio Strategy
-
-Both canvases share a single `HTMLAudioElement`. Since the hooks are from the same track:
-- Audio plays continuously
-- Each canvas's HookDanceEngine has its own hook region
-- They alternate: Hook A plays its 8-12s, then Hook B plays its 8-12s, ping-pong style
-- A thin progress indicator at the bottom shows which hook is currently "live"
-- The inactive canvas shows a frozen last-frame with reduced opacity
-
-### 7. Route Structure
-
-No route changes needed. The existing `/:artistSlug/:songSlug/:hookSlug` route loads the primary hook. The battle detection happens at data-load time by checking `battle_id`.
-
-## Technical Details
-
-### Font & Typography
-- Hook labels: 11px mono, uppercase, tracking-[0.3em], white/40
-- Vote percentages: 32px Geist, tabular-nums, white/90
-- Vote bars: 2px height, palette accent color, CSS transition 600ms
-- "Tap the side" CTA: 10px mono, white/20, centered below canvases
-
-### Canvas Rendering (per side)
-- Each side gets its own `<canvas>` element with independent DPR scaling
-- Each runs its own `HookDanceEngine` instance with the same audio element
-- The `computeFitFontSize` safe ratio stays at 0.52 (already battle-ready since canvases are narrower)
-- Background, effects, and progress bar render identically to the current single-hook experience
-
-### Performance
-- Two canvases = two rAF loops. Use a single shared rAF coordinator that ticks both engines
-- Only the "active" engine (whose hook region audio is playing) renders at 60fps
-- The inactive engine renders at 15fps (every 4th frame) to save GPU
-
-### Vote Persistence
-- Anonymous visitors get a session_id (existing pattern from `hook_comments`)
-- Authenticated users use their user_id
-- One vote per battle per visitor (unique constraint)
-- Votes are mutable (can switch sides) via upsert
-
-### Fire + Comment Particles
-- On vote, spawn 8-12 fire emoji particles from the tap point
-- Particles use simple gravity physics (vy += 0.15 per frame, fade over 1s)
-- Existing constellation comments drift toward the winning hook's side
-- New comments submitted after voting appear only on the voted side's canvas
