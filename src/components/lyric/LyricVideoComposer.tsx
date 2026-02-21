@@ -416,7 +416,13 @@ function drawFrame(
   // Background
   drawAnimatedBackground(ctx, bgStyle, relTime, cw, ch, gradient, bgImage);
 
-  // ── Artist / Title metadata (top corners) ──────────────────────────────────
+  // ── Safe Zone (90% inset to avoid TikTok/Reels UI overlays) ───────────────
+  const safeInsetX = cw * 0.05;
+  const safeInsetY = ch * 0.05;
+  const safeW = cw - safeInsetX * 2;
+  const safeH = ch - safeInsetY * 2;
+
+  // ── Artist / Title metadata (inside safe zone) ─────────────────────────────
   const metaSize = Math.round(cw * 0.02);
   ctx.font = `500 ${metaSize}px "Geist Mono", monospace`;
   ctx.textBaseline = "top";
@@ -424,12 +430,11 @@ function drawFrame(
   ctx.shadowColor = "rgba(0,0,0,0.5)";
   ctx.shadowBlur = 4;
 
-  const pad = Math.round(cw * 0.04);
   ctx.textAlign = "left";
   ctx.letterSpacing = "0.15em";
-  ctx.fillText(artistText.toUpperCase(), pad, pad);
+  ctx.fillText(artistText.toUpperCase(), safeInsetX, safeInsetY);
   ctx.textAlign = "right";
-  ctx.fillText(titleText.toUpperCase(), cw - pad, pad);
+  ctx.fillText(titleText.toUpperCase(), cw - safeInsetX, safeInsetY);
 
   ctx.shadowBlur = 0;
   ctx.letterSpacing = "0em";
@@ -451,13 +456,23 @@ function drawFrame(
   }
   activeLineIdxs.sort((a, b) => a - b);
 
-  const rowHeight = fontSize * 1.4;
-  const maxTextWidth = cw * 0.85;
-  const safeZoneHeight = ch * 0.6;
+  // ── Dynamic font scaling: min(baseSize, safeWidth / maxCharCount * K) ─────
+  let maxCharCount = 1;
+  for (const lineIdx of activeLineIdxs) {
+    const lineWords = lineGroups.get(lineIdx) || [];
+    const charCount = lineWords.reduce((s, w) => s + w.word.length, 0) + lineWords.length - 1;
+    if (charCount > maxCharCount) maxCharCount = charCount;
+  }
+  const dynamicFs = Math.min(fontSize, (safeW / maxCharCount) * 1.6);
+  const fs = Math.max(Math.round(dynamicFs), 12);
+
+  const rowHeight = fs * 1.4;
+  const maxTextWidth = safeW;
+  const safeZoneHeight = safeH * 0.65;
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `bold ${fontSize}px ${fontCss}`;
+  ctx.font = `bold ${fs}px ${fontCss}`;
 
   // Pre-compute wrapped rows for each active line
   const lineWraps: { lineIdx: number; rows: WordEntry[][] }[] = [];
@@ -490,18 +505,18 @@ function drawFrame(
   }
 
   // Add spacing between lines
-  const lineGap = fontSize * 0.5;
+  const lineGap = fs * 0.5;
   const totalHeight = visibleWraps.reduce((s, lw) => s + lw.rows.length * rowHeight, 0)
     + (visibleWraps.length - 1) * lineGap;
   let curY = ch * 0.5 - totalHeight / 2 + rowHeight / 2;
 
   visibleWraps.forEach((lw, li) => {
-    ctx.font = `bold ${fontSize}px ${fontCss}`;
+    ctx.font = `bold ${fs}px ${fontCss}`;
 
     lw.rows.forEach((rowWords, ri) => {
       const rowY = curY;
       curY += rowHeight;
-      if (rowY < fontSize || rowY > ch - fontSize) return;
+      if (rowY < safeInsetY || rowY > ch - safeInsetY) return;
 
       const rowText = rowWords.map(w => w.word).join(" ");
       const rowWidth = ctx.measureText(rowText).width;
@@ -531,7 +546,7 @@ function drawFrame(
 
         ctx.globalAlpha = alpha;
         ctx.fillStyle = wordAge >= 0 ? "#FFFFFF" : "rgba(255,255,255,0.2)";
-        ctx.font = `bold ${fontSize}px ${fontCss}`;
+        ctx.font = `bold ${fs}px ${fontCss}`;
         ctx.fillText(w.word, wx, rowY);
 
         ctx.restore();
