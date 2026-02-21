@@ -24,7 +24,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
   const [debugData, setDebugData] = useState<any | null>(null);
   const [transcriptionModel, setTranscriptionModel] = useState("whisper-1");
-  const [analysisModel, setAnalysisModel] = useState("google/gemini-3-flash-preview");
+  const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
   const { user } = useAuth();
   const quota = useUsageQuota("lyric");
 
