@@ -77,7 +77,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { title, artist, lyrics, audioBase64, format } = await req.json();
+    const { title, artist, lyrics, audioBase64, format, beatGrid } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -98,11 +98,18 @@ serve(async (req) => {
       const userContent: any[] = [
         { type: "image_url", image_url: { url: `data:${mimeType};base64,${audioBase64}` } },
       ];
-      if (lyrics) {
-        userContent.push({ type: "text", text: `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return only the JSON schema specified.` });
-      } else {
-        userContent.push({ type: "text", text: "Analyze this audio. Return only the JSON schema specified." });
+
+      // Build text instruction with optional beat grid context
+      let textInstruction = "";
+      if (beatGrid?.bpm) {
+        textInstruction += `[Beat Grid Context] Detected BPM: ${beatGrid.bpm} (confidence: ${beatGrid.confidence?.toFixed?.(2) ?? "N/A"}). Use this as ground truth for tempo.\n\n`;
       }
+      if (lyrics) {
+        textInstruction += `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return only the JSON schema specified.`;
+      } else {
+        textInstruction += "Analyze this audio. Return only the JSON schema specified.";
+      }
+      userContent.push({ type: "text", text: textInstruction });
 
       console.log(`[song-dna] Audio mode: ~${(audioBase64.length * 0.75 / 1024 / 1024).toFixed(1)} MB, format: ${ext}`);
 
@@ -176,7 +183,7 @@ serve(async (req) => {
           model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: LYRICS_ONLY_PROMPT },
-            { role: "user", content: `Song: "${title || "Unknown"}" by ${artist || "Unknown Artist"}\n\nLyrics:\n${lyrics}` },
+            { role: "user", content: `Song: "${title || "Unknown"}" by ${artist || "Unknown Artist"}${beatGrid?.bpm ? `\n[Beat Grid] BPM: ${beatGrid.bpm}` : ""}\n\nLyrics:\n${lyrics}` },
           ],
           response_format: { type: "json_object" },
         }),

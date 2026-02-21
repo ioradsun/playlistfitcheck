@@ -325,7 +325,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       }
 
       const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
-        body: { title: data.title, artist: data.artist, lyrics: lyricsText, audioBase64, format },
+        body: {
+          title: data.title, artist: data.artist, lyrics: lyricsText, audioBase64, format,
+          beatGrid: beatGrid ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence } : undefined,
+        },
       });
       if (error) throw error;
 
@@ -360,7 +363,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     } finally {
       setDnaLoading(false);
     }
-  }, [data, audioFile, hasRealAudio, dnaLoading, songDna]);
+  }, [data, audioFile, hasRealAudio, dnaLoading, songDna, beatGrid]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
