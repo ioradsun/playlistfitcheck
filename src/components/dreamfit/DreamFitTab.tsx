@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Loader2, User } from "lucide-react";
+import { Loader2, User, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -7,9 +7,15 @@ import { DreamToolCard } from "./DreamToolCard";
 import { DreamComments } from "./DreamComments";
 import { DreamInlineComposer } from "./DreamInlineComposer";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Dream } from "./types";
 
-type DreamView = "recent" | "resolved";
+type DreamView = "recent" | "resolved" | "bypassed";
 
 export function DreamFitTab() {
   const { user } = useAuth();
@@ -40,8 +46,13 @@ export function DreamFitTab() {
     }, 300);
   };
 
+  const isRecentActive = view === "recent";
+  const isResolvedActive = view === "resolved" || view === "bypassed";
+
   const filtered = view === "resolved"
     ? dreams.filter(d => d.greenlight_count > 0)
+    : view === "bypassed"
+    ? dreams.filter(d => d.greenlight_count === 0 && d.backers_count > 0)
     : dreams;
 
   return (
@@ -68,20 +79,67 @@ export function DreamFitTab() {
       {/* Tabs */}
       <div className="border-b border-border/40">
         <div className="flex">
-          {(["recent", "resolved"] as const).map((v) => (
+          {/* Recent tab */}
+          <div className="flex-1 flex items-center justify-center">
             <button
-              key={v}
-              onClick={() => setView(v)}
+              onClick={() => setView("recent")}
               className={cn(
-                "flex-1 py-2.5 text-sm text-center transition-all duration-150",
-                view === v
+                "py-2.5 text-sm transition-all duration-150",
+                isRecentActive
                   ? "font-medium text-foreground"
                   : "font-normal text-muted-foreground"
               )}
             >
-              {v === "recent" ? "Recent" : "Resolved"}
+              Recent
             </button>
-          ))}
+          </div>
+
+          {/* Resolved tab with dropdown */}
+          <div className="flex-1 flex items-center justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    if (!isResolvedActive) {
+                      e.preventDefault();
+                      setView("resolved");
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-0.5 py-2.5 text-sm transition-all duration-150",
+                    isResolvedActive
+                      ? "font-medium text-foreground"
+                      : "font-normal text-muted-foreground"
+                  )}
+                >
+                  {view === "bypassed" ? "Bypassed" : "Resolved"}
+                  <ChevronDown
+                    size={12}
+                    className={cn(
+                      "transition-all duration-150",
+                      isResolvedActive ? "opacity-60" : "opacity-0 w-0"
+                    )}
+                  />
+                </button>
+              </DropdownMenuTrigger>
+              {isResolvedActive && (
+                <DropdownMenuContent align="center" className="w-40 bg-popover z-50">
+                  <DropdownMenuItem
+                    onClick={() => setView("resolved")}
+                    className={cn("text-sm", view === "resolved" && "text-foreground font-medium")}
+                  >
+                    Resolved
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setView("bypassed")}
+                    className={cn("text-sm", view === "bypassed" && "text-foreground font-medium")}
+                  >
+                    Bypassed
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              )}
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
@@ -93,7 +151,7 @@ export function DreamFitTab() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <p className="text-muted-foreground text-sm">
-            {view === "resolved" ? "No resolved dreams yet." : "No dreams yet. Be the first to ask for something."}
+            {view === "resolved" ? "No resolved dreams yet." : view === "bypassed" ? "No bypassed dreams yet." : "No dreams yet. Be the first to ask for something."}
           </p>
         </div>
       ) : (
