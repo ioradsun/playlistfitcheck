@@ -886,17 +886,12 @@ export default function ShareableHook() {
                     Tap each side to hear
                   </p>
                 ) : (
-                  <>
-                    <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30">
-                      {activeHookSide === "a" ? hookALabel : hookBLabel}
-                    </p>
-                    <button
-                      onClick={() => handleVote(activeHookSide === "a" ? hookData.id : rivalHook!.id)}
-                      className="px-8 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-colors min-h-[44px]"
-                    >
-                      I'M HOOKED
-                    </button>
-                  </>
+                  <button
+                    onClick={() => handleVote(activeHookSide === "a" ? hookData.id : rivalHook!.id)}
+                    className="px-8 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-colors min-h-[44px]"
+                  >
+                    {"I'M HOOKED ON " + (activeHookSide === "a" ? hookALabel : hookBLabel)}
+                  </button>
                 )}
               </motion.div>
             )}
