@@ -50,10 +50,10 @@ export function DreamFitTab() {
   const isResolvedActive = view === "resolved" || view === "bypassed";
 
   const filtered = view === "resolved"
-    ? dreams.filter(d => d.greenlight_count > 0)
+    ? dreams.filter(d => d.status === "resolved")
     : view === "bypassed"
-    ? dreams.filter(d => d.greenlight_count === 0 && d.backers_count > 0)
-    : dreams;
+    ? dreams.filter(d => d.status === "bypassed")
+    : dreams.filter(d => d.status !== "resolved" && d.status !== "bypassed");
 
   return (
     <div className="w-full max-w-[470px] mx-auto">

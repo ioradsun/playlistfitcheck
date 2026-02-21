@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { User, MoreHorizontal, Trash2 } from "lucide-react";
+import { User, MoreHorizontal, Trash2, CheckCircle, SkipForward } from "lucide-react";
 import { toast } from "sonner";
 import { Dream } from "./types";
 import { DreamSignal } from "./DreamSignal";
@@ -21,10 +21,14 @@ interface Props {
   onRefresh: () => void;
 }
 
+const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
+
 export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
   const { user } = useAuth();
 
   const isOwnPost = user?.id === dream.user_id;
+  const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
+  const showMenu = isOwnPost || isAdmin;
   const displayName = dream.profiles?.display_name || "Anonymous";
   const timeAgo = formatDistanceToNow(new Date(dream.created_at), { addSuffix: true });
 
@@ -36,6 +40,17 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
       onRefresh();
     } catch (e: any) {
       toast.error(e.message || "Failed to delete");
+    }
+  };
+
+  const handleSetStatus = async (status: "resolved" | "bypassed") => {
+    try {
+      const { error } = await supabase.from("dream_tools").update({ status }).eq("id", dream.id);
+      if (error) throw error;
+      toast.success(status === "resolved" ? "Dream resolved ✅" : "Dream bypassed ⏭");
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update status");
     }
   };
 
@@ -72,20 +87,32 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
           <TrailblazerBadge userId={dream.user_id} compact />
         </div>
 
-        {isOwnPost && (
+        {showMenu && (
           <DropdownMenu>
-            {/* hover:bg-accent/50 trigger */}
             <DropdownMenuTrigger asChild>
               <button className="p-1.5 rounded-full hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors shrink-0">
                 <MoreHorizontal size={18} />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              {/* text-destructive delete item */}
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDelete}>
-                <Trash2 size={14} className="mr-2" />
-                Delete
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-40 bg-popover z-50">
+              {isAdmin && (
+                <>
+                  <DropdownMenuItem onClick={() => handleSetStatus("resolved")}>
+                    <CheckCircle size={14} className="mr-2" />
+                    Resolve
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleSetStatus("bypassed")}>
+                    <SkipForward size={14} className="mr-2" />
+                    Bypass
+                  </DropdownMenuItem>
+                </>
+              )}
+              {isOwnPost && (
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDelete}>
+                  <Trash2 size={14} className="mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

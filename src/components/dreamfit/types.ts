@@ -6,7 +6,7 @@ export interface Dream {
   transformation: string;
   dream_type: "feature" | "new_fit";
   target_fit: string | null;
-  status: "seeding" | "momentum" | "review" | "building" | "live" | "not_a_fit";
+  status: "seeding" | "momentum" | "review" | "building" | "live" | "not_a_fit" | "resolved" | "bypassed";
   status_note: string | null;
   backers_count: number;
   greenlight_count: number;
@@ -40,5 +40,7 @@ export const STATUS_CONFIG: Record<string, { label: string; emoji: string; class
   building: { label: "In Development", emoji: "🛠", className: "bg-blue-500/10 text-blue-400" },
   live: { label: "Live", emoji: "🚀", className: "bg-primary/10 text-primary" },
   not_a_fit: { label: "Not a Fit", emoji: "❌", className: "bg-destructive/10 text-destructive" },
+  resolved: { label: "Resolved", emoji: "✅", className: "bg-emerald-500/10 text-emerald-400" },
+  bypassed: { label: "Bypassed", emoji: "⏭", className: "bg-muted text-muted-foreground" },
 };
 
