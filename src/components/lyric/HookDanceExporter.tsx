@@ -355,19 +355,19 @@ export function HookDanceExporter({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Mass</span>
-                <span className="font-mono text-foreground">{spec.material?.mass?.toFixed(1) ?? "—"}</span>
+                <span className="font-mono text-foreground">{spec.params?.mass?.toFixed(1) ?? spec.material?.mass?.toFixed(1) ?? "—"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Elasticity</span>
-                <span className="font-mono text-foreground">{spec.material?.elasticity?.toFixed(1) ?? "—"}</span>
+                <span className="font-mono text-foreground">{spec.params?.elasticity?.toFixed(1) ?? spec.material?.elasticity?.toFixed(1) ?? "—"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Damping</span>
-                <span className="font-mono text-foreground">{spec.material?.damping?.toFixed(1) ?? "—"}</span>
+                <span className="font-mono text-foreground">{spec.params?.damping?.toFixed(1) ?? spec.material?.damping?.toFixed(1) ?? "—"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Effects</span>
-                <span className="font-mono text-foreground">{spec.effect_sequence?.length ?? 0}</span>
+                <span className="font-mono text-foreground">{spec.effect_pool?.length ?? spec.effect_sequence?.length ?? 0}</span>
               </div>
             </div>
             <div className="flex gap-1 mt-1">
