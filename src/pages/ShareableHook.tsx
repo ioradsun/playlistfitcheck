@@ -81,10 +81,10 @@ interface ConstellationNode {
 
 // Static river row configuration
 const RIVER_ROWS = [
-  { y: 0.25, speed: 0.4, opacity: 0.18, direction: -1 }, // left
-  { y: 0.38, speed: 0.6, opacity: 0.14, direction: 1 },  // right
-  { y: 0.62, speed: 0.8, opacity: 0.11, direction: -1 }, // left
-  { y: 0.75, speed: 1.1, opacity: 0.08, direction: 1 },  // right
+  { y: 0.25, speed: 0.2, opacity: 0.07, direction: -1 },
+  { y: 0.38, speed: 0.3, opacity: 0.05, direction: 1 },
+  { y: 0.62, speed: 0.35, opacity: 0.04, direction: -1 },
+  { y: 0.75, speed: 0.55, opacity: 0.03, direction: 1 },
 ];
 
 interface FireParticle {
@@ -253,10 +253,26 @@ function useHookCanvas(
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
 
+    // Determine if we're in HOOK_FRACTURE phase (suppress river rows)
+    const lines = hookData.lyrics as LyricLine[];
+    const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
+    const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
+    const spec = hookData.physics_spec as PhysicsSpec;
+    let currentEffectKey = "STATIC_RESOLVE";
+    if (activeLine && spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
+      const isLastHookLine = activeLine.end >= hookData.hook_end - 0.5;
+      if (isLastHookLine) currentEffectKey = "HOOK_FRACTURE";
+      else {
+        const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
+        currentEffectKey = spec.effect_pool[poolIdx];
+      }
+    }
+    const isHookFracture = currentEffectKey === "HOOK_FRACTURE";
+
     // Pass 1: Constellation nodes (lowest opacity, drawn first)
     for (const node of nodes) {
       if (node.phase !== "constellation") continue;
-      // Linear drift
+      // Linear drift (halved speeds)
       node.x += Math.cos(node.driftAngle) * node.driftSpeed / w;
       node.y += Math.sin(node.driftAngle) * node.driftSpeed / h;
       // Wrap
@@ -265,74 +281,76 @@ function useHookCanvas(
       if (node.y < -0.1) node.y = 1.1;
       if (node.y > 1.1) node.y = -0.1;
 
-      ctx.font = "13px system-ui, -apple-system, sans-serif";
-      ctx.globalAlpha = node.baseOpacity;
+      ctx.font = "300 11px system-ui, -apple-system, sans-serif";
+      // During HOOK_FRACTURE, drop constellation to minimum opacity
+      ctx.globalAlpha = isHookFracture ? node.baseOpacity * 0.5 : node.baseOpacity;
       ctx.fillStyle = "#ffffff";
       const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
       ctx.fillText(truncated, node.x * w, node.y * h);
     }
 
-    // Pass 2: River rows (medium opacity)
-    const riverNodes = nodes.filter(n => n.phase === "river");
-    const offsets = riverOffsetsRef.current;
-    for (let ri = 0; ri < RIVER_ROWS.length; ri++) {
-      const row = RIVER_ROWS[ri];
-      offsets[ri] += row.speed * row.direction;
-      const rowComments = riverNodes.filter(n => n.riverRowIndex === ri);
-      if (rowComments.length === 0) continue;
+    // Pass 2: River rows — suppressed entirely during HOOK_FRACTURE
+    if (!isHookFracture) {
+      const riverNodes = nodes.filter(n => n.phase === "river");
+      const offsets = riverOffsetsRef.current;
+      for (let ri = 0; ri < RIVER_ROWS.length; ri++) {
+        const row = RIVER_ROWS[ri];
+        offsets[ri] += row.speed * row.direction;
+        const rowComments = riverNodes.filter(n => n.riverRowIndex === ri);
+        if (rowComments.length === 0) continue;
 
-      ctx.font = "15px system-ui, -apple-system, sans-serif";
-      ctx.globalAlpha = row.opacity;
-      ctx.fillStyle = "#ffffff";
+        ctx.font = "300 12px system-ui, -apple-system, sans-serif";
+        ctx.globalAlpha = row.opacity;
+        ctx.fillStyle = "#ffffff";
 
-      const rowY = row.y * h;
-      // Compute total spacing for wrapping
-      const textWidths = rowComments.map(n => {
-        const t = n.text.length > 30 ? n.text.slice(0, 30) + "…" : n.text;
-        return ctx.measureText(t).width;
-      });
-      const totalWidth = textWidths.reduce((a, tw) => a + tw + 120, 0);
-      const wrapWidth = Math.max(totalWidth, w + 200);
+        const rowY = row.y * h;
+        const textWidths = rowComments.map(n => {
+          const t = n.text.length > 30 ? n.text.slice(0, 30) + "…" : n.text;
+          return ctx.measureText(t).width;
+        });
+        const totalWidth = textWidths.reduce((a, tw) => a + tw + 120, 0);
+        const wrapWidth = Math.max(totalWidth, w + 200);
 
-      let xBase = offsets[ri];
-      for (let ci = 0; ci < rowComments.length; ci++) {
-        const truncated = rowComments[ci].text.length > 30 ? rowComments[ci].text.slice(0, 30) + "…" : rowComments[ci].text;
-        // Wrap position into visible range
-        let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
-        if (drawX > w + 100) drawX -= wrapWidth;
-        ctx.fillText(truncated, drawX, rowY);
-        xBase += textWidths[ci] + 120;
+        let xBase = offsets[ri];
+        for (let ci = 0; ci < rowComments.length; ci++) {
+          const truncated = rowComments[ci].text.length > 30 ? rowComments[ci].text.slice(0, 30) + "…" : rowComments[ci].text;
+          let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
+          if (drawX > w + 100) drawX -= wrapWidth;
+          ctx.fillText(truncated, drawX, rowY);
+          xBase += textWidths[ci] + 120;
+        }
       }
     }
 
-    // Pass 3: New submissions ("center" and "transitioning" — highest opacity, drawn last)
+    // Pass 3: New submissions — restrained entry animation
     for (const node of nodes) {
       if (node.phase === "center") {
         const elapsed = now - node.phaseStartTime;
-        ctx.font = "15px system-ui, -apple-system, sans-serif";
-        ctx.globalAlpha = 1;
+        ctx.font = "300 16px system-ui, -apple-system, sans-serif";
+        ctx.globalAlpha = 0.35;
         ctx.fillStyle = "#ffffff";
         const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
         ctx.fillText(truncated, w / 2, h / 2);
-        // After 2000ms, transition
-        if (elapsed >= 2000) {
+        // After 800ms hold, transition
+        if (elapsed >= 800) {
           node.phase = "transitioning";
           node.phaseStartTime = now;
         }
       } else if (node.phase === "transitioning") {
         const elapsed = now - node.phaseStartTime;
-        const t = Math.min(1, elapsed / 8000); // 0→1 over 8s
-        // Interpolate position from center to river row position
+        const t = Math.min(1, elapsed / 4000); // 0→1 over 4s
         const targetRow = RIVER_ROWS[node.riverRowIndex];
         const targetY = targetRow ? targetRow.y : node.seedY;
         const cx = 0.5, cy = 0.5;
-        const curX = cx + (node.seedX - cx) * t * 0.3; // drift partway
+        const curX = cx + (node.seedX - cx) * t * 0.3;
         const curY = cy + (targetY - cy) * t;
-        // Interpolate size and opacity
-        const size = 15 - (15 - 13) * t;
-        const opacity = 1 - (1 - (targetRow?.opacity || 0.18)) * t;
+        // Interpolate size: 16 → 12
+        const size = 16 - (16 - 12) * t;
+        // Interpolate opacity: 0.35 → river row opacity
+        const targetOpacity = targetRow?.opacity || 0.05;
+        const opacity = 0.35 - (0.35 - targetOpacity) * t;
 
-        ctx.font = `${Math.round(size)}px system-ui, -apple-system, sans-serif`;
+        ctx.font = `300 ${Math.round(size)}px system-ui, -apple-system, sans-serif`;
         ctx.globalAlpha = opacity;
         ctx.fillStyle = "#ffffff";
         const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
@@ -342,7 +360,7 @@ function useHookCanvas(
         node.y = curY;
         node.currentSize = size;
 
-        if (elapsed >= 8000) {
+        if (elapsed >= 4000) {
           node.phase = "river";
           node.phaseStartTime = now;
         }
@@ -350,23 +368,9 @@ function useHookCanvas(
     }
     ctx.globalAlpha = 1;
 
-    // Lyrics
-    const lines = hookData.lyrics as LyricLine[];
-    const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
-    const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
-    const spec = hookData.physics_spec as PhysicsSpec;
-
+    // Lyrics — reuse effect key computed above
     if (activeLine) {
-      let effectKey = "STATIC_RESOLVE";
-      if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
-        const isLastHookLine = activeLine.end >= hookData.hook_end - 0.5;
-        if (isLastHookLine) effectKey = "HOOK_FRACTURE";
-        else {
-          const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
-          effectKey = spec.effect_pool[poolIdx];
-        }
-      }
-      const drawFn = getEffect(effectKey);
+      const drawFn = getEffect(currentEffectKey);
       const age = (currentTime - activeLine.start) * 1000;
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
@@ -537,12 +541,12 @@ export default function ShareableHook() {
       const seedX = 0.5 + Math.cos(angle) * radius;
       const seedY = 0.5 + Math.sin(angle) * radius;
 
-      // Permanent drift
-      const driftSpeed = 0.015 + rng() * 0.025;
+      // Permanent drift (halved)
+      const driftSpeed = 0.008 + rng() * 0.012;
       const driftAngle = rng() * Math.PI * 2;
 
-      // Age-based opacity: newest=12%, oldest=6%
-      const baseOpacity = 0.12 - ageRatio * 0.06;
+      // Age-based opacity: newest=6%, oldest=3%
+      const baseOpacity = 0.06 - ageRatio * 0.03;
 
       // Assign to river if recent enough
       const isRiver = idx >= riverStartIdx;
@@ -557,7 +561,7 @@ export default function ShareableHook() {
         phase: (isRiver ? "river" : "constellation") as ConstellationNode["phase"],
         phaseStartTime: now,
         riverRowIndex,
-        currentSize: isRiver ? 15 : 13,
+        currentSize: isRiver ? 12 : 11,
         baseOpacity,
       };
     });
@@ -681,7 +685,7 @@ export default function ShareableHook() {
       const radius = rng() * 0.2;
       const seedX = 0.5 + Math.cos(angle) * radius;
       const seedY = 0.5 + Math.sin(angle) * radius;
-      const driftSpeed = 0.015 + rng() * 0.025;
+      const driftSpeed = 0.008 + rng() * 0.012;
       const driftAngle = rng() * Math.PI * 2;
       const riverRowIndex = Math.floor(rng() * RIVER_ROWS.length);
 
@@ -696,8 +700,8 @@ export default function ShareableHook() {
         phase: "center",
         phaseStartTime: Date.now(),
         riverRowIndex,
-        currentSize: 15,
-        baseOpacity: 0.12,
+        currentSize: 16,
+        baseOpacity: 0.06,
       });
     }
   }, [inputText, hookData, hasSubmitted, isBattle, activeHookSide]);
