@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
+import { useBeatGrid } from "@/hooks/useBeatGrid";
 import { LyricWaveform } from "./LyricWaveform";
 import { VersionToggle, type ActiveVersion } from "./VersionToggle";
 import { LyricFormatControls, type LineFormat, type SocialPreset } from "./LyricFormatControls";
@@ -225,6 +226,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const { beatGrid, loading: beatGridLoading } = useBeatGrid(audioBuffer);
   const rafRef = useRef<number | null>(null);
 
   // (timing offset removed — Scribe timestamps are accurate)
@@ -414,7 +417,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     audio.addEventListener("ended", handleEnded);
 
     if (audioFile.size > 0) {
-      decodeFile(audioFile).then(({ waveform }) => setWaveform(waveform)).catch(() => {});
+      decodeFile(audioFile).then(({ buffer, waveform }) => {
+        setWaveform(waveform);
+        setAudioBuffer(buffer);
+      }).catch(() => {});
     }
 
     return () => {
@@ -853,6 +859,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   loopRegion={activeHookIndex !== null && hooks[activeHookIndex]
                     ? { start: hooks[activeHookIndex].start, end: hooks[activeHookIndex].end, duration: waveform?.duration ?? 1 }
                     : null}
+                  beats={beatGrid?.beats ?? null}
+                  beatGridLoading={beatGridLoading}
                 />
                 <AnimatePresence>
                   {activeHookIndex !== null && (

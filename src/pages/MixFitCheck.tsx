@@ -6,6 +6,7 @@ import { MixCard } from "@/components/mix/MixCard";
 import { GlobalTimeline } from "@/components/mix/GlobalTimeline";
 
 import { useAudioEngine, type AudioMix } from "@/hooks/useAudioEngine";
+import { useBeatGrid } from "@/hooks/useBeatGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
@@ -47,8 +48,11 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   const markerEndRef = useRef(markerEnd);
   markerStartRef.current = markerStart;
   markerEndRef.current = markerEnd;
-  const firstWaveform = mixes.find((m) => m.buffer)?.waveform || null;
+  const firstMix = mixes.find((m) => m.buffer);
+  const firstWaveform = firstMix?.waveform || null;
+  const firstBuffer = firstMix?.buffer || null;
   const referenceDuration = firstWaveform?.duration || 1;
+  const { beatGrid, loading: beatGridLoading } = useBeatGrid(firstBuffer);
 
   // Animate playhead
   useEffect(() => {
@@ -290,6 +294,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
           if (first) play(first.id, first.buffer, markerStartRef.current, markerEndRef.current);
         }}
         onStop={stop}
+        beats={beatGrid?.beats ?? null}
+        beatGridLoading={beatGridLoading}
       />
 
       {/* Upload area */}
