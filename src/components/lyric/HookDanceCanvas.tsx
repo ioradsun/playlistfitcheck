@@ -5,7 +5,7 @@
  * looks up the AI-assigned effect for the current line, and draws it.
  */
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download } from "lucide-react";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
@@ -40,7 +40,7 @@ interface Props {
   songContext?: FingerprintSongContext;
 }
 
-export function HookDanceCanvas({
+export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDanceCanvas({
   physicsState,
   spec,
   lines,
@@ -55,7 +55,7 @@ export function HookDanceCanvas({
   fingerprint,
   onFingerprintChange,
   songContext,
-}: Props) {
+}, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [overrides, setOverrides] = useState<HookDanceOverrides>({});
@@ -206,7 +206,7 @@ export function HookDanceCanvas({
 
   return (
     <motion.div
-      ref={containerRef}
+      ref={(node: HTMLDivElement | null) => { containerRef.current = node; if (typeof ref === 'function') ref(node); else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node; }}
       className="fixed inset-0 z-50 bg-black"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -299,7 +299,7 @@ export function HookDanceCanvas({
       </AnimatePresence>
     </motion.div>
   );
-}
+});
 
 // ── Micro-surprise overlays ─────────────────────────────────────────────────
 
