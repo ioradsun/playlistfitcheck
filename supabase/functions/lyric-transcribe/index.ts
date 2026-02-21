@@ -252,14 +252,17 @@ function findHookFromWords(
   hook: GeminiHook
 ): { start: number; end: number; score: number; previewText: string; status: "confirmed" | "candidate" } | null {
   if (!hook) return null;
-  const HOOK_DURATION = 10.000;
+  const TARGET_DURATION = 10.0;
+  const MIN_DURATION = 8.0;
+  const MAX_DURATION = 12.0;
   const { start_sec, confidence = 0 } = hook;
   const trackEnd = words.length > 0 ? words[words.length - 1].end : Infinity;
 
-  if (start_sec > trackEnd - HOOK_DURATION) {
-    return findRepetitionAnchor(words, trackEnd, HOOK_DURATION);
+  if (start_sec > trackEnd - MIN_DURATION) {
+    return findRepetitionAnchor(words, trackEnd, TARGET_DURATION);
   }
 
+  // Snap start to nearest word boundary
   const windowWords = words.filter(w => w.start >= start_sec - 2 && w.start <= start_sec + 3);
   let snapStart = start_sec;
   if (windowWords.length > 0) {
@@ -270,11 +273,28 @@ function findHookFromWords(
     }
   }
 
-  const hookWords = words.filter(w => w.start >= snapStart && w.end <= snapStart + HOOK_DURATION + 0.5);
-  const previewText = hookWords.map(w => w.word).join(" ").slice(0, 100);
+  // Collect words within max window
+  const hookWords = words.filter(w => w.start >= snapStart && w.end <= snapStart + MAX_DURATION);
+
+  // Find the best end: snap to a word boundary between MIN and MAX duration
+  let snapEnd = snapStart + TARGET_DURATION;
+  const candidateEnds = hookWords
+    .filter(w => w.end >= snapStart + MIN_DURATION && w.end <= snapStart + MAX_DURATION)
+    .map(w => w.end);
+  if (candidateEnds.length > 0) {
+    // Pick the word end closest to target duration
+    let bestDist = Infinity;
+    for (const end of candidateEnds) {
+      const dist = Math.abs((end - snapStart) - TARGET_DURATION);
+      if (dist < bestDist) { bestDist = dist; snapEnd = end; }
+    }
+  }
+
+  const finalWords = words.filter(w => w.start >= snapStart && w.end <= snapEnd + 0.3);
+  const previewText = finalWords.map(w => w.word).join(" ");
   return {
     start: Math.round(snapStart * 1000) / 1000,
-    end: Math.round((snapStart + HOOK_DURATION) * 1000) / 1000,
+    end: Math.round(snapEnd * 1000) / 1000,
     score: Math.round(confidence * 100),
     previewText,
     status: confidence >= 0.75 ? "confirmed" : "candidate",
