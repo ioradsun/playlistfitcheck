@@ -94,8 +94,14 @@ export class HookDanceEngine {
     // Seek audio
     this.audioRef.currentTime = this.hookStart;
     this.audioRef.play()
-      .then(() => { this.audioPlaying = true; })
-      .catch(() => { this.audioPlaying = false; });
+      .then(() => {
+        this.audioPlaying = true;
+        console.log("[HookDanceEngine] audio playing");
+      })
+      .catch((e) => {
+        this.audioPlaying = false;
+        console.warn("[HookDanceEngine] audio play failed, using synthetic clock:", e);
+      });
 
     this.tick();
   }
@@ -119,7 +125,8 @@ export class HookDanceEngine {
 
     // Use audio time if playing, otherwise synthetic clock
     let currentTime: number;
-    if (this.audioPlaying && !isNaN(this.audioRef.currentTime) && this.audioRef.currentTime > 0) {
+    const audioUsable = this.audioPlaying && !this.audioRef.paused && !isNaN(this.audioRef.currentTime);
+    if (audioUsable) {
       currentTime = this.audioRef.currentTime;
     } else {
       const elapsed = (performance.now() - this.syntheticStart) / 1000;

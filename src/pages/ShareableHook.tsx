@@ -297,10 +297,17 @@ export default function ShareableHook() {
   useEffect(() => {
     if (!hookData) return;
 
-    const audio = new Audio(hookData.audio_url);
-    audio.loop = false;
+    const audio = new Audio();
     audio.muted = true;
+    audio.preload = "auto";
+    audio.crossOrigin = "anonymous";
     audioRef.current = audio;
+
+    audio.addEventListener("error", (e) => {
+      console.warn("[ShareableHook] audio error:", (e.target as HTMLAudioElement)?.error?.message);
+    });
+
+    audio.src = hookData.audio_url;
 
     const spec = hookData.physics_spec as PhysicsSpec;
     const beats: BeatTick[] = hookData.beat_grid.beats.map((t: number, i: number) => ({
@@ -517,6 +524,11 @@ export default function ShareableHook() {
     const newMuted = !muted;
     audio.muted = newMuted;
     setMuted(newMuted);
+
+    // Ensure audio is actually playing when user interacts (user gesture context)
+    if (!newMuted) {
+      audio.play().catch((e) => console.warn("[ShareableHook] play on unmute failed:", e));
+    }
 
     setShowMuteIcon(true);
     if (muteIconTimerRef.current) clearTimeout(muteIconTimerRef.current);
