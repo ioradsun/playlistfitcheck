@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video, Sparkles, Loader2, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -23,6 +23,8 @@ import { LyricFormatControls, type LineFormat, type SocialPreset } from "./Lyric
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
+import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
+import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
 export interface LyricLine {
@@ -286,6 +288,16 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   // Lyric video composer
   const [videoComposerOpen, setVideoComposerOpen] = useState(false);
+
+  // Hook Dance engine
+  const hookDanceRef = useRef<HookDanceEngine | null>(null);
+  const [hookDanceState, setHookDanceState] = useState<PhysicsState | null>(null);
+  const [hookDanceRunning, setHookDanceRunning] = useState(false);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { hookDanceRef.current?.stop(); };
+  }, []);
 
   // Song DNA — on-demand generation
   const [songDna, setSongDna] = useState<{
@@ -1376,14 +1388,50 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 {songDna?.physicsSpec && (
                   <button
                     onClick={() => {
-                      // Phase 2: Mount Canvas renderer. For now, log + toast.
-                      console.log("[hook-dance] physics_spec ready:", songDna.physicsSpec);
-                      toast.info("Hook Dance renderer coming in Phase 2");
+                      if (hookDanceRunning) {
+                        hookDanceRef.current?.stop();
+                        return;
+                      }
+                      const audio = audioRef.current;
+                      if (!audio || !beatGrid?.beats) return;
+
+                      // Build BeatTick array from beat grid
+                      const beats: BeatTick[] = beatGrid.beats.map((t, i) => ({
+                        time: t,
+                        isDownbeat: i % 4 === 0,
+                        strength: i % 4 === 0 ? 1 : 0.6,
+                      }));
+
+                      const hook = songDna.hook!;
+                      const engine = new HookDanceEngine(
+                        songDna.physicsSpec as PhysicsSpec,
+                        beats,
+                        hook.start,
+                        hook.end,
+                        audio,
+                        {
+                          onFrame: (state, _time, _beatCount) => {
+                            setHookDanceState(state);
+                          },
+                          onEnd: () => {
+                            setHookDanceRunning(false);
+                            setHookDanceState(null);
+                          },
+                        },
+                        `${data.title}-${hook.start.toFixed(3)}`,
+                      );
+                      hookDanceRef.current = engine;
+                      setHookDanceRunning(true);
+                      engine.start();
                     }}
-                    className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
+                    className={`w-full flex items-center justify-center gap-1.5 text-[10px] font-mono transition-colors border rounded-lg py-1.5 ${
+                      hookDanceRunning
+                        ? "text-primary bg-primary/10 border-primary/40"
+                        : "text-primary/70 hover:text-primary border-primary/20 hover:border-primary/40"
+                    }`}
                   >
-                    <Sparkles size={10} />
-                    <span>See hook dance</span>
+                    {hookDanceRunning ? <Pause size={10} /> : <Sparkles size={10} />}
+                    <span>{hookDanceRunning ? "Stop dance" : "See hook dance"}</span>
                   </button>
                 )}
                 {features?.lyric_video && (
