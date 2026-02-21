@@ -105,7 +105,7 @@ async function runScribe(
 }
 
 // ── Gemini Prompt: Hook + Insights + Metadata ─────────────────────────────────
-const GEMINI_HOOK_PROMPT = `ROLE: Lead Music Intelligence Analyst
+const DEFAULT_HOOK_PROMPT = `ROLE: Lead Music Intelligence Analyst
 
 TASK: Identify structural identity and describe the track.
 
@@ -143,6 +143,30 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
     "mood": { "value": "hype", "confidence": 0.00 }
   }
 }`;
+
+// Runtime prompt fetcher with hardcoded fallback
+let _cachedPrompts: Record<string, string> | null = null;
+async function getPrompt(slug: string, fallback: string): Promise<string> {
+  try {
+    if (!_cachedPrompts) {
+      const sbUrl = Deno.env.get("SUPABASE_URL");
+      const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (sbUrl && sbKey) {
+        const res = await fetch(`${sbUrl}/rest/v1/ai_prompts?select=slug,prompt`, {
+          headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` },
+        });
+        if (res.ok) {
+          const rows: Array<{ slug: string; prompt: string }> = await res.json();
+          _cachedPrompts = {};
+          for (const r of rows) _cachedPrompts[r.slug] = r.prompt;
+        }
+      }
+    }
+    return _cachedPrompts?.[slug] || fallback;
+  } catch {
+    return fallback;
+  }
+}
 // ── Shared: call Gemini gateway ───────────────────────────────────────────────
 async function callGemini(
   systemPrompt: string,
@@ -216,7 +240,8 @@ async function runGeminiHookAnalysis(
   lovableKey: string,
   model = "google/gemini-3-flash-preview"
 ): Promise<{ hook: GeminiHook | null; insights?: GeminiInsights; metadata: any; rawContent: string }> {
-  const content = await callGemini(GEMINI_HOOK_PROMPT, audioBase64, mimeType, lovableKey, model, 1200, "hook");
+  const hookPrompt = await getPrompt("lyric-hook", DEFAULT_HOOK_PROMPT);
+  const content = await callGemini(hookPrompt, audioBase64, mimeType, lovableKey, model, 1200, "hook");
   const parsed = extractJsonFromContent(content);
 
   let hook: GeminiHook | null = null;
@@ -334,7 +359,7 @@ function findRepetitionAnchor(
 }
 
 // ── Gemini Transcription: full audio-to-lyrics via Gemini ─────────────────────
-const GEMINI_TRANSCRIBE_PROMPT = `ROLE: Audio Transcription Engine
+const DEFAULT_TRANSCRIBE_PROMPT = `ROLE: Audio Transcription Engine
 
 TASK: Transcribe ALL sung/rapped/spoken lyrics from this audio file with precise timestamps.
 
@@ -364,7 +389,8 @@ async function runGeminiTranscribe(
   rawText: string;
   duration: number;
 }> {
-  const content = await callGemini(GEMINI_TRANSCRIBE_PROMPT, audioBase64, mimeType, lovableKey, model, 8000, "transcribe");
+  const transcribePrompt = await getPrompt("lyric-transcribe", DEFAULT_TRANSCRIBE_PROMPT);
+  const content = await callGemini(transcribePrompt, audioBase64, mimeType, lovableKey, model, 8000, "transcribe");
 
   // Parse — could be a raw array or wrapped in an object
   let lines: any[];
