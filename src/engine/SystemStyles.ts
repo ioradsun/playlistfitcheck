@@ -126,50 +126,43 @@ export function createGradientFill(
 }
 
 /**
- * Compute the largest font size that fits text within a safe zone,
- * accounting for system-specific letter-spacing and char-by-char layout.
+ * First-principles font sizing: find the largest font where
+ * rendered text (glyphs + letter-spacing) fits within 80% of canvas width.
  *
- * Solves: charCount × (glyphRatio × fs + letterSpacing) ≤ safeW
- * → fs ≤ (safeW / charCount − letterSpacing) / glyphRatio
+ * Rule: text is the focal point → fill most of the width.
+ * Overflow prevention lives here, not in effects.
  */
 export function computeFitFontSize(
   ctx: CanvasRenderingContext2D,
   text: string,
   canvasW: number,
   system: string,
-  safeRatio = 0.44,
-  maxRatio = 0.048,
 ): number {
   const st = getSystemStyle(system);
   const displayText = applyTransform(text, st);
-  const safeW = canvasW * safeRatio;
-  const charCount = Math.max(1, displayText.length);
+  const charCount = displayText.length;
+  if (charCount === 0) return 12;
 
-  // Measure per-character widths at reference size — matches how effects render
-  const refFs = 100;
-  ctx.font = buildFont(st, refFs);
-  let glyphWidthSum = 0;
-  for (let i = 0; i < displayText.length; i++) {
-    glyphWidthSum += ctx.measureText(displayText[i]).width;
+  const targetW = canvasW * 0.80;  // text fills 80% of width
+
+  // Measure at reference size to get glyph-to-size ratio
+  const REF = 100;
+  ctx.font = buildFont(st, REF);
+  let glyphSum = 0;
+  for (let i = 0; i < charCount; i++) {
+    glyphSum += ctx.measureText(displayText[i]).width;
   }
-  // Total rendered width at refFs = glyphWidthSum + charCount * letterSpacing
-  // (effects add spacing after every char including last)
-  const totalRefWidth = glyphWidthSum + charCount * st.letterSpacing;
 
-  if (totalRefWidth <= 0) return 12;
+  if (glyphSum <= 0) return 12;
 
-  // When scaling to target fs:
-  //   totalWidth(fs) = glyphWidthSum * (fs/refFs) + charCount * st.letterSpacing
-  // Solve: glyphWidthSum * (fs/refFs) + charCount * st.letterSpacing = safeW
-  //   fs = (safeW - charCount * st.letterSpacing) * refFs / glyphWidthSum
+  // At font size `fs`, rendered width = glyphSum*(fs/REF) + charCount*letterSpacing
+  // Solve: glyphSum*(fs/REF) + charCount*ls = targetW
+  // → fs = (targetW - charCount*ls) * REF / glyphSum
   const spacingTotal = charCount * st.letterSpacing;
-  const availableForGlyphs = safeW - spacingTotal;
+  const availableForGlyphs = targetW - spacingTotal;
 
-  if (availableForGlyphs <= 0 || glyphWidthSum <= 0) return 12;
+  if (availableForGlyphs <= 0) return 12;
 
-  const maxFromFit = (availableForGlyphs / glyphWidthSum) * refFs;
-  const maxFromCap = canvasW * maxRatio;
-
-  const fs = Math.min(maxFromFit, maxFromCap);
+  const fs = (availableForGlyphs / glyphSum) * REF;
   return Math.max(Math.round(fs), 12);
 }
