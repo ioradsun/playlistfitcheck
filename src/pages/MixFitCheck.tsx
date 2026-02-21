@@ -19,7 +19,7 @@ interface MixFitCheckProps {
   initialProject?: MixProjectData | null;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
-  onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void; rightContent?: React.ReactNode } | null) => void;
 }
 
 export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject, onHeaderProject }: MixFitCheckProps = {}) {
@@ -239,13 +239,16 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   const usedRanks = mixes.map((m) => m.rank).filter((r): r is number => r !== null);
   const activeMixes = mixes.filter((m) => m.buffer);
 
-  // Report project to header
+  // Report project to header with save indicator
   useEffect(() => {
     if (projectId) {
-      onHeaderProject?.({ title, onBack: resetProject });
+      const rightContent = user && lastSavedAt ? (
+        <span className="text-[10px] text-muted-foreground shrink-0">✓ Saved {lastSavedAt}</span>
+      ) : undefined;
+      onHeaderProject?.({ title, onBack: resetProject, rightContent });
       return () => onHeaderProject?.(null);
     }
-  }, [projectId, title, resetProject, onHeaderProject]);
+  }, [projectId, title, resetProject, onHeaderProject, user, lastSavedAt]);
 
   // If no project created yet, show form + saved projects
   if (!projectId) {
@@ -261,11 +264,6 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       {/* Notes */}
       {notes && (
         <p className="text-[10px] text-muted-foreground">{notes}</p>
-      )}
-      {user && lastSavedAt && (
-        <div className="flex justify-end">
-          <span className="text-[10px] text-muted-foreground shrink-0">✓ Saved {lastSavedAt}</span>
-        </div>
       )}
 
       
