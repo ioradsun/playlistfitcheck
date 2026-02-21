@@ -145,6 +145,7 @@ function useHookCanvas(
     audio.muted = true;
     audio.preload = "auto";
     audio.crossOrigin = "anonymous";
+    audio.loop = true; // Ensure looping even when muted
     audioRef.current = audio;
     audio.src = hookData.audio_url;
 
@@ -434,6 +435,12 @@ export default function ShareableHook() {
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+
+  // Reset submission state when navigating to a different hook
+  useEffect(() => {
+    setHasSubmitted(false);
+    setInputText("");
+  }, [artistSlug, songSlug, hookSlug]);
 
   // Constellation for primary
   const constellationRef = useRef<ConstellationNode[]>([]);
