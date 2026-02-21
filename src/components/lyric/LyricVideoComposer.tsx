@@ -351,27 +351,21 @@ function drawFrame(
   }
   activeLineIdxs.sort((a, b) => a - b);
 
-  const lineHeight = fontSize * 1.6;
+  const rowHeight = fontSize * 1.4;
+  const maxTextWidth = cw * 0.85;
   const safeZoneHeight = ch * 0.6;
-  const maxVisibleLines = Math.max(1, Math.floor(safeZoneHeight / lineHeight));
-  const visibleLines = activeLineIdxs.slice(-maxVisibleLines);
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  ctx.font = `bold ${fontSize}px ${fontCss}`;
 
-  const totalHeight = visibleLines.length * lineHeight;
-  const startY = ch * 0.5 - totalHeight / 2 + lineHeight / 2;
-  const maxTextWidth = cw * 0.85;
-
-  visibleLines.forEach((lineIdx, vi) => {
+  // Pre-compute wrapped rows for each active line
+  const lineWraps: { lineIdx: number; rows: WordEntry[][] }[] = [];
+  for (const lineIdx of activeLineIdxs) {
     const lineWords = lineGroups.get(lineIdx) || [];
-    ctx.font = `bold ${fontSize}px ${fontCss}`;
-
-    // Word-wrap
     const wrappedRows: WordEntry[][] = [];
     let currentRow: WordEntry[] = [];
     let currentRowWidth = 0;
-
     lineWords.forEach((w) => {
       const wordWidth = ctx.measureText(w.word + " ").width;
       if (currentRow.length > 0 && currentRowWidth + wordWidth > maxTextWidth) {
@@ -384,14 +378,29 @@ function drawFrame(
       }
     });
     if (currentRow.length > 0) wrappedRows.push(currentRow);
+    lineWraps.push({ lineIdx, rows: wrappedRows });
+  }
 
-    const rowHeight = fontSize * 1.3;
-    const lineBlockHeight = wrappedRows.length * rowHeight;
-    const lineBaseY = startY + vi * lineHeight;
-    const lineStartY = lineBaseY - (lineBlockHeight - rowHeight) / 2;
+  // Trim from the top until total height fits the safe zone
+  let totalRows = lineWraps.reduce((s, lw) => s + lw.rows.length, 0);
+  let visibleWraps = [...lineWraps];
+  while (visibleWraps.length > 1 && totalRows * rowHeight > safeZoneHeight) {
+    totalRows -= visibleWraps[0].rows.length;
+    visibleWraps.shift();
+  }
 
-    wrappedRows.forEach((rowWords, ri) => {
-      const rowY = lineStartY + ri * rowHeight;
+  // Add spacing between lines
+  const lineGap = fontSize * 0.5;
+  const totalHeight = visibleWraps.reduce((s, lw) => s + lw.rows.length * rowHeight, 0)
+    + (visibleWraps.length - 1) * lineGap;
+  let curY = ch * 0.5 - totalHeight / 2 + rowHeight / 2;
+
+  visibleWraps.forEach((lw, li) => {
+    ctx.font = `bold ${fontSize}px ${fontCss}`;
+
+    lw.rows.forEach((rowWords, ri) => {
+      const rowY = curY;
+      curY += rowHeight;
       if (rowY < fontSize || rowY > ch - fontSize) return;
 
       const rowText = rowWords.map(w => w.word).join(" ");
@@ -429,6 +438,7 @@ function drawFrame(
         x += wordWidth;
       });
     });
+    if (li < visibleWraps.length - 1) curY += lineGap;
   });
 
   ctx.globalAlpha = 1;
