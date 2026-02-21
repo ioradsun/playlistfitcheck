@@ -1,12 +1,11 @@
 /**
- * DirectorsCutScreen — Split A/B comparison gallery.
- * Two canvases side by side, cycle through systems to compare.
- * Select button always visible at bottom.
+ * DirectorsCutScreen — Editorial carousel for system selection.
+ * Minimal, typography-led. Two canvases side-by-side with carousel nav.
+ * All systems render live. Tap to select, confirm with "SELECT".
  */
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
@@ -187,7 +186,7 @@ export function DirectorsCutScreen({
     // Progress bar
     const hookProgress = (currentTime - hookStart) / (hookEnd - hookStart);
     ctx.fillStyle = (renderer.spec.palette?.[1]) || "#a855f7";
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.4;
     ctx.fillRect(0, h - 2, w * Math.max(0, Math.min(1, hookProgress)), 2);
     ctx.globalAlpha = 1;
 
@@ -198,7 +197,7 @@ export function DirectorsCutScreen({
   useEffect(() => {
     const ownUrl = URL.createObjectURL(audioFile);
     const audio = new Audio();
-    audio.muted = true;       // muted required for autoplay policy
+    audio.muted = true;
     audio.volume = 0;
     audio.preload = "auto";
     audioRef.current = audio;
@@ -226,7 +225,6 @@ export function DirectorsCutScreen({
 
     const tick = () => {
       let ct: number;
-      // Only use audio time once seek to hookStart is confirmed
       const useAudio = audioSeeked && audioRef.current && !audioRef.current.paused && audioRef.current.currentTime >= hookStart;
       if (useAudio) {
         ct = audioRef.current!.currentTime;
@@ -235,7 +233,6 @@ export function DirectorsCutScreen({
         ct = hookStart + (elapsed % hookDuration);
       }
 
-      // Loop: reset when past hookEnd
       if (ct >= hookEnd) {
         if (useAudio && audioRef.current) {
           audioRef.current.currentTime = hookStart;
@@ -248,7 +245,6 @@ export function DirectorsCutScreen({
 
       const prev = prevTimeRef.current;
 
-      // Only update & draw the two visible systems
       for (const idx of [leftIndex, rightIndex]) {
         const renderer = renderersRef.current[idx];
         if (!renderer) continue;
@@ -293,7 +289,6 @@ export function DirectorsCutScreen({
     const other = side === "left" ? rightIndex : leftIndex;
     setter(prev => {
       let next = (prev + dir + SYSTEMS.length) % SYSTEMS.length;
-      // Skip the index shown on the other side
       if (next === other) next = (next + dir + SYSTEMS.length) % SYSTEMS.length;
       return next;
     });
@@ -306,113 +301,137 @@ export function DirectorsCutScreen({
 
   return (
     <motion.div
-      className="fixed inset-0 z-[100] bg-black flex flex-col"
+      className="fixed inset-0 z-[100] flex flex-col"
+      style={{ background: '#0a0a0a' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0">
-        <p className="text-[10px] font-mono text-white/20 uppercase tracking-[0.3em]">
+      <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
+        <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30">
           Director's Cut
         </p>
         <button
           onClick={onClose}
-          className="text-white/30 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors"
+          className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/20 hover:text-white/50 transition-colors"
         >
           ✕
         </button>
       </div>
 
       {/* Split canvas area */}
-      <div className="flex-1 flex gap-[2px] min-h-0 px-1">
+      <div className="flex-1 flex gap-1 px-1 min-h-0">
         {/* Left panel */}
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 relative rounded-lg overflow-hidden">
+          <motion.div
+            className="flex-1 relative rounded-lg overflow-hidden cursor-pointer"
+            animate={{ opacity: selected === leftSys ? 1 : 0.4 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            onClick={() => setSelected(leftSys)}
+          >
             <canvas
               ref={leftCanvasRef}
-              className="absolute inset-0 w-full h-full cursor-pointer"
-              onClick={() => setSelected(leftSys)}
+              className="absolute inset-0 w-full h-full"
             />
-            {/* Selection ring */}
+            {/* Selected indicator — subtle border */}
             {selected === leftSys && (
-              <div className="absolute inset-0 ring-2 ring-red-500 rounded-lg pointer-events-none" />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="absolute inset-0 rounded-lg pointer-events-none"
+                style={{ border: '1px solid rgba(255,255,255,0.15)' }}
+              />
             )}
-            {/* AI pick badge */}
+            {/* AI pick — editorial label */}
             {leftSys === aiPick && (
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-red-500 tracking-[0.15em] uppercase bg-black/40 px-2 py-0.5 rounded">
-                AI Pick
+              <div className="absolute top-2 left-2">
+                <p className="text-[8px] font-mono uppercase tracking-[0.3em] text-white/30">
+                  AI Pick
+                </p>
               </div>
             )}
-            {/* Selected check */}
-            {selected === leftSys && (
-              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
-                <Check size={12} className="text-white" />
-              </div>
-            )}
-          </div>
-          {/* Label + nav */}
+          </motion.div>
+
+          {/* Label + carousel nav */}
           <div className="flex items-center justify-between py-2 px-1">
-            <button onClick={() => cycleSide("left", -1)} className="text-white/30 hover:text-white p-1">
-              <ChevronLeft size={16} />
+            <button
+              onClick={() => cycleSide("left", -1)}
+              className="text-[10px] font-mono text-white/20 hover:text-white/50 transition-colors px-1"
+            >
+              ←
             </button>
             <div className="text-center min-w-0">
-              <p className={`text-sm font-bold tracking-[0.12em] ${selected === leftSys ? "text-white" : "text-white/50"}`}
-                style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+              <p className={`text-[11px] font-mono uppercase tracking-[0.2em] transition-colors ${
+                selected === leftSys ? "text-white/70" : "text-white/30"
+              }`}>
                 {leftLabel.name}
-                {leftLabel.light && <span className="ml-1 text-[9px] text-white/30 font-mono">☀</span>}
               </p>
-              <p className="text-[9px] text-white/25 italic">{leftLabel.subtitle}</p>
             </div>
-            <button onClick={() => cycleSide("left", 1)} className="text-white/30 hover:text-white p-1">
-              <ChevronRight size={16} />
+            <button
+              onClick={() => cycleSide("left", 1)}
+              className="text-[10px] font-mono text-white/20 hover:text-white/50 transition-colors px-1"
+            >
+              →
             </button>
           </div>
         </div>
 
         {/* Right panel */}
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 relative rounded-lg overflow-hidden">
+          <motion.div
+            className="flex-1 relative rounded-lg overflow-hidden cursor-pointer"
+            animate={{ opacity: selected === rightSys ? 1 : 0.4 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            onClick={() => setSelected(rightSys)}
+          >
             <canvas
               ref={rightCanvasRef}
-              className="absolute inset-0 w-full h-full cursor-pointer"
-              onClick={() => setSelected(rightSys)}
+              className="absolute inset-0 w-full h-full"
             />
             {selected === rightSys && (
-              <div className="absolute inset-0 ring-2 ring-red-500 rounded-lg pointer-events-none" />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="absolute inset-0 rounded-lg pointer-events-none"
+                style={{ border: '1px solid rgba(255,255,255,0.15)' }}
+              />
             )}
             {rightSys === aiPick && (
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-red-500 tracking-[0.15em] uppercase bg-black/40 px-2 py-0.5 rounded">
-                AI Pick
+              <div className="absolute top-2 left-2">
+                <p className="text-[8px] font-mono uppercase tracking-[0.3em] text-white/30">
+                  AI Pick
+                </p>
               </div>
             )}
-            {selected === rightSys && (
-              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
-                <Check size={12} className="text-white" />
-              </div>
-            )}
-          </div>
+          </motion.div>
+
           <div className="flex items-center justify-between py-2 px-1">
-            <button onClick={() => cycleSide("right", -1)} className="text-white/30 hover:text-white p-1">
-              <ChevronLeft size={16} />
+            <button
+              onClick={() => cycleSide("right", -1)}
+              className="text-[10px] font-mono text-white/20 hover:text-white/50 transition-colors px-1"
+            >
+              ←
             </button>
             <div className="text-center min-w-0">
-              <p className={`text-sm font-bold tracking-[0.12em] ${selected === rightSys ? "text-white" : "text-white/50"}`}
-                style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+              <p className={`text-[11px] font-mono uppercase tracking-[0.2em] transition-colors ${
+                selected === rightSys ? "text-white/70" : "text-white/30"
+              }`}>
                 {rightLabel.name}
-                {rightLabel.light && <span className="ml-1 text-[9px] text-white/30 font-mono">☀</span>}
               </p>
-              <p className="text-[9px] text-white/25 italic">{rightLabel.subtitle}</p>
             </div>
-            <button onClick={() => cycleSide("right", 1)} className="text-white/30 hover:text-white p-1">
-              <ChevronRight size={16} />
+            <button
+              onClick={() => cycleSide("right", 1)}
+              className="text-[10px] font-mono text-white/20 hover:text-white/50 transition-colors px-1"
+            >
+              →
             </button>
           </div>
         </div>
       </div>
 
-      {/* System dots */}
-      <div className="flex justify-center gap-1.5 py-1 shrink-0">
+      {/* System position indicators */}
+      <div className="flex justify-center gap-2 py-1 shrink-0">
         {SYSTEMS.map((s, i) => (
           <button
             key={s}
@@ -420,23 +439,25 @@ export function DirectorsCutScreen({
               if (i !== rightIndex) setLeftIndex(i);
               else setRightIndex(leftIndex);
             }}
-            className={`w-2 h-2 rounded-full transition-all ${
-              selected === s ? "bg-red-500 scale-125" :
-              i === leftIndex || i === rightIndex ? "bg-white/60" : "bg-white/15"
+            className={`w-1 h-1 rounded-full transition-all ${
+              selected === s ? "bg-white/60 scale-150" :
+              i === leftIndex || i === rightIndex ? "bg-white/30" : "bg-white/10"
             }`}
-            title={SYSTEM_LABELS[s].name}
           />
         ))}
       </div>
 
-      {/* Confirm button — always visible */}
-      <div className="px-4 pb-4 pt-2 shrink-0">
+      {/* Select button — editorial */}
+      <div className="px-5 pb-[env(safe-area-inset-bottom,16px)] pt-3 shrink-0">
         <button
           onClick={handleConfirm}
-          className="w-full py-3 rounded-lg text-sm font-bold tracking-[0.15em] uppercase transition-all bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30"
+          className="w-full py-3 text-[11px] font-mono uppercase tracking-[0.2em] text-white/70 hover:text-white bg-white/5 hover:bg-white/8 border border-white/10 rounded-lg transition-all"
         >
-          {SYSTEM_LABELS[selected].name} → Play
+          Select
         </button>
+        <p className="text-center text-[9px] font-mono text-white/15 mt-2 uppercase tracking-[0.2em]">
+          {SYSTEM_LABELS[selected].name} — {SYSTEM_LABELS[selected].subtitle}
+        </p>
       </div>
     </motion.div>
   );
