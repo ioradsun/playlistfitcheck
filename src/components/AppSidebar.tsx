@@ -120,7 +120,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       .from("profit_reports")
       .select("id, created_at, blueprint_json, share_token, artist_id, profit_artists!inner(name, spotify_artist_id, image_url, genres_json, followers_total, popularity, raw_artist_json, signals_json)")
       .order("created_at", { ascending: false })
-      .limit(5);
+      .limit(20);
     if (reports) {
       reports.forEach((r: any) => {
         items.push({
@@ -152,7 +152,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       .select("id, playlist_name, playlist_url, song_url, report_data, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
-      .limit(5);
+      .limit(20);
     if (searches) {
       searches.forEach((s: any) => {
         items.push({
@@ -170,7 +170,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       .select("id, title, notes, mixes, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
-      .limit(5);
+      .limit(20);
     if (mixes) {
       mixes.forEach((m: any) => {
         items.push({
@@ -188,7 +188,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       .select("id, title, artist, lines, filename, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
-      .limit(5);
+      .limit(20);
     if (lyrics) {
       lyrics.forEach((l: any) => {
         items.push({
@@ -206,7 +206,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       .select("id, filename, analysis_json, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
-      .limit(5);
+      .limit(20);
     if (hitfits) {
       hitfits.forEach((h: any) => {
         items.push({
@@ -224,7 +224,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       .select("id, song_title, updated_at, result_json")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
-      .limit(5);
+      .limit(20);
     if (vibefits) {
       vibefits.forEach((v: any) => {
         items.push({
@@ -359,7 +359,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                     </SidebarMenuButton>
 
                     {isActive && recents.length > 0 && (
-                      <ul className="ml-6 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+                      <ul className="ml-6 mt-1 space-y-0.5 border-l border-sidebar-border pl-3 max-h-[40vh] overflow-y-auto">
                         {recents.map((item) => (
                           <li key={item.id} className="group flex items-center gap-0.5">
                             {editingId === item.id ? (
