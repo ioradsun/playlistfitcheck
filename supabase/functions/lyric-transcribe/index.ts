@@ -1053,6 +1053,14 @@ serve(async (req) => {
           gemini: {
             input: { model: analysisDisabled ? "disabled" : resolvedAnalysisModel, mimeType },
             output: {
+              status: hookSuccess ? "success" : (geminiError ? "failed" : "skipped"),
+              error: geminiError,
+              rawResponseLength: hookSuccess ? hookResult.value.rawContent.length : 0,
+              rawResponseContent: hookSuccess ? hookResult.value.rawContent.slice(0, 800) : null,
+              metadata: metadata || null,
+              hottest_hook: hooks.length > 0 ? hooks[0] : null,
+              adlibsCount: adlibCount,
+              adlibs: lines.filter(l => l.tag === "adlib"),
               hook: {
                 status: hookSuccess ? "success" : "failed",
                 rawLength: hookSuccess ? hookResult.value.rawContent.length : 0,
