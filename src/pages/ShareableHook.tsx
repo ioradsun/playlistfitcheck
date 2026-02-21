@@ -218,6 +218,8 @@ function useHookCanvas(
       const newH = Math.round(rect.height * dpr);
       if (canvas.width !== newW || canvas.height !== newH) {
         canvas.width = newW; canvas.height = newH;
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
       }
     };
     resize();
