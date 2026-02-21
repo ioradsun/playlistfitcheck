@@ -315,13 +315,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
             <Music size={18} className="text-primary shrink-0" />
             <span className="font-mono text-sm font-bold text-primary">{siteCopy.sidebar.brand}</span>
           </div>
-          <button
-            onClick={() => isMobile ? setOpenMobile(false) : toggleSidebar()}
-            className="p-1 rounded-md hover:bg-sidebar-accent transition-colors text-sidebar-foreground/60 hover:text-sidebar-foreground"
-            aria-label="Collapse sidebar"
-          >
-            <ChevronLeft size={16} />
-          </button>
         </div>
         {!authLoading && !user && (
           <div className="px-2 mt-2 space-y-1">
