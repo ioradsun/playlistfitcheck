@@ -72,6 +72,23 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       if (cachedAudio) {
         setAudioFile(cachedAudio);
         setHasRealAudio(true);
+      } else if ((initialLyric as any).audio_url) {
+        // Fetch audio from stored URL
+        const audioUrl = (initialLyric as any).audio_url as string;
+        fetch(audioUrl)
+          .then(res => res.blob())
+          .then(blob => {
+            const file = new File([blob], initialLyric.filename || "saved-lyrics.mp3", { type: blob.type || "audio/mpeg" });
+            setAudioFile(file);
+            setHasRealAudio(true);
+            // Cache for future navigations
+            if (initialLyric.id) sessionAudio.set("lyric", initialLyric.id, file);
+          })
+          .catch(() => {
+            const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+            setAudioFile(dummyFile);
+            setHasRealAudio(false);
+          });
       } else {
         const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
         setAudioFile(dummyFile);
@@ -277,6 +294,21 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
         if (cachedAudio) {
           setAudioFile(cachedAudio);
           setHasRealAudio(true);
+        } else if (l.audio_url) {
+          // Fetch from stored URL
+          fetch(l.audio_url)
+            .then(res => res.blob())
+            .then(blob => {
+              const file = new File([blob], l.filename || "saved-lyrics.mp3", { type: blob.type || "audio/mpeg" });
+              setAudioFile(file);
+              setHasRealAudio(true);
+              if (l.id) sessionAudio.set("lyric", l.id, file);
+            })
+            .catch(() => {
+              const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+              setAudioFile(dummyFile);
+              setHasRealAudio(false);
+            });
         } else {
           const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
           setAudioFile(dummyFile);

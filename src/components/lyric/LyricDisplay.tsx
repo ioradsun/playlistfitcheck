@@ -627,7 +627,21 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     if (!user) return;
     setSaveStatus("saving");
     try {
-      const payload = {
+      // Upload audio to storage if we have a real file
+      let audioUrl: string | null = null;
+      if (hasRealAudio && audioFile.size > 0) {
+        const fileExt = audioFile.name.split(".").pop() || "webm";
+        const storagePath = `${user.id}/lyric/${currentSavedId || crypto.randomUUID()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("audio-clips")
+          .upload(storagePath, audioFile, { upsert: true });
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+          audioUrl = urlData.publicUrl;
+        }
+      }
+
+      const payload: Record<string, any> = {
         title: data.title,
         artist: data.artist,
         lines: explicitLines as any,
@@ -639,6 +653,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } as any : null,
         song_dna: songDna as any ?? null,
       };
+
+      if (audioUrl) payload.audio_url = audioUrl;
 
       if (currentSavedId) {
         const { error } = await supabase.from("saved_lyrics").update(payload).eq("id", currentSavedId);
@@ -661,7 +677,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       console.error("Autosave error:", e);
       setSaveStatus("idle");
     }
-  }, [user, currentSavedId, data, explicitLines, fmlyLines, explicitMeta, fmlyMeta, audioFile.name, onSaved, beatGrid, songDna]);
+  }, [user, currentSavedId, data, explicitLines, fmlyLines, explicitMeta, fmlyMeta, audioFile, hasRealAudio, onSaved, beatGrid, songDna]);
 
   const scheduleAutosave = useCallback(() => {
     if (!user) return;
