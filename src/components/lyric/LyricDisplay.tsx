@@ -1420,11 +1420,18 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   const clipDuration = hook.end - hook.start;
                   return (
                     <div key={idx} className={`space-y-1.5 ${idx > 0 ? "pt-2 border-t border-border/20" : ""}`}>
-                      {hasBattle && (
-                        <span className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">
-                          {labels[idx] || `Hook ${idx + 1}`}
-                        </span>
-                      )}
+                      <div className="flex items-center justify-between">
+                        {hasBattle && (
+                          <span className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">
+                            {labels[idx] || `Hook ${idx + 1}`}
+                          </span>
+                        )}
+                        {hook.score > 0 && (
+                          <span className={`text-[10px] font-mono tabular-nums ${hookScoreColor(hook.score)}`}>
+                            {Math.round(hook.score)}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center justify-between">
                         {hook.previewText && (
                           <p className="text-sm font-medium text-foreground leading-snug flex-1">
