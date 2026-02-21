@@ -1,38 +1,34 @@
 
-# v11.0 "Scribe-Only" Architecture
+# v12.0 "Dual Engine" Architecture
 
 ## Overview
 
-Replaced the entire Whisper + Gemini Triptych pipeline with **ElevenLabs Scribe v2** as the sole transcription engine. Gemini is retained only for hook detection and metadata analysis.
+Added **Gemini audio transcription** as a selectable alternative to ElevenLabs Scribe v2. The transcription engine is admin-configurable via the Tools panel.
 
 ## Pipeline
 
 ```text
-t=0:   Scribe + Hook (parallel)
-t+S:   Scribe done → build lyric lines from word-level timestamps
+t=0:   Transcribe (Scribe OR Gemini) + Hook Analysis (parallel)
+t+T:   Transcription done → build lyric lines
 t+H:   Hook done → snap hook to nearest word boundary
 t+max: Return response
 ```
 
-## What Was Removed (v8-v10)
+## Engines
 
-- **Whisper** (`runWhisper`) — replaced by Scribe
-- **Gemini Triptych Lanes B/C/D** — intro patch, outro patch, phonetic auditor
-- **Audio byte-slicer** (`sliceAudioBase64`)
-- **Stitcher** (`stitchTriptych`)
-- **Phrase splitter** (`splitSegmentIntoPhrases`)
-- All triptych prompt builders (`buildIntroPrompt`, `buildOutroPrompt`, `buildAuditorPrompt`)
-- Auditor fallback logic (`runGeminiAuditorWithFallback`)
-- `transcriptionModel` frontend state (always Scribe now)
+| Engine | Source | Timestamps | Dependency |
+|--------|--------|-----------|------------|
+| ElevenLabs Scribe v2 | Native word-level | High precision | `ELEVENLABS_API_KEY` |
+| Gemini (audio-only) | Prompted line-level | Approximate | `LOVABLE_API_KEY` (free) |
 
-## What Remains
+## What Changed (v11 → v12)
 
-- `runScribe()` — ElevenLabs Scribe v2 with diarization + audio event tagging
-- `runGeminiHookAnalysis()` — hook detection, BPM/key/mood, title/artist
-- `findHookFromWords()` / `findRepetitionAnchor()` — hook snapping
-- `callGemini()` / `extractJsonFromContent()` — shared utilities
-- Frontend unchanged except removed `transcriptionModel` param
+- Added `runGeminiTranscribe()` — prompts Gemini for timestamped lyrics, synthesizes word entries for hook snapping
+- Edge function accepts `transcriptionModel` param (`"scribe"` or `"gemini"`)
+- Admin ToolsEditor: Whisper option replaced with Scribe; Gemini option retained
+- Frontend reads `lyric_transcription_model` from site_copy and passes to edge function
+- Client-side WebM/Opus compression unchanged — both engines receive the same base64 payload
 
 ## Version String
 
-`v11.0-scribe-only`
+`v12.0-dual-engine`

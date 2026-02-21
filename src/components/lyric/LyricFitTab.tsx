@@ -24,6 +24,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
   const [debugData, setDebugData] = useState<any | null>(null);
   const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
+  const [transcriptionModel, setTranscriptionModel] = useState("scribe");
   const { user } = useAuth();
   const quota = useUsageQuota("lyric");
 
@@ -49,6 +50,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
     supabase.from("site_copy").select("copy_json").limit(1).single().then(({ data }) => {
       const f = (data?.copy_json as any)?.features || {};
       if (f.lyric_analysis_model) setAnalysisModel(f.lyric_analysis_model);
+      if (f.lyric_transcription_model) setTranscriptionModel(f.lyric_transcription_model);
     });
   }, []);
 
@@ -104,7 +106,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject }: Prop
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ audioBase64, format, analysisModel }),
+          body: JSON.stringify({ audioBase64, format, analysisModel, transcriptionModel }),
         }
       );
 
