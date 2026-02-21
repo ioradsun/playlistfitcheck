@@ -207,7 +207,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
   return (
     <motion.div
       ref={(node: HTMLDivElement | null) => { containerRef.current = node; if (typeof ref === 'function') ref(node); else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node; }}
-      className="fixed inset-0 z-[60] bg-black"
+      className="fixed inset-0 z-[100] bg-black"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
