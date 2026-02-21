@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
+import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import type { LyricLine } from "./LyricDisplay";
 import type { BeatTick } from "@/engine/HookDanceEngine";
 
@@ -204,8 +205,21 @@ export function DirectorsCutScreen({
 
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "rgba(0, 0, 0, 0.92)";
-    ctx.fillRect(0, 0, w, h);
+
+    // System-specific background
+    const bgPalette = renderer.spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
+    drawSystemBackground(ctx, {
+      system: renderer.system,
+      physState: physState,
+      w,
+      h,
+      time: currentTime,
+      beatCount: renderer.beatIndex,
+      rng: renderer.prng,
+      palette: bgPalette,
+      hookStart,
+      hookEnd,
+    });
 
     // Find active line
     const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
