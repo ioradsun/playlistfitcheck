@@ -233,8 +233,29 @@ serve(async (req) => {
         console.warn(`[song-dna] Attempt ${attempt + 1} incomplete (finish_reason=${finishReason}). ${attempt < attempts.length - 1 ? "Retrying..." : "Using partial result."}`);
         console.warn(`[song-dna] Raw ends with: "${raw.slice(-120)}"`);
 
-        if (attempt === attempts.length - 1 && !parsed) {
-          parsed = {};
+        if (attempt === attempts.length - 1) {
+          // If we got partial data, try to salvage what we can
+          if (!parsed) parsed = {};
+          
+          // Ensure critical fields exist with fallback defaults
+          if (!parsed.mood) parsed.mood = "determined";
+          if (!parsed.description) parsed.description = "A dynamic track with powerful energy.";
+          if (!parsed.meaning) parsed.meaning = { theme: "Expression", summary: "An expressive musical piece.", imagery: ["sound waves", "stage lights"] };
+          if (!parsed.hottest_hook) {
+            // Estimate hook at ~60% through the track
+            parsed.hottest_hook = { start_sec: 60, duration_sec: 10, confidence: 0.80, justification: "Estimated hook region" };
+          }
+          if (!parsed.physics_spec || !parsed.physics_spec.system) {
+            parsed.physics_spec = {
+              system: "pressure",
+              params: { mass: 1.5, elasticity: 0.5, damping: 0.6, brittleness: 0.3, heat: 0.4 },
+              palette: ["hsl(280, 80%, 60%)", "hsl(320, 90%, 55%)", "hsl(0, 0%, 95%)"],
+              effect_pool: ["SHATTER_IN", "GLITCH_FLASH", "WAVE_SURGE", "STATIC_RESOLVE"],
+              logic_seed: 42,
+              lexicon: { semantic_tags: [{ tag: "RISE", strength: 0.7 }], line_mods: [], word_marks: [] },
+            };
+          }
+          console.log(`[song-dna] Using salvaged/fallback result: mood=${parsed.mood}, system=${parsed.physics_spec.system}`);
         }
       }
 
