@@ -141,6 +141,7 @@ export function HookDanceCanvas({
         progress,
         rng: prng,
         palette: activePalette,
+        system: activeSystem,
       };
 
       drawFn(ctx, effectState);

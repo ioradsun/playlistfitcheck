@@ -242,6 +242,7 @@ export function DirectorsCutScreen({
         progress,
         rng: renderer.prng,
         palette,
+        system: renderer.system,
       };
 
       drawFn(ctx, effectState);
