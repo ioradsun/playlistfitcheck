@@ -60,28 +60,32 @@ interface Comment {
 interface ConstellationNode {
   id: string;
   text: string;
+  submittedAt: number;
+  // Permanent position seeded from PRNG (normalized 0-1)
+  seedX: number;
+  seedY: number;
+  // Current position (normalized 0-1)
   x: number;
   y: number;
-  vx: number;
-  vy: number;
-  alpha: number;
-  age: number;
-  // Fly-in animation fields
-  phase: "flying" | "settling" | "drifting";
-  targetX: number;
-  targetY: number;
-  flySpeed: number;
-  settleTimer: number;
-  maxAlpha: number;
-  scale: number;
+  // Permanent drift from PRNG
+  driftSpeed: number;  // 0.015-0.04 px/frame
+  driftAngle: number;  // radians
+  // Lifecycle
+  phase: "center" | "transitioning" | "river" | "constellation";
+  phaseStartTime: number;
+  riverRowIndex: number;
+  currentSize: number;
+  // Age-based opacity (6-12%)
+  baseOpacity: number;
 }
 
-interface RiverRow {
-  comments: { id: string; text: string; alpha: number }[];
-  speed: number;
-  y: number;
-  offset: number;
-}
+// Static river row configuration
+const RIVER_ROWS = [
+  { y: 0.25, speed: 0.4, opacity: 0.18, direction: -1 }, // left
+  { y: 0.38, speed: 0.6, opacity: 0.14, direction: 1 },  // right
+  { y: 0.62, speed: 0.8, opacity: 0.11, direction: -1 }, // left
+  { y: 0.75, speed: 1.1, opacity: 0.08, direction: 1 },  // right
+];
 
 interface FireParticle {
   id: number;
@@ -124,7 +128,7 @@ function useHookCanvas(
   containerRef: React.RefObject<HTMLDivElement>,
   hookData: HookData | null,
   constellationRef: React.MutableRefObject<ConstellationNode[]>,
-  riverRowsRef: React.MutableRefObject<RiverRow[]>,
+  riverOffsetsRef: React.MutableRefObject<number[]>,
   active: boolean = true,
 ) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -247,80 +251,106 @@ function useHookCanvas(
       hookStart: hookData.hook_start, hookEnd: hookData.hook_end,
     });
 
-    // Constellation — tiny, non-overlapping, subtle orbits at edges
+    // ── Layer 1: Comment rendering (constellation → river → arrival) ──────
     const nodes = constellationRef.current;
+    const now = Date.now();
     ctx.textBaseline = "middle";
-    // Pre-compute positions to avoid overlap
-    const placedRects: { x: number; y: number; hw: number; hh: number }[] = [];
-    const doesOverlap = (px: number, py: number, hw: number, hh: number) => {
-      for (const r of placedRects) {
-        if (Math.abs(px - r.x) < (hw + r.hw + 8) && Math.abs(py - r.y) < (hh + r.hh + 4)) return true;
-      }
-      // Also avoid center where lyrics render (middle 40% of screen)
-      if (px > w * 0.3 && px < w * 0.7 && py > h * 0.25 && py < h * 0.75) return true;
-      return false;
-    };
+    ctx.textAlign = "center";
+
+    // Pass 1: Constellation nodes (lowest opacity, drawn first)
     for (const node of nodes) {
-      node.age += 1;
-      if (node.phase === "flying") {
-        const dx = node.targetX - node.x;
-        const dy = node.targetY - node.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 0.02) {
-          node.x = node.targetX; node.y = node.targetY;
-          node.phase = "settling"; node.settleTimer = 0;
-        } else {
-          node.x += dx * node.flySpeed * 3;
-          node.y += dy * node.flySpeed * 3;
-        }
-        node.scale = Math.max(0.7, node.scale - 0.015);
-      } else if (node.phase === "settling") {
-        node.settleTimer += 1;
-        if (node.settleTimer > 60) node.phase = "drifting";
-        node.alpha = Math.max(node.maxAlpha, node.alpha - 0.005);
-        node.scale = Math.max(0.7, node.scale - 0.008);
-      } else {
-        // Orbit in the edges/corners — away from center lyrics
-        const rng2 = mulberry32(hashSeed(node.id));
-        const baseAngle = rng2() * Math.PI * 2;
-        // Push orbits to outer ring (0.35–0.48 from center)
-        const orbitRadius = 0.35 + rng2() * 0.13;
-        const orbitSpeed = (0.00015 + rng2() * 0.00025) * (rng2() > 0.5 ? 1 : -1);
-        const angle = baseAngle + node.age * orbitSpeed;
-        node.x = 0.5 + Math.cos(angle) * orbitRadius;
-        node.y = 0.5 + Math.sin(angle) * orbitRadius;
-        node.alpha = node.maxAlpha * 0.6 + Math.sin(node.age * 0.006) * 0.015;
-        node.scale = 0.7;
-      }
-      const fontSize = Math.round(8 * node.scale); // much smaller base
-      ctx.font = `${fontSize}px system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
-      const textW = ctx.measureText(truncated).width;
-      const px = node.x * w;
-      const py = node.y * h;
-      // Skip rendering if it would overlap another comment or the lyric zone
-      if (doesOverlap(px, py, textW / 2, fontSize / 2)) continue;
-      placedRects.push({ x: px, y: py, hw: textW / 2, hh: fontSize / 2 });
-      ctx.globalAlpha = Math.max(0, Math.min(0.15, node.alpha)); // cap opacity very low
+      if (node.phase !== "constellation") continue;
+      // Linear drift
+      node.x += Math.cos(node.driftAngle) * node.driftSpeed / w;
+      node.y += Math.sin(node.driftAngle) * node.driftSpeed / h;
+      // Wrap
+      if (node.x < -0.1) node.x = 1.1;
+      if (node.x > 1.1) node.x = -0.1;
+      if (node.y < -0.1) node.y = 1.1;
+      if (node.y > 1.1) node.y = -0.1;
+
+      ctx.font = "13px system-ui, -apple-system, sans-serif";
+      ctx.globalAlpha = node.baseOpacity;
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(truncated, px, py);
+      const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
+      ctx.fillText(truncated, node.x * w, node.y * h);
     }
 
-    // River
-    const rows = riverRowsRef.current;
-    ctx.font = "13px system-ui, sans-serif";
-    for (const row of rows) {
-      row.offset -= row.speed;
-      let xPos = row.offset;
-      for (const comment of row.comments) {
-        ctx.globalAlpha = comment.alpha;
-        ctx.fillStyle = "#ffffff";
-        const measured = ctx.measureText(comment.text).width;
-        ctx.fillText(comment.text, xPos % (w + 400), row.y * h);
-        xPos += measured + 60;
+    // Pass 2: River rows (medium opacity)
+    const riverNodes = nodes.filter(n => n.phase === "river");
+    const offsets = riverOffsetsRef.current;
+    for (let ri = 0; ri < RIVER_ROWS.length; ri++) {
+      const row = RIVER_ROWS[ri];
+      offsets[ri] += row.speed * row.direction;
+      const rowComments = riverNodes.filter(n => n.riverRowIndex === ri);
+      if (rowComments.length === 0) continue;
+
+      ctx.font = "15px system-ui, -apple-system, sans-serif";
+      ctx.globalAlpha = row.opacity;
+      ctx.fillStyle = "#ffffff";
+
+      const rowY = row.y * h;
+      // Compute total spacing for wrapping
+      const textWidths = rowComments.map(n => {
+        const t = n.text.length > 30 ? n.text.slice(0, 30) + "…" : n.text;
+        return ctx.measureText(t).width;
+      });
+      const totalWidth = textWidths.reduce((a, tw) => a + tw + 120, 0);
+      const wrapWidth = Math.max(totalWidth, w + 200);
+
+      let xBase = offsets[ri];
+      for (let ci = 0; ci < rowComments.length; ci++) {
+        const truncated = rowComments[ci].text.length > 30 ? rowComments[ci].text.slice(0, 30) + "…" : rowComments[ci].text;
+        // Wrap position into visible range
+        let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
+        if (drawX > w + 100) drawX -= wrapWidth;
+        ctx.fillText(truncated, drawX, rowY);
+        xBase += textWidths[ci] + 120;
       }
-      if (row.offset < -(w + 400) * 2) row.offset = 0;
+    }
+
+    // Pass 3: New submissions ("center" and "transitioning" — highest opacity, drawn last)
+    for (const node of nodes) {
+      if (node.phase === "center") {
+        const elapsed = now - node.phaseStartTime;
+        ctx.font = "28px system-ui, -apple-system, sans-serif";
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#ffffff";
+        const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
+        ctx.fillText(truncated, w / 2, h / 2);
+        // After 2000ms, transition
+        if (elapsed >= 2000) {
+          node.phase = "transitioning";
+          node.phaseStartTime = now;
+        }
+      } else if (node.phase === "transitioning") {
+        const elapsed = now - node.phaseStartTime;
+        const t = Math.min(1, elapsed / 8000); // 0→1 over 8s
+        // Interpolate position from center to river row position
+        const targetRow = RIVER_ROWS[node.riverRowIndex];
+        const targetY = targetRow ? targetRow.y : node.seedY;
+        const cx = 0.5, cy = 0.5;
+        const curX = cx + (node.seedX - cx) * t * 0.3; // drift partway
+        const curY = cy + (targetY - cy) * t;
+        // Interpolate size and opacity
+        const size = 28 - (28 - 15) * t;
+        const opacity = 1 - (1 - (targetRow?.opacity || 0.18)) * t;
+
+        ctx.font = `${Math.round(size)}px system-ui, -apple-system, sans-serif`;
+        ctx.globalAlpha = opacity;
+        ctx.fillStyle = "#ffffff";
+        const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
+        ctx.fillText(truncated, curX * w, curY * h);
+
+        node.x = curX;
+        node.y = curY;
+        node.currentSize = size;
+
+        if (elapsed >= 8000) {
+          node.phase = "river";
+          node.phaseStartTime = now;
+        }
+      }
     }
     ctx.globalAlpha = 1;
 
@@ -405,12 +435,12 @@ export default function ShareableHook() {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
-  // Constellation + river for primary
+  // Constellation for primary
   const constellationRef = useRef<ConstellationNode[]>([]);
-  const riverRowsRef = useRef<RiverRow[]>([]);
+  const riverOffsetsRef = useRef<number[]>([0, 0, 0, 0]);
   // Empty refs for rival (no comments on rival canvas)
   const constellationRefB = useRef<ConstellationNode[]>([]);
-  const riverRowsRefB = useRef<RiverRow[]>([]);
+  const riverOffsetsRefB = useRef<number[]>([0, 0, 0, 0]);
 
   // Badge
   const [badgeVisible, setBadgeVisible] = useState(false);
@@ -484,41 +514,59 @@ export default function ShareableHook() {
   useEffect(() => {
     if (!hookData || comments.length === 0) return;
     const now = Date.now();
-    const nodes: ConstellationNode[] = comments.map((c) => {
+    const timestamps = comments.map(c => new Date(c.submitted_at).getTime());
+    const oldest = Math.min(...timestamps);
+    const newest = Math.max(...timestamps);
+    const timeSpan = Math.max(newest - oldest, 1);
+
+    // Determine how many recent comments go to river vs constellation
+    const riverCount = Math.min(comments.length, RIVER_ROWS.length * 5);
+    const riverStartIdx = Math.max(0, comments.length - riverCount);
+
+    const nodes: ConstellationNode[] = comments.map((c, idx) => {
       const ts = new Date(c.submitted_at).getTime();
       const rng = mulberry32(hashSeed(c.id));
-      const ageSec = (now - ts) / 1000;
-      const maxAge = 30 * 24 * 3600;
-      const normalizedAge = Math.min(ageSec / maxAge, 1);
-      const dist = 0.1 + normalizedAge * 0.4;
+      const ageRatio = timeSpan > 0 ? (newest - ts) / timeSpan : 0; // 0=newest, 1=oldest
+
+      // Seed position: newest in center 40%, oldest in outer 60%
       const angle = rng() * Math.PI * 2;
-      const finalX = 0.5 + Math.cos(angle) * dist;
-      const finalY = 0.5 + Math.sin(angle) * dist;
+      const maxRadius = 0.2 + ageRatio * 0.3; // 0.2 (center) to 0.5 (outer)
+      const radius = rng() * maxRadius;
+      const seedX = 0.5 + Math.cos(angle) * radius;
+      const seedY = 0.5 + Math.sin(angle) * radius;
+
+      // Permanent drift
+      const driftSpeed = 0.015 + rng() * 0.025;
+      const driftAngle = rng() * Math.PI * 2;
+
+      // Age-based opacity: newest=12%, oldest=6%
+      const baseOpacity = 0.12 - ageRatio * 0.06;
+
+      // Assign to river if recent enough
+      const isRiver = idx >= riverStartIdx;
+      const riverRowIndex = isRiver ? (idx - riverStartIdx) % RIVER_ROWS.length : 0;
+
       return {
         id: c.id, text: c.text,
-        x: finalX, y: finalY,
-        vx: (rng() - 0.5) * 0.00002, vy: (rng() - 0.5) * 0.00002,
-        alpha: 0.06 + (1 - normalizedAge) * 0.06, age: ageSec,
-        phase: "drifting" as const, targetX: finalX, targetY: finalY,
-        flySpeed: 0, settleTimer: 0, maxAlpha: 0.06 + (1 - normalizedAge) * 0.06, scale: 1,
+        submittedAt: ts,
+        seedX, seedY,
+        x: seedX, y: seedY,
+        driftSpeed, driftAngle,
+        phase: (isRiver ? "river" : "constellation") as ConstellationNode["phase"],
+        phaseStartTime: now,
+        riverRowIndex,
+        currentSize: isRiver ? 15 : 13,
+        baseOpacity,
       };
     });
     constellationRef.current = nodes;
-
-    const recent = comments.slice(-100);
-    const rows: RiverRow[] = [0.2, 0.4, 0.6, 0.8].map((y, i) => ({
-      comments: recent.slice(i * 5, i * 5 + 5).map((c, j) => ({
-        id: c.id, text: c.text, alpha: 0.15 - j * 0.02,
-      })),
-      speed: 0.3 + i * 0.1, y, offset: 0,
-    }));
-    riverRowsRef.current = rows;
+    riverOffsetsRef.current = [0, 0, 0, 0];
   }, [comments, hookData]);
 
   // ── Hook canvas engines ───────────────────────────────────────────────────
 
-  const hookACanvas = useHookCanvas(canvasRef, containerRef, hookData, constellationRef, riverRowsRef, !isBattle || activeHookSide === "a");
-  const hookBCanvas = useHookCanvas(canvasRefB, containerRefB, rivalHook, constellationRefB, riverRowsRefB, isBattle && activeHookSide === "b");
+  const hookACanvas = useHookCanvas(canvasRef, containerRef, hookData, constellationRef, riverOffsetsRef, !isBattle || activeHookSide === "a");
+  const hookBCanvas = useHookCanvas(canvasRefB, containerRefB, rivalHook, constellationRefB, riverOffsetsRefB, isBattle && activeHookSide === "b");
 
   // ── Handle canvas tap (unmute) ────────────────────────────────────────────
 
@@ -625,27 +673,27 @@ export default function ShareableHook() {
       setHasSubmitted(true);
       setInputText("");
 
-      // Spawn from a random edge, fly bright to center, then drift into constellation
-      const edge = Math.random();
-      let spawnX: number, spawnY: number;
-      if (edge < 0.25) { spawnX = -0.15; spawnY = Math.random(); }
-      else if (edge < 0.5) { spawnX = 1.15; spawnY = Math.random(); }
-      else if (edge < 0.75) { spawnX = Math.random(); spawnY = -0.15; }
-      else { spawnX = Math.random(); spawnY = 1.15; }
-
+      // New submission: start at center, full brightness
       const rng = mulberry32(hashSeed(newComment.id));
-      const settledAngle = rng() * Math.PI * 2;
-      const settledDist = 0.1 + rng() * 0.15;
+      const angle = rng() * Math.PI * 2;
+      const radius = rng() * 0.2;
+      const seedX = 0.5 + Math.cos(angle) * radius;
+      const seedY = 0.5 + Math.sin(angle) * radius;
+      const driftSpeed = 0.015 + rng() * 0.025;
+      const driftAngle = rng() * Math.PI * 2;
+      const riverRowIndex = Math.floor(rng() * RIVER_ROWS.length);
+
       constellationRef.current.push({
         id: newComment.id, text: newComment.text,
-        x: spawnX, y: spawnY,
-        vx: (rng() - 0.5) * 0.00002, vy: (rng() - 0.5) * 0.00002,
-        alpha: 1, age: 0,
-        phase: "flying", targetX: 0.5, targetY: 0.5,
-        flySpeed: 0.008 + Math.random() * 0.006,
-        settleTimer: 0,
-        maxAlpha: 0.12,
-        scale: 1.8,
+        submittedAt: Date.now(),
+        seedX, seedY,
+        x: 0.5, y: 0.5,
+        driftSpeed, driftAngle,
+        phase: "center",
+        phaseStartTime: Date.now(),
+        riverRowIndex,
+        currentSize: 28,
+        baseOpacity: 0.12,
       });
     }
   }, [inputText, hookData, hasSubmitted]);
