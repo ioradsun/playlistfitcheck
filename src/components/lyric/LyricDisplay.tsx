@@ -23,6 +23,7 @@ import { LyricFormatControls, type LineFormat, type SocialPreset } from "./Lyric
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import { HookDanceCanvas } from "./HookDanceCanvas";
+import { HookDanceExporter } from "./HookDanceExporter";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
@@ -297,6 +298,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [hookDanceTime, setHookDanceTime] = useState(0);
   const [hookDanceBeatCount, setHookDanceBeatCount] = useState(0);
   const hookDancePrngRef = useRef<(() => number) | null>(null);
+  const [hookDanceExportOpen, setHookDanceExportOpen] = useState(false);
+  const hookDanceBeatsRef = useRef<BeatTick[]>([]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1430,6 +1433,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       );
                       hookDanceRef.current = engine;
                       hookDancePrngRef.current = engine.prng;
+                      hookDanceBeatsRef.current = beats;
                       setHookDanceRunning(true);
                       engine.start();
                     }}
@@ -1475,6 +1479,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
             beatCount={hookDanceBeatCount}
             prng={hookDancePrngRef.current}
             onClose={() => hookDanceRef.current?.stop()}
+            onExport={() => {
+              hookDanceRef.current?.stop();
+              setHookDanceExportOpen(true);
+            }}
           />
         )}
       </AnimatePresence>
@@ -1547,6 +1555,23 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         artist={data.artist}
         audioFile={audioFile}
       />
+
+      {/* Hook Dance Exporter */}
+      {songDna?.physicsSpec && songDna.hook && (
+        <HookDanceExporter
+          open={hookDanceExportOpen}
+          onOpenChange={setHookDanceExportOpen}
+          spec={songDna.physicsSpec as PhysicsSpec}
+          beats={hookDanceBeatsRef.current}
+          lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
+          hookStart={songDna.hook.start}
+          hookEnd={songDna.hook.end}
+          title={data.title}
+          artist={data.artist}
+          audioFile={audioFile}
+          seed={`${data.title}-${songDna.hook.start.toFixed(3)}`}
+        />
+      )}
     </motion.div>
   );
 }
