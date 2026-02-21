@@ -16,13 +16,15 @@ CRITICAL RULES:
 - Do NOT generate a line_mod for every lyric line. Only pick the 5-8 most impactful moments.
 - If the song has 100+ lines, you still output ONLY 5-8 line_mods total. This is NON-NEGOTIABLE.
 
-1. ADAPTIVE HOOK ANCHOR (8–12s, Bar-Aligned)
+1. TOP 2 HOOK ANCHORS (8–12s Each, Bar-Aligned)
 
-Identify the single primary bar-aligned segment representing the track's definitive "Hottest Hook."
+Identify the TWO most distinct, bar-aligned segments representing the track's hottest hooks. They MUST be non-overlapping.
 
-Rules: Must be 8.000–12.000s, bar-aligned, and capture the peak production lift without cutting off lyrical phrases.
+Rules: Each must be 8.000–12.000s, bar-aligned, and capture a production lift without cutting off lyrical phrases. The two hooks should feel genuinely different (e.g. a melodic chorus vs. a rhythmic bridge, or a verse climax vs. a drop).
 
 Evaluation Priority: 1. Production lift, 2. Lyrical repetition, 3. Melodic peak.
+
+Give each hook a short editorial "label" — a 2-4 word evocative name (e.g. "The Drop", "The Confession", "Midnight Surge"). The label should capture the hook's emotional character.
 
 2. SONG IDENTITY & MEANING
 
@@ -63,7 +65,10 @@ Hook Lock: Lines within the hottest_hook window MUST use the HOOK_FRACTURE effec
 
 OUTPUT — Valid JSON only, no markdown, no explanation:
 {
-  "hottest_hook": { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.00, "justification": "..." },
+  "hottest_hooks": [
+    { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.95, "justification": "...", "label": "The Drop" },
+    { "start_sec": 45.000, "duration_sec": 10.000, "confidence": 0.85, "justification": "...", "label": "The Confession" }
+  ],
   "description": "...",
   "mood": "...",
   "meaning": {
@@ -123,8 +128,11 @@ function extractJson(raw: string): any | null {
 
 /** Check if parsed result has the critical fields */
 function isComplete(parsed: any): boolean {
+  // Support both new hottest_hooks array and legacy hottest_hook object
+  const hasHooks = (Array.isArray(parsed?.hottest_hooks) && parsed.hottest_hooks.length > 0 && parsed.hottest_hooks[0]?.start_sec != null)
+    || (parsed?.hottest_hook?.start_sec != null);
   return !!(
-    parsed?.hottest_hook?.start_sec != null &&
+    hasHooks &&
     parsed?.physics_spec?.system &&
     parsed?.physics_spec?.params &&
     Object.keys(parsed.physics_spec.params).length >= 3 &&
@@ -225,7 +233,12 @@ serve(async (req) => {
         parsed = extractJson(raw);
 
         if (parsed && isComplete(parsed)) {
-          console.log(`[song-dna] ✓ Complete on attempt ${attempt + 1}: mood=${parsed.mood}, system=${parsed.physics_spec.system}, hook=${parsed.hottest_hook.start_sec}`);
+          // Normalize legacy format
+          if (parsed.hottest_hook && !parsed.hottest_hooks) {
+            parsed.hottest_hooks = [parsed.hottest_hook];
+          }
+          const firstHook = parsed.hottest_hooks?.[0] || parsed.hottest_hook;
+          console.log(`[song-dna] ✓ Complete on attempt ${attempt + 1}: mood=${parsed.mood}, system=${parsed.physics_spec.system}, hook=${firstHook?.start_sec}, hooks=${parsed.hottest_hooks?.length ?? 1}`);
           break;
         }
 
@@ -241,9 +254,16 @@ serve(async (req) => {
           if (!parsed.mood) parsed.mood = "determined";
           if (!parsed.description) parsed.description = "A dynamic track with powerful energy.";
           if (!parsed.meaning) parsed.meaning = { theme: "Expression", summary: "An expressive musical piece.", imagery: ["sound waves", "stage lights"] };
-          if (!parsed.hottest_hook) {
-            // Estimate hook at ~60% through the track
-            parsed.hottest_hook = { start_sec: 60, duration_sec: 10, confidence: 0.80, justification: "Estimated hook region" };
+          if (!parsed.hottest_hooks && !parsed.hottest_hook) {
+            // Estimate hooks as fallback
+            parsed.hottest_hooks = [
+              { start_sec: 60, duration_sec: 10, confidence: 0.80, justification: "Estimated hook region", label: "The Hook" },
+              { start_sec: 90, duration_sec: 10, confidence: 0.70, justification: "Estimated secondary hook", label: "The Bridge" },
+            ];
+          }
+          // Normalize legacy hottest_hook → hottest_hooks array
+          if (parsed.hottest_hook && !parsed.hottest_hooks) {
+            parsed.hottest_hooks = [parsed.hottest_hook];
           }
           if (!parsed.physics_spec || !parsed.physics_spec.system) {
             parsed.physics_spec = {
@@ -259,7 +279,12 @@ serve(async (req) => {
         }
       }
 
-      console.log(`[song-dna] Final result: mood=${parsed?.mood ?? "none"}, hook=${parsed?.hottest_hook?.start_sec ?? "none"}, system=${parsed?.physics_spec?.system ?? "none"}, params=${JSON.stringify(parsed?.physics_spec?.params ?? {})}`);
+      // Final normalization: ensure hottest_hooks array exists
+      if (parsed?.hottest_hook && !parsed?.hottest_hooks) {
+        parsed.hottest_hooks = [parsed.hottest_hook];
+      }
+
+      console.log(`[song-dna] Final result: mood=${parsed?.mood ?? "none"}, hooks=${parsed?.hottest_hooks?.length ?? 0}, system=${parsed?.physics_spec?.system ?? "none"}, params=${JSON.stringify(parsed?.physics_spec?.params ?? {})}`);
 
     } else {
       // ── Lyrics-only mode ──
