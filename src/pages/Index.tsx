@@ -113,31 +113,68 @@ const Index = () => {
     }
   }, [location.pathname]);
 
-  // Auto-load LyricFit project from URL param
-  const lyricProjectLoadedRef = useRef<string | null>(null);
+  // Auto-load project from URL param for any tool
+  const projectLoadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!projectId || lyricProjectLoadedRef.current === projectId) return;
-    // If already loaded via sidebar, skip
-    if (loadedLyric?.id === projectId) {
-      lyricProjectLoadedRef.current = projectId;
+    if (!projectId || projectLoadedRef.current === projectId) return;
+    const tab = activeTab;
+    
+    // If already loaded via sidebar, just mark as loaded
+    const alreadyLoaded = 
+      (tab === "lyric" && loadedLyric?.id === projectId) ||
+      (tab === "mix" && loadedMixProject?.id === projectId) ||
+      (tab === "profit" && profitSavedReport?.reportId === projectId);
+    if (alreadyLoaded) {
+      projectLoadedRef.current = projectId;
       return;
     }
-    lyricProjectLoadedRef.current = projectId;
+    projectLoadedRef.current = projectId;
+
+    const pathMap: Record<string, string> = { lyric: "/LyricFit", mix: "/MixFit", hitfit: "/HitFit", profit: "/ProFit", vibefit: "/VibeFit", playlist: "/PlaylistFit" };
+
     (async () => {
-      const { data, error } = await supabase
-        .from("saved_lyrics")
-        .select("*")
-        .eq("id", projectId)
-        .single();
+      let data: any = null;
+      let error: any = null;
+      if (tab === "lyric") {
+        const r = await supabase.from("saved_lyrics").select("*").eq("id", projectId).single();
+        data = r.data; error = r.error;
+      } else if (tab === "mix") {
+        const r = await supabase.from("mix_projects").select("*").eq("id", projectId).single();
+        data = r.data; error = r.error;
+      } else if (tab === "hitfit") {
+        const r = await supabase.from("saved_hitfit").select("*").eq("id", projectId).single();
+        data = r.data; error = r.error;
+      } else if (tab === "profit") {
+        const r = await supabase.from("profit_reports").select("*, profit_artists(*)").eq("id", projectId).single();
+        data = r.data; error = r.error;
+      } else if (tab === "vibefit") {
+        const r = await supabase.from("saved_vibefit").select("*").eq("id", projectId).single();
+        data = r.data; error = r.error;
+      } else if (tab === "playlist") {
+        const r = await supabase.from("saved_searches").select("*").eq("id", projectId).single();
+        data = r.data; error = r.error;
+      }
       if (error || !data) {
         toast.error("Project not found");
-        navigate("/LyricFit", { replace: true });
+        navigate(pathMap[tab] || "/CrowdFit", { replace: true });
         return;
       }
-      setLoadedLyric(data);
-      setActiveTabState("lyric");
+      // For profit, reshape data to match expected format
+      if (tab === "profit" && data.blueprint_json) {
+        const artist = (data as any).profit_artists;
+        handleLoadProject("profit", {
+          reportId: data.id,
+          shareToken: data.share_token,
+          blueprint: data.blueprint_json,
+          artist,
+        });
+      } else if (tab === "hitfit" && data.analysis_json) {
+        handleLoadProject("hitfit", { id: data.id, analysis: data.analysis_json });
+      } else {
+        handleLoadProject(tab, data);
+      }
     })();
-  }, [projectId]);
+  }, [projectId, activeTab]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
@@ -227,7 +264,10 @@ const Index = () => {
         health_score: output.summary.healthScore,
         health_label: output.summary.healthLabel,
       }).select("id").single();
-      if (inserted) savedSearchIdRef.current = inserted.id;
+      if (inserted) {
+        savedSearchIdRef.current = inserted.id;
+        navigate(`/PlaylistFit/${inserted.id}`, { replace: true });
+      }
     } catch (e) {
       console.error("Failed to save search:", e);
     }
@@ -369,8 +409,8 @@ const Index = () => {
   }, [user, authLoading]);
 
   const handleNewLyric = useCallback(() => { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }, [navigate]);
-  const handleNewMix = useCallback(() => setLoadedMixProject(null), []);
-  const handleNewHitFit = useCallback(() => setLoadedHitFitAnalysis(null), []);
+  const handleNewMix = useCallback(() => { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }, [navigate]);
+  const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }, [navigate]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
     // Reset everything first
@@ -386,9 +426,9 @@ const Index = () => {
     switch (type) {
       case "profit": {
         if (data?.reportId && data?.blueprint && data?.artist) {
-          // Load saved report directly — no re-analysis needed
           setProfitSavedReport(data);
           setProfitLoadKey(k => k + 1);
+          navigate(`/ProFit/${data.reportId}`, { replace: true });
         } else {
           const artistId = data?.spotify_artist_id;
           if (artistId) {
@@ -401,6 +441,7 @@ const Index = () => {
       case "hitfit": {
         if (data?.analysis) {
           setLoadedHitFitAnalysis(data.analysis);
+          if (data.id) navigate(`/HitFit/${data.id}`, { replace: true });
         }
         break;
       }
@@ -412,8 +453,8 @@ const Index = () => {
           setSongFitAnalysis(songFit ?? null);
           setVibeLoading(false);
           setSongFitLoading(false);
+          if (data.id) navigate(`/PlaylistFit/${data.id}`, { replace: true });
         } else if (data?.playlist_url) {
-          // Re-run analysis from scratch
           (async () => {
             setVibeLoading(true);
             try {
@@ -445,6 +486,7 @@ const Index = () => {
             updatedAt: data.updated_at || new Date().toISOString(),
           };
           setLoadedMixProject(mixData);
+          if (data.id) navigate(`/MixFit/${data.id}`, { replace: true });
         }
         break;
       }
@@ -459,16 +501,25 @@ const Index = () => {
         if (data) {
           setLoadedVibeFitResult(data);
           setVibeFitLoadKey((k) => k + 1);
+          if (data.id) navigate(`/VibeFit/${data.id}`, { replace: true });
         }
         break;
       }
     }
-  }, [handleAnalyze]);
+  }, [handleAnalyze, navigate]);
+
+  const navigateToProject = useCallback((tool: string, id: string) => {
+    const pathMap: Record<string, string> = { profit: "ProFit", playlist: "PlaylistFit", mix: "MixFit", lyric: "LyricFit", hitfit: "HitFit", vibefit: "VibeFit" };
+    const prefix = pathMap[tool];
+    if (prefix && id && location.pathname !== `/${prefix}/${id}`) {
+      navigate(`/${prefix}/${id}`, { replace: true });
+    }
+  }, [navigate, location.pathname]);
 
   const renderTabContent = () => {
     switch (activeTab) {
       case "profit":
-        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onProjectSaved={refreshSidebar} onHeaderProject={setHeaderProject} /></div>;
+        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onProjectSaved={refreshSidebar} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></div>;
       case "playlist":
         return result ? (
           <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -499,7 +550,7 @@ const Index = () => {
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><DreamFitTab /></div>;
       case "vibefit":
-        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onProjectSaved={refreshSidebar} onHeaderProject={setHeaderProject} /></div>;
+        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onProjectSaved={refreshSidebar} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} /></div>;
       default:
         return null;
     }
@@ -542,21 +593,17 @@ const Index = () => {
           </div>
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
-            <LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => {
-              if (id && location.pathname !== `/LyricFit/${id}`) {
-                navigate(`/LyricFit/${id}`, { replace: true });
-              }
-            }} />
+            <LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("lyric", id)} />
           </div>
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "mix" ? "" : "hidden"}`}>
-            <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} />
+            <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} />
           </div>
           {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
             {loadedHitFitAnalysis
-              ? <HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} />
-              : <HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} />
+              ? <HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} />
+              : <HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} />
             }
           </div>
           {!persistedTabs.includes(activeTab) && renderTabContent()}

@@ -22,9 +22,10 @@ interface ProFitTabProps {
   initialSavedReport?: { reportId: string; shareToken: string; blueprint: Blueprint; artist: ArtistData } | null;
   onProjectSaved?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
+  onSavedId?: (id: string) => void;
 }
 
-export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved, onHeaderProject }: ProFitTabProps = {}) => {
+export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved, onHeaderProject, onSavedId }: ProFitTabProps = {}) => {
   const [view, setView] = useState<View>("landing");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportState | null>(null);
@@ -54,6 +55,7 @@ export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved
       setView("report");
       await quota.increment();
       onProjectSaved?.();
+      if (data.reportId) onSavedId?.(data.reportId);
       // Save to localStorage history
       try {
         const history = JSON.parse(localStorage.getItem("profit_history") || "[]");

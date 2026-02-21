@@ -12,9 +12,10 @@ interface HitFitTabProps {
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
+  onSavedId?: (id: string) => void;
 }
 
-export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHeaderProject }: HitFitTabProps = {}) {
+export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHeaderProject, onSavedId }: HitFitTabProps = {}) {
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<HitFitAnalysis | null>(initialAnalysis || null);
   const { user } = useAuth();
@@ -79,12 +80,13 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHea
       // Save to DB for authenticated users
       if (user) {
         try {
-          await supabase.from("saved_hitfit").insert({
+          const { data: inserted } = await supabase.from("saved_hitfit").insert({
             user_id: user.id,
             filename: master1.name.replace(/\.[^.]+$/, ""),
             analysis_json: result as any,
-          });
+          }).select("id").single();
           onProjectSaved?.();
+          if (inserted) onSavedId?.(inserted.id);
         } catch (e) {
           console.error("Failed to save HitFit analysis:", e);
         }
