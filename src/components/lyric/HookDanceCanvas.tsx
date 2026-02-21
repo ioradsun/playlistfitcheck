@@ -9,6 +9,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { X, Download } from "lucide-react";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
+import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
@@ -86,11 +87,21 @@ export function HookDanceCanvas({
     const w = canvas.width / dpr;
     const h = canvas.height / dpr;
 
-    // Clear with dark background
+    // Draw system-specific background
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "rgba(0, 0, 0, 0.92)";
-    ctx.fillRect(0, 0, w, h);
+    drawSystemBackground(ctx, {
+      system: activeSystem,
+      physState: physicsState,
+      w,
+      h,
+      time: currentTime,
+      beatCount,
+      rng: prng,
+      palette: activePalette,
+      hookStart,
+      hookEnd,
+    });
 
     // Find current lyric line in hook region
     const activeLine = lines.find(
