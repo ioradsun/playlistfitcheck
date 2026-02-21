@@ -1,81 +1,175 @@
 
 
-# Director's Cut Screen
+# Hook Battle: Editorial A/B Poll on the Share Page
 
-## Overview
-After Song DNA analysis reveals the AI's recommended physics system, a new full-screen "Director's Cut" overlay lets the artist see all 5 physics systems rendered simultaneously on the same hook. They pick the one that feels right -- no sliders, no parameters. Just instinct.
+## Vision
 
-## Flow Change
+Transform the share page from a single-hook showcase into a split-screen "Hook Battle" where audiences vote on which of two AI-identified hooks hits harder. Think editorial music magazine meets Instagram Stories poll -- minimal, typographic, and visceral. The winning hook accumulates fire and floating comments in real-time while the losing side fades quiet.
+
+## Architecture Overview
 
 ```text
-Upload --> Transcribe --> Song DNA Reveal --> Director's Cut --> Hook Dance Playback --> Export
++--------------------------------------------------+
+|  AI (lyric-analyze)                               |
+|  Returns top 2 hooks ranked by confidence         |
++--------------------------------------------------+
+         |
+         v
++--------------------------------------------------+
+|  LyricDisplay (client)                            |
+|  Parses both hooks, publishes both to             |
+|  shareable_hooks with a shared battle_id          |
++--------------------------------------------------+
+         |
+         v
++--------------------------------------------------+
+|  ShareableHook (/:artist/:song/:hook)             |
+|  Detects battle_id, loads both hooks,             |
+|  renders split-screen poll with voting            |
++--------------------------------------------------+
 ```
 
-The "See Hook Dance" button in Song DNA will now open the Director's Cut screen instead of jumping directly into the single-system Hook Dance.
+## Changes Required
 
-## New Component: `DirectorsCutScreen.tsx`
+### 1. Backend: AI Returns Two Hooks
 
-A full-screen overlay (`fixed inset-0 z-50`) with:
+**File: `supabase/functions/lyric-analyze/index.ts`**
 
-- **5 mini-canvases** in a 2-col grid (2 / 2 / 1 centered) on desktop; stacked vertically on mobile
-- Each canvas runs its own `PhysicsIntegrator` with the same beat grid, same lyrics, same hook window -- just a different system
-- **Silent playback**: audio plays once (shared), all 5 canvases render from the same `audio.currentTime`
-- **AI Pick badge**: the AI-recommended system gets a small "AI PICK" label above its canvas in red
-- **System labels**: Bebas Neue font, with poetic subtitle underneath (e.g., "FRACTURE -- Your words are glass")
-- **Selection**: tap/click a canvas to highlight it (thin red border, white label). Hover scales to 1.02x
-- **"THIS ONE" button**: glows red when a system is selected. Clicking it transitions to the full Hook Dance with that system applied as an override
+- Update the system prompt to request the top 2 hooks instead of 1
+- Change the JSON schema from `hottest_hook` (single object) to `hottest_hooks` (array of 2)
+- Each entry: `{ start_sec, duration_sec, confidence, justification, label }`
+- The `label` is a short editorial name the AI gives each hook (e.g. "The Drop", "The Confession")
+- Keep backward compatibility: if only 1 hook returned, still works
 
-### System Variants (derived from AI base spec)
+### 2. Database: Battle Support
 
-Each system starts from the AI's base `PhysicsSpec` params and applies multipliers:
+**New columns on `shareable_hooks`:**
+- `battle_id` (uuid, nullable) -- groups two hooks into a battle pair
+- `battle_position` (smallint, nullable) -- 1 or 2 within the battle
+- `hook_label` (text, nullable) -- AI-generated editorial label for the hook
+- `vote_count` (integer, default 0) -- total votes for this hook
 
-| System | Modifications |
-|---|---|
-| FRACTURE | Use spec params as-is |
-| PRESSURE | mass x1.2, elasticity x0.8 |
-| BREATH | damping x1.3, heat x1.6 |
-| COMBUSTION | heat x2.0, brittleness x0.5 |
-| ORBIT | elasticity x1.4, damping x0.7 |
+**New table: `hook_votes`**
+- `id` (uuid, PK)
+- `battle_id` (uuid, not null)
+- `hook_id` (uuid, not null) -- which hook was voted for
+- `user_id` (uuid, nullable)
+- `session_id` (text, nullable)
+- `created_at` (timestamptz)
+- Unique constraint on `(battle_id, session_id)` -- one vote per visitor per battle
+- RLS: anyone can view, anyone can insert (anon or auth), no update/delete
 
-### Performance Strategy
+**Trigger:** On insert into `hook_votes`, increment `shareable_hooks.vote_count` for the voted hook.
 
-- **Desktop (hardwareConcurrency >= 4)**: Render all 5 canvases. Non-hovered canvases render at 0.5x resolution (CSS scaled up). Hovered/selected canvas gets full resolution.
-- **Mobile / low-end (hardwareConcurrency < 4)**: Show one canvas at a time with left/right swipe navigation. System name + subtitle visible; dots indicator for position.
+### 3. Client: LyricDisplay Parses Two Hooks
 
-### Deterministic Seeding
+**File: `src/components/lyric/LyricDisplay.tsx`**
 
-Each system gets a unique but deterministic seed: `baseSeed + systemIndex` (0-4), ensuring each canvas produces different but reproducible visuals.
+- Update the Song DNA parser to handle `hottest_hooks` (array) in addition to `hottest_hook`
+- Store both hooks in state (primary + challenger)
+- The "Hottest Hook" card shows the top-ranked hook (unchanged UX)
+- PublishHookButton publishes both hooks with a shared `battle_id`
 
-## Changes Summary
+### 4. Client: PublishHookButton Publishes a Battle
 
-### New Files
-1. **`src/components/lyric/DirectorsCutScreen.tsx`** -- The full Director's Cut overlay component. Contains:
-   - 5 mini-canvas elements, each with its own `PhysicsIntegrator` instance
-   - A shared `requestAnimationFrame` loop driving all 5 integrators from one `audio.currentTime`
-   - System labels with Bebas Neue font (loaded via Google Fonts or CSS)
-   - Low-end device detection and single-canvas fallback mode
-   - "THIS ONE" button that returns the selected system key
+**File: `src/components/lyric/PublishHookButton.tsx`**
 
-### Modified Files
-2. **`src/components/lyric/LyricDisplay.tsx`** -- Wire the Director's Cut into the flow:
-   - "See Hook Dance" button opens `DirectorsCutScreen` instead of directly starting `HookDanceEngine`
-   - New state: `showDirectorsCut: boolean`
-   - On system selection from Director's Cut, set `hookDanceOverrides.system` to the chosen system and launch the existing Hook Dance playback
-   - The existing `HookDanceCanvas` and `HookDanceExporter` remain unchanged
+- Accept an optional second hook prop
+- When two hooks exist, generate a `battle_id` (crypto.randomUUID)
+- Upsert both hooks to `shareable_hooks` with `battle_id`, `battle_position` (1 or 2), and `hook_label`
+- The published URL remains the same (primary hook's slug) -- the share page detects the battle
 
-3. **`index.html`** -- Add Bebas Neue font link (Google Fonts) for the system labels
+### 5. Share Page: Split-Screen Battle UI
 
-### No Backend Changes
-The AI prompt does NOT need to change. The current v6 spec already provides `effect_pool` + `logic_seed` which the Director's Cut will reuse per-system. Each canvas uses the same pool but with its own seeded index offset, creating visual variety without requiring 5 separate effect sequences from the AI.
+**File: `src/pages/ShareableHook.tsx`**
+
+This is the centrepiece -- a Jony Ive-inspired editorial poll.
+
+**Data loading:**
+- After loading the primary hook, check if `battle_id` exists
+- If yes, load the second hook from `shareable_hooks` where `battle_id` matches and `id` differs
+- Load vote counts for both hooks
+- Check if current session has already voted
+
+**Layout (mobile-first, full viewport):**
+
+```text
++---------------------------------------+
+|  [artist] x [song]                    |  <- editorial header, 10px mono
+|                                       |
+|  +---------------+  +---------------+ |
+|  |               |  |               | |
+|  |   HOOK A      |  |   HOOK B      | |  <- two canvases, each running
+|  |   (canvas)    |  |   (canvas)    | |     its own HookDanceEngine
+|  |               |  |               | |
+|  +---------------+  +---------------+ |
+|                                       |
+|  "THE DROP"          "THE CONFESSION" |  <- AI-generated labels
+|   62%  ████░░         38%  ███░░░░░░  |  <- live vote bars
+|                                       |
+|  Tap the side that hits harder.       |  <- CTA
+|                                       |
+|  [Fit by toolsFM]                     |  <- badge, bottom-right
++---------------------------------------+
+```
+
+**On mobile (< 640px):** Stack vertically -- top canvas / bottom canvas, each 45vh.
+
+**Interaction:**
+- Tapping either canvas side casts a vote (or switches vote if already cast)
+- On vote: the chosen side gets a burst of fire emojis and floating comment particles gravitating toward it
+- The losing side dims to 40% opacity
+- Vote percentages animate in with a typographic counter
+- Comments submitted via the input float exclusively around the winning hook's canvas
+
+**After voting:**
+- The voted hook's canvas expands slightly (scale 1.02)
+- A subtle pulse of the palette's accent color radiates from the chosen side
+- The input prompt changes from "Tap the side that hits harder" to "What did [label] do to you?"
+
+**Single-hook fallback:**
+- If no `battle_id`, render the existing single-hook experience (no regression)
+
+### 6. Shared Audio Strategy
+
+Both canvases share a single `HTMLAudioElement`. Since the hooks are from the same track:
+- Audio plays continuously
+- Each canvas's HookDanceEngine has its own hook region
+- They alternate: Hook A plays its 8-12s, then Hook B plays its 8-12s, ping-pong style
+- A thin progress indicator at the bottom shows which hook is currently "live"
+- The inactive canvas shows a frozen last-frame with reduced opacity
+
+### 7. Route Structure
+
+No route changes needed. The existing `/:artistSlug/:songSlug/:hookSlug` route loads the primary hook. The battle detection happens at data-load time by checking `battle_id`.
 
 ## Technical Details
 
-### Shared Audio Architecture
-One `HTMLAudioElement` plays the hook region. A single `requestAnimationFrame` loop reads `audio.currentTime` and fans it out to all 5 `PhysicsIntegrator` instances. Each integrator scans the same `BeatTick[]` array independently with its own `beatIndex` pointer.
+### Font & Typography
+- Hook labels: 11px mono, uppercase, tracking-[0.3em], white/40
+- Vote percentages: 32px Geist, tabular-nums, white/90
+- Vote bars: 2px height, palette accent color, CSS transition 600ms
+- "Tap the side" CTA: 10px mono, white/20, centered below canvases
 
-### Canvas Rendering
-Each mini-canvas gets its own draw pass using the existing `EffectRegistry`. The effect key resolution uses the same `(logic_seed + systemOffset + lineIndex * 7) % pool.length` formula, where `systemOffset` varies per system to create visual differentiation.
+### Canvas Rendering (per side)
+- Each side gets its own `<canvas>` element with independent DPR scaling
+- Each runs its own `HookDanceEngine` instance with the same audio element
+- The `computeFitFontSize` safe ratio stays at 0.52 (already battle-ready since canvases are narrower)
+- Background, effects, and progress bar render identically to the current single-hook experience
 
-### Transition to Playback
-When the artist clicks "THIS ONE", the Director's Cut fades out, the selected system key is passed as a `hookDanceOverrides.system` override, and the existing full-screen `HookDanceCanvas` takes over with audio. This reuses all existing infrastructure -- no new engine code needed.
+### Performance
+- Two canvases = two rAF loops. Use a single shared rAF coordinator that ticks both engines
+- Only the "active" engine (whose hook region audio is playing) renders at 60fps
+- The inactive engine renders at 15fps (every 4th frame) to save GPU
 
+### Vote Persistence
+- Anonymous visitors get a session_id (existing pattern from `hook_comments`)
+- Authenticated users use their user_id
+- One vote per battle per visitor (unique constraint)
+- Votes are mutable (can switch sides) via upsert
+
+### Fire + Comment Particles
+- On vote, spawn 8-12 fire emoji particles from the tap point
+- Particles use simple gravity physics (vy += 0.15 per frame, fade over 1s)
+- Existing constellation comments drift toward the winning hook's side
+- New comments submitted after voting appear only on the voted side's canvas
