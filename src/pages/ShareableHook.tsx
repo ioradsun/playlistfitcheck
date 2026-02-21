@@ -281,7 +281,7 @@ function useHookCanvas(
       if (node.y < -0.1) node.y = 1.1;
       if (node.y > 1.1) node.y = -0.1;
 
-      ctx.font = "300 11px system-ui, -apple-system, sans-serif";
+      ctx.font = "300 8px system-ui, -apple-system, sans-serif";
       // During HOOK_FRACTURE, drop constellation to minimum opacity
       ctx.globalAlpha = isHookFracture ? node.baseOpacity * 0.5 : node.baseOpacity;
       ctx.fillStyle = "#ffffff";
@@ -299,7 +299,7 @@ function useHookCanvas(
         const rowComments = riverNodes.filter(n => n.riverRowIndex === ri);
         if (rowComments.length === 0) continue;
 
-        ctx.font = "300 12px system-ui, -apple-system, sans-serif";
+        ctx.font = "300 9px system-ui, -apple-system, sans-serif";
         ctx.globalAlpha = row.opacity;
         ctx.fillStyle = "#ffffff";
 
@@ -326,7 +326,7 @@ function useHookCanvas(
     for (const node of nodes) {
       if (node.phase === "center") {
         const elapsed = now - node.phaseStartTime;
-        ctx.font = "300 16px system-ui, -apple-system, sans-serif";
+        ctx.font = "300 12px system-ui, -apple-system, sans-serif";
         ctx.globalAlpha = 0.35;
         ctx.fillStyle = "#ffffff";
         const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
@@ -344,8 +344,8 @@ function useHookCanvas(
         const cx = 0.5, cy = 0.5;
         const curX = cx + (node.seedX - cx) * t * 0.3;
         const curY = cy + (targetY - cy) * t;
-        // Interpolate size: 16 → 12
-        const size = 16 - (16 - 12) * t;
+        // Interpolate size: 12 → 9
+        const size = 12 - (12 - 9) * t;
         // Interpolate opacity: 0.35 → river row opacity
         const targetOpacity = targetRow?.opacity || 0.05;
         const opacity = 0.35 - (0.35 - targetOpacity) * t;
