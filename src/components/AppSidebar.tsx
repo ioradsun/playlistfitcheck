@@ -29,6 +29,8 @@ import {
   MessageCircle,
   UserPlus,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -94,7 +96,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   const navigate = useNavigate();
   const location = useLocation();
   const { state: sidebarState, setOpenMobile, isMobile } = useSidebar();
-  const collapsed = sidebarState === "collapsed";
+  const { toggleSidebar } = useSidebar();
   const { notifications, unreadCount, loading: notiLoading, markAllRead, refetch: refetchNotifications } = useNotifications();
   const { number: pioneerNumber, isBlazer } = useTrailblazer(user?.id);
   const { theme, setTheme } = useTheme();
@@ -306,13 +308,20 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   }, {} as Record<string, RecentItem[]>);
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="offcanvas">
       <SidebarHeader className="pb-0">
-        <div className="flex items-center gap-2 px-2 py-1">
-          <Music size={18} className="text-primary shrink-0" />
-          {!collapsed && (
+        <div className="flex items-center justify-between px-2 py-1">
+          <div className="flex items-center gap-2">
+            <Music size={18} className="text-primary shrink-0" />
             <span className="font-mono text-sm font-bold text-primary">{siteCopy.sidebar.brand}</span>
-          )}
+          </div>
+          <button
+            onClick={() => isMobile ? setOpenMobile(false) : toggleSidebar()}
+            className="p-1 rounded-md hover:bg-sidebar-accent transition-colors text-sidebar-foreground/60 hover:text-sidebar-foreground"
+            aria-label="Collapse sidebar"
+          >
+            <ChevronLeft size={16} />
+          </button>
         </div>
         {!authLoading && !user && (
           <div className="px-2 mt-2 space-y-1">
@@ -320,7 +329,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
               onClick={() => { navigate("/auth"); closeMobileIfNeeded(); }}
               className="w-full px-2 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-[0.1em] bg-foreground text-background hover:bg-foreground/80 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
             >
-              {collapsed ? <UserPlus size={14} className="mx-auto" /> : "Sign Up / Log In"}
+              {"Sign Up / Log In"}
             </button>
           </div>
         )}
@@ -356,7 +365,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                       <span>{siteCopy.tools[tool.value]?.label || tool.label}</span>
                     </SidebarMenuButton>
 
-                    {!collapsed && isActive && recents.length > 0 && (
+                    {isActive && recents.length > 0 && (
                       <ul className="ml-6 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
                         {recents.map((item) => (
                           <li key={item.id} className="group flex items-center gap-0.5">
@@ -493,7 +502,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   </span>
                 )}
               </div>
-              {!collapsed && (
+              {(
                 <>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     {isBlazer && pioneerNumber && (
@@ -509,7 +518,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                 </>
               )}
             </button>
-            {!collapsed && profileExpanded && (
+            {profileExpanded && (
               <div className="space-y-0.5 pl-2">
                 {/* Notifications inline */}
                 <div className="px-2 py-1">
