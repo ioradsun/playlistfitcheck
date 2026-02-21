@@ -164,11 +164,15 @@ export class PhysicsIntegrator {
     this.heat *= 0.95;
     this.impulseNow *= 0.8;
 
+    // Clamp scale to prevent text blowing out of canvas bounds
+    const MAX_SCALE = 1.8;
+    const MAX_SHAKE = 12; // px
+
     return {
-      scale: 1 + Math.abs(this.position) * 0.5,
-      blur: Math.abs(this.velocity) * 2,
-      glow: this.heat * 40,
-      shake: this.impulseNow * 10,
+      scale: Math.min(MAX_SCALE, 1 + Math.abs(this.position) * 0.5),
+      blur: Math.min(8, Math.abs(this.velocity) * 2),
+      glow: Math.min(30, this.heat * 40),
+      shake: Math.min(MAX_SHAKE, this.impulseNow * 10),
       isFractured: Math.abs(this.position) > this.spec.material.brittleness,
       position: this.position,
       velocity: this.velocity,
