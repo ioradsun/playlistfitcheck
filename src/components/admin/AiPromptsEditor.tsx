@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, Save, RotateCcw } from "lucide-react";
+import { Loader2, Save, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -45,6 +45,12 @@ export function AiPromptsEditor() {
     const newPrompt = editedPrompts[slug];
     if (newPrompt === undefined) return;
 
+    // If prompt is empty, delete the row so edge functions use their hardcoded fallback
+    if (!newPrompt.trim()) {
+      await handleDelete(slug);
+      return;
+    }
+
     setSaving(slug);
     const { error } = await supabase
       .from("ai_prompts")
@@ -59,6 +65,28 @@ export function AiPromptsEditor() {
       setPrompts((prev) =>
         prev.map((p) => (p.slug === slug ? { ...p, prompt: newPrompt, updated_at: new Date().toISOString() } : p))
       );
+      setEditedPrompts((prev) => {
+        const next = { ...prev };
+        delete next[slug];
+        return next;
+      });
+    }
+    setSaving(null);
+  };
+
+  const handleDelete = async (slug: string) => {
+    setSaving(slug);
+    const { error } = await supabase
+      .from("ai_prompts")
+      .delete()
+      .eq("slug", slug);
+
+    if (error) {
+      toast.error("Failed to delete prompt — check permissions");
+      console.error(error);
+    } else {
+      toast.success("Prompt deleted — will use code default");
+      setPrompts((prev) => prev.filter((p) => p.slug !== slug));
       setEditedPrompts((prev) => {
         const next = { ...prev };
         delete next[slug];
@@ -121,6 +149,18 @@ export function AiPromptsEditor() {
                     </Button>
                   </>
                 )}
+                {!edited && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDelete(p.slug)}
+                    disabled={saving === p.slug}
+                    className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                  >
+                    {saving === p.slug ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    Use Default
+                  </Button>
+                )}
               </div>
             </div>
             <div className="p-4">
@@ -139,7 +179,7 @@ export function AiPromptsEditor() {
       })}
 
       {prompts.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-8">No AI prompts configured yet.</p>
+        <p className="text-sm text-muted-foreground text-center py-8">No custom prompts — all tools using code defaults.</p>
       )}
     </div>
   );
