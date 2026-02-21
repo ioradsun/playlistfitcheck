@@ -137,7 +137,9 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 // ── v9.0 Triptych: Three specialized prompt builders ─────────────────────────
 
 function buildIntroPrompt(anchorWord: string, anchorTs: number): string {
-  return `ROLE: Forensic Acoustic Analyst (v9.5 Triptych — Lane B)
+  return `ROLE: Forensic Acoustic Analyst (v9.7 Triptych — Lane B)
+
+CRITICAL — STRICT JSON ONLY: You are a JSON-output machine. Return ONLY the JSON schema specified below. Do NOT ask questions, add commentary, or output markdown. If uncertain, return fewer lines — NEVER free text.
 
 AUDIO SIGNAL: You are analyzing the first ~${Math.ceil(anchorTs + 2)} seconds of a track. There is a quiet spoken dialogue track mixed UNDER the music.
 
@@ -161,6 +163,8 @@ OUTPUT — return ONLY valid JSON, no markdown:
 function buildOutroPrompt(middleCutoff: number, trackEnd: number): string {
   return `ROLE: Literal Outro Forensic (v9.7 Triptych — Lane C)
 
+CRITICAL — STRICT JSON ONLY: You are a JSON-output machine. Return ONLY the JSON schema specified below. Do NOT ask questions, add commentary, or output markdown. If uncertain about a word, skip it — NEVER output free text.
+
 TASK: Transcribe ALL vocal events from ${middleCutoff.toFixed(3)}s to the end of the track at ${trackEnd.toFixed(3)}s.
 
 RULES:
@@ -180,12 +184,26 @@ OUTPUT — return ONLY valid JSON, no markdown:
 }
 
 function buildAuditorPrompt(rawText: string, anchorTs: number, middleCutoff: number): string {
-  return `ROLE: Word-Level Phonetic Auditor (v9.6 Triptych — Lane D)
+  return `ROLE: Word-Level Phonetic Auditor (v9.7 Triptych — Lane D)
 
 TASK: Audit the Whisper text against the audio between ${anchorTs.toFixed(3)}s and ${middleCutoff.toFixed(3)}s. Whisper often struggles with ending consonants.
 
+CRITICAL — STRICT JSON ONLY:
+You are a JSON-output machine. You MUST return ONLY a valid JSON object. Do NOT:
+- Ask clarifying questions about lyrics you cannot understand
+- Add commentary, explanations, or markdown formatting
+- "Break character" to discuss the song's meaning or content
+- Return anything other than the exact JSON schema below
+If you are uncertain about ANY word, simply omit it from the corrections map. NEVER output free text.
+
 WHISPER TEXT:
 ${rawText.slice(0, 3000)}
+
+BASS-HEAVY TRACK AWARENESS:
+Whisper struggles with bass-heavy mixes where low-end frequencies mask vocals. When auditing:
+- Focus on the vocal frequency range (300Hz-4kHz) mentally — ignore bass rumble artifacts
+- Bass-induced misrecognitions often produce phantom consonants (e.g., "thump" sounds become words)
+- If a word seems implausible given the surrounding context, it may be a bass artifact — do NOT correct it, just skip it
 
 HIGH-PRIORITY PHONETIC TARGETS:
 - ENDINGS: Check for words ending in '-ange' that should be '-ain' (e.g., "range" → "rain", "strange" → "strain").
@@ -205,7 +223,7 @@ GUARDRAILS:
 7. SURGICAL: Only correct actual phonetic/word-sound mismatches. Do NOT correct grammar, punctuation, or stylistic choices.
 8. NO TIMESTAMPS: Return ONLY the corrections map.
 
-OUTPUT — return ONLY valid JSON, no markdown:
+OUTPUT — return ONLY this JSON schema, nothing else:
 {"corrections": {}, "count": 0}`;
 }
 
