@@ -10,24 +10,13 @@ export interface LoopRegion {
   duration: number;
 }
 
-export interface DiagnosticDot {
-  /** Position in seconds */
-  time: number;
-  /** Green = high confidence, Yellow = medium, Red = large gap detected */
-  color: "green" | "yellow" | "red";
-  label?: string;
-}
-
 interface LyricWaveformProps {
   waveform: WaveformData | null;
   isPlaying: boolean;
   currentTime: number;
-  /** Playback time with timingOffset already applied — used for the timestamp bubble overlay */
-  adjustedTime?: number;
   onSeek: (time: number) => void;
   onTogglePlay: () => void;
   loopRegion?: LoopRegion | null;
-  diagnosticDots?: DiagnosticDot[];
 }
 
 function formatTime(s: number): string {
@@ -49,9 +38,7 @@ function drawWaveform(
   canvas: HTMLCanvasElement,
   peaks: number[],
   currentPct: number,
-  loopRegion?: LoopRegion | null,
-  diagnosticDots?: DiagnosticDot[],
-  duration?: number
+  loopRegion?: LoopRegion | null
 ) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
@@ -107,38 +94,16 @@ function drawWaveform(
     }
     ctx.fillRect(x, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
-
-  // Draw diagnostic dots above the waveform
-  if (diagnosticDots && diagnosticDots.length > 0 && duration && duration > 0) {
-    const dotR = 3;
-    const dotY = 4; // near the top
-    diagnosticDots.forEach((dot) => {
-      const pct = Math.min(dot.time / duration, 1);
-      const x = pct * cw;
-      const colorMap = {
-        green: "rgba(74, 222, 128, 0.9)",   // green-400 equivalent
-        yellow: "rgba(251, 191, 36, 0.9)",  // yellow-400 equivalent
-        red: "rgba(248, 113, 113, 0.9)",    // red-400 equivalent
-      };
-      ctx.beginPath();
-      ctx.arc(x, dotY, dotR, 0, Math.PI * 2);
-      ctx.fillStyle = colorMap[dot.color];
-      ctx.fill();
-    });
-  }
 }
 
 export function LyricWaveform({
   waveform,
   isPlaying,
   currentTime,
-  adjustedTime,
   onSeek,
   onTogglePlay,
   loopRegion,
-  diagnosticDots,
 }: LyricWaveformProps) {
-  const displayTime = adjustedTime ?? currentTime;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -148,28 +113,28 @@ export function LyricWaveform({
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
-    drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion, diagnosticDots, duration);
-  }, [waveform, currentPct, loopRegion, diagnosticDots, duration]);
+    drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
+  }, [waveform, currentPct, loopRegion]);
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
     const observer = new ResizeObserver(() => {
       if (canvasRef.current && waveform)
-        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion, diagnosticDots, duration);
+        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
     });
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
-  }, [waveform, currentPct, loopRegion, diagnosticDots, duration]);
+  }, [waveform, currentPct, loopRegion]);
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
     const mo = new MutationObserver(() => {
       if (canvasRef.current && waveform)
-        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion, diagnosticDots, duration);
+        drawWaveform(canvasRef.current, waveform.peaks, currentPct, loopRegion);
     });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => mo.disconnect();
-  }, [waveform, currentPct, loopRegion, diagnosticDots, duration]);
+  }, [waveform, currentPct, loopRegion]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -214,15 +179,12 @@ export function LyricWaveform({
             <div className="absolute -top-1 -translate-x-[3px] w-2 h-2 rounded-full bg-primary shadow" />
             {/* Timestamp bubble on playhead */}
             <div
-              className="absolute top-1 left-2 bg-primary text-primary-foreground text-[9px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap pointer-events-none shadow z-20 flex flex-col gap-0"
+              className="absolute top-1 left-2 bg-primary text-primary-foreground text-[9px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap pointer-events-none shadow z-20"
               style={{
                 transform: playheadPct > 80 ? "translateX(calc(-100% - 6px))" : "translateX(0)",
               }}
             >
               <span>▶ {currentTime.toFixed(2)}s</span>
-              {adjustedTime !== undefined && Math.abs(adjustedTime - currentTime) > 0.01 && (
-                <span className="opacity-70">≈ {adjustedTime.toFixed(2)}s</span>
-              )}
             </div>
           </div>
         </div>
