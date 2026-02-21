@@ -177,23 +177,30 @@ OUTPUT — return ONLY valid JSON, no markdown:
 }
 
 function buildAuditorPrompt(rawText: string, anchorTs: number, middleCutoff: number): string {
-  return `ROLE: Word-Level Phonetic Auditor (v9.4 Triptych — Lane D)
+  return `ROLE: Word-Level Phonetic Auditor (v9.6 Triptych — Lane D)
 
-TASK: Find phonetic errors in the Whisper text between ${anchorTs.toFixed(3)}s and ${middleCutoff.toFixed(3)}s.
+TASK: Audit the Whisper text against the audio between ${anchorTs.toFixed(3)}s and ${middleCutoff.toFixed(3)}s. Whisper often struggles with ending consonants.
 
 WHISPER TEXT:
 ${rawText.slice(0, 3000)}
 
+HIGH-PRIORITY PHONETIC TARGETS:
+- ENDINGS: Check for words ending in '-ange' that should be '-ain' (e.g., "range" → "rain", "strange" → "strain").
+- ENDINGS: Check for words ending in '-ard' that should be '-odd' (e.g., "hard" → "odd").
+- PROFANITY: Check for "whore" → "boy", "shit" → "spit", and similar Whisper misrecognitions where profanity is incorrect.
+- VOWEL SHIFTS: Check for 'cleaning' vs 'playing', 'road' vs 'rogue', and similar vowel confusions.
+
 GUARDRAILS:
 1. ANCHOR: Do NOT audit anything before ${anchorTs.toFixed(3)}s.
-2. SINGLE-WORD ONLY: Your corrections map MUST use single words as keys. Never use phrases.
+2. SINGLE-WORD ONLY: Your corrections map MUST use single words as keys and single words as values.
    INCORRECT: {"I'm a whore": "I'm a boy"}
-   CORRECT: {"whore": "boy"}
+   CORRECT: {"whore": "boy", "range": "rain"}
 3. IDIOM GUARD: Do NOT correct common English idioms or phrases (e.g., "pay them no mind", "sit back").
 4. CONTRACTION GUARD: Do NOT suggest corrections for words that are parts of contractions (can, don, won, ain, etc.). Unless the ENTIRE contraction is wrong, skip it.
-5. HIGH CONFIDENCE ONLY: Only return a swap if you are 95% certain Whisper is acoustically wrong. If unsure, return an empty map.
-6. SURGICAL: Only correct actual phonetic/word-sound mismatches (e.g., "whore" should be "boy"). Do NOT correct grammar, punctuation, or stylistic choices.
-7. NO TIMESTAMPS: Return ONLY the corrections map.
+5. SEMANTIC SAFETY: Reject any change that breaks basic English grammar. Do NOT change "can't" to "caving" or similar nonsense.
+6. HIGH CONFIDENCE ONLY: Only return a swap if you are 95% certain Whisper is acoustically wrong. If unsure, return an empty map.
+7. SURGICAL: Only correct actual phonetic/word-sound mismatches. Do NOT correct grammar, punctuation, or stylistic choices.
+8. NO TIMESTAMPS: Return ONLY the corrections map.
 
 OUTPUT — return ONLY valid JSON, no markdown:
 {"corrections": {}, "count": 0}`;
@@ -543,14 +550,10 @@ function stitchTriptych(
         }
 
         const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Pre-filter: skip if the wrong word only exists as part of a contraction
-        const contractionCheck = new RegExp(`\\b${escaped}[''\u2019]`, "i");
-        if (contractionCheck.test(text) && !new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "i").test(text)) {
-          continue;
-        }
 
-        // Punctuation-agnostic word-boundary regex: matches "hard" in "hard," or "hard."
-        const regex = new RegExp(`\\b${escaped}\\b`, "gi");
+        // Contraction guard: negative lookbehind/lookahead for apostrophes
+        // This prevents matching "can" inside "can't" or "don" inside "don't"
+        const regex = new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019]\\w)`, "gi");
         const matchCount = (text.match(regex) || []).length;
         if (matchCount > 0) {
           text = text.replace(regex, right);
@@ -946,11 +949,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v9.5-triptych-forensic-intro",
+          version: "anchor-align-v9.6-triptych-phonetic-heatmap",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v9.5-triptych-forensic-intro",
+            orchestrator: "v9.6-triptych-phonetic-heatmap",
           },
           geminiUsed,
           geminiError,
