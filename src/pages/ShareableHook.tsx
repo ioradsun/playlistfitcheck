@@ -234,7 +234,7 @@ function useHookCanvas(
   // Canvas draw
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !physicsState || !hookData || !prngRef.current) return;
+    if (!canvas || !physicsState || !hookData || !prngRef.current || !activeRef.current) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -838,10 +838,9 @@ export default function ShareableHook() {
         <div className="flex-1 flex flex-col sm:flex-row gap-1 px-1 min-h-0">
           {/* Hook A */}
           <motion.div
-            className={`relative flex-1 min-h-[35vh] sm:min-h-0 cursor-pointer rounded-lg overflow-hidden ${activeHookSide !== "a" ? "opacity-40" : ""}`}
+            className="relative flex-1 min-h-[35vh] sm:min-h-0 cursor-pointer rounded-lg overflow-hidden"
             animate={{
-              opacity: activeHookSide !== "a" ? 0.4 : hasVoted && !votedA ? 0.7 : 1,
-              scale: hasVoted && votedA ? 1.01 : 1,
+              opacity: activeHookSide !== "a" ? 0.4 : 1,
             }}
             transition={{ duration: 0.6, ease: "easeOut" }}
             onClick={() => {
@@ -865,8 +864,8 @@ export default function ShareableHook() {
             {/* Vote pulse on selection */}
             {votedA && (
               <motion.div
-                initial={{ opacity: 0.4, scale: 0.8 }}
-                animate={{ opacity: 0, scale: 2 }}
+                initial={{ opacity: 0.4 }}
+                animate={{ opacity: 0 }}
                 transition={{ duration: 1, ease: "easeOut" }}
                 className="absolute inset-0 rounded-lg"
                 style={{ border: `2px solid ${hookData.palette?.[1] || '#a855f7'}` }}
@@ -876,10 +875,9 @@ export default function ShareableHook() {
 
           {/* Hook B */}
           <motion.div
-            className={`relative flex-1 min-h-[35vh] sm:min-h-0 cursor-pointer rounded-lg overflow-hidden ${activeHookSide !== "b" ? "opacity-40" : ""}`}
+            className="relative flex-1 min-h-[35vh] sm:min-h-0 cursor-pointer rounded-lg overflow-hidden"
             animate={{
-              opacity: activeHookSide !== "b" ? 0.4 : hasVoted && !votedB ? 0.7 : 1,
-              scale: hasVoted && votedB ? 1.01 : 1,
+              opacity: activeHookSide !== "b" ? 0.4 : 1,
             }}
             transition={{ duration: 0.6, ease: "easeOut" }}
             onClick={() => {
@@ -902,8 +900,8 @@ export default function ShareableHook() {
 
             {votedB && (
               <motion.div
-                initial={{ opacity: 0.4, scale: 0.8 }}
-                animate={{ opacity: 0, scale: 2 }}
+                initial={{ opacity: 0.4 }}
+                animate={{ opacity: 0 }}
                 transition={{ duration: 1, ease: "easeOut" }}
                 className="absolute inset-0 rounded-lg"
                 style={{ border: `2px solid ${rivalHook?.palette?.[1] || '#a855f7'}` }}
