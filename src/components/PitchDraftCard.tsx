@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Mail, MessageCircle, Copy, Check, Zap } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import type { PlaylistInput } from "@/lib/playlistHealthEngine";
@@ -151,60 +151,45 @@ export function PitchDraftCard(props: Props) {
 
   return (
     <motion.div
-      className="glass-card rounded-xl p-5 space-y-4"
+      className="space-y-4"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.7 }}
     >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Zap size={14} className="text-primary" />
-          <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-            Sample Pitch
-          </h3>
-        </div>
-        <div className="flex gap-1 bg-muted/50 rounded-lg p-0.5">
-          <button
-            onClick={() => setTab("email")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              tab === "email"
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Mail size={12} /> Email
-          </button>
-          <button
-            onClick={() => setTab("dm")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              tab === "dm"
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <MessageCircle size={12} /> DM
-          </button>
+        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Sample Pitch</p>
+        <div className="flex gap-0 border-b border-border/30">
+          {(["email", "dm"] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-3 py-1.5 text-[13px] font-sans font-bold tracking-[0.15em] uppercase transition-colors border-b-2 -mb-[1px] ${
+                tab === t
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground/30 hover:text-muted-foreground"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground italic">
+      <p className="text-[11px] text-muted-foreground/60 leading-snug">
         Signals understanding, not analysis. Customize before sending.
       </p>
 
-      <pre className="text-sm text-secondary-foreground leading-relaxed whitespace-pre-wrap font-sans bg-muted/30 rounded-lg p-4 border border-border/50">
+      <pre className="text-sm text-foreground leading-relaxed whitespace-pre-wrap font-sans bg-muted/20 rounded-lg p-4 border border-border/30">
         {pitch}
       </pre>
 
       <div className="flex justify-end">
-        <Button
-          variant="outline"
-          size="sm"
+        <button
           onClick={handleCopy}
-          className="gap-1.5"
+          className="text-[13px] font-sans font-bold tracking-[0.15em] uppercase text-muted-foreground/30 hover:text-foreground transition-colors"
         >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
           {copied ? "Copied" : "Copy"}
-        </Button>
+        </button>
       </div>
     </motion.div>
   );
