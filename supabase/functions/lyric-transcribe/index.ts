@@ -134,10 +134,10 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
   }
 }`;
 
-// ── v8.0 Triptych: Three specialized prompt builders ─────────────────────────
+// ── v9.0 Triptych: Three specialized prompt builders ─────────────────────────
 
 function buildIntroPrompt(anchorWord: string, anchorTs: number): string {
-  return `ROLE: Intro Onset Specialist (v8.0 Triptych — Lane B)
+  return `ROLE: Intro Onset Specialist (v9.0 Triptych — Lane B)
 
 TASK: Detect the acoustic onset of the first spoken/sung word in this audio track and transcribe all vocal dialogue from that onset up to the anchor word "${anchorWord}" at ${anchorTs.toFixed(3)}s.
 
@@ -155,7 +155,7 @@ OUTPUT — return ONLY valid JSON, no markdown:
 }
 
 function buildOutroPrompt(middleCutoff: number, trackEnd: number): string {
-  return `ROLE: Outro Recovery Specialist (v8.0 Triptych — Lane C)
+  return `ROLE: Outro Recovery Specialist (v9.0 Triptych — Lane C)
 
 TASK: Transcribe ALL vocal events from ${middleCutoff.toFixed(3)}s to the end of the track at ${trackEnd.toFixed(3)}s.
 
@@ -173,7 +173,7 @@ OUTPUT — return ONLY valid JSON, no markdown:
 }
 
 function buildAuditorPrompt(rawText: string, anchorTs: number, middleCutoff: number): string {
-  return `ROLE: Phonetic Auditor (v8.2 Triptych — Lane D)
+  return `ROLE: Phonetic Auditor (v9.0 Triptych — Lane D)
 
 TASK: Find phonetic errors in the Whisper text between ${anchorTs.toFixed(3)}s and ${middleCutoff.toFixed(3)}s.
 
@@ -325,7 +325,29 @@ async function runGeminiHookAnalysis(
   };
 }
 
-// ── v8.0 Triptych Lane B: Intro Patch ─────────────────────────────────────────
+// ── v9.0 Audio byte-slicer: extract time range from base64 audio ──────────────
+function sliceAudioBase64(audioBase64: string, totalDuration: number, startSec: number, endSec: number): string {
+  // Decode base64 to bytes
+  const binaryStr = atob(audioBase64);
+  const totalBytes = binaryStr.length;
+  const bytesPerSecond = totalBytes / totalDuration;
+
+  // Calculate byte offsets with 1s padding
+  const startByte = Math.floor(Math.max(0, startSec - 1.0) * bytesPerSecond);
+  const endByte = Math.ceil(Math.min(totalDuration, endSec + 1.0) * bytesPerSecond);
+
+  // Slice and re-encode
+  const sliced = binaryStr.slice(startByte, endByte);
+  const slicedB64 = btoa(sliced);
+
+  const originalMB = (totalBytes / 1024 / 1024).toFixed(2);
+  const slicedMB = (sliced.length / 1024 / 1024).toFixed(2);
+  console.log(`[slicer] ${startSec.toFixed(1)}s-${endSec.toFixed(1)}s: ${originalMB}MB → ${slicedMB}MB (${Math.round((1 - sliced.length / totalBytes) * 100)}% reduction)`);
+
+  return slicedB64;
+}
+
+// ── v9.0 Triptych Lane B: Intro Patch ─────────────────────────────────────────
 async function runGeminiIntro(
   audioBase64: string,
   mimeType: string,
@@ -366,7 +388,7 @@ async function runGeminiIntro(
   return { lines, rawContent: content };
 }
 
-// ── v8.0 Triptych Lane C: Outro Patch ─────────────────────────────────────────
+// ── v9.0 Triptych Lane C: Outro Patch ─────────────────────────────────────────
 async function runGeminiOutro(
   audioBase64: string,
   mimeType: string,
@@ -403,7 +425,7 @@ async function runGeminiOutro(
   return { lines, rawContent: content };
 }
 
-// ── v8.0 Triptych Lane D: Phonetic Auditor ────────────────────────────────────
+// ── v9.0 Triptych Lane D: Phonetic Auditor ────────────────────────────────────
 async function runGeminiAuditor(
   audioBase64: string,
   mimeType: string,
@@ -432,7 +454,7 @@ async function runGeminiAuditor(
   return { corrections, rawContent: content };
 }
 
-// ── v8.0 Phrase splitter: break Whisper segments into 6-word max phrases ──────
+// ── v9.0 Phrase splitter: break Whisper segments into 6-word max phrases ──────
 function splitSegmentIntoPhrases(
   segment: { start: number; end: number; text: string },
   words: WhisperWord[],
@@ -475,7 +497,7 @@ function splitSegmentIntoPhrases(
   return phrases;
 }
 
-// ── v8.2 Stitcher: combine intro + corrected middle + outro (Idiom-Safe) ─────
+// ── v9.0 Stitcher: combine intro + corrected middle + outro (Byte-Sliced) ────
 function stitchTriptych(
   introLinesInput: LyricLine[],
   outroLinesInput: LyricLine[],
@@ -500,17 +522,23 @@ function stitchTriptych(
     // Split into phrases first
     const phrases = splitSegmentIntoPhrases(seg, whisperWords);
 
-    // Apply corrections map with contraction-safe regex (v8.2 Idiom-Safe)
+    // Apply corrections map with contraction-safe regex (v9.0 Idiom-Safe)
     for (const phrase of phrases) {
       let text = phrase.text;
       let isCorrection = false;
       let geminiConflict: string | undefined;
 
       for (const [wrong, right] of Object.entries(corrections)) {
+        // Pre-filter: skip this correction if the wrong word appears only as part of a contraction
+        const contractionCheck = new RegExp(`\\b${wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[''\u2019]`, "i");
+        if (contractionCheck.test(text) && !new RegExp(`(?<![\\w''\u2019])${wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w''\u2019])`, "i").test(text)) {
+          // The word only exists as part of a contraction — skip
+          continue;
+        }
+
         const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         // Negative lookahead/lookbehind to avoid matching inside contractions
-        // e.g., "can" must NOT match inside "can't"
-        const regex = new RegExp(`(?<!')\\b${escaped}\\b(?![''\u2019])`, "gi");
+        const regex = new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "gi");
         const before = text;
         text = text.replace(regex, right);
         if (text !== before) {
@@ -563,7 +591,7 @@ function stitchTriptych(
   const lastEnd = allLines.length > 0 ? allLines[allLines.length - 1].end : 0;
   const coverageGap = trackEnd - lastEnd;
 
-  console.log(`[stitcher] v8.2 stitched: ${allLines.length} total lines (${introLines.length} intro + ${middleLines.length} middle + ${outroLines.length} outro)`);
+  console.log(`[stitcher] v9.0 stitched: ${allLines.length} total lines (${introLines.length} intro + ${middleLines.length} middle + ${outroLines.length} outro)`);
   console.log(`[stitcher] Coverage: ${firstStart.toFixed(3)}s to ${lastEnd.toFixed(3)}s (trackEnd=${trackEnd.toFixed(3)}s, gap=${coverageGap.toFixed(3)}s)`);
 
   if (coverageGap > 2.0) {
@@ -705,8 +733,8 @@ serve(async (req) => {
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
     console.log(
-      `[v8.2] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Idiom-Safe v8.2), ` +
+      `[v9.0] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Byte-Sliced v9.0), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
@@ -746,7 +774,7 @@ serve(async (req) => {
     const trackEnd = whisperDuration > 0 ? whisperDuration : (lastWordEnd > 0 ? lastWordEnd : 300);
     console.log(`[trackEnd] ${trackEnd.toFixed(3)}s (whisperDuration=${whisperDuration}, lastWordEnd=${lastWordEnd.toFixed(3)})`);
 
-    // ── Stage 2: v8.0 Triptych — Three parallel Gemini lanes ────────────────
+    // ── Stage 2: v9.0 Triptych — Three parallel Gemini lanes (byte-sliced) ──
     let lines: LyricLine[] = [];
     let qaCorrections = 0;
     let ghostsRemoved = 0;
@@ -760,11 +788,16 @@ serve(async (req) => {
       // Determine middle cutoff: where Whisper words thin out (last word - small buffer)
       const middleCutoff = lastWordEnd > 10 ? lastWordEnd - 2.0 : lastWordEnd;
 
-      console.log(`[triptych] Firing 3 parallel lanes: intro(0-${anchorTs.toFixed(3)}), outro(${middleCutoff.toFixed(3)}-${trackEnd.toFixed(3)}), auditor(${anchorTs.toFixed(3)}-${middleCutoff.toFixed(3)})`);
+      // v9.0: Slice audio for Lane B (intro) and Lane C (outro) to reduce Gemini ingestion
+      const introAudioB64 = sliceAudioBase64(audioBase64, trackEnd, 0, anchorTs + 2.0);
+      const outroAudioB64 = sliceAudioBase64(audioBase64, trackEnd, middleCutoff - 2.0, trackEnd);
+      // Lane D gets the full audio for phonetic context
+
+      console.log(`[triptych] Firing 3 parallel lanes with byte-sliced audio: intro(0-${anchorTs.toFixed(3)}), outro(${middleCutoff.toFixed(3)}-${trackEnd.toFixed(3)}), auditor(full)`);
 
       const [introResult, outroResult, auditorResult] = await Promise.allSettled([
-        runGeminiIntro(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, anchorW, anchorTs),
-        runGeminiOutro(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, middleCutoff, trackEnd),
+        runGeminiIntro(introAudioB64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, anchorW, anchorTs),
+        runGeminiOutro(outroAudioB64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, middleCutoff, trackEnd),
         runGeminiAuditor(audioBase64, mimeType, LOVABLE_API_KEY, resolvedAnalysisModel, rawText, anchorTs, middleCutoff),
       ]);
 
@@ -882,7 +915,7 @@ serve(async (req) => {
     const orphanedCount = lines.filter(l => l.isOrphaned).length;
     const correctionCount = qaCorrections;
 
-    console.log(`[v8.2] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections), ${hooks.length} hooks`);
+    console.log(`[v9.0] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections), ${hooks.length} hooks`);
 
     const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
       wordCount: words.length,
@@ -900,11 +933,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v8.2-triptych-idiom-safe",
+          version: "anchor-align-v9.0-triptych-byte-sliced",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v8.2-triptych-idiom-safe",
+            orchestrator: "v9.0-triptych-byte-sliced",
           },
           geminiUsed,
           geminiError,
