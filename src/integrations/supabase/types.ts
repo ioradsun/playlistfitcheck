@@ -365,6 +365,41 @@ export type Database = {
           },
         ]
       }
+      hook_votes: {
+        Row: {
+          battle_id: string
+          created_at: string
+          hook_id: string
+          id: string
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          battle_id: string
+          created_at?: string
+          hook_id: string
+          id?: string
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          battle_id?: string
+          created_at?: string
+          hook_id?: string
+          id?: string
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hook_votes_hook_id_fkey"
+            columns: ["hook_id"]
+            isOneToOne: false
+            referencedRelation: "shareable_hooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invites: {
         Row: {
           converted_at: string | null
@@ -956,10 +991,13 @@ export type Database = {
           artist_name: string
           artist_slug: string
           audio_url: string
+          battle_id: string | null
+          battle_position: number | null
           beat_grid: Json
           created_at: string
           fire_count: number
           hook_end: number
+          hook_label: string | null
           hook_phrase: string
           hook_slug: string
           hook_start: number
@@ -973,16 +1011,20 @@ export type Database = {
           system_type: string
           updated_at: string
           user_id: string
+          vote_count: number
         }
         Insert: {
           artist_dna?: Json | null
           artist_name: string
           artist_slug: string
           audio_url: string
+          battle_id?: string | null
+          battle_position?: number | null
           beat_grid: Json
           created_at?: string
           fire_count?: number
           hook_end: number
+          hook_label?: string | null
           hook_phrase: string
           hook_slug: string
           hook_start: number
@@ -996,16 +1038,20 @@ export type Database = {
           system_type?: string
           updated_at?: string
           user_id: string
+          vote_count?: number
         }
         Update: {
           artist_dna?: Json | null
           artist_name?: string
           artist_slug?: string
           audio_url?: string
+          battle_id?: string | null
+          battle_position?: number | null
           beat_grid?: Json
           created_at?: string
           fire_count?: number
           hook_end?: number
+          hook_label?: string | null
           hook_phrase?: string
           hook_slug?: string
           hook_start?: number
@@ -1019,6 +1065,7 @@ export type Database = {
           system_type?: string
           updated_at?: string
           user_id?: string
+          vote_count?: number
         }
         Relationships: [
           {

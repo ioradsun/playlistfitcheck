@@ -330,7 +330,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     mood?: string; description?: string;
     meaning?: { theme?: string; summary?: string; imagery?: string[] };
     hook?: LyricHook | null;
+    secondHook?: LyricHook | null;
     hookJustification?: string;
+    secondHookJustification?: string;
+    hookLabel?: string;
+    secondHookLabel?: string;
     physicsSpec?: {
       system: string;
       params: Record<string, number>;
@@ -397,49 +401,61 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       });
       if (error) throw error;
 
-      // Parse hook from result
-      let hook: LyricHook | null = null;
-      if (result?.hottest_hook?.start_sec != null) {
-        const startSec = Number(result.hottest_hook.start_sec);
-        const durationSec = Number(result.hottest_hook.duration_sec) || 10;
-        const conf = Number(result.hottest_hook.confidence) || 0;
-        if (conf >= 0.75) {
-          // Find preview text using per-word timestamp interpolation
-          const hookEnd = startSec + durationSec;
-          const hookWords: string[] = [];
-          for (const line of data.lines) {
-            if (line.end < startSec || line.start > hookEnd) continue;
-            const words = line.text.split(/\s+/).filter(w => w.length > 0);
-            if (words.length === 0) continue;
-            const lineDur = line.end - line.start;
-            const totalChars = words.reduce((s, w) => s + w.length, 0);
-            let charsSoFar = 0;
-            for (const w of words) {
-              const wordStart = line.start + (charsSoFar / totalChars) * lineDur;
-              charsSoFar += w.length;
-              const wordEnd = line.start + (charsSoFar / totalChars) * lineDur;
-              if (wordEnd >= startSec && wordStart <= hookEnd) {
-                hookWords.push(w);
-              }
-            }
+      // Parse hooks from result — support both hottest_hooks (array) and legacy hottest_hook (object)
+      const rawHooks = Array.isArray(result?.hottest_hooks)
+        ? result.hottest_hooks
+        : result?.hottest_hook ? [result.hottest_hook] : [];
+
+      const parseHook = (raw: any): { hook: LyricHook; justification?: string; label?: string } | null => {
+        if (!raw?.start_sec) return null;
+        const startSec = Number(raw.start_sec);
+        const durationSec = Number(raw.duration_sec) || 10;
+        const conf = Number(raw.confidence) || 0;
+        if (conf < 0.5) return null;
+        const hookEnd = startSec + durationSec;
+        const hookWords: string[] = [];
+        for (const line of data.lines) {
+          if (line.end < startSec || line.start > hookEnd) continue;
+          const words = line.text.split(/\s+/).filter(w => w.length > 0);
+          if (words.length === 0) continue;
+          const lineDur = line.end - line.start;
+          const totalChars = words.reduce((s, w) => s + w.length, 0);
+          let charsSoFar = 0;
+          for (const w of words) {
+            const wordStart = line.start + (charsSoFar / totalChars) * lineDur;
+            charsSoFar += w.length;
+            const wordEnd = line.start + (charsSoFar / totalChars) * lineDur;
+            if (wordEnd >= startSec && wordStart <= hookEnd) hookWords.push(w);
           }
-          const previewText = hookWords.join(" ").trim();
-          hook = {
+        }
+        return {
+          hook: {
             start: startSec,
             end: startSec + durationSec,
             score: Math.round(conf * 100),
             reasonCodes: [],
-            previewText,
-          };
-        }
-      }
+            previewText: hookWords.join(" ").trim(),
+            status: conf >= 0.75 ? "confirmed" : "candidate",
+          },
+          justification: raw.justification,
+          label: raw.label,
+        };
+      };
+
+      const parsedHooks = rawHooks.map(parseHook).filter(Boolean) as { hook: LyricHook; justification?: string; label?: string }[];
+      const primary = parsedHooks[0] || null;
+      const secondary = parsedHooks[1] || null;
 
       setSongDna({
         mood: result?.mood,
         description: result?.description,
         meaning: result?.meaning,
-        hook,
-        hookJustification: result?.hottest_hook?.justification || undefined,
+        hook: primary?.hook || null,
+        secondHook: secondary?.hook || null,
+        hookJustification: primary?.justification,
+        secondHookJustification: secondary?.justification,
+        hookLabel: primary?.label,
+        secondHookLabel: secondary?.label,
         physicsSpec: result?.physics_spec || null,
       });
     } catch (e) {
@@ -1453,6 +1469,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 {songDna?.physicsSpec && beatGrid && (
                   <PublishHookButton
                     hook={hook}
+                    secondHook={songDna.secondHook}
+                    hookLabel={songDna.hookLabel}
+                    secondHookLabel={songDna.secondHookLabel}
                     physicsSpec={songDna.physicsSpec as PhysicsSpec}
                     lines={data.lines}
                     beatGrid={{ bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence }}
