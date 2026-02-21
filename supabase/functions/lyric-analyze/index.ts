@@ -187,17 +187,25 @@ serve(async (req) => {
       const data = await response.json();
       const raw = data.choices?.[0]?.message?.content ?? "";
 
-      // Parse JSON from response
+      // Robust JSON extraction
       let cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
       const jsonStart = cleaned.indexOf("{");
       const jsonEnd = cleaned.lastIndexOf("}");
       if (jsonStart === -1 || jsonEnd <= jsonStart) throw new Error("No JSON in response");
-      const jsonStr = cleaned.slice(jsonStart, jsonEnd + 1)
-        .replace(/,\s*}/g, "}").replace(/,\s*]/g, "]");
+      let jsonStr = cleaned.slice(jsonStart, jsonEnd + 1)
+        .replace(/,\s*}/g, "}").replace(/,\s*]/g, "]")
+        .replace(/[\x00-\x1F\x7F]/g, ""); // strip control chars
 
       try { parsed = JSON.parse(jsonStr); } catch { parsed = {}; }
 
-      console.log(`[song-dna] Audio analysis complete: mood=${parsed.mood}, hook=${parsed.hottest_hook?.start_sec ?? "none"}, duration=${parsed.hottest_hook?.duration_sec ?? "none"}, conf=${parsed.hottest_hook?.confidence ?? "none"}`);
+      // Detect truncation: if physics_spec.params is missing, log warning
+      const hasParams = parsed?.physics_spec?.params && Object.keys(parsed.physics_spec.params).length > 0;
+      if (!hasParams) {
+        console.warn("[song-dna] WARNING: physics_spec.params missing or empty — possible truncation");
+        console.warn(`[song-dna] Raw response length: ${raw.length}, ends with: "${raw.slice(-100)}"`);
+      }
+
+      console.log(`[song-dna] Audio analysis complete: mood=${parsed.mood}, hook=${parsed.hottest_hook?.start_sec ?? "none"}, duration=${parsed.hottest_hook?.duration_sec ?? "none"}, conf=${parsed.hottest_hook?.confidence ?? "none"}, system=${parsed.physics_spec?.system ?? "none"}, params=${JSON.stringify(parsed.physics_spec?.params ?? {})}`);
       console.log(`[song-dna] Raw AI response: ${raw.slice(0, 500)}`);
 
     } else {

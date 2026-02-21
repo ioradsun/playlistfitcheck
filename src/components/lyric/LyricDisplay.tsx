@@ -27,6 +27,7 @@ import { HookDanceExporter } from "./HookDanceExporter";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
+import type { HookDanceOverrides } from "./HookDanceControls";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
 export interface LyricLine {
@@ -300,6 +301,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const hookDancePrngRef = useRef<(() => number) | null>(null);
   const [hookDanceExportOpen, setHookDanceExportOpen] = useState(false);
   const hookDanceBeatsRef = useRef<BeatTick[]>([]);
+  const [hookDanceOverrides, setHookDanceOverrides] = useState<HookDanceOverrides>({});
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1477,8 +1479,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       <AnimatePresence>
         {hookDanceRunning && songDna?.physicsSpec && songDna.hook && hookDancePrngRef.current && (
           <HookDanceCanvas
-            physicsState={hookDanceState}
-            spec={songDna.physicsSpec as PhysicsSpec}
+            physicsState={hookDanceOverrides.energyMultiplier && hookDanceState ? {
+              ...hookDanceState,
+              scale: 1 + (hookDanceState.scale - 1) * hookDanceOverrides.energyMultiplier,
+              shake: hookDanceState.shake * (hookDanceOverrides.energyMultiplier ?? 1),
+              glow: hookDanceState.glow * (hookDanceOverrides.energyMultiplier ?? 1),
+            } : hookDanceState}
+            spec={hookDanceOverrides.system
+              ? { ...(songDna.physicsSpec as PhysicsSpec), system: hookDanceOverrides.system }
+              : songDna.physicsSpec as PhysicsSpec}
             lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
             hookStart={songDna.hook.start}
             hookEnd={songDna.hook.end}
@@ -1490,6 +1499,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               hookDanceRef.current?.stop();
               setHookDanceExportOpen(true);
             }}
+            onOverrides={setHookDanceOverrides}
           />
         )}
       </AnimatePresence>
