@@ -524,26 +524,26 @@ function stitchTriptych(
     // Split into phrases first
     const phrases = splitSegmentIntoPhrases(seg, whisperWords);
 
-    // Apply corrections map with contraction-safe regex (v9.0 Idiom-Safe)
+    // Apply corrections map with contraction-safe regex (v9.2 Production Master)
     for (const phrase of phrases) {
       let text = phrase.text;
       let isCorrection = false;
       let geminiConflict: string | undefined;
 
       for (const [wrong, right] of Object.entries(corrections)) {
-        // Pre-filter: skip this correction if the wrong word appears only as part of a contraction
-        const contractionCheck = new RegExp(`\\b${wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[''\u2019]`, "i");
-        if (contractionCheck.test(text) && !new RegExp(`(?<![\\w''\u2019])${wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w''\u2019])`, "i").test(text)) {
-          // The word only exists as part of a contraction — skip
+        // Pre-filter: skip if the wrong word only exists as part of a contraction
+        const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const contractionCheck = new RegExp(`\\b${escaped}[''\u2019]`, "i");
+        const standaloneCheck = new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "i");
+        if (contractionCheck.test(text) && !standaloneCheck.test(text)) {
           continue;
         }
 
-        const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Negative lookahead/lookbehind to avoid matching inside contractions
+        // Boundary-safe regex to prevent contraction corruption
         const regex = new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "gi");
-        const before = text;
-        text = text.replace(regex, right);
-        if (text !== before) {
+        if (regex.test(text)) {
+          // Reset lastIndex after test() before replace()
+          text = text.replace(new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "gi"), right);
           isCorrection = true;
           geminiConflict = wrong;
           qaCorrections++;
@@ -935,11 +935,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v9.2-triptych-literal-intro",
+          version: "anchor-align-v9.3-triptych-production-master",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v9.2-triptych-literal-intro",
+            orchestrator: "v9.3-triptych-production-master",
           },
           geminiUsed,
           geminiError,
