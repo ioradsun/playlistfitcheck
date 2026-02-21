@@ -226,14 +226,16 @@ interface Props {
 }
 
 export function HitFitResults({ analysis, onBack, onHeaderProject }: Props) {
+  const masters = (analysis.masters ?? []).map(normalizeMaster);
+  const headerTitle = masters[0]?.filename || "Hit Potential Analysis";
+
   useEffect(() => {
-    onHeaderProject?.({ title: "Hit Potential Analysis", onBack });
+    onHeaderProject?.({ title: headerTitle, onBack });
     return () => onHeaderProject?.(null);
-  }, [onBack, onHeaderProject]);
+  }, [headerTitle, onBack, onHeaderProject]);
 
   const strengths = analysis.referenceProfile?.strengths ?? [];
   const gaps = analysis.referenceProfile?.gaps ?? [];
-  const masters = (analysis.masters ?? []).map(normalizeMaster);
 
   return (
     <div className="w-full max-w-2xl mx-auto pb-24 space-y-10">
