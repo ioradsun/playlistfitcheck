@@ -844,8 +844,8 @@ export default function ShareableHook() {
 
   const recentForPlaceholder = comments.slice(-20);
   const placeholder = recentForPlaceholder.length > 0
-    ? recentForPlaceholder[placeholderIndex % recentForPlaceholder.length]?.text || "what did this do to you?"
-    : "what did this do to you?";
+    ? recentForPlaceholder[placeholderIndex % recentForPlaceholder.length]?.text || "COMMENT LIVE TO THE VIDEO FMLY STYLE"
+    : "COMMENT LIVE TO THE VIDEO FMLY STYLE";
 
   const hookALabel = hookData.hook_label || "Hook A";
   const hookBLabel = rivalHook?.hook_label || "Hook B";
@@ -1071,7 +1071,7 @@ export default function ShareableHook() {
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-                    placeholder={`what did ${votedA ? hookALabel.toLowerCase() : hookBLabel.toLowerCase()} do to you?`}
+                    placeholder="COMMENT LIVE TO THE VIDEO FMLY STYLE"
                     maxLength={200}
                     className="w-full bg-transparent border-0 border-b border-white/15 px-0 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/40 transition-colors min-h-[44px]"
                   />
@@ -1188,7 +1188,7 @@ export default function ShareableHook() {
 
           <div className="space-y-2">
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-center" style={{ color: "rgba(255,255,255,0.3)" }}>
-              What did this do to you?
+              COMMENT LIVE TO THE VIDEO FMLY STYLE
             </p>
             {hasSubmitted ? (
               <p className="text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
