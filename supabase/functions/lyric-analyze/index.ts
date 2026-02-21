@@ -145,9 +145,10 @@ serve(async (req) => {
       }
       userContent.push({ type: "text", text: textInstruction });
 
-      console.log(`[song-dna] Audio mode: ~${(audioBase64.length * 0.75 / 1024 / 1024).toFixed(1)} MB, format: ${ext}`);
+      console.log(`[song-dna] Audio mode: ~${(audioBase64.length * 0.75 / 1024 / 1024).toFixed(1)} MB, format: ${ext}, beatGrid: ${beatGrid ? `${beatGrid.bpm}bpm` : "none"}`);
 
       const dnaPrompt = await getDnaPrompt();
+      console.log(`[song-dna] Prompt source: ${dnaPrompt.includes("ADAPTIVE HOOK ANCHOR") ? "v2-adaptive" : "v1-legacy"}, length: ${dnaPrompt.length}`);
 
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -195,7 +196,8 @@ serve(async (req) => {
 
       try { parsed = JSON.parse(jsonStr); } catch { parsed = {}; }
 
-      console.log(`[song-dna] Audio analysis complete: mood=${parsed.mood}, bpm=${parsed.bpm}, hook=${parsed.hottest_hook?.start_sec ?? "none"}`);
+      console.log(`[song-dna] Audio analysis complete: mood=${parsed.mood}, hook=${parsed.hottest_hook?.start_sec ?? "none"}, duration=${parsed.hottest_hook?.duration_sec ?? "none"}, conf=${parsed.hottest_hook?.confidence ?? "none"}`);
+      console.log(`[song-dna] Raw AI response: ${raw.slice(0, 500)}`);
 
     } else {
       // ── Lyrics-only mode: text analysis ──
