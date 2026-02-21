@@ -204,10 +204,16 @@ export function DirectorsCutScreen({
     audioRef.current = audio;
 
     let audioReady = false;
+    let audioSeeked = false;
     audio.addEventListener("canplay", () => {
       audioReady = true;
       audio.currentTime = hookStart;
-      audio.play().catch((e) => console.warn("[DirectorsCut] audio play failed:", e));
+    });
+    audio.addEventListener("seeked", () => {
+      if (audioReady) {
+        audioSeeked = true;
+        audio.play().catch((e) => console.warn("[DirectorsCut] audio play failed:", e));
+      }
     });
     audio.addEventListener("error", (e) => {
       console.warn("[DirectorsCut] audio error, using synthetic clock:", e);
@@ -220,24 +226,24 @@ export function DirectorsCutScreen({
 
     const tick = () => {
       let ct: number;
-      if (audioReady && audioRef.current && !isNaN(audioRef.current.currentTime)) {
-        ct = audioRef.current.currentTime;
+      // Only use audio time once seek to hookStart is confirmed
+      const useAudio = audioSeeked && audioRef.current && !audioRef.current.paused && audioRef.current.currentTime >= hookStart;
+      if (useAudio) {
+        ct = audioRef.current!.currentTime;
       } else {
         const elapsed = (performance.now() - syntheticStartTime) / 1000;
         ct = hookStart + (elapsed % hookDuration);
       }
 
-      if (audioReady && audioRef.current && (ct >= hookEnd || ct < hookStart)) {
-        audioRef.current.currentTime = hookStart;
+      // Loop: reset when past hookEnd
+      if (ct >= hookEnd) {
+        if (useAudio && audioRef.current) {
+          audioRef.current.currentTime = hookStart;
+        }
         prevTimeRef.current = hookStart;
         renderersRef.current.forEach(r => { r.integrator.reset(); r.beatIndex = 0; });
         rafRef.current = requestAnimationFrame(tick);
         return;
-      }
-
-      if (!audioReady && ct >= hookEnd) {
-        prevTimeRef.current = hookStart;
-        renderersRef.current.forEach(r => { r.integrator.reset(); r.beatIndex = 0; });
       }
 
       const prev = prevTimeRef.current;
