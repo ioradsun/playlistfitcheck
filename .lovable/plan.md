@@ -1,76 +1,101 @@
 
 
-# Hook Battle: Interaction Redesign
+# Comment Layer Redesign — Constellation, River, and Arrival
 
-The current bottom panel has too many layers competing for attention: vote bars with percentages, a question prompt, a comment input, a vote count, a share button, and a tagline -- all stacked vertically with inconsistent spacing and text that clips on mobile.
+This reworks the entire comment rendering system on the Hook canvas to match the precise animation specification. The current implementation has approximate versions of these concepts but with wrong parameters, wrong lifecycle, and missing the center-entry animation.
 
-## The Problem
+## What Changes
 
-1. Vote labels ("EVEREST PEAK", "STEP BY STEP") clip at small widths
-2. Too many visual layers: bars, percentages, question, input, count, button, tagline
-3. The hierarchy is unclear -- what should the user do first?
-4. On mobile, this stack pushes critical actions below the fold
+### 1. Constellation Nodes (Layer 1, drawn first)
 
-## The Principle
+**Current**: Nodes orbit in a ring at 0.35-0.48 radius, capped at 15% opacity, 8px font, with fly-in from edges.
 
-One action at a time. The interface should breathe. Every element earns its place.
+**New**: Every comment is a permanent node. Position seeded deterministically from `submitted_at`. Newest cluster in center 40%, oldest drift to outer 60%. Opacity 6%-12% based on age (linear decay). Drift speed 0.015-0.04px/frame at a permanent seeded angle. Font: 13px `system-ui`. No orbit behavior -- just linear drift. No overlap avoidance needed (opacity is low enough). No fly-in from edges.
 
-## The New Flow
+### 2. River Rows (Layer 1, drawn second)
 
-Three states, each owning the full bottom panel:
+**Current**: 4 rows at y=20/40/60/80%, speeds 0.3-0.6, opacity ~0.13-0.07, 5 comments per row, 13px font.
 
-**State 1: Pre-Vote** -- Just the canvases. A single whisper of instruction at the bottom center: "TAP TO VOTE". Nothing else. The art speaks.
+**New**: 4 rows at y=25/38/62/75% (avoids center lyric zone). Speeds: 0.4/0.6/0.8/1.1 px/frame. Opacities: 18/14/11/8%. Rows 1,3 scroll left; rows 2,4 scroll right. Min 120px spacing. Font: 15px `system-ui`. Comments wrap when exiting one edge, re-entering the opposite.
 
-**State 2: Post-Vote, Pre-Comment** -- The vote result appears as a single centered line: "HOOK A 67%" with the winning bar below. Below that, a full-width input with the question as placeholder ("what did [hook] do to you?"). Typing and hitting Enter submits. No separate button -- Enter is the action.
+### 3. New Submission Animation (Layer 1, drawn last)
 
-**State 3: Post-Comment (or dismissed)** -- The input collapses. "SEND THIS" becomes the sole CTA. Vote count appears as a quiet footnote. The tagline stays.
+**Current**: Spawns from random edge, flies to center, settles, then joins constellation orbit.
 
-## Key Design Decisions
-
-- Vote percentages: Show only the voted hook's percentage as a single large number, not both side-by-side. The rival percentage is implied (100 minus).
-- Hook labels: Truncate with ellipsis at 12 characters on mobile to prevent clipping.
-- Comment input: Full-width, no border-radius change, just a clean underline-style input (border-bottom only) to feel lighter.
-- "SEND THIS" button: Only appears after comment or if user scrolls past the input. Rounded-full pill shape, not full-width rectangle.
-- Remove the "vs" divider entirely from the bottom -- the canvases already show the split.
-- Total votes: Shown inline with SEND THIS as "3 votes -- SEND THIS" to reduce vertical layers.
+**New**: Appears dead center at 28px, 100% opacity white. Holds 2000ms. Over 8000ms, drifts linearly toward its permanent constellation position while shrinking 28px to 15px and fading 100% to 18%. Then joins the river. Over following minutes, continues fading toward 6% and transitioning from river scroll to constellation drift.
 
 ## Technical Changes
 
 ### `src/pages/ShareableHook.tsx`
 
-**Battle bottom panel (lines 872-972):**
+**Types (lines 54-84)**: Rewrite `ConstellationNode` to include:
+- `submittedAt: number` (timestamp)
+- `seedX, seedY` (permanent position from PRNG)
+- `driftSpeed, driftAngle` (permanent from PRNG)
+- `phase: "center" | "transitioning" | "river" | "constellation"`
+- `phaseStartTime: number`
+- `riverRowIndex: number` (assigned row for river phase)
+- `currentSize: number`
 
-Replace the entire bottom panel with a state-machine approach:
+Remove `RiverRow` interface -- river rows become a rendering pass over nodes that are in "river" phase, plus a static config.
 
-```text
-State 1 (pre-vote):
-  <p "TAP TO VOTE" centered, 10px mono, white/20>
+**Build constellation (lines 484-516)**: Rewrite to:
+- Seed each node's position using `mulberry32(hashSeed(c.id))` from `submitted_at`
+- Newest comments: seed position within center 40% of canvas
+- Oldest comments: seed position in outer 60%
+- Compute `driftSpeed` (0.015-0.04) and `driftAngle` (0-360) from the same PRNG
+- Compute opacity as linear interpolation between 6% (oldest) and 12% (newest)
+- All existing comments start in "constellation" phase
 
-State 2 (voted, not commented):
-  <div centered>
-    <p hookLabel truncated, 11px mono white/40>
-    <p percentage, text-4xl bold tabular-nums white/90>
-    <div single vote bar, 2px, full-width>
-  </div>
-  <input underline-style, placeholder="what did [hook] do to you?">
+**River config**: Define 4 static river rows with fixed y-positions, speeds, opacities, and directions. Recent comments (last N) are assigned to river rows and rendered as a separate pass.
 
-State 3 (commented or dismissed):
-  <p "your words are on the video" white/30>
-  <button pill "SEND THIS">
-  <p vote count + tagline>
-```
+**Canvas draw — constellation pass (lines 250-308)**: Replace with:
+- Simple linear drift: `node.x += cos(driftAngle) * driftSpeed`, `node.y += sin(driftAngle) * driftSpeed`
+- Wrap position when exiting canvas bounds
+- Draw at 13px system-ui, white, node's age-based opacity (6-12%)
+- No overlap detection needed (very low opacity)
+- No orbit calculation
 
-- Remove the dual side-by-side vote bar layout
-- Remove the standalone "vs" text element
-- Remove the separate question prompt (move into input placeholder)
-- Consolidate vote count and tagline into one line
-- Add `truncate max-w-[120px]` to hook labels in the canvas overlays to prevent clipping
-- Use `text-4xl` for the winning percentage (single focal number)
-- Input uses `border-b border-white/15` instead of full border for lighter feel
+**Canvas draw — river pass (lines 310-324)**: Replace with:
+- 4 rows at y = 25/38/62/75%
+- Pull recent comments for each row
+- Scroll with alternating directions (rows 1,3 left; rows 2,4 right)
+- 15px font, row-specific opacity
+- 120px minimum spacing, wrapping at edges
 
-### Mobile-specific refinements
+**Canvas draw — new submission (within constellation loop)**: Add phase handling:
+- "center": Draw at canvas center, 28px, 100% opacity, no movement. After 2000ms, transition to "transitioning"
+- "transitioning": Over 8000ms, linearly interpolate position from center to river position, size 28px to 15px, opacity 100% to 18%. After 8000ms, move to "river"
+- "river": Scroll with assigned row. Over time (minutes), gradually decay opacity toward constellation opacity and shift drift angle from horizontal to permanent constellation angle
+- "constellation": Standard constellation rendering
 
-- Bottom panel gets `pb-safe` (safe area inset) for notched phones
-- Max vertical height of bottom panel: `max-h-[35vh]` to ensure canvases always dominate
-- Touch targets: minimum 44px height on all interactive elements
+**Submit handler (lines 610-651)**: Rewrite spawn logic:
+- New node starts at phase "center" with `phaseStartTime = Date.now()`
+- Position: `x = 0.5, y = 0.5` (canvas center)
+- `currentSize = 28`
+- No edge spawning
+
+### Rendering Order (within the existing canvas draw effect)
+
+1. Constellation nodes (phase "constellation") -- lowest opacity, drawn first
+2. River rows (phase "river" + static recent comments) -- medium opacity
+3. New submission (phase "center" or "transitioning") -- highest opacity, drawn last
+
+### What Gets Removed
+
+- The `doesOverlap` / `placedRects` collision detection system
+- The "flying" / "settling" / "drifting" phase system
+- The orbit calculation (`orbitRadius`, `orbitSpeed`, `baseAngle`)
+- The edge-spawn logic in `handleSubmit`
+- The `flySpeed`, `settleTimer`, `scale` fields from `ConstellationNode`
+- The `RiverRow` interface (replaced by static config + phase-based rendering)
+
+### What Does NOT Change
+
+- No blur, glow, or shadow on comments
+- Comments always white -- no palette colors
+- Layer 2 (lyrics/effects) renders on top, making overlap architecturally impossible
+- No physics interaction -- comments are purely opacity + linear drift
+- Font: `system-ui, -apple-system, sans-serif` -- never the artist fingerprint font
+- Text rendered exactly as typed -- no transform
 
