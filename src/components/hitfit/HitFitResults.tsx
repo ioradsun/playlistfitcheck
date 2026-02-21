@@ -1,9 +1,8 @@
-import { useEffect } from "react";
-import { motion } from "framer-motion";
-import { Trophy, Target, AlertTriangle, CheckCircle2, ChevronDown, Flame, Zap, TrendingUp, Radio } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
+
+/* ── Types ── */
 
 interface Dimension {
   name: string;
@@ -39,7 +38,9 @@ export interface HitFitAnalysis {
   headToHead: { winner: string | null; reason: string };
 }
 
-const dimensionLabels: Record<string, string> = {
+/* ── Helpers ── */
+
+const DIMENSION_NAMES: Record<string, string> = {
   hookStrength: "Hook Strength",
   productionQuality: "Production Quality",
   vocalPerformance: "Vocal Performance",
@@ -50,23 +51,30 @@ const dimensionLabels: Record<string, string> = {
   emotionalImpact: "Emotional Impact",
 };
 
-const performanceLabels: Record<string, { label: string }> = {
-  streaming: { label: "Streaming" },
-  sync: { label: "Sync Licensing" },
-  radio: { label: "Radio" },
-  live: { label: "Live" },
-  social: { label: "Social / Short-Form" },
+const PLATFORM_NAMES: Record<string, string> = {
+  streaming: "Streaming",
+  sync: "Sync Licensing",
+  radio: "Radio",
+  live: "Live",
+  social: "Social / Short-Form",
 };
 
-function getScoreColor(score: number): string {
-  if (score >= 80) return "text-score-excellent";
-  if (score >= 65) return "text-score-strong";
-  if (score >= 50) return "text-score-ok";
-  if (score >= 35) return "text-score-weak";
+function scoreColor(n: number) {
+  if (n >= 80) return "text-score-excellent";
+  if (n >= 65) return "text-score-strong";
+  if (n >= 50) return "text-score-ok";
+  if (n >= 35) return "text-score-weak";
   return "text-score-bad";
 }
 
-// Normalize the API response which may return dimensions as object or array
+function barColor(n: number) {
+  if (n >= 80) return "bg-score-excellent";
+  if (n >= 65) return "bg-score-strong";
+  if (n >= 50) return "bg-score-ok";
+  if (n >= 35) return "bg-score-weak";
+  return "bg-score-bad";
+}
+
 function normalizeMaster(raw: any): MasterAnalysis {
   let dims: Dimension[] = [];
   if (Array.isArray(raw.dimensions)) {
@@ -75,11 +83,10 @@ function normalizeMaster(raw: any): MasterAnalysis {
     dims = Object.entries(raw.dimensions).map(([key, val]: [string, any]) => ({
       name: key,
       score: val?.score ?? 0,
-      label: val?.note ? "" : "",
+      label: "",
       feedback: val?.note ?? "",
     }));
   }
-
   return {
     filename: raw.name || raw.filename || "Master",
     overallScore: raw.score ?? raw.overallScore ?? 0,
@@ -93,98 +100,124 @@ function normalizeMaster(raw: any): MasterAnalysis {
   };
 }
 
-function ScorePill({ score, label }: { score: number; label: string }) {
+/* ── Section label ── */
+
+function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline gap-2">
-      <span className={`font-mono text-2xl font-semibold ${getScoreColor(score)}`}>{score}</span>
-      <span className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">{label}</span>
+    <p className="text-[11px] font-medium tracking-wide uppercase text-muted-foreground/50 mb-3">
+      {children}
+    </p>
+  );
+}
+
+/* ── Score block (quiet, inline) ── */
+
+function ScoreBlock({ score, label, summary }: { score: number; label: string; summary: string }) {
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-1">
+        <span className={`font-mono text-lg font-semibold ${scoreColor(score)}`}>{score}</span>
+        <span className="text-xs text-muted-foreground">{label}</span>
+      </div>
+      <p className="text-sm text-muted-foreground leading-relaxed">{summary}</p>
     </div>
   );
 }
 
-function MasterCard({ master, index }: { master: MasterAnalysis; index: number }) {
-  const [open, setOpen] = useState(index === 0);
+/* ── Master accordion ── */
+
+function MasterCard({ master, index, defaultOpen }: { master: MasterAnalysis; index: number; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="border-b border-border/30 last:border-0">
+    <div>
       <button
-        className="w-full flex items-center justify-between py-5 text-left gap-3"
+        className="w-full flex items-center justify-between py-4 text-left gap-3"
         onClick={() => setOpen(!open)}
       >
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Master {index + 1}</p>
-          <p className="text-sm font-semibold truncate">{master.filename}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate">{master.filename}</p>
         </div>
-        <div className="flex items-center gap-4 shrink-0">
-          <div className="text-right">
-            <p className={`font-mono text-xl font-semibold ${getScoreColor(master.overallScore)}`}>{master.overallScore}</p>
-            <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">{master.overallLabel}</p>
-          </div>
-          <ChevronDown size={14} className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} strokeWidth={1.5} />
+        <div className="flex items-center gap-3 shrink-0">
+          <span className={`font-mono text-base font-semibold ${scoreColor(master.overallScore)}`}>
+            {master.overallScore}
+          </span>
+          <ChevronDown
+            size={14}
+            className={`text-muted-foreground/40 transition-transform ${open ? "rotate-180" : ""}`}
+            strokeWidth={1.5}
+          />
         </div>
       </button>
 
       {open && (
-        <div className="pb-6 space-y-6">
-          <p className="text-sm text-foreground leading-relaxed">{master.summary}</p>
+        <div className="pb-8 space-y-6">
+          {/* Summary */}
+          <p className="text-sm text-foreground/80 leading-relaxed">{master.summary}</p>
 
           {/* Dimensions */}
-          <div className="space-y-3">
-            <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Dimensions</p>
+          <div className="space-y-2.5">
             {master.dimensions.map((dim) => (
-              <div key={dim.name} className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-foreground">{dimensionLabels[dim.name] || dim.name}</span>
-                  <span className={`font-mono text-xs font-semibold ${getScoreColor(dim.score)}`}>{dim.score}</span>
+              <div key={dim.name}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-foreground/70">{DIMENSION_NAMES[dim.name] || dim.name}</span>
+                  <span className={`font-mono text-xs ${scoreColor(dim.score)}`}>{dim.score}</span>
                 </div>
-                <div className="h-[1px] bg-border/30 w-full relative">
-                  <div
-                    className="absolute top-0 left-0 h-full bg-foreground/20"
-                    style={{ width: `${dim.score}%` }}
-                  />
+                <div className="h-px bg-border/20 w-full relative">
+                  <div className={`absolute inset-y-0 left-0 ${barColor(dim.score)} opacity-40`} style={{ width: `${dim.score}%` }} />
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-snug">{dim.feedback}</p>
+                {dim.feedback && (
+                  <p className="text-xs text-muted-foreground mt-1 leading-snug">{dim.feedback}</p>
+                )}
               </div>
             ))}
           </div>
 
-          {/* Performance Insights */}
+          {/* Platform fit */}
           {master.performanceInsights && master.performanceInsights.length > 0 && (
-            <div className="space-y-3">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Platform Fit</p>
+            <div>
+              <Label>Platform Fit</Label>
               <div className="space-y-2">
                 {master.performanceInsights.map((insight) => (
-                  <div key={insight.type} className="flex items-start gap-3">
-                    <span className="font-mono text-[11px] text-muted-foreground/60 w-24 shrink-0 pt-0.5">
-                      {performanceLabels[insight.type]?.label || insight.type}
+                  <div key={insight.type} className="flex gap-3">
+                    <span className="text-xs text-muted-foreground/50 w-20 shrink-0">
+                      {PLATFORM_NAMES[insight.type] || insight.type}
                     </span>
-                    <p className="text-[11px] text-foreground leading-snug">{insight.description}</p>
+                    <p className="text-xs text-foreground/70 leading-snug">{insight.description}</p>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Strength / Weakness / Note */}
-          <div className="grid grid-cols-1 gap-4 border-t border-border/20 pt-4">
-            <div className="space-y-1">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Top Strength</p>
-              <p className="text-[11px] text-foreground">{master.topStrength}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Main Gap</p>
-              <p className="text-[11px] text-foreground">{master.mainWeakness}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Action</p>
-              <p className="text-[11px] text-foreground">{master.actionableNote}</p>
-            </div>
+          {/* Takeaways */}
+          <div className="space-y-3 pt-2">
+            {master.topStrength && (
+              <div>
+                <p className="text-xs text-muted-foreground/50 mb-0.5">Strength</p>
+                <p className="text-sm text-foreground/80">{master.topStrength}</p>
+              </div>
+            )}
+            {master.mainWeakness && (
+              <div>
+                <p className="text-xs text-muted-foreground/50 mb-0.5">Gap</p>
+                <p className="text-sm text-foreground/80">{master.mainWeakness}</p>
+              </div>
+            )}
+            {master.actionableNote && (
+              <div>
+                <p className="text-xs text-muted-foreground/50 mb-0.5">Next step</p>
+                <p className="text-sm text-foreground/80">{master.actionableNote}</p>
+              </div>
+            )}
           </div>
         </div>
       )}
     </div>
   );
 }
+
+/* ── Main component ── */
 
 interface Props {
   analysis: HitFitAnalysis;
@@ -203,87 +236,78 @@ export function HitFitResults({ analysis, onBack, onHeaderProject }: Props) {
   const masters = (analysis.masters ?? []).map(normalizeMaster);
 
   return (
-    <div className="w-full max-w-2xl mx-auto pb-24 divide-y divide-border/30">
+    <div className="w-full max-w-2xl mx-auto pb-24 space-y-10">
 
       {/* Verdict */}
-      <div className="pb-6">
-        <p className="font-mono text-[11px] text-muted-foreground mt-0.5 leading-snug">{analysis.overallVerdict}</p>
-      </div>
+      <p className="text-sm text-muted-foreground leading-relaxed">{analysis.overallVerdict}</p>
 
-      {/* Hit + Short-Form Potential */}
+      {/* Potentials */}
       {(analysis.hitPotential || analysis.shortFormPotential) && (
-        <div className="py-8 grid grid-cols-1 sm:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
           {analysis.hitPotential && (
-            <div className="space-y-2">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Hit Potential</p>
-              <ScorePill score={analysis.hitPotential.score} label={analysis.hitPotential.label} />
-              <p className="text-[11px] text-muted-foreground leading-snug">{analysis.hitPotential.summary}</p>
+            <div>
+              <Label>Hit Potential</Label>
+              <ScoreBlock {...analysis.hitPotential} />
             </div>
           )}
           {analysis.shortFormPotential && (
-            <div className="space-y-2">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Short-Form Potential</p>
-              <ScorePill score={analysis.shortFormPotential.score} label={analysis.shortFormPotential.label} />
-              <p className="text-[11px] text-muted-foreground leading-snug">{analysis.shortFormPotential.summary}</p>
+            <div>
+              <Label>Short-Form Potential</Label>
+              <ScoreBlock {...analysis.shortFormPotential} />
             </div>
           )}
         </div>
       )}
 
-      {/* Reference Profile */}
-      <div className="py-8 space-y-4">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Reference Profile</p>
-        <p className="text-sm text-foreground leading-relaxed">{analysis.referenceProfile?.description}</p>
+      {/* Reference profile */}
+      <div>
+        <Label>Reference Profile</Label>
+        <p className="text-sm text-foreground/80 leading-relaxed mb-4">{analysis.referenceProfile?.description}</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {strengths.length > 0 && (
-            <div className="space-y-2">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Strengths</p>
-              <ul className="space-y-1">
-                {strengths.map((s, i) => (
-                  <li key={i} className="text-[11px] text-foreground flex items-start gap-2">
-                    <span className="text-score-excellent shrink-0">✓</span> {s}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ul className="space-y-1">
+              {strengths.map((s, i) => (
+                <li key={i} className="text-sm text-foreground/70 flex items-start gap-2">
+                  <span className="text-score-excellent shrink-0 text-xs mt-0.5">✓</span> {s}
+                </li>
+              ))}
+            </ul>
           )}
           {gaps.length > 0 && (
-            <div className="space-y-2">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Gaps</p>
-              <ul className="space-y-1">
-                {gaps.map((g, i) => (
-                  <li key={i} className="text-[11px] text-foreground flex items-start gap-2">
-                    <span className="text-score-ok shrink-0">—</span> {g}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ul className="space-y-1">
+              {gaps.map((g, i) => (
+                <li key={i} className="text-sm text-foreground/70 flex items-start gap-2">
+                  <span className="text-muted-foreground/40 shrink-0 text-xs mt-0.5">—</span> {g}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>
 
-      {/* Master Cards */}
-      <div className="py-8 space-y-0">
-        <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase mb-2">Masters</p>
-        {masters.map((master, i) => (
-          <MasterCard key={i} master={master} index={i} />
-        ))}
+      {/* Masters */}
+      <div>
+        <Label>Masters</Label>
+        <div className="divide-y divide-border/20">
+          {masters.map((master, i) => (
+            <MasterCard key={i} master={master} index={i} defaultOpen={i === 0} />
+          ))}
+        </div>
       </div>
 
-      {/* Head to Head */}
+      {/* Head to head */}
       {masters.length > 1 && analysis.headToHead?.winner && (
-        <div className="py-8 space-y-3">
-          <p className="font-mono text-[9px] tracking-widest text-muted-foreground/60 uppercase">Head to Head</p>
-          <p className="text-sm text-foreground">
-            <span className="font-semibold">{analysis.headToHead.winner}</span>
-            <span className="text-muted-foreground"> — {analysis.headToHead.reason}</span>
+        <div>
+          <Label>Head to Head</Label>
+          <p className="text-sm text-foreground/80">
+            <span className="font-medium">{analysis.headToHead.winner}</span>
+            {" — "}
+            <span className="text-muted-foreground">{analysis.headToHead.reason}</span>
           </p>
         </div>
       )}
 
-      <div className="pt-8">
-        <SignUpToSaveBanner />
-      </div>
+      <SignUpToSaveBanner />
     </div>
   );
 }
