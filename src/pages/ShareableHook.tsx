@@ -529,6 +529,15 @@ export default function ShareableHook() {
   const bgBase = hookData?.artist_dna?.palette?.background_base || "#0a0a0a";
   const bgAtmosphere = hookData?.artist_dna?.palette?.background_atmosphere || "rgba(255,255,255,0.2)";
 
+  // Hide Lovable widget on share page
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.id = "hide-lovable-badge";
+    style.textContent = `[data-lovable-badge], .lovable-badge, iframe[src*="lovable"] { display: none !important; }`;
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, []);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -557,6 +566,23 @@ export default function ShareableHook() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: bgBase }}>
+      {/* Fit by toolsFM badge — fixed bottom-right like Lovable's badge */}
+      <AnimatePresence>
+        {badgeVisible && (
+          <motion.button
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+            onClick={handleBadgeClick}
+            className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
+          >
+            <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
+              Fit by toolsFM
+            </span>
+          </motion.button>
+        )}
+      </AnimatePresence>
       {/* ── Canvas area — full viewport height on mobile ── */}
       <div
         ref={containerRef}
@@ -579,23 +605,6 @@ export default function ShareableHook() {
           )}
         </AnimatePresence>
 
-        {/* tools.fm badge — DOM element like Lovable's badge */}
-        <AnimatePresence>
-          {badgeVisible && (
-            <motion.button
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
-              onClick={(e) => { e.stopPropagation(); handleBadgeClick(); }}
-              className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
-            >
-              <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
-                tools.fm
-              </span>
-            </motion.button>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* ── Below-canvas content ── */}
