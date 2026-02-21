@@ -137,19 +137,20 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation:
 // ── v9.0 Triptych: Three specialized prompt builders ─────────────────────────
 
 function buildIntroPrompt(anchorWord: string, anchorTs: number): string {
-  return `ROLE: Literal Spoken Transcriber (v9.4 Triptych — Lane B)
+  return `ROLE: Forensic Acoustic Analyst (v9.5 Triptych — Lane B)
 
-AUDIO CONTEXT: You are receiving the first ~${Math.ceil(anchorTs + 2)} seconds of the track as a byte-sliced clip.
+AUDIO SIGNAL: You are analyzing the first ~${Math.ceil(anchorTs + 2)} seconds of a track. There is a quiet spoken dialogue track mixed UNDER the music.
 
-YOUR MISSION:
-1. LITERAL ONLY: Transcribe ONLY what is actually spoken or muttered. If you hear humming, write "[humming]". Do NOT invent dialogue. Do NOT add creative lyrics or generic song phrases.
-2. BOUNDARY: The anchor word "${anchorWord}" occurs at exactly ${anchorTs.toFixed(3)}s. You MUST project backward from this anchor. The first human vocal sound is approximately 3-4 seconds into the track — NOT at 0.000s.
-3. SILENCE RULE: Any audio before the first vocal onset is instrumental/silence. No dialogue line may start before 1.0s. If you detect onset later than 5.0s, trust your ears.
-4. THE ANCHOR: Your LAST line must end at or very near ${anchorTs.toFixed(3)}s. The last word must be "${anchorWord}".
-5. PHRASE DENSITY: Max 6 words per line.
-6. TAGGING: All intro dialogue = tag "main". Background vocals = tag "adlib".
-7. SCHEMA: Every object MUST include ALL keys: start, end, text, tag, isCorrection (false), isFloating (false), confidence (1.0), geminiConflict (null).
-8. NO INVENTION: If you are unsure of a word, set confidence to 0.7. Never add words that aren't in the audio.
+YOUR TASK:
+1. FILTER THE MUSIC: Ignore the beat, melody, and any background instrumentation. Focus ENTIRELY on the human speaking voice.
+2. LITERAL TRANSCRIPTION: Transcribe the EXACT words spoken (e.g., "Oh, what the hell is that melody... I gotta remember it"). Do NOT paraphrase. Do NOT substitute generic filler like "[humming]" or "Yeah" if actual words are spoken.
+3. THE ANCHOR: Your very LAST word must be "${anchorWord}" at ${anchorTs.toFixed(3)}s. Align your timeline so all lines project backward from this anchor.
+4. ONSET DETECTION: The first human vocal sound is approximately 3-4 seconds into the track — NOT at 0.000s. No dialogue line may start before 1.0s.
+5. NO FILLER: Do NOT use "[humming]" or generic adlibs like "Yeah" or "Check it out" unless those EXACT words are clearly spoken. If you hear quiet muttering, transcribe the actual words even if confidence is low.
+6. NO INVENTION: Do NOT add words, phrases, or creative lyrics that are not in the audio. If uncertain, set confidence to 0.6 but still attempt the actual words.
+7. PHRASE DENSITY: Max 6 words per line.
+8. TAGGING: All intro dialogue = tag "main". Background vocals = tag "adlib".
+9. SCHEMA: Every object MUST include ALL keys: start, end, text, tag, isCorrection (false), isFloating (false), confidence (0.6-1.0), geminiConflict (null).
 
 EXPECTED OUTPUT: 3-8 lines of literal spoken dialogue before the anchor.
 
@@ -365,7 +366,7 @@ async function runGeminiIntro(
   const prompt = buildIntroPrompt(anchorWord, anchorTs);
   console.log(`[triptych-intro] Lane B: anchor="${anchorWord}" @ ${anchorTs.toFixed(3)}s`);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 800, "intro");
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 400, "intro");
   const parsed = extractJsonFromContent(content, "intro_lines");
 
   const lines: LyricLine[] = Array.isArray(parsed.intro_lines)
@@ -406,7 +407,7 @@ async function runGeminiOutro(
   const prompt = buildOutroPrompt(middleCutoff, trackEnd);
   console.log(`[triptych-outro] Lane C: ${middleCutoff.toFixed(3)}s to ${trackEnd.toFixed(3)}s`);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 800, "outro");
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 400, "outro");
   const parsed = extractJsonFromContent(content, "outro_lines");
 
   const HARD_MAX = Math.min(trackEnd + 2.0, 350);
@@ -444,7 +445,7 @@ async function runGeminiAuditor(
   const prompt = buildAuditorPrompt(rawText, anchorTs, middleCutoff);
   console.log(`[triptych-auditor] Lane D: ${anchorTs.toFixed(3)}s to ${middleCutoff.toFixed(3)}s, text length=${rawText.length}`);
 
-  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 400, "auditor");
+  const content = await callGemini(prompt, audioBase64, mimeType, lovableKey, model, 200, "auditor");
   const parsed = extractJsonFromContent(content, "corrections");
 
   const corrections: Record<string, string> = {};
@@ -544,18 +545,18 @@ function stitchTriptych(
         const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         // Pre-filter: skip if the wrong word only exists as part of a contraction
         const contractionCheck = new RegExp(`\\b${escaped}[''\u2019]`, "i");
-        const standaloneCheck = new RegExp(`\\b${escaped}\\b`, "i");
         if (contractionCheck.test(text) && !new RegExp(`(?<![\\w''\u2019])${escaped}(?![''\u2019\\w])`, "i").test(text)) {
           continue;
         }
 
-        // Word-boundary regex (punctuation-agnostic)
+        // Punctuation-agnostic word-boundary regex: matches "hard" in "hard," or "hard."
         const regex = new RegExp(`\\b${escaped}\\b`, "gi");
-        if (regex.test(text)) {
-          text = text.replace(new RegExp(`\\b${escaped}\\b`, "gi"), right);
+        const matchCount = (text.match(regex) || []).length;
+        if (matchCount > 0) {
+          text = text.replace(regex, right);
           isCorrection = true;
           geminiConflict = wrong;
-          qaCorrections++;
+          qaCorrections += matchCount;
         }
       }
 
@@ -745,7 +746,7 @@ serve(async (req) => {
 
     console.log(
       `[v9.0] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Literal-Intro v9.2), ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Forensic-Intro v9.5), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
@@ -945,11 +946,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v9.4-triptych-literal-bound",
+          version: "anchor-align-v9.5-triptych-forensic-intro",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v9.4-triptych-literal-bound",
+            orchestrator: "v9.5-triptych-forensic-intro",
           },
           geminiUsed,
           geminiError,
