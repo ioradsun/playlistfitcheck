@@ -654,7 +654,7 @@ export default function ShareableHook() {
         onMouseMove={(e) => handleBadgeArea(e)}
         onMouseLeave={() => setBadgeHovered(false)}
       >
-        <canvas ref={canvasRef} className="absolute inset-0" />
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
         {/* Mute icon */}
         <AnimatePresence>
