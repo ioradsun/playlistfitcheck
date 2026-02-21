@@ -197,16 +197,22 @@ export function DirectorsCutScreen({
 
   // Audio + animation loop
   useEffect(() => {
-    const audio = new Audio(audioSrc);
+    const audio = new Audio();
+    audio.muted = true;       // muted required for autoplay policy
     audio.volume = 0;
+    audio.preload = "auto";
     audioRef.current = audio;
 
     let audioReady = false;
     audio.addEventListener("canplay", () => {
       audioReady = true;
       audio.currentTime = hookStart;
-      audio.play().catch(() => {});
+      audio.play().catch((e) => console.warn("[DirectorsCut] audio play failed:", e));
     });
+    audio.addEventListener("error", (e) => {
+      console.warn("[DirectorsCut] audio error, using synthetic clock:", e);
+    });
+    audio.src = audioSrc;
     audio.load();
 
     const syntheticStartTime = performance.now();
