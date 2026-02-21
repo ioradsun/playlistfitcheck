@@ -35,6 +35,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
   const [debugData, setDebugData] = useState<any | null>(null);
+  const [savedSongDna, setSavedSongDna] = useState<any | null>(null);
   const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
   const [transcriptionModel, setTranscriptionModel] = useState("scribe");
   const { user } = useAuth();
@@ -61,6 +62,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       setSavedId(initialLyric.id);
       setFmlyLines((initialLyric as any).fmly_lines ?? null);
       setVersionMeta((initialLyric as any).version_meta ?? null);
+      setSavedSongDna((initialLyric as any).song_dna ?? null);
       // Restore saved beat grid
       const savedBg = (initialLyric as any).beat_grid;
       if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
@@ -236,6 +238,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
           versionMeta={versionMeta}
           debugData={debugData}
           initialBeatGrid={precomputedBeatGrid}
+          initialSongDna={savedSongDna}
           onBack={handleBack}
           onSaved={(id) => {
             setSavedId(id);

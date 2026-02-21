@@ -763,6 +763,7 @@ export type Database = {
           fmly_lines: Json | null
           id: string
           lines: Json
+          song_dna: Json | null
           title: string
           updated_at: string
           user_id: string
@@ -776,6 +777,7 @@ export type Database = {
           fmly_lines?: Json | null
           id?: string
           lines?: Json
+          song_dna?: Json | null
           title?: string
           updated_at?: string
           user_id: string
@@ -789,6 +791,7 @@ export type Database = {
           fmly_lines?: Json | null
           id?: string
           lines?: Json
+          song_dna?: Json | null
           title?: string
           updated_at?: string
           user_id?: string

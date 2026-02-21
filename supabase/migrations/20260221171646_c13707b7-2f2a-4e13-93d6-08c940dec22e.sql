@@ -1,0 +1,1 @@
+ALTER TABLE public.saved_lyrics ADD COLUMN song_dna jsonb DEFAULT NULL;
