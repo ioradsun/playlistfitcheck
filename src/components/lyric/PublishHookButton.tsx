@@ -181,13 +181,15 @@ export function PublishHookButton({
 
   if (!user) return null;
 
+  const buttonClass = "w-full text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 disabled:opacity-50 text-foreground hover:text-primary border-border/40 hover:border-primary/40";
+
   if (publishedUrl) {
     return (
       <button
         onClick={onViewBattle ? () => onViewBattle(publishedUrl) : undefined}
-        className={`w-full text-[10px] font-mono transition-colors py-1 text-muted-foreground/60 hover:text-muted-foreground`}
+        className={buttonClass}
       >
-        {secondHook ? "View Hook Battle" : "View Published Hook"}
+        {secondHook ? "VIEW HOOK BATTLE" : "VIEW PUBLISHED HOOK"}
       </button>
     );
   }
@@ -196,15 +198,15 @@ export function PublishHookButton({
     <button
       onClick={handlePublish}
       disabled={publishing}
-      className="w-full text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 disabled:opacity-50 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+      className={buttonClass}
     >
       {publishing ? (
         <>
           <Loader2 size={10} className="inline animate-spin mr-1.5" />
-          Publishing…
+          PUBLISHING…
         </>
       ) : (
-        secondHook ? "Start Battle" : "Publish Hook Page"
+        secondHook ? "START BATTLE" : "PUBLISH HOOK PAGE"
       )}
     </button>
   );
