@@ -1279,6 +1279,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         metadata={data.metadata}
         title={data.title}
         artist={data.artist}
+        audioFile={audioFile}
       />
     </motion.div>
   );
