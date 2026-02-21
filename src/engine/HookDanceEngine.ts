@@ -44,6 +44,8 @@ export class HookDanceEngine {
   private running = false;
   private audioPlaying = false;
   private syntheticStart = 0; // performance.now() when engine started
+  private boundTimeUpdate: (() => void) | null = null;
+  private boundEnded: (() => void) | null = null;
 
   constructor(
     spec: PhysicsSpec,
@@ -91,6 +93,22 @@ export class HookDanceEngine {
     this.prevTime = this.hookStart;
     this.syntheticStart = performance.now();
 
+    // Enforce hook boundaries via timeupdate — most reliable loop mechanism
+    this.boundTimeUpdate = () => {
+      if (!this.running) return;
+      const t = this.audioRef.currentTime;
+      if (t >= this.hookEnd || t < this.hookStart - 0.5) {
+        try { this.audioRef.currentTime = this.hookStart; } catch {}
+      }
+    };
+    this.boundEnded = () => {
+      if (!this.running) return;
+      try { this.audioRef.currentTime = this.hookStart; } catch {}
+      this.audioRef.play().catch(() => {});
+    };
+    this.audioRef.addEventListener("timeupdate", this.boundTimeUpdate);
+    this.audioRef.addEventListener("ended", this.boundEnded);
+
     // Wait for audio to be seekable before seeking
     const trySeekAndPlay = () => {
       try {
@@ -101,9 +119,8 @@ export class HookDanceEngine {
       this.audioRef.play()
         .then(() => {
           this.audioPlaying = true;
-          // Sync synthetic clock to audio position to prevent drift
           this.syntheticStart = performance.now() - (this.audioRef.currentTime - this.hookStart) * 1000;
-          console.log("[HookDanceEngine] audio playing at", this.audioRef.currentTime.toFixed(2));
+          console.log("[HookDanceEngine] audio playing at", this.audioRef.currentTime.toFixed(2), "hook:", this.hookStart.toFixed(2), "-", this.hookEnd.toFixed(2));
         })
         .catch((e) => {
           this.audioPlaying = false;
@@ -111,12 +128,10 @@ export class HookDanceEngine {
         });
     };
 
-    // If audio metadata is loaded, seek immediately; otherwise wait
     if (this.audioRef.readyState >= 1) {
       trySeekAndPlay();
     } else {
       this.audioRef.addEventListener("loadedmetadata", () => trySeekAndPlay(), { once: true });
-      // Start synthetic clock ticking immediately regardless
     }
 
     this.tick();
@@ -128,6 +143,14 @@ export class HookDanceEngine {
     if (this.rafId != null) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
+    }
+    if (this.boundTimeUpdate) {
+      this.audioRef.removeEventListener("timeupdate", this.boundTimeUpdate);
+      this.boundTimeUpdate = null;
+    }
+    if (this.boundEnded) {
+      this.audioRef.removeEventListener("ended", this.boundEnded);
+      this.boundEnded = null;
     }
     this.audioRef.pause();
     this.callbacks.onEnd();
