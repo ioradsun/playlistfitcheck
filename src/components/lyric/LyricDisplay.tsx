@@ -339,9 +339,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         const durationSec = Number(result.hottest_hook.duration_sec) || 10;
         const conf = Number(result.hottest_hook.confidence) || 0;
         if (conf >= 0.75) {
-          // Find preview text from lyrics near the hook
-          const hookLines = data.lines.filter(l => l.start >= startSec - 1 && l.start <= startSec + durationSec + 2);
-          const previewText = hookLines.map(l => l.text).join(" ").slice(0, 100);
+          // Find preview text from lyrics that overlap the hook window
+          const hookEnd = startSec + durationSec;
+          const hookLines = data.lines.filter(l => l.end >= startSec && l.start <= hookEnd);
+          const previewText = hookLines.map(l => l.text).join(" ").trim();
           hook = {
             start: startSec,
             end: startSec + durationSec,
