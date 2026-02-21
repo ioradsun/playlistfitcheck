@@ -906,6 +906,26 @@ export default function ShareableHook() {
           </p>
         </div>
 
+        {/* Hooked badge — top left neon green */}
+        <AnimatePresence>
+          {hasVoted && (
+            <motion.div
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.3 }}
+              className="fixed top-4 left-4 z-[60] px-3 py-1.5 rounded-full border"
+              style={{ background: 'rgba(57,255,20,0.15)', borderColor: '#39FF14' }}
+            >
+              <span className="text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: '#39FF14' }}>
+                {totalVotes <= 1
+                  ? "You're Hooked"
+                  : `You and ${totalVotes - 1} FMLY Hooked`}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Split-screen canvases */}
         <div className="flex-1 flex flex-col sm:flex-row gap-1 px-1 min-h-0 shrink-0">
           {/* Hook A */}
@@ -1026,7 +1046,7 @@ export default function ShareableHook() {
               </motion.div>
             )}
 
-            {/* State 2: Post-Vote, Pre-Comment */}
+            {/* State 2: Post-Vote — show "I'm Hooked" again if on different side, or comment input */}
             {hasVoted && !hasSubmitted && (
               <motion.div
                 key="postVote"
@@ -1036,37 +1056,27 @@ export default function ShareableHook() {
                 transition={{ duration: 0.3 }}
                 className="space-y-4"
               >
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40 truncate max-w-[120px]">
-                      {votedA ? hookALabel : hookBLabel}
-                    </p>
-                    <motion.p
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.4, ease: "easeOut" }}
-                      className="text-4xl font-bold tabular-nums text-white/90"
+                {/* If active side differs from voted side, offer to switch */}
+                {((activeHookSide === "a" && !votedA) || (activeHookSide === "b" && !votedB)) ? (
+                  <div className="text-center py-2">
+                    <button
+                      onClick={() => handleVote(activeHookSide === "a" ? hookData.id : rivalHook!.id)}
+                      className="px-8 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-colors min-h-[44px]"
                     >
-                      {votedA ? pctA : pctB}%
-                    </motion.p>
+                      {"I'M HOOKED ON " + (activeHookSide === "a" ? hookALabel : hookBLabel)}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleVote(votedA ? rivalHook!.id : hookData.id)}
-                    className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/20 hover:text-white/40 transition-colors min-h-[44px] px-3"
-                  >
-                    Switch
-                  </button>
-                </div>
-
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-                  placeholder={`what did ${votedA ? hookALabel.toLowerCase() : hookBLabel.toLowerCase()} do to you?`}
-                  maxLength={200}
-                  className="w-full bg-transparent border-0 border-b border-white/15 px-0 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/40 transition-colors min-h-[44px]"
-                />
+                ) : (
+                  <input
+                    type="text"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+                    placeholder={`what did ${votedA ? hookALabel.toLowerCase() : hookBLabel.toLowerCase()} do to you?`}
+                    maxLength={200}
+                    className="w-full bg-transparent border-0 border-b border-white/15 px-0 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/40 transition-colors min-h-[44px]"
+                  />
+                )}
               </motion.div>
             )}
 
