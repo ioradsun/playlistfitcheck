@@ -6,13 +6,18 @@
  */
 
 import { useRef, useEffect, useState, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { X, Download } from "lucide-react";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
+import { ArtistFingerprintButton } from "./ArtistFingerprintButton";
+import { FingerprintOnboarding } from "./FingerprintOnboarding";
+import { FingerprintConfirmation } from "./FingerprintConfirmation";
+import { FingerprintSummary } from "./FingerprintSummary";
+import type { ArtistDNA, FingerprintSongContext } from "./ArtistFingerprintTypes";
 
 interface Props {
   physicsState: PhysicsState | null;
@@ -26,6 +31,12 @@ interface Props {
   onClose: () => void;
   onExport?: () => void;
   onOverrides?: (overrides: HookDanceOverrides) => void;
+  /** Artist fingerprint for visual identity */
+  fingerprint?: ArtistDNA | null;
+  /** Called when fingerprint is created/reset */
+  onFingerprintChange?: (dna: ArtistDNA | null) => void;
+  /** Song context for fingerprint generation */
+  songContext?: FingerprintSongContext;
 }
 
 export function HookDanceCanvas({
@@ -40,10 +51,28 @@ export function HookDanceCanvas({
   onClose,
   onExport,
   onOverrides,
+  fingerprint,
+  onFingerprintChange,
+  songContext,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [overrides, setOverrides] = useState<HookDanceOverrides>({});
+  const startTimeRef = useRef(Date.now());
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Fingerprint flow state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [pendingDna, setPendingDna] = useState<ArtistDNA | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
+
+  // Track elapsed time for the fingerprint button reveal
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Propagate overrides to parent (for engine system changes)
   const handleOverrides = useCallback((newOverrides: HookDanceOverrides) => {
@@ -51,8 +80,9 @@ export function HookDanceCanvas({
     onOverrides?.(newOverrides);
   }, [onOverrides]);
 
-  // Merge spec with overrides
-  const activePalette = overrides.palette || spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
+  // Build active palette: fingerprint palette takes priority
+  const fpPalette = fingerprint ? [fingerprint.palette.primary, fingerprint.palette.accent, "#ffffff"] : null;
+  const activePalette = overrides.palette || fpPalette || spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
   const activeSystem = overrides.system || spec.system;
 
   // Resize canvas to fill container
@@ -115,12 +145,9 @@ export function HookDanceCanvas({
       // Resolve effect: v6 pool-based or v5 sequence-based
       let effectKey = "STATIC_RESOLVE";
       if (spec.effect_sequence) {
-        // Legacy v5: direct lookup
         const seqEntry = spec.effect_sequence.find(e => e.line_index === activeLineIndex);
         effectKey = seqEntry?.effect_key ?? "STATIC_RESOLVE";
       } else if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
-        // v6: procedural selection from pool using logic_seed + line index
-        // Hook Lock: lines within hook window use HOOK_FRACTURE
         const isInHook = currentTime >= hookStart && currentTime <= hookEnd;
         const isLastHookLine = isInHook && activeLine.end >= hookEnd - 0.5;
         if (isLastHookLine) {
@@ -175,7 +202,7 @@ export function HookDanceCanvas({
     ctx.globalAlpha = 1;
 
     ctx.restore();
-  }, [physicsState, currentTime, beatCount, lines, hookStart, hookEnd, spec, prng, activePalette]);
+  }, [physicsState, currentTime, beatCount, lines, hookStart, hookEnd, spec, prng, activePalette, activeSystem]);
 
   return (
     <motion.div
@@ -215,6 +242,61 @@ export function HookDanceCanvas({
         overrides={overrides}
         onChange={handleOverrides}
       />
+
+      {/* Artist Fingerprint button — fades in after 3s */}
+      {onFingerprintChange && !showOnboarding && !pendingDna && !showSummary && (
+        <ArtistFingerprintButton
+          elapsedSeconds={elapsedSeconds}
+          fingerprint={fingerprint ?? null}
+          onStartOnboarding={() => setShowOnboarding(true)}
+          onViewSummary={() => setShowSummary(true)}
+        />
+      )}
+
+      {/* Fingerprint onboarding overlay */}
+      <AnimatePresence>
+        {showOnboarding && songContext && (
+          <FingerprintOnboarding
+            songContext={songContext}
+            onGenerated={(dna) => {
+              setShowOnboarding(false);
+              setPendingDna(dna);
+            }}
+            onClose={() => setShowOnboarding(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Fingerprint confirmation overlay */}
+      <AnimatePresence>
+        {pendingDna && (
+          <FingerprintConfirmation
+            dna={pendingDna}
+            onLockIn={() => {
+              onFingerprintChange?.(pendingDna);
+              setPendingDna(null);
+            }}
+            onStartOver={() => {
+              setPendingDna(null);
+              setShowOnboarding(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Fingerprint summary overlay */}
+      <AnimatePresence>
+        {showSummary && fingerprint && (
+          <FingerprintSummary
+            dna={fingerprint}
+            onClose={() => setShowSummary(false)}
+            onReset={() => {
+              onFingerprintChange?.(null);
+              setShowSummary(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -232,7 +314,6 @@ function drawMicroSurprise(
   ctx.save();
   switch (action) {
     case "rgb_split": {
-      // Flash scanlines
       ctx.globalAlpha = 0.15;
       const lineCount = 5 + Math.floor(rng() * 10);
       for (let i = 0; i < lineCount; i++) {
@@ -256,7 +337,6 @@ function drawMicroSurprise(
       break;
     }
     default: {
-      // Generic glitch scanlines
       ctx.globalAlpha = 0.08;
       for (let i = 0; i < 3; i++) {
         ctx.fillStyle = "white";
