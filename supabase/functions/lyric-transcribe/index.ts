@@ -173,19 +173,20 @@ OUTPUT — return ONLY valid JSON, no markdown:
 }
 
 function buildAuditorPrompt(rawText: string, anchorTs: number, middleCutoff: number): string {
-  return `ROLE: Phonetic Auditor (v8.1 Triptych — Lane D)
+  return `ROLE: Phonetic Auditor (v8.2 Triptych — Lane D)
 
-TASK: Compare the Audio [${anchorTs.toFixed(3)}s to ${middleCutoff.toFixed(3)}s] against the Whisper Text below. Identify only egregious contextual/phonetic errors.
+TASK: Find phonetic errors in the Whisper text between ${anchorTs.toFixed(3)}s and ${middleCutoff.toFixed(3)}s.
 
 WHISPER TEXT:
 ${rawText.slice(0, 3000)}
 
-RULES:
-1. ANCHOR: The master anchor is ${anchorTs.toFixed(3)}s. Do NOT audit anything before this point.
-2. SURGICAL PRECISION: Only correct actual word-sound mismatches (e.g., "whore" should be "boy", "range" should be "rain"). Do NOT correct grammar, punctuation, or stylistic choices.
-3. WHOLE WORDS ONLY: Each correction key must be a single complete word. Do NOT use partial words or substrings that could match inside other words (e.g., do NOT use "can" if "can't" exists in the text).
-4. CONSERVATIVE: Only flag words you are acoustically confident are wrong.
-5. NO TIMESTAMPS: Return ONLY the JSON corrections map, nothing else.
+GUARDRAILS:
+1. ANCHOR: Do NOT audit anything before ${anchorTs.toFixed(3)}s.
+2. IDIOM GUARD: Do NOT correct common English idioms or phrases (e.g., "pay them no mind", "taking a chance", "sit back"). If a phrase makes sense idiomatically, leave it alone.
+3. CONTRACTION GUARD: Do NOT suggest corrections for words that are parts of common contractions (can, don, won, ain, wasn, isn, doesn, hasn, wouldn, couldn, shouldn). Unless the ENTIRE contraction is wrong, skip it.
+4. HIGH CONFIDENCE ONLY: Only return a swap if you are 95% certain Whisper is acoustically wrong. If unsure, return an empty map.
+5. SURGICAL: Only correct actual phonetic/word-sound mismatches (e.g., "whore" should be "boy"). Do NOT correct grammar, punctuation, or stylistic choices.
+6. NO TIMESTAMPS: Return ONLY the corrections map.
 
 OUTPUT — return ONLY valid JSON, no markdown:
 {"corrections": {}, "count": 0}`;
@@ -474,7 +475,7 @@ function splitSegmentIntoPhrases(
   return phrases;
 }
 
-// ── v8.1 Stitcher: combine intro + corrected middle + outro (Clean-Stitch) ───
+// ── v8.2 Stitcher: combine intro + corrected middle + outro (Idiom-Safe) ─────
 function stitchTriptych(
   introLinesInput: LyricLine[],
   outroLinesInput: LyricLine[],
@@ -499,7 +500,7 @@ function stitchTriptych(
     // Split into phrases first
     const phrases = splitSegmentIntoPhrases(seg, whisperWords);
 
-    // Apply corrections map to each phrase with double-contraction guard
+    // Apply corrections map with contraction-safe regex (v8.2 Idiom-Safe)
     for (const phrase of phrases) {
       let text = phrase.text;
       let isCorrection = false;
@@ -507,20 +508,12 @@ function stitchTriptych(
 
       for (const [wrong, right] of Object.entries(corrections)) {
         const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Use word-boundary matching but verify no double-replacement
-        const regex = new RegExp(`\\b${escaped}\\b`, "gi");
+        // Negative lookahead/lookbehind to avoid matching inside contractions
+        // e.g., "can" must NOT match inside "can't"
+        const regex = new RegExp(`(?<!')\\b${escaped}\\b(?![''\u2019])`, "gi");
         const before = text;
-        text = text.replace(regex, (match) => {
-          // Guard: if the replacement would create a stutter (e.g., "can't" already present
-          // and we're replacing "can" with "can't"), skip
-          return right;
-        });
+        text = text.replace(regex, right);
         if (text !== before) {
-          // Post-replacement sanity: detect double-contractions like "can't't"
-          text = text.replace(/(\w+'[a-z]+)'([a-z]+)/gi, (full, base, suffix) => {
-            // If base already ends with the contraction, strip the duplicate
-            return base;
-          });
           isCorrection = true;
           geminiConflict = wrong;
           qaCorrections++;
@@ -570,7 +563,7 @@ function stitchTriptych(
   const lastEnd = allLines.length > 0 ? allLines[allLines.length - 1].end : 0;
   const coverageGap = trackEnd - lastEnd;
 
-  console.log(`[stitcher] v8.1 stitched: ${allLines.length} total lines (${introLines.length} intro + ${middleLines.length} middle + ${outroLines.length} outro)`);
+  console.log(`[stitcher] v8.2 stitched: ${allLines.length} total lines (${introLines.length} intro + ${middleLines.length} middle + ${outroLines.length} outro)`);
   console.log(`[stitcher] Coverage: ${firstStart.toFixed(3)}s to ${lastEnd.toFixed(3)}s (trackEnd=${trackEnd.toFixed(3)}s, gap=${coverageGap.toFixed(3)}s)`);
 
   if (coverageGap > 2.0) {
@@ -712,8 +705,8 @@ serve(async (req) => {
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
     console.log(
-      `[v8.1] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Clean-Stitch v8.1), ` +
+      `[v8.2] Pipeline: transcription=${useWhisper ? "whisper-1" : "gemini-only"}, ` +
+      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel} (Triptych Idiom-Safe v8.2), ` +
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
@@ -889,7 +882,7 @@ serve(async (req) => {
     const orphanedCount = lines.filter(l => l.isOrphaned).length;
     const correctionCount = qaCorrections;
 
-    console.log(`[v8.1] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections), ${hooks.length} hooks`);
+    console.log(`[v8.2] Final: ${lines.length} lines (${lines.length - adlibCount} main, ${adlibCount} adlib, ${correctionCount} qa-corrections), ${hooks.length} hooks`);
 
     const whisperOutput = useWhisper && whisperResult.status === "fulfilled" ? {
       wordCount: words.length,
@@ -907,11 +900,11 @@ serve(async (req) => {
         lines,
         hooks,
         _debug: {
-          version: "anchor-align-v8.1-triptych-clean-stitch",
+          version: "anchor-align-v8.2-triptych-idiom-safe",
           pipeline: {
             transcription: useWhisper ? "whisper-1" : "gemini-only",
             analysis: analysisDisabled ? "disabled" : resolvedAnalysisModel,
-            orchestrator: "v8.1-triptych-clean-stitch",
+            orchestrator: "v8.2-triptych-idiom-safe",
           },
           geminiUsed,
           geminiError,
