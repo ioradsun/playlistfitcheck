@@ -23,7 +23,7 @@ import { VibeFitTab } from "@/components/vibefit/VibeFitTab";
 import { AppSidebar } from "@/components/AppSidebar";
 
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { Music } from "lucide-react";
+import { Music, ChevronRight } from "lucide-react";
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -479,7 +479,9 @@ const Index = () => {
       <SidebarInset className="h-svh !min-h-0 overflow-hidden">
         {/* Minimal top header with pill badge */}
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
-          <SidebarTrigger />
+          <SidebarTrigger data-sidebar="trigger" className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+            <ChevronRight size={16} />
+          </SidebarTrigger>
           {TAB_SUBTITLES[activeTab] && (
             <span className="font-mono text-[11px] tracking-widest text-primary">
               {TAB_SUBTITLES[activeTab]}
