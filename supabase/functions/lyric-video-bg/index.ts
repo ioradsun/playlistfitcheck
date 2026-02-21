@@ -32,6 +32,7 @@ serve(async (req) => {
             content: prompt,
           },
         ],
+        modalities: ["image", "text"],
       }),
     });
 
@@ -55,30 +56,19 @@ serve(async (req) => {
 
     const data = await response.json();
 
-    // Extract image URL from response
-    // Gemini image model returns base64 or URL in content
-    const content = data.choices?.[0]?.message?.content;
+    // Extract image from the images array in the response
+    const images = data.choices?.[0]?.message?.images;
     let imageUrl: string | null = null;
 
-    if (typeof content === "string") {
-      // Check if it's a data URL or regular URL
-      const urlMatch = content.match(/https?:\/\/[^\s"]+\.(png|jpg|jpeg|webp)[^\s"]*/i);
-      if (urlMatch) {
-        imageUrl = urlMatch[0];
-      } else if (content.startsWith("data:image")) {
+    if (Array.isArray(images) && images.length > 0) {
+      imageUrl = images[0]?.image_url?.url ?? null;
+    }
+
+    // Fallback: check content for inline image
+    if (!imageUrl) {
+      const content = data.choices?.[0]?.message?.content;
+      if (typeof content === "string" && content.startsWith("data:image")) {
         imageUrl = content;
-      }
-    } else if (Array.isArray(content)) {
-      // Multimodal response with image parts
-      for (const part of content) {
-        if (part.type === "image_url") {
-          imageUrl = part.image_url?.url;
-          break;
-        }
-        if (part.type === "image" && part.source?.data) {
-          imageUrl = `data:image/${part.source.media_type || "png"};base64,${part.source.data}`;
-          break;
-        }
       }
     }
 
