@@ -383,6 +383,7 @@ export default function ShareableHook() {
   const [voteCountB, setVoteCountB] = useState(0);
   const [fireParticles, setFireParticles] = useState<FireParticle[]>([]);
   const [activeHookSide, setActiveHookSide] = useState<"a" | "b">("a");
+  const [tappedSides, setTappedSides] = useState<Set<"a" | "b">>(new Set());
   const particleIdRef = useRef(0);
 
   const isBattle = !!(hookData?.battle_id && rivalHook);
@@ -790,9 +791,11 @@ export default function ShareableHook() {
             transition={{ duration: 0.6, ease: "easeOut" }}
             onClick={() => {
               setActiveHookSide("a");
+              setTappedSides(prev => new Set(prev).add("a"));
               hookACanvas.restart();
               setMuted(false);
-              if (!hasVoted) handleVote(hookData.id);
+              // Only vote once both sides have been heard
+              if (!hasVoted && tappedSides.has("b")) handleVote(hookData.id);
             }}
           >
             <div ref={containerRef} className="absolute inset-0">
@@ -828,9 +831,11 @@ export default function ShareableHook() {
             transition={{ duration: 0.6, ease: "easeOut" }}
             onClick={() => {
               setActiveHookSide("b");
+              setTappedSides(prev => new Set(prev).add("b"));
               hookBCanvas.restart();
               setMuted(false);
-              if (!hasVoted) handleVote(rivalHook!.id);
+              // Only vote once both sides have been heard
+              if (!hasVoted && tappedSides.has("a")) handleVote(rivalHook!.id);
             }}
           >
             <div ref={containerRefB} className="absolute inset-0">
@@ -871,17 +876,27 @@ export default function ShareableHook() {
         {/* Bottom panel — 3-state machine */}
         <div className="px-5 py-4 max-h-[35vh] pb-[env(safe-area-inset-bottom,16px)]" style={{ background: bgBase }}>
           <AnimatePresence mode="wait">
-            {/* State 1: Pre-Vote */}
+            {/* State 1: Pre-Vote — must hear both sides first */}
             {!hasVoted && (
-              <motion.p
+              <motion.div
                 key="prevote"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-[10px] font-mono uppercase tracking-[0.3em] text-center text-white/20 py-2"
+                className="text-center py-2"
               >
-                Tap to vote
-              </motion.p>
+                {tappedSides.size < 2 ? (
+                  <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/20">
+                    {tappedSides.size === 0
+                      ? "Tap each side to hear"
+                      : `Now tap the ${tappedSides.has("a") ? "other" : "first"} side`}
+                  </p>
+                ) : (
+                  <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/20">
+                    Tap the one that hits harder
+                  </p>
+                )}
+              </motion.div>
             )}
 
             {/* State 2: Post-Vote, Pre-Comment */}
@@ -894,8 +909,7 @@ export default function ShareableHook() {
                 transition={{ duration: 0.3 }}
                 className="space-y-4"
               >
-                {/* Winning hook result */}
-                <div className="text-center space-y-2">
+                <div className="text-center space-y-1">
                   <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40 truncate max-w-[120px] mx-auto">
                     {votedA ? hookALabel : hookBLabel}
                   </p>
@@ -907,18 +921,8 @@ export default function ShareableHook() {
                   >
                     {votedA ? pctA : pctB}%
                   </motion.p>
-                  <div className="h-[2px] rounded-full bg-white/10 overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ background: votedA ? (hookData.palette?.[1] || '#a855f7') : (rivalHook?.palette?.[1] || '#ec4899') }}
-                      initial={{ width: "0%" }}
-                      animate={{ width: `${votedA ? pctA : pctB}%` }}
-                      transition={{ duration: 0.6, ease: "easeOut" }}
-                    />
-                  </div>
                 </div>
 
-                {/* Comment input — underline style */}
                 <input
                   type="text"
                   value={inputText}
