@@ -46,6 +46,7 @@ async function runWhisper(
   words: WhisperWord[];
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
+  duration: number;
 }> {
   const binaryStr = atob(audioBase64);
   const bytes = new Uint8Array(binaryStr.length);
@@ -88,7 +89,10 @@ async function runWhisper(
     }))
     .filter((s: any) => s.text.length > 0 && s.end > s.start);
 
-  return { words, segments, rawText: data.text || "" };
+  const duration = typeof data.duration === "number" ? Math.round(data.duration * 1000) / 1000 : 0;
+  console.log(`[whisper] duration field: ${duration}s`);
+
+  return { words, segments, rawText: data.text || "", duration };
 }
 
 // ── Gemini Prompt: Hook + Insights + Metadata ─────────────────────────────────
@@ -598,10 +602,15 @@ serve(async (req) => {
         );
       }
       ({ words, segments, rawText } = whisperResult.value);
-      console.log(`Whisper: ${words.length} words, ${segments.length} segments`);
+      const whisperDuration = whisperResult.value.duration;
+      console.log(`Whisper: ${words.length} words, ${segments.length} segments, duration: ${whisperDuration}s`);
     }
 
-    const trackEnd = words.length > 0 ? words[words.length - 1].end : 300;
+    // Use Whisper's reported duration (full audio length) as trackEnd, falling back to last word
+    const lastWordEnd = words.length > 0 ? words[words.length - 1].end : 0;
+    const whisperDuration = useWhisper && whisperResult.status === "fulfilled" ? whisperResult.value.duration : 0;
+    const trackEnd = whisperDuration > 0 ? whisperDuration : (lastWordEnd > 0 ? lastWordEnd : 300);
+    console.log(`[trackEnd] ${trackEnd.toFixed(3)}s (whisperDuration=${whisperDuration}, lastWordEnd=${lastWordEnd.toFixed(3)})`);
 
     // ── Stage 2: Gemini Orchestrator (audio + Whisper JSON) ──────────────────
     let lines: LyricLine[] = [];
