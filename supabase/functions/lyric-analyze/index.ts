@@ -282,6 +282,19 @@ serve(async (req) => {
           if (parsed.hottest_hook && !parsed.hottest_hooks) {
             parsed.hottest_hooks = [parsed.hottest_hook];
           }
+          // Ensure we always have 2 hooks in salvage path
+          if (Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
+            const first = parsed.hottest_hooks[0];
+            const secondStart = first.start_sec > 60 ? Math.max(first.start_sec - 40, 10) : first.start_sec + 30;
+            parsed.hottest_hooks.push({
+              start_sec: secondStart,
+              duration_sec: 10,
+              confidence: Math.max((first.confidence || 0.8) - 0.15, 0.5),
+              justification: "Secondary hook region (auto-detected)",
+              label: "The Other Side",
+            });
+            console.log(`[song-dna] Salvage: synthesized 2nd hook at ${secondStart}s`);
+          }
           if (!parsed.physics_spec || !parsed.physics_spec.system) {
             parsed.physics_spec = {
               system: "pressure",
@@ -292,7 +305,7 @@ serve(async (req) => {
               lexicon: { semantic_tags: [{ tag: "RISE", strength: 0.7 }], line_mods: [], word_marks: [] },
             };
           }
-          console.log(`[song-dna] Using salvaged/fallback result: mood=${parsed.mood}, system=${parsed.physics_spec.system}`);
+          console.log(`[song-dna] Using salvaged/fallback result: mood=${parsed.mood}, system=${parsed.physics_spec.system}, hooks=${parsed.hottest_hooks?.length}`);
         }
       }
 
