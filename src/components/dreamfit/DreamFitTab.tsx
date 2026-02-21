@@ -6,7 +6,10 @@ import { useNavigate } from "react-router-dom";
 import { DreamToolCard } from "./DreamToolCard";
 import { DreamComments } from "./DreamComments";
 import { DreamInlineComposer } from "./DreamInlineComposer";
+import { cn } from "@/lib/utils";
 import type { Dream } from "./types";
+
+type DreamView = "recent" | "resolved";
 
 export function DreamFitTab() {
   const { user } = useAuth();
@@ -14,6 +17,7 @@ export function DreamFitTab() {
   const [dreams, setDreams] = useState<Dream[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentDreamId, setCommentDreamId] = useState<string | null>(null);
+  const [view, setView] = useState<DreamView>("recent");
 
   const fetchDreams = useCallback(async () => {
     setLoading(true);
@@ -36,8 +40,32 @@ export function DreamFitTab() {
     }, 300);
   };
 
+  const filtered = view === "resolved"
+    ? dreams.filter(d => d.greenlight_count > 0)
+    : dreams;
+
   return (
     <div className="w-full max-w-[470px] mx-auto">
+      {/* Tabs */}
+      <div className="border-b border-border/40">
+        <div className="flex">
+          {(["recent", "resolved"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                "flex-1 py-2.5 text-sm text-center transition-all duration-150",
+                view === v
+                  ? "font-medium text-foreground"
+                  : "font-normal text-muted-foreground"
+              )}
+            >
+              {v === "recent" ? "Recent" : "Resolved"}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Composer */}
       {user ? (
         <DreamInlineComposer onCreated={() => { fetchDreams(); }} />
@@ -62,13 +90,15 @@ export function DreamFitTab() {
         <div className="flex justify-center py-16">
           <Loader2 size={24} className="animate-spin text-muted-foreground" />
         </div>
-      ) : dreams.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16 space-y-3">
-          <p className="text-muted-foreground text-sm">No dreams yet. Be the first to ask for something.</p>
+          <p className="text-muted-foreground text-sm">
+            {view === "resolved" ? "No resolved dreams yet." : "No dreams yet. Be the first to ask for something."}
+          </p>
         </div>
       ) : (
         <div className="pb-24">
-          {dreams.map((dream) => (
+          {filtered.map((dream) => (
             <DreamToolCard
               key={dream.id}
               dream={dream}
