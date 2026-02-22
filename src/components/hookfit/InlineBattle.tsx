@@ -304,7 +304,14 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           animate={{ opacity: activeHookSide !== "a" ? 0.6 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
-            if (activeHookSide === "a") return;
+            if (activeHookSide === "a") {
+              // Already active — toggle mute
+              userMutedRef.current = true;
+              setIsMuted(true);
+              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
+              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
+              return;
+            }
             setActiveHookSide("a");
             setTappedSides(prev => new Set(prev).add("a"));
             if (!isMuted) {
@@ -336,7 +343,14 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           animate={{ opacity: activeHookSide !== "b" ? 0.6 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
-            if (activeHookSide === "b") return;
+            if (activeHookSide === "b") {
+              // Already active — toggle mute
+              userMutedRef.current = true;
+              setIsMuted(true);
+              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
+              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
+              return;
+            }
             setActiveHookSide("b");
             setTappedSides(prev => new Set(prev).add("b"));
             if (!isMuted) {
