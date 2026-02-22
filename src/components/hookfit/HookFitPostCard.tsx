@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { User, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -65,6 +66,17 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
     }
   };
 
+  // Derived from battle state
+  const isBattle = !!(battleState?.hookA && battleState?.hookB);
+  const hasVoted = !!battleState?.votedHookId;
+  const canVote = (battleState?.tappedSides?.size ?? 0) > 0 && !hasVoted;
+  const totalVotes = (battleState?.voteCountA ?? 0) + (battleState?.voteCountB ?? 0);
+  const activeLabel = battleState?.activeHookSide === "a"
+    ? (battleState?.hookA?.hook_label || "Hook A")
+    : (battleState?.hookB?.hook_label || "Hook B");
+  const accentColor = battleState?.accentColor || "#a855f7";
+  const hasTapped = (battleState?.tappedSides?.size ?? 0) > 0;
+
   return (
     <div className="border-b border-border/40" ref={containerRef}>
       {/* Header */}
@@ -122,12 +134,72 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
         </DropdownMenu>
       </div>
 
-      {/* Inline Battle (includes playbar + vote button) */}
+      {/* Inline Battle (pure visual — no interactive overlays) */}
       <InlineBattle
         battleId={post.battle_id}
         visible={isVisible}
         onBattleState={setBattleState}
       />
+
+      {/* Action row — vote controls in card area */}
+      {isBattle && (
+        <div className="flex items-center justify-between px-3 py-2">
+          <AnimatePresence mode="wait">
+            {!hasTapped ? (
+              <motion.p
+                key="hint"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-xs text-muted-foreground font-mono uppercase tracking-[0.15em]"
+              >
+                Tap each side to play
+              </motion.p>
+            ) : canVote ? (
+              <motion.button
+                key="vote"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                onClick={() => {
+                  const hookId = battleState?.activeHookSide === "a"
+                    ? battleState?.hookA?.id
+                    : battleState?.hookB?.id;
+                  if (hookId) battleState?.handleVote(hookId);
+                }}
+                className="text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-full border transition-colors"
+                style={{
+                  color: accentColor,
+                  borderColor: `${accentColor}33`,
+                  background: `${accentColor}0a`,
+                }}
+              >
+                I'm Hooked on {activeLabel}
+              </motion.button>
+            ) : hasVoted ? (
+              <motion.div
+                key="voted"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center gap-2"
+              >
+                <span
+                  className="text-[10px] font-mono uppercase tracking-[0.15em]"
+                  style={{ color: "rgba(57,255,20,0.45)" }}
+                >
+                  Hooked
+                </span>
+                {totalVotes > 0 && (
+                  <span className="text-[10px] font-mono text-muted-foreground">
+                    {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Caption */}
       {post.caption && (
