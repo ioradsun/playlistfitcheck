@@ -238,21 +238,30 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
             )}
 
             {phase === "registering" && (
-              <motion.button
+              <motion.div
                 key="registering"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                onClick={() => {
-                  const hookId = battleState?.activeHookSide === "a"
-                    ? battleState?.hookA?.id
-                    : battleState?.hookB?.id;
-                  if (hookId) battleState?.handleVote(hookId);
-                }}
-                className="text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-full border border-border text-foreground hover:bg-accent/50 transition-colors"
+                className="flex w-full"
               >
-                I'm Hooked on {activeLabel}
-              </motion.button>
+                <button
+                  onClick={() => {
+                    if (battleState?.hookA?.id) battleState?.handleVote(battleState.hookA.id);
+                  }}
+                  className="flex-1 text-[11px] font-bold uppercase tracking-[0.15em] py-1.5 text-foreground hover:bg-accent/50 transition-colors border-r border-border/30"
+                >
+                  Hooked
+                </button>
+                <button
+                  onClick={() => {
+                    if (battleState?.hookB?.id) battleState?.handleVote(battleState.hookB.id);
+                  }}
+                  className="flex-1 text-[11px] font-bold uppercase tracking-[0.15em] py-1.5 text-foreground hover:bg-accent/50 transition-colors"
+                >
+                  Hooked
+                </button>
+              </motion.div>
             )}
 
             {phase === "commenting" && (
