@@ -129,14 +129,14 @@ function extractJson(raw: string): any | null {
 }
 
 /** Check if parsed result has the critical fields — requires 2 hooks */
-function isComplete(parsed: any): boolean {
+function isComplete(parsed: any, includeHooks: boolean): boolean {
   const hooks = parsed?.hottest_hooks;
   const hasTwoHooks = Array.isArray(hooks) && hooks.length >= 2
     && hooks[0]?.start_sec != null && hooks[1]?.start_sec != null
     && hooks[0]?.label && hooks[1]?.label;
   // Also accept legacy single hook on final fallback (handled elsewhere)
   return !!(
-    hasTwoHooks &&
+    (!includeHooks || hasTwoHooks) &&
     parsed?.physics_spec?.system &&
     parsed?.physics_spec?.params &&
     Object.keys(parsed.physics_spec.params).length >= 3 &&
@@ -148,7 +148,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { title, artist, lyrics, audioBase64, format, beatGrid } = await req.json();
+    const { title, artist, lyrics, audioBase64, format, beatGrid, includeHooks } = await req.json();
+    const hooksEnabled = includeHooks !== false;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -174,9 +175,13 @@ serve(async (req) => {
         textInstruction += `[Beat Grid Context] Detected BPM: ${beatGrid.bpm} (confidence: ${beatGrid.confidence?.toFixed?.(2) ?? "N/A"}). Use this as ground truth for tempo.\n\n`;
       }
       if (lyrics) {
-        textInstruction += `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. MANDATORY: "hottest_hooks" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique "label". lexicon.line_mods must have EXACTLY 5-8 entries total.`;
+        textInstruction += hooksEnabled
+          ? `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. MANDATORY: "hottest_hooks" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique "label". lexicon.line_mods must have EXACTLY 5-8 entries total.`
+          : `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. DO NOT return any hook fields (no hottest_hook and no hottest_hooks).`; 
       } else {
-        textInstruction += "Analyze this audio. Return ONLY the JSON schema specified. MANDATORY: \"hottest_hooks\" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique \"label\". lexicon.line_mods must have EXACTLY 5-8 entries total.";
+        textInstruction += hooksEnabled
+          ? "Analyze this audio. Return ONLY the JSON schema specified. MANDATORY: \"hottest_hooks\" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique \"label\". lexicon.line_mods must have EXACTLY 5-8 entries total."
+          : "Analyze this audio. Return ONLY the JSON schema specified. DO NOT return any hook fields (no hottest_hook and no hottest_hooks).";
       }
       userContent.push({ type: "text", text: textInstruction });
 
@@ -236,13 +241,13 @@ serve(async (req) => {
 
         parsed = extractJson(raw);
 
-        if (parsed && isComplete(parsed)) {
+        if (parsed && isComplete(parsed, hooksEnabled)) {
           // Normalize legacy format
-          if (parsed.hottest_hook && !parsed.hottest_hooks) {
+          if (hooksEnabled && parsed.hottest_hook && !parsed.hottest_hooks) {
             parsed.hottest_hooks = [parsed.hottest_hook];
           }
           // If AI returned only 1 hook, synthesize a second from a different region
-          if (Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
+          if (hooksEnabled && Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
             const first = parsed.hottest_hooks[0];
             const firstStart = Number(first.start_sec) || 60;
             const secondStart = firstStart > 60 ? Math.max(firstStart - 40, 10) : firstStart + 30;
@@ -272,7 +277,7 @@ serve(async (req) => {
           if (!parsed.mood) parsed.mood = "determined";
           if (!parsed.description) parsed.description = "A dynamic track with powerful energy.";
           if (!parsed.meaning) parsed.meaning = { theme: "Expression", summary: "An expressive musical piece.", imagery: ["sound waves", "stage lights"] };
-          if (!parsed.hottest_hooks && !parsed.hottest_hook) {
+          if (hooksEnabled && !parsed.hottest_hooks && !parsed.hottest_hook) {
             // Estimate hooks as fallback
             parsed.hottest_hooks = [
               { start_sec: 60, duration_sec: 10, confidence: 0.80, justification: "Estimated hook region", label: "The Hook" },
@@ -280,11 +285,11 @@ serve(async (req) => {
             ];
           }
           // Normalize legacy hottest_hook → hottest_hooks array
-          if (parsed.hottest_hook && !parsed.hottest_hooks) {
+          if (hooksEnabled && parsed.hottest_hook && !parsed.hottest_hooks) {
             parsed.hottest_hooks = [parsed.hottest_hook];
           }
           // Ensure we always have 2 hooks in salvage path
-          if (Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
+          if (hooksEnabled && Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
             const first = parsed.hottest_hooks[0];
             const firstStart = Number(first.start_sec) || 60;
             const secondStart = firstStart > 60 ? Math.max(firstStart - 40, 10) : firstStart + 30;
@@ -312,8 +317,13 @@ serve(async (req) => {
       }
 
       // Final normalization: ensure hottest_hooks array exists
-      if (parsed?.hottest_hook && !parsed?.hottest_hooks) {
+      if (hooksEnabled && parsed?.hottest_hook && !parsed?.hottest_hooks) {
         parsed.hottest_hooks = [parsed.hottest_hook];
+      }
+
+      if (!hooksEnabled && parsed) {
+        delete parsed.hottest_hook;
+        delete parsed.hottest_hooks;
       }
 
       console.log(`[song-dna] Final result: mood=${parsed?.mood ?? "none"}, hooks=${parsed?.hottest_hooks?.length ?? 0}, system=${parsed?.physics_spec?.system ?? "none"}, params=${JSON.stringify(parsed?.physics_spec?.params ?? {})}`);
