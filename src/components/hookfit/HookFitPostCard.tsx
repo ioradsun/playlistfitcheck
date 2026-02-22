@@ -5,7 +5,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { User, MoreHorizontal, Trash2, ExternalLink, RotateCcw } from "lucide-react";
+import { User, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -380,6 +380,64 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
               </div>
             </motion.div>
           )}
+
+          {/* STATE 4: SCORECARD — overlays on tiles */}
+          {(cardState === "scorecard" || cardState === "results") && votedSide && (
+            <motion.div
+              key="scorecard-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-10 pointer-events-none"
+            >
+              {/* VERDICT LOCKED — centered above tiles */}
+              <div className="absolute top-2 left-0 right-0 flex justify-center">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/50">
+                  VERDICT LOCKED
+                </p>
+              </div>
+
+              {/* Left tile (A) — FMLY badge top-left */}
+              <div className="absolute top-2 left-2">
+                <span
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-sm"
+                  style={{ background: "rgba(0,0,0,0.7)", fontFamily: "'Space Mono', monospace", fontSize: "10px", color: "#fff", letterSpacing: "0.05em" }}
+                >
+                  {votedSide === "a" ? voteCountA : (totalVotes - voteCountA)} FMLY
+                </span>
+              </div>
+
+              {/* Right tile (B) — FMLY badge top-left of right half */}
+              <div className="absolute top-2 left-[calc(50%+4px)]">
+                <span
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-sm"
+                  style={{ background: "rgba(0,0,0,0.7)", fontFamily: "'Space Mono', monospace", fontSize: "10px", color: "#fff", letterSpacing: "0.05em" }}
+                >
+                  {votedSide === "b" ? voteCountB : (totalVotes - voteCountB)} FMLY
+                </span>
+              </div>
+
+              {/* Replay button — bottom center of left tile */}
+              <div className="absolute bottom-3 left-0 w-1/2 flex justify-center pointer-events-auto">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setReplayA(v => v + 1); }}
+                  className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/60 hover:text-white/90 transition-colors"
+                >
+                  ↺ REPLAY
+                </button>
+              </div>
+
+              {/* Replay button — bottom center of right tile */}
+              <div className="absolute bottom-3 left-1/2 w-1/2 flex justify-center pointer-events-auto">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setReplayB(v => v + 1); }}
+                  className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/60 hover:text-white/90 transition-colors"
+                >
+                  ↺ REPLAY
+                </button>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
@@ -396,47 +454,17 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
                 exit={{ opacity: 0 }}
                 className="space-y-2"
               >
-                <p className="text-center font-mono text-xs uppercase tracking-[0.15em] text-white/70">
-                  YOUR CALL — {votedHookLabel}
-                </p>
-
-                {/* Vote counts */}
-                <div className="flex justify-center gap-4">
-                  <span className="font-mono text-[11px] text-white/50">
-                    {hookA?.hook_label || "Hook A"}: {voteCountA} FMLY
-                  </span>
-                  <span className="font-mono text-[11px] text-white/50">
-                    {hookB?.hook_label || "Hook B"}: {voteCountB} FMLY
-                  </span>
-                </div>
-
-                <motion.p
-                  animate={{ opacity: [0.4, 0.8, 0.4] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="text-center font-mono text-[10px] uppercase tracking-[0.15em] text-white/40"
-                >
-                  FMLY VOTES COMING IN
-                </motion.p>
-
-                {/* Replay buttons */}
-                <div className="flex justify-between pt-1">
-                  <button
-                    onClick={() => setReplayA(v => v + 1)}
-                    className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <RotateCcw size={10} /> Replay {hookA?.hook_label || "A"}
-                  </button>
-                  <button
-                    onClick={() => setReplayB(v => v + 1)}
-                    className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <RotateCcw size={10} /> Replay {hookB?.hook_label || "B"}
-                  </button>
-                </div>
-
-                <p className="text-center font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/40">
+                <p className="text-center font-mono text-[10px] uppercase tracking-[0.2em] text-white/50">
                   VERDICT LOCKED
                 </p>
+
+                <motion.p
+                  animate={{ opacity: [0.6, 1, 0.6] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                  className="text-center font-mono text-[10px] uppercase tracking-[0.15em] text-white/50"
+                >
+                  FMLY DECISIONS COMING IN
+                </motion.p>
               </motion.div>
             )}
 
@@ -513,21 +541,6 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
                   )}
                 </div>
 
-                {/* Replay buttons */}
-                <div className="flex justify-between pt-1">
-                  <button
-                    onClick={() => setReplayA(v => v + 1)}
-                    className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <RotateCcw size={10} /> Replay {hookA?.hook_label || "A"}
-                  </button>
-                  <button
-                    onClick={() => setReplayB(v => v + 1)}
-                    className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <RotateCcw size={10} /> Replay {hookB?.hook_label || "B"}
-                  </button>
-                </div>
               </motion.div>
             )}
           </AnimatePresence>
