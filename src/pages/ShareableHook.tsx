@@ -438,9 +438,11 @@ export default function ShareableHook() {
     if (!artistSlug || !songSlug || !hookSlug) return;
     setLoading(true);
 
+    const HOOK_COLUMNS = "id,user_id,artist_slug,song_slug,hook_slug,artist_name,song_name,hook_phrase,artist_dna,physics_spec,beat_grid,hook_start,hook_end,lyrics,audio_url,fire_count,vote_count,system_type,palette,signature_line,battle_id,battle_position,hook_label";
+
     supabase
       .from("shareable_hooks" as any)
-      .select("*")
+      .select(HOOK_COLUMNS)
       .eq("artist_slug", artistSlug)
       .eq("song_slug", songSlug)
       .eq("hook_slug", hookSlug)
@@ -448,6 +450,12 @@ export default function ShareableHook() {
       .then(async ({ data, error }) => {
         if (error || !data) { setNotFound(true); setLoading(false); return; }
         const hook = data as any as HookData;
+
+        // Preload audio immediately — browser starts fetching while we process
+        const audioPreload = new Audio();
+        audioPreload.preload = "auto";
+        audioPreload.src = hook.audio_url;
+
         setHookData(hook);
         setFireCount(hook.fire_count);
         setVoteCountA(hook.vote_count || 0);
@@ -458,7 +466,7 @@ export default function ShareableHook() {
           // Fire rival query — this IS critical for battle render
           const rivalPromise = supabase
             .from("shareable_hooks" as any)
-            .select("*")
+            .select(HOOK_COLUMNS)
             .eq("battle_id", hook.battle_id)
             .neq("id", hook.id)
             .maybeSingle();
@@ -489,7 +497,7 @@ export default function ShareableHook() {
               .select("id, text, submitted_at")
               .eq("hook_id", hook.id)
               .order("submitted_at", { ascending: true })
-              .limit(500),
+              .limit(100),
             // Rival hook comments (use already-known rival ID)
             rivalData
               ? supabase
@@ -497,7 +505,7 @@ export default function ShareableHook() {
                   .select("id, text, submitted_at")
                   .eq("hook_id", (rivalData as any).id)
                   .order("submitted_at", { ascending: true })
-                  .limit(500)
+                  .limit(100)
               : Promise.resolve({ data: null }),
           ]);
 
@@ -513,7 +521,7 @@ export default function ShareableHook() {
             .select("id, text, submitted_at")
             .eq("hook_id", hook.id)
             .order("submitted_at", { ascending: true })
-            .limit(500);
+            .limit(100);
           if (commentsData) setComments(commentsData as any as Comment[]);
         }
       });
