@@ -390,12 +390,6 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
               exit={{ opacity: 0 }}
               className="absolute inset-0 z-10 pointer-events-none"
             >
-              {/* VERDICT LOCKED — centered above tiles */}
-              <div className="absolute top-2 left-0 right-0 flex justify-center">
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/50">
-                  VERDICT LOCKED
-                </p>
-              </div>
 
               {/* Left tile (A) — FMLY badge top-left */}
               <div className="absolute top-2 left-2">
@@ -452,18 +446,13 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="space-y-2"
               >
-                <p className="text-center font-mono text-[10px] uppercase tracking-[0.2em] text-white/50">
-                  VERDICT LOCKED
-                </p>
-
                 <motion.p
                   animate={{ opacity: [0.6, 1, 0.6] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                   className="text-center font-mono text-[10px] uppercase tracking-[0.15em] text-white/50"
                 >
-                  FMLY DECISIONS COMING IN
+                  LOCKED — FMLY VOTES INCOMING
                 </motion.p>
               </motion.div>
             )}
