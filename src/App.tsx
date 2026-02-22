@@ -15,7 +15,7 @@ import Index from "./pages/Index";
 
 import About from "./pages/About";
 
-import Admin from "./pages/Admin";
+const Admin = lazy(() => import("./pages/Admin"));
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import PublicProfile from "./pages/PublicProfile";
@@ -110,7 +110,14 @@ const App = () => (
                     <Route path="/answers/:slug" element={<SeoPages />} />
                     <Route path="/blog/:slug" element={<SeoPages />} />
                     <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
-                    <Route path="/admin" element={<Admin />} />
+                    <Route
+                      path="/admin"
+                      element={
+                        <Suspense fallback={<PageLayout subtitle="Admin" />}>
+                          <Admin />
+                        </Suspense>
+                      }
+                    />
                     <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout>} />
                     <Route path="/terms" element={<PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout>} />
                     <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
