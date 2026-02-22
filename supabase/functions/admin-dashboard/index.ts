@@ -177,16 +177,20 @@ serve(async (req) => {
       const { data: { users: authUsers }, error: authErr } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
       if (authErr) throw authErr;
 
-      const { data: profiles } = await supabase.from("profiles").select("id, display_name, avatar_url, created_at, is_unlimited");
-      const { data: roles } = await supabase.from("user_roles").select("user_id, role");
-      const { data: savedSearches } = await supabase.from("saved_searches").select("user_id");
-
-      // Fetch ALL track engagement with user_id
-      const { data: engagements } = await supabase
-        .from("track_engagement")
-        .select("user_id, track_id, track_name, artist_name, action, created_at")
-        .order("created_at", { ascending: false })
-        .limit(5000);
+      const [
+        { data: profiles },
+        { data: roles },
+        { data: savedSearches },
+        { data: engagements },
+      ] = await Promise.all([
+        supabase.from("profiles").select("id, display_name, avatar_url, created_at, is_unlimited"),
+        supabase.from("user_roles").select("user_id, role"),
+        supabase.from("saved_searches").select("user_id"),
+        supabase
+          .from("track_engagement")
+          .select("user_id")
+          .limit(5000),
+      ]);
 
       const fitCountMap: Record<string, number> = {};
       for (const s of savedSearches || []) {
