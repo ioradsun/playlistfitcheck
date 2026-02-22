@@ -349,12 +349,10 @@ export function useHookCanvas(
     if (!active) audio.muted = true;
   }, [active]);
 
-  // Restart from beginning and unmute
+  // Restart from beginning — does NOT change mute state (caller controls that)
   const restart = useCallback(() => {
     const engine = engineRef.current;
-    const audio = audioRef.current;
     if (!engine) return;
-    if (audio) audio.muted = false;
     engine.stop();
     engine.start();
   }, []);
