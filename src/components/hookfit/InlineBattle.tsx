@@ -1,55 +1,39 @@
 /**
- * InlineBattle — Renders a hook battle directly in the feed using canvas.
- * Includes an HTML playbar below the canvas with progress + vote button.
+ * InlineBattle — Controlled dual-canvas renderer for hook battles.
+ * Parent (HookFitPostCard) drives all state: mode, audio, dimming, etc.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Volume2, VolumeX } from "lucide-react";
+import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useHookCanvas, HOOK_COLUMNS, type HookData } from "@/hooks/useHookCanvas";
 import type { ConstellationNode } from "@/hooks/useHookCanvas";
-import { getSessionId } from "@/lib/sessionId";
 
-export interface BattleState {
-  hookA: HookData | null;
-  hookB: HookData | null;
-  activeHookSide: "a" | "b";
-  votedHookId: string | null;
-  voteCountA: number;
-  voteCountB: number;
-  tappedSides: Set<"a" | "b">;
-  handleVote: (hookId: string) => void;
-  handleUnvote: () => void;
-  accentColor: string;
-  isMuted: boolean;
-}
+export type BattleMode =
+  | "dark"        // STATE 1: both dimmed, silent
+  | "listen-a"    // STATE 2 phase 1: A active, B dimmed
+  | "listen-b"    // STATE 2 phase 2: B active, A dimmed
+  | "judgment"    // STATE 3: both dim, looping silently
+  | "scorecard"   // STATE 4: winner loops, loser frozen
+  | "results";    // STATE 5: same as scorecard visually
 
 interface Props {
   battleId: string;
-  visible?: boolean;
-  onBattleState?: (state: BattleState) => void;
-  restartSignal?: number;
-  floatingComment?: { text: string; side: "a" | "b" } | null;
+  mode: BattleMode;
+  votedSide?: "a" | "b" | null;
+  onHookEnd?: (side: "a" | "b") => void;
+  onHooksLoaded?: (hookA: HookData, hookB: HookData | null) => void;
+  replaySignalA?: number;
+  replaySignalB?: number;
 }
 
-export function InlineBattle({ battleId, visible = true, onBattleState, restartSignal, floatingComment }: Props) {
+export function InlineBattle({
+  battleId, mode, votedSide, onHookEnd, onHooksLoaded,
+  replaySignalA, replaySignalB,
+}: Props) {
   const [hookA, setHookA] = useState<HookData | null>(null);
   const [hookB, setHookB] = useState<HookData | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const [activeHookSide, setActiveHookSide] = useState<"a" | "b">("a");
-  const [tappedSides, setTappedSides] = useState<Set<"a" | "b">>(new Set());
-  const [votedHookId, setVotedHookId] = useState<string | null>(null);
-  const [voteCountA, setVoteCountA] = useState(0);
-  const [voteCountB, setVoteCountB] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [isMuted, setIsMuted] = useState(true);
-  const [recentMuteAction, setRecentMuteAction] = useState(false);
-  const userMutedRef = useRef(false);
-  const userIdRef = useRef<string | null | undefined>(undefined);
-  const progressRafRef = useRef<number>(0);
-  const muteActionTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const canvasRefA = useRef<HTMLCanvasElement>(null);
   const containerRefA = useRef<HTMLDivElement>(null);
@@ -60,207 +44,107 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
   const constellationRefB = useRef<ConstellationNode[]>([]);
   const riverOffsetsRefB = useRef<number[]>([0, 0, 0, 0]);
 
-  // ── Fetch battle data ───────────────────────────────────────────────────
-
+  // ── Fetch battle hooks ──────────────────────────────────────────
   useEffect(() => {
     if (!battleId) return;
     setLoading(true);
-
     supabase
       .from("shareable_hooks" as any)
       .select(HOOK_COLUMNS)
       .eq("battle_id", battleId)
       .order("battle_position", { ascending: true })
       .then(({ data }) => {
-        if (!data || data.length === 0) {
-          setLoading(false);
-          return;
-        }
+        if (!data || data.length === 0) { setLoading(false); return; }
         const hooks = data as any as HookData[];
         const a = hooks.find(h => h.battle_position === 1) || hooks[0];
         const b = hooks.find(h => h.id !== a.id) || null;
         setHookA(a);
         setHookB(b);
-        setVoteCountA(a.vote_count || 0);
-        if (b) setVoteCountB(b.vote_count || 0);
         setLoading(false);
-
-        const sessionId = getSessionId();
-        supabase
-          .from("hook_votes" as any)
-          .select("hook_id")
-          .eq("battle_id", battleId)
-          .eq("session_id", sessionId)
-          .maybeSingle()
-          .then(({ data: vote }) => {
-            if (vote) setVotedHookId((vote as any).hook_id);
-          });
+        onHooksLoaded?.(a, b);
       });
   }, [battleId]);
 
-  // ── Vote handler ──
+  // ── Canvas engines ──────────────────────────────────────────────
+  const isActive = mode !== "dark";
 
-  const handleVote = useCallback(async (hookId: string) => {
-    if (!hookA?.battle_id) return;
-    const sessionId = getSessionId();
-    const isA = hookId === hookA.id;
-    if (votedHookId === hookId) return;
+  const handleEndA = useCallback(() => onHookEnd?.("a"), [onHookEnd]);
+  const handleEndB = useCallback(() => onHookEnd?.("b"), [onHookEnd]);
 
-    if (votedHookId) {
-      if (votedHookId === hookA.id) setVoteCountA(v => Math.max(0, v - 1));
-      else setVoteCountB(v => Math.max(0, v - 1));
-    }
-    if (isA) setVoteCountA(v => v + 1);
-    else setVoteCountB(v => v + 1);
-    setVotedHookId(hookId);
-
-    if (votedHookId) {
-      await supabase
-        .from("hook_votes" as any)
-        .update({ hook_id: hookId })
-        .eq("battle_id", hookA.battle_id)
-        .eq("session_id", sessionId);
-    } else {
-      if (userIdRef.current === undefined) {
-        const { data: { user } } = await supabase.auth.getUser();
-        userIdRef.current = user?.id ?? null;
-      }
-      await supabase
-        .from("hook_votes" as any)
-        .insert({
-          battle_id: hookA.battle_id,
-          hook_id: hookId,
-          user_id: userIdRef.current || null,
-          session_id: sessionId,
-        });
-    }
-  }, [hookA, hookB, votedHookId]);
-
-  // ── Unvote handler ──
-  const handleUnvote = useCallback(async () => {
-    if (!hookA?.battle_id || !votedHookId) return;
-    const sessionId = getSessionId();
-    if (votedHookId === hookA.id) setVoteCountA(v => Math.max(0, v - 1));
-    else setVoteCountB(v => Math.max(0, v - 1));
-    setVotedHookId(null);
-    await supabase
-      .from("hook_votes" as any)
-      .delete()
-      .eq("battle_id", hookA.battle_id)
-      .eq("session_id", sessionId);
-  }, [hookA, votedHookId]);
-
-  // ── Lift state to parent ──────────────────────────────────────────────
-
-  useEffect(() => {
-    onBattleState?.({ hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, handleUnvote, accentColor: hookA?.palette?.[1] || "#a855f7", isMuted });
-  }, [hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, handleUnvote, isMuted]);
-
-  // ── Canvas engines — auto-alternate on end ─────────────────────────
-
-  const switchToB = useCallback(() => {
-    if (!hookB) return;
-    setActiveHookSide("b");
-    setTappedSides(prev => new Set(prev).add("b"));
-  }, [hookB]);
-
-  const switchToA = useCallback(() => {
-    setActiveHookSide("a");
-    setTappedSides(prev => new Set(prev).add("a"));
-  }, []);
-
-  // Both canvases always play when visible (simultaneous playback)
   const hookACanvas = useHookCanvas(
     canvasRefA, containerRefA, hookA, constellationRefA, riverOffsetsRefA,
-    visible,
-    hookB ? switchToB : undefined,
+    isActive, handleEndA,
   );
   const hookBCanvas = useHookCanvas(
     canvasRefB, containerRefB, hookB, constellationRefB, riverOffsetsRefB,
-    visible && !!hookB,
-    switchToA,
+    isActive && !!hookB, handleEndB,
   );
 
-  // When side auto-switches, restart canvas and handle audio
-  const prevSideRef = useRef(activeHookSide);
+  // ── Audio control based on mode ────────────────────────────────
   useEffect(() => {
-    if (prevSideRef.current === activeHookSide) return;
-    prevSideRef.current = activeHookSide;
-    if (userMutedRef.current || isMuted) {
-      // Muted — just restart the visual, keep all audio muted
-      if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
-      if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
-      if (activeHookSide === "a") hookACanvas.restart();
-      else hookBCanvas.restart();
-      return;
-    }
-    // Unmuted — switch audio to the new active side
-    if (activeHookSide === "a") {
-      if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
-      if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
-      hookACanvas.restart();
-    } else {
-      if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
-      if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
-      hookBCanvas.restart();
-    }
-  }, [activeHookSide]);
+    const audioA = hookACanvas.audioRef.current;
+    const audioB = hookBCanvas.audioRef.current;
 
-  // ── Sync progress from active engine to HTML bar ────────────────────
+    switch (mode) {
+      case "dark":
+      case "judgment":
+      case "scorecard":
+      case "results":
+        if (audioA) audioA.muted = true;
+        if (audioB) audioB.muted = true;
+        break;
+      case "listen-a":
+        if (audioA) audioA.muted = false;
+        if (audioB) audioB.muted = true;
+        hookACanvas.restart();
+        break;
+      case "listen-b":
+        if (audioB) audioB.muted = false;
+        if (audioA) audioA.muted = true;
+        hookBCanvas.restart();
+        break;
+    }
+  }, [mode]);
+
+  // ── Replay signals ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!replaySignalA) return;
+    hookACanvas.restart();
+  }, [replaySignalA]);
 
   useEffect(() => {
+    if (!replaySignalB) return;
+    hookBCanvas.restart();
+  }, [replaySignalB]);
+
+  // ── Progress bar state (must be before early returns) ────────
+  const [progress, setProgress] = useState(0);
+  const progressRafRef = useRef(0);
+
+  const showProgress = mode === "listen-a" || mode === "listen-b";
+  const activeCanvas = mode === "listen-a" ? hookACanvas : hookBCanvas;
+
+  useEffect(() => {
+    if (!showProgress) { setProgress(0); return; }
     let running = true;
     const tick = () => {
       if (!running) return;
-      const activeCanvas = activeHookSide === "a" ? hookACanvas : hookBCanvas;
       setProgress(activeCanvas.progressRef.current);
       progressRafRef.current = requestAnimationFrame(tick);
     };
     tick();
     return () => { running = false; cancelAnimationFrame(progressRafRef.current); };
-  }, [activeHookSide, hookACanvas, hookBCanvas]);
+  }, [showProgress, activeCanvas]);
 
-  // ── Auto-pause when not visible ─────────────────────────────────────
-
-  useEffect(() => {
-    if (!visible) {
-      if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
-      if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
-      setIsMuted(true);
-    }
-  }, [visible]);
-
-  // ── Mute all on unmount (route change) ──────────────────────────────
-
+  // ── Mute all on unmount ────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
       if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
-      clearTimeout(muteActionTimerRef.current);
     };
   }, []);
 
-  // ── External restart signal ─────────────────────────────────────────
-
-  useEffect(() => {
-    if (!restartSignal) return;
-    if (activeHookSide === "a") hookACanvas.restart();
-    else hookBCanvas.restart();
-  }, [restartSignal]);
-
-  // ── Mute flash helper ─────────────────────────────────────────────────
-  const flashMuteIcon = useCallback(() => {
-    setRecentMuteAction(true);
-    clearTimeout(muteActionTimerRef.current);
-    muteActionTimerRef.current = setTimeout(() => setRecentMuteAction(false), 1500);
-  }, []);
-
-  // ── Derived ─────────────────────────────────────────────────────────
-
-  const isBattle = !!(hookA && hookB);
-  const accentColor = hookA?.palette?.[1] || "#a855f7";
-  const MuteIcon = isMuted ? VolumeX : Volume2;
-
+  // ── Derived ────────────────────────────────────────────────────
   if (loading || !hookA) {
     return (
       <div className="w-full bg-black/30 animate-pulse" style={{ height: "300px" }}>
@@ -272,192 +156,99 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     );
   }
 
-  const bgBase = hookA?.artist_dna?.palette?.background_base || "#0a0a0a";
-
-  // ── Single hook ─────────────────────────────────────────────────────
-
-  if (!isBattle) {
+  if (!hookB) {
     return (
-      <div className="w-full" style={{ background: bgBase }}>
+      <div className="w-full" style={{ background: hookA?.artist_dna?.palette?.background_base || "#0a0a0a" }}>
         <div className="relative" style={{ height: "300px" }}>
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
         </div>
-        <div className="h-[2px] bg-white/[0.06]">
-          {!isMuted && (
-            <div className="h-full transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-          )}
-        </div>
       </div>
     );
   }
 
-  // ── Battle mode ───────────────────────────────────────────────────────
+  const getOpacity = (side: "a" | "b") => {
+    switch (mode) {
+      case "dark": return 0.2;
+      case "listen-a": return side === "a" ? 1 : 0.4;
+      case "listen-b": return side === "b" ? 1 : 0.4;
+      case "judgment": return 0.7;
+      case "scorecard":
+      case "results":
+        if (!votedSide) return 0.7;
+        return side === votedSide ? 1 : 0.3;
+      default: return 1;
+    }
+  };
+
+  const getSeamColor = () => {
+    switch (mode) {
+      case "listen-a": return hookA?.palette?.[0] || "#ffffff";
+      case "listen-b": return hookB?.palette?.[0] || "#ffffff";
+      default: return "rgba(255,255,255,0.1)";
+    }
+  };
+
+  const seamPulse = mode === "listen-a" || mode === "listen-b";
+  const bgBase = hookA?.artist_dna?.palette?.background_base || "#0a0a0a";
 
   return (
     <div className="w-full" style={{ background: bgBase }}>
-      {/* Split canvases */}
       <div className="relative flex flex-row" style={{ height: "300px" }}>
         {/* Hook A */}
         <motion.div
-          className="relative flex-1 cursor-pointer overflow-hidden"
-          animate={{ opacity: activeHookSide !== "a" ? 0.6 : 1 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          onClick={() => {
-            if (activeHookSide === "a") {
-              // Already active — toggle mute
-              userMutedRef.current = true;
-              setIsMuted(true);
-              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
-              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
-              return;
-            }
-            setActiveHookSide("a");
-            setTappedSides(prev => new Set(prev).add("a"));
-            if (!isMuted) {
-              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
-              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
-            }
-            hookACanvas.restart();
-          }}
+          className="relative flex-1 overflow-hidden"
+          animate={{ opacity: getOpacity("a") }}
+          transition={{ duration: 0.4 }}
         >
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
-          {(isMuted || activeHookSide !== "a") && (
-            <div className="absolute inset-0 bg-black/30 pointer-events-none" />
-          )}
-          <div className="absolute bottom-2 left-2 pointer-events-none">
-            <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-white/50 drop-shadow-md">
-              {hookA?.hook_label || "Hook A"}
-            </span>
-          </div>
         </motion.div>
 
-        {/* 1px vertical seam */}
-        <div className="w-px bg-white/10 shrink-0" />
+        {/* Seam */}
+        <motion.div
+          className="w-px shrink-0"
+          animate={{
+            backgroundColor: getSeamColor(),
+            opacity: seamPulse ? [0.4, 1, 0.4] : 1,
+          }}
+          transition={seamPulse ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
+        />
 
         {/* Hook B */}
         <motion.div
-          className="relative flex-1 cursor-pointer overflow-hidden"
-          animate={{ opacity: activeHookSide !== "b" ? 0.6 : 1 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          onClick={() => {
-            if (activeHookSide === "b") {
-              // Already active — toggle mute
-              userMutedRef.current = true;
-              setIsMuted(true);
-              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
-              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
-              return;
-            }
-            setActiveHookSide("b");
-            setTappedSides(prev => new Set(prev).add("b"));
-            if (!isMuted) {
-              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
-              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
-            }
-            hookBCanvas.restart();
-          }}
+          className="relative flex-1 overflow-hidden"
+          animate={{ opacity: getOpacity("b") }}
+          transition={{ duration: 0.4 }}
         >
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
-          {(isMuted || activeHookSide !== "b") && (
-            <div className="absolute inset-0 bg-black/30 pointer-events-none" />
-          )}
-          <div className="absolute bottom-2 left-2 pointer-events-none">
-            <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-white/50 drop-shadow-md">
-              {hookB?.hook_label || "Hook B"}
-            </span>
-          </div>
         </motion.div>
-
-        {/* Centered "Tap to unmute" across both videos */}
-        {isMuted && (
-          <div
-            className="absolute inset-0 flex items-center justify-center z-20 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              userMutedRef.current = false;
-              setIsMuted(false);
-              // Unmute and restart the active side from the beginning
-              if (activeHookSide === "a") {
-                if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
-                hookACanvas.restart();
-              } else {
-                if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
-                hookBCanvas.restart();
-              }
-              setTappedSides(prev => new Set(prev).add(activeHookSide));
-            }}
-          >
-            <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/30">
-              Tap to unmute
-            </span>
-          </div>
-        )}
-
-        {/* Floating comment overlay on the voted side */}
-        {floatingComment && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.6 }}
-            className={`absolute z-10 bottom-10 ${floatingComment.side === "a" ? "left-3" : "right-3"} max-w-[45%] pointer-events-none`}
-          >
-            <span className="text-[11px] font-mono text-white/70 bg-black/40 backdrop-blur-sm rounded px-2 py-1 inline-block">
-              {floatingComment.text}
-            </span>
-          </motion.div>
-        )}
       </div>
 
-      {/* ── Playbar — progress + mute control ──────────────────────── */}
-      <div className="relative h-6 bg-white/[0.03] flex items-center">
-        {/* Progress track */}
-        <div className="absolute inset-x-0 top-0 h-[2px] bg-white/[0.06] flex">
-          {!isMuted && (
-            activeHookSide === "a" ? (
-              <>
-                <div className="w-1/2 relative">
-                  <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-                </div>
-                <div className="w-1/2" />
-              </>
-            ) : (
-              <>
-                <div className="w-1/2" />
-                <div className="w-1/2 relative">
-                  <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-                </div>
-              </>
-            )
+      {/* Progress bar — only during listen */}
+      {showProgress && (
+        <div className="h-[2px] bg-white/[0.06] flex">
+          {mode === "listen-a" ? (
+            <>
+              <div className="w-1/2 relative">
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookA?.palette?.[0] || "#fff", opacity: 0.7 }} />
+              </div>
+              <div className="w-1/2" />
+            </>
+          ) : (
+            <>
+              <div className="w-1/2" />
+              <div className="w-1/2 relative">
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookB?.palette?.[0] || "#fff", opacity: 0.7 }} />
+              </div>
+            </>
           )}
         </div>
-        {/* Mute/Unmute button */}
-        <button
-          onClick={() => {
-            const nowMuted = !isMuted;
-            userMutedRef.current = nowMuted;
-            setIsMuted(nowMuted);
-            if (nowMuted) {
-              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
-              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
-            } else {
-              // Unmute the active side only
-              if (activeHookSide === "a" && hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
-              if (activeHookSide === "b" && hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
-              setTappedSides(prev => new Set(prev).add(activeHookSide));
-            }
-          }}
-          className="ml-2 p-1 text-white/40 hover:text-white/70 transition-colors"
-        >
-          <MuteIcon size={14} />
-        </button>
-      </div>
+      )}
     </div>
   );
 }
