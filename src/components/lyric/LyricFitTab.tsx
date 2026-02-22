@@ -41,6 +41,14 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
   const { user } = useAuth();
   const quota = useUsageQuota("lyric");
 
+  const resolveProjectTitle = useCallback((title: string | null | undefined, filename: string) => {
+    const normalizedTitle = (title || "").trim();
+    if (normalizedTitle && normalizedTitle.toLowerCase() !== "unknown" && normalizedTitle.toLowerCase() !== "untitled") {
+      return normalizedTitle;
+    }
+    return filename.replace(/\.[^/.]+$/, "").trim() || "Untitled";
+  }, []);
+
   // Beat grid: decode audio early and run in parallel with transcription
   const [earlyAudioBuffer, setEarlyAudioBuffer] = useState<AudioBuffer | null>(null);
   const [precomputedBeatGrid, setPrecomputedBeatGrid] = useState<BeatGridData | null>(null);
@@ -54,8 +62,9 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
   // Load saved lyric from dashboard navigation
   useEffect(() => {
     if (initialLyric && !lyricData) {
+      const filename = initialLyric.filename || "saved-lyrics.mp3";
       setLyricData({
-        title: initialLyric.title,
+        title: resolveProjectTitle(initialLyric.title, filename),
         artist: initialLyric.artist,
         lines: initialLyric.lines as any[],
       });
@@ -78,24 +87,24 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
         fetch(audioUrl)
           .then(res => res.blob())
           .then(blob => {
-            const file = new File([blob], initialLyric.filename || "saved-lyrics.mp3", { type: blob.type || "audio/mpeg" });
+            const file = new File([blob], filename, { type: blob.type || "audio/mpeg" });
             setAudioFile(file);
             setHasRealAudio(true);
             // Cache for future navigations
             if (initialLyric.id) sessionAudio.set("lyric", initialLyric.id, file);
           })
           .catch(() => {
-            const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+            const dummyFile = new File([], filename, { type: "audio/mpeg" });
             setAudioFile(dummyFile);
             setHasRealAudio(false);
           });
       } else {
-        const dummyFile = new File([], initialLyric.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+        const dummyFile = new File([], filename, { type: "audio/mpeg" });
         setAudioFile(dummyFile);
         setHasRealAudio(false);
       }
     }
-  }, [initialLyric, lyricData]);
+  }, [initialLyric, lyricData, resolveProjectTitle]);
 
   // Read pipeline model config from site_copy
   useEffect(() => {
@@ -238,7 +247,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       await new Promise((r) => setTimeout(r, 600));
 
       setLyricData({
-        title: data.title || file.name.replace(/\.[^/.]+$/, "") || "Unknown",
+        title: resolveProjectTitle(data.title, file.name),
         artist: data.artist || "Unknown",
         lines: data.lines,
         hooks: data.hooks,
@@ -264,7 +273,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       setLoading(false);
       setProgressOpen(false);
     }
-  }, [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId]);
+  }, [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId, resolveProjectTitle]);
 
   const handleBack = useCallback(() => {
     setLyricData(null);
@@ -318,7 +327,8 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
       <LyricUploader onTranscribe={handleTranscribe} onLoadSaved={(l: any) => {
-        setLyricData({ title: l.title, artist: l.artist, lines: l.lines as any[] });
+        const filename = l.filename || "saved-lyrics.mp3";
+        setLyricData({ title: resolveProjectTitle(l.title, filename), artist: l.artist, lines: l.lines as any[] });
         setSavedId(l.id);
         setFmlyLines((l as any).fmly_lines ?? null);
         setVersionMeta((l as any).version_meta ?? null);
@@ -335,18 +345,18 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
           fetch(l.audio_url)
             .then(res => res.blob())
             .then(blob => {
-              const file = new File([blob], l.filename || "saved-lyrics.mp3", { type: blob.type || "audio/mpeg" });
+              const file = new File([blob], filename, { type: blob.type || "audio/mpeg" });
               setAudioFile(file);
               setHasRealAudio(true);
               if (l.id) sessionAudio.set("lyric", l.id, file);
             })
             .catch(() => {
-              const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+              const dummyFile = new File([], filename, { type: "audio/mpeg" });
               setAudioFile(dummyFile);
               setHasRealAudio(false);
             });
         } else {
-          const dummyFile = new File([], l.filename || "saved-lyrics.mp3", { type: "audio/mpeg" });
+          const dummyFile = new File([], filename, { type: "audio/mpeg" });
           setAudioFile(dummyFile);
           setHasRealAudio(false);
         }
