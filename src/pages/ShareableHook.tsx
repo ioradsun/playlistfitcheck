@@ -177,14 +177,22 @@ export default function ShareableHook() {
 
           // ── NON-CRITICAL: fire all remaining queries in parallel ──
           const sessionId = getSessionId();
+          // Resolve user for vote lookup (prefer user_id for logged-in users)
+          const { data: { user: authUserForVote } } = await supabase.auth.getUser();
+          userIdRef.current = authUserForVote?.id ?? null;
+
+          let voteQuery = supabase
+            .from("hook_votes" as any)
+            .select("hook_id")
+            .eq("battle_id", hook.battle_id);
+          if (authUserForVote?.id) {
+            voteQuery = voteQuery.eq("user_id", authUserForVote.id);
+          } else {
+            voteQuery = voteQuery.eq("session_id", sessionId);
+          }
+
           const [voteResult, commentsAResult, commentsBResult] = await Promise.all([
-            // Check existing vote
-            supabase
-              .from("hook_votes" as any)
-              .select("hook_id")
-              .eq("battle_id", hook.battle_id)
-              .eq("session_id", sessionId)
-              .maybeSingle(),
+            voteQuery.maybeSingle(),
             // Primary hook comments
             supabase
               .from("hook_comments" as any)
@@ -753,16 +761,28 @@ export default function ShareableHook() {
                 className="text-center space-y-3 py-2"
               >
                 {tappedSides.size === 0 ? (
-                  <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/20">
-                    Tap each side to hear
+                  <p className="font-mono text-sm uppercase tracking-[0.2em] text-white/70">
+                    WHICH HOOK WINS
+                  </p>
+                ) : tappedSides.size === 1 ? (
+                  <p className="font-mono text-xs uppercase tracking-[0.15em] text-white/60">
+                    {tappedSides.has("a") ? "FIRST HIT — TAP OTHER SIDE" : "FIRST HIT — TAP OTHER SIDE"}
                   </p>
                 ) : (
-                  <button
-                    onClick={() => handleVote(activeHookSide === "a" ? hookData.id : rivalHook!.id)}
-                    className="px-8 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-colors min-h-[44px]"
-                  >
-                    {"I'M HOOKED ON " + (activeHookSide === "a" ? hookALabel : hookBLabel)}
-                  </button>
+                  <div className="flex items-center justify-center gap-6">
+                    <button
+                      onClick={() => handleVote(hookData.id)}
+                      className="px-6 py-2 border border-white/20 rounded font-mono text-xs uppercase tracking-[0.15em] text-white/80 hover:bg-white/10 transition-colors min-h-[44px]"
+                    >
+                      HOOKED
+                    </button>
+                    <button
+                      onClick={() => handleVote(rivalHook!.id)}
+                      className="px-6 py-2 border border-white/20 rounded font-mono text-xs uppercase tracking-[0.15em] text-white/80 hover:bg-white/10 transition-colors min-h-[44px]"
+                    >
+                      HOOKED
+                    </button>
+                  </div>
                 )}
               </motion.div>
             )}
@@ -782,9 +802,9 @@ export default function ShareableHook() {
                   <div className="text-center py-2">
                     <button
                       onClick={() => handleVote(activeHookSide === "a" ? hookData.id : rivalHook!.id)}
-                      className="px-8 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-colors min-h-[44px]"
+                      className="px-6 py-2 border border-white/20 rounded font-mono text-xs uppercase tracking-[0.15em] text-white/80 hover:bg-white/10 transition-colors min-h-[44px]"
                     >
-                      {"I'M HOOKED ON " + (activeHookSide === "a" ? hookALabel : hookBLabel)}
+                      HOOKED
                     </button>
                   </div>
                 ) : (
