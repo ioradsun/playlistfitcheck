@@ -518,6 +518,9 @@ export default function ShareableLyricDance() {
 
   // ── Progress bar seek ──────────────────────────────────────────────────────
 
+  // Track whether audio was playing before drag started
+  const wasPlayingBeforeDrag = useRef(false);
+
   const seekToPosition = useCallback((clientX: number) => {
     if (!progressBarRef.current || !audioRef.current || !data) return;
     const audio = audioRef.current;
@@ -527,11 +530,14 @@ export default function ShareableLyricDance() {
     const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     audio.currentTime = songStart + ratio * (songEnd - songStart);
-    // Re-trigger play after seek to prevent browser from stalling playback
-    audio.play().catch(() => {});
   }, [data]);
 
   const handleProgressDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    // Remember play state and pause during drag to avoid hammering play()
+    wasPlayingBeforeDrag.current = !audio.paused;
+    audio.pause();
     setIsDragging(true);
     const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
     seekToPosition(clientX);
@@ -543,7 +549,14 @@ export default function ShareableLyricDance() {
       const clientX = "touches" in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
       seekToPosition(clientX);
     };
-    const onUp = () => setIsDragging(false);
+    const onUp = () => {
+      setIsDragging(false);
+      // Resume playback once, cleanly, after the user lifts their finger/mouse
+      const audio = audioRef.current;
+      if (audio && wasPlayingBeforeDrag.current) {
+        audio.play().catch(() => {});
+      }
+    };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     window.addEventListener("touchmove", onMove);
