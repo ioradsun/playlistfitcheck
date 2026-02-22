@@ -34,6 +34,8 @@ export interface HookData {
   fire_count: number;
   vote_count: number;
   system_type: string;
+  /** Override: use this system's font/typography instead of system_type's */
+  font_system?: string;
   palette: string[];
   signature_line: string | null;
   battle_id: string | null;
@@ -260,7 +262,7 @@ export function useHookCanvas(
 
         // Compute font size based on longest wrapped line
         const longest = wrappedLines.reduce((a, b) => a.length > b.length ? a : b, "");
-        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, longest, w, hd.system_type);
+        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, longest, w, hd.font_system || hd.system_type);
 
         // Render each line at stacked y positions
         const lineH = fs * 1.15;
@@ -273,12 +275,13 @@ export function useHookCanvas(
           const virtualH = lineY * 2; // centers effect at lineY
           drawFn(ctx, {
             text: wrappedLines[li], physState: physState, w, h: virtualH,
-            fs, age, progress, rng, palette, system: hd.system_type, effectiveLetterSpacing,
+            fs, age, progress, rng, palette, system: hd.font_system || hd.system_type, effectiveLetterSpacing,
           });
         }
       } else {
-        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, hd.system_type);
-        drawFn(ctx, { text: activeLine.text, physState: physState, w, h, fs, age, progress, rng, palette, system: hd.system_type, effectiveLetterSpacing });
+        const fontSys = hd.font_system || hd.system_type;
+        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, fontSys);
+        drawFn(ctx, { text: activeLine.text, physState: physState, w, h, fs, age, progress, rng, palette, system: fontSys, effectiveLetterSpacing });
       }
     }
 

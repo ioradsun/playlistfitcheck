@@ -70,6 +70,8 @@ function invertHookData(hook: HookData, sourceHook: HookData): HookData {
     ...hook,
     palette,
     system_type: contrastSystem,
+    // Preserve the original artist typography — font identity stays consistent
+    font_system: hook.system_type,
   };
 }
 
