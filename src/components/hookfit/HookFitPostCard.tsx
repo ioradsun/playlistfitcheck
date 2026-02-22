@@ -191,28 +191,32 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
           visible={isVisible}
           onBattleState={setBattleState}
         />
-        {/* "Hooked" badge — top-left of canvas, after voting */}
-        {hasVoted && isBattle && (
-          <button
-            onClick={() => setSheetOpen(true)}
-            className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 transition-colors"
-          >
-            <span
-              className="text-[10px] font-bold uppercase tracking-[0.12em]"
-              style={{ color: "rgba(57,255,20,0.7)" }}
+        {/* "Hooked" badge — pinned to the voted video side */}
+        {hasVoted && isBattle && (() => {
+          const votedSide = battleState?.votedHookId === battleState?.hookA?.id ? "a" : "b";
+          const posClass = votedSide === "a" ? "left-3" : "right-3";
+          return (
+            <button
+              onClick={() => setSheetOpen(true)}
+              className={`absolute top-3 ${posClass} z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 transition-colors`}
             >
-              Hooked
-            </span>
-            {totalVotes > 0 && (
               <span
-                className="text-[10px] font-mono uppercase tracking-[0.12em]"
-                style={{ color: "rgba(57,255,20,0.5)" }}
+                className="text-[10px] font-bold uppercase tracking-[0.12em]"
+                style={{ color: "rgba(57,255,20,0.7)" }}
               >
-                You + {fmlyCount} FMLY
+                Hooked
               </span>
-            )}
-          </button>
-        )}
+              {totalVotes > 0 && (
+                <span
+                  className="text-[10px] font-mono uppercase tracking-[0.12em]"
+                  style={{ color: "rgba(57,255,20,0.5)" }}
+                >
+                  You + {fmlyCount} FMLY
+                </span>
+              )}
+            </button>
+          );
+        })()}
       </div>
 
       {/* Action row — phase-driven */}
