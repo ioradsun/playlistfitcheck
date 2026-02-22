@@ -7,7 +7,7 @@ import { useRef, useCallback, useEffect } from "react";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { getEffect } from "@/engine/EffectRegistry";
-import { computeFitFontSize, computeStackedLayout, getSystemStyle } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSystemStyle } from "@/engine/SystemStyles";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
@@ -323,6 +323,7 @@ export function useHookCanvas(
   // Setup audio + engine
   useEffect(() => {
     if (!hookData) return;
+
     const audio = new Audio();
     audio.muted = true;
     audio.preload = "auto";
@@ -342,26 +343,40 @@ export function useHookCanvas(
     const effectiveStart = Math.max(hookData.hook_start, lyricsStart);
     const effectiveEnd = Math.max(effectiveStart + 1, lyricsEnd);
 
-    const engine = new HookDanceEngine(
-      { ...spec, system: hookData.system_type },
-      beats, effectiveStart, effectiveEnd, audio,
-      {
-        onFrame: (state, time, bc) => {
-          frameRef.current = { physState: state, time, beats: bc };
-          drawCanvas(state, time, bc);
+    let cancelled = false;
+
+    (async () => {
+      const typographyProfile = spec.typographyProfile;
+      if (typographyProfile?.fontFamily) {
+        await ensureTypographyProfileReady(typographyProfile);
+      }
+      if (cancelled) return;
+
+      const engine = new HookDanceEngine(
+        { ...spec, system: hookData.system_type },
+        beats, effectiveStart, effectiveEnd, audio,
+        {
+          onFrame: (state, time, bc) => {
+            frameRef.current = { physState: state, time, beats: bc };
+            drawCanvas(state, time, bc);
+          },
+          onEnd: () => {},
         },
-        onEnd: () => {},
-      },
-      `${hookData.song_name}-${hookData.hook_start.toFixed(3)}`,
-    );
+        `${hookData.song_name}-${hookData.hook_start.toFixed(3)}`,
+      );
 
-    engineRef.current = engine;
-    prngRef.current = engine.prng;
-    activeRef.current = active;
-    engine.start();
+      engineRef.current = engine;
+      prngRef.current = engine.prng;
+      activeRef.current = active;
+      engine.start();
+    })();
 
-    return () => { engine.stop(); audio.pause(); };
-  }, [hookData, drawCanvas]);
+    return () => {
+      cancelled = true;
+      engineRef.current?.stop();
+      audio.pause();
+    };
+  }, [hookData, drawCanvas, active]);
 
   // Track active prop — pause/resume engine
   useEffect(() => {
