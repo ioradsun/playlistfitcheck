@@ -346,20 +346,15 @@ export function useHookCanvas(
     return () => { engine.stop(); audio.pause(); };
   }, [hookData, drawCanvas]);
 
-  // Track active prop — pause/resume engine + audio
+  // Track active prop — pause/resume engine
   useEffect(() => {
     activeRef.current = active;
-    const audio = audioRef.current;
     const engine = engineRef.current;
+    if (!engine) return;
     if (!active) {
-      if (audio) audio.muted = true;
-      // Pause audio to freeze the animation clock
-      if (audio && !audio.paused) audio.pause();
+      engine.pause();
     } else {
-      // Resume audio (mute state is controlled by caller)
-      if (audio && audio.paused && audio.src) {
-        audio.play().catch(() => {});
-      }
+      engine.resume();
     }
   }, [active]);
 

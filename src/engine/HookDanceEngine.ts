@@ -137,6 +137,26 @@ export class HookDanceEngine {
     this.tick();
   }
 
+  /** Pause the engine — freezes animation but keeps state for resume */
+  pause() {
+    if (!this.running) return;
+    if (this.rafId != null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this.audioRef.pause();
+  }
+
+  /** Resume a paused engine */
+  resume() {
+    if (!this.running) return;
+    if (this.rafId != null) return; // already ticking
+    // Re-sync synthetic clock
+    this.syntheticStart = performance.now() - (this.prevTime - this.hookStart) * 1000;
+    this.audioRef.play().then(() => { this.audioPlaying = true; }).catch(() => { this.audioPlaying = false; });
+    this.tick();
+  }
+
   /** Stop the engine and clean up */
   stop() {
     this.running = false;
