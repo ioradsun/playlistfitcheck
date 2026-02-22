@@ -23,13 +23,13 @@ interface Props {
   votedSide?: "a" | "b" | null;
   onHookEnd?: (side: "a" | "b") => void;
   onHooksLoaded?: (hookA: HookData, hookB: HookData | null) => void;
-  replaySignalA?: number;
-  replaySignalB?: number;
+  onTileTap?: (side: "a" | "b") => void;
+  activePlaying?: "a" | "b" | null;
 }
 
 export function InlineBattle({
   battleId, mode, votedSide, onHookEnd, onHooksLoaded,
-  replaySignalA, replaySignalB,
+  onTileTap, activePlaying,
 }: Props) {
   const [hookA, setHookA] = useState<HookData | null>(null);
   const [hookB, setHookB] = useState<HookData | null>(null);
@@ -106,31 +106,31 @@ export function InlineBattle({
     }
   }, [mode]);
 
-  // ── Replay signals ─────────────────────────────────────────────
+  // ── Active playing control (scorecard/results tap-to-play) ───
   useEffect(() => {
-    if (!replaySignalA) return;
+    if (mode !== "scorecard" && mode !== "results") return;
     const audioA = hookACanvas.audioRef.current;
     const audioB = hookBCanvas.audioRef.current;
-    if (audioA) audioA.muted = false;
-    if (audioB) audioB.muted = true;
-    hookACanvas.restart();
-  }, [replaySignalA]);
-
-  useEffect(() => {
-    if (!replaySignalB) return;
-    const audioA = hookACanvas.audioRef.current;
-    const audioB = hookBCanvas.audioRef.current;
-    if (audioB) audioB.muted = false;
-    if (audioA) audioA.muted = true;
-    hookBCanvas.restart();
-  }, [replaySignalB]);
+    if (activePlaying === "a") {
+      if (audioA) audioA.muted = false;
+      if (audioB) audioB.muted = true;
+      hookACanvas.restart();
+    } else if (activePlaying === "b") {
+      if (audioB) audioB.muted = false;
+      if (audioA) audioA.muted = true;
+      hookBCanvas.restart();
+    } else {
+      if (audioA) audioA.muted = true;
+      if (audioB) audioB.muted = true;
+    }
+  }, [activePlaying, mode]);
 
   // ── Progress bar state (must be before early returns) ────────
   const [progress, setProgress] = useState(0);
   const progressRafRef = useRef(0);
 
-  const showProgress = mode === "listen-a" || mode === "listen-b";
-  const activeCanvas = mode === "listen-a" ? hookACanvas : hookBCanvas;
+  const showProgress = mode === "listen-a" || mode === "listen-b" || ((mode === "scorecard" || mode === "results") && !!activePlaying);
+  const activeCanvas = activePlaying === "b" ? hookBCanvas : (mode === "listen-b" ? hookBCanvas : hookACanvas);
 
   useEffect(() => {
     if (!showProgress) { setProgress(0); return; }
@@ -214,10 +214,11 @@ export function InlineBattle({
       <div className="relative flex flex-row" style={{ height: "300px" }}>
         {/* Hook A */}
         <motion.div
-          className="relative flex-1 overflow-hidden"
+          className="relative flex-1 overflow-hidden cursor-pointer"
           style={getBorderStyle("a")}
           animate={{ opacity: getOpacity("a") }}
           transition={{ duration: 0.4 }}
+          onClick={() => onTileTap?.("a")}
         >
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
@@ -236,10 +237,11 @@ export function InlineBattle({
 
         {/* Hook B */}
         <motion.div
-          className="relative flex-1 overflow-hidden"
+          className="relative flex-1 overflow-hidden cursor-pointer"
           style={getBorderStyle("b")}
           animate={{ opacity: getOpacity("b") }}
           transition={{ duration: 0.4 }}
+          onClick={() => onTileTap?.("b")}
         >
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
@@ -247,10 +249,10 @@ export function InlineBattle({
         </motion.div>
       </div>
 
-      {/* Progress bar — only during listen */}
+      {/* Progress bar */}
       {showProgress && (
         <div className="h-[2px] bg-white/[0.06] flex">
-          {mode === "listen-a" ? (
+          {(mode === "listen-a" || activePlaying === "a") ? (
             <>
               <div className="w-1/2 relative">
                 <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookA?.palette?.[0] || "#fff", opacity: 0.7 }} />

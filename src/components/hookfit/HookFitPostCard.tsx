@@ -5,7 +5,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { User, MoreHorizontal, Trash2, ExternalLink, RotateCcw } from "lucide-react";
+import { User, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,8 +60,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
   const [votedSide, setVotedSide] = useState<"a" | "b" | null>(null);
   const [voteCountA, setVoteCountA] = useState(0);
   const [voteCountB, setVoteCountB] = useState(0);
-  const [replayA, setReplayA] = useState(0);
-  const [replayB, setReplayB] = useState(0);
+  const [activePlaying, setActivePlaying] = useState<"a" | "b" | null>(null);
   const passLoggedRef = useRef(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
 
@@ -312,8 +311,12 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
           votedSide={votedSide}
           onHookEnd={handleHookEnd}
           onHooksLoaded={handleHooksLoaded}
-          replaySignalA={replayA}
-          replaySignalB={replayB}
+          activePlaying={activePlaying}
+          onTileTap={(side) => {
+            if (cardState === "scorecard" || cardState === "results") {
+              setActivePlaying(prev => prev === side ? null : side);
+            }
+          }}
         />
 
         {/* ── Overlays per state ─────────────────────────────────── */}
@@ -411,25 +414,6 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
                 </span>
               </div>
 
-              {/* Replay button — bottom center of left tile */}
-              <div className="absolute bottom-3 left-0 w-1/2 flex justify-center pointer-events-auto">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setReplayA(v => v + 1); }}
-                  className="text-white/50 hover:text-white/90 transition-colors"
-                >
-                  <RotateCcw size={14} />
-                </button>
-              </div>
-
-              {/* Replay button — bottom center of right tile */}
-              <div className="absolute bottom-3 left-1/2 w-1/2 flex justify-center pointer-events-auto">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setReplayB(v => v + 1); }}
-                  className="text-white/50 hover:text-white/90 transition-colors"
-                >
-                  <RotateCcw size={14} />
-                </button>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
