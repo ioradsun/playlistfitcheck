@@ -29,21 +29,29 @@ const ShareableHook = lazy(() => import("./pages/ShareableHook"));
 
 const queryClient = new QueryClient();
 
-/** Skeleton fallback for the hook embed — feels instant */
+/** Skeleton fallback matching battle layout — two video panels + bottom bar */
 const HookEmbedFallback = () => (
-  <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-6 p-6">
-    {/* Title area */}
-    <div className="w-full max-w-md space-y-3">
-      <div className="h-6 w-3/4 mx-auto rounded-md bg-white/10 animate-pulse" />
-      <div className="h-4 w-1/2 mx-auto rounded-md bg-white/[0.06] animate-pulse" />
+  <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col z-50">
+    {/* Header */}
+    <div className="px-5 pt-4 pb-2 flex justify-center">
+      <div className="h-3 w-40 rounded bg-white/[0.06] animate-pulse" />
     </div>
-    {/* Canvas placeholder */}
-    <div className="w-full max-w-lg aspect-square rounded-xl bg-white/[0.04] animate-pulse" />
-    {/* Controls bar */}
-    <div className="w-full max-w-md flex items-center justify-center gap-4">
-      <div className="h-10 w-10 rounded-full bg-white/10 animate-pulse" />
-      <div className="h-10 flex-1 rounded-lg bg-white/[0.06] animate-pulse" />
-      <div className="h-10 w-10 rounded-full bg-white/10 animate-pulse" />
+    {/* Split-screen canvases */}
+    <div className="flex-1 flex flex-col sm:flex-row gap-1 px-1 min-h-0">
+      <div className="relative flex-1 min-h-[35vh] sm:min-h-0 rounded-lg bg-white/[0.03] animate-pulse">
+        <div className="absolute bottom-0 left-0 right-0 p-3">
+          <div className="h-3 w-16 rounded bg-white/[0.08] animate-pulse" />
+        </div>
+      </div>
+      <div className="relative flex-1 min-h-[35vh] sm:min-h-0 rounded-lg bg-white/[0.03] animate-pulse">
+        <div className="absolute bottom-0 left-0 right-0 p-3">
+          <div className="h-3 w-16 rounded bg-white/[0.08] animate-pulse" />
+        </div>
+      </div>
+    </div>
+    {/* Bottom bar */}
+    <div className="h-[120px] px-4 flex items-center justify-center">
+      <div className="h-10 w-64 rounded-lg bg-white/[0.05] animate-pulse" />
     </div>
   </div>
 );
