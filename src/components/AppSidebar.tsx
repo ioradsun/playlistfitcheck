@@ -336,7 +336,10 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
           <SidebarGroupLabel className="hidden">Tools</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {(siteCopy.features?.tools_order ?? TOOLS.map(t => t.value))
+              {([
+                ...((siteCopy.features?.tools_order ?? []).filter((key) => TOOLS.some((tool) => tool.value === key))),
+                ...TOOLS.map((tool) => tool.value).filter((key) => !(siteCopy.features?.tools_order ?? []).includes(key)),
+              ])
                 .map(key => TOOLS.find(t => t.value === key))
                 .filter((tool): tool is typeof TOOLS[number] => {
                   if (!tool) return false;
