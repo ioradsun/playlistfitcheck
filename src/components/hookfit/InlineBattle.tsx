@@ -195,7 +195,7 @@ export function InlineBattle({
     if (side !== votedSide) return {};
     const palette = side === "a" ? hookA?.palette : hookB?.palette;
     const color = (palette as any)?.[0] || "#ffffff";
-    return { border: `2px solid ${color}` };
+    return { boxShadow: `inset 0 0 0 2px ${color}` };
   };
 
   const getSeamColor = () => {
