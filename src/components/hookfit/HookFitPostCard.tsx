@@ -249,7 +249,9 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
                   onClick={() => {
                     if (battleState?.hookA?.id) battleState?.handleVote(battleState.hookA.id);
                   }}
-                  className="flex-1 text-[11px] font-bold uppercase tracking-[0.15em] py-1.5 text-foreground hover:bg-accent/50 transition-colors border-r border-border/30"
+                  className={`flex-1 text-[11px] font-bold uppercase tracking-[0.15em] py-1.5 transition-colors border-r border-border/30 ${
+                    battleState?.activeHookSide === "a" ? "text-foreground hover:bg-accent/50" : "text-foreground/25"
+                  }`}
                 >
                   Hooked
                 </button>
@@ -257,7 +259,9 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
                   onClick={() => {
                     if (battleState?.hookB?.id) battleState?.handleVote(battleState.hookB.id);
                   }}
-                  className="flex-1 text-[11px] font-bold uppercase tracking-[0.15em] py-1.5 text-foreground hover:bg-accent/50 transition-colors"
+                  className={`flex-1 text-[11px] font-bold uppercase tracking-[0.15em] py-1.5 transition-colors ${
+                    battleState?.activeHookSide === "b" ? "text-foreground hover:bg-accent/50" : "text-foreground/25"
+                  }`}
                 >
                   Hooked
                 </button>
