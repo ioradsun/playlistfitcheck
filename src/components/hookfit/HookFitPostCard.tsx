@@ -37,8 +37,8 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
     const el = containerRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      ([entry]) => setIsVisible(entry.isIntersecting),
-      { threshold: 0.1 }
+      ([entry]) => setIsVisible(entry.intersectionRatio >= 0.5),
+      { threshold: 0.5 }
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -167,12 +167,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
                     : battleState?.hookB?.id;
                   if (hookId) battleState?.handleVote(hookId);
                 }}
-                className="text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-full border transition-colors"
-                style={{
-                  color: accentColor,
-                  borderColor: `${accentColor}33`,
-                  background: `${accentColor}0a`,
-                }}
+                className="text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1.5 rounded-full border border-border text-foreground hover:bg-accent/50 transition-colors"
               >
                 I'm Hooked on {activeLabel}
               </motion.button>
