@@ -313,12 +313,12 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
-          {/* Mask overlay — Hook A */}
-          {activeHookSide !== "a" && (
+          {/* Mask overlay — Hook A: show when not active OR when active but muted */}
+          {(activeHookSide !== "a" || isMuted) && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
           )}
-          {/* "Tap to unmute" — on left side when muted */}
-          {(tappedSides.size === 0 || (activeHookSide !== "a")) && (
+          {/* "Tap to unmute" — show when this side has mask */}
+          {(activeHookSide !== "a" || isMuted) && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
                 Tap to unmute
@@ -372,12 +372,12 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
-          {/* Mask overlay — Hook B */}
-          {activeHookSide !== "b" && (
+          {/* Mask overlay — Hook B: show when not active OR when active but muted */}
+          {(activeHookSide !== "b" || isMuted) && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
           )}
-          {/* "Tap to unmute" — on right side when muted */}
-          {(tappedSides.size === 0 || (activeHookSide !== "b")) && (
+          {/* "Tap to unmute" — show when this side has mask */}
+          {(activeHookSide !== "b" || isMuted) && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
                 Tap to unmute
