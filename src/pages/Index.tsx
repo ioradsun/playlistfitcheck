@@ -155,7 +155,7 @@ const Index = () => {
         .select("*")
         .eq("id", projectId)
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (error || !data) return;
       setLoadedLyric(data);
@@ -164,7 +164,7 @@ const Index = () => {
   }, [activeTab, projectId, user?.id]);
 
   useEffect(() => {
-    if (!projectId || projectLoadedRef.current === projectId) return;
+    if (!projectId || projectLoadedRef.current === projectId || !user) return;
     const tab = activeTab;
     
     // If already loaded via sidebar, just mark as loaded
@@ -184,22 +184,22 @@ const Index = () => {
       let data: any = null;
       let error: any = null;
       if (tab === "lyric") {
-        const r = await supabase.from("saved_lyrics").select("*").eq("id", projectId).single();
+        const r = await supabase.from("saved_lyrics").select("*").eq("id", projectId).maybeSingle();
         data = r.data; error = r.error;
       } else if (tab === "mix") {
-        const r = await supabase.from("mix_projects").select("*").eq("id", projectId).single();
+        const r = await supabase.from("mix_projects").select("*").eq("id", projectId).maybeSingle();
         data = r.data; error = r.error;
       } else if (tab === "hitfit") {
-        const r = await supabase.from("saved_hitfit").select("*").eq("id", projectId).single();
+        const r = await supabase.from("saved_hitfit").select("*").eq("id", projectId).maybeSingle();
         data = r.data; error = r.error;
       } else if (tab === "profit") {
-        const r = await supabase.from("profit_reports").select("*, profit_artists(*)").eq("id", projectId).single();
+        const r = await supabase.from("profit_reports").select("*, profit_artists(*)").eq("id", projectId).maybeSingle();
         data = r.data; error = r.error;
       } else if (tab === "vibefit") {
-        const r = await supabase.from("saved_vibefit").select("*").eq("id", projectId).single();
+        const r = await supabase.from("saved_vibefit").select("*").eq("id", projectId).maybeSingle();
         data = r.data; error = r.error;
       } else if (tab === "playlist") {
-        const r = await supabase.from("saved_searches").select("*").eq("id", projectId).single();
+        const r = await supabase.from("saved_searches").select("*").eq("id", projectId).maybeSingle();
         data = r.data; error = r.error;
       }
       if (error || !data) {
@@ -222,7 +222,7 @@ const Index = () => {
         handleLoadProject(tab, data);
       }
     })();
-  }, [projectId, activeTab]);
+  }, [projectId, activeTab, user?.id]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
