@@ -143,7 +143,7 @@ export default function LyricDanceBottomPanel({ danceId, constellationRef, onCom
   }, []);
 
   return (
-    <div className="px-5 py-4 pb-[env(safe-area-inset-bottom,16px)] shrink-0 overflow-hidden" style={{ minHeight: "100px" }}>
+    <div className="px-5 py-4 pb-[env(safe-area-inset-bottom,16px)] shrink-0 overflow-hidden relative z-20" style={{ minHeight: "80px", background: "#0a0a0a" }}>
       <AnimatePresence mode="wait">
         {/* State 1: Pre-signal — Replay / Skip buttons */}
         {phase === "pre-signal" && (

@@ -488,7 +488,7 @@ export default function ShareableLyricDance() {
       {/* Full-screen canvas */}
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 cursor-pointer relative"
+        className="flex-1 min-h-0 cursor-pointer relative overflow-hidden"
         onClick={handleMuteToggle}
       >
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
@@ -508,7 +508,7 @@ export default function ShareableLyricDance() {
 
       {/* Bottom panel — signal/comment state machine */}
       {muted ? (
-        <div className="px-5 py-3 pb-[env(safe-area-inset-bottom,12px)] shrink-0 text-center">
+        <div className="px-5 py-3 pb-[env(safe-area-inset-bottom,12px)] shrink-0 text-center relative z-20" style={{ background: "#0a0a0a" }}>
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
