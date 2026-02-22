@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { User, MoreHorizontal, Share2, Trash2, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +26,24 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isOwnPost = user?.id === post.user_id;
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-pause audio when card scrolls out of view
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting && iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage("hookfit:pause", "*");
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const displayName = post.profiles?.display_name || "Anonymous";
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
@@ -65,7 +83,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   }, [hook]);
 
   return (
-    <div className="border-b border-border/40">
+    <div className="border-b border-border/40" ref={containerRef}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -125,6 +143,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
       {embedUrl && (
         <div className="w-full" style={{ height: "420px" }}>
           <iframe
+            ref={iframeRef}
             src={embedUrl}
             className="w-full h-full border-0"
             loading="lazy"

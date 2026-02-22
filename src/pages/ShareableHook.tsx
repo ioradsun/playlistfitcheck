@@ -719,6 +719,19 @@ export default function ShareableHook() {
   // ── Badge timer ───────────────────────────────────────────────────────────
   useEffect(() => { setTimeout(() => setBadgeVisible(true), 1000); }, []);
 
+  // Listen for pause messages from parent (embed mode scroll-out)
+  useEffect(() => {
+    if (!isEmbed) return;
+    const handler = (e: MessageEvent) => {
+      if (e.data === "hookfit:pause") {
+        if (hookACanvas.audioRef.current) { hookACanvas.audioRef.current.muted = true; }
+        if (hookBCanvas.audioRef.current) { hookBCanvas.audioRef.current.muted = true; }
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [isEmbed]);
+
   // Badge click handler
   const handleBadgeClick = useCallback(() => {
     if (!hookData) return;
