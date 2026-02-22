@@ -153,7 +153,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
                 exit={{ opacity: 0 }}
                 className="text-xs text-muted-foreground font-mono uppercase tracking-[0.15em]"
               >
-                Tap each side to play
+                Tap a side to play
               </motion.p>
             ) : canVote ? (
               <motion.button
