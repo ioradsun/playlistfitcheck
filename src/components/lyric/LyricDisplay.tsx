@@ -658,6 +658,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         } as any,
         beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } as any : null,
         song_dna: songDna as any ?? null,
+        updated_at: new Date().toISOString(),
       };
 
       if (audioUrl) payload.audio_url = audioUrl;
