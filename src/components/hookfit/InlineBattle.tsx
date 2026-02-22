@@ -177,9 +177,17 @@ export function InlineBattle({
       case "scorecard":
       case "results":
         if (!votedSide) return 0.7;
-        return side === votedSide ? 1 : 0.3;
+        return side === votedSide ? 1 : 0.4;
       default: return 1;
     }
+  };
+
+  const getBorderStyle = (side: "a" | "b"): React.CSSProperties => {
+    if ((mode !== "scorecard" && mode !== "results") || !votedSide) return {};
+    if (side !== votedSide) return {};
+    const palette = side === "a" ? hookA?.palette : hookB?.palette;
+    const color = (palette as any)?.[0] || "#ffffff";
+    return { border: `2px solid ${color}` };
   };
 
   const getSeamColor = () => {
@@ -199,6 +207,7 @@ export function InlineBattle({
         {/* Hook A */}
         <motion.div
           className="relative flex-1 overflow-hidden"
+          style={getBorderStyle("a")}
           animate={{ opacity: getOpacity("a") }}
           transition={{ duration: 0.4 }}
         >
@@ -220,6 +229,7 @@ export function InlineBattle({
         {/* Hook B */}
         <motion.div
           className="relative flex-1 overflow-hidden"
+          style={getBorderStyle("b")}
           animate={{ opacity: getOpacity("b") }}
           transition={{ duration: 0.4 }}
         >
