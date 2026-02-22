@@ -19,6 +19,7 @@ import { LyricFitTab } from "@/components/lyric/LyricFitTab";
 import { HitFitTab } from "@/components/hitfit/HitFitTab";
 import { ProFitTab } from "@/components/profit/ProFitTab";
 import { SongFitTab } from "@/components/songfit/SongFitTab";
+import { HookFitTab } from "@/components/hookfit/HookFitTab";
 import { DreamFitTab } from "@/components/dreamfit/DreamFitTab";
 import { VibeFitTab } from "@/components/vibefit/VibeFitTab";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -59,7 +60,7 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 
 const PATH_TO_TAB: Record<string, string> = {
   "/CrowdFit": "songfit",
-  "/HookFit": "songfit",
+  "/HookFit": "hookfit",
   "/SongFit": "songfit", // legacy redirect support
   "/ProFit": "profit",
   "/PlaylistFit": "playlist",
@@ -109,7 +110,7 @@ const Index = () => {
     if (location.pathname === "/" && !location.state && !location.search && !window.location.hash) {
       navigate("/CrowdFit", { replace: true });
     }
-    if (location.pathname === "/SongFit" || location.pathname === "/HookFit") {
+    if (location.pathname === "/SongFit") {
       navigate("/CrowdFit", { replace: true });
     }
   }, [location.pathname]);
@@ -559,7 +560,7 @@ const Index = () => {
     }
   };
 
-  const persistedTabs = ["songfit", "lyric", "mix", "hitfit"];
+  const persistedTabs = ["songfit", "hookfit", "lyric", "mix", "hitfit"];
 
   return (
     <>
@@ -593,6 +594,12 @@ const Index = () => {
             className={`flex-1 overflow-y-auto px-4 py-6 ${activeTab === "songfit" ? "" : "hidden"}`}
           >
             <SongFitTab />
+          </div>
+          {/* HookFitTab stays mounted to preserve feed state — hidden when not active */}
+          <div
+            className={`flex-1 overflow-y-auto px-4 py-6 ${activeTab === "hookfit" ? "" : "hidden"}`}
+          >
+            <HookFitTab />
           </div>
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>

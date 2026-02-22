@@ -56,6 +56,7 @@ interface ToolItem {
 
 const TOOLS: ToolItem[] = [
   { value: "songfit", label: "CrowdFit", path: "/CrowdFit" },
+  { value: "hookfit", label: "HookFit", path: "/HookFit" },
   { value: "hitfit", label: "HitFit", path: "/HitFit" },
   { value: "vibefit", label: "VibeFit", path: "/VibeFit" },
   { value: "profit", label: "ProFit", path: "/ProFit" },
