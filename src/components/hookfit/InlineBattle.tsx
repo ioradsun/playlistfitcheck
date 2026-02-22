@@ -292,53 +292,22 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           animate={{ opacity: activeHookSide !== "a" ? 0.6 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
-            if (activeHookSide === "a" && tappedSides.has("a")) {
-              const nowMuted = !hookACanvas.audioRef.current?.muted;
-              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = nowMuted;
-              userMutedRef.current = nowMuted;
-              setIsMuted(nowMuted);
-              flashMuteIcon();
-              return;
-            }
+            if (activeHookSide === "a") return; // already active, do nothing
             setActiveHookSide("a");
             setTappedSides(prev => new Set(prev).add("a"));
-            if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
-            if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
-            userMutedRef.current = false;
-            setIsMuted(false);
-            flashMuteIcon();
+            if (!isMuted) {
+              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
+              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
+            }
             hookACanvas.restart();
           }}
         >
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
-          {/* Mask overlay — Hook A: show when not active OR when active but muted */}
-          {(activeHookSide !== "a" || isMuted) && (
+          {/* Mask overlay — inactive side */}
+          {activeHookSide !== "a" && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
-          )}
-          {/* "Tap to unmute" — show when this side has mask */}
-          {(activeHookSide !== "a" || isMuted) && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
-                Tap to unmute
-              </span>
-            </div>
-          )}
-          {/* Mute icon overlay — Hook A */}
-          {activeHookSide === "a" && (
-            <AnimatePresence>
-              <motion.div
-                key={`mute-a-${recentMuteAction}`}
-                initial={{ opacity: recentMuteAction ? 0.8 : 0.2 }}
-                animate={{ opacity: recentMuteAction ? 0.8 : 0.2 }}
-                exit={{ opacity: 0.2 }}
-                transition={{ duration: 0.6 }}
-                className="absolute bottom-2 right-2 pointer-events-none"
-              >
-                <MuteIcon size={16} className="text-white drop-shadow-md" />
-              </motion.div>
-            </AnimatePresence>
           )}
         </motion.div>
 
@@ -351,76 +320,68 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           animate={{ opacity: activeHookSide !== "b" ? 0.6 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
-            if (activeHookSide === "b" && tappedSides.has("b")) {
-              const nowMuted = !hookBCanvas.audioRef.current?.muted;
-              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = nowMuted;
-              userMutedRef.current = nowMuted;
-              setIsMuted(nowMuted);
-              flashMuteIcon();
-              return;
-            }
+            if (activeHookSide === "b") return; // already active, do nothing
             setActiveHookSide("b");
             setTappedSides(prev => new Set(prev).add("b"));
-            if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
-            if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
-            userMutedRef.current = false;
-            setIsMuted(false);
-            flashMuteIcon();
+            if (!isMuted) {
+              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
+              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
+            }
             hookBCanvas.restart();
           }}
         >
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
-          {/* Mask overlay — Hook B: show when not active OR when active but muted */}
-          {(activeHookSide !== "b" || isMuted) && (
+          {/* Mask overlay — inactive side */}
+          {activeHookSide !== "b" && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
-          )}
-          {/* "Tap to unmute" — show when this side has mask */}
-          {(activeHookSide !== "b" || isMuted) && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
-                Tap to unmute
-              </span>
-            </div>
-          )}
-          {/* Mute icon overlay — Hook B */}
-          {activeHookSide === "b" && (
-            <AnimatePresence>
-              <motion.div
-                key={`mute-b-${recentMuteAction}`}
-                initial={{ opacity: recentMuteAction ? 0.8 : 0.2 }}
-                animate={{ opacity: recentMuteAction ? 0.8 : 0.2 }}
-                exit={{ opacity: 0.2 }}
-                transition={{ duration: 0.6 }}
-                className="absolute bottom-2 right-2 pointer-events-none"
-              >
-                <MuteIcon size={16} className="text-white drop-shadow-md" />
-              </motion.div>
-            </AnimatePresence>
           )}
         </motion.div>
       </div>
 
-      {/* ── HTML Playbar — progress only when audio playing ──────────── */}
-      <div className="h-[2px] bg-white/[0.06] flex">
-        {!isMuted && (
-          activeHookSide === "a" ? (
-            <>
-              <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-              </div>
-              <div className="w-1/2" />
-            </>
-          ) : (
-            <>
-              <div className="w-1/2" />
-              <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-              </div>
-            </>
-          )
-        )}
+      {/* ── Playbar — progress + mute control ──────────────────────── */}
+      <div className="relative h-6 bg-white/[0.03] flex items-center">
+        {/* Progress track */}
+        <div className="absolute inset-x-0 top-0 h-[2px] bg-white/[0.06] flex">
+          {!isMuted && (
+            activeHookSide === "a" ? (
+              <>
+                <div className="w-1/2 relative">
+                  <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+                </div>
+                <div className="w-1/2" />
+              </>
+            ) : (
+              <>
+                <div className="w-1/2" />
+                <div className="w-1/2 relative">
+                  <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+                </div>
+              </>
+            )
+          )}
+        </div>
+        {/* Mute/Unmute button */}
+        <button
+          onClick={() => {
+            const nowMuted = !isMuted;
+            userMutedRef.current = nowMuted;
+            setIsMuted(nowMuted);
+            if (nowMuted) {
+              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
+              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
+            } else {
+              // Unmute the active side only
+              if (activeHookSide === "a" && hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
+              if (activeHookSide === "b" && hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
+              setTappedSides(prev => new Set(prev).add(activeHookSide));
+            }
+          }}
+          className="ml-2 p-1 text-white/40 hover:text-white/70 transition-colors"
+        >
+          <MuteIcon size={14} />
+        </button>
       </div>
     </div>
   );
