@@ -90,6 +90,7 @@ const Index = () => {
   const TAB_SUBTITLES: Record<string, string> = Object.fromEntries(
     Object.entries(siteCopy.tools).map(([k, v]) => [k, v.pill])
   );
+  const hookfitEnabled = siteCopy.features?.tools_enabled?.hookfit !== false;
   const location = useLocation();
   const navigate = useNavigate();
   const autoRunRef = useRef(false);
@@ -99,14 +100,16 @@ const Index = () => {
   
   // Derive active tab from URL path (strip /:projectId suffix)
   const basePath = location.pathname.replace(/\/[0-9a-f-]{36}$/, "");
-  const tabFromPath = PATH_TO_TAB[basePath] || PATH_TO_TAB[location.pathname] || "songfit";
+  const rawTabFromPath = PATH_TO_TAB[basePath] || PATH_TO_TAB[location.pathname] || "songfit";
+  const tabFromPath = !hookfitEnabled && rawTabFromPath === "hookfit" ? "songfit" : rawTabFromPath;
   const [activeTab, setActiveTabState] = useState(tabFromPath);
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([tabFromPath]));
   
   // Sync tab when path changes (e.g. browser back/forward)
   useEffect(() => {
     const bp = location.pathname.replace(/\/[0-9a-f-]{36}$/, "");
-    const t = PATH_TO_TAB[bp] || PATH_TO_TAB[location.pathname];
+    const tRaw = PATH_TO_TAB[bp] || PATH_TO_TAB[location.pathname];
+    const t = !hookfitEnabled && tRaw === "hookfit" ? "songfit" : tRaw;
     if (t && t !== activeTab) setActiveTabState(t);
     // Redirect bare "/" to "/CrowdFit" — but NOT if there's a code/token in the URL (auth callback)
     // If there's a ref param, redirect to signup
@@ -121,7 +124,10 @@ const Index = () => {
     if (location.pathname === "/SongFit") {
       navigate("/CrowdFit", { replace: true });
     }
-  }, [location.pathname]);
+    if (!hookfitEnabled && (bp === "/HookFit" || location.pathname === "/HookFit")) {
+      navigate("/CrowdFit", { replace: true });
+    }
+  }, [location.pathname, hookfitEnabled]);
 
   useEffect(() => {
     setVisitedTabs(prev => {
@@ -577,7 +583,7 @@ const Index = () => {
     }
   };
 
-  const persistedTabs = ["songfit", "hookfit", "lyric", "mix", "hitfit"];
+  const persistedTabs = ["songfit", "lyric", "mix", "hitfit", ...(hookfitEnabled ? ["hookfit"] : [])];
 
   return (
     <>
@@ -615,7 +621,7 @@ const Index = () => {
             </div>
           )}
           {/* HookFitTab stays mounted to preserve feed state — hidden when not active */}
-          {visitedTabs.has("hookfit") && (
+          {hookfitEnabled && visitedTabs.has("hookfit") && (
             <div
               className={`flex-1 overflow-y-auto px-4 py-6 ${activeTab === "hookfit" ? "" : "hidden"}`}
             >
