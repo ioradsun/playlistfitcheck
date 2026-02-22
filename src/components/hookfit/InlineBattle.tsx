@@ -53,15 +53,32 @@ const SYSTEM_PAIRS: Record<string, string> = {
   paper: "combustion",
 };
 
-function invertHookData(hook: HookData, sourceHook: HookData): HookData {
-  // Palette inversion: swap primary (first) and background-ish (last), reverse the middle
-  const palette = [...hook.palette];
-  if (palette.length >= 2) {
-    const [first, ...rest] = palette;
-    const last = rest.pop()!;
-    palette.length = 0;
-    palette.push(last, ...rest.reverse(), first);
+/**
+ * Parse an HSL string like "hsl(200, 70%, 40%)" into [h, s, l].
+ * Falls back to null for non-HSL strings.
+ */
+function parseHSL(color: string): [number, number, number] | null {
+  const m = color.match(/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%?\s*,\s*([\d.]+)%?\s*\)/i);
+  if (!m) return null;
+  return [parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3])];
+}
+
+function invertColor(color: string): string {
+  const hsl = parseHSL(color);
+  if (!hsl) {
+    // Hex fallback — just return as-is, the contrast system will handle the feel
+    return color;
   }
+  const [h, s, l] = hsl;
+  // Rotate hue 180°, invert lightness (light↔dark), keep saturation
+  const newH = (h + 180) % 360;
+  const newL = Math.max(10, Math.min(90, 100 - l));
+  return `hsl(${Math.round(newH)}, ${Math.round(s)}%, ${Math.round(newL)}%)`;
+}
+
+function invertHookData(hook: HookData, sourceHook: HookData): HookData {
+  // True palette inversion: rotate hue 180° and flip lightness for each color
+  const palette = hook.palette.map(c => invertColor(c));
 
   // Contrasting physics system — use sourceHook's system to pick the opposite
   const contrastSystem = SYSTEM_PAIRS[sourceHook.system_type] || "breath";
