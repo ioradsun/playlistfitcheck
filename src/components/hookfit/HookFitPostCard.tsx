@@ -197,21 +197,6 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
               >
                 I'm Hooked on {activeLabel}
               </motion.button>
-            ) : hasVoted ? (
-              <motion.div
-                key="voted"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-2"
-              >
-                <span
-                  className="text-[10px] font-mono uppercase tracking-[0.15em] font-bold"
-                  style={{ color: "rgba(57,255,20,0.45)" }}
-                >
-                  Hooked
-                </span>
-              </motion.div>
             ) : null}
           </AnimatePresence>
         </div>
