@@ -292,12 +292,23 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
 
       {/* ── HTML Playbar ─────────────────────────────────────────────── */}
       <div className="relative" style={{ background: bgBase }}>
-        {/* Progress track */}
-        <div className="h-[2px] bg-white/[0.06]">
-          <div
-            className="h-full transition-none"
-            style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }}
-          />
+        {/* Progress track — spans only the active side's half */}
+        <div className="h-[2px] bg-white/[0.06] flex">
+          {activeHookSide === "a" ? (
+            <>
+              <div className="w-1/2 relative">
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+              </div>
+              <div className="w-1/2" />
+            </>
+          ) : (
+            <>
+              <div className="w-1/2" />
+              <div className="w-1/2 relative">
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Controls row */}
