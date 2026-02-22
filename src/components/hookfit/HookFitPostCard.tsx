@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InlineBattle, type BattleState } from "./InlineBattle";
+import { HookFitVotesSheet } from "./HookFitVotesSheet";
 import type { HookFitPost } from "./types";
 
 interface Props {
@@ -31,6 +32,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [battleState, setBattleState] = useState<BattleState | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Track visibility for auto-pause
   useEffect(() => {
@@ -74,8 +76,8 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const activeLabel = battleState?.activeHookSide === "a"
     ? (battleState?.hookA?.hook_label || "Hook A")
     : (battleState?.hookB?.hook_label || "Hook B");
-  const accentColor = battleState?.accentColor || "#a855f7";
   const hasTapped = (battleState?.tappedSides?.size ?? 0) > 0;
+  const fmlyCount = Math.max(0, totalVotes - 1);
 
   return (
     <div className="border-b border-border/40" ref={containerRef}>
@@ -134,12 +136,28 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
         </DropdownMenu>
       </div>
 
-      {/* Inline Battle (pure visual — no interactive overlays) */}
-      <InlineBattle
-        battleId={post.battle_id}
-        visible={isVisible}
-        onBattleState={setBattleState}
-      />
+      {/* Inline Battle with Hooked badge overlay */}
+      <div className="relative">
+        <InlineBattle
+          battleId={post.battle_id}
+          visible={isVisible}
+          onBattleState={setBattleState}
+        />
+        {/* "Hooked" badge — top-left of canvas, after voting */}
+        {hasVoted && isBattle && (
+          <button
+            onClick={() => setSheetOpen(true)}
+            className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 transition-colors"
+          >
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.12em]"
+              style={{ color: "rgba(57,255,20,0.7)" }}
+            >
+              Hooked
+            </span>
+          </button>
+        )}
+      </div>
 
       {/* Action row — vote controls in card area */}
       {isBattle && (
@@ -153,7 +171,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
                 exit={{ opacity: 0 }}
                 className="text-xs text-muted-foreground font-mono uppercase tracking-[0.15em]"
               >
-                Tap a side to play
+                WHICH HOOK FITS? — FMLY DECIDES
               </motion.p>
             ) : canVote ? (
               <motion.button
@@ -172,25 +190,26 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
                 I'm Hooked on {activeLabel}
               </motion.button>
             ) : hasVoted ? (
-              <motion.div
+              <motion.button
                 key="voted"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex items-center gap-2"
+                onClick={() => setSheetOpen(true)}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
               >
                 <span
-                  className="text-[10px] font-mono uppercase tracking-[0.15em]"
+                  className="text-[10px] font-mono uppercase tracking-[0.15em] font-bold"
                   style={{ color: "rgba(57,255,20,0.45)" }}
                 >
                   Hooked
                 </span>
                 {totalVotes > 0 && (
                   <span className="text-[10px] font-mono text-muted-foreground">
-                    {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
+                    You + {fmlyCount} FMLY
                   </span>
                 )}
-              </motion.div>
+              </motion.button>
             ) : null}
           </AnimatePresence>
         </div>
@@ -212,6 +231,17 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
           <span className="text-[11px] font-bold text-primary font-mono">#{rank}</span>
         </div>
       )}
+
+      {/* Votes side panel */}
+      <HookFitVotesSheet
+        battleId={sheetOpen ? post.battle_id : null}
+        hookA={battleState?.hookA ?? null}
+        hookB={battleState?.hookB ?? null}
+        voteCountA={battleState?.voteCountA ?? 0}
+        voteCountB={battleState?.voteCountB ?? 0}
+        votedHookId={battleState?.votedHookId ?? null}
+        onClose={() => setSheetOpen(false)}
+      />
     </div>
   );
 }
