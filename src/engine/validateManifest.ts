@@ -1,4 +1,4 @@
-import type { SceneManifest, TypographyProfile } from "./SceneManifest";
+import type { ParticleConfig, ParticleSystemType, SceneManifest, TypographyProfile } from "./SceneManifest";
 
 const GRAVITY_VALUES = [
   "normal",
@@ -58,6 +58,10 @@ const TYPOGRAPHY_PERSONAS = [
   "INVISIBLE INK",
 ] as const;
 const TEXT_TRANSFORMS = ["uppercase", "lowercase", "none"] as const;
+const VALID_PARTICLE_SYSTEMS = [
+  "rain", "snow", "embers", "flames", "dust", "smoke",
+  "sparks", "petals", "ash", "light-rays", "static-noise", "bubbles", "none",
+] as const;
 
 export interface ManifestValidationResult {
   valid: boolean;
@@ -90,6 +94,15 @@ const SAFE_DEFAULTS: SceneManifest = {
     lineHeightMultiplier: 1.4,
     hasSerif: false,
     personality: "RAW TRANSCRIPT",
+  },
+  particleConfig: {
+    system: "none",
+    density: 0.3,
+    speed: 0.4,
+    opacity: 0.35,
+    color: "#e8e8e8",
+    beatReactive: false,
+    foreground: false,
   },
   songTitle: "Unknown",
   generatedAt: Date.now(),
@@ -182,6 +195,34 @@ function validateTypographyProfile(
     );
 
   return result;
+}
+
+
+function normalizeParticleConfig(raw: unknown, manifest: SceneManifest): ParticleConfig {
+  const defaults: ParticleConfig = {
+    system: "none",
+    density: 0.3,
+    speed: 0.4,
+    opacity: 0.35,
+    color: manifest.palette[2],
+    beatReactive: false,
+    foreground: false,
+  };
+
+  if (!raw || typeof raw !== "object") return defaults;
+  const p = raw as Record<string, unknown>;
+
+  return {
+    system: VALID_PARTICLE_SYSTEMS.includes(p.system as ParticleSystemType)
+      ? (p.system as ParticleSystemType)
+      : "none",
+    density: clampNumber(p.density, 0, 1, 0.3),
+    speed: clampNumber(p.speed, 0, 1, 0.4),
+    opacity: clampNumber(p.opacity, 0, 1, 0.35),
+    color: isValidHex(p.color) ? p.color : manifest.palette[2],
+    beatReactive: typeof p.beatReactive === "boolean" ? p.beatReactive : false,
+    foreground: typeof p.foreground === "boolean" ? p.foreground : false,
+  };
 }
 
 function checkConsistency(m: SceneManifest, warnings: string[]): void {
@@ -299,6 +340,20 @@ export function validateManifest(raw: unknown): ManifestValidationResult {
     input.typographyProfile,
     warnings,
   );
+  m.particleConfig = normalizeParticleConfig(input.particleConfig, m);
+
+  if (m.particleConfig.system !== "none") {
+    if (m.particleConfig.foreground && m.particleConfig.opacity > 0.5) {
+      m.particleConfig.opacity = 0.5;
+      warnings.push(
+        "particleConfig: foreground particles capped at opacity 0.5 to protect lyric readability",
+      );
+    }
+    if (m.particleConfig.foreground && m.particleConfig.density > 0.6) {
+      m.particleConfig.density = 0.6;
+      warnings.push("particleConfig: foreground particle density capped at 0.6");
+    }
+  }
 
   checkConsistency(m, warnings);
 

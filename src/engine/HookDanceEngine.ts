@@ -63,6 +63,11 @@ export interface LayoutValidationResult {
   steps: number;
 }
 
+
+export function isForegroundParticleSystem(system: string): boolean {
+  return system === "snow" || system === "petals" || system === "light-rays" || system === "ash";
+}
+
 export class HookDanceEngine {
   private integrator: PhysicsIntegrator;
   private beats: BeatTick[];

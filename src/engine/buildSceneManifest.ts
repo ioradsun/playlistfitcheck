@@ -76,6 +76,15 @@ export function deriveSceneManifestFromSpec(params: {
       hasSerif: false,
       personality: "RAW TRANSCRIPT",
     },
+    particleConfig: {
+      system: "none",
+      density: 0.3,
+      speed: 0.4,
+      opacity: 0.35,
+      color: palette[2],
+      beatReactive: false,
+      foreground: false,
+    },
     songTitle: songTitle || "Unknown",
     generatedAt: Date.now(),
   };

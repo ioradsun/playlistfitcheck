@@ -141,6 +141,33 @@ Song: Defiant comeback, confidence, self-reclamation
 → typography: MONUMENTAL
 → NOT: generic dark red
 
+
+PARTICLE SYSTEM SELECTION:
+
+Based on the world you described, select the environmental particle system that would exist in that physical place. This is not a mood choice — it is a physical environment choice.
+Ask: "What is actually falling, drifting, or moving through the air in this place?"
+
+World → particle mapping examples:
+- rain/window/wet/storm → rain
+- snow/winter/cold/blizzard → snow
+- fire/burning/ember/smolder → embers or flames
+- dust/desert/dry/forgotten → dust
+- smoke/haze/aftermath/fog → smoke
+- electric/voltage/spark/arc → sparks
+- flowers/petals/spring/bloom → petals
+- grief/ash/burned/ruin → ash
+- cathedral/church/rays/hope → light-rays
+- anxiety/static/interference → static-noise
+- underwater/ocean/dream/float → bubbles
+- clean/minimal/abstract → none
+
+Then set particleConfig with:
+- system, density (0-1), speed (0-1), opacity (0-1), color (hex), beatReactive, foreground
+- foreground true only for snow/petals/ash/light-rays
+
+PARTICLE + BACKGROUND COHERENCE:
+Avoid incoherent pairings. Could this particle physically exist in the world? If not, use none.
+
 OUTPUT — valid JSON only:
 {
   "hottest_hooks": [
@@ -157,6 +184,15 @@ OUTPUT — valid JSON only:
     "palette": ["#0a0a0a", "#6f7c8f", "#d8e6f2"],
     "effect_pool": ["SHATTER_IN", "GLITCH_FLASH", "WAVE_SURGE", "STATIC_RESOLVE"],
     "logic_seed": 12345,
+    "particleConfig": {
+      "system": "none",
+      "density": 0.3,
+      "speed": 0.4,
+      "opacity": 0.35,
+      "color": "#d8e6f2",
+      "beatReactive": false,
+      "foreground": false
+    },
     "typographyProfile": {
       "fontFamily": "Inter",
       "fontWeight": 500,
@@ -211,8 +247,23 @@ function extractJson(raw: string): any | null {
   try { return JSON.parse(jsonStr); } catch { return null; }
 }
 
+type ParticleSystemType =
+  | "rain" | "snow" | "embers" | "flames" | "dust" | "smoke"
+  | "sparks" | "petals" | "ash" | "light-rays" | "static-noise" | "bubbles" | "none";
+
+interface ParticleConfig {
+  system: ParticleSystemType;
+  density: number;
+  speed: number;
+  opacity: number;
+  color: string;
+  beatReactive: boolean;
+  foreground: boolean;
+}
+
 interface SceneManifest {
   world?: string;
+  particleConfig?: ParticleConfig;
   physics_spec?: { system?: string; palette?: string[]; typographyProfile?: any };
 }
 
@@ -229,6 +280,43 @@ function normalizeHexColor(color: string): string | null {
   }
   const full = /^#([0-9a-f]{6})$/i.exec(c);
   return full ? `#${full[1]}` : null;
+}
+
+
+const VALID_PARTICLE_SYSTEMS: ParticleSystemType[] = [
+  "rain","snow","embers","flames","dust","smoke","sparks","petals","ash","light-rays","static-noise","bubbles","none",
+];
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  if (typeof value !== "number" || Number.isNaN(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
+function isValidHex(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+}
+
+function normalizeParticleConfig(raw: unknown, manifest: SceneManifest): ParticleConfig {
+  const defaults: ParticleConfig = {
+    system: "none",
+    density: 0.3,
+    speed: 0.4,
+    opacity: 0.35,
+    color: manifest.physics_spec?.palette?.[2] || "#e8e8e8",
+    beatReactive: false,
+    foreground: false,
+  };
+  if (!raw || typeof raw !== "object") return defaults;
+  const p = raw as Record<string, unknown>;
+  return {
+    system: VALID_PARTICLE_SYSTEMS.includes(p.system as ParticleSystemType) ? (p.system as ParticleSystemType) : "none",
+    density: clampNumber(p.density, 0, 1, defaults.density),
+    speed: clampNumber(p.speed, 0, 1, defaults.speed),
+    opacity: clampNumber(p.opacity, 0, 1, defaults.opacity),
+    color: isValidHex(p.color) ? p.color : defaults.color,
+    beatReactive: typeof p.beatReactive === "boolean" ? p.beatReactive : false,
+    foreground: typeof p.foreground === "boolean" ? p.foreground : false,
+  };
 }
 
 function colorDistance(hex1: string, hex2: string): number {
@@ -579,6 +667,10 @@ serve(async (req) => {
       const data = await response.json();
       const raw = data.choices?.[0]?.message?.content ?? "";
       try { parsed = JSON.parse(raw); } catch { parsed = { summary: raw }; }
+    }
+
+    if (parsed) {
+      parsed.particleConfig = normalizeParticleConfig(parsed.particleConfig, parsed as SceneManifest);
     }
 
     if (parsed && parsed.physics_spec) trackManifest(parsed as SceneManifest);

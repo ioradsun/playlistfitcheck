@@ -14,6 +14,31 @@ export interface TypographyProfile {
     | "INVISIBLE INK";
 }
 
+export type ParticleSystemType =
+  | "rain"
+  | "snow"
+  | "embers"
+  | "flames"
+  | "dust"
+  | "smoke"
+  | "sparks"
+  | "petals"
+  | "ash"
+  | "light-rays"
+  | "static-noise"
+  | "bubbles"
+  | "none";
+
+export interface ParticleConfig {
+  system: ParticleSystemType;
+  density: number;
+  speed: number;
+  opacity: number;
+  color: string;
+  beatReactive: boolean;
+  foreground: boolean;
+}
+
 export interface SceneManifest {
   world: string;
   coreEmotion: string;
@@ -55,6 +80,7 @@ export interface SceneManifest {
     | "void";
   backgroundIntensity: number;
   typographyProfile: TypographyProfile;
+  particleConfig: ParticleConfig;
   songTitle: string;
   generatedAt: number;
 }
