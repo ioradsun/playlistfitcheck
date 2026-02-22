@@ -230,14 +230,47 @@ export function useHookCanvas(
     }
     ctx.globalAlpha = 1;
 
-    // Lyrics
+    // Lyrics — word-wrap into stacked lines when canvas is narrow
     if (activeLine) {
       const drawFn = getEffect(currentEffectKey);
       const age = (ct - activeLine.start) * 1000;
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (ct - activeLine.start) / lineDur);
-      const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, hd.system_type);
-      drawFn(ctx, { text: activeLine.text, physState: physState, w, h, fs, age, progress, rng, palette, system: hd.system_type, effectiveLetterSpacing });
+
+      // Narrow canvas threshold: split into multiple lines for readability
+      const NARROW_THRESHOLD = 400;
+      if (w < NARROW_THRESHOLD && activeLine.text.split(/\s+/).length > 2) {
+        // Word-wrap: split into lines of roughly equal word count
+        const words = activeLine.text.split(/\s+/);
+        const lineCount = Math.min(3, Math.ceil(words.length / 2));
+        const wordsPerLine = Math.ceil(words.length / lineCount);
+        const wrappedLines: string[] = [];
+        for (let li = 0; li < lineCount; li++) {
+          wrappedLines.push(words.slice(li * wordsPerLine, (li + 1) * wordsPerLine).join(" "));
+        }
+
+        // Compute font size based on longest wrapped line
+        const longest = wrappedLines.reduce((a, b) => a.length > b.length ? a : b, "");
+        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, longest, w, hd.system_type);
+
+        // Render each line at stacked y positions
+        const lineH = fs * 1.15;
+        const totalH = lineCount * lineH;
+        const startY = (h - totalH) / 2 + fs * 0.5;
+
+        for (let li = 0; li < wrappedLines.length; li++) {
+          const lineY = startY + li * lineH;
+          // Offset the virtual h so the effect draws at the correct y position
+          const virtualH = lineY * 2; // centers effect at lineY
+          drawFn(ctx, {
+            text: wrappedLines[li], physState: physState, w, h: virtualH,
+            fs, age, progress, rng, palette, system: hd.system_type, effectiveLetterSpacing,
+          });
+        }
+      } else {
+        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, hd.system_type);
+        drawFn(ctx, { text: activeLine.text, physState: physState, w, h, fs, age, progress, rng, palette, system: hd.system_type, effectiveLetterSpacing });
+      }
     }
 
     // Progress bar
