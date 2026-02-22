@@ -211,9 +211,6 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
   // ── Derived ─────────────────────────────────────────────────────────
 
   const isBattle = !!(hookA && hookB);
-  const activeLabel = activeHookSide === "a"
-    ? (hookA?.hook_label || "Hook A")
-    : (hookB?.hook_label || "Hook B");
   const accentColor = hookA?.palette?.[1] || "#a855f7";
 
   if (loading || !hookA) {
@@ -239,16 +236,9 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
         </div>
-        {/* Playbar */}
-        <div className="relative h-8" style={{ background: bgBase }}>
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-white/[0.06]">
-            <div className="h-full transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-          </div>
-          <div className="flex items-center justify-between px-3 h-full">
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 truncate">
-              {hookA.hook_label || hookA.hook_phrase}
-            </p>
-          </div>
+        {/* Progress only */}
+        <div className="h-[2px] bg-white/[0.06]">
+          <div className="h-full transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
         </div>
       </div>
     );
@@ -266,6 +256,11 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           animate={{ opacity: activeHookSide !== "a" ? 0.4 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
+            if (activeHookSide === "a" && tappedSides.has("a")) {
+              // Toggle mute on re-tap
+              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = !hookACanvas.audioRef.current.muted;
+              return;
+            }
             setActiveHookSide("a");
             setTappedSides(prev => new Set(prev).add("a"));
             if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
@@ -276,11 +271,6 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
-          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 truncate max-w-[100px]">
-              {hookA.hook_label || "Hook A"}
-            </p>
-          </div>
         </motion.div>
 
         {/* Hook B */}
@@ -289,6 +279,10 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           animate={{ opacity: activeHookSide !== "b" ? 0.4 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
+            if (activeHookSide === "b" && tappedSides.has("b")) {
+              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = !hookBCanvas.audioRef.current.muted;
+              return;
+            }
             setActiveHookSide("b");
             setTappedSides(prev => new Set(prev).add("b"));
             if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
@@ -299,41 +293,26 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
-          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 truncate max-w-[100px]">
-              {hookB.hook_label || "Hook B"}
-            </p>
-          </div>
         </motion.div>
       </div>
 
-      {/* ── HTML Playbar ─────────────────────────────────────────────── */}
-      <div className="relative" style={{ background: bgBase }}>
-        {/* Progress track — spans only the active side's half */}
-        <div className="h-[2px] bg-white/[0.06] flex">
-          {activeHookSide === "a" ? (
-            <>
-              <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-              </div>
-              <div className="w-1/2" />
-            </>
-          ) : (
-            <>
-              <div className="w-1/2" />
-              <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Controls row — label only */}
-        <div className="flex items-center px-3 py-2">
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 truncate">
-            {activeLabel}
-          </p>
-        </div>
+      {/* ── HTML Playbar — progress only ─────────────────────────────── */}
+      <div className="h-[2px] bg-white/[0.06] flex">
+        {activeHookSide === "a" ? (
+          <>
+            <div className="w-1/2 relative">
+              <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+            </div>
+            <div className="w-1/2" />
+          </>
+        ) : (
+          <>
+            <div className="w-1/2" />
+            <div className="w-1/2 relative">
+              <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
