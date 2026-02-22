@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video, Sparkles, Loader2, RotateCcw, X } from "lucide-react";
+import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video, Film, Sparkles, Loader2, RotateCcw, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,7 @@ import { LyricVideoComposer } from "./LyricVideoComposer";
 import { HookDanceCanvas } from "./HookDanceCanvas";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { HookDanceExporter } from "./HookDanceExporter";
+import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
@@ -310,6 +311,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [showDirectorsCut, setShowDirectorsCut] = useState(false);
   const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(null);
   const [battlePopupUrl, setBattlePopupUrl] = useState<string | null>(null);
+  const [lyricDanceExportOpen, setLyricDanceExportOpen] = useState(false);
 
   // Load fingerprint from profile
   useEffect(() => {
@@ -1538,6 +1540,30 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               </div>
             );
           })()}
+
+          {/* ── Lyric Dance — Full Song Video ── */}
+          {songDna?.physicsSpec && beatGrid && (
+            <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
+              <div className="flex items-center gap-1.5">
+                <Film size={11} className="text-primary" />
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                  Lyric Dance
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Full-song lyric video powered by the {songDna.physicsSpec.system} physics engine.
+                All {data.lines.filter(l => l.tag !== "adlib").length} lines rendered with effects.
+              </p>
+              <button
+                onClick={() => setLyricDanceExportOpen(true)}
+                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              >
+                <Film size={10} />
+                Create Lyric Dance
+              </button>
+            </div>
+          )}
+
           {/* Spacer so floating widget doesn't block last card */}
           <div className="h-20" />
         </div>
@@ -1732,6 +1758,31 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           artist={(data.artist && data.artist !== "Unknown" && data.artist !== "UNKNOWN") ? data.artist : "—"}
           audioFile={audioFile}
           seed={`${data.title}-${songDna.hook.start.toFixed(3)}`}
+        />
+      )}
+
+      {/* Lyric Dance Exporter — full song */}
+      {songDna?.physicsSpec && beatGrid?.beats && (
+        <LyricDanceExporter
+          open={lyricDanceExportOpen}
+          onOpenChange={setLyricDanceExportOpen}
+          spec={hookDanceOverrides.system
+            ? { ...(songDna.physicsSpec as PhysicsSpec), system: hookDanceOverrides.system, palette: hookDanceOverrides.palette || (songDna.physicsSpec as PhysicsSpec).palette }
+            : hookDanceOverrides.palette
+              ? { ...(songDna.physicsSpec as PhysicsSpec), palette: hookDanceOverrides.palette }
+              : songDna.physicsSpec as PhysicsSpec}
+          beats={beatGrid.beats.map((t, i) => ({
+            time: t,
+            isDownbeat: i % 4 === 0,
+            strength: i % 4 === 0 ? 1 : 0.6,
+          }))}
+          lines={data.lines.filter(l => l.tag !== "adlib")}
+          title={(data.title && data.title !== "Unknown" && data.title !== "Untitled") ? data.title : audioFile.name.replace(/\.[^.]+$/, "")}
+          artist={(data.artist && data.artist !== "Unknown" && data.artist !== "UNKNOWN") ? data.artist : "—"}
+          audioFile={audioFile}
+          seed={`${data.title}-lyric-dance`}
+          mood={songDna.mood}
+          description={songDna.description}
         />
       )}
 
