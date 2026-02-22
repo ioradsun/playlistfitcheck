@@ -26,6 +26,8 @@ import Terms from "./pages/Terms";
 import ArtistStage from "./pages/ArtistStage";
 // Lazy-load ShareableHook — standalone page, no need in main bundle
 const ShareableHook = lazy(() => import("./pages/ShareableHook"));
+// Lazy-load ShareableLyricDance — standalone page
+const ShareableLyricDance = lazy(() => import("./pages/ShareableLyricDance"));
 
 const queryClient = new QueryClient();
 
@@ -64,6 +66,10 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
+            {/* ── Lyric Dance: lightweight path ── */}
+            <Route path="/:artistSlug/:songSlug/lyric-dance" element={
+              <Suspense fallback={<HookEmbedFallback />}><ShareableLyricDance /></Suspense>
+            } />
             {/* ── Hook embed: lightweight path — no Auth/SiteCopy/Wallet/Sidebar overhead ── */}
             <Route path="/:artistSlug/:songSlug/:hookSlug" element={
               <Suspense fallback={<HookEmbedFallback />}><ShareableHook /></Suspense>
