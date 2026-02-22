@@ -141,6 +141,29 @@ const Index = () => {
   // Auto-load project from URL param for any tool
   const projectLoadedRef = useRef<string | null>(null);
   useEffect(() => {
+    if (!projectId) {
+      projectLoadedRef.current = null;
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (activeTab !== "lyric" || !projectId || !user) return;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("saved_lyrics")
+        .select("*")
+        .eq("id", projectId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (error || !data) return;
+      setLoadedLyric(data);
+      projectLoadedRef.current = projectId;
+    })();
+  }, [activeTab, projectId, user?.id]);
+
+  useEffect(() => {
     if (!projectId || projectLoadedRef.current === projectId) return;
     const tab = activeTab;
     
