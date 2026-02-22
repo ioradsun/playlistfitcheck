@@ -445,8 +445,8 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
                 </span>
               </div>
 
-              {/* Right tile (B) — FMLY badge top-left of right half */}
-              <div className="absolute top-2 left-[calc(50%+4px)]">
+              {/* Right tile (B) — FMLY badge top-right */}
+              <div className="absolute top-2 right-2">
                 <span
                   className="inline-flex items-center px-1.5 py-0.5 rounded-sm"
                   style={{ background: "rgba(0,0,0,0.7)", fontFamily: "'Space Mono', monospace", fontSize: "10px", color: "#fff", letterSpacing: "0.05em" }}
@@ -454,6 +454,18 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
                   {votedSide === "b" ? voteCountB : (totalVotes - voteCountB)} FMLY
                 </span>
               </div>
+
+              {/* Centered "LOCKED" text between the two FMLY badges */}
+              {cardState === "scorecard" && (
+                <motion.p
+                  animate={{ opacity: [0.6, 1, 0.6] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute top-2 left-1/2 -translate-x-1/2 font-mono text-[9px] uppercase tracking-[0.1em] text-white/50 whitespace-nowrap"
+                  style={{ background: "rgba(0,0,0,0.5)", padding: "2px 6px", borderRadius: "2px" }}
+                >
+                  LOCKED — FMLY VOTES INCOMING
+                </motion.p>
+              )}
 
             </motion.div>
           )}
@@ -464,24 +476,6 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
       {isBattle && (
         <div className="px-3 py-2.5">
           <AnimatePresence mode="wait">
-            {/* STATE 4: SCORECARD */}
-            {cardState === "scorecard" && votedSide && (
-              <motion.div
-                key="scorecard"
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <motion.p
-                  animate={{ opacity: [0.6, 1, 0.6] }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                  className="text-center font-mono text-[10px] uppercase tracking-[0.15em] text-white/50"
-                >
-                  LOCKED — FMLY VOTES INCOMING
-                </motion.p>
-              </motion.div>
-            )}
-
             {/* STATE 5: RESULTS */}
             {cardState === "results" && votedSide && (
               <motion.div
@@ -570,6 +564,21 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
           </p>
         </div>
       )}
+
+      {/* Always-visible comment input */}
+      <div className="px-3 pb-3">
+        <input
+          type="text"
+          placeholder="DROP YOUR TAKE LIVE"
+          className="w-full bg-muted/40 border border-border/30 rounded px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40 transition-colors"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.target as HTMLInputElement).value.trim()) {
+              toast.info("Comments coming soon");
+              (e.target as HTMLInputElement).value = "";
+            }
+          }}
+        />
+      </div>
     </div>
   );
 }
