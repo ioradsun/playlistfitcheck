@@ -65,10 +65,10 @@ export interface ConstellationNode {
 }
 
 export const RIVER_ROWS = [
-  { y: 0.35, speed: 0.2, opacity: 0.07, direction: -1 },
-  { y: 0.43, speed: 0.3, opacity: 0.05, direction: 1 },
-  { y: 0.57, speed: 0.4, opacity: 0.04, direction: -1 },
-  { y: 0.65, speed: 0.55, opacity: 0.03, direction: 1 },
+  { y: 0.12, speed: 0.2, opacity: 0.12, direction: -1 },
+  { y: 0.20, speed: 0.3, opacity: 0.09, direction: 1 },
+  { y: 0.80, speed: 0.4, opacity: 0.09, direction: -1 },
+  { y: 0.88, speed: 0.55, opacity: 0.07, direction: 1 },
 ];
 
 export const HOOK_COLUMNS =
@@ -164,10 +164,10 @@ export function useHookCanvas(
       if (node.y < -0.1) node.y = 1.1;
       if (node.y > 1.1) node.y = -0.1;
 
-      ctx.font = "300 5px system-ui, -apple-system, sans-serif";
+      ctx.font = "300 10px system-ui, -apple-system, sans-serif";
       ctx.globalAlpha = isHookFracture ? node.baseOpacity * 0.5 : node.baseOpacity;
       ctx.fillStyle = "#ffffff";
-      const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
+      const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
       ctx.fillText(truncated, node.x * w, node.y * h);
     }
 
@@ -181,13 +181,13 @@ export function useHookCanvas(
         const rowComments = riverNodes.filter(n => n.riverRowIndex === ri);
         if (rowComments.length === 0) continue;
 
-        ctx.font = "300 6px system-ui, -apple-system, sans-serif";
+        ctx.font = "300 11px system-ui, -apple-system, sans-serif";
         ctx.globalAlpha = row.opacity;
         ctx.fillStyle = "#ffffff";
 
         const rowY = row.y * h;
         const textWidths = rowComments.map(n => {
-          const t = n.text.length > 30 ? n.text.slice(0, 30) + "…" : n.text;
+          const t = n.text.length > 40 ? n.text.slice(0, 40) + "…" : n.text;
           return ctx.measureText(t).width;
         });
         const totalWidth = textWidths.reduce((a, tw) => a + tw + 120, 0);
@@ -195,7 +195,7 @@ export function useHookCanvas(
 
         let xBase = offsets[ri];
         for (let ci = 0; ci < rowComments.length; ci++) {
-          const truncated = rowComments[ci].text.length > 30 ? rowComments[ci].text.slice(0, 30) + "…" : rowComments[ci].text;
+          const truncated = rowComments[ci].text.length > 40 ? rowComments[ci].text.slice(0, 40) + "…" : rowComments[ci].text;
           let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
           if (drawX > w + 100) drawX -= wrapWidth;
           ctx.fillText(truncated, drawX, rowY);
@@ -208,11 +208,13 @@ export function useHookCanvas(
     for (const node of nodes) {
       if (node.phase === "center") {
         const elapsed = now - node.phaseStartTime;
-        ctx.font = "300 8px system-ui, -apple-system, sans-serif";
-        ctx.globalAlpha = 0.35;
+        ctx.font = "400 14px system-ui, -apple-system, sans-serif";
+        ctx.globalAlpha = 0.45;
         ctx.fillStyle = "#ffffff";
-        const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
+        ctx.textAlign = "center";
+        const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
         ctx.fillText(truncated, w / 2, h / 2);
+        ctx.textAlign = "start";
         if (elapsed >= 800) { node.phase = "transitioning"; node.phaseStartTime = now; }
       } else if (node.phase === "transitioning") {
         const elapsed = now - node.phaseStartTime;
@@ -222,14 +224,14 @@ export function useHookCanvas(
         const cx = 0.5, cy = 0.5;
         const curX = cx + (node.seedX - cx) * t * 0.3;
         const curY = cy + (targetY - cy) * t;
-        const size = 8 - (8 - 6) * t;
-        const targetOpacity = targetRow?.opacity || 0.05;
-        const opacity = 0.35 - (0.35 - targetOpacity) * t;
+        const size = 14 - (14 - 11) * t;
+        const targetOpacity = targetRow?.opacity || 0.09;
+        const opacity = 0.45 - (0.45 - targetOpacity) * t;
 
         ctx.font = `300 ${Math.round(size)}px system-ui, -apple-system, sans-serif`;
         ctx.globalAlpha = opacity;
         ctx.fillStyle = "#ffffff";
-        const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
+        const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
         ctx.fillText(truncated, curX * w, curY * h);
         node.x = curX; node.y = curY; node.currentSize = size;
         if (elapsed >= 4000) { node.phase = "river"; node.phaseStartTime = now; }
