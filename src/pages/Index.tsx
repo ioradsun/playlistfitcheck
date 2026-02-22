@@ -462,6 +462,17 @@ const Index = () => {
   const handleNewMix = useCallback(() => { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }, [navigate]);
   const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }, [navigate]);
 
+  const handleSidebarTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+
+    // Clicking the main LyricFit nav item should always return to a fresh upload flow
+    // while still keeping LyricFit active so recents expand in the sidebar.
+    if (tab === "lyric") {
+      projectLoadedRef.current = null;
+      setLoadedLyric(null);
+    }
+  }, [setActiveTab]);
+
   const handleLoadProject = useCallback((type: string, data: any) => {
     // Reset everything first
     setResult(null);
@@ -610,7 +621,7 @@ const Index = () => {
 
   return (
     <>
-      <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} onLoadProject={handleLoadProject} refreshKey={sidebarRefreshKey} />
+      <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} refreshKey={sidebarRefreshKey} />
       <SidebarInset className="h-svh !min-h-0 overflow-hidden">
         {/* Minimal top header with pill badge */}
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
