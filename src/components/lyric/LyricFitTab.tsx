@@ -234,14 +234,16 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       if (user) {
         projectId = crypto.randomUUID();
         const audioUrl = await uploadAudioImmediately(file, user.id, projectId);
-        if (audioUrl) {
-          await supabase.from("saved_lyrics").upsert({
-            id: projectId,
-            user_id: user.id,
-            audio_url: audioUrl,
-            updated_at: new Date().toISOString(),
-          });
-        }
+        await supabase.from("saved_lyrics").upsert({
+          id: projectId,
+          user_id: user.id,
+          title: resolveProjectTitle(data.title, file.name),
+          artist: data.artist || "Unknown",
+          lines: data.lines,
+          filename: file.name,
+          ...(audioUrl ? { audio_url: audioUrl } : {}),
+          updated_at: new Date().toISOString(),
+        });
       }
 
       await new Promise((r) => setTimeout(r, 600));

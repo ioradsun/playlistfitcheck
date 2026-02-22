@@ -113,7 +113,7 @@ const App = () => (
                     <Route
                       path="/admin"
                       element={
-                        <Suspense fallback={<PageLayout subtitle="Admin" />}>
+                        <Suspense fallback={<PageLayout subtitle="Admin"><div /></PageLayout>}>
                           <Admin />
                         </Suspense>
                       }

@@ -176,6 +176,7 @@ export default function Admin() {
 
               <div className="divide-y divide-border max-h-[65vh] overflow-y-auto">
                 {userRows.map((u) => {
+                  const initials = (u.display_name || "?").slice(0, 2).toUpperCase();
                   return (
                     <div key={u.id}>
                       <div className="px-4 py-3 flex flex-col sm:grid sm:grid-cols-[1fr_1fr_70px_60px_60px_70px_90px_36px] gap-2 sm:items-center transition-colors group hover:bg-muted/30">
