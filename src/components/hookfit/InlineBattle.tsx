@@ -124,18 +124,21 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   }, [battleId]);
 
   // ── Canvas engines ──────────────────────────────────────────────
+  // When one side is actively playing audio, pause the other's animation
   const isActive = mode !== "dark";
+  const aActive = isActive && (activePlaying === null || activePlaying === "a");
+  const bActive = isActive && !!hookB && (activePlaying === null || activePlaying === "b");
 
   const handleEndA = useCallback(() => onHookEnd?.("a"), [onHookEnd]);
   const handleEndB = useCallback(() => onHookEnd?.("b"), [onHookEnd]);
 
   const hookACanvas = useHookCanvas(
     canvasRefA, containerRefA, hookA, constellationRefA, riverOffsetsRefA,
-    isActive, handleEndA,
+    aActive, handleEndA,
   );
   const hookBCanvas = useHookCanvas(
     canvasRefB, containerRefB, hookB, constellationRefB, riverOffsetsRefB,
-    isActive && !!hookB, handleEndB,
+    bActive, handleEndB,
   );
 
   // ── MASTER AUDIO RULE ──────────────────────────────────────────
