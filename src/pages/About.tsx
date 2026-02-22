@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
-const DEFAULT_TOOL_ORDER = ["songfit", "hitfit", "vibefit", "profit", "playlist", "mix", "lyric", "dreamfit"];
+const DEFAULT_TOOL_ORDER = ["songfit", "hookfit", "hitfit", "vibefit", "profit", "playlist", "mix", "lyric", "dreamfit"];
 
 const TABS = ["Origin Story", "The Tools"] as const;
 
@@ -90,7 +90,10 @@ export default function About() {
             {about.tools_intro || "Six tools. One goal: give independent artists the clarity they deserve. No gatekeeping, no vague advice. Just data, context, and a little taste."}
           </p>
 
-          {(siteCopy.features?.tools_order ?? DEFAULT_TOOL_ORDER).filter((key) => {
+          {([
+            ...((siteCopy.features?.tools_order ?? []).filter((key) => DEFAULT_TOOL_ORDER.includes(key))),
+            ...DEFAULT_TOOL_ORDER.filter((key) => !(siteCopy.features?.tools_order ?? []).includes(key)),
+          ]).filter((key) => {
             const enabled = siteCopy.features?.tools_enabled?.[key];
             return enabled === undefined || enabled === true;
           }).map((key, i) => {

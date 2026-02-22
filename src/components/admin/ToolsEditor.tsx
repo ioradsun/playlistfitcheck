@@ -7,6 +7,7 @@ import { Reorder, useDragControls } from "framer-motion";
 
 const ALL_TOOLS = [
   { key: "songfit",  label: "CrowdFit" },
+  { key: "hookfit",  label: "HookFit" },
   { key: "hitfit",   label: "HitFit" },
   { key: "vibefit",  label: "VibeFit" },
   { key: "profit",   label: "ProFit" },
