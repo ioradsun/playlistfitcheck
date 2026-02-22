@@ -634,56 +634,9 @@ export default function ShareableLyricDance() {
         </AnimatePresence>
       </div>
 
-      {/* Below-canvas content — identical to ShareableHook single-hook layout */}
+      {/* Below-canvas content */}
       <div className="w-full overflow-y-auto" style={{ background: "#0a0a0a" }}>
         <div className="max-w-[480px] mx-auto px-5 py-6 space-y-6">
-          {/* Artist identity block */}
-          <div className="flex items-center gap-3">
-            {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={profile.display_name || data.artist_name}
-                className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                <span className="text-sm font-mono text-white/40">
-                  {(data.artist_name || "?")[0].toUpperCase()}
-                </span>
-              </div>
-            )}
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold leading-tight text-white truncate">
-                {profile?.display_name || data.artist_name}
-              </h1>
-              <p className="text-sm italic leading-snug text-white/60 truncate">
-                {data.song_name}
-              </p>
-            </div>
-          </div>
-
-          {/* Listen Now button */}
-          <button
-            onClick={() => {
-              if (audioRef.current) {
-                const wasMuted = audioRef.current.muted;
-                audioRef.current.muted = !wasMuted;
-                if (wasMuted) audioRef.current.play().catch(() => {});
-                setMuted(!wasMuted);
-              }
-            }}
-            className="w-full py-3 text-sm font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
-          >
-            {muted ? "Listen Now" : "Mute"}
-          </button>
-
-          {/* Fire count */}
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-5xl flex items-center gap-2">
-              <span>🔥</span>
-              <span className="font-bold text-white tabular-nums">{fireCount}</span>
-            </span>
-          </div>
 
           {/* Comment input */}
           <div className="space-y-2">
