@@ -361,7 +361,18 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
 
         {/* Centered "Tap to unmute" across both videos */}
         {isMuted && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <div
+            className="absolute inset-0 flex items-center justify-center z-20 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              userMutedRef.current = false;
+              setIsMuted(false);
+              // Unmute the active side
+              if (activeHookSide === "a" && hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
+              if (activeHookSide === "b" && hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
+              setTappedSides(prev => new Set(prev).add(activeHookSide));
+            }}
+          >
             <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
               Tap to unmute
             </span>
