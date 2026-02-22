@@ -52,6 +52,59 @@ interface DanceComment {
 
 const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed";
 
+/** Draggable progress bar overlay at bottom of canvas */
+function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
+  audioRef: React.MutableRefObject<HTMLAudioElement | null>;
+  data: LyricDanceData;
+  progressBarRef: React.RefObject<HTMLDivElement>;
+  onMouseDown: (e: React.MouseEvent) => void;
+  onTouchStart: (e: React.TouchEvent) => void;
+  palette: string[];
+}) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const lines = data.lyrics;
+    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
+    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
+    const duration = songEnd - songStart;
+
+    const update = () => {
+      const p = duration > 0 ? (audio.currentTime - songStart) / duration : 0;
+      setProgress(Math.max(0, Math.min(1, p)));
+    };
+    const id = setInterval(update, 100);
+    return () => clearInterval(id);
+  }, [audioRef, data]);
+
+  return (
+    <div
+      ref={progressBarRef}
+      onMouseDown={onMouseDown}
+      onTouchStart={onTouchStart}
+      className="absolute bottom-0 left-0 right-0 z-10 h-3 cursor-pointer group"
+      style={{ touchAction: "none" }}
+    >
+      <div className="absolute inset-0 bg-white/5" />
+      <div
+        className="absolute left-0 top-0 h-full transition-none"
+        style={{
+          width: `${progress * 100}%`,
+          background: palette[1] || "#a855f7",
+          opacity: 0.6,
+        }}
+      />
+      {/* Thumb */}
+      <div
+        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ left: `calc(${progress * 100}% - 6px)` }}
+      />
+    </div>
+  );
+}
+
 export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
@@ -65,9 +118,11 @@ export default function ShareableLyricDance() {
   // Comment input (ShareableHook-style)
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [comments, setComments] = useState<DanceComment[]>([]);
-  const [copied, setCopied] = useState(false);
+
+  // Progress bar dragging
+  const [isDragging, setIsDragging] = useState(false);
+  const progressBarRef = useRef<HTMLDivElement>(null);
 
   // Audio
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -395,14 +450,7 @@ export default function ShareableLyricDance() {
         ctx.restore();
       }
 
-      // Progress bar
-      const songProgress = (currentTime - songStart) / (songEnd - songStart);
-      ctx.save();
-      ctx.fillStyle = palette[1] || "#a855f7";
-      ctx.globalAlpha = 0.4;
-      ctx.fillRect(0, ch - 3, cw * Math.max(0, Math.min(1, songProgress)), 3);
-      ctx.restore();
-
+      // Progress bar — rendered via HTML overlay now, skip canvas bar
       // System label
       ctx.save();
       ctx.font = `${Math.max(9, Math.round(cw * 0.012))}px "Geist Mono", monospace`;
@@ -480,23 +528,42 @@ export default function ShareableLyricDance() {
     }
   }, [inputText, data, hasSubmitted]);
 
-  // ── Placeholder cycling ───────────────────────────────────────────────────
+  // ── Progress bar seek ──────────────────────────────────────────────────────
+
+  const seekToPosition = useCallback((clientX: number) => {
+    if (!progressBarRef.current || !audioRef.current || !data) return;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const lines = data.lyrics;
+    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
+    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
+    audioRef.current.currentTime = songStart + ratio * (songEnd - songStart);
+  }, [data]);
+
+  const handleProgressDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    setIsDragging(true);
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    seekToPosition(clientX);
+  }, [seekToPosition]);
 
   useEffect(() => {
-    if (comments.length === 0) return;
-    const interval = setInterval(() => {
-      setPlaceholderIndex(i => (i + 1) % Math.min(comments.length, 20));
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [comments.length]);
-
-  // ── Share ─────────────────────────────────────────────────────────────────
-
-  const handleShare = useCallback(() => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }, []);
+    if (!isDragging) return;
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = "touches" in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      seekToPosition(clientX);
+    };
+    const onUp = () => setIsDragging(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, [isDragging, seekToPosition]);
 
   // Badge timer
   useEffect(() => { setTimeout(() => setBadgeVisible(true), 1000); }, []);
@@ -534,11 +601,7 @@ export default function ShareableLyricDance() {
     );
   }
 
-  const recentForPlaceholder = comments.slice(-20);
-  const placeholder = recentForPlaceholder.length > 0
-    ? recentForPlaceholder[placeholderIndex % recentForPlaceholder.length]?.text || "COMMENT LIVE TO THE VIDEO FMLY STYLE"
-    : "COMMENT LIVE TO THE VIDEO FMLY STYLE";
-
+  const placeholder = "DROP YOUR TAKE LIVE";
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -625,6 +688,45 @@ export default function ShareableLyricDance() {
           )}
         </AnimatePresence>
 
+        {/* Top-left identity label (visible after cover dismissed) */}
+        {!showCover && data && (
+          <div className="absolute top-4 left-4 z-10 flex items-center gap-2.5">
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={profile.display_name || data.artist_name}
+                className="w-8 h-8 rounded-full object-cover border border-white/10"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                <span className="text-xs font-mono text-white/40">
+                  {(data.artist_name || "?")[0].toUpperCase()}
+                </span>
+              </div>
+            )}
+            <div className="flex flex-col">
+              <span className="text-[11px] font-semibold text-white/70 leading-tight truncate max-w-[180px]">
+                {data.song_name}
+              </span>
+              <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">
+                {profile?.display_name || data.artist_name}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Draggable progress bar */}
+        {!showCover && data && (
+          <ProgressBar
+            audioRef={audioRef}
+            data={data}
+            progressBarRef={progressBarRef}
+            onMouseDown={handleProgressDown}
+            onTouchStart={handleProgressDown}
+            palette={data.palette}
+          />
+        )}
+
         <AnimatePresence>
           {showMuteIcon && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute bottom-4 left-4 z-10 text-white/50">
@@ -635,42 +737,32 @@ export default function ShareableLyricDance() {
       </div>
 
       {/* Below-canvas content */}
-      <div className="w-full overflow-y-auto" style={{ background: "#0a0a0a" }}>
-        <div className="max-w-[480px] mx-auto px-5 py-6 space-y-6">
+      <div className="w-full" style={{ background: "#0a0a0a" }}>
+        <div className="max-w-[480px] mx-auto px-5 py-4 space-y-3">
 
           {/* Comment input */}
-          <div className="space-y-2">
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-center text-white/30">
-              COMMENT LIVE TO THE VIDEO FMLY STYLE
+          {hasSubmitted ? (
+            <p className="text-center text-sm text-white/30">
+              your words are on the video
             </p>
-            {hasSubmitted ? (
-              <p className="text-center text-sm text-white/30">
-                your words are on the video
-              </p>
-            ) : (
-              <div className="relative">
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-                  placeholder={placeholder}
-                  maxLength={200}
-                  className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
-                />
-              </div>
-            )}
-          </div>
+          ) : (
+            <div className="relative">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+                placeholder={placeholder}
+                maxLength={200}
+                className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 pr-20 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/20 pointer-events-none">
+                Press Enter
+              </span>
+            </div>
+          )}
 
-          {/* Share */}
-          <button
-            onClick={handleShare}
-            className="w-full py-3 text-sm font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
-          >
-            {copied ? "Copied" : "SEND THIS"}
-          </button>
-
-          <p className="text-center text-[10px] text-white/15 pb-4">
+          <p className="text-center text-[10px] text-white/15 pb-2">
             Built on tools.fm — every artist's fingerprint is unique to them
           </p>
         </div>
