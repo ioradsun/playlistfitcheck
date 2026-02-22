@@ -1,11 +1,29 @@
 /**
- * HookDanceEngine — Deterministic render loop slaved to audio.currentTime.
+ * Master Layout Spec — Lyric Safety & Focus Invariants
  *
- * Scans the BeatGrid for events between prev and current playhead,
- * fires impulses into the PhysicsIntegrator, and emits PhysicsState
- * via a callback every animation frame.
+ * 1) Text is the hero:
+ *    - Background animation must sit behind lyric readability.
+ *    - Text effects can be expressive but never overpower legibility.
  *
- * Phase 2 only outputs state — Phase 3 will consume it for Canvas rendering.
+ * 2) 80% viewport rule:
+ *    - Lyric safe zone is based on viewport/container-relative sizing.
+ *    - Renderers target the inner ~80% area with explicit safe padding.
+ *
+ * 3) Zero clipping tolerance:
+ *    - Physics motion budgets scale from container dimensions.
+ *    - EffectRegistry applies clip guards so glyph transforms stay in-bounds.
+ *    - validateLayout() is the final safety net before lyric transitions.
+ *
+ * 4) Mobile-first:
+ *    - Layout assumptions must hold at narrow portrait viewports.
+ *    - Dynamic font and line-height reductions are applied when overflow risk is detected.
+ *
+ * Coordination across engine files:
+ * - PhysicsIntegrator: computes viewport-aware safe motion envelopes.
+ * - EffectRegistry: clamps animated glyph positions to lyric-safe bounds.
+ * - SystemStyles: computes responsive type + stacked layouts for constrained screens.
+ * - SystemBackgrounds: keeps ambience subordinate to lyric focal clarity.
+ * - HookDanceEngine: validates fit pre-transition and orchestrates deterministic timing.
  */
 
 import {
@@ -27,6 +45,22 @@ export interface HookDanceCallbacks {
   onFrame: (state: PhysicsState, time: number, beatCount: number) => void;
   /** Fires when the hook region ends or is stopped */
   onEnd: () => void;
+}
+
+export interface LayoutValidationInput {
+  textWidth: number;
+  textHeight: number;
+  safeWidth: number;
+  safeHeight: number;
+  fontSize: number;
+  lineHeight: number;
+}
+
+export interface LayoutValidationResult {
+  fontSize: number;
+  lineHeight: number;
+  fits: boolean;
+  steps: number;
 }
 
 export class HookDanceEngine {
@@ -80,6 +114,49 @@ export class HookDanceEngine {
   /** Get the PRNG for downstream deterministic randomness */
   get prng(): () => number {
     return this.rand;
+  }
+
+  setViewportBounds(width: number, height: number) {
+    this.integrator.setViewportBounds(width, height);
+  }
+
+  /**
+   * Last-resort safety net before lyric transitions.
+   * Iteratively shrinks font-size / line-height until text fits safe zone.
+   */
+  validateLayout(input: LayoutValidationInput): LayoutValidationResult {
+    let fontSize = input.fontSize;
+    let lineHeight = input.lineHeight;
+    let width = input.textWidth;
+    let height = input.textHeight;
+    let steps = 0;
+
+    const widthRatio = input.safeWidth > 0 ? input.safeWidth / Math.max(1, width) : 1;
+    const heightRatio = input.safeHeight > 0 ? input.safeHeight / Math.max(1, height) : 1;
+    let fitRatio = Math.min(1, widthRatio, heightRatio);
+
+    if (fitRatio < 1) {
+      fontSize = Math.max(12, fontSize * fitRatio);
+      lineHeight = Math.max(1.0, lineHeight * Math.min(1, fitRatio + 0.05));
+      width *= fitRatio;
+      height *= fitRatio;
+      steps++;
+    }
+
+    while ((width > input.safeWidth || height > input.safeHeight) && steps < 10) {
+      fontSize = Math.max(12, fontSize * 0.94);
+      lineHeight = Math.max(1.0, lineHeight * 0.98);
+      width *= 0.94;
+      height *= 0.94;
+      steps++;
+    }
+
+    return {
+      fontSize: Math.round(fontSize),
+      lineHeight,
+      fits: width <= input.safeWidth && height <= input.safeHeight,
+      steps,
+    };
   }
 
   /** Start the engine — seeks audio to hookStart and begins ticking */
