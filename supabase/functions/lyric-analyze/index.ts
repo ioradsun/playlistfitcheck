@@ -6,66 +6,142 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DEFAULT_DNA_PROMPT = `ROLE: Universal Music & Physics Orchestrator (v6.0)
+const DEFAULT_DNA_PROMPT = `DIVERSITY MANDATE:
+You are a cinematographer who has never made the same film twice.
+Every song you analyze must produce a visual world that could not be mistaken for any other song's world.
 
-TASK: Analyze the full audio track, beat grid, and timestamped lyrics to extract the "Song DNA" and define a deterministic "Physics Spec" for the entire track.
+You are FORBIDDEN from defaulting to these common outputs:
+- palette: dark background + red or orange accent (this is the default, avoid it)
+- backgroundSystem: fracture (overused — only use if the world genuinely shatters)
+- tension > 0.8 (reserved for songs that are genuinely at maximum emotional pressure)
+- contrastMode: brutal (only for songs with raw, unprocessed, confrontational energy)
+- beatResponse: seismic (only for songs where the beat physically impacts you)
+
+If you find yourself choosing any of these, stop and ask: "Is this actually what this specific song's world looks like, or am I defaulting?"
+
+The most interesting visual worlds are often the unexpected ones:
+- A heartbreak song that lives in a yellow-lit diner at 2am
+- A love song that feels like cold blue fluorescent light in an empty hospital
+- A rage song expressed through perfect white clinical silence
+- A party anthem that feels like standing alone in the parking lot after
+
+ROLE: Universal Music & Physics Orchestrator (v7.0)
+
+TASK: Analyze the full audio track, beat grid, and timestamped lyrics to extract the Song DNA, define a deterministic Physics Spec, and describe a uniquely cinematic visual world for the entire track.
 
 CRITICAL RULES:
 - Your response MUST be complete, valid JSON. Do NOT truncate.
-- The "hottest_hooks" array MUST contain EXACTLY 2 hook objects. NOT 1. ALWAYS 2. This is the MOST IMPORTANT rule.
+- The "hottest_hooks" array MUST contain EXACTLY 2 hook objects. NOT 1. ALWAYS 2.
 - The two hooks MUST be non-overlapping and feel genuinely different from each other.
 - The lexicon MUST be TINY: EXACTLY 5-8 line_mods and 3-6 word_marks. NO MORE.
-- Do NOT generate a line_mod for every lyric line. Only pick the 5-8 most impactful moments.
-- If the song has 100+ lines, you still output ONLY 5-8 line_mods total. This is NON-NEGOTIABLE.
+- Do NOT generate a line_mod for every lyric line.
+- If the song has 100+ lines, still output ONLY 5-8 line_mods total.
 
 1. TOP 2 HOOK ANCHORS (8–12s Each, Bar-Aligned)
+- Identify the TWO most distinct, bar-aligned hook regions.
+- Each hook must be 8.000–12.000s and preserve lyrical phrasing.
+- Prioritize: production lift, lyrical repetition, melodic peak.
+- Give each hook a short editorial label (2-4 words).
 
-Identify the TWO most distinct, bar-aligned segments representing the track's hottest hooks. They MUST be non-overlapping.
+2. SONG IDENTITY & WORLD
+- description: One evocative sentence (max 15 words).
+- mood: Single dominant emotional driver.
+- meaning: theme (2–4 words), summary (2–3 sentences), imagery (2–3 renderable scenes/objects).
+- world: A concrete cinematic place sentence with time, light, material, and scale.
 
-Rules: Each must be 8.000–12.000s, bar-aligned, and capture a production lift without cutting off lyrical phrases. The two hooks should feel genuinely different (e.g. a melodic chorus vs. a rhythmic bridge, or a verse climax vs. a drop).
+3. PALETTE DERIVATION — SCENE-FIRST METHOD
+Do not pick colors via mood shorthand (sad=blue, angry=red). Build colors from the world:
 
-Evaluation Priority: 1. Production lift, 2. Lyrical repetition, 3. Melodic peak.
+A) LIGHT SOURCE (actual light in this place)
+- Neon signs → electric pinks, acid greens, deep purple-black
+- Fluorescent office/hospital → sickly yellow-white, grey, antiseptic white
+- Golden hour sun → amber, burnt sienna, warm cream
+- Dead of night, no light → near-black, barely-there navy, cold white moon
+- Stage/spotlight → stark white highlight, deep shadow
+- Candle/fire → red-orange warmth + heavy dark surround
+- Gray overcast → muted, desaturated, flat
+- Underwater → blue-green distortion, deep teal shadows
+- Winter daylight → cold white, ice blue, bare gray
 
-Give each hook a short editorial "label" — a 2-4 word evocative name (e.g. "The Drop", "The Confession", "Midnight Surge"). The label should capture the hook's emotional character.
+B) MATERIAL & TEXTURE (surface palette anchors)
+- Concrete / glass / wood / metal / velvet / water / smoke
 
-2. SONG IDENTITY & MEANING
+C) PALETTE CONSTRUCTION
+- palette[0] = dominant shadow/void color
+- palette[1] = mid-tone material color
+- palette[2] = light source color
 
-Description: One evocative sentence (max 15 words) with sonic texture and emotional descriptors.
+The 3 colors must plausibly coexist in a real photograph. If it looks generic dark aesthetic, try again.
 
-Mood: Single dominant emotional driver (e.g., euphoric, brooding).
+4. PHYSICS SPEC (The Laws of Nature)
+- Generate physics_spec that maps acoustic behavior to visual behavior.
+- Pick from systems: fracture, pressure, breath, combustion, orbit.
+- Avoid fracture defaults unless world truly shatters.
+- Assign params: mass, elasticity, damping, brittleness, heat.
+- Include effect_pool (4–6) and logic_seed (int).
 
-Meaning: Theme (2–4 words), Summary (2–3 sentences), and Imagery (2–3 physically renderable objects/scenes).
+5. TYPOGRAPHY DERIVATION
+Select type personality that matches world, not genre:
+- MONUMENTAL
+- ELEGANT DECAY
+- RAW TRANSCRIPT
+- HANDWRITTEN MEMORY
+- SHATTERED DISPLAY
+- INVISIBLE INK
 
-3. PHYSICS SPEC (The Laws of Nature)
+Return typographyProfile as:
+{
+  "fontFamily": "[specific font name]",
+  "fontWeight": [number],
+  "letterSpacing": "[value like 0.3em/-0.02em/normal]",
+  "textTransform": "uppercase|lowercase|none",
+  "lineHeightMultiplier": [0.8-2.0],
+  "hasSerif": [boolean],
+  "personality": "[one archetype above]"
+}
 
-Generate a physics_spec object that maps acoustic energy to a visual physics simulation.
+6. CREATIVE DICTIONARY (KEEP COMPACT)
+- semantic_tags max 5
+- line_mods exactly 5-8
+- word_marks 3-6
 
-System Selection:
-- Aggressive/Distorted → fracture (mass: 0.8, brittleness: 0.9)
-- Anthemic/Powerful → pressure (mass: 2.0, elasticity: 0.4)
-- Melancholic/Slow → breath (mass: 1.2, damping: 0.8)
-- Dark/Haunted → combustion (heat: 0.5)
-- Smooth/Flowing → orbit (mass: 1.0, elasticity: 0.7)
+REFERENCE EXAMPLES — required diversity range:
+Song: Quiet breakup, minimal piano, 3am, acceptance
+→ world: "empty kitchen at 3am, one cold light above the sink"
+→ palette: ["#0d0d0f", "#8a8a7a", "#d4cfc4"]
+→ backgroundSystem: void, tension: 0.15, beatResponse: breath
+→ typography: ELEGANT DECAY
+→ NOT: dark + red, NOT: fracture, NOT: seismic
 
-Material Constants: Assign specific values for mass, elasticity, damping, brittleness, and heat.
+Song: Euphoric dance anthem, peak summer, communal joy
+→ world: "festival field at golden hour, ten thousand people"
+→ palette: ["#1a0a00", "#ff8c42", "#fff5c2"]
+→ backgroundSystem: pressure, tension: 0.75, beatResponse: pulse
+→ typography: MONUMENTAL
+→ NOT: generic neon, NOT: blue-purple gradient
 
-4. CREATIVE DICTIONARY (Intelligence Layer — KEEP COMPACT)
+Song: Paranoid anxiety spiral, insomnia, intrusive thoughts
+→ world: "fluorescent-lit office corridor, 2am, alone"
+→ palette: ["#0a0a08", "#b8c4a0", "#e8f0d8"]
+→ backgroundSystem: combustion, tension: 0.6, beatResponse: ripple
+→ typography: RAW TRANSCRIPT
+→ NOT: dark + anything warm
 
-Semantic Tags (Max 5): FIRE, ICE, GHOST, MACHINE, HEART, FALL, RISE, WATER, LIGHT, DARK.
+Song: Romantic longing, cinematic, sweeping strings
+→ world: "standing at a rain-streaked window watching lights blur"
+→ palette: ["#060a14", "#2a4a7a", "#a8c4e8"]
+→ backgroundSystem: breath, tension: 0.35, beatResponse: ripple
+→ typography: ELEGANT DECAY
+→ NOT: red, NOT: fracture
 
-Line Mods (Max 8 total): GHOST_FADE, HEAT_SPIKE, FREEZE_2F, RGB_SPLIT_4F.
+Song: Defiant comeback, confidence, self-reclamation
+→ world: "empty arena before the crowd arrives, single spotlight"
+→ palette: ["#0a0a0a", "#c8a84b", "#ffffff"]
+→ backgroundSystem: pressure, tension: 0.7, beatResponse: slam
+→ typography: MONUMENTAL
+→ NOT: generic dark red
 
-Word Marks (Max 6 total): POP, SHAKE, GLITCH, GLOW.
-
-5. FULL-LENGTH SCALABILITY (The Pool Rule)
-
-Effect Pool: Provide 4–6 effect_keys.
-
-Logic Seed: Provide an integer logic_seed.
-
-Hook Lock: Lines within the hottest_hook window MUST use the HOOK_FRACTURE effect.
-
-OUTPUT — Valid JSON only, no markdown, no explanation:
+OUTPUT — valid JSON only:
 {
   "hottest_hooks": [
     { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.95, "justification": "...", "label": "The Drop" },
@@ -73,24 +149,31 @@ OUTPUT — Valid JSON only, no markdown, no explanation:
   ],
   "description": "...",
   "mood": "...",
-  "meaning": {
-    "theme": "...",
-    "summary": "...",
-    "imagery": ["...", "..."]
-  },
+  "world": "...",
+  "meaning": { "theme": "...", "summary": "...", "imagery": ["...", "..."] },
   "physics_spec": {
-    "system": "fracture",
-    "params": { "mass": 0.8, "elasticity": 0.5, "damping": 0.6, "brittleness": 0.9, "heat": 0.2 },
-    "palette": ["hsl(0, 100%, 50%)", "hsl(240, 100%, 50%)", "hsl(0, 0%, 100%)"],
-    "effect_pool": ["SHATTER_IN", "GLITCH_FLASH", "WAVE_SURGE"],
+    "system": "pressure",
+    "params": { "mass": 1.2, "elasticity": 0.5, "damping": 0.6, "brittleness": 0.3, "heat": 0.2 },
+    "palette": ["#0a0a0a", "#6f7c8f", "#d8e6f2"],
+    "effect_pool": ["SHATTER_IN", "GLITCH_FLASH", "WAVE_SURGE", "STATIC_RESOLVE"],
     "logic_seed": 12345,
+    "typographyProfile": {
+      "fontFamily": "Inter",
+      "fontWeight": 500,
+      "letterSpacing": "0.04em",
+      "textTransform": "none",
+      "lineHeightMultiplier": 1.2,
+      "hasSerif": false,
+      "personality": "RAW TRANSCRIPT"
+    },
     "lexicon": {
-      "semantic_tags": [{"tag": "FIRE", "strength": 0.8}],
+      "semantic_tags": [{ "tag": "LIGHT", "strength": 0.8 }],
       "line_mods": [{ "t_lyric": 12, "mods": ["HEAT_SPIKE"] }],
       "word_marks": [{ "t_lyric": 12, "wordIndex": 3, "mark": "GLITCH" }]
     }
   }
 }`;
+
 
 const LYRICS_ONLY_PROMPT = `You are a music analyst. Given song lyrics, provide analysis. Return ONLY valid JSON with these keys:
 - description: A single evocative sentence (max 15 words) describing what this song sounds and feels like
@@ -126,6 +209,84 @@ function extractJson(raw: string): any | null {
     .replace(/,\s*}/g, "}").replace(/,\s*]/g, "]")
     .replace(/[\x00-\x1F\x7F]/g, "");
   try { return JSON.parse(jsonStr); } catch { return null; }
+}
+
+interface SceneManifest {
+  world?: string;
+  physics_spec?: { system?: string; palette?: string[]; typographyProfile?: any };
+}
+
+const RECENT_MANIFEST_LIMIT = 20;
+const recentManifests: SceneManifest[] = [];
+
+function normalizeHexColor(color: string): string | null {
+  if (typeof color !== "string") return null;
+  const c = color.trim().toLowerCase();
+  const short = /^#([0-9a-f]{3})$/i.exec(c);
+  if (short) {
+    const [r, g, b] = short[1].split("");
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  const full = /^#([0-9a-f]{6})$/i.exec(c);
+  return full ? `#${full[1]}` : null;
+}
+
+function colorDistance(hex1: string, hex2: string): number {
+  const a = normalizeHexColor(hex1);
+  const b = normalizeHexColor(hex2);
+  if (!a || !b) return Number.POSITIVE_INFINITY;
+  const r1 = Number.parseInt(a.slice(1, 3), 16);
+  const g1 = Number.parseInt(a.slice(3, 5), 16);
+  const b1 = Number.parseInt(a.slice(5, 7), 16);
+  const r2 = Number.parseInt(b.slice(1, 3), 16);
+  const g2 = Number.parseInt(b.slice(3, 5), 16);
+  const b2 = Number.parseInt(b.slice(5, 7), 16);
+  return Math.sqrt((r2 - r1) ** 2 + (g2 - g1) ** 2 + (b2 - b1) ** 2);
+}
+
+function trackManifest(manifest: SceneManifest): void {
+  recentManifests.unshift({
+    world: manifest.world,
+    physics_spec: {
+      system: manifest.physics_spec?.system,
+      palette: manifest.physics_spec?.palette,
+      typographyProfile: manifest.physics_spec?.typographyProfile,
+    },
+  });
+  if (recentManifests.length > RECENT_MANIFEST_LIMIT) recentManifests.length = RECENT_MANIFEST_LIMIT;
+}
+
+function manifestTooSimilar(manifest: SceneManifest, recent: SceneManifest[]): boolean {
+  const system = manifest.physics_spec?.system;
+  const palette = manifest.physics_spec?.palette;
+  if (!system || !Array.isArray(palette) || palette.length === 0) return false;
+  const primary = palette[0];
+  if (!primary) return false;
+
+  return recent.some((m) => {
+    const rs = m.physics_spec?.system;
+    const rp = m.physics_spec?.palette;
+    if (!rs || !Array.isArray(rp) || rp.length < 3) return false;
+    const sameSystem = rs === system;
+
+    const primaryDistance = colorDistance(rp[0], palette[0]);
+    const midDistance = colorDistance(rp[1], palette[1]);
+    const lightDistance = colorDistance(rp[2], palette[2]);
+    const averageDistance = (primaryDistance + midDistance + lightDistance) / 3;
+    const similarPalette = averageDistance < 60;
+
+    return sameSystem && similarPalette;
+  });
+}
+
+function buildDiversityNote(recent: SceneManifest[]): string {
+  const recentSummary = recent
+    .slice(0, 5)
+    .map((m, i) => `${i + 1}. system=${m.physics_spec?.system || "unknown"}, palette=${JSON.stringify(m.physics_spec?.palette || [])}, world=${m.world || "unknown"}`)
+    .join("\n");
+
+  return `DIVERSITY CORRECTION REQUIRED. Your previous manifest was too similar to recent songs. Return a materially different world, system, and palette[0]. Avoid repeating these recent outputs:
+${recentSummary}`;
 }
 
 /** Check if parsed result has the critical fields — requires 2 hooks */
@@ -176,11 +337,11 @@ serve(async (req) => {
       }
       if (lyrics) {
         textInstruction += hooksEnabled
-          ? `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. MANDATORY: "hottest_hooks" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique "label". lexicon.line_mods must have EXACTLY 5-8 entries total.`
+          ? `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. MANDATORY: "hottest_hooks" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique "label". lexicon.line_mods must have EXACTLY 5-8 entries total. physics_spec.typographyProfile is REQUIRED.`
           : `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. DO NOT return any hook fields (no hottest_hook and no hottest_hooks).`; 
       } else {
         textInstruction += hooksEnabled
-          ? "Analyze this audio. Return ONLY the JSON schema specified. MANDATORY: \"hottest_hooks\" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique \"label\". lexicon.line_mods must have EXACTLY 5-8 entries total."
+          ? "Analyze this audio. Return ONLY the JSON schema specified. MANDATORY: \"hottest_hooks\" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique \"label\". lexicon.line_mods must have EXACTLY 5-8 entries total. physics_spec.typographyProfile is REQUIRED."
           : "Analyze this audio. Return ONLY the JSON schema specified. DO NOT return any hook fields (no hottest_hook and no hottest_hooks).";
       }
       userContent.push({ type: "text", text: textInstruction });
@@ -240,6 +401,35 @@ serve(async (req) => {
         console.log(`[song-dna] Response length: ${raw.length}, finish_reason: ${finishReason}`);
 
         parsed = extractJson(raw);
+
+        if (parsed && isComplete(parsed, hooksEnabled) && manifestTooSimilar(parsed as SceneManifest, recentManifests)) {
+          console.warn("[song-dna] Diversity guard: manifest too similar, regenerating");
+          const diversityNote = buildDiversityNote(recentManifests);
+          const regenResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: "system", content: dnaPrompt },
+                { role: "user", content: userContent },
+                { role: "user", content: diversityNote },
+              ],
+              temperature: 0.2,
+              max_tokens,
+            }),
+          });
+
+          if (regenResponse.ok) {
+            const regenData = await regenResponse.json();
+            const regenRaw = regenData.choices?.[0]?.message?.content ?? "";
+            const regenParsed = extractJson(regenRaw);
+            if (regenParsed) parsed = regenParsed;
+          }
+        }
 
         if (parsed && isComplete(parsed, hooksEnabled)) {
           // Normalize legacy format
@@ -306,14 +496,35 @@ serve(async (req) => {
             parsed.physics_spec = {
               system: "pressure",
               params: { mass: 1.5, elasticity: 0.5, damping: 0.6, brittleness: 0.3, heat: 0.4 },
-              palette: ["hsl(280, 80%, 60%)", "hsl(320, 90%, 55%)", "hsl(0, 0%, 95%)"],
+              palette: ["#1e2230", "#7d8aa3", "#e8edf5"],
               effect_pool: ["SHATTER_IN", "GLITCH_FLASH", "WAVE_SURGE", "STATIC_RESOLVE"],
               logic_seed: 42,
+              typographyProfile: {
+                fontFamily: "Inter",
+                fontWeight: 500,
+                letterSpacing: "0.04em",
+                textTransform: "none",
+                lineHeightMultiplier: 1.2,
+                hasSerif: false,
+                personality: "RAW TRANSCRIPT",
+              },
               lexicon: { semantic_tags: [{ tag: "RISE", strength: 0.7 }], line_mods: [], word_marks: [] },
             };
           }
           console.log(`[song-dna] Using salvaged/fallback result: mood=${parsed.mood}, system=${parsed.physics_spec.system}, hooks=${parsed.hottest_hooks?.length}`);
         }
+      }
+
+      if (parsed?.physics_spec && !parsed.physics_spec.typographyProfile) {
+        parsed.physics_spec.typographyProfile = {
+          fontFamily: "Inter",
+          fontWeight: 500,
+          letterSpacing: "0.04em",
+          textTransform: "none",
+          lineHeightMultiplier: 1.2,
+          hasSerif: false,
+          personality: "RAW TRANSCRIPT",
+        };
       }
 
       // Final normalization: ensure hottest_hooks array exists
@@ -369,6 +580,8 @@ serve(async (req) => {
       const raw = data.choices?.[0]?.message?.content ?? "";
       try { parsed = JSON.parse(raw); } catch { parsed = { summary: raw }; }
     }
+
+    if (parsed && parsed.physics_spec) trackManifest(parsed as SceneManifest);
 
     return new Response(JSON.stringify(parsed), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
