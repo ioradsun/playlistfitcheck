@@ -109,11 +109,19 @@ export function InlineBattle({
   // ── Replay signals ─────────────────────────────────────────────
   useEffect(() => {
     if (!replaySignalA) return;
+    const audioA = hookACanvas.audioRef.current;
+    const audioB = hookBCanvas.audioRef.current;
+    if (audioA) audioA.muted = false;
+    if (audioB) audioB.muted = true;
     hookACanvas.restart();
   }, [replaySignalA]);
 
   useEffect(() => {
     if (!replaySignalB) return;
+    const audioA = hookACanvas.audioRef.current;
+    const audioB = hookBCanvas.audioRef.current;
+    if (audioB) audioB.muted = false;
+    if (audioA) audioA.muted = true;
     hookBCanvas.restart();
   }, [replaySignalB]);
 
