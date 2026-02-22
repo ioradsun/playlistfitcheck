@@ -373,7 +373,7 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
               setTappedSides(prev => new Set(prev).add(activeHookSide));
             }}
           >
-            <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
+            <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/30">
               Tap to unmute
             </span>
           </div>
