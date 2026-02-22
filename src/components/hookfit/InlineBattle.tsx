@@ -180,23 +180,20 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     switchToA,
   );
 
-  // When side auto-switches, restart canvas — respect userMuted
+  // When side auto-switches, restart canvas and handle audio
   const prevSideRef = useRef(activeHookSide);
   useEffect(() => {
     if (prevSideRef.current === activeHookSide) return;
     prevSideRef.current = activeHookSide;
-    if (tappedSides.size < 2) {
-      if (activeHookSide === "a") hookACanvas.restart();
-      else hookBCanvas.restart();
-      return;
-    }
-    if (userMutedRef.current) {
+    if (userMutedRef.current || isMuted) {
+      // Muted — just restart the visual, keep all audio muted
       if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
       if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
       if (activeHookSide === "a") hookACanvas.restart();
       else hookBCanvas.restart();
       return;
     }
+    // Unmuted — switch audio to the new active side
     if (activeHookSide === "a") {
       if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
       if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
