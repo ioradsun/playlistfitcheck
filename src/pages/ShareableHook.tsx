@@ -823,8 +823,25 @@ export default function ShareableHook() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center z-50">
-        <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+      <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col z-50">
+        <div className="px-5 pt-4 pb-2 flex justify-center">
+          <div className="h-3 w-40 rounded bg-white/[0.06] animate-pulse" />
+        </div>
+        <div className="flex-1 flex flex-col sm:flex-row gap-1 px-1 min-h-0">
+          <div className="relative flex-1 min-h-[35vh] sm:min-h-0 rounded-lg bg-white/[0.03] animate-pulse">
+            <div className="absolute bottom-0 left-0 right-0 p-3">
+              <div className="h-3 w-16 rounded bg-white/[0.08] animate-pulse" />
+            </div>
+          </div>
+          <div className="relative flex-1 min-h-[35vh] sm:min-h-0 rounded-lg bg-white/[0.03] animate-pulse">
+            <div className="absolute bottom-0 left-0 right-0 p-3">
+              <div className="h-3 w-16 rounded bg-white/[0.08] animate-pulse" />
+            </div>
+          </div>
+        </div>
+        <div className="h-[120px] px-4 flex items-center justify-center">
+          <div className="h-10 w-64 rounded-lg bg-white/[0.05] animate-pulse" />
+        </div>
       </div>
     );
   }
