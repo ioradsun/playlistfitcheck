@@ -126,8 +126,11 @@ const STACK_THRESHOLD = 600;
 const MAX_STACK_LINES = 3;
 
 /**
- * For narrow canvases (<400px), split text into up to 3 stacked lines
- * and compute the largest font size that fits within 85% of canvas width.
+ * For narrow canvases (<600px) or portrait/square aspect ratios,
+ * split text into up to 3 stacked lines and compute the largest
+ * font size that fits within 85% of canvas width.
+ *
+ * When aspectHint is "9:16" or "1:1", stacking is forced regardless of width.
  */
 export function computeStackedLayout(
   ctx: CanvasRenderingContext2D,
@@ -135,12 +138,15 @@ export function computeStackedLayout(
   canvasW: number,
   canvasH: number,
   system: string,
+  aspectHint?: string,
 ): StackedLayout {
   const st = getSystemStyle(system);
   const displayText = applyTransform(text, st);
   const words = displayText.split(/\s+/).filter(Boolean);
 
-  if (canvasW >= STACK_THRESHOLD || words.length <= 2) {
+  const forceStack = aspectHint === "9:16" || aspectHint === "1:1";
+
+  if ((!forceStack && canvasW >= STACK_THRESHOLD) || words.length <= 2) {
     const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, text, canvasW, system);
     return { lines: [displayText], fs, effectiveLetterSpacing, isStacked: false };
   }

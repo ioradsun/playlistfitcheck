@@ -265,7 +265,7 @@ export function LyricDanceExporter({
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
         const lineProgress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-        const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, spec.system);
+        const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, spec.system, aspectRatio);
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
           ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
           : computeFitFontSize(ctx, activeLine.text, cw, spec.system);
