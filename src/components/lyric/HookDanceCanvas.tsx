@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Download } from "lucide-react";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
-import { computeFitFontSize } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
@@ -166,8 +166,11 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
 
-      // Use measureText-based sizing that accounts for letter-spacing
-      const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, activeSystem);
+      // Use stacked layout for narrow viewports, single-line for wide
+      const stackedLayout = computeStackedLayout(ctx, activeLine.text, w, h, activeSystem);
+      const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
+        ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
+        : computeFitFontSize(ctx, activeLine.text, w, activeSystem);
 
       const effectState: EffectState = {
         text: activeLine.text,
@@ -181,6 +184,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         palette: activePalette,
         system: activeSystem,
         effectiveLetterSpacing,
+        stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
       };
 
       drawFn(ctx, effectState);
