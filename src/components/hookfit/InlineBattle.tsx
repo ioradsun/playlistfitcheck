@@ -158,13 +158,18 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     switchToA,
   );
 
-  // When side auto-switches, unmute active and restart (only after user has tapped)
+  // When side auto-switches, restart canvas but keep audio muted until user taps
   const prevSideRef = useRef(activeHookSide);
   useEffect(() => {
     if (prevSideRef.current === activeHookSide) return;
     prevSideRef.current = activeHookSide;
-    // Only auto-switch audio if user has already interacted
-    if (tappedSides.size === 0) return;
+    // Only auto-switch audio if user has already interacted with BOTH sides
+    if (tappedSides.size < 2) {
+      // Just restart the canvas visually, keep audio muted
+      if (activeHookSide === "a") hookACanvas.restart();
+      else hookBCanvas.restart();
+      return;
+    }
     if (activeHookSide === "a") {
       if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
       if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
