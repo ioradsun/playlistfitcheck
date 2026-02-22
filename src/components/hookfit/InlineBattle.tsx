@@ -297,14 +297,14 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
   return (
     <div className="w-full" style={{ background: bgBase }}>
       {/* Split canvases */}
-      <div className="flex flex-row" style={{ height: "300px" }}>
+      <div className="relative flex flex-row" style={{ height: "300px" }}>
         {/* Hook A */}
         <motion.div
           className="relative flex-1 cursor-pointer overflow-hidden"
           animate={{ opacity: activeHookSide !== "a" ? 0.6 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
-            if (activeHookSide === "a") return; // already active, do nothing
+            if (activeHookSide === "a") return;
             setActiveHookSide("a");
             setTappedSides(prev => new Set(prev).add("a"));
             if (!isMuted) {
@@ -317,11 +317,9 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
-          {/* Mask overlay — when muted or inactive */}
           {(isMuted || activeHookSide !== "a") && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
           )}
-          {/* Hook label */}
           <div className="absolute bottom-2 left-2 pointer-events-none">
             <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-white/50 drop-shadow-md">
               {hookA?.hook_label || "Hook A"}
@@ -338,7 +336,7 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           animate={{ opacity: activeHookSide !== "b" ? 0.6 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
-            if (activeHookSide === "b") return; // already active, do nothing
+            if (activeHookSide === "b") return;
             setActiveHookSide("b");
             setTappedSides(prev => new Set(prev).add("b"));
             if (!isMuted) {
@@ -351,17 +349,24 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
-          {/* Mask overlay — when muted or inactive */}
           {(isMuted || activeHookSide !== "b") && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
           )}
-          {/* Hook label */}
           <div className="absolute bottom-2 left-2 pointer-events-none">
             <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-white/50 drop-shadow-md">
               {hookB?.hook_label || "Hook B"}
             </span>
           </div>
         </motion.div>
+
+        {/* Centered "Tap to unmute" across both videos */}
+        {isMuted && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
+              Tap to unmute
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Playbar — progress + mute control ──────────────────────── */}
