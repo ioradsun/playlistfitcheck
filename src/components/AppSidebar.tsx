@@ -186,7 +186,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
 
     const { data: lyrics } = await supabase
       .from("saved_lyrics")
-      .select("id, title, artist, lines, filename, updated_at")
+      .select("id, title, artist, lines, filename, updated_at, audio_url, beat_grid, song_dna, fmly_lines, version_meta")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(20);
