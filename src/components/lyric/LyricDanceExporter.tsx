@@ -7,16 +7,33 @@
 
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Film, Loader2, Sparkles, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
+import {
+  PhysicsIntegrator,
+  mulberry32,
+  hashSeed,
+  type PhysicsSpec,
+  type PhysicsState,
+} from "@/engine/PhysicsIntegrator";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
-import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
+import {
+  computeFitFontSize,
+  computeStackedLayout,
+} from "@/engine/SystemStyles";
 import type { BeatTick } from "@/engine/HookDanceEngine";
+import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
+import { safeManifest } from "@/engine/validateManifest";
 import type { LyricLine } from "./LyricDisplay";
 
 // ── Aspect ratio → canvas dimensions ────────────────────────────────────────
@@ -28,13 +45,13 @@ const RESOLUTION_PRESETS = {
 
 const ASPECT_BASE: Record<string, [number, number]> = {
   "9:16": [1080, 1920],
-  "1:1":  [1080, 1080],
+  "1:1": [1080, 1080],
   "16:9": [1920, 1080],
 };
 
 const ASPECT_OPTIONS = [
   { key: "9:16", label: "9:16", sub: "TikTok / Reels" },
-  { key: "1:1",  label: "1:1",  sub: "Instagram" },
+  { key: "1:1", label: "1:1", sub: "Instagram" },
   { key: "16:9", label: "16:9", sub: "YouTube" },
 ];
 
@@ -76,7 +93,9 @@ export function LyricDanceExporter({
   const [bgMode, setBgMode] = useState<BgMode>("system");
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState<"idle" | "generating_bg" | "rendering" | "encoding" | "done">("idle");
+  const [stage, setStage] = useState<
+    "idle" | "generating_bg" | "rendering" | "encoding" | "done"
+  >("idle");
   const cancelRef = useRef(false);
   const [aiBgLoading, setAiBgLoading] = useState(false);
   const [aiBgUrl, setAiBgUrl] = useState<string | null>(null);
@@ -86,9 +105,22 @@ export function LyricDanceExporter({
     if (aiBgUrl || aiBgLoading) return;
     setAiBgLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("lyric-video-bg", {
-        body: { title, artist, mood: mood || "cinematic", description },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "lyric-video-bg",
+        {
+          body: {
+            manifest: safeManifest(
+              deriveSceneManifestFromSpec({
+                spec,
+                mood,
+                description,
+                songTitle: title,
+              }),
+            ).manifest,
+            userDirection: `Song: ${title} by ${artist}`,
+          },
+        },
+      );
       if (error) throw error;
       if (data?.imageUrl) setAiBgUrl(data.imageUrl);
       else throw new Error("No image returned");
@@ -171,9 +203,11 @@ export function LyricDanceExporter({
     // MediaRecorder
     const videoStream = canvas.captureStream(0);
     const combinedStream = new MediaStream();
-    videoStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
+    videoStream.getVideoTracks().forEach((t) => combinedStream.addTrack(t));
     if (audioDest) {
-      audioDest.stream.getAudioTracks().forEach(t => combinedStream.addTrack(t));
+      audioDest.stream
+        .getAudioTracks()
+        .forEach((t) => combinedStream.addTrack(t));
     }
 
     const mediaRecorder = new MediaRecorder(combinedStream, {
@@ -181,7 +215,9 @@ export function LyricDanceExporter({
       videoBitsPerSecond: resolution === "1080p" ? 12_000_000 : 6_000_000,
     });
     const chunks: Blob[] = [];
-    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
 
     // Initialize deterministic engine
     const integrator = new PhysicsIntegrator(spec);
@@ -189,7 +225,11 @@ export function LyricDanceExporter({
     const sortedBeats = [...beats].sort((a, b) => a.time - b.time);
 
     if (audioEl) {
-      try { await audioEl.play(); } catch (e) { console.warn("Audio play failed:", e); }
+      try {
+        await audioEl.play();
+      } catch (e) {
+        console.warn("Audio play failed:", e);
+      }
     }
 
     mediaRecorder.start();
@@ -203,15 +243,21 @@ export function LyricDanceExporter({
       if (cancelRef.current || frame >= totalFrames) {
         setStage("encoding");
         mediaRecorder.stop();
-        if (audioEl) { audioEl.pause(); audioEl.src = ""; }
+        if (audioEl) {
+          audioEl.pause();
+          audioEl.src = "";
+        }
         if (audioCtx) audioCtx.close();
         return;
       }
 
-      const currentTime = songStart + (frame / FPS);
+      const currentTime = songStart + frame / FPS;
 
       // Scan beats
-      while (beatIndex < sortedBeats.length && sortedBeats[beatIndex].time <= currentTime) {
+      while (
+        beatIndex < sortedBeats.length &&
+        sortedBeats[beatIndex].time <= currentTime
+      ) {
         const beat = sortedBeats[beatIndex];
         if (beat.time > prevTime) {
           integrator.onBeat(beat.strength, beat.isDownbeat);
@@ -220,7 +266,9 @@ export function LyricDanceExporter({
       }
 
       const state = integrator.tick();
-      const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
+      const activeLine = lines.find(
+        (l) => currentTime >= l.start && currentTime < l.end,
+      );
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
 
       // ── Draw frame ──
@@ -247,27 +295,52 @@ export function LyricDanceExporter({
         // System background
         const bgPalette = spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
         drawSystemBackground(ctx, {
-          system: spec.system, physState: state, w: cw, h: ch,
-          time: currentTime, beatCount: beatIndex,
-          rng, palette: bgPalette, hookStart: songStart, hookEnd: songEnd,
+          system: spec.system,
+          physState: state,
+          w: cw,
+          h: ch,
+          time: currentTime,
+          beatCount: beatIndex,
+          rng,
+          palette: bgPalette,
+          hookStart: songStart,
+          hookEnd: songEnd,
         });
       }
 
       if (activeLine) {
         // Resolve effect
         let effectKey = "STATIC_RESOLVE";
-        if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
-          const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
+        if (
+          spec.effect_pool &&
+          spec.effect_pool.length > 0 &&
+          spec.logic_seed != null
+        ) {
+          const poolIdx =
+            (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
           effectKey = spec.effect_pool[poolIdx];
         }
         const drawFn = getEffect(effectKey);
 
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
-        const lineProgress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-        const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, spec.system, aspectRatio);
+        const lineProgress = Math.min(
+          1,
+          (currentTime - activeLine.start) / lineDur,
+        );
+        const stackedLayout = computeStackedLayout(
+          ctx,
+          activeLine.text,
+          cw,
+          ch,
+          spec.system,
+          aspectRatio,
+        );
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
-          ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
+          ? {
+              fs: stackedLayout.fs,
+              effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing,
+            }
           : computeFitFontSize(ctx, activeLine.text, cw, spec.system);
 
         ctx.save();
@@ -351,11 +424,26 @@ export function LyricDanceExporter({
       setStage("done");
       setProgress(1);
       toast.success("Lyric Dance video exported!");
-      setTimeout(() => { setStage("idle"); setProgress(0); }, 2000);
+      setTimeout(() => {
+        setStage("idle");
+        setProgress(0);
+      }, 2000);
     };
 
     renderNextFrame();
-  }, [aspectRatio, resolution, bgMode, aiBgUrl, spec, beats, lines, title, artist, audioFile, seed]);
+  }, [
+    aspectRatio,
+    resolution,
+    bgMode,
+    aiBgUrl,
+    spec,
+    beats,
+    lines,
+    title,
+    artist,
+    audioFile,
+    seed,
+  ]);
 
   const handleCancel = useCallback(() => {
     cancelRef.current = true;
@@ -366,16 +454,25 @@ export function LyricDanceExporter({
   const cw = Math.round(baseW * scale);
   const ch = Math.round(baseH * scale);
 
-  const songDuration = lines.length > 0
-    ? Math.round(lines[lines.length - 1].end - Math.max(0, lines[0].start - 0.5))
-    : 0;
+  const songDuration =
+    lines.length > 0
+      ? Math.round(
+          lines[lines.length - 1].end - Math.max(0, lines[0].start - 0.5),
+        )
+      : 0;
   const estimatedFrames = songDuration * FPS;
-  const estimatedMinutes = resolution === "1080p"
-    ? Math.ceil(estimatedFrames / 900) // ~30fps render speed at 1080p
-    : Math.ceil(estimatedFrames / 1800); // ~60fps at 720p
+  const estimatedMinutes =
+    resolution === "1080p"
+      ? Math.ceil(estimatedFrames / 900) // ~30fps render speed at 1080p
+      : Math.ceil(estimatedFrames / 1800); // ~60fps at 720p
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!isExporting) onOpenChange(v); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!isExporting) onOpenChange(v);
+      }}
+    >
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground font-medium">
@@ -390,7 +487,9 @@ export function LyricDanceExporter({
           {/* Song info */}
           <div className="text-center space-y-0.5">
             <p className="text-sm font-medium text-foreground">{title}</p>
-            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">{artist}</p>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+              {artist}
+            </p>
             <p className="text-[10px] font-mono text-muted-foreground/50">
               {lines.length} lines · ~{songDuration}s
             </p>
@@ -411,8 +510,12 @@ export function LyricDanceExporter({
                     : "bg-secondary text-muted-foreground hover:text-foreground"
                 } disabled:opacity-50`}
               >
-                <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block">Physics</span>
-                <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5">{spec.system}</span>
+                <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block">
+                  Physics
+                </span>
+                <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5">
+                  {spec.system}
+                </span>
               </button>
               <button
                 onClick={() => {
@@ -428,7 +531,11 @@ export function LyricDanceExporter({
                 } disabled:opacity-50`}
               >
                 <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block flex items-center justify-center gap-1">
-                  {aiBgLoading ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                  {aiBgLoading ? (
+                    <Loader2 size={10} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={10} />
+                  )}
                   AI
                 </span>
                 <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5">
@@ -455,8 +562,12 @@ export function LyricDanceExporter({
                       : "bg-secondary text-muted-foreground hover:text-foreground"
                   } disabled:opacity-50`}
                 >
-                  <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block">{opt.label}</span>
-                  <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5">{opt.sub}</span>
+                  <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block">
+                    {opt.label}
+                  </span>
+                  <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5">
+                    {opt.sub}
+                  </span>
                 </button>
               ))}
             </div>
@@ -468,24 +579,30 @@ export function LyricDanceExporter({
               Resolution
             </label>
             <div className="flex gap-2">
-              {(Object.keys(RESOLUTION_PRESETS) as ResolutionKey[]).map((key) => {
-                const preset = RESOLUTION_PRESETS[key];
-                return (
-                  <button
-                    key={key}
-                    onClick={() => !isExporting && setResolution(key)}
-                    disabled={isExporting}
-                    className={`flex-1 py-2 rounded-md text-center transition-colors ${
-                      resolution === key
-                        ? "bg-foreground text-background"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
-                    } disabled:opacity-50`}
-                  >
-                    <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block">{preset.label}</span>
-                    <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5">{preset.sub}</span>
-                  </button>
-                );
-              })}
+              {(Object.keys(RESOLUTION_PRESETS) as ResolutionKey[]).map(
+                (key) => {
+                  const preset = RESOLUTION_PRESETS[key];
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => !isExporting && setResolution(key)}
+                      disabled={isExporting}
+                      className={`flex-1 py-2 rounded-md text-center transition-colors ${
+                        resolution === key
+                          ? "bg-foreground text-background"
+                          : "bg-secondary text-muted-foreground hover:text-foreground"
+                      } disabled:opacity-50`}
+                    >
+                      <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block">
+                        {preset.label}
+                      </span>
+                      <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5">
+                        {preset.sub}
+                      </span>
+                    </button>
+                  );
+                },
+              )}
             </div>
           </div>
 
@@ -494,24 +611,36 @@ export function LyricDanceExporter({
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Resolution</span>
-                <span className="font-mono text-foreground">{cw}×{ch}</span>
+                <span className="font-mono text-foreground">
+                  {cw}×{ch}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">System</span>
-                <span className="font-mono text-foreground capitalize">{spec.system}</span>
+                <span className="font-mono text-foreground capitalize">
+                  {spec.system}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Frames</span>
-                <span className="font-mono text-foreground tabular-nums">~{estimatedFrames.toLocaleString()}</span>
+                <span className="font-mono text-foreground tabular-nums">
+                  ~{estimatedFrames.toLocaleString()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Est. time</span>
-                <span className="font-mono text-foreground">~{estimatedMinutes} min</span>
+                <span className="font-mono text-foreground">
+                  ~{estimatedMinutes} min
+                </span>
               </div>
             </div>
             <div className="flex gap-1 mt-1">
               {(spec.palette || []).map((c, i) => (
-                <div key={i} className="w-3.5 h-3.5 rounded-full border border-border/30" style={{ backgroundColor: c }} />
+                <div
+                  key={i}
+                  className="w-3.5 h-3.5 rounded-full border border-border/30"
+                  style={{ backgroundColor: c }}
+                />
               ))}
             </div>
           </div>
@@ -536,9 +665,13 @@ export function LyricDanceExporter({
                     exit={{ opacity: 0, y: -4 }}
                     className="text-[11px] font-mono text-muted-foreground"
                   >
-                    {stage === "generating_bg" ? "Generating background…" :
-                     stage === "rendering" ? "Rendering full song…" :
-                     stage === "encoding" ? "Encoding…" : "Done!"}
+                    {stage === "generating_bg"
+                      ? "Generating background…"
+                      : stage === "rendering"
+                        ? "Rendering full song…"
+                        : stage === "encoding"
+                          ? "Encoding…"
+                          : "Done!"}
                   </motion.p>
                 </AnimatePresence>
                 <p className="text-[11px] font-mono text-muted-foreground tabular-nums">

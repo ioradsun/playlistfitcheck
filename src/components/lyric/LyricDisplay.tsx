@@ -1,7 +1,28 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Zap, Play, Pause, Copy, Repeat2, MoreHorizontal, AlertCircle, Video, Film, Sparkles, Loader2, RotateCcw, X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  ArrowLeft,
+  Zap,
+  Play,
+  Pause,
+  Copy,
+  Repeat2,
+  MoreHorizontal,
+  AlertCircle,
+  Video,
+  Film,
+  Sparkles,
+  Loader2,
+  RotateCcw,
+  X,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,7 +40,11 @@ import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import { LyricWaveform } from "./LyricWaveform";
 import { VersionToggle, type ActiveVersion } from "./VersionToggle";
-import { LyricFormatControls, type LineFormat, type SocialPreset } from "./LyricFormatControls";
+import {
+  LyricFormatControls,
+  type LineFormat,
+  type SocialPreset,
+} from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import { HookDanceCanvas } from "./HookDanceCanvas";
@@ -28,23 +53,32 @@ import { HookDanceExporter } from "./HookDanceExporter";
 import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
 import { PublishLyricDanceButton } from "./PublishLyricDanceButton";
-import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
+import {
+  applyProfanityFilter,
+  type Strictness,
+  type ProfanityReport,
+} from "@/lib/profanityFilter";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
 import type { HookDanceOverrides } from "./HookDanceControls";
 import type { WaveformData } from "@/hooks/useAudioEngine";
-import type { ArtistDNA, FingerprintSongContext } from "./ArtistFingerprintTypes";
+import type {
+  ArtistDNA,
+  FingerprintSongContext,
+} from "./ArtistFingerprintTypes";
+import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
+import { safeManifest } from "@/engine/validateManifest";
 
 export interface LyricLine {
   start: number;
   end: number;
   text: string;
   tag?: "main" | "adlib";
-  isFloating?: boolean;      // v2.2: adlib has no Whisper word match within ±1.5s
-  geminiConflict?: string;   // v2.2: Whisper alternative text when Gemini text diverges
-  confidence?: number;       // v2.2: per-adlib confidence from Gemini
-  isCorrection?: boolean;    // v3.7: line had a phonetic QA word swap applied
-  correctedWord?: string;    // v3.7: the replacement word (e.g. "rain") for purple underline
+  isFloating?: boolean; // v2.2: adlib has no Whisper word match within ±1.5s
+  geminiConflict?: string; // v2.2: Whisper alternative text when Gemini text diverges
+  confidence?: number; // v2.2: per-adlib confidence from Gemini
+  isCorrection?: boolean; // v3.7: line had a phonetic QA word swap applied
+  correctedWord?: string; // v3.7: the replacement word (e.g. "rain") for purple underline
 }
 
 export interface LyricHook {
@@ -85,20 +119,53 @@ interface VersionMeta {
   lastEdited?: string;
 }
 
+function normalizeSongDnaWithManifest(
+  songDna: any,
+  fallbackTitle: string,
+): any {
+  if (!songDna || typeof songDna !== "object") return songDna;
+  const rawManifest = songDna.scene_manifest || songDna.sceneManifest;
+
+  if (rawManifest) {
+    const checked = safeManifest(rawManifest);
+    return { ...songDna, scene_manifest: checked.manifest };
+  }
+
+  if (songDna.physicsSpec) {
+    const derived = deriveSceneManifestFromSpec({
+      spec: songDna.physicsSpec as PhysicsSpec,
+      mood: songDna.mood,
+      description: songDna.description,
+      songTitle: fallbackTitle,
+    });
+    return { ...songDna, scene_manifest: safeManifest(derived).manifest };
+  }
+
+  return songDna;
+}
 interface Props {
   data: LyricData;
   audioFile: File;
   hasRealAudio?: boolean;
   savedId?: string | null;
   fmlyLines?: LyricLine[] | null;
-  versionMeta?: { explicit?: Partial<VersionMeta>; fmly?: Partial<VersionMeta> } | null;
+  versionMeta?: {
+    explicit?: Partial<VersionMeta>;
+    fmly?: Partial<VersionMeta>;
+  } | null;
   debugData?: any | null;
   initialBeatGrid?: BeatGridData | null;
   initialSongDna?: any | null;
   onBack: () => void;
   onSaved?: (id: string) => void;
   onReuploadAudio?: (file: File) => void;
-  onHeaderProject?: (project: { title: string; onBack: () => void; rightContent?: React.ReactNode } | null) => void;
+  onHeaderProject?: (
+    project: {
+      title: string;
+      onBack: () => void;
+      rightContent?: React.ReactNode;
+    } | null,
+  ) => void;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -126,12 +193,22 @@ function formatTimeShort(seconds: number): string {
 
 function toLRC(data: LyricData): string {
   const mainLines = data.lines.filter((l) => l.tag !== "adlib");
-  return [`[ti:${data.title}]`, `[ar:${data.artist}]`, "", ...mainLines.map((l) => `[${formatTimeLRC(l.start)}]${l.text}`)].join("\n");
+  return [
+    `[ti:${data.title}]`,
+    `[ar:${data.artist}]`,
+    "",
+    ...mainLines.map((l) => `[${formatTimeLRC(l.start)}]${l.text}`),
+  ].join("\n");
 }
 
 function toSRT(data: LyricData): string {
   const mainLines = data.lines.filter((l) => l.tag !== "adlib");
-  return mainLines.map((l, i) => `${i + 1}\n${formatTimeSRT(l.start)} --> ${formatTimeSRT(l.end)}\n${l.text}\n`).join("\n");
+  return mainLines
+    .map(
+      (l, i) =>
+        `${i + 1}\n${formatTimeSRT(l.start)} --> ${formatTimeSRT(l.end)}\n${l.text}\n`,
+    )
+    .join("\n");
 }
 
 function toPlainText(data: LyricData): string {
@@ -157,7 +234,10 @@ function applyLineFormat(lines: LyricLine[], format: LineFormat): LyricLine[] {
 
   lines.forEach((line) => {
     // Pass adlibs through unchanged
-    if (line.tag === "adlib") { result.push(line); return; }
+    if (line.tag === "adlib") {
+      result.push(line);
+      return;
+    }
 
     const words = line.text.trim().split(/\s+/).filter(Boolean);
     if (words.length === 0) return;
@@ -167,9 +247,11 @@ function applyLineFormat(lines: LyricLine[], format: LineFormat): LyricLine[] {
     if (format === "1_word") {
       groups = words.map((w) => [w]);
     } else if (format === "2_3_words") {
-      for (let i = 0; i < words.length; i += 3) groups.push(words.slice(i, i + 3));
+      for (let i = 0; i < words.length; i += 3)
+        groups.push(words.slice(i, i + 3));
     } else if (format === "4_6_words") {
-      for (let i = 0; i < words.length; i += 5) groups.push(words.slice(i, i + 5));
+      for (let i = 0; i < words.length; i += 5)
+        groups.push(words.slice(i, i + 5));
     } else if (format === "break_on_pause") {
       const text = line.text;
       const parts = text.split(/([,;:.!?]+\s*)/).filter(Boolean);
@@ -177,7 +259,10 @@ function applyLineFormat(lines: LyricLine[], format: LineFormat): LyricLine[] {
       let cur = "";
       parts.forEach((p) => {
         cur += p;
-        if (/[,;:.!?]/.test(p)) { merged.push(cur.trim()); cur = ""; }
+        if (/[,;:.!?]/.test(p)) {
+          merged.push(cur.trim());
+          cur = "";
+        }
       });
       if (cur.trim()) merged.push(cur.trim());
       groups = merged.map((m) => [m]);
@@ -201,11 +286,12 @@ function applyLineFormat(lines: LyricLine[], format: LineFormat): LyricLine[] {
 
 type ExportFormat = "lrc" | "srt" | "txt";
 
-const EXPORT_OPTIONS: { format: ExportFormat; label: string; desc: string }[] = [
-  { format: "lrc", label: "LRC", desc: "Synced" },
-  { format: "srt", label: "SRT", desc: "Subtitles" },
-  { format: "txt", label: "TXT", desc: "Plain" },
-];
+const EXPORT_OPTIONS: { format: ExportFormat; label: string; desc: string }[] =
+  [
+    { format: "lrc", label: "LRC", desc: "Synced" },
+    { format: "srt", label: "SRT", desc: "Subtitles" },
+    { format: "txt", label: "TXT", desc: "Plain" },
+  ];
 
 const DEFAULT_VERSION_META: VersionMeta = {
   lineFormat: "natural",
@@ -224,7 +310,21 @@ function hookScoreColor(score: number): string {
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
-export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fmlyLines: initFmlyLines, versionMeta: initVersionMeta, debugData, initialBeatGrid, initialSongDna, onBack, onSaved, onReuploadAudio, onHeaderProject }: Props) {
+export function LyricDisplay({
+  data,
+  audioFile,
+  hasRealAudio = true,
+  savedId,
+  fmlyLines: initFmlyLines,
+  versionMeta: initVersionMeta,
+  debugData,
+  initialBeatGrid,
+  initialSongDna,
+  onBack,
+  onSaved,
+  onReuploadAudio,
+  onHeaderProject,
+}: Props) {
   const { user, roles } = useAuth();
   const siteCopy = useSiteCopy();
   const features = (siteCopy as any)?.features;
@@ -232,7 +332,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const hottestHooksEnabled = features?.hookfit_hottest_hooks !== false;
   const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
   const [showDebug, setShowDebug] = useState(false);
-  const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
+  const { decodeFile, play, stop, playingId, getPlayheadPosition } =
+    useAudioEngine();
 
   // Audio state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -242,7 +343,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   // Use pre-computed beat grid if available, otherwise run detection from decoded audio
-  const { beatGrid: detectedBeatGrid, loading: beatGridLoading } = useBeatGrid(initialBeatGrid ? null : audioBuffer);
+  const { beatGrid: detectedBeatGrid, loading: beatGridLoading } = useBeatGrid(
+    initialBeatGrid ? null : audioBuffer,
+  );
   const beatGrid = initialBeatGrid ?? detectedBeatGrid;
   const rafRef = useRef<number | null>(null);
 
@@ -257,7 +360,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   // Version state
   const [activeVersion, setActiveVersion] = useState<ActiveVersion>("explicit");
   const [explicitLines, setExplicitLines] = useState<LyricLine[]>(data.lines);
-  const [fmlyLines, setFmlyLines] = useState<LyricLine[] | null>(initFmlyLines ?? null);
+  const [fmlyLines, setFmlyLines] = useState<LyricLine[] | null>(
+    initFmlyLines ?? null,
+  );
   const originalLines = useRef<LyricLine[]>(data.lines);
   const [fmlyReport, setFmlyReport] = useState<ProfanityReport | null>(null);
 
@@ -277,12 +382,18 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [editText, setEditText] = useState("");
 
   // Autosave
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [currentSavedId, setCurrentSavedId] = useState<string | null>(savedId ?? null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
+  const [currentSavedId, setCurrentSavedId] = useState<string | null>(
+    savedId ?? null,
+  );
   const autosaveTimerRef = useRef<number | null>(null);
 
   // Timestamps for version toggle
-  const [explicitLastEdited, setExplicitLastEdited] = useState<Date | null>(null);
+  const [explicitLastEdited, setExplicitLastEdited] = useState<Date | null>(
+    null,
+  );
   const [fmlyLastEdited, setFmlyLastEdited] = useState<Date | null>(null);
 
   // Lyric scroll
@@ -295,30 +406,43 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   // (anchor state removed)
 
   // v2.2: Conflict resolution modal
-  const [conflictLine, setConflictLine] = useState<{ lineIndex: number; whisperText: string; geminiText: string } | null>(null);
+  const [conflictLine, setConflictLine] = useState<{
+    lineIndex: number;
+    whisperText: string;
+    geminiText: string;
+  } | null>(null);
 
   // Lyric video composer
   const [videoComposerOpen, setVideoComposerOpen] = useState(false);
 
   // Hook Dance engine
   const hookDanceRef = useRef<HookDanceEngine | null>(null);
-  const [hookDanceState, setHookDanceState] = useState<PhysicsState | null>(null);
+  const [hookDanceState, setHookDanceState] = useState<PhysicsState | null>(
+    null,
+  );
   const [hookDanceRunning, setHookDanceRunning] = useState(false);
   const [hookDanceTime, setHookDanceTime] = useState(0);
   const [hookDanceBeatCount, setHookDanceBeatCount] = useState(0);
   const hookDancePrngRef = useRef<(() => number) | null>(null);
   const [hookDanceExportOpen, setHookDanceExportOpen] = useState(false);
   const hookDanceBeatsRef = useRef<BeatTick[]>([]);
-  const [hookDanceOverrides, setHookDanceOverrides] = useState<HookDanceOverrides>({});
+  const [hookDanceOverrides, setHookDanceOverrides] =
+    useState<HookDanceOverrides>({});
   const [showDirectorsCut, setShowDirectorsCut] = useState(false);
-  const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(null);
+  const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(
+    null,
+  );
   const [battlePopupUrl, setBattlePopupUrl] = useState<string | null>(null);
   const [lyricDanceExportOpen, setLyricDanceExportOpen] = useState(false);
 
   // Load fingerprint from profile
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("artist_fingerprint").eq("id", user.id).single()
+    supabase
+      .from("profiles")
+      .select("artist_fingerprint")
+      .eq("id", user.id)
+      .single()
       .then(({ data }) => {
         if (data?.artist_fingerprint) {
           setArtistFingerprint(data.artist_fingerprint as unknown as ArtistDNA);
@@ -328,12 +452,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => { hookDanceRef.current?.stop(); };
+    return () => {
+      hookDanceRef.current?.stop();
+    };
   }, []);
 
   // Song DNA — on-demand generation
   const [songDna, setSongDna] = useState<{
-    mood?: string; description?: string;
+    mood?: string;
+    description?: string;
     meaning?: { theme?: string; summary?: string; imagery?: string[] };
     hook?: LyricHook | null;
     secondHook?: LyricHook | null;
@@ -356,7 +483,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       effect_sequence?: { line_index: number; effect_key: string }[];
       micro_surprise?: { every_n_beats: number; action: string };
     } | null;
-  } | null>(initialSongDna ?? null);
+  } | null>(normalizeSongDnaWithManifest(initialSongDna, data.title) ?? null);
   const [dnaLoading, setDnaLoading] = useState(false);
   const [dnaRequested, setDnaRequested] = useState(!!initialSongDna);
 
@@ -376,7 +503,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     setDnaLoading(true);
     setDnaRequested(true);
     try {
-      const lyricsText = data.lines.filter(l => l.tag !== "adlib").map(l => l.text).join("\n");
+      const lyricsText = data.lines
+        .filter((l) => l.tag !== "adlib")
+        .map((l) => l.text)
+        .join("\n");
 
       // If we have real audio, encode it and send along for full audio+lyrics DNA
       let audioBase64: string | undefined;
@@ -399,21 +529,34 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         else format = "mp3";
       }
 
-      const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
-        body: {
-          title: data.title, artist: data.artist, lyrics: lyricsText, audioBase64, format,
-          beatGrid: beatGrid ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence } : undefined,
-          includeHooks: hottestHooksEnabled,
+      const { data: result, error } = await supabase.functions.invoke(
+        "lyric-analyze",
+        {
+          body: {
+            title: data.title,
+            artist: data.artist,
+            lyrics: lyricsText,
+            audioBase64,
+            format,
+            beatGrid: beatGrid
+              ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence }
+              : undefined,
+            includeHooks: hottestHooksEnabled,
+          },
         },
-      });
+      );
       if (error) throw error;
 
       // Parse hooks from result — support both hottest_hooks (array) and legacy hottest_hook (object)
       const rawHooks = Array.isArray(result?.hottest_hooks)
         ? result.hottest_hooks
-        : result?.hottest_hook ? [result.hottest_hook] : [];
+        : result?.hottest_hook
+          ? [result.hottest_hook]
+          : [];
 
-      const parseHook = (raw: any): { hook: LyricHook; justification?: string; label?: string } | null => {
+      const parseHook = (
+        raw: any,
+      ): { hook: LyricHook; justification?: string; label?: string } | null => {
         if (!raw?.start_sec) return null;
         const startSec = Number(raw.start_sec);
         const durationSec = Number(raw.duration_sec) || 10;
@@ -423,7 +566,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         const hookWords: string[] = [];
         for (const line of data.lines) {
           if (line.end < startSec || line.start > hookEnd) continue;
-          const words = line.text.split(/\s+/).filter(w => w.length > 0);
+          const words = line.text.split(/\s+/).filter((w) => w.length > 0);
           if (words.length === 0) continue;
           const lineDur = line.end - line.start;
           const totalChars = words.reduce((s, w) => s + w.length, 0);
@@ -449,11 +592,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         };
       };
 
-      const parsedHooks = rawHooks.map(parseHook).filter(Boolean) as { hook: LyricHook; justification?: string; label?: string }[];
+      const parsedHooks = rawHooks.map(parseHook).filter(Boolean) as {
+        hook: LyricHook;
+        justification?: string;
+        label?: string;
+      }[];
       const primary = parsedHooks[0] || null;
       const secondary = parsedHooks[1] || null;
 
-      setSongDna({
+      const nextSongDna = {
         mood: result?.mood,
         description: result?.description,
         meaning: result?.meaning,
@@ -464,17 +611,28 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         hookLabel: primary?.label,
         secondHookLabel: secondary?.label,
         physicsSpec: result?.physics_spec || null,
-      });
+        scene_manifest: result?.scene_manifest || result?.sceneManifest || null,
+      };
+      setSongDna(normalizeSongDnaWithManifest(nextSongDna, data.title));
     } catch (e) {
       console.error("Song DNA error:", e);
       toast.error("Couldn't generate Song DNA");
     } finally {
       setDnaLoading(false);
     }
-  }, [data, audioFile, hasRealAudio, dnaLoading, songDna, beatGrid, hottestHooksEnabled]);
+  }, [
+    data,
+    audioFile,
+    hasRealAudio,
+    dnaLoading,
+    songDna,
+    beatGrid,
+    hottestHooksEnabled,
+  ]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
-  const activeLinesRaw = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
+  const activeLinesRaw =
+    activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
   const activeMeta = activeVersion === "explicit" ? explicitMeta : fmlyMeta;
   const activeLines = applyLineFormat(activeLinesRaw, activeMeta.lineFormat);
 
@@ -485,19 +643,23 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   // ── Multi-active highlighting — supports overlapping adlibs ───────────────
   const activeLineIndices = new Set<number>(
     activeLines.reduce<number[]>((acc, l, i) => {
-      if (currentTime >= l.start && currentTime < l.end + HIGHLIGHT_EPSILON) acc.push(i);
+      if (currentTime >= l.start && currentTime < l.end + HIGHLIGHT_EPSILON)
+        acc.push(i);
       return acc;
-    }, [])
+    }, []),
   );
   // Sticky: if no line is active, highlight the most recently passed main line
   if (activeLineIndices.size === 0) {
     let lastPassed = -1;
     for (let i = 0; i < activeLines.length; i++) {
-      if (activeLines[i].tag !== "adlib" && currentTime >= activeLines[i].start) lastPassed = i;
+      if (activeLines[i].tag !== "adlib" && currentTime >= activeLines[i].start)
+        lastPassed = i;
     }
     if (lastPassed !== -1) activeLineIndices.add(lastPassed);
   }
-  const primaryActiveLine = Math.min(...(activeLineIndices.size > 0 ? [...activeLineIndices] : [-1]));
+  const primaryActiveLine = Math.min(
+    ...(activeLineIndices.size > 0 ? [...activeLineIndices] : [-1]),
+  );
 
   // ── Audio setup ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -530,10 +692,12 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     audio.addEventListener("ended", handleEnded);
 
     if (audioFile.size > 0) {
-      decodeFile(audioFile).then(({ buffer, waveform }) => {
-        setWaveform(waveform);
-        setAudioBuffer(buffer);
-      }).catch(() => {});
+      decodeFile(audioFile)
+        .then(({ buffer, waveform }) => {
+          setWaveform(waveform);
+          setAudioBuffer(buffer);
+        })
+        .catch(() => {});
     }
 
     return () => {
@@ -556,7 +720,8 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     const containerBottom = containerTop + container.clientHeight;
     const lineTop = activeLine.offsetTop;
     const lineBottom = lineTop + activeLine.offsetHeight;
-    const targetScroll = lineTop - container.clientHeight / 2 + activeLine.offsetHeight / 2;
+    const targetScroll =
+      lineTop - container.clientHeight / 2 + activeLine.offsetHeight / 2;
     if (lineTop < containerTop || lineBottom > containerBottom) {
       container.scrollTo({ top: targetScroll, behavior: "smooth" });
     }
@@ -570,56 +735,69 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       setIsPlaying(false);
       loopRegionRef.current = null;
       setActiveHookIndex(null);
-      if (clipProgressRafRef.current) cancelAnimationFrame(clipProgressRafRef.current);
+      if (clipProgressRafRef.current)
+        cancelAnimationFrame(clipProgressRafRef.current);
     } else {
       audioRef.current.play();
       setIsPlaying(true);
     }
   }, [isPlaying]);
 
-  const seekTo = useCallback((time: number) => {
-    if (!audioRef.current) return;
-    loopRegionRef.current = null;
-    setActiveHookIndex(null);
-    if (clipProgressRafRef.current) cancelAnimationFrame(clipProgressRafRef.current);
-    audioRef.current.currentTime = time;
-    setCurrentTime(time);
-    if (!isPlaying) {
-      audioRef.current.play();
-      setIsPlaying(true);
-    }
-  }, [isPlaying]);
-
-
-  // ── Clip loop: play a hook region on repeat ───────────────────────────────
-  const playClip = useCallback((hook: LyricHook, hookIdx: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (activeHookIndex === hookIdx) {
+  const seekTo = useCallback(
+    (time: number) => {
+      if (!audioRef.current) return;
       loopRegionRef.current = null;
       setActiveHookIndex(null);
-      if (clipProgressRafRef.current) cancelAnimationFrame(clipProgressRafRef.current);
-      setClipProgress(0);
-      audio.pause();
-      setIsPlaying(false);
-      return;
-    }
-    loopRegionRef.current = { start: hook.start, end: hook.end };
-    setActiveHookIndex(hookIdx);
-    audio.currentTime = hook.start;
-    audio.play();
-    setIsPlaying(true);
-    const duration = hook.end - hook.start;
-    const tickProgress = () => {
-      const region = loopRegionRef.current;
-      if (!region) { setClipProgress(0); return; }
-      const elapsed = (audio.currentTime - region.start + duration) % duration;
-      setClipProgress(Math.min(Math.max(elapsed / duration, 0), 1));
+      if (clipProgressRafRef.current)
+        cancelAnimationFrame(clipProgressRafRef.current);
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
+      if (!isPlaying) {
+        audioRef.current.play();
+        setIsPlaying(true);
+      }
+    },
+    [isPlaying],
+  );
+
+  // ── Clip loop: play a hook region on repeat ───────────────────────────────
+  const playClip = useCallback(
+    (hook: LyricHook, hookIdx: number) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      if (activeHookIndex === hookIdx) {
+        loopRegionRef.current = null;
+        setActiveHookIndex(null);
+        if (clipProgressRafRef.current)
+          cancelAnimationFrame(clipProgressRafRef.current);
+        setClipProgress(0);
+        audio.pause();
+        setIsPlaying(false);
+        return;
+      }
+      loopRegionRef.current = { start: hook.start, end: hook.end };
+      setActiveHookIndex(hookIdx);
+      audio.currentTime = hook.start;
+      audio.play();
+      setIsPlaying(true);
+      const duration = hook.end - hook.start;
+      const tickProgress = () => {
+        const region = loopRegionRef.current;
+        if (!region) {
+          setClipProgress(0);
+          return;
+        }
+        const elapsed =
+          (audio.currentTime - region.start + duration) % duration;
+        setClipProgress(Math.min(Math.max(elapsed / duration, 0), 1));
+        clipProgressRafRef.current = requestAnimationFrame(tickProgress);
+      };
+      if (clipProgressRafRef.current)
+        cancelAnimationFrame(clipProgressRafRef.current);
       clipProgressRafRef.current = requestAnimationFrame(tickProgress);
-    };
-    if (clipProgressRafRef.current) cancelAnimationFrame(clipProgressRafRef.current);
-    clipProgressRafRef.current = requestAnimationFrame(tickProgress);
-  }, [activeHookIndex]);
+    },
+    [activeHookIndex],
+  );
 
   // ── Copy Clip Info ────────────────────────────────────────────────────────
   const copyClipInfo = useCallback((hook: LyricHook) => {
@@ -642,7 +820,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           .from("audio-clips")
           .upload(storagePath, audioFile, { upsert: true });
         if (!uploadError) {
-          const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+          const { data: urlData } = supabase.storage
+            .from("audio-clips")
+            .getPublicUrl(storagePath);
           audioUrl = urlData.publicUrl;
         }
       }
@@ -651,20 +831,38 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         title: data.title,
         artist: data.artist,
         lines: explicitLines as any,
-        fmly_lines: fmlyLines as any ?? null,
+        fmly_lines: (fmlyLines as any) ?? null,
         version_meta: {
-          explicit: { lineFormat: explicitMeta.lineFormat, socialPreset: explicitMeta.socialPreset, lastEdited: new Date().toISOString() },
-          fmly: { lineFormat: fmlyMeta.lineFormat, socialPreset: fmlyMeta.socialPreset, strictness: fmlyMeta.strictness, lastEdited: new Date().toISOString() },
+          explicit: {
+            lineFormat: explicitMeta.lineFormat,
+            socialPreset: explicitMeta.socialPreset,
+            lastEdited: new Date().toISOString(),
+          },
+          fmly: {
+            lineFormat: fmlyMeta.lineFormat,
+            socialPreset: fmlyMeta.socialPreset,
+            strictness: fmlyMeta.strictness,
+            lastEdited: new Date().toISOString(),
+          },
         } as any,
-        beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } as any : null,
-        song_dna: songDna as any ?? null,
+        beat_grid: beatGrid
+          ? ({
+              bpm: beatGrid.bpm,
+              beats: beatGrid.beats,
+              confidence: beatGrid.confidence,
+            } as any)
+          : null,
+        song_dna: (songDna as any) ?? null,
         updated_at: new Date().toISOString(),
       };
 
       if (audioUrl) payload.audio_url = audioUrl;
 
       if (currentSavedId) {
-        const { error } = await supabase.from("saved_lyrics").update(payload).eq("id", currentSavedId);
+        const { error } = await supabase
+          .from("saved_lyrics")
+          .update(payload)
+          .eq("id", currentSavedId);
         if (error) throw error;
       } else {
         const { data: inserted, error } = await supabase
@@ -684,7 +882,20 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       console.error("Autosave error:", e);
       setSaveStatus("idle");
     }
-  }, [user, currentSavedId, data, explicitLines, fmlyLines, explicitMeta, fmlyMeta, audioFile, hasRealAudio, onSaved, beatGrid, songDna]);
+  }, [
+    user,
+    currentSavedId,
+    data,
+    explicitLines,
+    fmlyLines,
+    explicitMeta,
+    fmlyMeta,
+    audioFile,
+    hasRealAudio,
+    onSaved,
+    beatGrid,
+    songDna,
+  ]);
 
   const scheduleAutosave = useCallback(() => {
     if (!user) return;
@@ -711,14 +922,22 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     const updatedText = editText;
     if (activeVersion === "explicit") {
       setExplicitLines((prev) =>
-        prev.map((l) => (l.start === editedLine.start && l.tag === editedLine.tag ? { ...l, text: updatedText } : l))
+        prev.map((l) =>
+          l.start === editedLine.start && l.tag === editedLine.tag
+            ? { ...l, text: updatedText }
+            : l,
+        ),
       );
       setExplicitLastEdited(new Date());
     } else {
       setFmlyLines((prev) =>
         prev
-          ? prev.map((l) => (l.start === editedLine.start && l.tag === editedLine.tag ? { ...l, text: updatedText } : l))
-          : prev
+          ? prev.map((l) =>
+              l.start === editedLine.start && l.tag === editedLine.tag
+                ? { ...l, text: updatedText }
+                : l,
+            )
+          : prev,
       );
       setFmlyLastEdited(new Date());
     }
@@ -727,7 +946,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   // ── FMLY Generation ───────────────────────────────────────────────────────
   const handleGenerateFmly = useCallback(() => {
-    const { filteredLines, report } = applyProfanityFilter(explicitLines, fmlyMeta.strictness);
+    const { filteredLines, report } = applyProfanityFilter(
+      explicitLines,
+      fmlyMeta.strictness,
+    );
     setFmlyLines(filteredLines);
     setFmlyReport(report);
     setFmlyLastEdited(new Date());
@@ -735,7 +957,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     if (report.totalFlagged === 0) {
       toast.success("No profanity detected — FMLY Friendly version is clean!");
     } else {
-      toast.success(`FMLY Friendly generated — ${report.totalFlagged} word${report.totalFlagged !== 1 ? "s" : ""} filtered`);
+      toast.success(
+        `FMLY Friendly generated — ${report.totalFlagged} word${report.totalFlagged !== 1 ? "s" : ""} filtered`,
+      );
     }
   }, [explicitLines, fmlyMeta.strictness]);
 
@@ -751,12 +975,22 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   };
 
   // ── Export ────────────────────────────────────────────────────────────────
-  const baseName = (data.title !== "Unknown" && data.title !== "Untitled" ? data.title : audioFile.name.replace(/\.[^.]+$/, "")).replace(/\s+/g, "_");
-  const versionSuffix = activeVersion === "explicit" ? "Explicit" : "FMLY_Friendly";
+  const baseName = (
+    data.title !== "Unknown" && data.title !== "Untitled"
+      ? data.title
+      : audioFile.name.replace(/\.[^.]+$/, "")
+  ).replace(/\s+/g, "_");
+  const versionSuffix =
+    activeVersion === "explicit" ? "Explicit" : "FMLY_Friendly";
   const editedData: LyricData = { ...data, lines: activeLines };
 
   const handleCopy = (format: ExportFormat) => {
-    const content = format === "lrc" ? toLRC(editedData) : format === "srt" ? toSRT(editedData) : toPlainText(editedData);
+    const content =
+      format === "lrc"
+        ? toLRC(editedData)
+        : format === "srt"
+          ? toSRT(editedData)
+          : toPlainText(editedData);
     navigator.clipboard.writeText(content);
     setCopied(format);
     toast.success(`${format.toUpperCase()} copied`);
@@ -765,8 +999,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
   const handleDownload = (format: ExportFormat) => {
     const filename = `${baseName}_${versionSuffix}.${format}`;
-    if (format === "lrc") downloadFile(toLRC(editedData), filename, "text/plain");
-    else if (format === "srt") downloadFile(toSRT(editedData), filename, "text/plain");
+    if (format === "lrc")
+      downloadFile(toLRC(editedData), filename, "text/plain");
+    else if (format === "srt")
+      downloadFile(toSRT(editedData), filename, "text/plain");
     else downloadFile(toPlainText(editedData), filename, "text/plain");
     toast.success(`${format.toUpperCase()} downloaded`);
   };
@@ -777,60 +1013,95 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   // (drift/reset/offset removed — Scribe timestamps are accurate)
 
   // ── Tag toggle ─────────────────────────────────────────────────────────────
-  const toggleLineTag = useCallback((lineIndex: number) => {
-    const line = activeLines[lineIndex];
-    const newTag: "main" | "adlib" = line.tag === "adlib" ? "main" : "adlib";
-    const updater = (prev: LyricLine[]) =>
-      prev.map((l) =>
-        l.start === line.start && l.text === line.text ? { ...l, tag: newTag } : l
+  const toggleLineTag = useCallback(
+    (lineIndex: number) => {
+      const line = activeLines[lineIndex];
+      const newTag: "main" | "adlib" = line.tag === "adlib" ? "main" : "adlib";
+      const updater = (prev: LyricLine[]) =>
+        prev.map((l) =>
+          l.start === line.start && l.text === line.text
+            ? { ...l, tag: newTag }
+            : l,
+        );
+      if (activeVersion === "explicit") {
+        setExplicitLines(updater);
+      } else {
+        setFmlyLines((prev) => (prev ? updater(prev) : prev));
+      }
+      toast.success(
+        newTag === "adlib"
+          ? "Line converted to Adlib"
+          : "Line converted to Main vocal",
       );
-    if (activeVersion === "explicit") {
-      setExplicitLines(updater);
-    } else {
-      setFmlyLines((prev) => (prev ? updater(prev) : prev));
-    }
-    toast.success(newTag === "adlib" ? "Line converted to Adlib" : "Line converted to Main vocal");
-  }, [activeLines, activeVersion]);
+    },
+    [activeLines, activeVersion],
+  );
 
   // ── Word-level splitter ───────────────────────────────────────────────────
   // Store selection at mouseUp time — clicking the menu clears the browser selection
-  const [selectionLineIndex, setSelectionLineIndex] = useState<number | null>(null);
-  const [capturedSelectionText, setCapturedSelectionText] = useState<string>("");
+  const [selectionLineIndex, setSelectionLineIndex] = useState<number | null>(
+    null,
+  );
+  const [capturedSelectionText, setCapturedSelectionText] =
+    useState<string>("");
 
-  const handleSplitToAdlib = useCallback((lineIndex: number) => {
-    const selectedText = capturedSelectionText.trim();
-    if (!selectedText) {
-      toast.error("Select the adlib word(s) first, then choose Split new line Adlib");
-      return;
-    }
-    const line = activeLines[lineIndex];
-    const remaining = line.text.replace(selectedText, "").replace(/\s{2,}/g, " ").trim();
-    if (!remaining) {
-      toast.error("Cannot split — nothing would remain on the main line");
-      return;
-    }
+  const handleSplitToAdlib = useCallback(
+    (lineIndex: number) => {
+      const selectedText = capturedSelectionText.trim();
+      if (!selectedText) {
+        toast.error(
+          "Select the adlib word(s) first, then choose Split new line Adlib",
+        );
+        return;
+      }
+      const line = activeLines[lineIndex];
+      const remaining = line.text
+        .replace(selectedText, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      if (!remaining) {
+        toast.error("Cannot split — nothing would remain on the main line");
+        return;
+      }
 
-    const mainLine: LyricLine = { ...line, text: remaining, tag: "main" };
-    const adlibLine: LyricLine = { start: line.start, end: line.end, text: selectedText, tag: "adlib" };
+      const mainLine: LyricLine = { ...line, text: remaining, tag: "main" };
+      const adlibLine: LyricLine = {
+        start: line.start,
+        end: line.end,
+        text: selectedText,
+        tag: "adlib",
+      };
 
-    const updater = (prev: LyricLine[]): LyricLine[] => {
-      const idx = prev.findIndex((l) => l.start === line.start && l.text === line.text);
-      if (idx === -1) return prev;
-      return [...prev.slice(0, idx), mainLine, adlibLine, ...prev.slice(idx + 1)];
-    };
-    if (activeVersion === "explicit") {
-      setExplicitLines(updater);
-    } else {
-      setFmlyLines((prev) => (prev ? updater(prev) : prev));
-    }
-    setCapturedSelectionText("");
-    setSelectionLineIndex(null);
-    toast.success(`"${selectedText}" split to new Adlib line`);
-  }, [capturedSelectionText, activeLines, activeVersion]);
+      const updater = (prev: LyricLine[]): LyricLine[] => {
+        const idx = prev.findIndex(
+          (l) => l.start === line.start && l.text === line.text,
+        );
+        if (idx === -1) return prev;
+        return [
+          ...prev.slice(0, idx),
+          mainLine,
+          adlibLine,
+          ...prev.slice(idx + 1),
+        ];
+      };
+      if (activeVersion === "explicit") {
+        setExplicitLines(updater);
+      } else {
+        setFmlyLines((prev) => (prev ? updater(prev) : prev));
+      }
+      setCapturedSelectionText("");
+      setSelectionLineIndex(null);
+      toast.success(`"${selectedText}" split to new Adlib line`);
+    },
+    [capturedSelectionText, activeLines, activeVersion],
+  );
 
   // Report project title + right content (save indicator + debug) to header
   useEffect(() => {
-    const title = (data.title && data.title !== "Unknown" && data.title !== "Untitled") ? data.title : audioFile.name.replace(/\.[^.]+$/, "");
+    const title =
+      data.title && data.title !== "Unknown" && data.title !== "Untitled"
+        ? data.title
+        : audioFile.name.replace(/\.[^.]+$/, "");
     const rightContent = (
       <>
         {user && saveStatus !== "idle" && (
@@ -850,7 +1121,16 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     );
     onHeaderProject?.({ title, onBack, rightContent });
     return () => onHeaderProject?.(null);
-  }, [data.title, audioFile.name, onBack, onHeaderProject, saveStatus, user, isAdmin, debugData]);
+  }, [
+    data.title,
+    audioFile.name,
+    onBack,
+    onHeaderProject,
+    saveStatus,
+    user,
+    isAdmin,
+    debugData,
+  ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -863,14 +1143,19 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       {isAdmin && debugData && showDebug && (
         <div className="w-full glass-card rounded-xl p-4 border border-border/40 shadow-lg max-h-[85vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-mono font-semibold text-foreground">🔬 Full Debug Panel</span>
+            <span className="text-[11px] font-mono font-semibold text-foreground">
+              🔬 Full Debug Panel
+            </span>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono text-muted-foreground/40">
-                v{debugData.version} · {Math.round((debugData.inputBytes || 0) / 1024)}KB
+                v{debugData.version} ·{" "}
+                {Math.round((debugData.inputBytes || 0) / 1024)}KB
               </span>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(JSON.stringify(debugData, null, 2));
+                  navigator.clipboard.writeText(
+                    JSON.stringify(debugData, null, 2),
+                  );
                   toast.success("Full debug data copied");
                 }}
                 className="text-[10px] font-mono text-muted-foreground/60 hover:text-foreground border border-border/30 rounded px-1.5 py-0.5"
@@ -883,8 +1168,21 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           {/* ── WHISPER INPUT ── */}
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">📥 Whisper — Input</p>
-              <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.whisper?.input, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+              <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">
+                📥 Whisper — Input
+              </p>
+              <button
+                onClick={() =>
+                  navigator.clipboard
+                    .writeText(
+                      JSON.stringify(debugData.whisper?.input, null, 2),
+                    )
+                    .then(() => toast.success("Copied"))
+                }
+                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
+              >
+                copy
+              </button>
             </div>
             <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
               {JSON.stringify(debugData.whisper?.input, null, 2) || "(no data)"}
@@ -894,28 +1192,67 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           {/* ── WHISPER OUTPUT ── */}
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">📤 Whisper — Output ({debugData.whisper?.output?.wordCount ?? 0} words / {debugData.whisper?.output?.segmentCount} segments)</p>
-              <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.whisper?.output, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+              <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">
+                📤 Whisper — Output ({debugData.whisper?.output?.wordCount ?? 0}{" "}
+                words / {debugData.whisper?.output?.segmentCount} segments)
+              </p>
+              <button
+                onClick={() =>
+                  navigator.clipboard
+                    .writeText(
+                      JSON.stringify(debugData.whisper?.output, null, 2),
+                    )
+                    .then(() => toast.success("Copied"))
+                }
+                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
+              >
+                copy
+              </button>
             </div>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Raw text:</p>
+            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
+              Raw text:
+            </p>
             <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
               {debugData.whisper?.output?.rawText || "(no raw text)"}
             </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Words — source of truth (first 40):</p>
+            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
+              Words — source of truth (first 40):
+            </p>
             <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap mb-1">
-              {JSON.stringify(debugData.whisper?.output?.words?.slice(0, 40), null, 2) || "(no words — upgrade needed)"}
+              {JSON.stringify(
+                debugData.whisper?.output?.words?.slice(0, 40),
+                null,
+                2,
+              ) || "(no words — upgrade needed)"}
             </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Segments — grouping context (first 20):</p>
+            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
+              Segments — grouping context (first 20):
+            </p>
             <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
-              {JSON.stringify(debugData.whisper?.output?.segments?.slice(0, 20), null, 2) || "(no segments)"}
+              {JSON.stringify(
+                debugData.whisper?.output?.segments?.slice(0, 20),
+                null,
+                2,
+              ) || "(no segments)"}
             </pre>
           </div>
 
           {/* ── GEMINI INPUT ── */}
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-purple-400/90 uppercase tracking-wider">📥 Gemini — Input</p>
-              <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.gemini?.input, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+              <p className="text-[10px] font-mono text-purple-400/90 uppercase tracking-wider">
+                📥 Gemini — Input
+              </p>
+              <button
+                onClick={() =>
+                  navigator.clipboard
+                    .writeText(JSON.stringify(debugData.gemini?.input, null, 2))
+                    .then(() => toast.success("Copied"))
+                }
+                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
+              >
+                copy
+              </button>
             </div>
             <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
               {JSON.stringify(debugData.gemini?.input, null, 2) || "(no data)"}
@@ -926,30 +1263,60 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1">
               <p className="text-[10px] font-mono text-purple-400/90 uppercase tracking-wider">
-                📤 Gemini — Output {debugData.gemini?.output?.status === "failed" ? "❌ FAILED" : `✓ (${debugData.gemini?.output?.adlibsCount} adlibs)`}
+                📤 Gemini — Output{" "}
+                {debugData.gemini?.output?.status === "failed"
+                  ? "❌ FAILED"
+                  : `✓ (${debugData.gemini?.output?.adlibsCount} adlibs)`}
               </p>
-              <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.gemini?.output, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+              <button
+                onClick={() =>
+                  navigator.clipboard
+                    .writeText(
+                      JSON.stringify(debugData.gemini?.output, null, 2),
+                    )
+                    .then(() => toast.success("Copied"))
+                }
+                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
+              >
+                copy
+              </button>
             </div>
             {debugData.gemini?.output?.status === "failed" && (
               <pre className="text-[10px] font-mono text-red-400 bg-red-950/20 border border-red-500/20 rounded p-2 mb-1 whitespace-pre-wrap">
                 Error: {debugData.gemini?.output?.error}
               </pre>
             )}
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Raw response ({debugData.gemini?.output?.rawResponseLength || 0} chars):</p>
+            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
+              Raw response ({debugData.gemini?.output?.rawResponseLength || 0}{" "}
+              chars):
+            </p>
             <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap mb-1">
-              {debugData.gemini?.output?.rawResponseContent?.slice(0, 800) || "(no response)"}
+              {debugData.gemini?.output?.rawResponseContent?.slice(0, 800) ||
+                "(no response)"}
             </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Parsed metadata:</p>
+            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
+              Parsed metadata:
+            </p>
             <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
-              {JSON.stringify(debugData.gemini?.output?.metadata, null, 2) || "(none)"}
+              {JSON.stringify(debugData.gemini?.output?.metadata, null, 2) ||
+                "(none)"}
             </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Hook detected:</p>
+            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
+              Hook detected:
+            </p>
             <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
-              {JSON.stringify(debugData.gemini?.output?.hottest_hook, null, 2) || "null"}
+              {JSON.stringify(
+                debugData.gemini?.output?.hottest_hook,
+                null,
+                2,
+              ) || "null"}
             </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">Adlibs ({(debugData.gemini?.output?.adlibs || []).length}):</p>
+            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
+              Adlibs ({(debugData.gemini?.output?.adlibs || []).length}):
+            </p>
             <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap">
-              {JSON.stringify(debugData.gemini?.output?.adlibs, null, 2) || "[]"}
+              {JSON.stringify(debugData.gemini?.output?.adlibs, null, 2) ||
+                "[]"}
             </pre>
           </div>
 
@@ -957,11 +1324,25 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           <div className="mb-2">
             <div className="flex items-center justify-between mb-1">
               <p className="text-[10px] font-mono text-green-400/90 uppercase tracking-wider">
-                🎯 Merged Output — {debugData.merged?.totalLines} lines ({debugData.merged?.mainLines} main / {debugData.merged?.adlibLines} adlib) · {debugData.merged?.hooks?.length || 0} hooks
+                🎯 Merged Output — {debugData.merged?.totalLines} lines (
+                {debugData.merged?.mainLines} main /{" "}
+                {debugData.merged?.adlibLines} adlib) ·{" "}
+                {debugData.merged?.hooks?.length || 0} hooks
               </p>
-              <button onClick={() => navigator.clipboard.writeText(JSON.stringify(debugData.merged, null, 2)).then(() => toast.success("Copied"))} className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground">copy</button>
+              <button
+                onClick={() =>
+                  navigator.clipboard
+                    .writeText(JSON.stringify(debugData.merged, null, 2))
+                    .then(() => toast.success("Copied"))
+                }
+                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
+              >
+                copy
+              </button>
             </div>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">All lines:</p>
+            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
+              All lines:
+            </p>
             <pre className="text-[10px] font-mono text-muted-foreground bg-green-950/20 border border-green-500/10 rounded p-2 overflow-auto max-h-48 whitespace-pre-wrap">
               {JSON.stringify(debugData.merged?.allLines, null, 2) || "[]"}
             </pre>
@@ -971,13 +1352,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
       {/* Metadata strip removed — mood/description now in Song DNA */}
 
-      
-
       <div className="flex flex-col lg:flex-row gap-4 items-start">
-
         {/* ── LEFT: Waveform + Lyrics + Export ── */}
         <div className="flex-1 min-w-0 w-full space-y-3">
-
           {/* Waveform */}
           <div className="glass-card rounded-xl p-3">
             {hasRealAudio ? (
@@ -988,9 +1365,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   currentTime={currentTime}
                   onSeek={seekTo}
                   onTogglePlay={togglePlay}
-                  loopRegion={activeHookIndex !== null && hooks[activeHookIndex]
-                    ? { start: hooks[activeHookIndex].start, end: hooks[activeHookIndex].end, duration: waveform?.duration ?? 1 }
-                    : null}
+                  loopRegion={
+                    activeHookIndex !== null && hooks[activeHookIndex]
+                      ? {
+                          start: hooks[activeHookIndex].start,
+                          end: hooks[activeHookIndex].end,
+                          duration: waveform?.duration ?? 1,
+                        }
+                      : null
+                  }
                   beats={beatGrid?.beats ?? null}
                   beatGridLoading={beatGridLoading}
                 />
@@ -1003,8 +1386,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       exit={{ opacity: 0, y: -4 }}
                       className="flex items-center gap-1.5 mt-2 px-1"
                     >
-                      <Repeat2 size={11} className="text-primary animate-pulse" />
-                      <span className="text-[10px] font-mono text-primary">Looping clip — click Stop to exit</span>
+                      <Repeat2
+                        size={11}
+                        className="text-primary animate-pulse"
+                      />
+                      <span className="text-[10px] font-mono text-primary">
+                        Looping clip — click Stop to exit
+                      </span>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1025,7 +1413,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     }}
                   />
                 </label>
-                <span className="text-[10px] text-muted-foreground/60 font-mono">Audio files aren't saved or stored.</span>
+                <span className="text-[10px] text-muted-foreground/60 font-mono">
+                  Audio files aren't saved or stored.
+                </span>
               </div>
             )}
           </div>
@@ -1034,11 +1424,19 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           <div className="glass-card rounded-xl p-4 space-y-1">
             {activeLines.length > 0 && (
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] text-muted-foreground">Double-click to edit · Select text + ⋯ to split adlib</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Double-click to edit · Select text + ⋯ to split adlib
+                </p>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground/50">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-foreground/20 inline-block" /> main</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-primary/20 inline-block" /> adlib</span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-sm bg-foreground/20 inline-block" />{" "}
+                      main
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-sm bg-primary/20 inline-block" />{" "}
+                      adlib
+                    </span>
                   </div>
                   <button
                     onClick={() => {
@@ -1060,26 +1458,33 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               </div>
             )}
             {/* v3.7: scroll height anchored to last element's start time so Outro adlibs are reachable */}
-            <div ref={lyricsContainerRef} className="overflow-y-auto space-y-0.5" style={{ maxHeight: "45vh" }}>
+            <div
+              ref={lyricsContainerRef}
+              className="overflow-y-auto space-y-0.5"
+              style={{ maxHeight: "45vh" }}
+            >
               {activeLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   {activeVersion === "fmly"
-                    ? "Click \"Make FMLY Friendly\" above to generate the clean version."
+                    ? 'Click "Make FMLY Friendly" above to generate the clean version.'
                     : "No lyrics detected — this may be an instrumental track."}
                 </p>
               ) : (
-              activeLines.map((line, i) => {
+                activeLines.map((line, i) => {
                   const isAdlib = line.tag === "adlib";
                   const isFloating = isAdlib && line.isFloating;
                   // v3.8: hide conflict marker on QA-corrected lines (purple badge already shown)
-                  const hasConflict = isAdlib && !!line.geminiConflict && !line.isCorrection;
+                  const hasConflict =
+                    isAdlib && !!line.geminiConflict && !line.isCorrection;
                   const isActive = activeLineIndices.has(i);
                   const isPrimary = i === primaryActiveLine;
                   const isEditing = i === editingIndex;
                   // Highlight lines that fall within the active looping hook
-                  const activeHook = activeHookIndex !== null ? hooks[activeHookIndex] : null;
+                  const activeHook =
+                    activeHookIndex !== null ? hooks[activeHookIndex] : null;
                   const isInHook = activeHook
-                    ? line.start >= activeHook.start && line.start < activeHook.end
+                    ? line.start >= activeHook.start &&
+                      line.start < activeHook.end
                     : false;
                   const isSelected = selectionLineIndex === i;
 
@@ -1087,7 +1492,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
                   // v3.7: render corrected word with purple underline
                   const renderLineText = () => {
-                    if (!isEditing && !isAdlib && line.isCorrection && line.correctedWord && line.text.includes(line.correctedWord)) {
+                    if (
+                      !isEditing &&
+                      !isAdlib &&
+                      line.isCorrection &&
+                      line.correctedWord &&
+                      line.text.includes(line.correctedWord)
+                    ) {
                       const parts = line.text.split(line.correctedWord);
                       return (
                         <span
@@ -1117,15 +1528,22 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     }
                     // Word-level highlighting: interpolate timestamps per word
                     const words = line.text.split(/(\s+)/);
-                    const nonSpaceWords = words.filter(w => w.trim().length > 0);
-                    const totalChars = nonSpaceWords.reduce((s, w) => s + w.length, 0);
+                    const nonSpaceWords = words.filter(
+                      (w) => w.trim().length > 0,
+                    );
+                    const totalChars = nonSpaceWords.reduce(
+                      (s, w) => s + w.length,
+                      0,
+                    );
                     const lineDuration = line.end - line.start;
 
                     let charsSoFar = 0;
-                    const wordTimings = nonSpaceWords.map(w => {
-                      const wordStart = line.start + (charsSoFar / totalChars) * lineDuration;
+                    const wordTimings = nonSpaceWords.map((w) => {
+                      const wordStart =
+                        line.start + (charsSoFar / totalChars) * lineDuration;
                       charsSoFar += w.length;
-                      const wordEnd = line.start + (charsSoFar / totalChars) * lineDuration;
+                      const wordEnd =
+                        line.start + (charsSoFar / totalChars) * lineDuration;
                       return { word: w, start: wordStart, end: wordEnd };
                     });
 
@@ -1150,12 +1568,22 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         }}
                       >
                         {words.map((token, ti) => {
-                          if (token.trim().length === 0) return <span key={ti}>{token}</span>;
+                          if (token.trim().length === 0)
+                            return <span key={ti}>{token}</span>;
                           const timing = wordTimings[timingIdx++];
-                          const isWordActive = isActive && timing && currentTime >= timing.start && currentTime < timing.end + HIGHLIGHT_EPSILON;
-                          const isWordPast = isActive && timing && currentTime >= timing.end + HIGHLIGHT_EPSILON;
+                          const isWordActive =
+                            isActive &&
+                            timing &&
+                            currentTime >= timing.start &&
+                            currentTime < timing.end + HIGHLIGHT_EPSILON;
+                          const isWordPast =
+                            isActive &&
+                            timing &&
+                            currentTime >= timing.end + HIGHLIGHT_EPSILON;
                           // FMLY: highlight censored words (all asterisks) in green
-                          const isCensored = activeVersion === "fmly" && /^\*+$/.test(token.trim());
+                          const isCensored =
+                            activeVersion === "fmly" &&
+                            /^\*+$/.test(token.trim());
                           return (
                             <span
                               key={ti}
@@ -1188,15 +1616,17 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                       className={`group flex items-start gap-3 px-3 py-1 rounded-lg transition-all ${
                         isAdlib ? "ml-6 opacity-70" : ""
                       } ${
-                        isFloating ? "border-l-2 border-dashed border-primary/30" : ""
+                        isFloating
+                          ? "border-l-2 border-dashed border-primary/30"
+                          : ""
                       } ${
                         isActive
                           ? isAdlib
                             ? "bg-primary/5 text-foreground"
                             : "bg-primary/10 text-foreground"
                           : isInHook
-                          ? "bg-primary/5 text-foreground/80"
-                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
+                            ? "bg-primary/5 text-foreground/80"
+                            : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
                       }`}
                     >
                       <span
@@ -1217,16 +1647,24 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                             if (e.key === "Escape") setEditingIndex(null);
                           }}
                         />
-                      ) : renderLineText()}
+                      ) : (
+                        renderLineText()
+                      )}
                       {/* v2.2: Floating chip badge */}
                       {isFloating && (
-                        <span className="shrink-0 text-[9px] font-mono text-primary/50 border border-primary/20 rounded px-1 py-0.5 self-center" title="Floating adlib — no matching word in Whisper timeline">
+                        <span
+                          className="shrink-0 text-[9px] font-mono text-primary/50 border border-primary/20 rounded px-1 py-0.5 self-center"
+                          title="Floating adlib — no matching word in Whisper timeline"
+                        >
                           float
                         </span>
                       )}
                       {/* v3.7: QA correction badge on main lines */}
                       {!isAdlib && line.isCorrection && (
-                        <span className="shrink-0 text-[9px] font-mono text-purple-400/70 border border-purple-400/20 rounded px-1 py-0.5 self-center" title={`AI corrected: "${line.geminiConflict}" → "${line.correctedWord}"`}>
+                        <span
+                          className="shrink-0 text-[9px] font-mono text-purple-400/70 border border-purple-400/20 rounded px-1 py-0.5 self-center"
+                          title={`AI corrected: "${line.geminiConflict}" → "${line.correctedWord}"`}
+                        >
                           ✱ fix
                         </span>
                       )}
@@ -1235,11 +1673,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                         <button
                           className="shrink-0 opacity-60 hover:opacity-100 transition-opacity self-center"
                           title="Gemini and Whisper text differ — click to resolve"
-                          onClick={() => setConflictLine({
-                            lineIndex: i,
-                            whisperText: line.geminiConflict!,
-                            geminiText: line.text,
-                          })}
+                          onClick={() =>
+                            setConflictLine({
+                              lineIndex: i,
+                              whisperText: line.geminiConflict!,
+                              geminiText: line.text,
+                            })
+                          }
                         >
                           <AlertCircle size={12} className="text-yellow-500" />
                         </button>
@@ -1264,7 +1704,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                           {!isAdlib && (
                             <>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleSplitToAdlib(i)}>
+                              <DropdownMenuItem
+                                onClick={() => handleSplitToAdlib(i)}
+                              >
                                 Split new line Adlib
                               </DropdownMenuItem>
                             </>
@@ -1284,7 +1726,9 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Sparkles size={14} className="text-primary" />
-                  <span className="text-[11px] font-mono text-muted-foreground">Song DNA</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    Song DNA
+                  </span>
                 </div>
                 <button
                   onClick={fetchSongDna}
@@ -1309,7 +1753,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     </span>
                   </div>
                   <button
-                    onClick={() => { setSongDna(null); setDnaRequested(false); }}
+                    onClick={() => {
+                      setSongDna(null);
+                      setDnaRequested(false);
+                    }}
                     className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
                   >
                     Reveal Again
@@ -1332,37 +1779,46 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                   </div>
                 )}
 
-
                 {/* Song Meaning */}
-                {songDna.meaning && (songDna.meaning.theme || songDna.meaning.summary) && (
-                  <div className="space-y-2 pt-2 border-t border-border/30">
-                    {songDna.meaning.theme && (
-                      <p className="text-sm font-semibold text-foreground">{songDna.meaning.theme}</p>
-                    )}
-                    {songDna.meaning.summary && (
-                      <p className="text-sm text-muted-foreground leading-relaxed">{songDna.meaning.summary}</p>
-                    )}
-                    {songDna.meaning.imagery && songDna.meaning.imagery.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {songDna.meaning.imagery.map((img, idx) => (
-                          <span key={idx} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                            {img}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {songDna.meaning &&
+                  (songDna.meaning.theme || songDna.meaning.summary) && (
+                    <div className="space-y-2 pt-2 border-t border-border/30">
+                      {songDna.meaning.theme && (
+                        <p className="text-sm font-semibold text-foreground">
+                          {songDna.meaning.theme}
+                        </p>
+                      )}
+                      {songDna.meaning.summary && (
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {songDna.meaning.summary}
+                        </p>
+                      )}
+                      {songDna.meaning.imagery &&
+                        songDna.meaning.imagery.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {songDna.meaning.imagery.map((img, idx) => (
+                              <span
+                                key={idx}
+                                className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+                              >
+                                {img}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+                  )}
               </div>
             ) : (
-              <p className="text-[11px] text-muted-foreground">Couldn't analyze — try again later.</p>
+              <p className="text-[11px] text-muted-foreground">
+                Couldn't analyze — try again later.
+              </p>
             )}
           </div>
         </div>
 
         {/* ── RIGHT: Controls panel ── */}
         <div className="w-full lg:w-56 lg:shrink-0 space-y-4">
-
           {/* Version toggle */}
           <div className="glass-card rounded-xl p-3">
             <VersionToggle
@@ -1391,9 +1847,15 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               lineFormat={activeMeta.lineFormat}
               socialPreset={activeMeta.socialPreset}
               strictness={fmlyMeta.strictness}
-              onLineFormatChange={(v) => updateMeta(activeVersion, { lineFormat: v })}
-              onSocialPresetChange={(v) => updateMeta(activeVersion, { socialPreset: v })}
-              onStrictnessChange={(v) => setFmlyMeta((m) => ({ ...m, strictness: v }))}
+              onLineFormatChange={(v) =>
+                updateMeta(activeVersion, { lineFormat: v })
+              }
+              onSocialPresetChange={(v) =>
+                updateMeta(activeVersion, { socialPreset: v })
+              }
+              onStrictnessChange={(v) =>
+                setFmlyMeta((m) => ({ ...m, strictness: v }))
+              }
             />
           </div>
 
@@ -1405,16 +1867,29 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               </p>
               <div className="space-y-0">
                 {EXPORT_OPTIONS.map(({ format, label, desc }, idx) => (
-                  <div key={format} className={`flex items-center justify-between py-2 ${idx > 0 ? "border-t border-border/30" : ""}`}>
+                  <div
+                    key={format}
+                    className={`flex items-center justify-between py-2 ${idx > 0 ? "border-t border-border/30" : ""}`}
+                  >
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-medium text-foreground w-7">{label}</span>
-                      <span className="text-[10px] text-muted-foreground">{desc}</span>
+                      <span className="text-xs font-mono font-medium text-foreground w-7">
+                        {label}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {desc}
+                      </span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <button className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors" onClick={() => handleCopy(format)}>
+                      <button
+                        className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => handleCopy(format)}
+                      >
                         {copied === format ? "✓ Copied" : "Copy"}
                       </button>
-                      <button className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors" onClick={() => handleDownload(format)}>
+                      <button
+                        className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => handleDownload(format)}
+                      >
                         Save
                       </button>
                     </div>
@@ -1425,124 +1900,182 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           )}
 
           {/* ── Hottest Hooks — appears after Song DNA is revealed ── */}
-          {hottestHooksEnabled && songDna?.hook && (() => {
-            const hooks2 = [songDna.hook, songDna.secondHook].filter(Boolean) as LyricHook[];
-            const labels = [songDna.hookLabel, songDna.secondHookLabel];
-            const justifications = [songDna.hookJustification, songDna.secondHookJustification];
-            const hasBattle = hooks2.length === 2;
-            return (
-              <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
-                <div className="flex items-center gap-1.5">
-                  <Zap size={11} className="text-primary" />
-                  <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                    {hasBattle ? "Hook Battle" : "Hottest Hook"}
-                  </span>
-                </div>
+          {hottestHooksEnabled &&
+            songDna?.hook &&
+            (() => {
+              const hooks2 = [songDna.hook, songDna.secondHook].filter(
+                Boolean,
+              ) as LyricHook[];
+              const labels = [songDna.hookLabel, songDna.secondHookLabel];
+              const justifications = [
+                songDna.hookJustification,
+                songDna.secondHookJustification,
+              ];
+              const hasBattle = hooks2.length === 2;
+              return (
+                <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
+                  <div className="flex items-center gap-1.5">
+                    <Zap size={11} className="text-primary" />
+                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                      {hasBattle ? "Hook Battle" : "Hottest Hook"}
+                    </span>
+                  </div>
 
-                {hooks2.map((hook, idx) => {
-                  const isLooping = activeHookIndex === idx;
-                  const clipDuration = hook.end - hook.start;
-                  return (
-                    <div key={idx} className={`space-y-1.5 ${idx > 0 ? "pt-2 border-t border-border/20" : ""}`}>
-                      <div className="flex items-center justify-between">
-                        {hasBattle && (
-                          <span className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">
-                            {labels[idx] || `Hook ${idx + 1}`}
-                          </span>
-                        )}
-                        {hook.score > 0 && (
-                          <span className={`text-[10px] font-mono tabular-nums ${hookScoreColor(hook.score)}`}>
-                            {Math.round(hook.score)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        {hook.previewText && (
-                          <p className="text-sm font-medium text-foreground leading-snug flex-1">
-                            "{hook.previewText}"
-                          </p>
-                        )}
-                        <button
-                          onClick={() => playClip(hook, idx)}
-                          className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300 flex-shrink-0 ml-2 ${
-                            isLooping
-                              ? "text-primary bg-primary/10"
-                              : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                          }`}
-                          title={isLooping ? "Stop clip" : "Play clip"}
-                        >
-                          <svg width="28" height="28" viewBox="0 0 28 28" className="absolute inset-0" style={{ transform: "rotate(-90deg)" }}>
-                            <circle cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth="2" />
-                            {isLooping && (
+                  {hooks2.map((hook, idx) => {
+                    const isLooping = activeHookIndex === idx;
+                    const clipDuration = hook.end - hook.start;
+                    return (
+                      <div
+                        key={idx}
+                        className={`space-y-1.5 ${idx > 0 ? "pt-2 border-t border-border/20" : ""}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          {hasBattle && (
+                            <span className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">
+                              {labels[idx] || `Hook ${idx + 1}`}
+                            </span>
+                          )}
+                          {hook.score > 0 && (
+                            <span
+                              className={`text-[10px] font-mono tabular-nums ${hookScoreColor(hook.score)}`}
+                            >
+                              {Math.round(hook.score)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          {hook.previewText && (
+                            <p className="text-sm font-medium text-foreground leading-snug flex-1">
+                              "{hook.previewText}"
+                            </p>
+                          )}
+                          <button
+                            onClick={() => playClip(hook, idx)}
+                            className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300 flex-shrink-0 ml-2 ${
+                              isLooping
+                                ? "text-primary bg-primary/10"
+                                : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                            }`}
+                            title={isLooping ? "Stop clip" : "Play clip"}
+                          >
+                            <svg
+                              width="28"
+                              height="28"
+                              viewBox="0 0 28 28"
+                              className="absolute inset-0"
+                              style={{ transform: "rotate(-90deg)" }}
+                            >
                               <circle
-                                cx="14" cy="14" r={10} fill="none" stroke="currentColor" strokeOpacity={0.9} strokeWidth="2"
-                                strokeDasharray={Math.PI * 2 * 10}
-                                strokeDashoffset={Math.PI * 2 * 10 * (1 - clipProgress)}
-                                strokeLinecap="round"
-                                style={{ transition: "stroke-dashoffset 0.1s linear" }}
+                                cx="14"
+                                cy="14"
+                                r={10}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeOpacity={0.12}
+                                strokeWidth="2"
                               />
+                              {isLooping && (
+                                <circle
+                                  cx="14"
+                                  cy="14"
+                                  r={10}
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeOpacity={0.9}
+                                  strokeWidth="2"
+                                  strokeDasharray={Math.PI * 2 * 10}
+                                  strokeDashoffset={
+                                    Math.PI * 2 * 10 * (1 - clipProgress)
+                                  }
+                                  strokeLinecap="round"
+                                  style={{
+                                    transition: "stroke-dashoffset 0.1s linear",
+                                  }}
+                                />
+                              )}
+                            </svg>
+                            {isLooping ? (
+                              <Pause size={10} />
+                            ) : (
+                              <Play size={10} />
                             )}
-                          </svg>
-                          {isLooping ? <Pause size={10} /> : <Play size={10} />}
-                        </button>
-                      </div>
-                      <p className="text-[10px] font-mono text-muted-foreground" title={justifications[idx] || undefined}>
-                        {formatTimeShort(hook.start)} – {formatTimeShort(hook.end)}
-                        <span className="ml-1 text-muted-foreground/40">({Math.round(clipDuration)}s)</span>
-                      </p>
-                      {songDna?.physicsSpec && (
-                        <button
-                          onClick={() => {
-                            if (hookDanceRunning) {
-                              hookDanceRef.current?.stop();
-                              return;
-                            }
-                            setShowDirectorsCut(true);
-                          }}
-                          className={`w-full text-[10px] font-mono transition-colors py-1 ${
-                            hookDanceRunning
-                              ? "text-primary"
-                              : "text-muted-foreground/60 hover:text-muted-foreground"
-                          }`}
+                          </button>
+                        </div>
+                        <p
+                          className="text-[10px] font-mono text-muted-foreground"
+                          title={justifications[idx] || undefined}
                         >
-                          {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                          {formatTimeShort(hook.start)} –{" "}
+                          {formatTimeShort(hook.end)}
+                          <span className="ml-1 text-muted-foreground/40">
+                            ({Math.round(clipDuration)}s)
+                          </span>
+                        </p>
+                        {songDna?.physicsSpec && (
+                          <button
+                            onClick={() => {
+                              if (hookDanceRunning) {
+                                hookDanceRef.current?.stop();
+                                return;
+                              }
+                              setShowDirectorsCut(true);
+                            }}
+                            className={`w-full text-[10px] font-mono transition-colors py-1 ${
+                              hookDanceRunning
+                                ? "text-primary"
+                                : "text-muted-foreground/60 hover:text-muted-foreground"
+                            }`}
+                          >
+                            {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
 
-                {/* Publish Hook Battle / Hook Page — below both hooks */}
-                {songDna?.physicsSpec && beatGrid && (
-                  <PublishHookButton
-                    hook={hooks2[0]}
-                    secondHook={hooks2[1] || null}
-                    hookLabel={songDna.hookLabel}
-                    secondHookLabel={songDna.secondHookLabel}
-                    physicsSpec={songDna.physicsSpec as PhysicsSpec}
-                    lines={data.lines}
-                    beatGrid={{ bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence }}
-                    audioFile={audioFile}
-                    songTitle={data.title}
-                    artistName={data.artist}
-                    system={hookDanceOverrides.system || songDna.physicsSpec.system}
-                    palette={songDna.physicsSpec.palette || ["#ffffff", "#a855f7", "#ec4899"]}
-                    fingerprint={artistFingerprint}
-                    onViewBattle={(url) => setBattlePopupUrl(url)}
-                  />
-                )}
-                {features?.lyric_video && (
-                  <button
-                    onClick={() => setVideoComposerOpen(true)}
-                    className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
-                  >
-                    <Video size={10} />
-                    <span>Create Lyric Video</span>
-                  </button>
-                )}
-              </div>
-            );
-          })()}
+                  {/* Publish Hook Battle / Hook Page — below both hooks */}
+                  {songDna?.physicsSpec && beatGrid && (
+                    <PublishHookButton
+                      hook={hooks2[0]}
+                      secondHook={hooks2[1] || null}
+                      hookLabel={songDna.hookLabel}
+                      secondHookLabel={songDna.secondHookLabel}
+                      physicsSpec={songDna.physicsSpec as PhysicsSpec}
+                      lines={data.lines}
+                      beatGrid={{
+                        bpm: beatGrid.bpm,
+                        beats: beatGrid.beats,
+                        confidence: beatGrid.confidence,
+                      }}
+                      audioFile={audioFile}
+                      songTitle={data.title}
+                      artistName={data.artist}
+                      system={
+                        hookDanceOverrides.system || songDna.physicsSpec.system
+                      }
+                      palette={
+                        songDna.physicsSpec.palette || [
+                          "#ffffff",
+                          "#a855f7",
+                          "#ec4899",
+                        ]
+                      }
+                      fingerprint={artistFingerprint}
+                      onViewBattle={(url) => setBattlePopupUrl(url)}
+                    />
+                  )}
+                  {features?.lyric_video && (
+                    <button
+                      onClick={() => setVideoComposerOpen(true)}
+                      className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
+                    >
+                      <Video size={10} />
+                      <span>Create Lyric Video</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
           {/* ── Lyric Dance — Full Song Video ── */}
           {songDna?.physicsSpec && beatGrid && (
@@ -1554,8 +2087,10 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Full-song lyric video powered by the {songDna.physicsSpec.system} physics engine.
-                All {data.lines.filter(l => l.tag !== "adlib").length} lines rendered with effects.
+                Full-song lyric video powered by the{" "}
+                {songDna.physicsSpec.system} physics engine. All{" "}
+                {data.lines.filter((l) => l.tag !== "adlib").length} lines
+                rendered with effects.
               </p>
               <button
                 onClick={() => setLyricDanceExportOpen(true)}
@@ -1567,12 +2102,28 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               <PublishLyricDanceButton
                 physicsSpec={songDna.physicsSpec as PhysicsSpec}
                 lines={data.lines}
-                beatGrid={{ bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence }}
+                beatGrid={{
+                  bpm: beatGrid.bpm,
+                  beats: beatGrid.beats,
+                  confidence: beatGrid.confidence,
+                }}
                 audioFile={audioFile}
                 songTitle={data.title}
-                artistName={(data.artist && data.artist !== "Unknown" && data.artist !== "UNKNOWN") ? data.artist : "—"}
+                artistName={
+                  data.artist &&
+                  data.artist !== "Unknown" &&
+                  data.artist !== "UNKNOWN"
+                    ? data.artist
+                    : "—"
+                }
                 system={songDna.physicsSpec.system}
-                palette={songDna.physicsSpec.palette || ["#ffffff", "#a855f7", "#ec4899"]}
+                palette={
+                  songDna.physicsSpec.palette || [
+                    "#ffffff",
+                    "#a855f7",
+                    "#ec4899",
+                  ]
+                }
                 fingerprint={artistFingerprint}
                 seed={`${data.title}-lyric-dance`}
               />
@@ -1588,106 +2139,143 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
 
       {/* Director's Cut overlay — system selection */}
       <AnimatePresence>
-        {showDirectorsCut && songDna?.physicsSpec && songDna.hook && beatGrid?.beats && (
-          <DirectorsCutScreen
-            baseSpec={songDna.physicsSpec as PhysicsSpec}
-            beats={beatGrid.beats.map((t, i) => ({
-              time: t,
-              isDownbeat: i % 4 === 0,
-              strength: i % 4 === 0 ? 1 : 0.6,
-            }))}
-            lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
-            hookStart={songDna.hook.start}
-            hookEnd={songDna.hook.end}
-            audioFile={audioFile}
-            seedBase={`${data.title}-${songDna.hook.start.toFixed(3)}`}
-            onSelect={(system) => {
-              setShowDirectorsCut(false);
-              // Launch Hook Dance with the selected system
-              const audio = audioRef.current;
-              if (!audio || !beatGrid?.beats) return;
-
-              // Unlock audio synchronously within user gesture context
-              audio.currentTime = songDna.hook!.start;
-              audio.play().catch(() => {});
-
-              const beats: BeatTick[] = beatGrid.beats.map((t, i) => ({
+        {showDirectorsCut &&
+          songDna?.physicsSpec &&
+          songDna.hook &&
+          beatGrid?.beats && (
+            <DirectorsCutScreen
+              baseSpec={songDna.physicsSpec as PhysicsSpec}
+              beats={beatGrid.beats.map((t, i) => ({
                 time: t,
                 isDownbeat: i % 4 === 0,
                 strength: i % 4 === 0 ? 1 : 0.6,
-              }));
-              const hook = songDna.hook!;
-              setHookDanceOverrides({ system });
-              const spec = { ...(songDna.physicsSpec as PhysicsSpec), system };
-              const engine = new HookDanceEngine(
-                spec,
-                beats,
-                hook.start,
-                hook.end,
-                audio,
-                {
-                  onFrame: (state, time, bc) => {
-                    setHookDanceState(state);
-                    setHookDanceTime(time);
-                    setHookDanceBeatCount(bc);
+              }))}
+              lines={data.lines.filter(
+                (l) =>
+                  l.start < songDna.hook!.end && l.end > songDna.hook!.start,
+              )}
+              hookStart={songDna.hook.start}
+              hookEnd={songDna.hook.end}
+              audioFile={audioFile}
+              seedBase={`${data.title}-${songDna.hook.start.toFixed(3)}`}
+              onSelect={(system) => {
+                setShowDirectorsCut(false);
+                // Launch Hook Dance with the selected system
+                const audio = audioRef.current;
+                if (!audio || !beatGrid?.beats) return;
+
+                // Unlock audio synchronously within user gesture context
+                audio.currentTime = songDna.hook!.start;
+                audio.play().catch(() => {});
+
+                const beats: BeatTick[] = beatGrid.beats.map((t, i) => ({
+                  time: t,
+                  isDownbeat: i % 4 === 0,
+                  strength: i % 4 === 0 ? 1 : 0.6,
+                }));
+                const hook = songDna.hook!;
+                setHookDanceOverrides({ system });
+                const spec = {
+                  ...(songDna.physicsSpec as PhysicsSpec),
+                  system,
+                };
+                const engine = new HookDanceEngine(
+                  spec,
+                  beats,
+                  hook.start,
+                  hook.end,
+                  audio,
+                  {
+                    onFrame: (state, time, bc) => {
+                      setHookDanceState(state);
+                      setHookDanceTime(time);
+                      setHookDanceBeatCount(bc);
+                    },
+                    onEnd: () => {
+                      setHookDanceRunning(false);
+                      setHookDanceState(null);
+                      setHookDanceTime(0);
+                      setHookDanceBeatCount(0);
+                    },
                   },
-                  onEnd: () => {
-                    setHookDanceRunning(false);
-                    setHookDanceState(null);
-                    setHookDanceTime(0);
-                    setHookDanceBeatCount(0);
-                  },
-                },
-                `${data.title}-${hook.start.toFixed(3)}`,
-              );
-              hookDanceRef.current = engine;
-              hookDancePrngRef.current = engine.prng;
-              hookDanceBeatsRef.current = beats;
-              setHookDanceRunning(true);
-              engine.start();
-            }}
-            onClose={() => setShowDirectorsCut(false)}
-          />
-        )}
+                  `${data.title}-${hook.start.toFixed(3)}`,
+                );
+                hookDanceRef.current = engine;
+                hookDancePrngRef.current = engine.prng;
+                hookDanceBeatsRef.current = beats;
+                setHookDanceRunning(true);
+                engine.start();
+              }}
+              onClose={() => setShowDirectorsCut(false)}
+            />
+          )}
       </AnimatePresence>
 
       {/* Hook Dance full-bleed canvas overlay */}
       <AnimatePresence>
-        {hookDanceRunning && songDna?.physicsSpec && songDna.hook && hookDancePrngRef.current && (
-          <HookDanceCanvas
-            physicsState={hookDanceOverrides.energyMultiplier && hookDanceState ? {
-              ...hookDanceState,
-              scale: 1 + (hookDanceState.scale - 1) * hookDanceOverrides.energyMultiplier,
-              shake: hookDanceState.shake * (hookDanceOverrides.energyMultiplier ?? 1),
-              glow: hookDanceState.glow * (hookDanceOverrides.energyMultiplier ?? 1),
-            } : hookDanceState}
-            spec={hookDanceOverrides.system
-              ? { ...(songDna.physicsSpec as PhysicsSpec), system: hookDanceOverrides.system }
-              : songDna.physicsSpec as PhysicsSpec}
-            lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
-            hookStart={songDna.hook.start}
-            hookEnd={songDna.hook.end}
-            currentTime={hookDanceTime}
-            beatCount={hookDanceBeatCount}
-            prng={hookDancePrngRef.current}
-            onClose={() => hookDanceRef.current?.stop()}
-            onExport={() => setHookDanceExportOpen(true)}
-            onOverrides={setHookDanceOverrides}
-            fingerprint={artistFingerprint}
-            onFingerprintChange={(dna) => setArtistFingerprint(dna)}
-            songContext={{
-              bpm: beatGrid?.bpm,
-              mood: songDna?.mood,
-              physics_system: hookDanceOverrides.system || songDna?.physicsSpec?.system,
-              hook_lyric: songDna?.hook?.previewText,
-              description: songDna?.description,
-            }}
-          />
-        )}
+        {hookDanceRunning &&
+          songDna?.physicsSpec &&
+          songDna.hook &&
+          hookDancePrngRef.current && (
+            <HookDanceCanvas
+              physicsState={
+                hookDanceOverrides.energyMultiplier && hookDanceState
+                  ? {
+                      ...hookDanceState,
+                      scale:
+                        1 +
+                        (hookDanceState.scale - 1) *
+                          hookDanceOverrides.energyMultiplier,
+                      shake:
+                        hookDanceState.shake *
+                        (hookDanceOverrides.energyMultiplier ?? 1),
+                      glow:
+                        hookDanceState.glow *
+                        (hookDanceOverrides.energyMultiplier ?? 1),
+                    }
+                  : hookDanceState
+              }
+              spec={
+                hookDanceOverrides.system
+                  ? {
+                      ...(songDna.physicsSpec as PhysicsSpec),
+                      system: hookDanceOverrides.system,
+                    }
+                  : (songDna.physicsSpec as PhysicsSpec)
+              }
+              lines={data.lines.filter(
+                (l) =>
+                  l.start < songDna.hook!.end && l.end > songDna.hook!.start,
+              )}
+              hookStart={songDna.hook.start}
+              hookEnd={songDna.hook.end}
+              currentTime={hookDanceTime}
+              beatCount={hookDanceBeatCount}
+              prng={hookDancePrngRef.current}
+              onClose={() => hookDanceRef.current?.stop()}
+              onExport={() => setHookDanceExportOpen(true)}
+              onOverrides={setHookDanceOverrides}
+              fingerprint={artistFingerprint}
+              onFingerprintChange={(dna) => setArtistFingerprint(dna)}
+              songContext={{
+                bpm: beatGrid?.bpm,
+                mood: songDna?.mood,
+                physics_system:
+                  hookDanceOverrides.system || songDna?.physicsSpec?.system,
+                hook_lyric: songDna?.hook?.previewText,
+                description: songDna?.description,
+              }}
+            />
+          )}
       </AnimatePresence>
 
       {/* v2.2: Conflict Resolution Modal — keeps Whisper timestamps, lets artist swap text */}
-      <Dialog open={!!conflictLine} onOpenChange={(open) => { if (!open) setConflictLine(null); }}>
+      <Dialog
+        open={!!conflictLine}
+        onOpenChange={(open) => {
+          if (!open) setConflictLine(null);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-sm flex items-center gap-2">
@@ -1695,22 +2283,35 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
               Text Conflict Detected
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Gemini and Whisper identified different words at this timestamp. Whisper's timestamps are kept regardless — choose which text to display.
+              Gemini and Whisper identified different words at this timestamp.
+              Whisper's timestamps are kept regardless — choose which text to
+              display.
             </DialogDescription>
           </DialogHeader>
           {conflictLine && (
             <div className="space-y-3">
               <div className="space-y-2">
                 <div className="rounded-lg border border-border/40 p-3 space-y-1">
-                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Gemini (AI label)</p>
-                  <p className="text-sm font-medium text-foreground">"{conflictLine.geminiText}"</p>
+                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    Gemini (AI label)
+                  </p>
+                  <p className="text-sm font-medium text-foreground">
+                    "{conflictLine.geminiText}"
+                  </p>
                 </div>
                 <div className="rounded-lg border border-border/40 p-3 space-y-1">
-                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Whisper (transcription)</p>
-                  <p className="text-sm font-medium text-foreground">"{conflictLine.whisperText}"</p>
+                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    Whisper (transcription)
+                  </p>
+                  <p className="text-sm font-medium text-foreground">
+                    "{conflictLine.whisperText}"
+                  </p>
                 </div>
               </div>
-              <p className="text-[10px] text-muted-foreground font-mono">Timestamps always stay from Whisper — you're only choosing what text is shown.</p>
+              <p className="text-[10px] text-muted-foreground font-mono">
+                Timestamps always stay from Whisper — you're only choosing what
+                text is shown.
+              </p>
               <div className="flex gap-2">
                 <button
                   className="flex-1 text-xs font-mono border border-border/50 rounded-lg py-2 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
@@ -1725,7 +2326,13 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                     const line = activeLines[conflictLine.lineIndex];
                     const updater = (prev: LyricLine[]) =>
                       prev.map((l) =>
-                        l.start === line.start && l.text === line.text ? { ...l, text: conflictLine.whisperText, geminiConflict: undefined } : l
+                        l.start === line.start && l.text === line.text
+                          ? {
+                              ...l,
+                              text: conflictLine.whisperText,
+                              geminiConflict: undefined,
+                            }
+                          : l,
                       );
                     if (activeVersion === "explicit") {
                       setExplicitLines(updater);
@@ -1760,17 +2367,40 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         <HookDanceExporter
           open={hookDanceExportOpen}
           onOpenChange={setHookDanceExportOpen}
-          spec={hookDanceOverrides.system
-            ? { ...(songDna.physicsSpec as PhysicsSpec), system: hookDanceOverrides.system, palette: hookDanceOverrides.palette || (songDna.physicsSpec as PhysicsSpec).palette }
-            : hookDanceOverrides.palette
-              ? { ...(songDna.physicsSpec as PhysicsSpec), palette: hookDanceOverrides.palette }
-              : songDna.physicsSpec as PhysicsSpec}
+          spec={
+            hookDanceOverrides.system
+              ? {
+                  ...(songDna.physicsSpec as PhysicsSpec),
+                  system: hookDanceOverrides.system,
+                  palette:
+                    hookDanceOverrides.palette ||
+                    (songDna.physicsSpec as PhysicsSpec).palette,
+                }
+              : hookDanceOverrides.palette
+                ? {
+                    ...(songDna.physicsSpec as PhysicsSpec),
+                    palette: hookDanceOverrides.palette,
+                  }
+                : (songDna.physicsSpec as PhysicsSpec)
+          }
           beats={hookDanceBeatsRef.current}
-          lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
+          lines={data.lines.filter(
+            (l) => l.start < songDna.hook!.end && l.end > songDna.hook!.start,
+          )}
           hookStart={songDna.hook.start}
           hookEnd={songDna.hook.end}
-          title={(data.title && data.title !== "Unknown" && data.title !== "Untitled") ? data.title : audioFile.name.replace(/\.[^.]+$/, "")}
-          artist={(data.artist && data.artist !== "Unknown" && data.artist !== "UNKNOWN") ? data.artist : "—"}
+          title={
+            data.title && data.title !== "Unknown" && data.title !== "Untitled"
+              ? data.title
+              : audioFile.name.replace(/\.[^.]+$/, "")
+          }
+          artist={
+            data.artist &&
+            data.artist !== "Unknown" &&
+            data.artist !== "UNKNOWN"
+              ? data.artist
+              : "—"
+          }
           audioFile={audioFile}
           seed={`${data.title}-${songDna.hook.start.toFixed(3)}`}
         />
@@ -1781,19 +2411,40 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         <LyricDanceExporter
           open={lyricDanceExportOpen}
           onOpenChange={setLyricDanceExportOpen}
-          spec={hookDanceOverrides.system
-            ? { ...(songDna.physicsSpec as PhysicsSpec), system: hookDanceOverrides.system, palette: hookDanceOverrides.palette || (songDna.physicsSpec as PhysicsSpec).palette }
-            : hookDanceOverrides.palette
-              ? { ...(songDna.physicsSpec as PhysicsSpec), palette: hookDanceOverrides.palette }
-              : songDna.physicsSpec as PhysicsSpec}
+          spec={
+            hookDanceOverrides.system
+              ? {
+                  ...(songDna.physicsSpec as PhysicsSpec),
+                  system: hookDanceOverrides.system,
+                  palette:
+                    hookDanceOverrides.palette ||
+                    (songDna.physicsSpec as PhysicsSpec).palette,
+                }
+              : hookDanceOverrides.palette
+                ? {
+                    ...(songDna.physicsSpec as PhysicsSpec),
+                    palette: hookDanceOverrides.palette,
+                  }
+                : (songDna.physicsSpec as PhysicsSpec)
+          }
           beats={beatGrid.beats.map((t, i) => ({
             time: t,
             isDownbeat: i % 4 === 0,
             strength: i % 4 === 0 ? 1 : 0.6,
           }))}
-          lines={data.lines.filter(l => l.tag !== "adlib")}
-          title={(data.title && data.title !== "Unknown" && data.title !== "Untitled") ? data.title : audioFile.name.replace(/\.[^.]+$/, "")}
-          artist={(data.artist && data.artist !== "Unknown" && data.artist !== "UNKNOWN") ? data.artist : "—"}
+          lines={data.lines.filter((l) => l.tag !== "adlib")}
+          title={
+            data.title && data.title !== "Unknown" && data.title !== "Untitled"
+              ? data.title
+              : audioFile.name.replace(/\.[^.]+$/, "")
+          }
+          artist={
+            data.artist &&
+            data.artist !== "Unknown" &&
+            data.artist !== "UNKNOWN"
+              ? data.artist
+              : "—"
+          }
           audioFile={audioFile}
           seed={`${data.title}-lyric-dance`}
           mood={songDna.mood}
@@ -1828,4 +2479,3 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     </motion.div>
   );
 }
-
