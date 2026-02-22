@@ -21,9 +21,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { InlineBattle, type BattleMode } from "./InlineBattle";
+import { InlineBattle, type BattleMode, type InlineBattleHandle } from "./InlineBattle";
 import type { HookFitPost } from "./types";
-import type { HookData } from "@/hooks/useHookCanvas";
+import type { HookData, ConstellationNode } from "@/hooks/useHookCanvas";
+import { RIVER_ROWS } from "@/hooks/useHookCanvas";
 import { getSessionId } from "@/lib/sessionId";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { useGlobalAudio, audioKey } from "./useGlobalAudio";
@@ -65,6 +66,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
   const [liveComments, setLiveComments] = useState<{ id: string; text: string; name: string }[]>([]);
   const passLoggedRef = useRef(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
+  const battleRef = useRef<InlineBattleHandle>(null);
 
   // ── Derive activePlaying from global audio context ──────────────
   const myKeyA = audioKey(post.battle_id, "a");
@@ -115,6 +117,56 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
       }
     };
     checkVote();
+
+    // Load existing comments and seed constellation
+    const loadComments = async () => {
+      const hookIds = [a.id, b?.id].filter(Boolean);
+      const { data: commentsData } = await supabase
+        .from("hook_comments" as any)
+        .select("id, text, submitted_at")
+        .in("hook_id", hookIds)
+        .order("submitted_at", { ascending: true })
+        .limit(50);
+      if (!commentsData || commentsData.length === 0) return;
+
+      const comments = commentsData as any[];
+      // Show in text list
+      setLiveComments(comments.map((c: any) => ({ id: c.id, text: c.text, name: "FMLY" })));
+
+      // Build constellation nodes
+      const now = Date.now();
+      const nodes: ConstellationNode[] = comments.map((c: any) => {
+        const rng = mulberry32(hashSeed(c.id));
+        const seedX = 0.1 + rng() * 0.8;
+        const seedY = 0.1 + rng() * 0.8;
+        const driftSpeed = 0.008 + rng() * 0.012;
+        const driftAngle = rng() * Math.PI * 2;
+        const riverRowIndex = Math.floor(rng() * RIVER_ROWS.length);
+        const ts = new Date(c.submitted_at).getTime();
+        return {
+          id: c.id, text: c.text, submittedAt: ts,
+          seedX, seedY, x: seedX, y: seedY,
+          driftSpeed, driftAngle,
+          phase: "river" as ConstellationNode["phase"],
+          phaseStartTime: now,
+          riverRowIndex,
+          currentSize: 11,
+          baseOpacity: 0.05,
+        };
+      });
+
+      // Wait a tick for battleRef to be populated
+      setTimeout(() => {
+        const handle = battleRef.current;
+        if (handle) {
+          handle.constellationRefA.current = [...nodes];
+          handle.constellationRefB.current = nodes.map(n => ({ ...n }));
+          handle.riverOffsetsRefA.current = [0, 0, 0, 0];
+          handle.riverOffsetsRefB.current = [0, 0, 0, 0];
+        }
+      }, 100);
+    };
+    loadComments();
   }, [post.battle_id]);
 
   // ── Derive battle mode for InlineBattle ─────────────────────────
@@ -347,6 +399,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
         }}
       >
         <InlineBattle
+          ref={battleRef}
           battleId={post.battle_id}
           mode={getBattleMode()}
           votedSide={votedSide}
@@ -582,13 +635,51 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
           type="text"
           placeholder="DROP YOUR TAKE LIVE"
           className="w-full bg-muted/40 border border-border/30 rounded px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40 transition-colors"
-          onKeyDown={(e) => {
+          onKeyDown={async (e) => {
             const input = e.target as HTMLInputElement;
             if (e.key === "Enter" && input.value.trim()) {
               const text = input.value.trim();
               const name = user ? (displayName || "You") : "Anon";
-              setLiveComments((prev) => [...prev, { id: crypto.randomUUID(), text, name }]);
+              const commentId = crypto.randomUUID();
               input.value = "";
+
+              // Add to local display
+              setLiveComments((prev) => [...prev, { id: commentId, text, name }]);
+
+              // Push comment onto the canvas constellation
+              const handle = battleRef.current;
+              if (handle) {
+                const rng = mulberry32(hashSeed(commentId));
+                const seedX = 0.1 + rng() * 0.8;
+                const seedY = 0.1 + rng() * 0.8;
+                const driftSpeed = 0.008 + rng() * 0.012;
+                const driftAngle = rng() * Math.PI * 2;
+                const riverRowIndex = Math.floor(rng() * RIVER_ROWS.length);
+
+                const node: ConstellationNode = {
+                  id: commentId, text, submittedAt: Date.now(),
+                  seedX, seedY,
+                  x: seedX, y: seedY,
+                  driftSpeed, driftAngle,
+                  phase: "center",
+                  phaseStartTime: Date.now(),
+                  riverRowIndex,
+                  currentSize: 16,
+                  baseOpacity: 0.06,
+                };
+                // Push to both sides
+                handle.constellationRefA.current.push(node);
+                handle.constellationRefB.current.push({ ...node });
+              }
+
+              // Persist to hook_comments
+              const targetHookId = hookA?.id;
+              if (targetHookId) {
+                const sessionId = getSessionId();
+                await supabase
+                  .from("hook_comments" as any)
+                  .insert({ hook_id: targetHookId, text, session_id: sessionId, user_id: user?.id || null });
+              }
             }
           }}
         />

@@ -7,7 +7,7 @@
  * If activePlaying === null, both are muted. No other code path touches mute.
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useHookCanvas, HOOK_COLUMNS, type HookData } from "@/hooks/useHookCanvas";
@@ -21,6 +21,13 @@ export type BattleMode =
   | "scorecard"   // STATE 4: winner loops, loser dimmed
   | "results";    // STATE 5: same as scorecard visually
 
+export interface InlineBattleHandle {
+  constellationRefA: React.MutableRefObject<ConstellationNode[]>;
+  constellationRefB: React.MutableRefObject<ConstellationNode[]>;
+  riverOffsetsRefA: React.MutableRefObject<number[]>;
+  riverOffsetsRefB: React.MutableRefObject<number[]>;
+}
+
 interface Props {
   battleId: string;
   mode: BattleMode;
@@ -32,10 +39,10 @@ interface Props {
   activePlaying: "a" | "b" | null;
 }
 
-export function InlineBattle({
+export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
   battleId, mode, votedSide, onHookEnd, onHooksLoaded,
   onTileTap, activePlaying,
-}: Props) {
+}, ref) {
   const [hookA, setHookA] = useState<HookData | null>(null);
   const [hookB, setHookB] = useState<HookData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,6 +55,14 @@ export function InlineBattle({
   const riverOffsetsRefA = useRef<number[]>([0, 0, 0, 0]);
   const constellationRefB = useRef<ConstellationNode[]>([]);
   const riverOffsetsRefB = useRef<number[]>([0, 0, 0, 0]);
+
+  // Expose constellation refs to parent
+  useImperativeHandle(ref, () => ({
+    constellationRefA,
+    constellationRefB,
+    riverOffsetsRefA,
+    riverOffsetsRefB,
+  }), []);
 
   // ── Fetch battle hooks ──────────────────────────────────────────
   useEffect(() => {
@@ -252,4 +267,4 @@ export function InlineBattle({
       </div>
     </div>
   );
-}
+});
