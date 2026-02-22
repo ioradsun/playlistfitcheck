@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { User, MoreHorizontal, Share2, Trash2, ExternalLink } from "lucide-react";
+import { User, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { InlineBattle } from "./InlineBattle";
+import { InlineBattle, type BattleState } from "./InlineBattle";
 import type { HookFitPost } from "./types";
 
 interface Props {
@@ -29,6 +29,8 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const isOwnPost = user?.id === post.user_id;
   const containerRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [battleState, setBattleState] = useState<BattleState | null>(null);
+  const [restartSignal, setRestartSignal] = useState(0);
 
   // Track visibility for auto-pause
   useEffect(() => {
@@ -44,7 +46,6 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
 
   const displayName = post.profiles?.display_name || "Anonymous";
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
-
   const hook = post.hook;
 
   const handleProfileClick = () => {
@@ -75,6 +76,22 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
       toast.error("Failed to copy link");
     }
   }, [hook]);
+
+  const handleVote = useCallback(() => {
+    if (!battleState?.hookA) return;
+    const hookId = battleState.activeHookSide === "a" ? battleState.hookA.id : battleState.hookB?.id;
+    if (!hookId) return;
+    const handler = (window as any).__hookfit_vote_handlers?.[post.battle_id];
+    if (handler) handler(hookId);
+  }, [battleState, post.battle_id]);
+
+  // Derived from battle state
+  const hasVoted = !!battleState?.votedHookId;
+  const totalVotes = (battleState?.voteCountA || 0) + (battleState?.voteCountB || 0);
+  const canVote = battleState && battleState.tappedSides.size > 0 && !hasVoted;
+  const activeLabel = battleState?.activeHookSide === "a"
+    ? (battleState?.hookA?.hook_label || "Hook A")
+    : (battleState?.hookB?.hook_label || "Hook B");
 
   return (
     <div className="border-b border-border/40" ref={containerRef}>
@@ -133,8 +150,13 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
         </DropdownMenu>
       </div>
 
-      {/* Inline Battle (replaces iframe) */}
-      <InlineBattle battleId={post.battle_id} visible={isVisible} />
+      {/* Inline Battle */}
+      <InlineBattle
+        battleId={post.battle_id}
+        visible={isVisible}
+        onBattleState={setBattleState}
+        restartSignal={restartSignal}
+      />
 
       {/* Caption */}
       {post.caption && (
@@ -146,24 +168,53 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
         </div>
       )}
 
-      {/* Action row */}
-      <div className="flex items-center justify-between px-3 py-1.5">
-        <div className="flex items-center gap-1">
+      {/* ── Action Row ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-3 py-2 border-t border-border/20">
+        {/* Left: action triggers */}
+        <div className="flex items-center gap-4">
+          {/* Vote / Hooked */}
+          {canVote ? (
+            <button
+              onClick={handleVote}
+              className="text-[13px] font-bold uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              I'm Hooked
+            </button>
+          ) : hasVoted ? (
+            <span
+              className="text-[13px] font-mono uppercase tracking-[0.15em]"
+              style={{ color: 'rgba(57,255,20,0.45)' }}
+            >
+              Hooked
+            </span>
+          ) : null}
+
+          {/* Replay */}
+          <button
+            onClick={() => setRestartSignal(s => s + 1)}
+            className="text-[13px] font-bold uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Run it back
+          </button>
+
+          {/* Share */}
           <button
             onClick={handleShare}
-            className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
+            className="text-[13px] font-bold uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
           >
-            <Share2 size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
+            Share
           </button>
         </div>
-        <div className="flex items-center gap-2 text-muted-foreground">
-          {(post.total_votes ?? 0) > 0 && (
-            <span className="text-xs font-mono">
-              {post.total_votes} vote{(post.total_votes ?? 0) !== 1 ? "s" : ""}
+
+        {/* Right: meta */}
+        <div className="flex items-center gap-2">
+          {totalVotes > 0 && (
+            <span className="text-[11px] font-mono text-muted-foreground">
+              {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
             </span>
           )}
           {rank && (
-            <span className="text-xs font-bold text-primary font-mono">#{rank}</span>
+            <span className="text-[11px] font-bold text-primary font-mono">#{rank}</span>
           )}
         </div>
       </div>
