@@ -7,6 +7,8 @@
  */
 
 import type { PhysicsState } from "./PhysicsIntegrator";
+import { ParticleEngine, type Rect } from "./ParticleEngine";
+import type { SceneManifest } from "./SceneManifest";
 
 export interface BackgroundState {
   system: string;
@@ -19,6 +21,10 @@ export interface BackgroundState {
   palette: string[];
   hookStart: number;
   hookEnd: number;
+  manifest?: SceneManifest;
+  deltaMs?: number;
+  beatIntensity?: number;
+  lyricSafeZone?: Rect;
 }
 
 // ── Persistent state per canvas instance ────────────────────────────────────
@@ -47,6 +53,7 @@ const breathState = new WeakMap<CanvasRenderingContext2D, BreathState>();
 const combustionEmbers = new WeakMap<CanvasRenderingContext2D, CombustionEmber[]>();
 const orbitStars = new WeakMap<CanvasRenderingContext2D, OrbitStar[]>();
 const pressureRuleExtent = new WeakMap<CanvasRenderingContext2D, { extent: number; lastBeat: number }>();
+const particleEngines = new WeakMap<CanvasRenderingContext2D, ParticleEngine>();
 
 // ── FRACTURE — Raw concrete with glowing stress cracks ─────────────────────
 
@@ -725,6 +732,25 @@ const BG_RENDERERS: Record<string, (ctx: CanvasRenderingContext2D, s: Background
   glass: drawGlassBackground,
 };
 
+function getParticleEngine(ctx: CanvasRenderingContext2D, manifest: SceneManifest): ParticleEngine {
+  let engine = particleEngines.get(ctx);
+  if (!engine) {
+    engine = new ParticleEngine(manifest);
+    particleEngines.set(ctx, engine);
+  }
+  engine.setManifest(manifest);
+  return engine;
+}
+
+export function drawForegroundParticles(ctx: CanvasRenderingContext2D, s: BackgroundState): void {
+  if (!s.manifest) return;
+  const engine = getParticleEngine(ctx, s.manifest);
+  engine.setBounds({ x: 0, y: 0, w: s.w, h: s.h });
+  if (s.lyricSafeZone) engine.setLyricSafeZone(s.lyricSafeZone.x, s.lyricSafeZone.y, s.lyricSafeZone.w, s.lyricSafeZone.h);
+  if (!engine.shouldRenderForeground()) return;
+  engine.draw(ctx);
+}
+
 export function drawSystemBackground(ctx: CanvasRenderingContext2D, s: BackgroundState): void {
   const renderer = BG_RENDERERS[s.system];
   if (renderer) {
@@ -734,7 +760,14 @@ export function drawSystemBackground(ctx: CanvasRenderingContext2D, s: Backgroun
     ctx.fillRect(0, 0, s.w, s.h);
   }
 
-  // Lyric focus guard: subtly de-emphasize outer edges so text remains the hero.
+  if (s.manifest) {
+    const engine = getParticleEngine(ctx, s.manifest);
+    engine.setBounds({ x: 0, y: 0, w: s.w, h: s.h });
+    if (s.lyricSafeZone) engine.setLyricSafeZone(s.lyricSafeZone.x, s.lyricSafeZone.y, s.lyricSafeZone.w, s.lyricSafeZone.h);
+    engine.update(s.deltaMs ?? 16.67, s.beatIntensity ?? 0);
+    if (!s.manifest.particleConfig.foreground) engine.draw(ctx);
+  }
+
   const focusGrad = ctx.createRadialGradient(
     s.w / 2,
     s.h / 2,
