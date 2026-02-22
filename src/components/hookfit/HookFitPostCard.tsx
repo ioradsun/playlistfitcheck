@@ -155,6 +155,11 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
             >
               Hooked
             </span>
+            {totalVotes > 0 && (
+              <span className="text-[10px] font-mono text-white/50">
+                You + {fmlyCount} FMLY
+              </span>
+            )}
           </button>
         )}
       </div>
@@ -190,13 +195,12 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
                 I'm Hooked on {activeLabel}
               </motion.button>
             ) : hasVoted ? (
-              <motion.button
+              <motion.div
                 key="voted"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={() => setSheetOpen(true)}
-                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                className="flex items-center gap-2"
               >
                 <span
                   className="text-[10px] font-mono uppercase tracking-[0.15em] font-bold"
@@ -204,12 +208,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
                 >
                   Hooked
                 </span>
-                {totalVotes > 0 && (
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    You + {fmlyCount} FMLY
-                  </span>
-                )}
-              </motion.button>
+              </motion.div>
             ) : null}
           </AnimatePresence>
         </div>
