@@ -106,6 +106,23 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
     });
   }, []);
 
+  const uploadAudioImmediately = useCallback(async (file: File, userId: string, projectId: string): Promise<string | null> => {
+    const ext = file.name.split(".").pop() ?? "mp3";
+    const path = `${userId}/lyric/${projectId}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from("audio-clips")
+      .upload(path, file, { upsert: true });
+
+    if (error) return null;
+
+    const { data } = supabase.storage
+      .from("audio-clips")
+      .getPublicUrl(path);
+
+    return data.publicUrl;
+  }, []);
+
   const handleTranscribe = useCallback(async (file: File, referenceLyrics?: string) => {
     if (!quota.canUse) {
       toast.error(quota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
@@ -204,6 +221,20 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       if (data.error) throw new Error(data.error);
       if (!data.lines) throw new Error("Invalid response format");
 
+      let projectId: string | null = null;
+      if (user) {
+        projectId = crypto.randomUUID();
+        const audioUrl = await uploadAudioImmediately(file, user.id, projectId);
+        if (audioUrl) {
+          await supabase.from("saved_lyrics").upsert({
+            id: projectId,
+            user_id: user.id,
+            audio_url: audioUrl,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      }
+
       await new Promise((r) => setTimeout(r, 600));
 
       setLyricData({
@@ -215,11 +246,16 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       } as LyricData);
       setAudioFile(file);
       setHasRealAudio(true);
-      setSavedId(null);
+      setSavedId(projectId);
       setDebugData(data._debug ?? null);
       // Cache audio in session so it survives remounts
       // Will be keyed to savedId once the project is saved
-      sessionAudio.set("lyric", "__unsaved__", file);
+      if (projectId) {
+        sessionAudio.set("lyric", projectId, file);
+        onSavedId?.(projectId);
+      } else {
+        sessionAudio.set("lyric", "__unsaved__", file);
+      }
       await quota.increment();
     } catch (e) {
       console.error("Transcription error:", e);
@@ -228,7 +264,7 @@ export function LyricFitTab({ initialLyric, onProjectSaved, onNewProject, onHead
       setLoading(false);
       setProgressOpen(false);
     }
-  }, [analysisModel, transcriptionModel, quota]);
+  }, [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId]);
 
   const handleBack = useCallback(() => {
     setLyricData(null);
