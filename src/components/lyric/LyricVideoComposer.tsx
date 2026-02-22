@@ -1,13 +1,78 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { safeManifest } from "@/engine/validateManifest";
 import type { LyricLine, LyricHook, LyricMetadata } from "./LyricDisplay";
 
+interface SceneManifest {
+  world: string;
+  backgroundSystem:
+    | "fracture"
+    | "pressure"
+    | "breath"
+    | "static"
+    | "burn"
+    | "void";
+  lightSource: string;
+  tension: number;
+  palette: [string, string, string];
+  coreEmotion: string;
+}
+
+function buildSceneManifest(metadata?: LyricMetadata | null): SceneManifest {
+  const mood = metadata?.mood?.toLowerCase() || "brooding";
+  const description = metadata?.description || "dark emotional space";
+
+  const moodToSystem: Record<string, SceneManifest["backgroundSystem"]> = {
+    aggressive: "fracture",
+    energetic: "pressure",
+    melancholic: "breath",
+    chill: "breath",
+    dark: "void",
+    haunted: "void",
+    romantic: "breath",
+    happy: "breath",
+  };
+
+  let backgroundSystem: SceneManifest["backgroundSystem"] = "void";
+  for (const [key, value] of Object.entries(moodToSystem)) {
+    if (mood.includes(key)) {
+      backgroundSystem = value;
+      break;
+    }
+  }
+
+  const lightBySystem: Record<SceneManifest["backgroundSystem"], string> = {
+    fracture: "harsh overhead",
+    pressure: "fluorescent",
+    breath: "golden hour",
+    static: "fluorescent",
+    burn: "flickering left",
+    void: "moonlight",
+  };
+
+  const moodPalette = getMoodGradient(metadata?.mood);
+
+  return {
+    world: description,
+    backgroundSystem,
+    lightSource: lightBySystem[backgroundSystem],
+    tension: 0.5,
+    palette: moodPalette,
+    coreEmotion: metadata?.mood || "brooding",
+  };
+}
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -22,13 +87,13 @@ interface Props {
 // ── Aspect ratio → canvas dimensions ────────────────────────────────────────
 const ASPECT_DIMS: Record<string, [number, number]> = {
   "9:16": [1080, 1920],
-  "1:1":  [1080, 1080],
+  "1:1": [1080, 1080],
   "16:9": [1920, 1080],
 };
 
 const ASPECT_OPTIONS = [
   { key: "9:16", label: "9:16", sub: "TikTok / Reels" },
-  { key: "1:1",  label: "1:1",  sub: "Instagram" },
+  { key: "1:1", label: "1:1", sub: "Instagram" },
   { key: "16:9", label: "16:9", sub: "YouTube" },
 ];
 
@@ -43,25 +108,25 @@ type BgStyle = "particles" | "aurora" | "nebula" | "rain" | "ai";
 
 const BG_STYLE_OPTIONS: { key: BgStyle; label: string; sub: string }[] = [
   { key: "particles", label: "Particles", sub: "Floating light field" },
-  { key: "aurora",    label: "Aurora",    sub: "Flowing wave gradients" },
-  { key: "nebula",    label: "Nebula",    sub: "Deep space clouds" },
-  { key: "rain",      label: "Rain",      sub: "Falling streaks" },
-  { key: "ai",        label: "AI Generated", sub: "Custom from prompt" },
+  { key: "aurora", label: "Aurora", sub: "Flowing wave gradients" },
+  { key: "nebula", label: "Nebula", sub: "Deep space clouds" },
+  { key: "rain", label: "Rain", sub: "Falling streaks" },
+  { key: "ai", label: "AI Generated", sub: "Custom from prompt" },
 ];
 
 const FPS = 30;
 
 // ── Gradient presets ────────────────────────────────────────────────────────
 const MOOD_GRADIENTS: Record<string, [string, string, string]> = {
-  happy:      ["#FFD700", "#FF6B35", "#FF1493"],
-  sad:        ["#1a1a2e", "#16213e", "#0f3460"],
-  energetic:  ["#FF0000", "#FF4500", "#FF8C00"],
-  chill:      ["#0d1b2a", "#1b263b", "#415a77"],
-  dark:       ["#0a0a0a", "#1a1a2e", "#2d1b69"],
-  romantic:   ["#8B0000", "#C71585", "#FF69B4"],
+  happy: ["#FFD700", "#FF6B35", "#FF1493"],
+  sad: ["#1a1a2e", "#16213e", "#0f3460"],
+  energetic: ["#FF0000", "#FF4500", "#FF8C00"],
+  chill: ["#0d1b2a", "#1b263b", "#415a77"],
+  dark: ["#0a0a0a", "#1a1a2e", "#2d1b69"],
+  romantic: ["#8B0000", "#C71585", "#FF69B4"],
   aggressive: ["#1a0000", "#4a0000", "#8B0000"],
-  dreamy:     ["#2E1065", "#7C3AED", "#C4B5FD"],
-  default:    ["#0f0f23", "#1a1a3e", "#2d2d5e"],
+  dreamy: ["#2E1065", "#7C3AED", "#C4B5FD"],
+  default: ["#0f0f23", "#1a1a3e", "#2d2d5e"],
 };
 
 function getMoodGradient(mood?: string): [string, string, string] {
@@ -84,7 +149,13 @@ function seededRandom(seed: number): () => number {
 
 // ── Procedural animated backgrounds ─────────────────────────────────────────
 
-function drawBgParticles(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
+function drawBgParticles(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  cw: number,
+  ch: number,
+  gradient: [string, string, string],
+) {
   // Slowly rotating gradient base
   ctx.save();
   ctx.translate(cw / 2, ch / 2);
@@ -108,7 +179,11 @@ function drawBgParticles(ctx: CanvasRenderingContext2D, t: number, cw: number, c
     const phase = rng() * Math.PI * 2;
     const orbitRadius = 30 + rng() * 80;
 
-    const x = (baseX + Math.sin(t * speed * 0.6 + phase) * orbitRadius + Math.cos(t * 0.3 + i) * 20) % cw;
+    const x =
+      (baseX +
+        Math.sin(t * speed * 0.6 + phase) * orbitRadius +
+        Math.cos(t * 0.3 + i) * 20) %
+      cw;
     const y = (baseY + t * speed * 40 + Math.sin(t * 0.4 + phase) * 30) % ch;
     const alpha = 0.3 + 0.7 * Math.sin(t * speed * 1.5 + phase);
 
@@ -139,7 +214,12 @@ function drawBgParticles(ctx: CanvasRenderingContext2D, t: number, cw: number, c
       const cx = sx + (ex - sx) * progress;
       const cy = sy + (ey - sy) * progress;
       const tailLen = 60;
-      const tailGrad = ctx.createLinearGradient(cx - tailLen * 0.7, cy - tailLen * 0.3, cx, cy);
+      const tailGrad = ctx.createLinearGradient(
+        cx - tailLen * 0.7,
+        cy - tailLen * 0.3,
+        cx,
+        cy,
+      );
       tailGrad.addColorStop(0, "rgba(255,255,255,0)");
       tailGrad.addColorStop(1, `rgba(255,255,255,${0.6 * (1 - progress)})`);
       ctx.strokeStyle = tailGrad;
@@ -152,7 +232,13 @@ function drawBgParticles(ctx: CanvasRenderingContext2D, t: number, cw: number, c
   }
 }
 
-function drawBgAurora(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
+function drawBgAurora(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  cw: number,
+  ch: number,
+  gradient: [string, string, string],
+) {
   ctx.fillStyle = "#030308";
   ctx.fillRect(0, 0, cw, ch);
 
@@ -175,7 +261,12 @@ function drawBgAurora(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: 
     ctx.lineTo(0, ch);
     ctx.closePath();
 
-    const bandGrad = ctx.createLinearGradient(0, bandY - ch * 0.15, 0, bandY + ch * 0.35);
+    const bandGrad = ctx.createLinearGradient(
+      0,
+      bandY - ch * 0.15,
+      0,
+      bandY + ch * 0.35,
+    );
     bandGrad.addColorStop(0, `hsla(${hue}, 85%, 55%, 0)`);
     bandGrad.addColorStop(0.2, `hsla(${hue}, 85%, 55%, 0.2)`);
     bandGrad.addColorStop(0.5, `hsla(${hue}, 75%, 60%, 0.12)`);
@@ -198,7 +289,13 @@ function drawBgAurora(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: 
   }
 }
 
-function drawBgNebula(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
+function drawBgNebula(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  cw: number,
+  ch: number,
+  gradient: [string, string, string],
+) {
   ctx.fillStyle = gradient[0];
   ctx.fillRect(0, 0, cw, ch);
 
@@ -207,15 +304,23 @@ function drawBgNebula(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: 
     { cx: 0.3, cy: 0.4, r: 0.55, hue: 270, speed: 0.5, orbit: 0.12 },
     { cx: 0.7, cy: 0.3, r: 0.45, hue: 200, speed: 0.4, orbit: 0.1 },
     { cx: 0.5, cy: 0.7, r: 0.65, hue: 320, speed: 0.3, orbit: 0.15 },
-    { cx: 0.2, cy: 0.6, r: 0.4,  hue: 240, speed: 0.6, orbit: 0.08 },
-    { cx: 0.8, cy: 0.5, r: 0.5,  hue: 180, speed: 0.45, orbit: 0.11 },
+    { cx: 0.2, cy: 0.6, r: 0.4, hue: 240, speed: 0.6, orbit: 0.08 },
+    { cx: 0.8, cy: 0.5, r: 0.5, hue: 180, speed: 0.45, orbit: 0.11 },
     { cx: 0.4, cy: 0.2, r: 0.35, hue: 300, speed: 0.55, orbit: 0.09 },
-    { cx: 0.6, cy: 0.8, r: 0.4,  hue: 160, speed: 0.35, orbit: 0.13 },
+    { cx: 0.6, cy: 0.8, r: 0.4, hue: 160, speed: 0.35, orbit: 0.13 },
   ];
 
   for (const cloud of clouds) {
-    const cx = (cloud.cx + Math.sin(t * cloud.speed) * cloud.orbit + Math.cos(t * cloud.speed * 0.6) * cloud.orbit * 0.5) * cw;
-    const cy = (cloud.cy + Math.cos(t * cloud.speed * 0.7) * cloud.orbit + Math.sin(t * cloud.speed * 0.4) * cloud.orbit * 0.3) * ch;
+    const cx =
+      (cloud.cx +
+        Math.sin(t * cloud.speed) * cloud.orbit +
+        Math.cos(t * cloud.speed * 0.6) * cloud.orbit * 0.5) *
+      cw;
+    const cy =
+      (cloud.cy +
+        Math.cos(t * cloud.speed * 0.7) * cloud.orbit +
+        Math.sin(t * cloud.speed * 0.4) * cloud.orbit * 0.3) *
+      ch;
     const pulse = 1 + 0.2 * Math.sin(t * cloud.speed * 2);
     const r = cloud.r * Math.max(cw, ch) * pulse;
     const hue = (cloud.hue + t * 12) % 360;
@@ -249,13 +354,25 @@ function drawBgNebula(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: 
       ctx.strokeStyle = `rgba(255,255,255,${twinkle * 0.3})`;
       ctx.lineWidth = 0.5;
       const sLen = size * 4;
-      ctx.beginPath(); ctx.moveTo(x - sLen, y); ctx.lineTo(x + sLen, y); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x, y - sLen); ctx.lineTo(x, y + sLen); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - sLen, y);
+      ctx.lineTo(x + sLen, y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y - sLen);
+      ctx.lineTo(x, y + sLen);
+      ctx.stroke();
     }
   }
 }
 
-function drawBgRain(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: number, gradient: [string, string, string]) {
+function drawBgRain(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  cw: number,
+  ch: number,
+  gradient: [string, string, string],
+) {
   // Dark moody base with pulsing glow
   const baseGrad = ctx.createLinearGradient(0, 0, 0, ch);
   baseGrad.addColorStop(0, "#080818");
@@ -268,7 +385,14 @@ function drawBgRain(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: nu
   for (let i = 0; i < 3; i++) {
     const gx = cw * (0.2 + i * 0.3 + Math.sin(t * 0.3 + i) * 0.1);
     const pulse = 0.7 + 0.3 * Math.sin(t * 0.8 + i * 2);
-    const glowGrad = ctx.createRadialGradient(gx, ch, 0, gx, ch, ch * 0.45 * pulse);
+    const glowGrad = ctx.createRadialGradient(
+      gx,
+      ch,
+      0,
+      gx,
+      ch,
+      ch * 0.45 * pulse,
+    );
     glowGrad.addColorStop(0, `${gradient[1]}44`);
     glowGrad.addColorStop(0.5, `${gradient[2]}22`);
     glowGrad.addColorStop(1, "transparent");
@@ -294,7 +418,7 @@ function drawBgRain(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: nu
     const phase = rng() * ch;
     const windSway = Math.sin(t * 0.4 + i * 0.1) * 8 + Math.sin(t * 1.2) * 4;
 
-    const y = (phase + t * speed) % (ch + len) - len;
+    const y = ((phase + t * speed) % (ch + len)) - len;
     const x = baseX + windSway;
 
     const rainAlpha = 0.08 + rng() * 0.25;
@@ -307,7 +431,7 @@ function drawBgRain(ctx: CanvasRenderingContext2D, t: number, cw: number, ch: nu
 
   // Splashes at bottom
   for (let i = 0; i < 20; i++) {
-    const sx = (seededRandom(i + 200)() * cw + t * 50 * (i % 3 + 1)) % cw;
+    const sx = (seededRandom(i + 200)() * cw + t * 50 * ((i % 3) + 1)) % cw;
     const cycle = (t * 2 + i * 0.5) % 1;
     if (cycle < 0.3) {
       const progress = cycle / 0.3;
@@ -334,10 +458,14 @@ function drawAnimatedBackground(
   bgImage?: HTMLImageElement | null,
 ) {
   switch (style) {
-    case "particles": return drawBgParticles(ctx, time, cw, ch, gradient);
-    case "aurora":    return drawBgAurora(ctx, time, cw, ch, gradient);
-    case "nebula":    return drawBgNebula(ctx, time, cw, ch, gradient);
-    case "rain":      return drawBgRain(ctx, time, cw, ch, gradient);
+    case "particles":
+      return drawBgParticles(ctx, time, cw, ch, gradient);
+    case "aurora":
+      return drawBgAurora(ctx, time, cw, ch, gradient);
+    case "nebula":
+      return drawBgNebula(ctx, time, cw, ch, gradient);
+    case "rain":
+      return drawBgRain(ctx, time, cw, ch, gradient);
     case "ai":
       if (bgImage) {
         const scale = Math.max(cw / bgImage.width, ch / bgImage.height);
@@ -358,7 +486,14 @@ function drawAnimatedBackground(
         ctx.fillStyle = `rgba(0,0,0,${vignetteAlpha})`;
         ctx.fillRect(0, 0, cw, ch);
         // Edge vignette
-        const vig = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.3, cw / 2, ch / 2, Math.max(cw, ch) * 0.7);
+        const vig = ctx.createRadialGradient(
+          cw / 2,
+          ch / 2,
+          Math.min(cw, ch) * 0.3,
+          cw / 2,
+          ch / 2,
+          Math.max(cw, ch) * 0.7,
+        );
         vig.addColorStop(0, "rgba(0,0,0,0)");
         vig.addColorStop(1, "rgba(0,0,0,0.5)");
         ctx.fillStyle = vig;
@@ -371,9 +506,17 @@ function drawAnimatedBackground(
 }
 
 // ── Word animation helpers ──────────────────────────────────────────────────
-interface WordEntry { word: string; start: number; lineIdx: number; }
+interface WordEntry {
+  word: string;
+  start: number;
+  lineIdx: number;
+}
 
-function buildWordTimeline(lines: LyricLine[], regionStart: number, regionEnd: number): WordEntry[] {
+function buildWordTimeline(
+  lines: LyricLine[],
+  regionStart: number,
+  regionEnd: number,
+): WordEntry[] {
   const words: WordEntry[] = [];
   lines.forEach((line, lineIdx) => {
     if (line.end < regionStart || line.start > regionEnd) return;
@@ -391,7 +534,7 @@ function bounceEase(t: number): number {
   if (t < 0) return 0;
   if (t > 1) return 1;
   if (t < 0.5) return 4 * t * t;
-  if (t < 0.8) return 1 + 0.3 * Math.sin((t - 0.5) * Math.PI / 0.3);
+  if (t < 0.8) return 1 + 0.3 * Math.sin(((t - 0.5) * Math.PI) / 0.3);
   return 1;
 }
 
@@ -448,8 +591,8 @@ function drawFrame(
 
   const activeLineIdxs: number[] = [];
   for (const [lineIdx, lineWords] of lineGroups) {
-    const lineStart = Math.min(...lineWords.map(w => w.start));
-    const lineEnd = Math.max(...lineWords.map(w => w.start)) + 0.6;
+    const lineStart = Math.min(...lineWords.map((w) => w.start));
+    const lineEnd = Math.max(...lineWords.map((w) => w.start)) + 0.6;
     if (time >= lineStart - 0.15 && time <= lineEnd + 1.0) {
       activeLineIdxs.push(lineIdx);
     }
@@ -460,7 +603,8 @@ function drawFrame(
   let maxCharCount = 1;
   for (const lineIdx of activeLineIdxs) {
     const lineWords = lineGroups.get(lineIdx) || [];
-    const charCount = lineWords.reduce((s, w) => s + w.word.length, 0) + lineWords.length - 1;
+    const charCount =
+      lineWords.reduce((s, w) => s + w.word.length, 0) + lineWords.length - 1;
     if (charCount > maxCharCount) maxCharCount = charCount;
   }
   const dynamicFs = Math.min(fontSize, (safeW / maxCharCount) * 1.6);
@@ -506,8 +650,9 @@ function drawFrame(
 
   // Add spacing between lines
   const lineGap = fs * 0.5;
-  const totalHeight = visibleWraps.reduce((s, lw) => s + lw.rows.length * rowHeight, 0)
-    + (visibleWraps.length - 1) * lineGap;
+  const totalHeight =
+    visibleWraps.reduce((s, lw) => s + lw.rows.length * rowHeight, 0) +
+    (visibleWraps.length - 1) * lineGap;
   let curY = ch * 0.5 - totalHeight / 2 + rowHeight / 2;
 
   visibleWraps.forEach((lw, li) => {
@@ -518,7 +663,7 @@ function drawFrame(
       curY += rowHeight;
       if (rowY < safeInsetY || rowY > ch - safeInsetY) return;
 
-      const rowText = rowWords.map(w => w.word).join(" ");
+      const rowText = rowWords.map((w) => w.word).join(" ");
       const rowWidth = ctx.measureText(rowText).width;
       let x = (cw - rowWidth) / 2;
 
@@ -560,7 +705,16 @@ function drawFrame(
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
-export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, title, artist, audioFile }: Props) {
+export function LyricVideoComposer({
+  open,
+  onOpenChange,
+  lines,
+  hook,
+  metadata,
+  title,
+  artist,
+  audioFile,
+}: Props) {
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number | null>(null);
   const playStartRef = useRef<number>(0);
@@ -590,7 +744,8 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
   const [cw, ch] = ASPECT_DIMS[aspectRatio] || ASPECT_DIMS["9:16"];
   const gradient = getMoodGradient(metadata?.mood);
   const wordTimeline = buildWordTimeline(lines, regionStart, regionEnd);
-  const fontCss = FONT_OPTIONS.find(f => f.key === fontFamily)?.css ?? FONT_OPTIONS[0].css;
+  const fontCss =
+    FONT_OPTIONS.find((f) => f.key === fontFamily)?.css ?? FONT_OPTIONS[0].css;
 
   const previewScale = Math.min(480 / cw, 420 / ch);
 
@@ -608,16 +763,46 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
   }, [open]);
 
   // ── Draw preview ──────────────────────────────────────────────────────────
-  const drawPreview = useCallback((time: number) => {
-    const canvas = previewCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.save();
-    ctx.scale(previewScale, previewScale);
-    drawFrame(ctx, time, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgStyle, bgImage);
-    ctx.restore();
-  }, [regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgStyle, bgImage, previewScale]);
+  const drawPreview = useCallback(
+    (time: number) => {
+      const canvas = previewCanvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.save();
+      ctx.scale(previewScale, previewScale);
+      drawFrame(
+        ctx,
+        time,
+        regionStart,
+        wordTimeline,
+        gradient,
+        cw,
+        ch,
+        fontCss,
+        fontSize,
+        title,
+        artist,
+        bgStyle,
+        bgImage,
+      );
+      ctx.restore();
+    },
+    [
+      regionStart,
+      wordTimeline,
+      gradient,
+      cw,
+      ch,
+      fontCss,
+      fontSize,
+      title,
+      artist,
+      bgStyle,
+      bgImage,
+      previewScale,
+    ],
+  );
 
   // Animation loop
   useEffect(() => {
@@ -634,7 +819,9 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
       animRef.current = requestAnimationFrame(tick);
     };
     animRef.current = requestAnimationFrame(tick);
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
   }, [isPlaying, open, step, drawPreview, duration, regionStart]);
 
   // Draw initial frame on step 3
@@ -648,14 +835,20 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
   const generateBackground = useCallback(async () => {
     setGeneratingBg(true);
     try {
-      const { data, error } = await supabase.functions.invoke("lyric-video-bg", {
-        body: {
-          title, artist,
-          mood: metadata?.mood || "atmospheric",
-          description: metadata?.description || "",
-          userPrompt: bgPrompt,
+      const { data, error } = await supabase.functions.invoke(
+        "lyric-video-bg",
+        {
+          body: {
+            manifest: safeManifest(buildSceneManifest(metadata)).manifest,
+            userDirection: [
+              `Song: ${title} by ${artist}`,
+              bgPrompt?.trim() ? `Custom direction: ${bgPrompt.trim()}` : "",
+            ]
+              .filter(Boolean)
+              .join(". "),
+          },
         },
-      });
+      );
       if (error) throw error;
       if (!data?.imageUrl) throw new Error("No image returned");
 
@@ -702,7 +895,9 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
         audioEl.currentTime = regionStart;
 
         await new Promise<void>((resolve) => {
-          audioEl!.addEventListener("canplaythrough", () => resolve(), { once: true });
+          audioEl!.addEventListener("canplaythrough", () => resolve(), {
+            once: true,
+          });
           audioEl!.load();
         });
 
@@ -720,9 +915,11 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
 
     const videoStream = canvas.captureStream(0); // 0 = manual frame capture
     const combinedStream = new MediaStream();
-    videoStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
+    videoStream.getVideoTracks().forEach((t) => combinedStream.addTrack(t));
     if (audioDest) {
-      audioDest.stream.getAudioTracks().forEach(t => combinedStream.addTrack(t));
+      audioDest.stream
+        .getAudioTracks()
+        .forEach((t) => combinedStream.addTrack(t));
     }
 
     const mediaRecorder = new MediaRecorder(combinedStream, {
@@ -730,13 +927,19 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
       videoBitsPerSecond: 8_000_000,
     });
     const chunks: Blob[] = [];
-    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
 
     const totalFrames = Math.ceil(duration * FPS);
     let frame = 0;
 
     if (audioEl) {
-      try { await audioEl.play(); } catch (e) { console.warn("Audio play failed:", e); }
+      try {
+        await audioEl.play();
+      } catch (e) {
+        console.warn("Audio play failed:", e);
+      }
     }
 
     mediaRecorder.start();
@@ -746,12 +949,29 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     const renderNextFrame = () => {
       if (frame >= totalFrames) {
         mediaRecorder.stop();
-        if (audioEl) { audioEl.pause(); audioEl.src = ""; }
+        if (audioEl) {
+          audioEl.pause();
+          audioEl.src = "";
+        }
         if (audioCtx) audioCtx.close();
         return;
       }
-      const time = regionStart + (frame / FPS);
-      drawFrame(ctx, time, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgStyle, bgImage);
+      const time = regionStart + frame / FPS;
+      drawFrame(
+        ctx,
+        time,
+        regionStart,
+        wordTimeline,
+        gradient,
+        cw,
+        ch,
+        fontCss,
+        fontSize,
+        title,
+        artist,
+        bgStyle,
+        bgImage,
+      );
       // Manually request a frame capture so the recorder gets this exact frame
       if (videoTrack && typeof videoTrack.requestFrame === "function") {
         videoTrack.requestFrame();
@@ -775,7 +995,21 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
     };
 
     renderNextFrame();
-  }, [duration, regionStart, wordTimeline, gradient, cw, ch, fontCss, fontSize, title, artist, bgStyle, bgImage, audioFile]);
+  }, [
+    duration,
+    regionStart,
+    wordTimeline,
+    gradient,
+    cw,
+    ch,
+    fontCss,
+    fontSize,
+    title,
+    artist,
+    bgStyle,
+    bgImage,
+    audioFile,
+  ]);
 
   // ── Wizard navigation ─────────────────────────────────────────────────────
   const canGoNext = () => {
@@ -835,8 +1069,12 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block leading-tight">{opt.label}</span>
-                    <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5 leading-tight">{opt.sub}</span>
+                    <span className="text-[12px] font-semibold tracking-[0.1em] uppercase block leading-tight">
+                      {opt.label}
+                    </span>
+                    <span className="text-[9px] font-mono tracking-widest opacity-60 block mt-0.5 leading-tight">
+                      {opt.sub}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -852,14 +1090,20 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
                   <Textarea
                     value={bgPrompt}
                     onChange={(e) => setBgPrompt(e.target.value)}
-                    placeholder={metadata?.mood ? `e.g. ${metadata.mood} atmosphere, abstract shapes, deep colors` : "neon rain on dark streets, cinematic haze"}
+                    placeholder={
+                      metadata?.mood
+                        ? `e.g. ${metadata.mood} atmosphere, abstract shapes, deep colors`
+                        : "neon rain on dark streets, cinematic haze"
+                    }
                     className="min-h-[80px] text-sm resize-none"
                     rows={3}
                   />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">{artist}</p>
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
+                      {artist}
+                    </p>
                     <p className="text-sm font-medium mt-0.5">{title}</p>
                   </div>
                   <Button
@@ -869,9 +1113,14 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
                     className="text-[13px] font-semibold tracking-[0.15em] uppercase"
                   >
                     {generatingBg ? (
-                      <><Loader2 size={12} className="animate-spin mr-2" />Generating</>
+                      <>
+                        <Loader2 size={12} className="animate-spin mr-2" />
+                        Generating
+                      </>
+                    ) : bgImage ? (
+                      "Regenerate"
                     ) : (
-                      bgImage ? "Regenerate" : "Generate Background"
+                      "Generate Background"
                     )}
                   </Button>
                 </div>
@@ -881,7 +1130,9 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
             {/* Song metadata — shown for non-AI styles */}
             {bgStyle !== "ai" && (
               <div className="border-t border-border/30 pt-3">
-                <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">{artist}</p>
+                <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
+                  {artist}
+                </p>
                 <p className="text-sm font-medium mt-0.5">{title}</p>
               </div>
             )}
@@ -917,8 +1168,12 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <span className="text-[13px] font-semibold tracking-[0.15em] uppercase block">{opt.label}</span>
-                    <span className="text-[10px] font-mono tracking-widest opacity-60 block mt-0.5">{opt.sub}</span>
+                    <span className="text-[13px] font-semibold tracking-[0.15em] uppercase block">
+                      {opt.label}
+                    </span>
+                    <span className="text-[10px] font-mono tracking-widest opacity-60 block mt-0.5">
+                      {opt.sub}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -934,10 +1189,14 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
                 </label>
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] font-mono text-muted-foreground">
-                    {regionStart.toFixed(1)}s – {regionEnd.toFixed(1)}s ({duration.toFixed(1)}s)
+                    {regionStart.toFixed(1)}s – {regionEnd.toFixed(1)}s (
+                    {duration.toFixed(1)}s)
                   </span>
                   <button
-                    onClick={() => { setRegionStart(0); setRegionEnd(songEnd); }}
+                    onClick={() => {
+                      setRegionStart(0);
+                      setRegionEnd(songEnd);
+                    }}
                     className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground/60 hover:text-foreground transition-colors"
                   >
                     Full Song
@@ -989,7 +1248,9 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
                 <label className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
                   Font Size
                 </label>
-                <span className="text-[10px] font-mono text-muted-foreground">{fontSize}px</span>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {fontSize}px
+                </span>
               </div>
               <Slider
                 value={[fontSize]}
@@ -1001,12 +1262,20 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
             </div>
 
             <div className="flex justify-between pt-2">
-              <Button variant="ghost" size="sm" onClick={prevStep}
-                className="text-[13px] font-semibold tracking-[0.15em] uppercase">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={prevStep}
+                className="text-[13px] font-semibold tracking-[0.15em] uppercase"
+              >
                 Back
               </Button>
-              <Button size="sm" onClick={nextStep} disabled={!canGoNext()}
-                className="text-[13px] font-semibold tracking-[0.15em] uppercase">
+              <Button
+                size="sm"
+                onClick={nextStep}
+                disabled={!canGoNext()}
+                className="text-[13px] font-semibold tracking-[0.15em] uppercase"
+              >
                 Preview
               </Button>
             </div>
@@ -1037,16 +1306,30 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
             </div>
 
             <div className="text-center text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
-              {duration.toFixed(1)}s • {aspectRatio} • {fontFamily} {fontSize}px • {bgStyle}
+              {duration.toFixed(1)}s • {aspectRatio} • {fontFamily} {fontSize}px
+              • {bgStyle}
             </div>
 
             <div className="flex justify-between pt-2">
-              <Button variant="ghost" size="sm" onClick={() => { setIsPlaying(false); prevStep(); }}
-                className="text-[13px] font-semibold tracking-[0.15em] uppercase">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsPlaying(false);
+                  prevStep();
+                }}
+                className="text-[13px] font-semibold tracking-[0.15em] uppercase"
+              >
                 Back
               </Button>
-              <Button size="sm" onClick={() => { setIsPlaying(false); nextStep(); }}
-                className="text-[13px] font-semibold tracking-[0.15em] uppercase">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setIsPlaying(false);
+                  nextStep();
+                }}
+                className="text-[13px] font-semibold tracking-[0.15em] uppercase"
+              >
                 Export
               </Button>
             </div>
@@ -1058,9 +1341,12 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
           <div className="space-y-4 mt-2">
             <div className="text-center space-y-1">
               <p className="text-sm font-medium">{title}</p>
-              <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">{artist}</p>
+              <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
+                {artist}
+              </p>
               <p className="text-[10px] font-mono text-muted-foreground mt-2">
-                {duration.toFixed(1)}s • {aspectRatio} • {cw}×{ch} • {fontFamily} • {bgStyle}
+                {duration.toFixed(1)}s • {aspectRatio} • {cw}×{ch} •{" "}
+                {fontFamily} • {bgStyle}
               </p>
             </div>
 
@@ -1088,9 +1374,16 @@ export function LyricVideoComposer({ open, onOpenChange, lines, hook, metadata, 
             </Button>
 
             <div className="flex justify-start">
-              <Button variant="ghost" size="sm" onClick={() => { setIsRecording(false); prevStep(); }}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsRecording(false);
+                  prevStep();
+                }}
                 disabled={isRecording}
-                className="text-[13px] font-semibold tracking-[0.15em] uppercase">
+                className="text-[13px] font-semibold tracking-[0.15em] uppercase"
+              >
                 Back
               </Button>
             </div>
