@@ -1,5 +1,5 @@
-import { Buffer } from "buffer";
-(window as any).Buffer = Buffer;
+// Lazy-load Buffer polyfill — only needed by crypto/wallet features, not on critical path
+import("buffer").then(({ Buffer }) => { (window as any).Buffer = Buffer; });
 
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
