@@ -24,6 +24,7 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import ArtistStage from "./pages/ArtistStage";
+import SeoPages from "./pages/SeoPages";
 // Lazy-load ShareableHook — standalone page, no need in main bundle
 const ShareableHook = lazy(() => import("./pages/ShareableHook"));
 // Lazy-load ShareableLyricDance — standalone page
@@ -99,6 +100,15 @@ const App = () => (
                     <Route path="/DreamFit" element={<Index />} />
                     <Route path="/VibeFit" element={<Index />} />
                     <Route path="/VibeFit/:projectId" element={<Index />} />
+                    <Route path="/crowdfit" element={<SeoPages />} />
+                    <Route path="/lyricfit" element={<SeoPages />} />
+                    <Route path="/hookfit" element={<SeoPages />} />
+                    <Route path="/mixfit" element={<SeoPages />} />
+                    <Route path="/hitfit" element={<SeoPages />} />
+                    <Route path="/playlistfit" element={<SeoPages />} />
+                    <Route path="/dreamfit" element={<SeoPages />} />
+                    <Route path="/answers/:slug" element={<SeoPages />} />
+                    <Route path="/blog/:slug" element={<SeoPages />} />
                     <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout>} />
