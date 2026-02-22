@@ -96,7 +96,7 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
       });
   }, [battleId]);
 
-  // ── Vote handler (declared before lift so BattleState can reference it) ──
+  // ── Vote handler ──
 
   const handleVote = useCallback(async (hookId: string) => {
     if (!hookA?.battle_id) return;
@@ -169,13 +169,11 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
   useEffect(() => {
     if (prevSideRef.current === activeHookSide) return;
     prevSideRef.current = activeHookSide;
-    // Only auto-switch audio if user has already interacted with BOTH sides
     if (tappedSides.size < 2) {
       if (activeHookSide === "a") hookACanvas.restart();
       else hookBCanvas.restart();
       return;
     }
-    // Respect manual mute — if user muted, keep new side muted too
     if (userMutedRef.current) {
       if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
       if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
@@ -236,7 +234,6 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     else hookBCanvas.restart();
   }, [restartSignal]);
 
-
   // ── Mute flash helper ─────────────────────────────────────────────────
   const flashMuteIcon = useCallback(() => {
     setRecentMuteAction(true);
@@ -273,9 +270,10 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
         </div>
-        {/* Progress only */}
         <div className="h-[2px] bg-white/[0.06]">
-          <div className="h-full transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+          {!isMuted && (
+            <div className="h-full transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+          )}
         </div>
       </div>
     );
@@ -314,6 +312,18 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
+          {/* Mask overlay — Hook A */}
+          {!tappedSides.has("a") && (
+            <div className="absolute inset-0 bg-black/30 pointer-events-none" />
+          )}
+          {/* "Tap to unmute" instruction — only on left video before any interaction */}
+          {tappedSides.size === 0 && (
+            <div className="absolute top-3 inset-x-0 flex justify-center pointer-events-none">
+              <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
+                Tap to unmute
+              </span>
+            </div>
+          )}
           {/* Mute icon overlay — Hook A */}
           {activeHookSide === "a" && (
             <AnimatePresence>
@@ -358,6 +368,10 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
+          {/* Mask overlay — Hook B */}
+          {!tappedSides.has("b") && (
+            <div className="absolute inset-0 bg-black/30 pointer-events-none" />
+          )}
           {/* Mute icon overlay — Hook B */}
           {activeHookSide === "b" && (
             <AnimatePresence>
@@ -376,22 +390,24 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
         </motion.div>
       </div>
 
-      {/* ── HTML Playbar — progress only ─────────────────────────────── */}
+      {/* ── HTML Playbar — progress only when audio playing ──────────── */}
       <div className="h-[2px] bg-white/[0.06] flex">
-        {activeHookSide === "a" ? (
-          <>
-            <div className="w-1/2 relative">
-              <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-            </div>
-            <div className="w-1/2" />
-          </>
-        ) : (
-          <>
-            <div className="w-1/2" />
-            <div className="w-1/2 relative">
-              <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
-            </div>
-          </>
+        {!isMuted && (
+          activeHookSide === "a" ? (
+            <>
+              <div className="w-1/2 relative">
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+              </div>
+              <div className="w-1/2" />
+            </>
+          ) : (
+            <>
+              <div className="w-1/2" />
+              <div className="w-1/2 relative">
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+              </div>
+            </>
+          )
         )}
       </div>
     </div>
