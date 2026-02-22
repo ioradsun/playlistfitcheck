@@ -39,6 +39,40 @@ interface Props {
   activePlaying: "a" | "b" | null;
 }
 
+// ── Inversion rule ───────────────────────────────────────────────
+// The right hook (B) gets an inverted palette and a contrasting physics system.
+// Same artist identity, opposite emotional register.
+
+const SYSTEM_PAIRS: Record<string, string> = {
+  fracture: "breath",
+  breath: "fracture",
+  pressure: "orbit",
+  orbit: "pressure",
+  combustion: "glass",
+  glass: "combustion",
+  paper: "combustion",
+};
+
+function invertHookData(hook: HookData, sourceHook: HookData): HookData {
+  // Palette inversion: swap primary (first) and background-ish (last), reverse the middle
+  const palette = [...hook.palette];
+  if (palette.length >= 2) {
+    const [first, ...rest] = palette;
+    const last = rest.pop()!;
+    palette.length = 0;
+    palette.push(last, ...rest.reverse(), first);
+  }
+
+  // Contrasting physics system — use sourceHook's system to pick the opposite
+  const contrastSystem = SYSTEM_PAIRS[sourceHook.system_type] || "breath";
+
+  return {
+    ...hook,
+    palette,
+    system_type: contrastSystem,
+  };
+}
+
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
   battleId, mode, votedSide, onHookEnd, onHooksLoaded,
   onTileTap, activePlaying,
@@ -77,7 +111,9 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         if (!data || data.length === 0) { setLoading(false); return; }
         const hooks = data as any as HookData[];
         const a = hooks.find(h => h.battle_position === 1) || hooks[0];
-        const b = hooks.find(h => h.id !== a.id) || null;
+        const rawB = hooks.find(h => h.id !== a.id) || null;
+        // Apply inversion rule to hook B
+        const b = rawB ? invertHookData(rawB, a) : null;
         setHookA(a);
         setHookB(b);
         setLoading(false);
