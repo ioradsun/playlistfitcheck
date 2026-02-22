@@ -153,14 +153,15 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     setTappedSides(prev => new Set(prev).add("a"));
   }, []);
 
+  // Both canvases always play when visible (simultaneous playback)
   const hookACanvas = useHookCanvas(
     canvasRefA, containerRefA, hookA, constellationRefA, riverOffsetsRefA,
-    visible && (!hookB || activeHookSide === "a"),
+    visible,
     hookB ? switchToB : undefined,
   );
   const hookBCanvas = useHookCanvas(
     canvasRefB, containerRefB, hookB, constellationRefB, riverOffsetsRefB,
-    visible && !!hookB && activeHookSide === "b",
+    visible && !!hookB,
     switchToA,
   );
 
@@ -284,11 +285,11 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
   return (
     <div className="w-full" style={{ background: bgBase }}>
       {/* Split canvases */}
-      <div className="flex flex-row gap-1 px-1 pt-1" style={{ height: "300px" }}>
+      <div className="flex flex-row" style={{ height: "300px" }}>
         {/* Hook A */}
         <motion.div
-          className="relative flex-1 cursor-pointer rounded-lg overflow-hidden"
-          animate={{ opacity: activeHookSide !== "a" ? 0.4 : 1 }}
+          className="relative flex-1 cursor-pointer overflow-hidden"
+          animate={{ opacity: activeHookSide !== "a" ? 0.6 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
             if (activeHookSide === "a" && tappedSides.has("a")) {
@@ -313,12 +314,12 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
           {/* Mask overlay — Hook A */}
-          {!tappedSides.has("a") && (
+          {activeHookSide !== "a" && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
           )}
-          {/* "Tap to unmute" instruction — only on left video before any interaction */}
-          {tappedSides.size === 0 && (
-            <div className="absolute top-3 inset-x-0 flex justify-center pointer-events-none">
+          {/* "Tap to unmute" — on left side when muted */}
+          {(tappedSides.size === 0 || (activeHookSide !== "a")) && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
                 Tap to unmute
               </span>
@@ -341,10 +342,13 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           )}
         </motion.div>
 
+        {/* 1px vertical seam */}
+        <div className="w-px bg-white/10 shrink-0" />
+
         {/* Hook B */}
         <motion.div
-          className="relative flex-1 cursor-pointer rounded-lg overflow-hidden"
-          animate={{ opacity: activeHookSide !== "b" ? 0.4 : 1 }}
+          className="relative flex-1 cursor-pointer overflow-hidden"
+          animate={{ opacity: activeHookSide !== "b" ? 0.6 : 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
             if (activeHookSide === "b" && tappedSides.has("b")) {
@@ -369,8 +373,16 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
           {/* Mask overlay — Hook B */}
-          {!tappedSides.has("b") && (
+          {activeHookSide !== "b" && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
+          )}
+          {/* "Tap to unmute" — on right side when muted */}
+          {(tappedSides.size === 0 || (activeHookSide !== "b")) && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-white/50">
+                Tap to unmute
+              </span>
+            </div>
           )}
           {/* Mute icon overlay — Hook B */}
           {activeHookSide === "b" && (

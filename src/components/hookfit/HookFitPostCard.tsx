@@ -18,12 +18,15 @@ import {
 import { InlineBattle, type BattleState } from "./InlineBattle";
 import { HookFitVotesSheet } from "./HookFitVotesSheet";
 import type { HookFitPost } from "./types";
+import { getSessionId } from "@/lib/sessionId";
 
 interface Props {
   post: HookFitPost;
   rank?: number;
   onRefresh: () => void;
 }
+
+type CardPhase = "rest" | "exploring" | "registering" | "commenting" | "confirmed";
 
 export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const { user } = useAuth();
@@ -33,6 +36,9 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const [isVisible, setIsVisible] = useState(false);
   const [battleState, setBattleState] = useState<BattleState | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const commentInputRef = useRef<HTMLInputElement>(null);
 
   // Track visibility for auto-pause
   useEffect(() => {
@@ -50,9 +56,34 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
   const hook = post.hook;
 
-  const handleProfileClick = () => {
-    navigate(`/u/${post.user_id}`);
-  };
+  // Derive phase from battle state
+  const isBattle = !!(battleState?.hookA && battleState?.hookB);
+  const hasVoted = !!battleState?.votedHookId;
+  const hasTapped = (battleState?.tappedSides?.size ?? 0) > 0;
+  const isPlaying = !battleState?.isMuted;
+  const totalVotes = (battleState?.voteCountA ?? 0) + (battleState?.voteCountB ?? 0);
+  const fmlyCount = Math.max(0, totalVotes - 1);
+  const activeLabel = battleState?.activeHookSide === "a"
+    ? (battleState?.hookA?.hook_label || "Hook A")
+    : (battleState?.hookB?.hook_label || "Hook B");
+
+  const [phase, setPhase] = useState<CardPhase>("rest");
+
+  // Phase state machine — derived from battleState
+  useEffect(() => {
+    if (phase === "commenting" || phase === "confirmed") return; // locked phases
+    if (!isBattle) return;
+    if (hasVoted) {
+      setPhase("commenting");
+      // Auto-focus comment input
+      setTimeout(() => commentInputRef.current?.focus(), 100);
+      return;
+    }
+    if (!hasTapped) { setPhase("rest"); return; }
+    setPhase(isPlaying ? "registering" : "exploring");
+  }, [isBattle, hasVoted, hasTapped, isPlaying]);
+
+  const handleProfileClick = () => navigate(`/u/${post.user_id}`);
 
   const handleDeletePost = async () => {
     try {
@@ -68,16 +99,27 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
     }
   };
 
-  // Derived from battle state
-  const isBattle = !!(battleState?.hookA && battleState?.hookB);
-  const hasVoted = !!battleState?.votedHookId;
-  const canVote = (battleState?.tappedSides?.size ?? 0) > 0 && !hasVoted;
-  const totalVotes = (battleState?.voteCountA ?? 0) + (battleState?.voteCountB ?? 0);
-  const activeLabel = battleState?.activeHookSide === "a"
-    ? (battleState?.hookA?.hook_label || "Hook A")
-    : (battleState?.hookB?.hook_label || "Hook B");
-  const hasTapped = (battleState?.tappedSides?.size ?? 0) > 0;
-  const fmlyCount = Math.max(0, totalVotes - 1);
+  const handleSubmitComment = async () => {
+    if (!commentText.trim() || !battleState?.votedHookId) return;
+    setSubmittingComment(true);
+    try {
+      const sessionId = getSessionId();
+      await supabase
+        .from("hook_comments" as any)
+        .insert({
+          hook_id: battleState.votedHookId,
+          text: commentText.trim(),
+          user_id: user?.id || null,
+          session_id: sessionId,
+        });
+      setCommentText("");
+      setPhase("confirmed");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to send comment");
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
 
   return (
     <div className="border-b border-border/40" ref={containerRef}>
@@ -167,23 +209,37 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
         )}
       </div>
 
-      {/* Action row — vote controls in card area */}
+      {/* Action row — phase-driven */}
       {isBattle && (
-        <div className="flex items-center justify-center px-3 py-2">
+        <div className="flex items-center justify-center px-3 py-2 min-h-[40px]">
           <AnimatePresence mode="wait">
-            {!hasTapped ? (
+            {phase === "rest" && (
               <motion.p
-                key="hint"
+                key="rest"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="text-xs text-muted-foreground font-mono uppercase tracking-[0.15em]"
               >
-                WHICH HOOK FITS? — FMLY DECIDES
+                WHICH HOOK FITS? — FMLY VOTE
               </motion.p>
-            ) : canVote ? (
+            )}
+
+            {phase === "exploring" && (
+              <motion.p
+                key="exploring"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-xs text-muted-foreground font-mono uppercase tracking-[0.15em]"
+              >
+                WHICH HOOK FITS? — FMLY VOTE
+              </motion.p>
+            )}
+
+            {phase === "registering" && (
               <motion.button
-                key="vote"
+                key="registering"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
@@ -197,7 +253,53 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
               >
                 I'm Hooked on {activeLabel}
               </motion.button>
-            ) : null}
+            )}
+
+            {phase === "commenting" && (
+              <motion.form
+                key="commenting"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                onSubmit={(e) => { e.preventDefault(); handleSubmitComment(); }}
+                className="w-full"
+              >
+                <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground text-center mb-1.5">
+                  Comment live to the winning video — FMLY style
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={commentInputRef}
+                    type="text"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Drop your words…"
+                    disabled={submittingComment}
+                    className="flex-1 bg-transparent border-b border-border/60 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/40 py-1 font-mono"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!commentText.trim() || submittingComment}
+                    className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/70 hover:text-foreground disabled:opacity-30 transition-colors"
+                  >
+                    Send
+                  </button>
+                </div>
+              </motion.form>
+            )}
+
+            {phase === "confirmed" && (
+              <motion.p
+                key="confirmed"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-[11px] font-mono uppercase tracking-[0.15em]"
+                style={{ color: "rgba(57,255,20,0.5)" }}
+              >
+                Watch your words get hooked in
+              </motion.p>
+            )}
           </AnimatePresence>
         </div>
       )}
