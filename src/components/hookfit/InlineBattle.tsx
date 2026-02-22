@@ -309,6 +309,12 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           {activeHookSide !== "a" && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
           )}
+          {/* Hook label */}
+          <div className="absolute bottom-2 left-2 pointer-events-none">
+            <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-white/50 drop-shadow-md">
+              {hookA?.hook_label || "Hook A"}
+            </span>
+          </div>
         </motion.div>
 
         {/* 1px vertical seam */}
@@ -337,6 +343,12 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           {activeHookSide !== "b" && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
           )}
+          {/* Hook label */}
+          <div className="absolute bottom-2 left-2 pointer-events-none">
+            <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-white/50 drop-shadow-md">
+              {hookB?.hook_label || "Hook B"}
+            </span>
+          </div>
         </motion.div>
       </div>
 
