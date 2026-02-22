@@ -38,6 +38,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [floatingComment, setFloatingComment] = useState<{ text: string; side: "a" | "b" } | null>(null);
   const commentInputRef = useRef<HTMLInputElement>(null);
 
   // Track visibility for auto-pause
@@ -118,8 +119,12 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
           user_id: user?.id || null,
           session_id: sessionId,
         });
+      const votedSide = battleState.votedHookId === battleState.hookA?.id ? "a" : "b";
+      setFloatingComment({ text: commentText.trim(), side: votedSide as "a" | "b" });
       setCommentText("");
       setPhase("confirmed");
+      // Auto-clear floating comment after 5s
+      setTimeout(() => setFloatingComment(null), 5000);
     } catch (e: any) {
       toast.error(e.message || "Failed to send comment");
     } finally {
@@ -190,6 +195,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
           battleId={post.battle_id}
           visible={isVisible}
           onBattleState={setBattleState}
+          floatingComment={floatingComment}
         />
         {/* "Hooked" badge — pinned to the voted video side */}
         {hasVoted && isBattle && (() => {
