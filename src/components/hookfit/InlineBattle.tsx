@@ -381,9 +381,14 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
               e.stopPropagation();
               userMutedRef.current = false;
               setIsMuted(false);
-              // Unmute the active side
-              if (activeHookSide === "a" && hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
-              if (activeHookSide === "b" && hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
+              // Unmute and restart the active side from the beginning
+              if (activeHookSide === "a") {
+                if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
+                hookACanvas.restart();
+              } else {
+                if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
+                hookBCanvas.restart();
+              }
               setTappedSides(prev => new Set(prev).add(activeHookSide));
             }}
           >
