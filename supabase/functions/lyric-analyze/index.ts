@@ -80,7 +80,36 @@ The 3 colors must plausibly coexist in a real photograph. If it looks generic da
 - Assign params: mass, elasticity, damping, brittleness, heat.
 - Include effect_pool (4–6) and logic_seed (int).
 
-5. TYPOGRAPHY DERIVATION
+5. WORLD SYSTEM COHERENCE (MANDATORY)
+Treat world-building as ONE coordinated decision. You must produce a unified world decision that includes:
+- world (cinematic place sentence)
+- backgroundSystem (macro motion language)
+- particleConfig (micro motion language)
+
+Pick these together, not independently. If one changes, the others must be re-evaluated.
+
+Return this object at top-level as:
+"world_decision": {
+  "world": "...",
+  "backgroundSystem": "void|fracture|pressure|breath|combustion|orbit",
+  "particleConfig": {
+    "style": "none|embers|dust|rain|sparks|mist|debris",
+    "density": 0.0-1.0,
+    "motion": "drift|rise|fall|orbit|pulse|chaotic",
+    "scale": "fine|mixed|chunky"
+  }
+}
+
+COHERENCE TABLE (strict):
+- sterile/clinical/empty interiors → backgroundSystem: pressure or void; particles: none/dust only
+- rain-streaked windows/night streets → backgroundSystem: breath or orbit; particles: rain/mist
+- heat/fire/combustion imagery → backgroundSystem: combustion; particles: embers/sparks/debris
+- collapse/shattering/violent impact → backgroundSystem: fracture; particles: debris only
+- vast cosmic/rotational/gravitational space → backgroundSystem: orbit; particles: dust/mist
+
+Never output contradictory combos (e.g., sterile hospital + embers, underwater world + sparks).
+
+6. TYPOGRAPHY DERIVATION
 Select type personality that matches world, not genre:
 - MONUMENTAL
 - ELEGANT DECAY
@@ -100,7 +129,7 @@ Return typographyProfile as:
   "personality": "[one archetype above]"
 }
 
-6. CREATIVE DICTIONARY (KEEP COMPACT)
+7. CREATIVE DICTIONARY (KEEP COMPACT)
 - semantic_tags max 5
 - line_mods exactly 5-8
 - word_marks 3-6
@@ -177,6 +206,16 @@ OUTPUT — valid JSON only:
   "description": "...",
   "mood": "...",
   "world": "...",
+  "world_decision": {
+    "world": "...",
+    "backgroundSystem": "pressure",
+    "particleConfig": {
+      "style": "dust",
+      "density": 0.35,
+      "motion": "drift",
+      "scale": "fine"
+    }
+  },
   "meaning": { "theme": "...", "summary": "...", "imagery": ["...", "..."] },
   "physics_spec": {
     "system": "pressure",
