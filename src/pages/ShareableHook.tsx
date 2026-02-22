@@ -122,6 +122,9 @@ function FireStreakAnimation({ system, children }: { system: string; children: R
 }
 
 // ── Canvas Hook Renderer (shared between single & battle) ───────────────────
+// Fully imperative: draws directly in the RAF callback via refs, zero React
+// re-renders per frame. This eliminates the 360 state-updates/sec that caused
+// battle-mode jank.
 
 function useHookCanvas(
   canvasRef: React.RefObject<HTMLCanvasElement>,
@@ -133,134 +136,62 @@ function useHookCanvas(
 ) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const engineRef = useRef<HookDanceEngine | null>(null);
-  const [physicsState, setPhysicsState] = useState<PhysicsState | null>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [beatCount, setBeatCount] = useState(0);
   const prngRef = useRef<(() => number) | null>(null);
-
-  // Setup audio + engine
-  useEffect(() => {
-    if (!hookData) return;
-    const audio = new Audio();
-    audio.muted = true;
-    audio.preload = "auto";
-    audio.crossOrigin = "anonymous";
-    audio.loop = true; // Ensure looping even when muted
-    audioRef.current = audio;
-    audio.src = hookData.audio_url;
-
-    const spec = hookData.physics_spec as PhysicsSpec;
-    const beats: BeatTick[] = hookData.beat_grid.beats.map((t: number, i: number) => ({
-      time: t, isDownbeat: i % 4 === 0, strength: i % 4 === 0 ? 1 : 0.6,
-    }));
-
-    const lines = hookData.lyrics as LyricLine[];
-    const lyricsStart = lines.length > 0 ? Math.min(hookData.hook_start, lines[0].start) : hookData.hook_start;
-    const lyricsEnd = lines.length > 0 ? Math.min(hookData.hook_end, lines[lines.length - 1].end + 0.3) : hookData.hook_end;
-    const effectiveStart = Math.max(hookData.hook_start, lyricsStart);
-    const effectiveEnd = Math.max(effectiveStart + 1, lyricsEnd);
-
-    const engine = new HookDanceEngine(
-      { ...spec, system: hookData.system_type },
-      beats, effectiveStart, effectiveEnd, audio,
-      {
-        onFrame: (state, time, bc) => { setPhysicsState(state); setCurrentTime(time); setBeatCount(bc); },
-        onEnd: () => {},
-      },
-      `${hookData.song_name}-${hookData.hook_start.toFixed(3)}`,
-    );
-
-    engineRef.current = engine;
-    prngRef.current = engine.prng;
-    activeRef.current = active;
-
-    // Always start engine so both battle sides render on load
-    engine.start();
-
-    return () => { engine.stop(); audio.pause(); };
-  }, [hookData]);
-
-  // Track active prop in a ref to avoid re-running setup effect
   const activeRef = useRef(active);
+  // Store frame data in refs — never in React state
+  const frameRef = useRef<{ physState: PhysicsState | null; time: number; beats: number }>({
+    physState: null, time: 0, beats: 0,
+  });
 
-  // Track active prop — keep engine always running, just mute/unmute audio
-  useEffect(() => {
-    activeRef.current = active;
-    const audio = audioRef.current;
-    if (!audio) return;
-    // In battle mode, mute inactive side's audio
-    if (!active) {
-      audio.muted = true;
-    }
-  }, [active]);
-
-  // Restart from beginning and unmute
-  const restart = useCallback(() => {
-    const engine = engineRef.current;
-    const audio = audioRef.current;
-    if (!engine) return;
-    // Unmute on user gesture
-    if (audio) {
-      audio.muted = false;
-    }
-    engine.stop();
-    engine.start();
-  }, []);
-  // Canvas resize
-  useEffect(() => {
+  // Imperative draw function — called directly from engine's onFrame
+  const drawCanvas = useCallback((physState: PhysicsState, ct: number, bc: number) => {
     const canvas = canvasRef.current;
+    const hd = hookData;
+    const rng = prngRef.current;
+    if (!canvas || !hd || !rng) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Resize canvas to match container (imperative, no ResizeObserver needed per-frame)
     const container = containerRef.current;
-    if (!canvas || !container) return;
-    const resize = () => {
+    if (container) {
       const rect = container.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       const newW = Math.round(rect.width * dpr);
       const newH = Math.round(rect.height * dpr);
       if (canvas.width !== newW || canvas.height !== newH) {
-        canvas.width = newW; canvas.height = newH;
+        canvas.width = newW;
+        canvas.height = newH;
       }
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [hookData]);
-
-  // Canvas draw
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !physicsState || !hookData || !prngRef.current) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    }
 
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.width / dpr;
     const h = canvas.height / dpr;
-    const palette = hookData.palette || ["#ffffff", "#a855f7", "#ec4899"];
+    const palette = hd.palette || ["#ffffff", "#a855f7", "#ec4899"];
 
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     drawSystemBackground(ctx, {
-      system: hookData.system_type, physState: physicsState,
-      w, h, time: currentTime, beatCount, rng: prngRef.current, palette,
-      hookStart: hookData.hook_start, hookEnd: hookData.hook_end,
+      system: hd.system_type, physState,
+      w, h, time: ct, beatCount: bc, rng, palette,
+      hookStart: hd.hook_start, hookEnd: hd.hook_end,
     });
 
-    // ── Layer 1: Comment rendering (constellation → river → arrival) ──────
+    // ── Comment rendering (constellation → river → arrival) ──────
     const nodes = constellationRef.current;
     const now = Date.now();
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
 
-    // Determine if we're in HOOK_FRACTURE phase (suppress river rows)
-    const lines = hookData.lyrics as LyricLine[];
-    const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
+    const lines = hd.lyrics as LyricLine[];
+    const activeLine = lines.find(l => ct >= l.start && ct < l.end);
     const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
-    const spec = hookData.physics_spec as PhysicsSpec;
+    const spec = hd.physics_spec as PhysicsSpec;
     let currentEffectKey = "STATIC_RESOLVE";
     if (activeLine && spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
-      const isLastHookLine = activeLine.end >= hookData.hook_end - 0.5;
+      const isLastHookLine = activeLine.end >= hd.hook_end - 0.5;
       if (isLastHookLine) currentEffectKey = "HOOK_FRACTURE";
       else {
         const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
@@ -269,27 +200,24 @@ function useHookCanvas(
     }
     const isHookFracture = currentEffectKey === "HOOK_FRACTURE";
 
-    // Pass 1: Constellation nodes (lowest opacity, drawn first)
+    // Pass 1: Constellation nodes
     for (const node of nodes) {
       if (node.phase !== "constellation") continue;
-      // Linear drift (halved speeds)
       node.x += Math.cos(node.driftAngle) * node.driftSpeed / w;
       node.y += Math.sin(node.driftAngle) * node.driftSpeed / h;
-      // Wrap
       if (node.x < -0.1) node.x = 1.1;
       if (node.x > 1.1) node.x = -0.1;
       if (node.y < -0.1) node.y = 1.1;
       if (node.y > 1.1) node.y = -0.1;
 
       ctx.font = "300 5px system-ui, -apple-system, sans-serif";
-      // During HOOK_FRACTURE, drop constellation to minimum opacity
       ctx.globalAlpha = isHookFracture ? node.baseOpacity * 0.5 : node.baseOpacity;
       ctx.fillStyle = "#ffffff";
       const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
       ctx.fillText(truncated, node.x * w, node.y * h);
     }
 
-    // Pass 2: River rows — suppressed entirely during HOOK_FRACTURE
+    // Pass 2: River rows
     if (!isHookFracture) {
       const riverNodes = nodes.filter(n => n.phase === "river");
       const offsets = riverOffsetsRef.current;
@@ -322,7 +250,7 @@ function useHookCanvas(
       }
     }
 
-    // Pass 3: New submissions — restrained entry animation
+    // Pass 3: New submissions
     for (const node of nodes) {
       if (node.phase === "center") {
         const elapsed = now - node.phaseStartTime;
@@ -331,22 +259,16 @@ function useHookCanvas(
         ctx.fillStyle = "#ffffff";
         const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
         ctx.fillText(truncated, w / 2, h / 2);
-        // After 800ms hold, transition
-        if (elapsed >= 800) {
-          node.phase = "transitioning";
-          node.phaseStartTime = now;
-        }
+        if (elapsed >= 800) { node.phase = "transitioning"; node.phaseStartTime = now; }
       } else if (node.phase === "transitioning") {
         const elapsed = now - node.phaseStartTime;
-        const t = Math.min(1, elapsed / 4000); // 0→1 over 4s
+        const t = Math.min(1, elapsed / 4000);
         const targetRow = RIVER_ROWS[node.riverRowIndex];
         const targetY = targetRow ? targetRow.y : node.seedY;
         const cx = 0.5, cy = 0.5;
         const curX = cx + (node.seedX - cx) * t * 0.3;
         const curY = cy + (targetY - cy) * t;
-        // Interpolate size: 8 → 6
         const size = 8 - (8 - 6) * t;
-        // Interpolate opacity: 0.35 → river row opacity
         const targetOpacity = targetRow?.opacity || 0.05;
         const opacity = 0.35 - (0.35 - targetOpacity) * t;
 
@@ -355,40 +277,95 @@ function useHookCanvas(
         ctx.fillStyle = "#ffffff";
         const truncated = node.text.length > 30 ? node.text.slice(0, 30) + "…" : node.text;
         ctx.fillText(truncated, curX * w, curY * h);
-
-        node.x = curX;
-        node.y = curY;
-        node.currentSize = size;
-
-        if (elapsed >= 4000) {
-          node.phase = "river";
-          node.phaseStartTime = now;
-        }
+        node.x = curX; node.y = curY; node.currentSize = size;
+        if (elapsed >= 4000) { node.phase = "river"; node.phaseStartTime = now; }
       }
     }
     ctx.globalAlpha = 1;
 
-    // Lyrics — reuse effect key computed above
+    // Lyrics
     if (activeLine) {
       const drawFn = getEffect(currentEffectKey);
-      const age = (currentTime - activeLine.start) * 1000;
+      const age = (ct - activeLine.start) * 1000;
       const lineDur = activeLine.end - activeLine.start;
-      const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-      const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, hookData.system_type);
-      drawFn(ctx, { text: activeLine.text, physState: physicsState, w, h, fs, age, progress, rng: prngRef.current, palette, system: hookData.system_type, effectiveLetterSpacing });
+      const progress = Math.min(1, (ct - activeLine.start) / lineDur);
+      const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, hd.system_type);
+      drawFn(ctx, { text: activeLine.text, physState: physState, w, h, fs, age, progress, rng, palette, system: hd.system_type, effectiveLetterSpacing });
     }
 
     // Progress bar
-    const hookProgress = (currentTime - hookData.hook_start) / (hookData.hook_end - hookData.hook_start);
+    const hookProgress = (ct - hd.hook_start) / (hd.hook_end - hd.hook_start);
     ctx.fillStyle = palette[1] || "#a855f7";
     ctx.globalAlpha = 0.6;
     ctx.fillRect(0, h - 3, w * Math.max(0, Math.min(1, hookProgress)), 3);
     ctx.globalAlpha = 1;
 
     ctx.restore();
-  }, [physicsState, currentTime, beatCount, hookData]);
+  }, [hookData, canvasRef, containerRef, constellationRef, riverOffsetsRef]);
 
-  return { audioRef, currentTime, physicsState, restart };
+  // Setup audio + engine — draw directly in onFrame, no React state
+  useEffect(() => {
+    if (!hookData) return;
+    const audio = new Audio();
+    audio.muted = true;
+    audio.preload = "auto";
+    audio.crossOrigin = "anonymous";
+    audio.loop = true;
+    audioRef.current = audio;
+    audio.src = hookData.audio_url;
+
+    const spec = hookData.physics_spec as PhysicsSpec;
+    const beats: BeatTick[] = hookData.beat_grid.beats.map((t: number, i: number) => ({
+      time: t, isDownbeat: i % 4 === 0, strength: i % 4 === 0 ? 1 : 0.6,
+    }));
+
+    const lines = hookData.lyrics as LyricLine[];
+    const lyricsStart = lines.length > 0 ? Math.min(hookData.hook_start, lines[0].start) : hookData.hook_start;
+    const lyricsEnd = lines.length > 0 ? Math.min(hookData.hook_end, lines[lines.length - 1].end + 0.3) : hookData.hook_end;
+    const effectiveStart = Math.max(hookData.hook_start, lyricsStart);
+    const effectiveEnd = Math.max(effectiveStart + 1, lyricsEnd);
+
+    const engine = new HookDanceEngine(
+      { ...spec, system: hookData.system_type },
+      beats, effectiveStart, effectiveEnd, audio,
+      {
+        onFrame: (state, time, bc) => {
+          // Store in ref for external access, draw imperatively
+          frameRef.current = { physState: state, time, beats: bc };
+          drawCanvas(state, time, bc);
+        },
+        onEnd: () => {},
+      },
+      `${hookData.song_name}-${hookData.hook_start.toFixed(3)}`,
+    );
+
+    engineRef.current = engine;
+    prngRef.current = engine.prng;
+    activeRef.current = active;
+    engine.start();
+
+    return () => { engine.stop(); audio.pause(); };
+  }, [hookData, drawCanvas]);
+
+  // Track active prop — mute/unmute audio only
+  useEffect(() => {
+    activeRef.current = active;
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (!active) audio.muted = true;
+  }, [active]);
+
+  // Restart from beginning and unmute
+  const restart = useCallback(() => {
+    const engine = engineRef.current;
+    const audio = audioRef.current;
+    if (!engine) return;
+    if (audio) audio.muted = false;
+    engine.stop();
+    engine.start();
+  }, []);
+
+  return { audioRef, frameRef, restart };
 }
 
 // ── Main Component ──────────────────────────────────────────────────────────
