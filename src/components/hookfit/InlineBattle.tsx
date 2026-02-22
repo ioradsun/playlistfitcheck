@@ -4,7 +4,8 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { Volume2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHookCanvas, HOOK_COLUMNS, type HookData } from "@/hooks/useHookCanvas";
 import type { ConstellationNode } from "@/hooks/useHookCanvas";
@@ -20,6 +21,7 @@ export interface BattleState {
   tappedSides: Set<"a" | "b">;
   handleVote: (hookId: string) => void;
   accentColor: string;
+  isMuted: boolean;
 }
 
 interface Props {
@@ -40,8 +42,12 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
   const [voteCountA, setVoteCountA] = useState(0);
   const [voteCountB, setVoteCountB] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [isMuted, setIsMuted] = useState(true);
+  const [recentMuteAction, setRecentMuteAction] = useState(false);
+  const userMutedRef = useRef(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
   const progressRafRef = useRef<number>(0);
+  const muteActionTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const canvasRefA = useRef<HTMLCanvasElement>(null);
   const containerRefA = useRef<HTMLDivElement>(null);
@@ -131,8 +137,8 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
   // ── Lift state to parent ──────────────────────────────────────────────
 
   useEffect(() => {
-    onBattleState?.({ hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, accentColor: hookA?.palette?.[1] || "#a855f7" });
-  }, [hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote]);
+    onBattleState?.({ hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, accentColor: hookA?.palette?.[1] || "#a855f7", isMuted });
+  }, [hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, isMuted]);
 
   // ── Canvas engines — auto-alternate on end ─────────────────────────
 
@@ -158,14 +164,21 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     switchToA,
   );
 
-  // When side auto-switches, restart canvas but keep audio muted until user taps
+  // When side auto-switches, restart canvas — respect userMuted
   const prevSideRef = useRef(activeHookSide);
   useEffect(() => {
     if (prevSideRef.current === activeHookSide) return;
     prevSideRef.current = activeHookSide;
     // Only auto-switch audio if user has already interacted with BOTH sides
     if (tappedSides.size < 2) {
-      // Just restart the canvas visually, keep audio muted
+      if (activeHookSide === "a") hookACanvas.restart();
+      else hookBCanvas.restart();
+      return;
+    }
+    // Respect manual mute — if user muted, keep new side muted too
+    if (userMutedRef.current) {
+      if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
+      if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
       if (activeHookSide === "a") hookACanvas.restart();
       else hookBCanvas.restart();
       return;
@@ -201,8 +214,19 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     if (!visible) {
       if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
       if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
+      setIsMuted(true);
     }
   }, [visible]);
+
+  // ── Mute all on unmount (route change) ──────────────────────────────
+
+  useEffect(() => {
+    return () => {
+      if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
+      if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
+      clearTimeout(muteActionTimerRef.current);
+    };
+  }, []);
 
   // ── External restart signal ─────────────────────────────────────────
 
@@ -213,10 +237,18 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
   }, [restartSignal]);
 
 
+  // ── Mute flash helper ─────────────────────────────────────────────────
+  const flashMuteIcon = useCallback(() => {
+    setRecentMuteAction(true);
+    clearTimeout(muteActionTimerRef.current);
+    muteActionTimerRef.current = setTimeout(() => setRecentMuteAction(false), 1500);
+  }, []);
+
   // ── Derived ─────────────────────────────────────────────────────────
 
   const isBattle = !!(hookA && hookB);
   const accentColor = hookA?.palette?.[1] || "#a855f7";
+  const MuteIcon = isMuted ? VolumeX : Volume2;
 
   if (loading || !hookA) {
     return (
@@ -262,20 +294,41 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
             if (activeHookSide === "a" && tappedSides.has("a")) {
-              // Toggle mute on re-tap
-              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = !hookACanvas.audioRef.current.muted;
+              const nowMuted = !hookACanvas.audioRef.current?.muted;
+              if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = nowMuted;
+              userMutedRef.current = nowMuted;
+              setIsMuted(nowMuted);
+              flashMuteIcon();
               return;
             }
             setActiveHookSide("a");
             setTappedSides(prev => new Set(prev).add("a"));
             if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
             if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
+            userMutedRef.current = false;
+            setIsMuted(false);
+            flashMuteIcon();
             hookACanvas.restart();
           }}
         >
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
+          {/* Mute icon overlay — Hook A */}
+          {activeHookSide === "a" && (
+            <AnimatePresence>
+              <motion.div
+                key={`mute-a-${recentMuteAction}`}
+                initial={{ opacity: recentMuteAction ? 0.8 : 0.2 }}
+                animate={{ opacity: recentMuteAction ? 0.8 : 0.2 }}
+                exit={{ opacity: 0.2 }}
+                transition={{ duration: 0.6 }}
+                className="absolute bottom-2 right-2 pointer-events-none"
+              >
+                <MuteIcon size={16} className="text-white drop-shadow-md" />
+              </motion.div>
+            </AnimatePresence>
+          )}
         </motion.div>
 
         {/* Hook B */}
@@ -285,19 +338,41 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           transition={{ duration: 0.6, ease: "easeOut" }}
           onClick={() => {
             if (activeHookSide === "b" && tappedSides.has("b")) {
-              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = !hookBCanvas.audioRef.current.muted;
+              const nowMuted = !hookBCanvas.audioRef.current?.muted;
+              if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = nowMuted;
+              userMutedRef.current = nowMuted;
+              setIsMuted(nowMuted);
+              flashMuteIcon();
               return;
             }
             setActiveHookSide("b");
             setTappedSides(prev => new Set(prev).add("b"));
             if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
             if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
+            userMutedRef.current = false;
+            setIsMuted(false);
+            flashMuteIcon();
             hookBCanvas.restart();
           }}
         >
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
+          {/* Mute icon overlay — Hook B */}
+          {activeHookSide === "b" && (
+            <AnimatePresence>
+              <motion.div
+                key={`mute-b-${recentMuteAction}`}
+                initial={{ opacity: recentMuteAction ? 0.8 : 0.2 }}
+                animate={{ opacity: recentMuteAction ? 0.8 : 0.2 }}
+                exit={{ opacity: 0.2 }}
+                transition={{ duration: 0.6 }}
+                className="absolute bottom-2 right-2 pointer-events-none"
+              >
+                <MuteIcon size={16} className="text-white drop-shadow-md" />
+              </motion.div>
+            </AnimatePresence>
+          )}
         </motion.div>
       </div>
 
