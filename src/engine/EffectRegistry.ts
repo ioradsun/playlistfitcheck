@@ -41,6 +41,24 @@ function safeScale(textWidth: number, canvasW: number, desiredScale: number): nu
   return Math.min(desiredScale, maxScale);
 }
 
+function getSafeZone(w: number, h: number, pad: number) {
+  return {
+    left: pad,
+    right: w - pad,
+    top: pad,
+    bottom: h - pad,
+    centerX: w / 2,
+    centerY: h / 2,
+  };
+}
+
+function clampPointToSafeZone(x: number, y: number, zone: ReturnType<typeof getSafeZone>) {
+  return {
+    x: Math.max(zone.left, Math.min(zone.right, x)),
+    y: Math.max(zone.top, Math.min(zone.bottom, y)),
+  };
+}
+
 export interface EffectState {
   text: string;
   physState: PhysicsState;
@@ -146,6 +164,7 @@ const drawShatterIn: EffectFn = (ctx, s) => {
 
   const shakeX = (rng() - 0.5) * physState.shake;
   const shakeY = (rng() - 0.5) * physState.shake;
+  const zone = getSafeZone(w, h, Math.max(12, physState.safeOffset));
 
   const chars = displayText.split("");
   const charPositions = getCharPositions(ctx, displayText, st, w / 2 + shakeX);
@@ -156,7 +175,7 @@ const drawShatterIn: EffectFn = (ctx, s) => {
     const t = Math.min(1, localAge / 300);
     const ease = 1 - Math.pow(1 - t, 3);
 
-    const offsetY = (1 - ease) * (rng() > 0.5 ? -1 : 1) * 60;
+    const offsetY = (1 - ease) * (rng() > 0.5 ? -1 : 1) * Math.min(60, h * 0.18);
     ctx.globalAlpha = ease;
 
     if (st.colorMode === "per-char") {
@@ -166,7 +185,8 @@ const drawShatterIn: EffectFn = (ctx, s) => {
     } else {
       ctx.fillStyle = palette[0] || "#fff";
     }
-    ctx.fillText(char, charPositions[i], h / 2 + offsetY + shakeY);
+    const p = clampPointToSafeZone(charPositions[i], h / 2 + offsetY + shakeY, zone);
+    ctx.fillText(char, p.x, p.y);
   });
   ctx.restore();
 };
@@ -339,8 +359,9 @@ const drawGlitchFlash: EffectFn = (ctx, s) => {
   ctx.font = buildFont(st, fs);
 
   const glitchOn = rng() > 0.7;
-  const offsetX = glitchOn ? (rng() - 0.5) * 20 : 0;
-  const sliceY = glitchOn ? (rng() - 0.5) * 10 : 0;
+  const offsetX = glitchOn ? (rng() - 0.5) * Math.min(20, w * 0.04) : 0;
+  const sliceY = glitchOn ? (rng() - 0.5) * Math.min(10, h * 0.025) : 0;
+  const zone = getSafeZone(w, h, Math.max(12, physState.safeOffset));
 
   if (drawAutoStacked(ctx, s, w / 2, h / 2)) {
     ctx.restore();
@@ -348,11 +369,13 @@ const drawGlitchFlash: EffectFn = (ctx, s) => {
   }
 
   if (glitchOn) {
+    const cyanP = clampPointToSafeZone(w / 2 + 3 + offsetX, h / 2 + sliceY, zone);
+    const redP = clampPointToSafeZone(w / 2 - 3 + offsetX, h / 2 - sliceY, zone);
     ctx.globalAlpha = 0.6;
     ctx.fillStyle = "cyan";
-    ctx.fillText(displayText, w / 2 + 3 + offsetX, h / 2 + sliceY);
+    ctx.fillText(displayText, cyanP.x, cyanP.y);
     ctx.fillStyle = "red";
-    ctx.fillText(displayText, w / 2 - 3 + offsetX, h / 2 - sliceY);
+    ctx.fillText(displayText, redP.x, redP.y);
   }
 
   ctx.globalAlpha = 1;
@@ -360,7 +383,8 @@ const drawGlitchFlash: EffectFn = (ctx, s) => {
   applyStyledFill(ctx, st, palette, w / 2, h / 2, measured);
   ctx.shadowBlur = physState.glow * 0.3;
   ctx.shadowColor = palette[1] || "#8b5cf6";
-  ctx.fillText(displayText, w / 2 + (glitchOn ? offsetX * 0.3 : 0), h / 2);
+  const mainP = clampPointToSafeZone(w / 2 + (glitchOn ? offsetX * 0.3 : 0), h / 2, zone);
+  ctx.fillText(displayText, mainP.x, mainP.y);
   ctx.restore();
 };
 
@@ -376,6 +400,7 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
   const chars = displayText.split("");
   const charPositions = getCharPositions(ctx, displayText, st, w / 2);
   const waveAmp = Math.min(15, 15 * Math.min(physState.scale, 1.3));
+  const zone = getSafeZone(w, h, Math.max(12, physState.safeOffset));
 
   // Arc layout: arrange chars in an arc
   if (st.layout === "arc") {
@@ -383,10 +408,13 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
     const totalAngle = Math.PI * 0.6;
     chars.forEach((char, i) => {
       const angle = -totalAngle / 2 + (i / Math.max(1, chars.length - 1)) * totalAngle - Math.PI / 2;
-      const cx = w / 2 + Math.cos(angle) * arcRadius;
-      const cy = h / 2 + Math.sin(angle) * arcRadius + arcRadius * 0.3;
+      const arcPoint = clampPointToSafeZone(
+        w / 2 + Math.cos(angle) * arcRadius,
+        h / 2 + Math.sin(angle) * arcRadius + arcRadius * 0.3,
+        zone,
+      );
       ctx.save();
-      ctx.translate(cx, cy);
+      ctx.translate(arcPoint.x, arcPoint.y);
       ctx.rotate(angle + Math.PI / 2);
       ctx.fillStyle = palette[i % palette.length] || "#fff";
       ctx.globalAlpha = 0.85 + physState.heat * 0.15;
@@ -402,7 +430,8 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
         ctx.fillStyle = palette[0] || "#fff";
       }
       ctx.globalAlpha = 0.85 + physState.heat * 0.15;
-      ctx.fillText(char, charPositions[i], h / 2 + wave);
+      const p = clampPointToSafeZone(charPositions[i], h / 2 + wave, zone);
+      ctx.fillText(char, p.x, p.y);
     });
   }
   ctx.restore();
@@ -417,7 +446,8 @@ const drawEmberRise: EffectFn = (ctx, s) => {
   ctx.textBaseline = "middle";
   ctx.font = buildFont(st, fs);
 
-  const rise = Math.min(30, age * 0.02);
+  const rise = Math.min(h * 0.08, age * 0.02);
+  const zone = getSafeZone(w, h, Math.max(12, physState.safeOffset));
 
   // Try stacked first
   if (!drawAutoStacked(ctx, s, w / 2, h / 2, { offsetY: -rise })) {
@@ -432,26 +462,31 @@ const drawEmberRise: EffectFn = (ctx, s) => {
         applyStyledFill(ctx, st, palette, w / 2 + staggerX, y, measured);
         ctx.shadowBlur = physState.glow;
         ctx.shadowColor = palette[1] || "#f97316";
-        ctx.fillText(word, w / 2 + staggerX, y);
+        const p = clampPointToSafeZone(w / 2 + staggerX, y, zone);
+        ctx.fillText(word, p.x, p.y);
       });
     } else {
       const measured = ctx.measureText(displayText).width;
       applyStyledFill(ctx, st, palette, w / 2, h / 2 - rise, measured);
       ctx.shadowBlur = physState.glow;
       ctx.shadowColor = palette[1] || "#f97316";
-      ctx.fillText(displayText, w / 2, h / 2 - rise);
+      const p = clampPointToSafeZone(w / 2, h / 2 - rise, zone);
+      ctx.fillText(displayText, p.x, p.y);
     }
   }
 
   const particleCount = Math.floor(physState.heat * 20);
   for (let i = 0; i < particleCount; i++) {
-    const px = w / 2 + (rng() - 0.5) * w * 0.6;
-    const py = h / 2 - rise - rng() * age * 0.1;
+    const particle = clampPointToSafeZone(
+      w / 2 + (rng() - 0.5) * w * 0.6,
+      h / 2 - rise - rng() * age * 0.1,
+      zone,
+    );
     const size = 1 + rng() * 3;
     ctx.globalAlpha = Math.max(0, 1 - (age * 0.001));
     ctx.fillStyle = palette[Math.floor(rng() * palette.length)] || "#f97316";
     ctx.beginPath();
-    ctx.arc(px, py, size, 0, Math.PI * 2);
+    ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -468,6 +503,7 @@ const drawHookFracture: EffectFn = (ctx, s) => {
 
   const shakeX = (rng() - 0.5) * physState.shake;
   const shakeY = (rng() - 0.5) * physState.shake;
+  const zone = getSafeZone(w, h, Math.max(12, physState.safeOffset));
 
   // In non-fractured state, use stacked rendering on narrow screens
   if (!physState.isFractured) {
@@ -496,18 +532,25 @@ const drawHookFracture: EffectFn = (ctx, s) => {
       ctx.translate(drift, yOff);
       ctx.rotate(rot);
       const x = charPositions[i];
+      const p = clampPointToSafeZone(x + drift, yOff, {
+        ...zone,
+        left: zone.left - w / 2,
+        right: zone.right - w / 2,
+        top: zone.top - h / 2,
+        bottom: zone.bottom - h / 2,
+      });
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = "cyan";
-      ctx.fillText(char, x + 3, 0);
+      ctx.fillText(char, p.x + 3, p.y);
       ctx.fillStyle = "red";
-      ctx.fillText(char, x - 3, 0);
+      ctx.fillText(char, p.x - 3, p.y);
       ctx.globalAlpha = 1;
       if (st.colorMode === "per-char") {
         ctx.fillStyle = palette[i % palette.length] || "#fff";
       } else {
         ctx.fillStyle = palette[0] || "#fff";
       }
-      ctx.fillText(char, x, 0);
+      ctx.fillText(char, p.x, p.y);
       ctx.restore();
     });
   } else {

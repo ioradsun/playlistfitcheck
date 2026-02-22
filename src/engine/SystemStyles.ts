@@ -124,6 +124,12 @@ export interface StackedLayout {
 
 const STACK_THRESHOLD = 600;
 const MAX_STACK_LINES = 3;
+const MIN_FONT_PX = 14;
+
+function fluidFontPx(canvasW: number, canvasH: number, minPx = MIN_FONT_PX, maxPx = 120): number {
+  const preferred = Math.min(canvasW, canvasH) * 0.12;
+  return Math.max(minPx, Math.min(maxPx, preferred));
+}
 
 /**
  * For narrow canvases (<600px) or portrait/square aspect ratios,
@@ -158,8 +164,8 @@ export function computeStackedLayout(
     stackedLines.push(words.slice(i, i + wordsPerLine).join(" "));
   }
 
-  const targetW = canvasW * 0.85;
-  const targetH = canvasH * 0.70;
+  const targetW = canvasW * 0.80;
+  const targetH = canvasH * 0.80;
   const REF = 100;
   let ls = st.letterSpacing;
 
@@ -198,7 +204,14 @@ export function computeStackedLayout(
     ls = Math.max(0, ls - (worstW - targetW) / Math.max(1, stackedLines.reduce((m, l) => Math.max(m, l.length), 0)));
   }
 
-  fs = Math.max(fs, canvasW * 0.04);
+  const responsiveMin = Math.max(MIN_FONT_PX, Math.min(canvasW, canvasH) * 0.035);
+  fs = Math.max(fs, responsiveMin);
+  fs = Math.min(fs, fluidFontPx(canvasW, canvasH));
+
+  // Dynamic line-height normalization as line count grows.
+  const normalizedLineHeight = Math.max(1.02, Math.min(st.lineHeight, 1.28 - stackedLines.length * 0.06));
+  const maxByHeight = targetH / Math.max(1, stackedLines.length * normalizedLineHeight);
+  fs = Math.min(fs, maxByHeight);
 
   return { lines: stackedLines, fs: Math.round(fs), effectiveLetterSpacing: ls, isStacked: true };
 }
@@ -232,7 +245,8 @@ export function computeFitFontSize(
   if (charCount === 0) return { fs: 12, effectiveLetterSpacing: st.letterSpacing };
 
   const targetW = canvasW * 0.80;
-  const minFs = canvasW * 0.03;  // floor: 3% of canvas width
+  const minFs = Math.max(MIN_FONT_PX, Math.min(canvasW, canvasW * 0.03));
+  const maxFs = fluidFontPx(canvasW, canvasW * 0.5625);
 
   // Measure glyph widths at reference size
   const REF = 100;
@@ -258,6 +272,7 @@ export function computeFitFontSize(
 
   // Enforce minimum font size — text must stay prominent
   fs = Math.max(fs, minFs);
+  fs = Math.min(fs, maxFs);
 
   return { fs: Math.round(fs), effectiveLetterSpacing: ls };
 }

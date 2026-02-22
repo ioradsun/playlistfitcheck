@@ -733,4 +733,19 @@ export function drawSystemBackground(ctx: CanvasRenderingContext2D, s: Backgroun
     ctx.fillStyle = "rgba(0, 0, 0, 0.92)";
     ctx.fillRect(0, 0, s.w, s.h);
   }
+
+  // Lyric focus guard: subtly de-emphasize outer edges so text remains the hero.
+  const focusGrad = ctx.createRadialGradient(
+    s.w / 2,
+    s.h / 2,
+    Math.min(s.w, s.h) * 0.18,
+    s.w / 2,
+    s.h / 2,
+    Math.max(s.w, s.h) * 0.75,
+  );
+  focusGrad.addColorStop(0, "rgba(0,0,0,0)");
+  focusGrad.addColorStop(0.65, "rgba(0,0,0,0.08)");
+  focusGrad.addColorStop(1, "rgba(0,0,0,0.18)");
+  ctx.fillStyle = focusGrad;
+  ctx.fillRect(0, 0, s.w, s.h);
 }

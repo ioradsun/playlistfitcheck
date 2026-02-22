@@ -7,7 +7,7 @@ import { useRef, useCallback, useEffect } from "react";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { getEffect } from "@/engine/EffectRegistry";
-import { computeFitFontSize } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout, getSystemStyle } from "@/engine/SystemStyles";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
@@ -124,7 +124,13 @@ export function useHookCanvas(
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.width / dpr;
     const h = canvas.height / dpr;
+    const safePad = Math.max(16, Math.min(w, h) * 0.06);
+    const safeW = Math.max(1, w - safePad * 2);
+    const safeH = Math.max(1, h - safePad * 2);
     const palette = hd.palette || ["#ffffff", "#a855f7", "#ec4899"];
+
+    // Keep physics motion budgets tied to real lyric container dimensions.
+    engineRef.current?.setViewportBounds(w, h);
 
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -248,41 +254,46 @@ export function useHookCanvas(
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (ct - activeLine.start) / lineDur);
 
-      // Narrow canvas threshold: split into multiple lines for readability
-      const NARROW_THRESHOLD = 400;
-      if (w < NARROW_THRESHOLD && activeLine.text.split(/\s+/).length > 2) {
-        // Word-wrap: split into lines of roughly equal word count
-        const words = activeLine.text.split(/\s+/);
-        const lineCount = Math.min(3, Math.ceil(words.length / 2));
-        const wordsPerLine = Math.ceil(words.length / lineCount);
-        const wrappedLines: string[] = [];
-        for (let li = 0; li < lineCount; li++) {
-          wrappedLines.push(words.slice(li * wordsPerLine, (li + 1) * wordsPerLine).join(" "));
-        }
+      const fontSys = hd.font_system || hd.system_type;
+      const stackedLayout = computeStackedLayout(ctx, activeLine.text, w, h, fontSys, w < h ? "9:16" : undefined);
+      const baseFit = computeFitFontSize(ctx, activeLine.text, safeW, fontSys);
+      const baseFs = stackedLayout.isStacked ? stackedLayout.fs : baseFit.fs;
+      const st = getSystemStyle(fontSys);
+      const lineCount = stackedLayout.isStacked ? stackedLayout.lines.length : 1;
+      const sampleText = stackedLayout.isStacked ? stackedLayout.lines.reduce((a, b) => (a.length > b.length ? a : b), "") : activeLine.text;
+      ctx.font = `${st.weight} ${baseFs}px ${st.font}`;
+      const measuredW = ctx.measureText(sampleText).width;
+      const measuredH = baseFs * st.lineHeight * lineCount;
 
-        // Compute font size based on longest wrapped line
-        const longest = wrappedLines.reduce((a, b) => a.length > b.length ? a : b, "");
-        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, longest, w, hd.font_system || hd.system_type);
+      const layoutResult = engineRef.current?.validateLayout({
+        textWidth: measuredW,
+        textHeight: measuredH,
+        safeWidth: safeW,
+        safeHeight: safeH,
+        fontSize: baseFs,
+        lineHeight: st.lineHeight,
+      });
 
-        // Render each line at stacked y positions
-        const lineH = fs * 1.15;
-        const totalH = lineCount * lineH;
-        const startY = (h - totalH) / 2 + fs * 0.5;
+      const fs = layoutResult?.fontSize ?? baseFs;
+      const effectiveLetterSpacing = stackedLayout.isStacked ? stackedLayout.effectiveLetterSpacing : baseFit.effectiveLetterSpacing;
 
-        for (let li = 0; li < wrappedLines.length; li++) {
-          const lineY = startY + li * lineH;
-          // Offset the virtual h so the effect draws at the correct y position
-          const virtualH = lineY * 2; // centers effect at lineY
-          drawFn(ctx, {
-            text: wrappedLines[li], physState: physState, w, h: virtualH,
-            fs, age, progress, rng, palette, system: hd.font_system || hd.system_type, effectiveLetterSpacing,
-          });
-        }
-      } else {
-        const fontSys = hd.font_system || hd.system_type;
-        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, fontSys);
-        drawFn(ctx, { text: activeLine.text, physState: physState, w, h, fs, age, progress, rng, palette, system: fontSys, effectiveLetterSpacing });
-      }
+      drawFn(ctx, {
+        text: activeLine.text,
+        physState: physState,
+        w,
+        h,
+        fs,
+        age,
+        progress,
+        rng,
+        palette,
+        system: fontSys,
+        effectiveLetterSpacing,
+        stackedLayout: stackedLayout.isStacked
+          ? { ...stackedLayout, fs }
+          : undefined,
+      });
+
     }
 
     // Progress — store for external HTML playbar

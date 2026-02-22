@@ -59,6 +59,13 @@ export interface PhysicsState {
   position: number;
   velocity: number;
   heat: number;
+  /** max per-frame offset budget derived from lyric container size */
+  safeOffset: number;
+}
+
+interface PhysicsViewportBounds {
+  width: number;
+  height: number;
 }
 
 // ── Material presets derived from AI system label ────────────────────────────
@@ -115,6 +122,7 @@ export class PhysicsIntegrator {
   private heat: number;
   private stress = 0;
   private impulseNow = 0;
+  private viewportBounds: PhysicsViewportBounds = { width: 1280, height: 720 };
 
   public readonly spec: PhysicsSpec;
 
@@ -164,20 +172,31 @@ export class PhysicsIntegrator {
     this.heat *= 0.95;
     this.impulseNow *= 0.8;
 
-    // Clamp scale to prevent text blowing out of canvas bounds
-    const MAX_SCALE = 1.8;
-    const MAX_SHAKE = 12; // px
+    // Scale all motion budgets by the current lyric container size.
+    const minViewportAxis = Math.max(1, Math.min(this.viewportBounds.width, this.viewportBounds.height));
+    const maxSafeOffset = Math.max(6, Math.min(24, minViewportAxis * 0.035));
+    const maxScale = 1.35;
+    const maxBlur = Math.max(4, Math.min(10, minViewportAxis * 0.015));
+    const rawScale = 1 + Math.abs(this.position) * 0.5;
 
     return {
-      scale: Math.min(MAX_SCALE, 1 + Math.abs(this.position) * 0.5),
-      blur: Math.min(8, Math.abs(this.velocity) * 2),
+      scale: Math.min(maxScale, rawScale),
+      blur: Math.min(maxBlur, Math.abs(this.velocity) * 2),
       glow: Math.min(30, this.heat * 40),
-      shake: Math.min(MAX_SHAKE, this.impulseNow * 10),
+      shake: Math.min(maxSafeOffset, this.impulseNow * (maxSafeOffset * 0.8)),
       isFractured: Math.abs(this.position) > this.spec.material.brittleness,
       position: this.position,
       velocity: this.velocity,
       heat: this.heat,
+      safeOffset: maxSafeOffset,
     };
+  }
+
+  /** Called by renderer to keep motion safety tied to real viewport/container size. */
+  setViewportBounds(width: number, height: number) {
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+    this.viewportBounds.width = Math.max(1, width);
+    this.viewportBounds.height = Math.max(1, height);
   }
 
   /** Reset integrator to rest state */
