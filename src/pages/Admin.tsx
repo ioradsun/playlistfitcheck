@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
@@ -13,12 +13,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { CopyEditor } from "@/components/admin/CopyEditor";
-import { AiPromptsEditor } from "@/components/admin/AiPromptsEditor";
-import { PendingVerifications } from "@/components/admin/PendingVerifications";
-import { ToolsEditor } from "@/components/admin/ToolsEditor";
-import { FmlyArtists } from "@/components/admin/FmlyArtists";
-import { GlobalCssEditor } from "@/components/admin/GlobalCssEditor";
+const CopyEditor = lazy(() => import("@/components/admin/CopyEditor").then((m) => ({ default: m.CopyEditor })));
+const AiPromptsEditor = lazy(() => import("@/components/admin/AiPromptsEditor").then((m) => ({ default: m.AiPromptsEditor })));
+const PendingVerifications = lazy(() => import("@/components/admin/PendingVerifications").then((m) => ({ default: m.PendingVerifications })));
+const ToolsEditor = lazy(() => import("@/components/admin/ToolsEditor").then((m) => ({ default: m.ToolsEditor })));
+const FmlyArtists = lazy(() => import("@/components/admin/FmlyArtists").then((m) => ({ default: m.FmlyArtists })));
+const GlobalCssEditor = lazy(() => import("@/components/admin/GlobalCssEditor").then((m) => ({ default: m.GlobalCssEditor })));
 
 interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
 interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
@@ -45,19 +45,19 @@ export default function Admin() {
   const [deleting, setDeleting] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", { body: { section: "users" } });
     if (fnError) throw fnError;
     if (result?.error) throw new Error(result.error);
     return result.users as AdminUser[];
-  };
+  }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", { body: { section: "data" } });
     if (fnError) throw fnError;
     if (result?.error) throw new Error(result.error);
     return result as DashboardData;
-  };
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -67,14 +67,32 @@ export default function Admin() {
       .then(setUsers)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
-  }, [authLoading, user, isAdmin]);
+  }, [authLoading, user, isAdmin, fetchUsers, navigate]);
 
   useEffect(() => {
     if (tab === "data" && !dataLoaded && isAdmin) {
       setRefreshing(true);
       fetchData().then((d) => { setData(d); setDataLoaded(true); }).catch(console.error).finally(() => setRefreshing(false));
     }
-  }, [tab, dataLoaded, isAdmin]);
+  }, [tab, dataLoaded, isAdmin, fetchData]);
+
+  const userRows = useMemo(() => {
+    return users.map((u) => {
+      const initials = (u.display_name ?? u.email ?? "?")
+        .split(" ")
+        .map((word) => word[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+
+      const joined = new Date(u.created_at);
+      const joinedLabel = isNaN(joined.getTime()) ? "—" : joined.toLocaleDateString();
+      const lastSeen = u.last_sign_in_at ? new Date(u.last_sign_in_at) : null;
+      const lastSeenLabel = lastSeen && !isNaN(lastSeen.getTime()) ? lastSeen.toLocaleDateString() : null;
+
+      return { ...u, initials, joinedLabel, lastSeenLabel };
+    });
+  }, [users]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -157,11 +175,7 @@ export default function Admin() {
               </div>
 
               <div className="divide-y divide-border max-h-[65vh] overflow-y-auto">
-                {users.map((u) => {
-                  const initials = (u.display_name ?? u.email ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-                  const joined = new Date(u.created_at);
-                  const lastSeen = u.last_sign_in_at ? new Date(u.last_sign_in_at) : null;
-
+                {userRows.map((u) => {
                   return (
                     <div key={u.id}>
                       <div className="px-4 py-3 flex flex-col sm:grid sm:grid-cols-[1fr_1fr_70px_60px_60px_70px_90px_36px] gap-2 sm:items-center transition-colors group hover:bg-muted/30">
@@ -229,8 +243,8 @@ export default function Admin() {
 
                         {/* Joined */}
                         <div className="text-xs text-muted-foreground font-mono">
-                          <div>{joined.toLocaleDateString()}</div>
-                          {lastSeen && <div className="text-[10px] opacity-60" title="Last sign in">seen {lastSeen.toLocaleDateString()}</div>}
+                          <div>{u.joinedLabel}</div>
+                          {u.lastSeenLabel && <div className="text-[10px] opacity-60" title="Last sign in">seen {u.lastSeenLabel}</div>}
                         </div>
 
                         {/* Delete */}
@@ -253,12 +267,20 @@ export default function Admin() {
 
           {/* ── ARTISTS TAB ── */}
           <TabsContent value="artists" className="mt-4">
-            <FmlyArtists />
+            {tab === "artists" && (
+              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
+                <FmlyArtists />
+              </Suspense>
+            )}
           </TabsContent>
 
           {/* ── VERIFY TAB ── */}
           <TabsContent value="verify" className="mt-4">
-            <PendingVerifications />
+            {tab === "verify" && (
+              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
+                <PendingVerifications />
+              </Suspense>
+            )}
           </TabsContent>
 
           {/* ── DATA TAB ── */}
@@ -304,22 +326,38 @@ export default function Admin() {
 
           {/* ── TOOLS TAB ── */}
           <TabsContent value="tools" className="mt-4">
-            <ToolsEditor />
+            {tab === "tools" && (
+              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
+                <ToolsEditor />
+              </Suspense>
+            )}
           </TabsContent>
 
           {/* ── COPY TAB ── */}
           <TabsContent value="copy" className="mt-4 space-y-6">
-            <CopyEditor />
+            {tab === "copy" && (
+              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
+                <CopyEditor />
+              </Suspense>
+            )}
           </TabsContent>
 
           {/* ── AI PROMPTS TAB ── */}
           <TabsContent value="prompts" className="mt-4">
-            <AiPromptsEditor />
+            {tab === "prompts" && (
+              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
+                <AiPromptsEditor />
+              </Suspense>
+            )}
           </TabsContent>
 
           {/* ── CSS TAB ── */}
           <TabsContent value="css" className="mt-4">
-            <GlobalCssEditor />
+            {tab === "css" && (
+              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
+                <GlobalCssEditor />
+              </Suspense>
+            )}
           </TabsContent>
         </Tabs>
       </div>
