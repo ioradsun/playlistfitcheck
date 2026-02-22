@@ -236,10 +236,6 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           <X size={24} />
         </button>
       </div>
-      {/* System label */}
-      <div className="absolute bottom-4 left-4 z-10 text-[10px] font-mono text-white/30 uppercase tracking-wider">
-        {activeSystem} · hook dance
-      </div>
       {/* Creative controls */}
       <HookDanceControls
         currentSystem={spec.system}
