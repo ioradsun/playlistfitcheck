@@ -29,6 +29,13 @@ const ShareableHook = lazy(() => import("./pages/ShareableHook"));
 
 const queryClient = new QueryClient();
 
+/** Lightweight shell for the hook embed — skips Auth, SiteCopy, Wallet, Sidebar providers */
+const HookEmbedFallback = () => (
+  <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center">
+    <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+  </div>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="tfm-theme">
@@ -36,46 +43,55 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <AuthProvider>
-            <SiteCopyProvider>
-            <WalletProvider>
-            <SidebarProvider defaultOpen={true}>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/CrowdFit" element={<Index />} />
-                <Route path="/HookFit" element={<Index />} />
-                <Route path="/SongFit" element={<Index />} />
-                <Route path="/ProFit" element={<Index />} />
-                <Route path="/ProFit/:projectId" element={<Index />} />
-                <Route path="/PlaylistFit" element={<Index />} />
-                <Route path="/PlaylistFit/:projectId" element={<Index />} />
-                <Route path="/MixFit" element={<Index />} />
-                <Route path="/MixFit/:projectId" element={<Index />} />
-                <Route path="/LyricFit" element={<Index />} />
-                <Route path="/LyricFit/:projectId" element={<Index />} />
-                <Route path="/HitFit" element={<Index />} />
-                <Route path="/HitFit/:projectId" element={<Index />} />
-                <Route path="/DreamFit" element={<Index />} />
-                <Route path="/VibeFit" element={<Index />} />
-                <Route path="/VibeFit/:projectId" element={<Index />} />
-                <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
-                <Route path="/admin" element={<Admin />} />
-                <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout>} />
-                <Route path="/terms" element={<PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout>} />
-                <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
-                <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
-                <Route path="/u/:userId" element={<PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout>} />
-                <Route path="/song/:postId" element={<PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout>} />
-                <Route path="/artist/:username" element={<ArtistStage />} />
-                <Route path="/:artistSlug/:songSlug/:hookSlug" element={<Suspense fallback={<div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center"><div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" /></div>}><ShareableHook /></Suspense>} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
-              </Routes>
-            </SidebarProvider>
-            <FitWidget />
-            </WalletProvider>
-            </SiteCopyProvider>
-          </AuthProvider>
+          <Routes>
+            {/* ── Hook embed: lightweight path — no Auth/SiteCopy/Wallet/Sidebar overhead ── */}
+            <Route path="/:artistSlug/:songSlug/:hookSlug" element={
+              <Suspense fallback={<HookEmbedFallback />}><ShareableHook /></Suspense>
+            } />
+
+            {/* ── Main app: full provider tree ── */}
+            <Route path="/*" element={
+              <AuthProvider>
+                <SiteCopyProvider>
+                <WalletProvider>
+                <SidebarProvider defaultOpen={true}>
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/CrowdFit" element={<Index />} />
+                    <Route path="/HookFit" element={<Index />} />
+                    <Route path="/SongFit" element={<Index />} />
+                    <Route path="/ProFit" element={<Index />} />
+                    <Route path="/ProFit/:projectId" element={<Index />} />
+                    <Route path="/PlaylistFit" element={<Index />} />
+                    <Route path="/PlaylistFit/:projectId" element={<Index />} />
+                    <Route path="/MixFit" element={<Index />} />
+                    <Route path="/MixFit/:projectId" element={<Index />} />
+                    <Route path="/LyricFit" element={<Index />} />
+                    <Route path="/LyricFit/:projectId" element={<Index />} />
+                    <Route path="/HitFit" element={<Index />} />
+                    <Route path="/HitFit/:projectId" element={<Index />} />
+                    <Route path="/DreamFit" element={<Index />} />
+                    <Route path="/VibeFit" element={<Index />} />
+                    <Route path="/VibeFit/:projectId" element={<Index />} />
+                    <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
+                    <Route path="/admin" element={<Admin />} />
+                    <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout>} />
+                    <Route path="/terms" element={<PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout>} />
+                    <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
+                    <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
+                    <Route path="/u/:userId" element={<PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout>} />
+                    <Route path="/song/:postId" element={<PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout>} />
+                    <Route path="/artist/:username" element={<ArtistStage />} />
+                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                    <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
+                  </Routes>
+                </SidebarProvider>
+                <FitWidget />
+                </WalletProvider>
+                </SiteCopyProvider>
+              </AuthProvider>
+            } />
+          </Routes>
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>

@@ -21,7 +21,8 @@ import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import { getSessionId } from "@/lib/sessionId";
-import { useAuth } from "@/hooks/useAuth";
+// useAuth removed — hook embed runs outside AuthProvider for speed
+// We lazily fetch user ID only when needed (vote insert)
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -375,7 +376,8 @@ export default function ShareableHook() {
     artistSlug: string; songSlug: string; hookSlug: string;
   }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  // Lazy user ref — fetched once on first vote, not on mount
+  const userIdRef = useRef<string | null | undefined>(undefined);
 
   const [hookData, setHookData] = useState<HookData | null>(null);
   const [rivalHook, setRivalHook] = useState<HookData | null>(null);
@@ -688,17 +690,21 @@ export default function ShareableHook() {
         .eq("battle_id", hookData.battle_id)
         .eq("session_id", sessionId);
     } else {
-      // Insert new vote
+      // Insert new vote — lazily resolve user ID
+      if (userIdRef.current === undefined) {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        userIdRef.current = authUser?.id ?? null;
+      }
       await supabase
         .from("hook_votes" as any)
         .insert({
           battle_id: hookData.battle_id,
           hook_id: hookId,
-          user_id: user?.id || null,
+          user_id: userIdRef.current || null,
           session_id: sessionId,
         });
     }
-  }, [hookData, rivalHook, votedHookId, user]);
+  }, [hookData, rivalHook, votedHookId]);
 
   // ── Badge timer ───────────────────────────────────────────────────────────
   useEffect(() => { setTimeout(() => setBadgeVisible(true), 1000); }, []);
