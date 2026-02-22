@@ -387,7 +387,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
               className="absolute bottom-4 left-0 right-0 flex justify-center z-10 pointer-events-none"
             >
               <p className="font-mono text-xs uppercase tracking-[0.15em] text-white/60">
-                {cardState === "listen-first" ? `${firstLabel} ENTERS` : `${secondLabel} ENTERS`}
+                {cardState === "listen-first" ? "FIRST HIT" : "SECOND HIT"}
               </p>
             </motion.div>
           )}
