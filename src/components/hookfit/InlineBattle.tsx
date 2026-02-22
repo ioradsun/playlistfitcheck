@@ -1,6 +1,10 @@
 /**
  * InlineBattle — Controlled dual-canvas renderer for hook battles.
  * Parent (HookFitPostCard) drives all state: mode, audio, dimming, etc.
+ *
+ * MASTER AUDIO RULE: `activePlaying` is the single source of truth.
+ * If activePlaying === "a", A is unmuted and B is muted. Vice versa.
+ * If activePlaying === null, both are muted. No other code path touches mute.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -14,7 +18,7 @@ export type BattleMode =
   | "listen-a"    // STATE 2 phase 1: A active, B dimmed
   | "listen-b"    // STATE 2 phase 2: B active, A dimmed
   | "judgment"    // STATE 3: both dim, looping silently
-  | "scorecard"   // STATE 4: winner loops, loser frozen
+  | "scorecard"   // STATE 4: winner loops, loser dimmed
   | "results";    // STATE 5: same as scorecard visually
 
 interface Props {
@@ -24,7 +28,8 @@ interface Props {
   onHookEnd?: (side: "a" | "b") => void;
   onHooksLoaded?: (hookA: HookData, hookB: HookData | null) => void;
   onTileTap?: (side: "a" | "b") => void;
-  activePlaying?: "a" | "b" | null;
+  /** Single source of truth for audio. Only this side plays. null = all muted. */
+  activePlaying: "a" | "b" | null;
 }
 
 export function InlineBattle({
@@ -80,57 +85,34 @@ export function InlineBattle({
     isActive && !!hookB, handleEndB,
   );
 
-  // ── Audio control based on mode ────────────────────────────────
+  // ── MASTER AUDIO RULE ──────────────────────────────────────────
+  // activePlaying is the ONLY thing that controls mute state.
+  // Parent is responsible for setting it correctly for all modes.
+  const prevActiveRef = useRef<"a" | "b" | null>(null);
+
   useEffect(() => {
     const audioA = hookACanvas.audioRef.current;
     const audioB = hookBCanvas.audioRef.current;
 
-    switch (mode) {
-      case "dark":
-      case "judgment":
-      case "scorecard":
-      case "results":
-        if (audioA) audioA.muted = true;
-        if (audioB) audioB.muted = true;
-        break;
-      case "listen-a":
-        if (audioA) audioA.muted = false;
-        if (audioB) audioB.muted = true;
-        hookACanvas.restart();
-        break;
-      case "listen-b":
-        if (audioB) audioB.muted = false;
-        if (audioA) audioA.muted = true;
-        hookBCanvas.restart();
-        break;
-    }
-  }, [mode]);
+    // Always enforce mute state from activePlaying
+    if (audioA) audioA.muted = activePlaying !== "a";
+    if (audioB) audioB.muted = activePlaying !== "b";
 
-  // ── Active playing control (scorecard/results tap-to-play) ───
-  useEffect(() => {
-    if (mode !== "scorecard" && mode !== "results") return;
-    const audioA = hookACanvas.audioRef.current;
-    const audioB = hookBCanvas.audioRef.current;
-    if (activePlaying === "a") {
-      if (audioA) audioA.muted = false;
-      if (audioB) audioB.muted = true;
-      hookACanvas.restart();
-    } else if (activePlaying === "b") {
-      if (audioB) audioB.muted = false;
-      if (audioA) audioA.muted = true;
-      hookBCanvas.restart();
-    } else {
-      if (audioA) audioA.muted = true;
-      if (audioB) audioB.muted = true;
+    // Restart the newly activated side (only when it changes)
+    if (activePlaying && activePlaying !== prevActiveRef.current) {
+      if (activePlaying === "a") hookACanvas.restart();
+      if (activePlaying === "b") hookBCanvas.restart();
     }
-  }, [activePlaying, mode]);
+
+    prevActiveRef.current = activePlaying;
+  }, [activePlaying]);
 
   // ── Progress bar state (must be before early returns) ────────
   const [progress, setProgress] = useState(0);
   const progressRafRef = useRef(0);
 
-  const showProgress = mode === "listen-a" || mode === "listen-b" || ((mode === "scorecard" || mode === "results") && !!activePlaying);
-  const activeCanvas = activePlaying === "b" ? hookBCanvas : (mode === "listen-b" ? hookBCanvas : hookACanvas);
+  const showProgress = !!activePlaying;
+  const activeCanvas = activePlaying === "b" ? hookBCanvas : hookACanvas;
 
   useEffect(() => {
     if (!showProgress) { setProgress(0); return; }
@@ -249,13 +231,13 @@ export function InlineBattle({
         </motion.div>
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar — 6px thick, sits above the winner border */}
       {showProgress && (
-        <div className="h-1 bg-white/[0.06] flex">
-          {(mode === "listen-a" || activePlaying === "a") ? (
+        <div className="h-1.5 bg-white/[0.06] flex">
+          {activePlaying === "a" ? (
             <>
               <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookA?.palette?.[0] || "#fff", opacity: 0.85 }} />
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookA?.palette?.[0] || "#fff", opacity: 0.9 }} />
               </div>
               <div className="w-1/2" />
             </>
@@ -263,7 +245,7 @@ export function InlineBattle({
             <>
               <div className="w-1/2" />
               <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookB?.palette?.[0] || "#fff", opacity: 0.85 }} />
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookB?.palette?.[0] || "#fff", opacity: 0.9 }} />
               </div>
             </>
           )}

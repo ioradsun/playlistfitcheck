@@ -3,10 +3,16 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { HookFitPost } from "./types";
 import { HookFitPostCard } from "./HookFitPostCard";
+import { GlobalAudioContext } from "./useGlobalAudio";
 
 export function HookFitFeed() {
   const [posts, setPosts] = useState<HookFitPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+
+  const claim = useCallback((key: string | null) => {
+    setActiveKey(key);
+  }, []);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -75,28 +81,30 @@ export function HookFitFeed() {
   }, [fetchPosts]);
 
   return (
-    <div className="w-full max-w-[470px] mx-auto">
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 size={24} className="animate-spin text-muted-foreground" />
-        </div>
-      ) : posts.length === 0 ? (
-        <div className="text-center py-16 space-y-3">
-          <p className="text-muted-foreground text-sm">
-            No hook battles yet. Publish a battle from LyricFit!
-          </p>
-        </div>
-      ) : (
-        <div className="pb-24">
-          {posts.map((post) => (
-            <HookFitPostCard
-              key={post.id}
-              post={post}
-              onRefresh={fetchPosts}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    <GlobalAudioContext.Provider value={{ activeKey, claim }}>
+      <div className="w-full max-w-[470px] mx-auto">
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 size={24} className="animate-spin text-muted-foreground" />
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-16 space-y-3">
+            <p className="text-muted-foreground text-sm">
+              No hook battles yet. Publish a battle from LyricFit!
+            </p>
+          </div>
+        ) : (
+          <div className="pb-24">
+            {posts.map((post) => (
+              <HookFitPostCard
+                key={post.id}
+                post={post}
+                onRefresh={fetchPosts}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </GlobalAudioContext.Provider>
   );
 }

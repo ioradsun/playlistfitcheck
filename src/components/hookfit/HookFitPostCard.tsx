@@ -4,7 +4,7 @@
  * Plus silent "pass" logging on scroll-away.
  */
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { User, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,6 +26,7 @@ import type { HookFitPost } from "./types";
 import type { HookData } from "@/hooks/useHookCanvas";
 import { getSessionId } from "@/lib/sessionId";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
+import { useGlobalAudio, audioKey } from "./useGlobalAudio";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
   const navigate = useNavigate();
   const isOwnPost = user?.id === post.user_id;
   const containerRef = useRef<HTMLDivElement>(null);
+  const { activeKey, claim } = useGlobalAudio();
 
   // ── Card state machine ──────────────────────────────────────────
   const [cardState, setCardState] = useState<CardState>("challenge");
@@ -60,9 +62,17 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
   const [votedSide, setVotedSide] = useState<"a" | "b" | null>(null);
   const [voteCountA, setVoteCountA] = useState(0);
   const [voteCountB, setVoteCountB] = useState(0);
-  const [activePlaying, setActivePlaying] = useState<"a" | "b" | null>(null);
   const passLoggedRef = useRef(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
+
+  // ── Derive activePlaying from global audio context ──────────────
+  const myKeyA = audioKey(post.battle_id, "a");
+  const myKeyB = audioKey(post.battle_id, "b");
+  const activePlaying = useMemo<"a" | "b" | null>(() => {
+    if (activeKey === myKeyA) return "a";
+    if (activeKey === myKeyB) return "b";
+    return null;
+  }, [activeKey, myKeyA, myKeyB]);
 
   // ── Playback order from PRNG ────────────────────────────────────
   useEffect(() => {
@@ -107,6 +117,26 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
       case "results": return "results";
     }
   };
+
+  // ── Claim audio on state transitions ────────────────────────────
+  useEffect(() => {
+    switch (cardState) {
+      case "listen-first":
+        claim(audioKey(post.battle_id, playbackOrder[0]));
+        break;
+      case "listen-second":
+        claim(audioKey(post.battle_id, playbackOrder[1]));
+        break;
+      case "judgment":
+      case "challenge":
+        claim(null);
+        break;
+      case "scorecard":
+        // Mute on entering scorecard (user can tap to replay)
+        claim(null);
+        break;
+    }
+  }, [cardState, playbackOrder, post.battle_id, claim]);
 
   // ── Hook end callback — drives auto-advance in STATE 2 ──────────
   const handleHookEnd = useCallback((side: "a" | "b") => {
@@ -314,7 +344,8 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
           activePlaying={activePlaying}
           onTileTap={(side) => {
             if (cardState === "scorecard" || cardState === "results") {
-              setActivePlaying(prev => prev === side ? null : side);
+              const key = audioKey(post.battle_id, side);
+              claim(activeKey === key ? null : key);
             }
           }}
         />
