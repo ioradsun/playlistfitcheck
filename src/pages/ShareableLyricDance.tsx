@@ -11,7 +11,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Volume2, VolumeX } from "lucide-react";
+
 import { mulberry32, hashSeed, PhysicsIntegrator } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
@@ -127,8 +127,7 @@ export default function ShareableLyricDance() {
   // Audio
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [muted, setMuted] = useState(true);
-  const [showMuteIcon, setShowMuteIcon] = useState(false);
-  const muteIconTimerRef = useRef<number | null>(null);
+  
 
   // Canvas
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -481,9 +480,6 @@ export default function ShareableLyricDance() {
     audioRef.current.muted = newMuted;
     if (!newMuted) audioRef.current.play().catch(() => {});
     setMuted(newMuted);
-    setShowMuteIcon(true);
-    if (muteIconTimerRef.current) clearTimeout(muteIconTimerRef.current);
-    muteIconTimerRef.current = window.setTimeout(() => setShowMuteIcon(false), 2000);
   }, [muted]);
 
   // ── Submit comment (ShareableHook-style) ──────────────────────────────────
@@ -727,13 +723,6 @@ export default function ShareableLyricDance() {
           />
         )}
 
-        <AnimatePresence>
-          {showMuteIcon && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute bottom-4 left-4 z-10 text-white/50">
-              {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Below-canvas content */}
@@ -741,30 +730,44 @@ export default function ShareableLyricDance() {
         <div className="max-w-[480px] mx-auto px-5 py-4 space-y-3">
 
           {/* Comment input */}
-          {hasSubmitted ? (
-            <p className="text-center text-sm text-white/30">
-              your words are on the video
-            </p>
-          ) : (
-            <div className="relative">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-                placeholder={placeholder}
-                maxLength={200}
-                className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 pr-20 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/20 pointer-events-none">
-                Press Enter
-              </span>
-            </div>
-          )}
-
-          <p className="text-center text-[10px] text-white/15 pb-2">
-            Built on tools.fm — every artist's fingerprint is unique to them
-          </p>
+          <AnimatePresence mode="wait">
+            {hasSubmitted ? (
+              <motion.p
+                key="notified"
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.6 }}
+                onAnimationComplete={() => {
+                  setTimeout(() => setHasSubmitted(false), 2500);
+                }}
+                className="text-center text-sm text-white/30"
+              >
+                FMLY Notified
+              </motion.p>
+            ) : (
+              <motion.div
+                key="input"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4 }}
+                className="relative"
+              >
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+                  placeholder={placeholder}
+                  maxLength={200}
+                  className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 pr-20 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/20 pointer-events-none">
+                  Press Enter
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
