@@ -20,6 +20,7 @@ export interface BattleState {
   voteCountB: number;
   tappedSides: Set<"a" | "b">;
   handleVote: (hookId: string) => void;
+  handleUnvote: () => void;
   accentColor: string;
   isMuted: boolean;
 }
@@ -134,11 +135,25 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     }
   }, [hookA, hookB, votedHookId]);
 
+  // ── Unvote handler ──
+  const handleUnvote = useCallback(async () => {
+    if (!hookA?.battle_id || !votedHookId) return;
+    const sessionId = getSessionId();
+    if (votedHookId === hookA.id) setVoteCountA(v => Math.max(0, v - 1));
+    else setVoteCountB(v => Math.max(0, v - 1));
+    setVotedHookId(null);
+    await supabase
+      .from("hook_votes" as any)
+      .delete()
+      .eq("battle_id", hookA.battle_id)
+      .eq("session_id", sessionId);
+  }, [hookA, votedHookId]);
+
   // ── Lift state to parent ──────────────────────────────────────────────
 
   useEffect(() => {
-    onBattleState?.({ hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, accentColor: hookA?.palette?.[1] || "#a855f7", isMuted });
-  }, [hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, isMuted]);
+    onBattleState?.({ hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, handleUnvote, accentColor: hookA?.palette?.[1] || "#a855f7", isMuted });
+  }, [hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, handleUnvote, isMuted]);
 
   // ── Canvas engines — auto-alternate on end ─────────────────────────
 
