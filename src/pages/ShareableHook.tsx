@@ -450,65 +450,70 @@ export default function ShareableHook() {
         setFireCount(hook.fire_count);
         setVoteCountA(hook.vote_count || 0);
 
-        // Check for battle rival
+        // ── CRITICAL PATH: set loading=false NOW so canvases render immediately ──
+        // Comments & votes are non-critical — they load in background
         if (hook.battle_id) {
-          const { data: rivalData } = await supabase
+          // Fire rival query — this IS critical for battle render
+          const rivalPromise = supabase
             .from("shareable_hooks" as any)
             .select("*")
             .eq("battle_id", hook.battle_id)
             .neq("id", hook.id)
             .maybeSingle();
 
+          const { data: rivalData } = await rivalPromise;
           if (rivalData) {
             const rival = rivalData as any as HookData;
             setRivalHook(rival);
             setVoteCountB(rival.vote_count || 0);
           }
 
-          // Check existing vote
+          // Canvas can render now — stop blocking
+          setLoading(false);
+
+          // ── NON-CRITICAL: fire all remaining queries in parallel ──
           const sessionId = getSessionId();
-          const { data: existingVote } = await supabase
-            .from("hook_votes" as any)
-            .select("hook_id")
-            .eq("battle_id", hook.battle_id)
-            .eq("session_id", sessionId)
-            .maybeSingle();
-
-          if (existingVote) {
-            setVotedHookId((existingVote as any).hook_id);
-          }
-        }
-
-        // Load comments for primary hook
-        const { data: commentsData } = await supabase
-          .from("hook_comments" as any)
-          .select("id, text, submitted_at")
-          .eq("hook_id", hook.id)
-          .order("submitted_at", { ascending: true })
-          .limit(500);
-
-        if (commentsData) setComments(commentsData as any as Comment[]);
-
-        // Load comments for rival hook (battle mode)
-        if (hook.battle_id) {
-          const { data: rivalData2 } = await supabase
-            .from("shareable_hooks" as any)
-            .select("id")
-            .eq("battle_id", hook.battle_id)
-            .neq("id", hook.id)
-            .maybeSingle();
-          if (rivalData2) {
-            const { data: commentsBData } = await supabase
+          const [voteResult, commentsAResult, commentsBResult] = await Promise.all([
+            // Check existing vote
+            supabase
+              .from("hook_votes" as any)
+              .select("hook_id")
+              .eq("battle_id", hook.battle_id)
+              .eq("session_id", sessionId)
+              .maybeSingle(),
+            // Primary hook comments
+            supabase
               .from("hook_comments" as any)
               .select("id, text, submitted_at")
-              .eq("hook_id", (rivalData2 as any).id)
+              .eq("hook_id", hook.id)
               .order("submitted_at", { ascending: true })
-              .limit(500);
-            if (commentsBData) setCommentsB(commentsBData as any as Comment[]);
-          }
-        }
+              .limit(500),
+            // Rival hook comments (use already-known rival ID)
+            rivalData
+              ? supabase
+                  .from("hook_comments" as any)
+                  .select("id, text, submitted_at")
+                  .eq("hook_id", (rivalData as any).id)
+                  .order("submitted_at", { ascending: true })
+                  .limit(500)
+              : Promise.resolve({ data: null }),
+          ]);
 
-        setLoading(false);
+          if (voteResult.data) setVotedHookId((voteResult.data as any).hook_id);
+          if (commentsAResult.data) setComments(commentsAResult.data as any as Comment[]);
+          if (commentsBResult.data) setCommentsB(commentsBResult.data as any as Comment[]);
+        } else {
+          // Single hook mode — set loading false immediately, load comments in background
+          setLoading(false);
+
+          const { data: commentsData } = await supabase
+            .from("hook_comments" as any)
+            .select("id, text, submitted_at")
+            .eq("hook_id", hook.id)
+            .order("submitted_at", { ascending: true })
+            .limit(500);
+          if (commentsData) setComments(commentsData as any as Comment[]);
+        }
       });
   }, [artistSlug, songSlug, hookSlug]);
 
