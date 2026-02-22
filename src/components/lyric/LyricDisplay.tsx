@@ -229,6 +229,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const siteCopy = useSiteCopy();
   const features = (siteCopy as any)?.features;
   const hookfitEnabled = features?.tools_enabled?.hookfit !== false;
+  const hottestHooksEnabled = features?.hookfit_hottest_hooks !== false;
   const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
   const [showDebug, setShowDebug] = useState(false);
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
@@ -402,7 +403,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         body: {
           title: data.title, artist: data.artist, lyrics: lyricsText, audioBase64, format,
           beatGrid: beatGrid ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence } : undefined,
-          includeHooks: hookfitEnabled,
+          includeHooks: hottestHooksEnabled,
         },
       });
       if (error) throw error;
@@ -470,7 +471,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     } finally {
       setDnaLoading(false);
     }
-  }, [data, audioFile, hasRealAudio, dnaLoading, songDna, beatGrid, hookfitEnabled]);
+  }, [data, audioFile, hasRealAudio, dnaLoading, songDna, beatGrid, hottestHooksEnabled]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw = activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
@@ -1423,7 +1424,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
           )}
 
           {/* ── Hottest Hooks — appears after Song DNA is revealed ── */}
-          {hookfitEnabled && songDna?.hook && (() => {
+          {hottestHooksEnabled && songDna?.hook && (() => {
             const hooks2 = [songDna.hook, songDna.secondHook].filter(Boolean) as LyricHook[];
             const labels = [songDna.hookLabel, songDna.secondHookLabel];
             const justifications = [songDna.hookJustification, songDna.secondHookJustification];

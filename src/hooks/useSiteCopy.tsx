@@ -92,6 +92,7 @@ export interface SiteCopy {
     crowdfit_mode?: "reactions" | "hook_review";
     lyric_video?: boolean;
     hookfit_enabled?: boolean;
+    hookfit_hottest_hooks?: boolean;
   };
   signals: {
     resolving_label: string;

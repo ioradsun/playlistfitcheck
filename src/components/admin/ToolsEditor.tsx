@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Coins, Rocket, Wrench, GripVertical, Target, Mic, Video } from "lucide-react";
+import { Loader2, Coins, Rocket, Wrench, GripVertical, Target, Mic, Video, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Reorder, useDragControls } from "framer-motion";
@@ -38,6 +38,7 @@ interface FeaturesState {
   lyric_transcription_model: TranscriptionModel;
   lyric_analysis_model: AnalysisModel;
   lyric_video: boolean;
+  hookfit_hottest_hooks: boolean;
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -50,6 +51,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   lyric_transcription_model: "scribe",
   lyric_analysis_model: "google/gemini-3-flash-preview",
   lyric_video: false,
+  hookfit_hottest_hooks: true,
 };
 
 async function patchFeatures(patch: Partial<FeaturesState & Record<string, any>>) {
@@ -176,6 +178,7 @@ export function ToolsEditor() {
           lyric_transcription_model: f.lyric_transcription_model === "gemini" ? "gemini" : "scribe",
           lyric_analysis_model: f.lyric_analysis_model ?? f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
           lyric_video: f.lyric_video ?? false,
+          hookfit_hottest_hooks: f.hookfit_hottest_hooks ?? true,
         });
         setOrderedKeys(merged);
         setGuestQuota(f.growth_quotas?.guest ?? 5);
@@ -462,6 +465,38 @@ export function ToolsEditor() {
               }
             }}
             disabled={savingKey === "lyric_video"}
+          />
+        </div>
+      </div>
+
+      {/* ── HookFit ── */}
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Zap size={14} className="text-primary" />
+          <span className="text-sm font-mono font-medium">HookFit</span>
+        </div>
+        <div className="px-4 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Hottest Hooks in LyricFit</p>
+            <p className="text-xs text-muted-foreground mt-0.5">AI detects hooks during analysis · powers Hook Dance + HookFit battles</p>
+          </div>
+          <Switch
+            checked={features.hookfit_hottest_hooks}
+            onCheckedChange={async (enabled) => {
+              const prev = features.hookfit_hottest_hooks;
+              setFeatures(f => ({ ...f, hookfit_hottest_hooks: enabled }));
+              setSavingKey("hookfit_hottest_hooks");
+              try {
+                await patchFeatures({ hookfit_hottest_hooks: enabled });
+                toast.success(enabled ? "Hottest Hooks enabled" : "Hottest Hooks disabled");
+              } catch {
+                setFeatures(f => ({ ...f, hookfit_hottest_hooks: prev }));
+                toast.error("Failed to update");
+              } finally {
+                setSavingKey(null);
+              }
+            }}
+            disabled={savingKey === "hookfit_hottest_hooks"}
           />
         </div>
       </div>
