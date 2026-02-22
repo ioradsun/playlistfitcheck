@@ -1,50 +1,50 @@
-## Pull interactive controls out of the video into the card area
 
-The idea: the canvas + playbar is a pure visual/audio experience with zero overlays. All interactive elements (vote button, "HOOKED" badge, vote counts, caption) live in the normal card area below, using the page's theme background instead of the dark video background.
 
-### What changes
+## UX Audio Clarity Fixes
 
-**1. `InlineBattle.tsx` — Strip all interactive UI**
+### Problem Summary
+Audio state is invisible to the user. There's no mute icon, no route-change cleanup, and auto-alternation can override manual mute. Users find unexpected audio deeply annoying.
 
-&nbsp;
+### Changes
 
-- Remove the vote button and "Hooked" status from the playbar controls row (lines 354-391)
-- Keep only: the two canvases, the half-width progress bar, the 
-- "Tap each side to play" comes out of canvas to the white area.. and when user clicks vide its replaced by "I'M HOOKED BUTTON"
-- The playbar becomes a minimal progress-only strip with the hook label
-- Expose `handleVote` via the lifted `BattleState` (add it to the callback or return it as a separate prop)
+**1. Add a visible mute/unmute icon overlay on the active canvas**
+- File: `InlineBattle.tsx`
+- Track an `isMuted` state derived from the active audio element
+- Show a small speaker/speaker-slash icon in the bottom-right corner of the ACTIVE canvas panel
+- Icon appears briefly on tap (fade in/out after 1.5s) so it doesn't clutter the visual, but confirms the action
+- Always visible as a subtle watermark (very low opacity) so users know where to tap
 
-**2. `HookFitPostCard.tsx` — Add controls in the card's white area**
+**2. Mute all audio on route navigation**
+- File: `InlineBattle.tsx`
+- Add a `useEffect` cleanup that mutes both audio refs on unmount (component teardown = route change or tab switch)
+- This guarantees audio stops when leaving the page
 
-- Below the `<InlineBattle />` component, add a new action row in the normal card background:
-  - **"I'm Hooked on [Hook]"** button — appears once the user has tapped one side... its going to be the same style we use in crowdfit...(follow crowd fit styling"
-  - **"HOOKED" status** with vote count — shown after voting
-- The caption already renders in this area, so it stays as-is
-- The vote logic needs to be callable from this component — we'll pass `handleVote` up from `InlineBattle` via an `onVote` callback prop
+**3. Respect manual mute during auto-alternate**
+- File: `InlineBattle.tsx`
+- Track a `userMuted` ref that gets set to `true` when user taps to mute
+- When auto-alternate fires (side switch after hook ends), check `userMuted` — if true, keep the new side muted too
+- Reset `userMuted` only when user explicitly taps to unmute
 
-### Architecture
+**4. Fix the instruction text**
+- File: `HookFitPostCard.tsx`  
+- Change "Tap each side to play" to "Tap a side to play"
+- The vote button already appears after one tap, so the instruction should match
 
-```
-+---------------------------+
-|  Avatar / Name / Time     |  <-- card bg (existing)
-+---------------------------+
-|                           |
-|   [Canvas A] [Canvas B]   |  <-- dark bg, pure visual
-|                           |
-|  ---- progress bar ----   |  <-- dark bg, minimal
-|  hook label only          |
-+---------------------------+
-|  [I'm Hooked on Hook A]   |  <-- card bg (NEW)
-|  or "Hooked - 12 votes"   |
-+---------------------------+
-|  Caption text             |  <-- card bg (existing)
-+---------------------------+
-```
+**5. Lift `isMuted` into BattleState for external visibility**
+- Add `isMuted: boolean` to `BattleState` interface
+- `HookFitPostCard` can optionally show a small mute indicator near the action row if needed later
 
-### Technical details
+### Technical Details
 
-- Add `onVote?: (hookId: string) => void` to `InlineBattle` props, or simpler: just lift `handleVote` into the `BattleState` object so `HookFitPostCard` can call it directly
-- `BattleState` gets a new field: `handleVote: (hookId: string) => void` and `accentColor: string`
-- `InlineBattle` keeps the playbar's progress track and the tiny label ("Tap each side to hear" / active hook name) — no buttons
-- `HookFitPostCard` renders the vote button using `battleState.canVote`, `battleState.activeHookSide`, etc.
-- The vote button uses standard card padding (`px-3 py-2`) so it sits naturally in the feed
+**InlineBattle.tsx changes:**
+- New state: `const [isMuted, setIsMuted] = useState(true)` (starts muted since no interaction yet)
+- New ref: `const userMutedRef = useRef(false)`
+- On canvas tap (mute toggle): set `userMutedRef.current = true/false` and update `isMuted`
+- On auto-alternate effect: check `userMutedRef.current` before unmuting
+- On unmount: `useEffect(() => () => { muteAll() }, [])` — mute both audio refs
+- Render a small `Volume2` or `VolumeX` icon (from lucide) over the active canvas, positioned absolute bottom-right, with `opacity-30` idle and `opacity-80` on recent tap (auto-fades)
+- Add `isMuted` to the `BattleState` object passed to parent
+
+**HookFitPostCard.tsx changes:**
+- Change hint text from "Tap each side to play" to "Tap a side to play"
+
