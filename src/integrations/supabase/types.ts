@@ -98,6 +98,30 @@ export type Database = {
         }
         Relationships: []
       }
+      battle_passes: {
+        Row: {
+          battle_id: string
+          created_at: string
+          id: string
+          session_id: string
+          user_id: string | null
+        }
+        Insert: {
+          battle_id: string
+          created_at?: string
+          id?: string
+          session_id: string
+          user_id?: string | null
+        }
+        Update: {
+          battle_id?: string
+          created_at?: string
+          id?: string
+          session_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       collab_points: {
         Row: {
           badge: string | null
@@ -371,6 +395,8 @@ export type Database = {
           created_at: string
           hook_id: string
           id: string
+          playback_order: string | null
+          played_first_hook_id: string | null
           session_id: string | null
           user_id: string | null
         }
@@ -379,6 +405,8 @@ export type Database = {
           created_at?: string
           hook_id: string
           id?: string
+          playback_order?: string | null
+          played_first_hook_id?: string | null
           session_id?: string | null
           user_id?: string | null
         }
@@ -387,6 +415,8 @@ export type Database = {
           created_at?: string
           hook_id?: string
           id?: string
+          playback_order?: string | null
+          played_first_hook_id?: string | null
           session_id?: string | null
           user_id?: string | null
         }

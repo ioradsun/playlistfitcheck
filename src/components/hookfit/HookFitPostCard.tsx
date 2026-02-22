@@ -1,5 +1,11 @@
-import { useState, useRef, useEffect } from "react";
-import { User, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
+/**
+ * HookFitPostCard — 6-state battle card for HookFit V1.
+ * States: challenge → listen-first → listen-second → judgment → scorecard → results
+ * Plus silent "pass" logging on scroll-away.
+ */
+
+import { useState, useRef, useEffect, useCallback } from "react";
+import { User, MoreHorizontal, Trash2, ExternalLink, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,82 +21,210 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { InlineBattle, type BattleState } from "./InlineBattle";
-import { HookFitVotesSheet } from "./HookFitVotesSheet";
+import { InlineBattle, type BattleMode } from "./InlineBattle";
 import type { HookFitPost } from "./types";
+import type { HookData } from "@/hooks/useHookCanvas";
 import { getSessionId } from "@/lib/sessionId";
+import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
+
+// ── Types ─────────────────────────────────────────────────────────────────
+
+type CardState =
+  | "challenge"
+  | "listen-first"
+  | "listen-second"
+  | "judgment"
+  | "scorecard"
+  | "results";
+
+const RESULTS_THRESHOLD = 10;
+
+// ── Component ─────────────────────────────────────────────────────────────
 
 interface Props {
   post: HookFitPost;
-  rank?: number;
   onRefresh: () => void;
 }
 
-type CardPhase = "rest" | "exploring" | "registering" | "commenting" | "confirmed" | "settled";
-
-export function HookFitPostCard({ post, rank, onRefresh }: Props) {
+export function HookFitPostCard({ post, onRefresh }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isOwnPost = user?.id === post.user_id;
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
-  const [battleState, setBattleState] = useState<BattleState | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [commentText, setCommentText] = useState("");
-  const [submittingComment, setSubmittingComment] = useState(false);
-  const [floatingComment, setFloatingComment] = useState<{ text: string; side: "a" | "b" } | null>(null);
-  const commentInputRef = useRef<HTMLInputElement>(null);
 
-  // Track visibility for auto-pause
+  // ── Card state machine ──────────────────────────────────────────
+  const [cardState, setCardState] = useState<CardState>("challenge");
+  const [hookA, setHookA] = useState<HookData | null>(null);
+  const [hookB, setHookB] = useState<HookData | null>(null);
+  const [playbackOrder, setPlaybackOrder] = useState<["a", "b"] | ["b", "a"]>(["a", "b"]);
+  const [votedSide, setVotedSide] = useState<"a" | "b" | null>(null);
+  const [voteCountA, setVoteCountA] = useState(0);
+  const [voteCountB, setVoteCountB] = useState(0);
+  const [replayA, setReplayA] = useState(0);
+  const [replayB, setReplayB] = useState(0);
+  const passLoggedRef = useRef(false);
+  const userIdRef = useRef<string | null | undefined>(undefined);
+
+  // ── Playback order from PRNG ────────────────────────────────────
+  useEffect(() => {
+    const sessionId = getSessionId();
+    const seed = hashSeed(sessionId + post.battle_id);
+    const rng = mulberry32(seed);
+    setPlaybackOrder(rng() > 0.5 ? ["a", "b"] : ["b", "a"]);
+  }, [post.battle_id]);
+
+  // ── Hooks loaded callback ───────────────────────────────────────
+  const handleHooksLoaded = useCallback((a: HookData, b: HookData | null) => {
+    setHookA(a);
+    setHookB(b);
+    setVoteCountA(a.vote_count || 0);
+    if (b) setVoteCountB(b.vote_count || 0);
+
+    // Check for existing vote
+    const sessionId = getSessionId();
+    supabase
+      .from("hook_votes" as any)
+      .select("hook_id")
+      .eq("battle_id", post.battle_id)
+      .eq("session_id", sessionId)
+      .maybeSingle()
+      .then(({ data: vote }) => {
+        if (vote) {
+          const existingVotedSide = (vote as any).hook_id === a.id ? "a" : "b";
+          setVotedSide(existingVotedSide);
+          setCardState("scorecard");
+        }
+      });
+  }, [post.battle_id]);
+
+  // ── Derive battle mode for InlineBattle ─────────────────────────
+  const getBattleMode = (): BattleMode => {
+    switch (cardState) {
+      case "challenge": return "dark";
+      case "listen-first": return playbackOrder[0] === "a" ? "listen-a" : "listen-b";
+      case "listen-second": return playbackOrder[1] === "a" ? "listen-a" : "listen-b";
+      case "judgment": return "judgment";
+      case "scorecard": return "scorecard";
+      case "results": return "results";
+    }
+  };
+
+  // ── Hook end callback — drives auto-advance in STATE 2 ──────────
+  const handleHookEnd = useCallback((side: "a" | "b") => {
+    if (cardState === "listen-first" && side === playbackOrder[0]) {
+      setCardState("listen-second");
+    } else if (cardState === "listen-second" && side === playbackOrder[1]) {
+      setCardState("judgment");
+    }
+  }, [cardState, playbackOrder]);
+
+  // ── Vote handler ────────────────────────────────────────────────
+  const handleVote = useCallback(async (side: "a" | "b") => {
+    if (!hookA || cardState !== "judgment") return;
+    const hookId = side === "a" ? hookA.id : hookB?.id;
+    if (!hookId) return;
+
+    setVotedSide(side);
+    if (side === "a") setVoteCountA(v => v + 1);
+    else setVoteCountB(v => v + 1);
+    setCardState("scorecard");
+
+    const sessionId = getSessionId();
+    if (userIdRef.current === undefined) {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      userIdRef.current = u?.id ?? null;
+    }
+
+    const playedFirstId = playbackOrder[0] === "a" ? hookA.id : hookB?.id;
+    const order = playbackOrder[0] === "a" ? "A_first" : "B_first";
+
+    await supabase
+      .from("hook_votes" as any)
+      .insert({
+        battle_id: post.battle_id,
+        hook_id: hookId,
+        user_id: userIdRef.current || null,
+        session_id: sessionId,
+        playback_order: order,
+        played_first_hook_id: playedFirstId,
+      });
+  }, [hookA, hookB, cardState, playbackOrder, post.battle_id]);
+
+  // ── Poll vote counts in scorecard/results ───────────────────────
+  useEffect(() => {
+    if (cardState !== "scorecard" && cardState !== "results") return;
+    if (!hookA) return;
+
+    const poll = async () => {
+      const { data } = await supabase
+        .from("hook_votes" as any)
+        .select("hook_id")
+        .eq("battle_id", post.battle_id);
+      if (!data) return;
+      const votes = data as any[];
+      const countA = votes.filter(v => v.hook_id === hookA.id).length;
+      const countB = votes.filter(v => v.hook_id === hookB?.id).length;
+      setVoteCountA(countA);
+      setVoteCountB(countB);
+
+      if (countA + countB >= RESULTS_THRESHOLD && cardState === "scorecard") {
+        setCardState("results");
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [cardState, hookA, hookB, post.battle_id]);
+
+  // ── Pass logging (STATE 6) ──────────────────────────────────────
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+
     const observer = new IntersectionObserver(
-      ([entry]) => setIsVisible(entry.intersectionRatio >= 0.5),
+      ([entry]) => {
+        const isVisible = entry.intersectionRatio >= 0.5;
+        // Log pass when card leaves viewport without vote
+        if (!isVisible && !votedSide && cardState !== "challenge" && !passLoggedRef.current) {
+          passLoggedRef.current = true;
+          const sessionId = getSessionId();
+          supabase
+            .from("battle_passes" as any)
+            .insert({
+              battle_id: post.battle_id,
+              session_id: sessionId,
+              user_id: user?.id || null,
+            })
+            .then(() => {});
+        }
+        // Reset to challenge if scrolled back without vote
+        if (isVisible && !votedSide && cardState !== "challenge" && passLoggedRef.current) {
+          setCardState("challenge");
+        }
+      },
       { threshold: 0.5 }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [votedSide, cardState, post.battle_id, user?.id]);
 
+  // ── Derived ─────────────────────────────────────────────────────
   const displayName = post.profiles?.display_name || "Anonymous";
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
   const hook = post.hook;
+  const isBattle = !!(hookA && hookB);
+  const totalVotes = voteCountA + voteCountB;
 
-  // Derive phase from battle state
-  const isBattle = !!(battleState?.hookA && battleState?.hookB);
-  const hasVoted = !!battleState?.votedHookId;
-  const hasTapped = (battleState?.tappedSides?.size ?? 0) > 0;
-  const isPlaying = !battleState?.isMuted;
-  const totalVotes = (battleState?.voteCountA ?? 0) + (battleState?.voteCountB ?? 0);
-  const fmlyCount = Math.max(0, totalVotes - 1);
-  const activeLabel = battleState?.activeHookSide === "a"
-    ? (battleState?.hookA?.hook_label || "Hook A")
-    : (battleState?.hookB?.hook_label || "Hook B");
+  const votedHookLabel = votedSide === "a"
+    ? (hookA?.hook_label || hookA?.hook_slug || "Hook A")
+    : (hookB?.hook_label || hookB?.hook_slug || "Hook B");
 
-  const [phase, setPhase] = useState<CardPhase>("rest");
-
-  // Phase state machine — derived from battleState
-  useEffect(() => {
-    if (phase === "commenting" || phase === "confirmed" || phase === "settled") return; // locked phases
-    if (!isBattle) return;
-    if (hasVoted) {
-      setPhase("commenting");
-      setTimeout(() => commentInputRef.current?.focus(), 100);
-      return;
-    }
-    if (!hasTapped) { setPhase("rest"); return; }
-    setPhase(isPlaying ? "registering" : "exploring");
-  }, [isBattle, hasVoted, hasTapped, isPlaying]);
-
-  // Auto-transition: confirmed → settled after 2.5s
-  useEffect(() => {
-    if (phase !== "confirmed") return;
-    const timer = setTimeout(() => setPhase("settled"), 2500);
-    return () => clearTimeout(timer);
-  }, [phase]);
-
-  const handleProfileClick = () => navigate(`/u/${post.user_id}`);
+  const majorityIsA = voteCountA >= voteCountB;
+  const judgeAgreed = votedSide ? (votedSide === "a" ? majorityIsA : !majorityIsA) : false;
+  const minorityPct = totalVotes > 0
+    ? Math.round(((votedSide === "a" ? voteCountA : voteCountB) / totalVotes) * 100)
+    : 0;
 
   const handleDeletePost = async () => {
     try {
@@ -106,31 +240,15 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
     }
   };
 
-  const handleSubmitComment = async () => {
-    if (!commentText.trim() || !battleState?.votedHookId) return;
-    setSubmittingComment(true);
-    try {
-      const sessionId = getSessionId();
-      await supabase
-        .from("hook_comments" as any)
-        .insert({
-          hook_id: battleState.votedHookId,
-          text: commentText.trim(),
-          user_id: user?.id || null,
-          session_id: sessionId,
-        });
-      const votedSide = battleState.votedHookId === battleState.hookA?.id ? "a" : "b";
-      setFloatingComment({ text: commentText.trim(), side: votedSide as "a" | "b" });
-      setCommentText("");
-      setPhase("confirmed");
-      // Auto-clear floating comment after 5s
-      setTimeout(() => setFloatingComment(null), 5000);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to send comment");
-    } finally {
-      setSubmittingComment(false);
-    }
-  };
+  const handleProfileClick = () => navigate(`/u/${post.user_id}`);
+
+  // ── First hook label for listen overlay ─────────────────────────
+  const firstLabel = playbackOrder[0] === "a"
+    ? (hookA?.hook_label || "Hook A")
+    : (hookB?.hook_label || "Hook B");
+  const secondLabel = playbackOrder[1] === "a"
+    ? (hookA?.hook_label || "Hook A")
+    : (hookB?.hook_label || "Hook B");
 
   return (
     <div className="border-b border-border/40" ref={containerRef}>
@@ -138,10 +256,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <ProfileHoverCard userId={post.user_id}>
-            <div
-              className="flex items-center gap-3 cursor-pointer min-w-0"
-              onClick={handleProfileClick}
-            >
+            <div className="flex items-center gap-3 cursor-pointer min-w-0" onClick={handleProfileClick}>
               <div className="relative shrink-0">
                 <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
                   {post.profiles?.avatar_url ? (
@@ -151,9 +266,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
                   )}
                 </div>
                 {post.profiles?.is_verified && (
-                  <span className="absolute -bottom-0.5 -right-0.5">
-                    <VerifiedBadge size={14} />
-                  </span>
+                  <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={14} /></span>
                 )}
               </div>
               <div className="min-w-0">
@@ -165,7 +278,6 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
           <TrailblazerBadge userId={post.user_id} compact />
         </div>
 
-        {/* 3-dot menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="p-1.5 rounded-full hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors shrink-0">
@@ -175,184 +287,247 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
           <DropdownMenuContent align="end" className="w-48">
             {hook && (
               <DropdownMenuItem onClick={() => navigate(`/${hook.artist_slug}/${hook.song_slug}/${hook.hook_slug}`)}>
-                <ExternalLink size={14} className="mr-2" />
-                Open Battle
+                <ExternalLink size={14} className="mr-2" />Open Battle
               </DropdownMenuItem>
             )}
             {isOwnPost && (
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDeletePost}>
-                <Trash2 size={14} className="mr-2" />
-                Delete Post
+                <Trash2 size={14} className="mr-2" />Delete Post
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      {/* Inline Battle with Hooked badge overlay */}
-      <div className="relative">
+      {/* Battle canvas area */}
+      <div
+        className="relative cursor-pointer"
+        onClick={() => {
+          if (cardState === "challenge") setCardState("listen-first");
+        }}
+      >
         <InlineBattle
           battleId={post.battle_id}
-          visible={isVisible}
-          onBattleState={setBattleState}
-          floatingComment={floatingComment}
+          mode={getBattleMode()}
+          votedSide={votedSide}
+          onHookEnd={handleHookEnd}
+          onHooksLoaded={handleHooksLoaded}
+          replaySignalA={replayA}
+          replaySignalB={replayB}
         />
-        {/* "Hooked" badge — pinned to the voted video side */}
-        {hasVoted && isBattle && (() => {
-          const votedSide = battleState?.votedHookId === battleState?.hookA?.id ? "a" : "b";
-          const posClass = votedSide === "a" ? "left-3" : "right-3";
-          return (
-            <button
-              onClick={() => setSheetOpen(true)}
-              className={`absolute top-3 ${posClass} z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 transition-colors`}
+
+        {/* ── Overlays per state ─────────────────────────────────── */}
+        <AnimatePresence mode="wait">
+          {/* STATE 1: CHALLENGE */}
+          {cardState === "challenge" && (
+            <motion.div
+              key="challenge"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex items-center justify-center z-10"
             >
-              <span
-                className="text-[10px] font-bold uppercase tracking-[0.12em]"
-                style={{ color: "rgba(57,255,20,0.7)" }}
-              >
-                Hooked
-              </span>
-              {totalVotes > 0 && (
-                <span
-                  className="text-[10px] font-mono uppercase tracking-[0.12em]"
-                  style={{ color: "rgba(57,255,20,0.5)" }}
-                >
-                  You + {fmlyCount} FMLY
-                </span>
-              )}
-            </button>
-          );
-        })()}
+              <p className="font-mono text-sm uppercase tracking-[0.2em] text-white/70">
+                WHICH HOOK WINS
+              </p>
+            </motion.div>
+          )}
+
+          {/* STATE 2: LISTEN */}
+          {(cardState === "listen-first" || cardState === "listen-second") && (
+            <motion.div
+              key={cardState}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="absolute bottom-4 left-0 right-0 flex justify-center z-10 pointer-events-none"
+            >
+              <p className="font-mono text-xs uppercase tracking-[0.15em] text-white/60">
+                {cardState === "listen-first" ? `${firstLabel} ENTERS` : `${secondLabel} ENTERS`}
+              </p>
+            </motion.div>
+          )}
+
+          {/* STATE 3: JUDGMENT */}
+          {cardState === "judgment" && isBattle && (
+            <motion.div
+              key="judgment"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center z-10"
+            >
+              <p className="font-mono text-sm uppercase tracking-[0.2em] text-white/70 mb-8">
+                YOUR VERDICT.
+              </p>
+              <div className="flex w-full">
+                <div className="flex-1 flex justify-center">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleVote("a"); }}
+                    className="px-6 py-2 border border-white/20 rounded font-mono text-xs uppercase tracking-[0.15em] text-white/80 hover:bg-white/10 transition-colors"
+                  >
+                    HOOKED
+                  </button>
+                </div>
+                <div className="flex-1 flex justify-center">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleVote("b"); }}
+                    className="px-6 py-2 border border-white/20 rounded font-mono text-xs uppercase tracking-[0.15em] text-white/80 hover:bg-white/10 transition-colors"
+                  >
+                    HOOKED
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Action row — phase-driven */}
+      {/* ── Action area below canvas ──────────────────────────────── */}
       {isBattle && (
-        <div className="flex items-center justify-center px-3 py-2 min-h-[40px]">
+        <div className="px-3 py-2.5">
           <AnimatePresence mode="wait">
-            {phase === "rest" && (
-              <motion.p
-                key="rest"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-xs text-muted-foreground font-mono uppercase tracking-[0.15em]"
-              >
-                WHICH HOOK FITS? — FMLY VOTE
-              </motion.p>
-            )}
-
-            {phase === "exploring" && (
-              <motion.p
-                key="exploring"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-xs text-muted-foreground font-mono uppercase tracking-[0.15em]"
-              >
-                WHICH HOOK FITS? — FMLY VOTE
-              </motion.p>
-            )}
-
-            {phase === "registering" && (
+            {/* STATE 4: SCORECARD */}
+            {cardState === "scorecard" && votedSide && (
               <motion.div
-                key="registering"
+                key="scorecard"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="flex w-full"
+                className="space-y-2"
               >
-                <button
-                  onClick={() => {
-                    if (battleState?.hookA?.id) battleState?.handleVote(battleState.hookA.id);
-                  }}
-                  className={`flex-1 text-[11px] font-bold uppercase tracking-[0.15em] py-1.5 transition-colors border-r border-border/30 ${
-                    battleState?.activeHookSide === "a" ? "text-foreground hover:bg-accent/50" : "text-foreground/25"
-                  }`}
+                <p className="text-center font-mono text-xs uppercase tracking-[0.15em] text-white/70">
+                  YOUR CALL — {votedHookLabel}
+                </p>
+
+                {/* Vote counts */}
+                <div className="flex justify-center gap-4">
+                  <span className="font-mono text-[11px] text-white/50">
+                    {hookA?.hook_label || "Hook A"}: {voteCountA} FMLY
+                  </span>
+                  <span className="font-mono text-[11px] text-white/50">
+                    {hookB?.hook_label || "Hook B"}: {voteCountB} FMLY
+                  </span>
+                </div>
+
+                <motion.p
+                  animate={{ opacity: [0.4, 0.8, 0.4] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="text-center font-mono text-[10px] uppercase tracking-[0.15em] text-white/40"
                 >
-                  Hooked
-                </button>
-                <button
-                  onClick={() => {
-                    if (battleState?.hookB?.id) battleState?.handleVote(battleState.hookB.id);
-                  }}
-                  className={`flex-1 text-[11px] font-bold uppercase tracking-[0.15em] py-1.5 transition-colors ${
-                    battleState?.activeHookSide === "b" ? "text-foreground hover:bg-accent/50" : "text-foreground/25"
-                  }`}
-                >
-                  Hooked
-                </button>
+                  FMLY VOTES COMING IN
+                </motion.p>
+
+                {/* Replay buttons */}
+                <div className="flex justify-between pt-1">
+                  <button
+                    onClick={() => setReplayA(v => v + 1)}
+                    className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <RotateCcw size={10} /> Replay {hookA?.hook_label || "A"}
+                  </button>
+                  <button
+                    onClick={() => setReplayB(v => v + 1)}
+                    className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <RotateCcw size={10} /> Replay {hookB?.hook_label || "B"}
+                  </button>
+                </div>
+
+                <p className="text-center font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/40">
+                  VERDICT LOCKED
+                </p>
               </motion.div>
             )}
 
-            {phase === "commenting" && (
-              <motion.form
-                key="commenting"
+            {/* STATE 5: RESULTS */}
+            {cardState === "results" && votedSide && (
+              <motion.div
+                key="results"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                onSubmit={(e) => { e.preventDefault(); handleSubmitComment(); }}
-                className="w-full"
+                className="space-y-3"
               >
-                <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground text-center mb-1.5">
-                  Comment live to the winning video — FMLY style
+                <p className="text-center font-mono text-xs uppercase tracking-[0.2em] text-white/80">
+                  THE JUDGES HAVE SCORED
                 </p>
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={commentInputRef}
-                    type="text"
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Drop your words…"
-                    disabled={submittingComment}
-                    className="flex-1 bg-transparent border-b border-border/60 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/40 py-1 font-mono"
-                  />
+
+                <p className="text-center font-mono text-[11px] uppercase tracking-[0.12em] text-white/50">
+                  YOUR CALL: {votedHookLabel}
+                </p>
+
+                {/* FMLY Scorecard bars */}
+                <div className="space-y-1.5 px-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-white/50 w-16 truncate">
+                      {hookA?.hook_label || hookA?.hook_slug || "Hook A"}
+                    </span>
+                    <div className="flex-1 h-3 bg-white/[0.06] rounded-sm overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-sm"
+                        style={{ background: hookA?.palette?.[0] || "#a855f7" }}
+                        initial={{ width: 0 }}
+                        animate={{ width: totalVotes > 0 ? `${(voteCountA / totalVotes) * 100}%` : "0%" }}
+                        transition={{ duration: 0.6 }}
+                      />
+                    </div>
+                    <span className="font-mono text-[10px] text-white/70 w-16 text-right">
+                      {voteCountA} FMLY
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-white/50 w-16 truncate">
+                      {hookB?.hook_label || hookB?.hook_slug || "Hook B"}
+                    </span>
+                    <div className="flex-1 h-3 bg-white/[0.06] rounded-sm overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-sm"
+                        style={{ background: hookB?.palette?.[0] || "#ec4899" }}
+                        initial={{ width: 0 }}
+                        animate={{ width: totalVotes > 0 ? `${(voteCountB / totalVotes) * 100}%` : "0%" }}
+                        transition={{ duration: 0.6 }}
+                      />
+                    </div>
+                    <span className="font-mono text-[10px] text-white/70 w-16 text-right">
+                      {voteCountB} FMLY
+                    </span>
+                  </div>
+                </div>
+
+                {/* Agreement text */}
+                <div className="text-center pt-1">
+                  {judgeAgreed ? (
+                    <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-white/60">
+                      YOU CALLED IT WITH THE FMLY
+                    </p>
+                  ) : (
+                    <>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-white/60">
+                        YOU SAW IT DIFFERENT
+                      </p>
+                      <p className="font-mono text-[9px] text-muted-foreground/40 mt-0.5">
+                        {minorityPct}% OF JUDGES SAW IT YOUR WAY
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* Replay buttons */}
+                <div className="flex justify-between pt-1">
                   <button
-                    type="submit"
-                    disabled={!commentText.trim() || submittingComment}
-                    className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/70 hover:text-foreground disabled:opacity-30 transition-colors"
+                    onClick={() => setReplayA(v => v + 1)}
+                    className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Send
+                    <RotateCcw size={10} /> Replay {hookA?.hook_label || "A"}
+                  </button>
+                  <button
+                    onClick={() => setReplayB(v => v + 1)}
+                    className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <RotateCcw size={10} /> Replay {hookB?.hook_label || "B"}
                   </button>
                 </div>
-              </motion.form>
-            )}
-
-            {phase === "confirmed" && (
-              <motion.p
-                key="confirmed"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-[11px] font-mono uppercase tracking-[0.15em]"
-                style={{ color: "rgba(57,255,20,0.5)" }}
-              >
-                Watch your words get hooked in
-              </motion.p>
-            )}
-
-            {phase === "settled" && (
-              <motion.div
-                key="settled"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex w-full items-center justify-between"
-              >
-                <button
-                  onClick={() => {
-                    battleState?.handleUnvote();
-                    setPhase("exploring");
-                  }}
-                  className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Unhook
-                </button>
-                <button
-                  onClick={() => setSheetOpen(true)}
-                  className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {totalVotes} Hooks Cast
-                </button>
               </motion.div>
             )}
           </AnimatePresence>
@@ -368,24 +543,6 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
           </p>
         </div>
       )}
-
-      {/* Minimal meta row */}
-      {rank && (
-        <div className="flex items-center justify-end px-3 py-1">
-          <span className="text-[11px] font-bold text-primary font-mono">#{rank}</span>
-        </div>
-      )}
-
-      {/* Votes side panel */}
-      <HookFitVotesSheet
-        battleId={sheetOpen ? post.battle_id : null}
-        hookA={battleState?.hookA ?? null}
-        hookB={battleState?.hookB ?? null}
-        voteCountA={battleState?.voteCountA ?? 0}
-        voteCountB={battleState?.voteCountB ?? 0}
-        votedHookId={battleState?.votedHookId ?? null}
-        onClose={() => setSheetOpen(false)}
-      />
     </div>
   );
 }
