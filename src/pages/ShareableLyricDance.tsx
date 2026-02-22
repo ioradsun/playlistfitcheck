@@ -16,7 +16,7 @@ import { mulberry32, hashSeed, PhysicsIntegrator } from "@/engine/PhysicsIntegra
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
-import { computeFitFontSize } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -371,7 +371,10 @@ export default function ShareableLyricDance() {
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
         const lineProgress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, cw, spec.system);
+        const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, spec.system);
+        const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
+          ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
+          : computeFitFontSize(ctx, activeLine.text, cw, spec.system);
 
         ctx.save();
         const effectState: EffectState = {
@@ -384,6 +387,7 @@ export default function ShareableLyricDance() {
           palette,
           system: spec.system,
           effectiveLetterSpacing,
+          stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
         };
         drawFn(ctx, effectState);
         ctx.restore();
