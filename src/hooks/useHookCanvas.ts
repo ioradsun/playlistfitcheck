@@ -83,15 +83,21 @@ export function useHookCanvas(
   constellationRef: React.MutableRefObject<ConstellationNode[]>,
   riverOffsetsRef: React.MutableRefObject<number[]>,
   active: boolean = true,
+  onEnd?: () => void,
 ) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const engineRef = useRef<HookDanceEngine | null>(null);
   const prngRef = useRef<(() => number) | null>(null);
   const activeRef = useRef(active);
   const progressRef = useRef(0);
+  const onEndRef = useRef(onEnd);
+  const firedEndRef = useRef(false);
   const frameRef = useRef<{ physState: PhysicsState | null; time: number; beats: number }>({
     physState: null, time: 0, beats: 0,
   });
+
+  // Keep onEnd ref current
+  onEndRef.current = onEnd;
 
   const drawCanvas = useCallback((physState: PhysicsState, ct: number, bc: number) => {
     const canvas = canvasRef.current;
@@ -274,9 +280,20 @@ export function useHookCanvas(
       }
     }
 
-    // Progress — store for external HTML playbar (skip canvas drawing)
+    // Progress — store for external HTML playbar
     const hookProgress = (ct - hd.hook_start) / (hd.hook_end - hd.hook_start);
     progressRef.current = Math.max(0, Math.min(1, hookProgress));
+
+    // Fire onEnd once when hook reaches end (for auto-alternation)
+    if (hookProgress >= 0.98 && !firedEndRef.current && onEndRef.current) {
+      firedEndRef.current = true;
+      // Defer to avoid calling setState during render frame
+      setTimeout(() => onEndRef.current?.(), 0);
+    }
+    // Reset the flag when progress loops back
+    if (hookProgress < 0.5) {
+      firedEndRef.current = false;
+    }
 
     ctx.restore();
   }, [hookData, canvasRef, containerRef, constellationRef, riverOffsetsRef]);

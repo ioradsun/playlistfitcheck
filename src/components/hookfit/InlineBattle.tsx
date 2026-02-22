@@ -94,16 +94,47 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     onBattleState?.({ hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides });
   }, [hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides]);
 
-  // ── Canvas engines ────────────────────────────────────────────────────
+  // ── Canvas engines — auto-alternate on end ─────────────────────────
+
+  const switchToB = useCallback(() => {
+    if (!hookB) return;
+    setActiveHookSide("b");
+    setTappedSides(prev => new Set(prev).add("b"));
+  }, [hookB]);
+
+  const switchToA = useCallback(() => {
+    setActiveHookSide("a");
+    setTappedSides(prev => new Set(prev).add("a"));
+  }, []);
 
   const hookACanvas = useHookCanvas(
     canvasRefA, containerRefA, hookA, constellationRefA, riverOffsetsRefA,
     visible && (!hookB || activeHookSide === "a"),
+    hookB ? switchToB : undefined,
   );
   const hookBCanvas = useHookCanvas(
     canvasRefB, containerRefB, hookB, constellationRefB, riverOffsetsRefB,
     visible && !!hookB && activeHookSide === "b",
+    switchToA,
   );
+
+  // When side auto-switches, unmute active and restart (only after user has tapped)
+  const prevSideRef = useRef(activeHookSide);
+  useEffect(() => {
+    if (prevSideRef.current === activeHookSide) return;
+    prevSideRef.current = activeHookSide;
+    // Only auto-switch audio if user has already interacted
+    if (tappedSides.size === 0) return;
+    if (activeHookSide === "a") {
+      if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = false;
+      if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = true;
+      hookACanvas.restart();
+    } else {
+      if (hookBCanvas.audioRef.current) hookBCanvas.audioRef.current.muted = false;
+      if (hookACanvas.audioRef.current) hookACanvas.audioRef.current.muted = true;
+      hookBCanvas.restart();
+    }
+  }, [activeHookSide]);
 
   // ── Sync progress from active engine to HTML bar ────────────────────
 
