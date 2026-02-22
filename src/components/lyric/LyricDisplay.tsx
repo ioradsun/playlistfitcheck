@@ -927,8 +927,9 @@ export function LyricDisplay({
         cancelAnimationFrame(clipProgressRafRef.current);
       audioRef.current.currentTime = time;
       setCurrentTime(time);
+      // Always re-trigger play after seek to prevent browser from stalling
+      audioRef.current.play().catch(() => {});
       if (!isPlaying) {
-        audioRef.current.play();
         setIsPlaying(true);
       }
     },

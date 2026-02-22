@@ -450,14 +450,6 @@ export default function ShareableLyricDance() {
       }
 
       // Progress bar — rendered via HTML overlay now, skip canvas bar
-      // System label
-      ctx.save();
-      ctx.font = `${Math.max(9, Math.round(cw * 0.012))}px "Geist Mono", monospace`;
-      ctx.fillStyle = "rgba(255,255,255,0.12)";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "bottom";
-      ctx.fillText(`${spec.system} · lyric dance`, 12, ch - 10);
-      ctx.restore();
 
       prevTime = currentTime;
     };
@@ -528,12 +520,15 @@ export default function ShareableLyricDance() {
 
   const seekToPosition = useCallback((clientX: number) => {
     if (!progressBarRef.current || !audioRef.current || !data) return;
+    const audio = audioRef.current;
     const rect = progressBarRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const lines = data.lyrics;
     const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
-    audioRef.current.currentTime = songStart + ratio * (songEnd - songStart);
+    audio.currentTime = songStart + ratio * (songEnd - songStart);
+    // Re-trigger play after seek to prevent browser from stalling playback
+    audio.play().catch(() => {});
   }, [data]);
 
   const handleProgressDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
