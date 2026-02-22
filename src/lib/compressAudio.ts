@@ -13,6 +13,16 @@ const TARGET_SAMPLE_RATE = 16000;
 const OPUS_BITRATE = 32_000; // 32 kbps — gold standard for voice clarity
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB hard cap
 
+/**
+ * Session-level cache to avoid recompressing the same file repeatedly
+ * (e.g., retries, re-analysis, or duplicate slots using one source file).
+ */
+const compressionCache = new Map<string, Promise<File>>();
+
+function getCacheKey(file: File, thresholdBytes: number): string {
+  return [file.name, file.type, file.size, file.lastModified, thresholdBytes].join("::");
+}
+
 /* ------------------------------------------------------------------ */
 /*  Encoders                                                          */
 /* ------------------------------------------------------------------ */
@@ -126,62 +136,77 @@ export async function compressAudioFile(
   // Skip compression for small files
   if (file.size <= thresholdBytes) return file;
 
-  const useOpus = supportsWebmOpus();
-  console.log(
-    `[compressAudio] Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB) → ${useOpus ? "WebM/Opus 32kbps" : "WAV"} @ ${TARGET_SAMPLE_RATE}Hz`
-  );
+  const cacheKey = getCacheKey(file, thresholdBytes);
+  const cached = compressionCache.get(cacheKey);
+  if (cached) return cached;
 
-  const audioCtx = new AudioContext();
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-
+  const compressionPromise = (async () => {
+    const useOpus = supportsWebmOpus();
     console.log(
-      `[compressAudio] Decoded: ${audioBuffer.duration.toFixed(1)}s, ${audioBuffer.numberOfChannels}ch, ${audioBuffer.sampleRate}Hz`
+      `[compressAudio] Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB) → ${useOpus ? "WebM/Opus 32kbps" : "WAV"} @ ${TARGET_SAMPLE_RATE}Hz`
     );
 
-    // Render to mono at target sample rate
-    const length = Math.ceil(audioBuffer.duration * TARGET_SAMPLE_RATE);
-    const offlineCtx = new OfflineAudioContext(1, length, TARGET_SAMPLE_RATE);
-    const source = offlineCtx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineCtx.destination);
-    source.start(0);
+    const audioCtx = new AudioContext();
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-    const rendered = await offlineCtx.startRendering();
-    const monoSamples = rendered.getChannelData(0);
+      console.log(
+        `[compressAudio] Decoded: ${audioBuffer.duration.toFixed(1)}s, ${audioBuffer.numberOfChannels}ch, ${audioBuffer.sampleRate}Hz`
+      );
 
-    let blob: Blob;
-    let ext: string;
+      // Render to mono at target sample rate
+      const length = Math.ceil(audioBuffer.duration * TARGET_SAMPLE_RATE);
+      const offlineCtx = new OfflineAudioContext(1, length, TARGET_SAMPLE_RATE);
+      const source = offlineCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(offlineCtx.destination);
+      source.start(0);
 
-    if (useOpus) {
-      try {
-        blob = await encodeWebmOpus(monoSamples, TARGET_SAMPLE_RATE);
-        ext = "webm";
-      } catch (e) {
-        console.warn("[compressAudio] WebM/Opus failed, falling back to WAV:", e);
+      const rendered = await offlineCtx.startRendering();
+      const monoSamples = rendered.getChannelData(0);
+
+      let blob: Blob;
+      let ext: string;
+
+      if (useOpus) {
+        try {
+          blob = await encodeWebmOpus(monoSamples, TARGET_SAMPLE_RATE);
+          ext = "webm";
+        } catch (e) {
+          console.warn("[compressAudio] WebM/Opus failed, falling back to WAV:", e);
+          blob = encodeWav(monoSamples, TARGET_SAMPLE_RATE);
+          ext = "wav";
+        }
+      } else {
         blob = encodeWav(monoSamples, TARGET_SAMPLE_RATE);
         ext = "wav";
       }
-    } else {
-      blob = encodeWav(monoSamples, TARGET_SAMPLE_RATE);
-      ext = "wav";
+
+      const baseName = file.name.replace(/\.[^.]+$/, "");
+      const mimeType = ext === "webm" ? "audio/webm" : "audio/wav";
+      const compressed = new File([blob], `${baseName}_compressed.${ext}`, { type: mimeType });
+
+      console.log(`[compressAudio] Result: ${(compressed.size / 1024 / 1024).toFixed(2)} MB (${ext})`);
+
+      if (compressed.size > MAX_UPLOAD_BYTES) {
+        throw new Error(
+          `File is too long — compressed to ${(compressed.size / 1024 / 1024).toFixed(0)} MB but max is ${(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(0)} MB. Try a shorter clip.`
+        );
+      }
+
+      return compressed;
+    } finally {
+      await audioCtx.close();
     }
+  })();
 
-    const baseName = file.name.replace(/\.[^.]+$/, "");
-    const mimeType = ext === "webm" ? "audio/webm" : "audio/wav";
-    const compressed = new File([blob], `${baseName}_compressed.${ext}`, { type: mimeType });
+  compressionCache.set(cacheKey, compressionPromise);
 
-    console.log(`[compressAudio] Result: ${(compressed.size / 1024 / 1024).toFixed(2)} MB (${ext})`);
-
-    if (compressed.size > MAX_UPLOAD_BYTES) {
-      throw new Error(
-        `File is too long — compressed to ${(compressed.size / 1024 / 1024).toFixed(0)} MB but max is ${(MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(0)} MB. Try a shorter clip.`
-      );
-    }
-
-    return compressed;
-  } finally {
-    await audioCtx.close();
+  try {
+    return await compressionPromise;
+  } catch (error) {
+    compressionCache.delete(cacheKey);
+    throw error;
   }
 }
