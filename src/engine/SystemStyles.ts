@@ -122,7 +122,7 @@ export interface StackedLayout {
   isStacked: boolean;
 }
 
-const STACK_THRESHOLD = 400;
+const STACK_THRESHOLD = 600;
 const MAX_STACK_LINES = 3;
 
 /**
