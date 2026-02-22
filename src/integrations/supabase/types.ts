@@ -976,6 +976,7 @@ export type Database = {
           id: string
           lines: Json
           song_dna: Json | null
+          song_signature: Json | null
           title: string
           updated_at: string
           user_id: string
@@ -991,6 +992,7 @@ export type Database = {
           id?: string
           lines?: Json
           song_dna?: Json | null
+          song_signature?: Json | null
           title?: string
           updated_at?: string
           user_id: string
@@ -1006,6 +1008,7 @@ export type Database = {
           id?: string
           lines?: Json
           song_dna?: Json | null
+          song_signature?: Json | null
           title?: string
           updated_at?: string
           user_id?: string

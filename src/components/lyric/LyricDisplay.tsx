@@ -38,6 +38,7 @@ import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
+import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import { LyricWaveform } from "./LyricWaveform";
 import { VersionToggle, type ActiveVersion } from "./VersionToggle";
 import {
@@ -161,6 +162,7 @@ interface Props {
   } | null;
   debugData?: any | null;
   initialBeatGrid?: BeatGridData | null;
+  initialSongSignature?: SongSignature | null;
   initialSongDna?: any | null;
   onBack: () => void;
   onSaved?: (id: string) => void;
@@ -325,6 +327,7 @@ export function LyricDisplay({
   versionMeta: initVersionMeta,
   debugData,
   initialBeatGrid,
+  initialSongSignature,
   initialSongDna,
   onBack,
   onSaved,
@@ -1028,6 +1031,7 @@ export function LyricDisplay({
               confidence: beatGrid.confidence,
             } as any)
           : null,
+        song_signature: (initialSongSignature as any) ?? null,
         song_dna: (songDna as any) ?? null,
         updated_at: new Date().toISOString(),
       };
@@ -1070,6 +1074,7 @@ export function LyricDisplay({
     hasRealAudio,
     onSaved,
     beatGrid,
+    initialSongSignature,
     songDna,
   ]);
 

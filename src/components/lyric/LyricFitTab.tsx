@@ -9,6 +9,10 @@ import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData } from "./LyricDisplay";
 import { LyricProgressModal, type ProgressStage } from "./LyricProgressModal";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
+import {
+  songSignatureAnalyzer,
+  type SongSignature,
+} from "@/lib/songSignatureAnalyzer";
 import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
 import { safeManifest } from "@/engine/validateManifest";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
@@ -94,12 +98,33 @@ export function LyricFitTab({
   );
   const [precomputedBeatGrid, setPrecomputedBeatGrid] =
     useState<BeatGridData | null>(null);
+  const [precomputedSongSignature, setPrecomputedSongSignature] =
+    useState<SongSignature | null>(null);
+  const signaturePromiseRef = useRef<Promise<SongSignature | null> | null>(null);
   const { beatGrid: detectedGrid } = useBeatGrid(earlyAudioBuffer);
 
   // When beat grid detection finishes, store it
   useEffect(() => {
     if (detectedGrid) setPrecomputedBeatGrid(detectedGrid);
   }, [detectedGrid]);
+
+  // Song signature analysis runs once we already have decoded audio + beat grid.
+  useEffect(() => {
+    if (!earlyAudioBuffer || !detectedGrid || precomputedSongSignature) return;
+
+    const analysisPromise = songSignatureAnalyzer
+      .analyze(earlyAudioBuffer, detectedGrid, undefined, earlyAudioBuffer.duration)
+      .then((signature) => {
+        setPrecomputedSongSignature(signature);
+        return signature;
+      })
+      .catch((err) => {
+        console.warn("[song-signature] analysis failed:", err);
+        return null;
+      });
+
+    signaturePromiseRef.current = analysisPromise;
+  }, [earlyAudioBuffer, detectedGrid, precomputedSongSignature]);
 
   // Load saved lyric from dashboard navigation
   useEffect(() => {
@@ -123,6 +148,9 @@ export function LyricFitTab({
       // Restore saved beat grid
       const savedBg = (initialLyric as any).beat_grid;
       if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
+      const savedSignature = (initialLyric as any).song_signature;
+      if (savedSignature)
+        setPrecomputedSongSignature(savedSignature as SongSignature);
 
       // Check session cache for real audio first
       const cachedAudio = initialLyric.id
@@ -213,7 +241,9 @@ export function LyricFitTab({
 
       // Kick off beat grid detection in parallel (decode original file)
       setPrecomputedBeatGrid(null);
+      setPrecomputedSongSignature(null);
       setEarlyAudioBuffer(null);
+      signaturePromiseRef.current = null;
       const audioCtx = new AudioContext();
       file
         .arrayBuffer()
@@ -331,6 +361,12 @@ export function LyricFitTab({
         let projectId: string | null = null;
         if (user) {
           projectId = crypto.randomUUID();
+
+          const maybeSignature = await Promise.race([
+            signaturePromiseRef.current ?? Promise.resolve(precomputedSongSignature),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
+          ]);
+
           const audioUrl = await uploadAudioImmediately(
             file,
             user.id,
@@ -343,6 +379,15 @@ export function LyricFitTab({
             artist: data.artist || "Unknown",
             lines: data.lines,
             filename: file.name,
+            beat_grid: precomputedBeatGrid
+              ? ({
+                  bpm: precomputedBeatGrid.bpm,
+                  beats: precomputedBeatGrid.beats,
+                  confidence: precomputedBeatGrid.confidence,
+                } as any)
+              : null,
+            song_signature:
+              (maybeSignature as any) ?? (precomputedSongSignature as any) ?? null,
             ...(audioUrl ? { audio_url: audioUrl } : {}),
             updated_at: new Date().toISOString(),
           });
@@ -400,7 +445,9 @@ export function LyricFitTab({
     setVersionMeta(null);
     setDebugData(null);
     setPrecomputedBeatGrid(null);
+    setPrecomputedSongSignature(null);
     setEarlyAudioBuffer(null);
+    signaturePromiseRef.current = null;
     onNewProject?.();
   }, [onNewProject]);
 
@@ -416,6 +463,7 @@ export function LyricFitTab({
           versionMeta={versionMeta}
           debugData={debugData}
           initialBeatGrid={precomputedBeatGrid}
+          initialSongSignature={precomputedSongSignature}
           initialSongDna={savedSongDna}
           onBack={handleBack}
           onSaved={(id) => {
@@ -462,6 +510,10 @@ export function LyricFitTab({
           const savedBg = (l as any).beat_grid;
           if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
           else setPrecomputedBeatGrid(null);
+          const savedSignature = (l as any).song_signature;
+          if (savedSignature)
+            setPrecomputedSongSignature(savedSignature as SongSignature);
+          else setPrecomputedSongSignature(null);
           // Check session cache for audio
           const cachedAudio = l.id
             ? sessionAudio.get("lyric", l.id)
