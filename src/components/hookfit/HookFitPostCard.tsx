@@ -156,7 +156,10 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
               Hooked
             </span>
             {totalVotes > 0 && (
-              <span className="text-[10px] font-mono text-white/50">
+              <span
+                className="text-[10px] font-mono uppercase tracking-[0.12em]"
+                style={{ color: "rgba(57,255,20,0.5)" }}
+              >
                 You + {fmlyCount} FMLY
               </span>
             )}
