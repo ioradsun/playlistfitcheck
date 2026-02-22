@@ -89,21 +89,31 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
     setVoteCountA(a.vote_count || 0);
     if (b) setVoteCountB(b.vote_count || 0);
 
-    // Check for existing vote
-    const sessionId = getSessionId();
-    supabase
-      .from("hook_votes" as any)
-      .select("hook_id")
-      .eq("battle_id", post.battle_id)
-      .eq("session_id", sessionId)
-      .maybeSingle()
-      .then(({ data: vote }) => {
-        if (vote) {
-          const existingVotedSide = (vote as any).hook_id === a.id ? "a" : "b";
-          setVotedSide(existingVotedSide);
-          setCardState("scorecard");
-        }
-      });
+    // Check for existing vote — prefer user_id for logged-in users
+    const checkVote = async () => {
+      const sessionId = getSessionId();
+      const { data: { user: u } } = await supabase.auth.getUser();
+      userIdRef.current = u?.id ?? null;
+
+      let query = supabase
+        .from("hook_votes" as any)
+        .select("hook_id")
+        .eq("battle_id", post.battle_id);
+
+      if (u?.id) {
+        query = query.eq("user_id", u.id);
+      } else {
+        query = query.eq("session_id", sessionId);
+      }
+
+      const { data: vote } = await query.maybeSingle();
+      if (vote) {
+        const existingVotedSide = (vote as any).hook_id === a.id ? "a" : "b";
+        setVotedSide(existingVotedSide);
+        setCardState("scorecard");
+      }
+    };
+    checkVote();
   }, [post.battle_id]);
 
   // ── Derive battle mode for InlineBattle ─────────────────────────
