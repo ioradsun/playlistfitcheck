@@ -13,6 +13,12 @@ import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 
+export const HOOK_CANVAS_COMPOSITING_HINTS = {
+  maskUsesPaletteShadow: true,
+  kenBurnsFollowsLightSource: true,
+  beatAffectsBloomOnly: true,
+} as const;
+
 // ── Shared types ────────────────────────────────────────────────────────────
 
 export interface HookData {
