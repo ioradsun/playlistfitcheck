@@ -62,6 +62,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
   const [votedSide, setVotedSide] = useState<"a" | "b" | null>(null);
   const [voteCountA, setVoteCountA] = useState(0);
   const [voteCountB, setVoteCountB] = useState(0);
+  const [liveComments, setLiveComments] = useState<{ id: string; text: string; name: string }[]>([]);
   const passLoggedRef = useRef(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
 
@@ -565,16 +566,29 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
         </div>
       )}
 
-      {/* Always-visible comment input */}
-      <div className="px-3 pb-3">
+      {/* Live comments + input */}
+      <div className="px-3 pb-3 space-y-1.5">
+        {liveComments.length > 0 && (
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {liveComments.map((c) => (
+              <p key={c.id} className="text-sm leading-snug">
+                <span className="font-semibold mr-1.5">{c.name}</span>
+                {c.text}
+              </p>
+            ))}
+          </div>
+        )}
         <input
           type="text"
           placeholder="DROP YOUR TAKE LIVE"
-          className="w-full bg-muted/40 border border-border/30 rounded px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40 transition-colors"
+          className="w-full bg-muted/40 border border-border/30 rounded px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40 transition-colors"
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.target as HTMLInputElement).value.trim()) {
-              toast.info("Comments coming soon");
-              (e.target as HTMLInputElement).value = "";
+            const input = e.target as HTMLInputElement;
+            if (e.key === "Enter" && input.value.trim()) {
+              const text = input.value.trim();
+              const name = user ? (displayName || "You") : "Anon";
+              setLiveComments((prev) => [...prev, { id: crypto.randomUUID(), text, name }]);
+              input.value = "";
             }
           }}
         />
