@@ -159,15 +159,19 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
       setTimeout(() => {
         const handle = battleRef.current;
         if (handle) {
-          handle.constellationRefA.current = [...nodes];
-          handle.constellationRefB.current = nodes.map(n => ({ ...n }));
+          // Only populate the voted side; if no vote yet, skip
+          if (votedSide === "a") {
+            handle.constellationRefA.current = [...nodes];
+          } else if (votedSide === "b") {
+            handle.constellationRefB.current = nodes.map(n => ({ ...n }));
+          }
           handle.riverOffsetsRefA.current = [0, 0, 0, 0];
           handle.riverOffsetsRefB.current = [0, 0, 0, 0];
         }
       }, 100);
     };
     loadComments();
-  }, [post.battle_id]);
+  }, [post.battle_id, votedSide]);
 
   // ── Derive battle mode for InlineBattle ─────────────────────────
   const getBattleMode = (): BattleMode => {
@@ -657,9 +661,16 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
                   currentSize: 16,
                   baseOpacity: 0.06,
                 };
-                // Push to both sides
-                handle.constellationRefA.current.push(node);
-                handle.constellationRefB.current.push({ ...node });
+                // Push only to the voted side's canvas
+                if (votedSide === "a") {
+                  handle.constellationRefA.current.push(node);
+                } else if (votedSide === "b") {
+                  handle.constellationRefB.current.push(node);
+                } else {
+                  // No vote yet — push to both as fallback
+                  handle.constellationRefA.current.push(node);
+                  handle.constellationRefB.current.push({ ...node });
+                }
               }
 
               // Persist to hook_comments
