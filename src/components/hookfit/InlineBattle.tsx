@@ -251,11 +251,11 @@ export function InlineBattle({
 
       {/* Progress bar */}
       {showProgress && (
-        <div className="h-[2px] bg-white/[0.06] flex">
+        <div className="h-1 bg-white/[0.06] flex">
           {(mode === "listen-a" || activePlaying === "a") ? (
             <>
               <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookA?.palette?.[0] || "#fff", opacity: 0.7 }} />
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookA?.palette?.[0] || "#fff", opacity: 0.85 }} />
               </div>
               <div className="w-1/2" />
             </>
@@ -263,7 +263,7 @@ export function InlineBattle({
             <>
               <div className="w-1/2" />
               <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookB?.palette?.[0] || "#fff", opacity: 0.7 }} />
+                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookB?.palette?.[0] || "#fff", opacity: 0.85 }} />
               </div>
             </>
           )}
