@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
-import { computeFitFontSize } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import type { LyricLine } from "./LyricDisplay";
 import type { BeatTick } from "@/engine/HookDanceEngine";
 
@@ -148,12 +148,16 @@ export function DirectorsCutScreen({
       const age = (currentTime - activeLine.start) * 1000;
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-      const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, renderer.system);
+      const stackedLayout = computeStackedLayout(ctx, activeLine.text, w, h, renderer.system);
+      const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
+        ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
+        : computeFitFontSize(ctx, activeLine.text, w, renderer.system);
       const palette = spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
 
       const effectState: EffectState = {
         text: activeLine.text, physState, w, h, fs, age, progress,
         rng: renderer.prng, palette, system: renderer.system, effectiveLetterSpacing,
+        stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
       };
       drawFn(ctx, effectState);
     }

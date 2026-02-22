@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
-import { computeFitFontSize } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import type { BeatTick } from "@/engine/HookDanceEngine";
 import type { LyricLine } from "./LyricDisplay";
 
@@ -265,7 +265,10 @@ export function LyricDanceExporter({
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
         const lineProgress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-        const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, cw, spec.system);
+        const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, spec.system);
+        const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
+          ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
+          : computeFitFontSize(ctx, activeLine.text, cw, spec.system);
 
         ctx.save();
         const effectState: EffectState = {
@@ -284,6 +287,7 @@ export function LyricDanceExporter({
           palette: spec.palette || ["#ffffff", "#a855f7", "#ec4899"],
           system: spec.system,
           effectiveLetterSpacing,
+          stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
         };
         drawFn(ctx, effectState);
         ctx.restore();
