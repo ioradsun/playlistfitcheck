@@ -510,6 +510,79 @@ export type Database = {
           },
         ]
       }
+      lyric_dance_comments: {
+        Row: {
+          dance_id: string
+          id: string
+          session_id: string | null
+          submitted_at: string
+          text: string
+          user_id: string | null
+        }
+        Insert: {
+          dance_id: string
+          id?: string
+          session_id?: string | null
+          submitted_at?: string
+          text: string
+          user_id?: string | null
+        }
+        Update: {
+          dance_id?: string
+          id?: string
+          session_id?: string | null
+          submitted_at?: string
+          text?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lyric_dance_comments_dance_id_fkey"
+            columns: ["dance_id"]
+            isOneToOne: false
+            referencedRelation: "shareable_lyric_dances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lyric_dance_signals: {
+        Row: {
+          context_note: string | null
+          created_at: string
+          dance_id: string
+          id: string
+          session_id: string
+          user_id: string | null
+          would_replay: boolean
+        }
+        Insert: {
+          context_note?: string | null
+          created_at?: string
+          dance_id: string
+          id?: string
+          session_id: string
+          user_id?: string | null
+          would_replay: boolean
+        }
+        Update: {
+          context_note?: string | null
+          created_at?: string
+          dance_id?: string
+          id?: string
+          session_id?: string
+          user_id?: string | null
+          would_replay?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lyric_dance_signals_dance_id_fkey"
+            columns: ["dance_id"]
+            isOneToOne: false
+            referencedRelation: "shareable_lyric_dances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mix_projects: {
         Row: {
           created_at: string
@@ -1156,6 +1229,7 @@ export type Database = {
           audio_url: string
           beat_grid: Json
           created_at: string
+          fire_count: number
           id: string
           lyrics: Json
           palette: Json
@@ -1174,6 +1248,7 @@ export type Database = {
           audio_url: string
           beat_grid: Json
           created_at?: string
+          fire_count?: number
           id?: string
           lyrics: Json
           palette?: Json
@@ -1192,6 +1267,7 @@ export type Database = {
           audio_url?: string
           beat_grid?: Json
           created_at?: string
+          fire_count?: number
           id?: string
           lyrics?: Json
           palette?: Json
