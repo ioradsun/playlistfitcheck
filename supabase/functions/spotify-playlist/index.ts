@@ -39,13 +39,13 @@ async function fetchAllTracks(playlistId: string, token: string): Promise<TrackI
   let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=items(added_at,track(id,name,popularity,artists(name))),next&limit=100`;
 
   while (url) {
-    const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const resp: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!resp.ok) {
       const text = await resp.text();
       console.error("Error fetching tracks:", resp.status, text);
       break;
     }
-    const data = await resp.json();
+    const data: any = await resp.json();
     items.push(...(data.items || []));
     url = data.next || null;
   }

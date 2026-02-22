@@ -227,7 +227,7 @@ export class ParticleEngine {
       this.noiseData[i + 2] = on ? b : 0;
       this.noiseData[i + 3] = on ? Math.floor(255 * intensity) : 0;
     }
-    const imageData = new ImageData(this.noiseData, this.noiseW, this.noiseH);
+    const imageData = new ImageData(new Uint8ClampedArray(this.noiseData.buffer as ArrayBuffer), this.noiseW, this.noiseH);
     ctx.putImageData(imageData, this.bounds.x, this.bounds.y);
   }
 }

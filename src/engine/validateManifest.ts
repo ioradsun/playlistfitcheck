@@ -288,12 +288,12 @@ export function validateManifest(raw: unknown): ManifestValidationResult {
   for (const { key, allowed, fallback } of enumFields) {
     const value = input[key];
     if (isOneOf(value, allowed as readonly string[]))
-      (m as Record<string, unknown>)[key] = value;
+      (m as unknown as Record<string, unknown>)[key] = value;
     else {
       warnings.push(
         `${String(key)}: "${value}" is not a valid value — using "${fallback}"`,
       );
-      (m as Record<string, unknown>)[key] = fallback;
+      (m as unknown as Record<string, unknown>)[key] = fallback;
     }
   }
 

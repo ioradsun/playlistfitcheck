@@ -58,14 +58,14 @@ serve(async (req) => {
       `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=items(track(id,name,artists(name,id,external_urls),album(name,images,release_date),preview_url,external_urls)),next&limit=100`;
 
     while (url) {
-      const resp = await fetch(url, {
+      const resp: Response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resp.ok) {
         const text = await resp.text();
         throw new Error(`Spotify API error ${resp.status}: ${text}`);
       }
-      const data = await resp.json();
+      const data: any = await resp.json();
       tracks.push(...(data.items || []));
       url = data.next || null;
     }

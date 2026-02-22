@@ -17,7 +17,7 @@ export function useBeatIntensity(analyserNode: AnalyserNode | null, isPlaying: b
 
     const tick = () => {
       if (!dataRef.current) return;
-      analyserNode.getByteFrequencyData(dataRef.current);
+      analyserNode.getByteFrequencyData(dataRef.current as Uint8Array<ArrayBuffer>);
       const bassSum = dataRef.current.slice(1, 5).reduce((acc, val) => acc + val, 0);
       const bassAvg = bassSum / 4 / 255;
       setIntensity((prev) => prev * 0.7 + bassAvg * 0.3);
