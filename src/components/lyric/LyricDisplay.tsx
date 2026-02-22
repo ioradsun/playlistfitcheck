@@ -64,13 +64,13 @@ import { ensureTypographyProfileReady, type TypographyProfile } from "@/engine/S
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
 import type { HookDanceOverrides } from "./HookDanceControls";
 import type { WaveformData } from "@/hooks/useAudioEngine";
+import { useBeatIntensity } from "@/hooks/useBeatIntensity";
 import type {
   ArtistDNA,
   FingerprintSongContext,
 } from "./ArtistFingerprintTypes";
 import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
 import { safeManifest } from "@/engine/validateManifest";
-import type { TypographyProfile } from "@/engine/SceneManifest";
 
 export interface LyricLine {
   start: number;
@@ -147,44 +147,7 @@ function normalizeSongDnaWithManifest(
   return songDna;
 }
 
-const preparedTypographyProfiles = new Set<string>();
 
-function ensureTypographyProfileReady(
-  profile: TypographyProfile,
-): Promise<void> {
-  const family = profile.fontFamily?.trim();
-  if (!family) return Promise.resolve();
-
-  const key = `${family}:${profile.fontWeight}`;
-  if (preparedTypographyProfiles.has(key)) return Promise.resolve();
-
-  const href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(
-    family,
-  )}:wght@${profile.fontWeight}&display=swap`;
-
-  const existing = Array.from(
-    document.querySelectorAll("link[rel='stylesheet']"),
-  ).find((el) => (el as HTMLLinkElement).href === href) as
-    | HTMLLinkElement
-    | undefined;
-
-  if (existing) {
-    preparedTypographyProfiles.add(key);
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve) => {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = href;
-    link.onload = () => {
-      preparedTypographyProfiles.add(key);
-      resolve();
-    };
-    link.onerror = () => resolve();
-    document.head.appendChild(link);
-  });
-}
 interface Props {
   data: LyricData;
   audioFile: File;
