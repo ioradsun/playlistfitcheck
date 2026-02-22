@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { InlineBattle } from "./InlineBattle";
 import type { HookFitPost } from "./types";
 
 interface Props {
@@ -26,19 +27,15 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isOwnPost = user?.id === post.user_id;
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
 
-  // Auto-pause audio when card scrolls out of view
+  // Track visibility for auto-pause
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting && iframeRef.current?.contentWindow) {
-          iframeRef.current.contentWindow.postMessage("hookfit:pause", "*");
-        }
-      },
+      ([entry]) => setIsVisible(entry.isIntersecting),
       { threshold: 0.1 }
     );
     observer.observe(el);
@@ -49,9 +46,6 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
 
   const hook = post.hook;
-  const embedUrl = hook
-    ? `/${hook.artist_slug}/${hook.song_slug}/${hook.hook_slug}?embed=true`
-    : null;
 
   const handleProfileClick = () => {
     navigate(`/u/${post.user_id}`);
@@ -139,18 +133,8 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
         </DropdownMenu>
       </div>
 
-      {/* Embedded Hook Battle */}
-      {embedUrl && (
-        <div className="w-full" style={{ height: "420px" }}>
-          <iframe
-            ref={iframeRef}
-            src={embedUrl}
-            className="w-full h-full border-0"
-            loading="lazy"
-            allow="autoplay"
-          />
-        </div>
-      )}
+      {/* Inline Battle (replaces iframe) */}
+      <InlineBattle battleId={post.battle_id} visible={isVisible} />
 
       {/* Caption */}
       {post.caption && (
