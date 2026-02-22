@@ -30,9 +30,10 @@ interface Props {
   visible?: boolean;
   onBattleState?: (state: BattleState) => void;
   restartSignal?: number;
+  floatingComment?: { text: string; side: "a" | "b" } | null;
 }
 
-export function InlineBattle({ battleId, visible = true, onBattleState, restartSignal }: Props) {
+export function InlineBattle({ battleId, visible = true, onBattleState, restartSignal, floatingComment }: Props) {
   const [hookA, setHookA] = useState<HookData | null>(null);
   const [hookB, setHookB] = useState<HookData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -396,6 +397,21 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
               Tap to unmute
             </span>
           </div>
+        )}
+
+        {/* Floating comment overlay on the voted side */}
+        {floatingComment && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.6 }}
+            className={`absolute z-10 bottom-10 ${floatingComment.side === "a" ? "left-3" : "right-3"} max-w-[45%] pointer-events-none`}
+          >
+            <span className="text-[11px] font-mono text-white/70 bg-black/40 backdrop-blur-sm rounded px-2 py-1 inline-block">
+              {floatingComment.text}
+            </span>
+          </motion.div>
         )}
       </div>
 
