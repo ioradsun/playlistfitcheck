@@ -20,7 +20,7 @@ import { computeFitFontSize } from "@/engine/SystemStyles";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
-import LyricDanceBottomPanel from "@/components/lyricdance/LyricDanceBottomPanel";
+import { getSessionId } from "@/lib/sessionId";
 
 interface LyricDanceData {
   id: string;
@@ -61,6 +61,13 @@ export default function ShareableLyricDance() {
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [fireCount, setFireCount] = useState(0);
+
+  // Comment input (ShareableHook-style)
+  const [inputText, setInputText] = useState("");
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [comments, setComments] = useState<DanceComment[]>([]);
+  const [copied, setCopied] = useState(false);
 
   // Audio
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -119,7 +126,12 @@ export default function ShareableLyricDance() {
         ]);
 
         if (profileResult.data) setProfile(profileResult.data as ProfileInfo);
-        if (commentsResult.data) buildConstellation(commentsResult.data as any as DanceComment[]);
+        if (commentsResult.data) {
+          const c = commentsResult.data as any as DanceComment[];
+          setComments(c);
+          setFireCount(c.length);
+          buildConstellation(c);
+        }
       });
   }, [artistSlug, songSlug]);
 
@@ -420,6 +432,66 @@ export default function ShareableLyricDance() {
     muteIconTimerRef.current = window.setTimeout(() => setShowMuteIcon(false), 2000);
   }, [muted]);
 
+  // ── Submit comment (ShareableHook-style) ──────────────────────────────────
+
+  const handleSubmit = useCallback(async () => {
+    if (!inputText.trim() || !data || hasSubmitted) return;
+    const text = inputText.trim().slice(0, 200);
+    const sessionId = getSessionId();
+
+    const { data: inserted } = await supabase
+      .from("lyric_dance_comments" as any)
+      .insert({ dance_id: data.id, text, session_id: sessionId })
+      .select("id, text, submitted_at")
+      .single();
+
+    if (inserted) {
+      const newComment = inserted as any as DanceComment;
+      setComments(prev => [...prev, newComment]);
+      setFireCount(prev => prev + 1);
+      setHasSubmitted(true);
+      setInputText("");
+
+      // Push to constellation as center phase node
+      const rng = mulberry32(hashSeed(newComment.id));
+      const angle = rng() * Math.PI * 2;
+      const radius = rng() * 0.2;
+      const seedX = 0.5 + Math.cos(angle) * radius;
+      const seedY = 0.5 + Math.sin(angle) * radius;
+      constellationRef.current.push({
+        id: newComment.id, text: newComment.text,
+        submittedAt: Date.now(),
+        seedX, seedY,
+        x: 0.5, y: 0.5,
+        driftSpeed: 0.008 + rng() * 0.012,
+        driftAngle: rng() * Math.PI * 2,
+        phase: "center",
+        phaseStartTime: Date.now(),
+        riverRowIndex: Math.floor(rng() * RIVER_ROWS.length),
+        currentSize: 16,
+        baseOpacity: 0.06,
+      });
+    }
+  }, [inputText, data, hasSubmitted]);
+
+  // ── Placeholder cycling ───────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (comments.length === 0) return;
+    const interval = setInterval(() => {
+      setPlaceholderIndex(i => (i + 1) % Math.min(comments.length, 20));
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [comments.length]);
+
+  // ── Share ─────────────────────────────────────────────────────────────────
+
+  const handleShare = useCallback(() => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, []);
+
   // Badge timer
   useEffect(() => { setTimeout(() => setBadgeVisible(true), 1000); }, []);
 
@@ -456,75 +528,15 @@ export default function ShareableLyricDance() {
     );
   }
 
+  const recentForPlaceholder = comments.slice(-20);
+  const placeholder = recentForPlaceholder.length > 0
+    ? recentForPlaceholder[placeholderIndex % recentForPlaceholder.length]?.text || "COMMENT LIVE TO THE VIDEO FMLY STYLE"
+    : "COMMENT LIVE TO THE VIDEO FMLY STYLE";
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
-      {/* Header with artist profile */}
-      <div className="px-5 pt-4 pb-2 text-center z-10 shrink-0 flex flex-col items-center gap-1.5">
-        {profile?.avatar_url ? (
-          <img
-            src={profile.avatar_url}
-            alt={profile.display_name || data.artist_name}
-            className="w-7 h-7 rounded-full object-cover border border-white/10"
-          />
-        ) : (
-          <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
-            <span className="text-[9px] font-mono text-white/40">
-              {(data.artist_name || "?")[0].toUpperCase()}
-            </span>
-          </div>
-        )}
-        <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30">
-            {profile?.display_name || data.artist_name}
-          </p>
-          <p className="text-[8px] font-mono uppercase tracking-[0.4em] text-white/15 mt-0.5">
-            {data.song_name} · lyric dance
-          </p>
-        </div>
-      </div>
-
-      {/* Full-screen canvas */}
-      <div
-        ref={containerRef}
-        className="flex-1 min-h-0 cursor-pointer relative overflow-hidden"
-        onClick={handleMuteToggle}
-      >
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-      </div>
-
-      {/* Mute icon */}
-      <AnimatePresence>
-        {showMuteIcon && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed bottom-28 left-4 z-[55] text-white/50"
-          >
-            {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Bottom panel — signal/comment state machine */}
-      {muted ? (
-        <div className="px-5 py-3 pb-[env(safe-area-inset-bottom,12px)] shrink-0 text-center relative z-20" style={{ background: "#0a0a0a" }}>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/20"
-          >
-            Tap to unmute
-          </motion.p>
-        </div>
-      ) : (
-        <LyricDanceBottomPanel
-          danceId={data.id}
-          constellationRef={constellationRef}
-          onCommentAdded={() => setFireCount(c => c + 1)}
-        />
-      )}
-
       {/* Fit by toolsFM badge */}
       <AnimatePresence>
         {badgeVisible && (
@@ -542,6 +554,111 @@ export default function ShareableLyricDance() {
           </motion.button>
         )}
       </AnimatePresence>
+
+      {/* Canvas area */}
+      <div
+        ref={containerRef}
+        className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer"
+        onClick={handleMuteToggle}
+      >
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+        <AnimatePresence>
+          {showMuteIcon && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute bottom-4 left-4 z-10 text-white/50">
+              {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Below-canvas content — identical to ShareableHook single-hook layout */}
+      <div className="w-full overflow-y-auto" style={{ background: "#0a0a0a" }}>
+        <div className="max-w-[480px] mx-auto px-5 py-6 space-y-6">
+          {/* Artist identity block */}
+          <div className="flex items-center gap-3">
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={profile.display_name || data.artist_name}
+                className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                <span className="text-sm font-mono text-white/40">
+                  {(data.artist_name || "?")[0].toUpperCase()}
+                </span>
+              </div>
+            )}
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold leading-tight text-white truncate">
+                {profile?.display_name || data.artist_name}
+              </h1>
+              <p className="text-sm italic leading-snug text-white/60 truncate">
+                {data.song_name}
+              </p>
+            </div>
+          </div>
+
+          {/* Listen Now button */}
+          <button
+            onClick={() => {
+              if (audioRef.current) {
+                const wasMuted = audioRef.current.muted;
+                audioRef.current.muted = !wasMuted;
+                if (wasMuted) audioRef.current.play().catch(() => {});
+                setMuted(!wasMuted);
+              }
+            }}
+            className="w-full py-3 text-sm font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+          >
+            {muted ? "Listen Now" : "Mute"}
+          </button>
+
+          {/* Fire count */}
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-5xl flex items-center gap-2">
+              <span>🔥</span>
+              <span className="font-bold text-white tabular-nums">{fireCount}</span>
+            </span>
+          </div>
+
+          {/* Comment input */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-center text-white/30">
+              COMMENT LIVE TO THE VIDEO FMLY STYLE
+            </p>
+            {hasSubmitted ? (
+              <p className="text-center text-sm text-white/30">
+                your words are on the video
+              </p>
+            ) : (
+              <div className="relative">
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+                  placeholder={placeholder}
+                  maxLength={200}
+                  className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Share */}
+          <button
+            onClick={handleShare}
+            className="w-full py-3 text-sm font-bold uppercase tracking-[0.2em] text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
+          >
+            {copied ? "Copied" : "SEND THIS"}
+          </button>
+
+          <p className="text-center text-[10px] text-white/15 pb-4">
+            Built on tools.fm — every artist's fingerprint is unique to them
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
