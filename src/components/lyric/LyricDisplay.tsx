@@ -23,6 +23,7 @@ import { LyricFormatControls, type LineFormat, type SocialPreset } from "./Lyric
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import { HookDanceCanvas } from "./HookDanceCanvas";
+import { LyricStage, type SceneManifest } from "./LyricStage";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { HookDanceExporter } from "./HookDanceExporter";
 import { LyricDanceExporter } from "./LyricDanceExporter";
@@ -34,6 +35,7 @@ import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
 import type { HookDanceOverrides } from "./HookDanceControls";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { ArtistDNA, FingerprintSongContext } from "./ArtistFingerprintTypes";
+import { useBeatIntensity } from "@/hooks/useBeatIntensity";
 
 export interface LyricLine {
   start: number;
@@ -307,9 +309,12 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   const [hookDanceTime, setHookDanceTime] = useState(0);
   const [hookDanceBeatCount, setHookDanceBeatCount] = useState(0);
   const hookDancePrngRef = useRef<(() => number) | null>(null);
+  const beatAnalyserRef = useRef<AnalyserNode | null>(null);
+  const beatAudioContextRef = useRef<AudioContext | null>(null);
   const [hookDanceExportOpen, setHookDanceExportOpen] = useState(false);
   const hookDanceBeatsRef = useRef<BeatTick[]>([]);
   const [hookDanceOverrides, setHookDanceOverrides] = useState<HookDanceOverrides>({});
+  const hookBackgroundImageUrl: string | null = null;
   const [showDirectorsCut, setShowDirectorsCut] = useState(false);
   const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(null);
   const [battlePopupUrl, setBattlePopupUrl] = useState<string | null>(null);
@@ -359,6 +364,25 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   } | null>(initialSongDna ?? null);
   const [dnaLoading, setDnaLoading] = useState(false);
   const [dnaRequested, setDnaRequested] = useState(!!initialSongDna);
+
+  const beatIntensity = useBeatIntensity(beatAnalyserRef.current, hookDanceRunning && isPlaying);
+  const stageManifest = useMemo<SceneManifest>(() => ({
+    palette: songDna?.physicsSpec?.palette || ["#111827", "#334155", "#e2e8f0"],
+    contrastMode: "soft",
+    backgroundIntensity: songDna?.mood?.toLowerCase().includes("dark") ? 0.2 : 0.65,
+    lightSource: songDna?.description || "harsh overhead",
+  }), [songDna]);
+
+  const currentLyricZone = useMemo<"upper" | "middle" | "lower">(() => {
+    if (!songDna?.hook) return "middle";
+    const hookLines = data.lines.filter((l) => l.start < songDna.hook.end && l.end > songDna.hook.start);
+    const activeIdx = hookLines.findIndex((l) => hookDanceTime >= l.start && hookDanceTime < l.end);
+    if (activeIdx < 0 || hookLines.length < 2) return "middle";
+    const position = activeIdx / Math.max(1, hookLines.length - 1);
+    if (position < 0.33) return "upper";
+    if (position > 0.66) return "lower";
+    return "middle";
+  }, [songDna, data.lines, hookDanceTime]);
 
   // Reset Song DNA when audio file changes (e.g. reupload)
   const audioFileRef = useRef(audioFile);
@@ -506,6 +530,22 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     const audio = new Audio(url);
     audioRef.current = audio;
 
+    // Shared analyser for cinematic bloom intensity (same media element as HookDance playback)
+    let beatCtx: AudioContext | null = null;
+    let beatSource: MediaElementAudioSourceNode | null = null;
+    try {
+      beatCtx = new AudioContext();
+      const analyser = beatCtx.createAnalyser();
+      beatSource = beatCtx.createMediaElementSource(audio);
+      beatSource.connect(analyser);
+      analyser.connect(beatCtx.destination);
+      beatAudioContextRef.current = beatCtx;
+      beatAnalyserRef.current = analyser;
+    } catch {
+      beatAnalyserRef.current = null;
+      beatAudioContextRef.current = null;
+    }
+
     // Single RAF loop — runs continuously, only reads currentTime when playing.
     // Using rafRef so cleanup always cancels the correct frame, even across re-renders.
     let isRunning = true;
@@ -542,6 +582,14 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       rafRef.current = null;
       audio.removeEventListener("ended", handleEnded);
       audio.pause();
+      beatAnalyserRef.current = null;
+      if (beatSource) {
+        try { beatSource.disconnect(); } catch {}
+      }
+      if (beatCtx) {
+        beatCtx.close().catch(() => {});
+      }
+      beatAudioContextRef.current = null;
       URL.revokeObjectURL(url);
     };
   }, [audioFile, decodeFile]);
@@ -1654,35 +1702,43 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       {/* Hook Dance full-bleed canvas overlay */}
       <AnimatePresence>
         {hookDanceRunning && songDna?.physicsSpec && songDna.hook && hookDancePrngRef.current && (
-          <HookDanceCanvas
-            physicsState={hookDanceOverrides.energyMultiplier && hookDanceState ? {
-              ...hookDanceState,
-              scale: 1 + (hookDanceState.scale - 1) * hookDanceOverrides.energyMultiplier,
-              shake: hookDanceState.shake * (hookDanceOverrides.energyMultiplier ?? 1),
-              glow: hookDanceState.glow * (hookDanceOverrides.energyMultiplier ?? 1),
-            } : hookDanceState}
-            spec={hookDanceOverrides.system
-              ? { ...(songDna.physicsSpec as PhysicsSpec), system: hookDanceOverrides.system }
-              : songDna.physicsSpec as PhysicsSpec}
-            lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
-            hookStart={songDna.hook.start}
-            hookEnd={songDna.hook.end}
-            currentTime={hookDanceTime}
-            beatCount={hookDanceBeatCount}
-            prng={hookDancePrngRef.current}
-            onClose={() => hookDanceRef.current?.stop()}
-            onExport={() => setHookDanceExportOpen(true)}
-            onOverrides={setHookDanceOverrides}
-            fingerprint={artistFingerprint}
-            onFingerprintChange={(dna) => setArtistFingerprint(dna)}
-            songContext={{
-              bpm: beatGrid?.bpm,
-              mood: songDna?.mood,
-              physics_system: hookDanceOverrides.system || songDna?.physicsSpec?.system,
-              hook_lyric: songDna?.hook?.previewText,
-              description: songDna?.description,
-            }}
-          />
+          <LyricStage
+            manifest={stageManifest}
+            backgroundImageUrl={hookBackgroundImageUrl}
+            isPlaying={isPlaying}
+            beatIntensity={beatIntensity}
+            currentLyricZone={currentLyricZone}
+          >
+            <HookDanceCanvas
+              physicsState={hookDanceOverrides.energyMultiplier && hookDanceState ? {
+                ...hookDanceState,
+                scale: 1 + (hookDanceState.scale - 1) * hookDanceOverrides.energyMultiplier,
+                shake: hookDanceState.shake * (hookDanceOverrides.energyMultiplier ?? 1),
+                glow: hookDanceState.glow * (hookDanceOverrides.energyMultiplier ?? 1),
+              } : hookDanceState}
+              spec={hookDanceOverrides.system
+                ? { ...(songDna.physicsSpec as PhysicsSpec), system: hookDanceOverrides.system }
+                : songDna.physicsSpec as PhysicsSpec}
+              lines={data.lines.filter(l => l.start < songDna.hook!.end && l.end > songDna.hook!.start)}
+              hookStart={songDna.hook.start}
+              hookEnd={songDna.hook.end}
+              currentTime={hookDanceTime}
+              beatCount={hookDanceBeatCount}
+              prng={hookDancePrngRef.current}
+              onClose={() => hookDanceRef.current?.stop()}
+              onExport={() => setHookDanceExportOpen(true)}
+              onOverrides={setHookDanceOverrides}
+              fingerprint={artistFingerprint}
+              onFingerprintChange={(dna) => setArtistFingerprint(dna)}
+              songContext={{
+                bpm: beatGrid?.bpm,
+                mood: songDna?.mood,
+                physics_system: hookDanceOverrides.system || songDna?.physicsSpec?.system,
+                hook_lyric: songDna?.hook?.previewText,
+                description: songDna?.description,
+              }}
+            />
+          </LyricStage>
         )}
       </AnimatePresence>
 
@@ -1828,4 +1884,3 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
     </motion.div>
   );
 }
-
