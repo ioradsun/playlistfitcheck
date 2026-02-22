@@ -10,6 +10,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { WalletProvider } from "@/components/crypto/WalletProvider";
 import { PageLayout } from "@/components/PageLayout";
 import { FitWidget } from "@/components/FitWidget";
+import { lazy, Suspense } from "react";
 import Index from "./pages/Index";
 
 import About from "./pages/About";
@@ -23,7 +24,8 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import ArtistStage from "./pages/ArtistStage";
-import ShareableHook from "./pages/ShareableHook";
+// Lazy-load ShareableHook — standalone page, no need in main bundle
+const ShareableHook = lazy(() => import("./pages/ShareableHook"));
 
 const queryClient = new QueryClient();
 
@@ -65,7 +67,7 @@ const App = () => (
                 <Route path="/u/:userId" element={<PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout>} />
                 <Route path="/song/:postId" element={<PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout>} />
                 <Route path="/artist/:username" element={<ArtistStage />} />
-                <Route path="/:artistSlug/:songSlug/:hookSlug" element={<ShareableHook />} />
+                <Route path="/:artistSlug/:songSlug/:hookSlug" element={<Suspense fallback={<div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center"><div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" /></div>}><ShareableHook /></Suspense>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
               </Routes>
