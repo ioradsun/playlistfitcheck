@@ -231,26 +231,25 @@ export function InlineBattle({
         </motion.div>
       </div>
 
-      {/* Progress bar — 6px thick, sits above the winner border */}
-      {showProgress && (
-        <div className="h-1.5 bg-white/[0.06] flex">
-          {activePlaying === "a" ? (
-            <>
-              <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookA?.palette?.[0] || "#fff", opacity: 0.9 }} />
-              </div>
-              <div className="w-1/2" />
-            </>
-          ) : (
-            <>
-              <div className="w-1/2" />
-              <div className="w-1/2 relative">
-                <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookB?.palette?.[0] || "#fff", opacity: 0.9 }} />
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      {/* Progress bar — absolute overlay at bottom of canvas, no layout shift */}
+      <div className="absolute bottom-0 left-0 right-0 h-1.5 z-20 flex pointer-events-none">
+        {showProgress && activePlaying === "a" && (
+          <>
+            <div className="w-1/2 relative bg-white/[0.06]">
+              <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookA?.palette?.[0] || "#fff", opacity: 0.9 }} />
+            </div>
+            <div className="w-1/2" />
+          </>
+        )}
+        {showProgress && activePlaying === "b" && (
+          <>
+            <div className="w-1/2" />
+            <div className="w-1/2 relative bg-white/[0.06]">
+              <div className="absolute inset-y-0 left-0 transition-none" style={{ width: `${progress * 100}%`, background: hookB?.palette?.[0] || "#fff", opacity: 0.9 }} />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
