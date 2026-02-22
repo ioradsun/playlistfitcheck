@@ -88,6 +88,7 @@ export function useHookCanvas(
   const engineRef = useRef<HookDanceEngine | null>(null);
   const prngRef = useRef<(() => number) | null>(null);
   const activeRef = useRef(active);
+  const progressRef = useRef(0);
   const frameRef = useRef<{ physState: PhysicsState | null; time: number; beats: number }>({
     physState: null, time: 0, beats: 0,
   });
@@ -273,12 +274,9 @@ export function useHookCanvas(
       }
     }
 
-    // Progress bar
+    // Progress — store for external HTML playbar (skip canvas drawing)
     const hookProgress = (ct - hd.hook_start) / (hd.hook_end - hd.hook_start);
-    ctx.fillStyle = palette[1] || "#a855f7";
-    ctx.globalAlpha = 0.6;
-    ctx.fillRect(0, h - 3, w * Math.max(0, Math.min(1, hookProgress)), 3);
-    ctx.globalAlpha = 1;
+    progressRef.current = Math.max(0, Math.min(1, hookProgress));
 
     ctx.restore();
   }, [hookData, canvasRef, containerRef, constellationRef, riverOffsetsRef]);
@@ -344,5 +342,5 @@ export function useHookCanvas(
     engine.start();
   }, []);
 
-  return { audioRef, frameRef, restart };
+  return { audioRef, frameRef, progressRef, restart };
 }

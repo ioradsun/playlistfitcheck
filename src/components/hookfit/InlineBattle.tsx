@@ -1,10 +1,10 @@
 /**
  * InlineBattle — Renders a hook battle directly in the feed using canvas.
- * Voting state is lifted to the parent via onVoteChange callback.
+ * Includes an HTML playbar below the canvas with progress + vote button.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useHookCanvas, HOOK_COLUMNS, type HookData } from "@/hooks/useHookCanvas";
 import type { ConstellationNode } from "@/hooks/useHookCanvas";
@@ -24,7 +24,6 @@ interface Props {
   battleId: string;
   visible?: boolean;
   onBattleState?: (state: BattleState) => void;
-  /** External trigger to restart the active side */
   restartSignal?: number;
 }
 
@@ -38,7 +37,9 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
   const [votedHookId, setVotedHookId] = useState<string | null>(null);
   const [voteCountA, setVoteCountA] = useState(0);
   const [voteCountB, setVoteCountB] = useState(0);
+  const [progress, setProgress] = useState(0);
   const userIdRef = useRef<string | null | undefined>(undefined);
+  const progressRafRef = useRef<number>(0);
 
   const canvasRefA = useRef<HTMLCanvasElement>(null);
   const containerRefA = useRef<HTMLDivElement>(null);
@@ -104,6 +105,20 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     visible && !!hookB && activeHookSide === "b",
   );
 
+  // ── Sync progress from active engine to HTML bar ────────────────────
+
+  useEffect(() => {
+    let running = true;
+    const tick = () => {
+      if (!running) return;
+      const activeCanvas = activeHookSide === "a" ? hookACanvas : hookBCanvas;
+      setProgress(activeCanvas.progressRef.current);
+      progressRafRef.current = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => { running = false; cancelAnimationFrame(progressRafRef.current); };
+  }, [activeHookSide, hookACanvas, hookBCanvas]);
+
   // ── Auto-pause when not visible ─────────────────────────────────────
 
   useEffect(() => {
@@ -121,9 +136,8 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     else hookBCanvas.restart();
   }, [restartSignal]);
 
-  // ── Vote handler (exposed via ref or can be called from parent) ─────
+  // ── Vote handler ────────────────────────────────────────────────────
 
-  // Expose vote handler for parent to call
   const handleVote = useCallback(async (hookId: string) => {
     if (!hookA?.battle_id) return;
     const sessionId = getSessionId();
@@ -160,16 +174,16 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     }
   }, [hookA, hookB, votedHookId]);
 
-  // Make handleVote accessible to parent
-  useEffect(() => {
-    (window as any).__hookfit_vote_handlers = (window as any).__hookfit_vote_handlers || {};
-    (window as any).__hookfit_vote_handlers[battleId] = handleVote;
-    return () => { delete (window as any).__hookfit_vote_handlers?.[battleId]; };
-  }, [battleId, handleVote]);
-
   // ── Derived ─────────────────────────────────────────────────────────
 
   const isBattle = !!(hookA && hookB);
+  const hasVoted = !!votedHookId;
+  const totalVotes = voteCountA + voteCountB;
+  const canVote = tappedSides.size > 0 && !hasVoted;
+  const activeLabel = activeHookSide === "a"
+    ? (hookA?.hook_label || "Hook A")
+    : (hookB?.hook_label || "Hook B");
+  const accentColor = hookA?.palette?.[1] || "#a855f7";
 
   if (loading || !hookA) {
     return (
@@ -188,25 +202,33 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
 
   if (!isBattle) {
     return (
-      <div className="w-full relative" style={{ height: "300px", background: bgBase }}>
-        <div ref={containerRefA} className="absolute inset-0">
-          <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
+      <div className="w-full" style={{ background: bgBase }}>
+        <div className="relative" style={{ height: "300px" }}>
+          <div ref={containerRefA} className="absolute inset-0">
+            <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
+          </div>
         </div>
-        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
-          <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-white/40 truncate">
-            {hookA.hook_label || hookA.hook_phrase}
-          </p>
+        {/* Playbar */}
+        <div className="relative h-8" style={{ background: bgBase }}>
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-white/[0.06]">
+            <div className="h-full transition-none" style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }} />
+          </div>
+          <div className="flex items-center justify-between px-3 h-full">
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 truncate">
+              {hookA.hook_label || hookA.hook_phrase}
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ── Battle mode — canvas only, no bottom panel ────────────────────────
+  // ── Battle mode ───────────────────────────────────────────────────────
 
   return (
-    <div className="w-full relative flex flex-col" style={{ height: "300px", background: bgBase }}>
+    <div className="w-full" style={{ background: bgBase }}>
       {/* Split canvases */}
-      <div className="flex-1 flex flex-row gap-1 px-1 pt-1 min-h-0">
+      <div className="flex flex-row gap-1 px-1 pt-1" style={{ height: "300px" }}>
         {/* Hook A */}
         <motion.div
           className="relative flex-1 cursor-pointer rounded-lg overflow-hidden"
@@ -268,14 +290,65 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
         </motion.div>
       </div>
 
-      {/* Minimal "tap to hear" hint — only when neither side tapped */}
-      {tappedSides.size === 0 && (
-        <div className="px-3 py-1.5 text-center shrink-0">
-          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/20">
-            Tap each side to hear
-          </p>
+      {/* ── HTML Playbar ─────────────────────────────────────────────── */}
+      <div className="relative" style={{ background: bgBase }}>
+        {/* Progress track */}
+        <div className="h-[2px] bg-white/[0.06]">
+          <div
+            className="h-full transition-none"
+            style={{ width: `${progress * 100}%`, background: accentColor, opacity: 0.7 }}
+          />
         </div>
-      )}
+
+        {/* Controls row */}
+        <div className="flex items-center justify-between px-3 py-2">
+          {/* Left: active hook label */}
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 truncate">
+              {tappedSides.size === 0 ? "Tap each side to hear" : activeLabel}
+            </p>
+          </div>
+
+          {/* Right: vote button or status */}
+          <div className="shrink-0">
+            <AnimatePresence mode="wait">
+              {canVote ? (
+                <motion.button
+                  key="vote"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => {
+                    const hookId = activeHookSide === "a" ? hookA.id : hookB?.id;
+                    if (hookId) handleVote(hookId);
+                  }}
+                  className="text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1 rounded-full border transition-colors"
+                  style={{ color: accentColor, borderColor: `${accentColor}33`, background: `${accentColor}0a` }}
+                >
+                  I'm Hooked on {activeLabel}
+                </motion.button>
+              ) : hasVoted ? (
+                <motion.div
+                  key="voted"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center gap-2"
+                >
+                  <span className="text-[10px] font-mono uppercase tracking-[0.15em]" style={{ color: 'rgba(57,255,20,0.45)' }}>
+                    Hooked
+                  </span>
+                  {totalVotes > 0 && (
+                    <span className="text-[10px] font-mono text-white/20">
+                      {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

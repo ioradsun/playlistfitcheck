@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { User, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,7 +30,6 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [battleState, setBattleState] = useState<BattleState | null>(null);
-  const [restartSignal, setRestartSignal] = useState(0);
 
   // Track visibility for auto-pause
   useEffect(() => {
@@ -65,33 +64,6 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
       toast.error(e.message || "Failed to delete");
     }
   };
-
-  const handleShare = useCallback(async () => {
-    if (!hook) return;
-    const url = `${window.location.origin}/${hook.artist_slug}/${hook.song_slug}/${hook.hook_slug}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Battle link copied!");
-    } catch {
-      toast.error("Failed to copy link");
-    }
-  }, [hook]);
-
-  const handleVote = useCallback(() => {
-    if (!battleState?.hookA) return;
-    const hookId = battleState.activeHookSide === "a" ? battleState.hookA.id : battleState.hookB?.id;
-    if (!hookId) return;
-    const handler = (window as any).__hookfit_vote_handlers?.[post.battle_id];
-    if (handler) handler(hookId);
-  }, [battleState, post.battle_id]);
-
-  // Derived from battle state
-  const hasVoted = !!battleState?.votedHookId;
-  const totalVotes = (battleState?.voteCountA || 0) + (battleState?.voteCountB || 0);
-  const canVote = battleState && battleState.tappedSides.size > 0 && !hasVoted;
-  const activeLabel = battleState?.activeHookSide === "a"
-    ? (battleState?.hookA?.hook_label || "Hook A")
-    : (battleState?.hookB?.hook_label || "Hook B");
 
   return (
     <div className="border-b border-border/40" ref={containerRef}>
@@ -150,12 +122,11 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
         </DropdownMenu>
       </div>
 
-      {/* Inline Battle */}
+      {/* Inline Battle (includes playbar + vote button) */}
       <InlineBattle
         battleId={post.battle_id}
         visible={isVisible}
         onBattleState={setBattleState}
-        restartSignal={restartSignal}
       />
 
       {/* Caption */}
@@ -168,56 +139,12 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
         </div>
       )}
 
-      {/* ── Action Row ─────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-3 py-2 border-t border-border/20">
-        {/* Left: action triggers */}
-        <div className="flex items-center gap-4">
-          {/* Vote / Hooked */}
-          {canVote ? (
-            <button
-              onClick={handleVote}
-              className="text-[13px] font-bold uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
-            >
-              I'm Hooked
-            </button>
-          ) : hasVoted ? (
-            <span
-              className="text-[13px] font-mono uppercase tracking-[0.15em]"
-              style={{ color: 'rgba(57,255,20,0.45)' }}
-            >
-              Hooked
-            </span>
-          ) : null}
-
-          {/* Replay */}
-          <button
-            onClick={() => setRestartSignal(s => s + 1)}
-            className="text-[13px] font-bold uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Run it back
-          </button>
-
-          {/* Share */}
-          <button
-            onClick={handleShare}
-            className="text-[13px] font-bold uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Share
-          </button>
+      {/* Minimal meta row */}
+      {rank && (
+        <div className="flex items-center justify-end px-3 py-1">
+          <span className="text-[11px] font-bold text-primary font-mono">#{rank}</span>
         </div>
-
-        {/* Right: meta */}
-        <div className="flex items-center gap-2">
-          {totalVotes > 0 && (
-            <span className="text-[11px] font-mono text-muted-foreground">
-              {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
-            </span>
-          )}
-          {rank && (
-            <span className="text-[11px] font-bold text-primary font-mono">#{rank}</span>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
