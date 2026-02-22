@@ -376,6 +376,8 @@ export default function ShareableHook() {
     artistSlug: string; songSlug: string; hookSlug: string;
   }>();
   const navigate = useNavigate();
+  // Embed mode: hide badge, share bar, reduce padding for iframe embedding
+  const isEmbed = new URLSearchParams(window.location.search).get("embed") === "true";
   // Lazy user ref — fetched once on first vote, not on mount
   const userIdRef = useRef<string | null | undefined>(undefined);
 
@@ -871,23 +873,25 @@ export default function ShareableHook() {
   if (isBattle) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col" style={{ background: bgBase }}>
-        {/* Fit by toolsFM badge */}
-        <AnimatePresence>
-          {badgeVisible && (
-            <motion.button
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
-              onClick={handleBadgeClick}
-              className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
-            >
-              <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
-                Fit by toolsFM
-              </span>
-            </motion.button>
-          )}
-        </AnimatePresence>
+        {/* Fit by toolsFM badge — hidden in embed mode */}
+        {!isEmbed && (
+          <AnimatePresence>
+            {badgeVisible && (
+              <motion.button
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4 }}
+                onClick={handleBadgeClick}
+                className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
+              >
+                <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
+                  Fit by toolsFM
+                </span>
+              </motion.button>
+            )}
+          </AnimatePresence>
+        )}
 
         {/* Fire particles overlay */}
         <div className="fixed inset-0 z-[55] pointer-events-none overflow-hidden">
@@ -912,8 +916,8 @@ export default function ShareableHook() {
           </AnimatePresence>
         </div>
 
-        {/* Editorial header */}
-        <div className="px-5 pt-4 pb-2 text-center z-10">
+        {/* Editorial header — reduced padding in embed */}
+        <div className={isEmbed ? "px-3 pt-2 pb-1 text-center z-10" : "px-5 pt-4 pb-2 text-center z-10"}>
           <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30">
             {hookData.artist_name} × {hookData.song_name}
           </p>
@@ -1135,23 +1139,25 @@ export default function ShareableHook() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: bgBase }}>
-      {/* Fit by toolsFM badge */}
-      <AnimatePresence>
-        {badgeVisible && (
-          <motion.button
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-            onClick={handleBadgeClick}
-            className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
-          >
-            <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
-              Fit by toolsFM
-            </span>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      {/* Fit by toolsFM badge — hidden in embed mode */}
+      {!isEmbed && (
+        <AnimatePresence>
+          {badgeVisible && (
+            <motion.button
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              onClick={handleBadgeClick}
+              className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
+            >
+              <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
+                Fit by toolsFM
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+      )}
 
       {/* Canvas area */}
       <div

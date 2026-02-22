@@ -168,6 +168,32 @@ export function PublishHookButton({
         if (secondError) throw secondError;
       }
 
+      // Auto-publish to HookFit feed for battles
+      if (hasBattle && battleId) {
+        // Get the primary hook's ID for the feed post
+        const { data: primaryHook } = await supabase
+          .from("shareable_hooks" as any)
+          .select("id")
+          .eq("artist_slug", artistSlug)
+          .eq("song_slug", songSlug)
+          .eq("hook_slug", hookSlug)
+          .maybeSingle();
+
+        if (primaryHook) {
+          await supabase
+            .from("hookfit_posts" as any)
+            .upsert({
+              user_id: user.id,
+              battle_id: battleId,
+              hook_id: (primaryHook as any).id,
+              status: "live",
+            }, { onConflict: "battle_id" });
+
+          // Dispatch event for UI sync
+          window.dispatchEvent(new Event("hookfit:battle-published"));
+        }
+      }
+
       const url = `/${artistSlug}/${songSlug}/${hookSlug}`;
       setPublishedUrl(url);
       toast.success(hasBattle ? "Hook Battle published!" : "Hook published!");

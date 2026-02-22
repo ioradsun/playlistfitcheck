@@ -400,6 +400,36 @@ export type Database = {
           },
         ]
       }
+      hookfit_posts: {
+        Row: {
+          battle_id: string
+          caption: string | null
+          created_at: string
+          hook_id: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          battle_id: string
+          caption?: string | null
+          created_at?: string
+          hook_id: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          battle_id?: string
+          caption?: string | null
+          created_at?: string
+          hook_id?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       invites: {
         Row: {
           converted_at: string | null
