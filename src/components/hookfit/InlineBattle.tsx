@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useHookCanvas, HOOK_COLUMNS, type HookData } from "@/hooks/useHookCanvas";
 import type { ConstellationNode } from "@/hooks/useHookCanvas";
@@ -18,6 +18,8 @@ export interface BattleState {
   voteCountA: number;
   voteCountB: number;
   tappedSides: Set<"a" | "b">;
+  handleVote: (hookId: string) => void;
+  accentColor: string;
 }
 
 interface Props {
@@ -88,11 +90,49 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
       });
   }, [battleId]);
 
+  // ── Vote handler (declared before lift so BattleState can reference it) ──
+
+  const handleVote = useCallback(async (hookId: string) => {
+    if (!hookA?.battle_id) return;
+    const sessionId = getSessionId();
+    const isA = hookId === hookA.id;
+    if (votedHookId === hookId) return;
+
+    if (votedHookId) {
+      if (votedHookId === hookA.id) setVoteCountA(v => Math.max(0, v - 1));
+      else setVoteCountB(v => Math.max(0, v - 1));
+    }
+    if (isA) setVoteCountA(v => v + 1);
+    else setVoteCountB(v => v + 1);
+    setVotedHookId(hookId);
+
+    if (votedHookId) {
+      await supabase
+        .from("hook_votes" as any)
+        .update({ hook_id: hookId })
+        .eq("battle_id", hookA.battle_id)
+        .eq("session_id", sessionId);
+    } else {
+      if (userIdRef.current === undefined) {
+        const { data: { user } } = await supabase.auth.getUser();
+        userIdRef.current = user?.id ?? null;
+      }
+      await supabase
+        .from("hook_votes" as any)
+        .insert({
+          battle_id: hookA.battle_id,
+          hook_id: hookId,
+          user_id: userIdRef.current || null,
+          session_id: sessionId,
+        });
+    }
+  }, [hookA, hookB, votedHookId]);
+
   // ── Lift state to parent ──────────────────────────────────────────────
 
   useEffect(() => {
-    onBattleState?.({ hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides });
-  }, [hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides]);
+    onBattleState?.({ hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote, accentColor: hookA?.palette?.[1] || "#a855f7" });
+  }, [hookA, hookB, activeHookSide, votedHookId, voteCountA, voteCountB, tappedSides, handleVote]);
 
   // ── Canvas engines — auto-alternate on end ─────────────────────────
 
@@ -167,50 +207,10 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
     else hookBCanvas.restart();
   }, [restartSignal]);
 
-  // ── Vote handler ────────────────────────────────────────────────────
-
-  const handleVote = useCallback(async (hookId: string) => {
-    if (!hookA?.battle_id) return;
-    const sessionId = getSessionId();
-    const isA = hookId === hookA.id;
-    if (votedHookId === hookId) return;
-
-    if (votedHookId) {
-      if (votedHookId === hookA.id) setVoteCountA(v => Math.max(0, v - 1));
-      else setVoteCountB(v => Math.max(0, v - 1));
-    }
-    if (isA) setVoteCountA(v => v + 1);
-    else setVoteCountB(v => v + 1);
-    setVotedHookId(hookId);
-
-    if (votedHookId) {
-      await supabase
-        .from("hook_votes" as any)
-        .update({ hook_id: hookId })
-        .eq("battle_id", hookA.battle_id)
-        .eq("session_id", sessionId);
-    } else {
-      if (userIdRef.current === undefined) {
-        const { data: { user } } = await supabase.auth.getUser();
-        userIdRef.current = user?.id ?? null;
-      }
-      await supabase
-        .from("hook_votes" as any)
-        .insert({
-          battle_id: hookA.battle_id,
-          hook_id: hookId,
-          user_id: userIdRef.current || null,
-          session_id: sessionId,
-        });
-    }
-  }, [hookA, hookB, votedHookId]);
 
   // ── Derived ─────────────────────────────────────────────────────────
 
   const isBattle = !!(hookA && hookB);
-  const hasVoted = !!votedHookId;
-  const totalVotes = voteCountA + voteCountB;
-  const canVote = tappedSides.size > 0 && !hasVoted;
   const activeLabel = activeHookSide === "a"
     ? (hookA?.hook_label || "Hook A")
     : (hookB?.hook_label || "Hook B");
@@ -281,13 +281,6 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
               {hookA.hook_label || "Hook A"}
             </p>
           </div>
-          {votedHookId === hookA.id && (
-            <div className="absolute top-2 right-2">
-              <span className="text-[9px] font-mono uppercase tracking-[0.15em] px-1.5 py-0.5 rounded-full" style={{ color: '#39FF14', background: 'rgba(57,255,20,0.08)', border: '1px solid rgba(57,255,20,0.15)' }}>
-                HOOKED
-              </span>
-            </div>
-          )}
         </motion.div>
 
         {/* Hook B */}
@@ -311,13 +304,6 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
               {hookB.hook_label || "Hook B"}
             </p>
           </div>
-          {votedHookId === hookB.id && (
-            <div className="absolute top-2 right-2">
-              <span className="text-[9px] font-mono uppercase tracking-[0.15em] px-1.5 py-0.5 rounded-full" style={{ color: '#39FF14', background: 'rgba(57,255,20,0.08)', border: '1px solid rgba(57,255,20,0.15)' }}>
-                HOOKED
-              </span>
-            </div>
-          )}
         </motion.div>
       </div>
 
@@ -342,53 +328,11 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           )}
         </div>
 
-        {/* Controls row */}
-        <div className="flex items-center justify-between px-3 py-2">
-          {/* Left: active hook label */}
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 truncate">
-              {tappedSides.size === 0 ? "Tap each side to hear" : activeLabel}
-            </p>
-          </div>
-
-          {/* Right: vote button or status */}
-          <div className="shrink-0">
-            <AnimatePresence mode="wait">
-              {canVote ? (
-                <motion.button
-                  key="vote"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => {
-                    const hookId = activeHookSide === "a" ? hookA.id : hookB?.id;
-                    if (hookId) handleVote(hookId);
-                  }}
-                  className="text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1 rounded-full border transition-colors"
-                  style={{ color: accentColor, borderColor: `${accentColor}33`, background: `${accentColor}0a` }}
-                >
-                  I'm Hooked on {activeLabel}
-                </motion.button>
-              ) : hasVoted ? (
-                <motion.div
-                  key="voted"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center gap-2"
-                >
-                  <span className="text-[10px] font-mono uppercase tracking-[0.15em]" style={{ color: 'rgba(57,255,20,0.45)' }}>
-                    Hooked
-                  </span>
-                  {totalVotes > 0 && (
-                    <span className="text-[10px] font-mono text-white/20">
-                      {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-          </div>
+        {/* Controls row — label only */}
+        <div className="flex items-center px-3 py-2">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 truncate">
+            {activeLabel}
+          </p>
         </div>
       </div>
     </div>
