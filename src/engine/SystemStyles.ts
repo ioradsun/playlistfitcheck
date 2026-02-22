@@ -9,6 +9,65 @@
 export type TextLayout = "center" | "stacked" | "stagger" | "wide" | "arc";
 export type ColorMode = "solid" | "gradient" | "per-char" | "duotone";
 
+
+export interface TypographyProfile {
+  fontFamily: string;
+  fontWeight: number;
+  letterSpacing: string;
+  textTransform: "uppercase" | "lowercase" | "none";
+  lineHeightMultiplier: number;
+  hasSerif: boolean;
+  personality: string;
+}
+
+const typographyProfileRef: { current: TypographyProfile | null } = { current: null };
+const loadedFontLinks = new Set<string>();
+
+function parseLetterSpacingPx(value: string): number {
+  if (!value || value === "normal") return 0;
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n * 16 : 0;
+}
+
+export function applyTypographyProfile(profile: TypographyProfile): void {
+  typographyProfileRef.current = profile;
+
+  if (typeof document === "undefined") return;
+  const familyKey = (profile.fontFamily || "").trim();
+  if (!familyKey || loadedFontLinks.has(familyKey)) return;
+
+  const existing = document.querySelector(`link[data-font="${familyKey}"]`);
+  if (existing) {
+    loadedFontLinks.add(familyKey);
+    return;
+  }
+
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.dataset.font = familyKey;
+  const encodedFamily = familyKey.replace(/\s+/g, "+");
+  const safeWeight = Math.min(900, Math.max(100, Math.round(profile.fontWeight || 400)));
+  link.href = `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@${safeWeight}&display=swap`;
+  document.head.appendChild(link);
+  loadedFontLinks.add(familyKey);
+}
+
+export async function ensureTypographyProfileReady(profile: TypographyProfile): Promise<void> {
+  applyTypographyProfile(profile);
+
+  if (typeof document === "undefined" || !document.fonts || !profile.fontFamily) return;
+
+  const safeWeight = Math.min(900, Math.max(100, Math.round(profile.fontWeight || 400)));
+  const descriptor = `${safeWeight} 1em "${profile.fontFamily}"`;
+  try {
+    await Promise.race([
+      document.fonts.load(descriptor),
+      new Promise<void>((resolve) => setTimeout(resolve, 1200)),
+    ]);
+  } catch {
+    // non-fatal: renderer can still proceed with fallback font
+  }
+}
 export interface SystemStyle {
   font: string;
   weight: string;
@@ -96,7 +155,18 @@ const SYSTEM_STYLES: Record<string, SystemStyle> = {
 const DEFAULT_STYLE: SystemStyle = SYSTEM_STYLES.fracture;
 
 export function getSystemStyle(system: string): SystemStyle {
-  return SYSTEM_STYLES[system] ?? DEFAULT_STYLE;
+  const base = SYSTEM_STYLES[system] ?? DEFAULT_STYLE;
+  const profile = typographyProfileRef.current;
+  if (!profile) return base;
+
+  return {
+    ...base,
+    font: `"${profile.fontFamily}", ${profile.hasSerif ? "serif" : "sans-serif"}`,
+    weight: String(Math.min(900, Math.max(100, Math.round(profile.fontWeight || Number(base.weight) || 400)))),
+    letterSpacing: parseLetterSpacingPx(profile.letterSpacing),
+    textTransform: profile.textTransform || base.textTransform,
+    lineHeight: Math.max(0.8, Math.min(2.0, profile.lineHeightMultiplier || base.lineHeight)),
+  };
 }
 
 /** Build a CSS font string from a SystemStyle + font size */
