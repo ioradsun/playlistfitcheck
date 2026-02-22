@@ -924,16 +924,21 @@ export function LyricDisplay({
   const seekTo = useCallback(
     (time: number) => {
       if (!audioRef.current) return;
+      const audio = audioRef.current;
+      const wasPlaying = !audio.paused;
       loopRegionRef.current = null;
       setActiveHookIndex(null);
       if (clipProgressRafRef.current)
         cancelAnimationFrame(clipProgressRafRef.current);
-      audioRef.current.currentTime = time;
+      audio.currentTime = time;
       setCurrentTime(time);
-      // Always re-trigger play after seek to prevent browser from stalling
-      audioRef.current.play().catch(() => {});
-      if (!isPlaying) {
+      if (wasPlaying) {
+        audio.play().catch(() => {});
+      }
+      if (wasPlaying && !isPlaying) {
         setIsPlaying(true);
+      } else if (!wasPlaying && isPlaying) {
+        setIsPlaying(false);
       }
     },
     [isPlaying],
