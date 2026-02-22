@@ -180,10 +180,10 @@ const blogTitle = (slug: string) => slug.split("-").map((w) => w[0].toUpperCase(
 
 const blogPage = (slug: string): SeoPageData => ({
   title: `${blogTitle(slug)} | tools.fm Blog`,
-  description: `Practical playbook for ${slug.replaceAll("-", " ")} with direct steps independent artists can apply now.`,
+  description: `Practical playbook for ${slug.split("-").join(" ")} with direct steps independent artists can apply now.`,
   h1: blogTitle(slug),
   ogImage: `${baseUrl}/og/blog-${slug}.png`,
-  lead: `The fastest way to improve ${slug.replaceAll("-", " ")} is to use a repeatable workflow with clear checkpoints. This guide breaks the process into concrete steps you can run this week, then improve with data from tools.fm.`,
+  lead: `The fastest way to improve ${slug.split("-").join(" ")} is to use a repeatable workflow with clear checkpoints. This guide breaks the process into concrete steps you can run this week, then improve with data from tools.fm.`,
   sections: [
     { heading: "What to do first", body: "Start with one measurable objective. Pick a date, target metric, and one audience segment so your decisions stay focused." },
     { heading: "How to execute without guesswork", body: ["Build one tight test cycle per week.", "Collect listening and engagement signal quickly.", "Keep what works and cut what stalls."] },
@@ -220,7 +220,7 @@ export default function SeoPages() {
       },
     });
   }
-  if ("appSchema" in page) schemaBlocks.push(page.appSchema);
+  if ("appSchema" in page) schemaBlocks.push((page as any).appSchema as Record<string, unknown>);
   if (page.faq?.length) schemaBlocks.push(faqSchema(page.faq));
 
   return (
