@@ -68,6 +68,7 @@ import type {
 } from "./ArtistFingerprintTypes";
 import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
 import { safeManifest } from "@/engine/validateManifest";
+import type { TypographyProfile } from "@/engine/SceneManifest";
 
 export interface LyricLine {
   start: number;
@@ -142,6 +143,45 @@ function normalizeSongDnaWithManifest(
   }
 
   return songDna;
+}
+
+const preparedTypographyProfiles = new Set<string>();
+
+function ensureTypographyProfileReady(
+  profile: TypographyProfile,
+): Promise<void> {
+  const family = profile.fontFamily?.trim();
+  if (!family) return Promise.resolve();
+
+  const key = `${family}:${profile.fontWeight}`;
+  if (preparedTypographyProfiles.has(key)) return Promise.resolve();
+
+  const href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(
+    family,
+  )}:wght@${profile.fontWeight}&display=swap`;
+
+  const existing = Array.from(
+    document.querySelectorAll("link[rel='stylesheet']"),
+  ).find((el) => (el as HTMLLinkElement).href === href) as
+    | HTMLLinkElement
+    | undefined;
+
+  if (existing) {
+    preparedTypographyProfiles.add(key);
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.onload = () => {
+      preparedTypographyProfiles.add(key);
+      resolve();
+    };
+    link.onerror = () => resolve();
+    document.head.appendChild(link);
+  });
 }
 interface Props {
   data: LyricData;
@@ -614,6 +654,13 @@ export function LyricDisplay({
         scene_manifest: result?.scene_manifest || result?.sceneManifest || null,
       };
       setSongDna(normalizeSongDnaWithManifest(nextSongDna, data.title));
+
+      const typographyProfile = result?.physics_spec?.typographyProfile as
+        | TypographyProfile
+        | undefined;
+      if (typographyProfile?.fontFamily) {
+        void ensureTypographyProfileReady(typographyProfile);
+      }
     } catch (e) {
       console.error("Song DNA error:", e);
       toast.error("Couldn't generate Song DNA");
