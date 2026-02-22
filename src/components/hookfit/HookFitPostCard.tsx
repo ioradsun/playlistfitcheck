@@ -143,7 +143,7 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
 
       {/* Action row — vote controls in card area */}
       {isBattle && (
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-center px-3 py-2">
           <AnimatePresence mode="wait">
             {!hasTapped ? (
               <motion.p
