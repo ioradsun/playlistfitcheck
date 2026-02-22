@@ -87,6 +87,8 @@ export default function ShareableLyricDance() {
 
   // Badge
   const [badgeVisible, setBadgeVisible] = useState(false);
+  // Cover overlay
+  const [showCover, setShowCover] = useState(true);
 
   // ── Load data ─────────────────────────────────────────────────────────────
 
@@ -563,9 +565,66 @@ export default function ShareableLyricDance() {
       <div
         ref={containerRef}
         className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer"
-        onClick={handleMuteToggle}
+        onClick={() => { if (!showCover) handleMuteToggle(); }}
       >
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+
+        {/* Dark cover overlay */}
+        <AnimatePresence>
+          {showCover && data && (
+            <motion.div
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="absolute inset-0 z-20 flex flex-col items-center justify-center"
+              style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(2px)" }}
+            >
+              {/* Profile pic */}
+              <div className="mb-5">
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt={profile.display_name || data.artist_name}
+                    className="w-20 h-20 rounded-full object-cover border border-white/10"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center">
+                    <span className="text-2xl font-mono text-white/40">
+                      {(data.artist_name || "?")[0].toUpperCase()}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Song title — editorial headline */}
+              <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[80%] mb-1">
+                {data.song_name}
+              </h2>
+
+              {/* Artist name */}
+              <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-white/40 mb-8">
+                {profile?.display_name || data.artist_name}
+              </p>
+
+              {/* Listen Now */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCover(false);
+                  if (audioRef.current) {
+                    audioRef.current.muted = false;
+                    audioRef.current.play().catch(() => {});
+                    setMuted(false);
+                  }
+                }}
+                className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+              >
+                Listen Now
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {showMuteIcon && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute bottom-4 left-4 z-10 text-white/50">
