@@ -14,6 +14,7 @@ import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
+import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import type { BeatTick } from "@/engine/HookDanceEngine";
 import type { LyricLine } from "./LyricDisplay";
 
@@ -200,7 +201,10 @@ export function HookDanceExporter({
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
         const lineProgress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-        const fs = Math.min(cw * 0.06, 72);
+        const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, spec.system, aspectRatio);
+        const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
+          ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
+          : computeFitFontSize(ctx, activeLine.text, cw, spec.system);
 
         // Draw with export-grade bloom
         ctx.save();
@@ -218,6 +222,9 @@ export function HookDanceExporter({
           progress: lineProgress,
           rng,
           palette: spec.palette || ["#ffffff", "#a855f7", "#ec4899"],
+          system: spec.system,
+          effectiveLetterSpacing,
+          stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
         };
         drawFn(ctx, effectState);
         ctx.restore();
