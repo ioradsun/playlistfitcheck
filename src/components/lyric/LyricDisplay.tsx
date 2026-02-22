@@ -27,6 +27,7 @@ import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { HookDanceExporter } from "./HookDanceExporter";
 import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
+import { PublishLyricDanceButton } from "./PublishLyricDanceButton";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
@@ -1561,6 +1562,18 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
                 <Film size={10} />
                 Create Lyric Dance
               </button>
+              <PublishLyricDanceButton
+                physicsSpec={songDna.physicsSpec as PhysicsSpec}
+                lines={data.lines}
+                beatGrid={{ bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence }}
+                audioFile={audioFile}
+                songTitle={data.title}
+                artistName={(data.artist && data.artist !== "Unknown" && data.artist !== "UNKNOWN") ? data.artist : "—"}
+                system={songDna.physicsSpec.system}
+                palette={songDna.physicsSpec.palette || ["#ffffff", "#a855f7", "#ec4899"]}
+                fingerprint={artistFingerprint}
+                seed={`${data.title}-lyric-dance`}
+              />
             </div>
           )}
 

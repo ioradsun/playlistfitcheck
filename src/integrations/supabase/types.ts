@@ -1148,6 +1148,71 @@ export type Database = {
           },
         ]
       }
+      shareable_lyric_dances: {
+        Row: {
+          artist_dna: Json | null
+          artist_name: string
+          artist_slug: string
+          audio_url: string
+          beat_grid: Json
+          created_at: string
+          id: string
+          lyrics: Json
+          palette: Json
+          physics_spec: Json
+          seed: string
+          song_name: string
+          song_slug: string
+          system_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          artist_dna?: Json | null
+          artist_name: string
+          artist_slug: string
+          audio_url: string
+          beat_grid: Json
+          created_at?: string
+          id?: string
+          lyrics: Json
+          palette?: Json
+          physics_spec: Json
+          seed?: string
+          song_name: string
+          song_slug: string
+          system_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          artist_dna?: Json | null
+          artist_name?: string
+          artist_slug?: string
+          audio_url?: string
+          beat_grid?: Json
+          created_at?: string
+          id?: string
+          lyrics?: Json
+          palette?: Json
+          physics_spec?: Json
+          seed?: string
+          song_name?: string
+          song_slug?: string
+          system_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shareable_lyric_dances_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_copy: {
         Row: {
           copy_json: Json
