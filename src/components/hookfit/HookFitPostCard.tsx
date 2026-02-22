@@ -26,7 +26,7 @@ interface Props {
   onRefresh: () => void;
 }
 
-type CardPhase = "rest" | "exploring" | "registering" | "commenting" | "confirmed";
+type CardPhase = "rest" | "exploring" | "registering" | "commenting" | "confirmed" | "settled";
 
 export function HookFitPostCard({ post, rank, onRefresh }: Props) {
   const { user } = useAuth();
@@ -71,17 +71,23 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
 
   // Phase state machine — derived from battleState
   useEffect(() => {
-    if (phase === "commenting" || phase === "confirmed") return; // locked phases
+    if (phase === "commenting" || phase === "confirmed" || phase === "settled") return; // locked phases
     if (!isBattle) return;
     if (hasVoted) {
       setPhase("commenting");
-      // Auto-focus comment input
       setTimeout(() => commentInputRef.current?.focus(), 100);
       return;
     }
     if (!hasTapped) { setPhase("rest"); return; }
     setPhase(isPlaying ? "registering" : "exploring");
   }, [isBattle, hasVoted, hasTapped, isPlaying]);
+
+  // Auto-transition: confirmed → settled after 2.5s
+  useEffect(() => {
+    if (phase !== "confirmed") return;
+    const timer = setTimeout(() => setPhase("settled"), 2500);
+    return () => clearTimeout(timer);
+  }, [phase]);
 
   const handleProfileClick = () => navigate(`/u/${post.user_id}`);
 
@@ -312,6 +318,32 @@ export function HookFitPostCard({ post, rank, onRefresh }: Props) {
               >
                 Watch your words get hooked in
               </motion.p>
+            )}
+
+            {phase === "settled" && (
+              <motion.div
+                key="settled"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex w-full items-center justify-between"
+              >
+                <button
+                  onClick={() => {
+                    battleState?.handleUnvote();
+                    setPhase("exploring");
+                  }}
+                  className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Unhook
+                </button>
+                <button
+                  onClick={() => setSheetOpen(true)}
+                  className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {totalVotes} Hooks Cast
+                </button>
+              </motion.div>
             )}
           </AnimatePresence>
         </div>
