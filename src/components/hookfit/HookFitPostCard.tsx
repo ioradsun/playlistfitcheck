@@ -619,18 +619,8 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
         </div>
       )}
 
-      {/* Live comments + input */}
-      <div className="px-3 pb-3 space-y-1.5">
-        {liveComments.length > 0 && (
-          <div className="space-y-1 max-h-32 overflow-y-auto">
-            {liveComments.map((c) => (
-              <p key={c.id} className="text-sm leading-snug">
-                <span className="font-semibold mr-1.5">{c.name}</span>
-                {c.text}
-              </p>
-            ))}
-          </div>
-        )}
+      {/* Comment input */}
+      <div className="px-3 pb-3">
         <input
           type="text"
           placeholder="DROP YOUR TAKE LIVE"
