@@ -29,10 +29,22 @@ const ShareableHook = lazy(() => import("./pages/ShareableHook"));
 
 const queryClient = new QueryClient();
 
-/** Lightweight shell for the hook embed — skips Auth, SiteCopy, Wallet, Sidebar providers */
+/** Skeleton fallback for the hook embed — feels instant */
 const HookEmbedFallback = () => (
-  <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center">
-    <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+  <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-6 p-6">
+    {/* Title area */}
+    <div className="w-full max-w-md space-y-3">
+      <div className="h-6 w-3/4 mx-auto rounded-md bg-white/10 animate-pulse" />
+      <div className="h-4 w-1/2 mx-auto rounded-md bg-white/[0.06] animate-pulse" />
+    </div>
+    {/* Canvas placeholder */}
+    <div className="w-full max-w-lg aspect-square rounded-xl bg-white/[0.04] animate-pulse" />
+    {/* Controls bar */}
+    <div className="w-full max-w-md flex items-center justify-center gap-4">
+      <div className="h-10 w-10 rounded-full bg-white/10 animate-pulse" />
+      <div className="h-10 flex-1 rounded-lg bg-white/[0.06] animate-pulse" />
+      <div className="h-10 w-10 rounded-full bg-white/10 animate-pulse" />
+    </div>
   </div>
 );
 
