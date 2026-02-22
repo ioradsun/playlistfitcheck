@@ -49,6 +49,47 @@ CRITICAL RULES:
 - meaning: theme (2–4 words), summary (2–3 sentences), imagery (2–3 renderable scenes/objects).
 - world: A concrete cinematic place sentence with time, light, material, and scale.
 
+WORLD CONSTRUCTION — ONE DECISION, THREE OUTPUTS:
+
+After answering "If this song were a place, what would it feel like
+to be inside it right now?", you are making ONE world decision that
+simultaneously determines:
+
+1. `world` — the physical scene description
+2. `backgroundSystem` — the visual energy of that environment
+3. `particleConfig.system` — what is physically moving in that environment
+
+These three must be derived together, not independently.
+
+Ask yourself:
+- What kind of space is this? (open/closed, interior/exterior)
+- What is the dominant physical force in this space?
+  (gravity pulling down, pressure closing in, things breaking apart,
+   stillness, heat rising, emptiness)
+- What is moving through the air in this space RIGHT NOW?
+
+The backgroundSystem maps directly to the dominant physical force:
+- fracture  → things are breaking, surfaces are cracking
+- pressure  → space is compressing, weight is accumulating
+- breath    → slow natural rhythm, organic movement
+- static    → frozen, clinical, no natural movement
+- burn      → heat is the dominant force, things are combusting
+- void      → absence, emptiness, darkness with one light source
+
+The particleConfig.system maps to what is physically in the air:
+- Ask literally: rain? snow? smoke? dust? sparks? petals? ash?
+  light beams? nothing?
+- If the world has no physical particles in the air, use "none"
+- Do not add particles for emotional effect — only for physical reality
+
+COHERENCE RULE: If your world, backgroundSystem, and particleConfig
+could not physically coexist in a real location, regenerate until
+they can.
+
+If the user has provided a scene direction (see userSceneDirection
+field), incorporate it as a strong influence on the world description
+but do not let it override physical coherence rules.
+
 3. PALETTE DERIVATION — SCENE-FIRST METHOD
 Do not pick colors via mood shorthand (sad=blue, angry=red). Build colors from the world:
 
@@ -257,6 +298,13 @@ const LYRICS_ONLY_PROMPT = `You are a music analyst. Given song lyrics, provide 
 
 No markdown, no explanation — just JSON.`;
 
+interface LyricAnalyzeRequest {
+  songTitle: string;
+  artistName: string;
+  fullLyrics: string;
+  userSceneDirection?: string; // optional creative override from UI
+}
+
 async function getDnaPrompt(): Promise<string> {
   try {
     const sbUrl = Deno.env.get("SUPABASE_URL");
@@ -436,7 +484,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { title, artist, lyrics, audioBase64, format, beatGrid, includeHooks } = await req.json();
+    const body = (await req.json()) as Partial<LyricAnalyzeRequest> & Record<string, unknown>;
+    const title = String(body.title ?? body.songTitle ?? "");
+    const artist = String(body.artist ?? body.artistName ?? "");
+    const lyrics = String(body.lyrics ?? body.fullLyrics ?? "");
+    const audioBase64 = typeof body.audioBase64 === "string" ? body.audioBase64 : undefined;
+    const format = typeof body.format === "string" ? body.format : undefined;
+    const beatGrid = body.beatGrid as { bpm?: number; confidence?: number } | undefined;
+    const includeHooks = body.includeHooks as boolean | undefined;
+    const userSceneDirection = typeof body.userSceneDirection === "string"
+      ? body.userSceneDirection.trim()
+      : "";
     const hooksEnabled = includeHooks !== false;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -463,6 +521,9 @@ serve(async (req) => {
         textInstruction += `[Beat Grid Context] Detected BPM: ${beatGrid.bpm} (confidence: ${beatGrid.confidence?.toFixed?.(2) ?? "N/A"}). Use this as ground truth for tempo.\n\n`;
       }
       if (lyrics) {
+        if (userSceneDirection) {
+          textInstruction += `The artist has provided a scene direction to consider:\n"${userSceneDirection}"\n\nIncorporate this direction into your world construction while\nmaintaining physical coherence. The direction is a creative influence,\nnot a literal instruction — if it conflicts with the lyrics,\nthe lyrics take precedence.\n\n`;
+        }
         textInstruction += hooksEnabled
           ? `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. MANDATORY: "hottest_hooks" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique "label". lexicon.line_mods must have EXACTLY 5-8 entries total. physics_spec.typographyProfile is REQUIRED.`
           : `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. DO NOT return any hook fields (no hottest_hook and no hottest_hooks).`; 

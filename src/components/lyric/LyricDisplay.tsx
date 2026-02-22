@@ -48,8 +48,9 @@ import {
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import { HookDanceCanvas } from "./HookDanceCanvas";
-import { LyricStage, type SceneManifest } from "./LyricStage";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
+import { DirectorsCutPanel } from "./DirectorsCutPanel";
+import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
 import { HookDanceExporter } from "./HookDanceExporter";
 import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
@@ -441,6 +442,11 @@ export function LyricDisplay({
   );
   const [battlePopupUrl, setBattlePopupUrl] = useState<string | null>(null);
   const [lyricDanceExportOpen, setLyricDanceExportOpen] = useState(false);
+  const [directorsCutOpen, setDirectorsCutOpen] = useState(false);
+  const [directorsCutRegenerating, setDirectorsCutRegenerating] = useState(false);
+  const [manifestDiff, setManifestDiff] = useState<Array<{ field: string; from: string; to: string }>>([]);
+  const [showDirectorsCutTooltip, setShowDirectorsCutTooltip] = useState(false);
+
 
   // Load fingerprint from profile
   useEffect(() => {
@@ -456,6 +462,12 @@ export function LyricDisplay({
         }
       });
   }, [user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const seen = window.localStorage.getItem("directors_cut_tooltip_seen");
+    setShowDirectorsCutTooltip(!seen);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -491,17 +503,12 @@ export function LyricDisplay({
       effect_sequence?: { line_index: number; effect_key: string }[];
       micro_surprise?: { every_n_beats: number; action: string };
     } | null;
+    scene_manifest?: FullSceneManifest | null;
   } | null>(normalizeSongDnaWithManifest(initialSongDna, data.title) ?? null);
   const [dnaLoading, setDnaLoading] = useState(false);
   const [dnaRequested, setDnaRequested] = useState(!!initialSongDna);
 
   const beatIntensity = useBeatIntensity(beatAnalyserRef.current, hookDanceRunning && isPlaying);
-  const stageManifest = useMemo<SceneManifest>(() => ({
-    palette: songDna?.physicsSpec?.palette || ["#111827", "#334155", "#e2e8f0"],
-    contrastMode: "soft",
-    backgroundIntensity: songDna?.mood?.toLowerCase().includes("dark") ? 0.2 : 0.65,
-    lightSource: songDna?.description || "harsh overhead",
-  }), [songDna]);
 
   const currentLyricZone = useMemo<"upper" | "middle" | "lower">(() => {
     if (!songDna?.hook) return "middle";
@@ -668,6 +675,111 @@ export function LyricDisplay({
     beatGrid,
     hottestHooksEnabled,
   ]);
+
+
+  const getManifestDiff = useCallback((before: FullSceneManifest, after: FullSceneManifest) => {
+    const changes: Array<{ field: string; from: string; to: string }> = [];
+    const checkFields: Array<keyof FullSceneManifest> = [
+      "world",
+      "backgroundSystem",
+      "tension",
+      "beatResponse",
+      "contrastMode",
+      "backgroundIntensity",
+      "letterPersonality",
+    ];
+
+    for (const field of checkFields) {
+      const b = String(before[field]);
+      const a = String(after[field]);
+      if (b !== a) changes.push({ field, from: b, to: a });
+    }
+
+    if (before.palette.join() !== after.palette.join()) {
+      changes.push({ field: "palette", from: before.palette.join(", "), to: after.palette.join(", ") });
+    }
+
+    return changes;
+  }, []);
+
+  const handleFieldOverride = useCallback((field: keyof FullSceneManifest | string, value: unknown) => {
+    setSongDna((prev) => {
+      if (!prev) return prev;
+      const current = safeManifest(prev.scene_manifest || deriveSceneManifestFromSpec({
+        spec: prev.physicsSpec as PhysicsSpec,
+        mood: prev.mood,
+        description: prev.description,
+        songTitle: data.title,
+      })).manifest;
+      const next = { ...current } as any;
+      if (field.includes(".")) {
+        const [parent, child] = field.split(".");
+        next[parent] = { ...(next[parent] || {}), [child]: value };
+      } else {
+        next[field] = value;
+      }
+      const validated = safeManifest(next).manifest;
+      return { ...prev, scene_manifest: validated };
+    });
+  }, [data.title]);
+
+  const handleRegenerateWithDirection = useCallback(async (direction: string) => {
+    if (!songDna || directorsCutRegenerating || !direction.trim()) return;
+    setDirectorsCutRegenerating(true);
+    try {
+      const beforeManifest = safeManifest(songDna.scene_manifest || deriveSceneManifestFromSpec({
+        spec: songDna.physicsSpec as PhysicsSpec,
+        mood: songDna.mood,
+        description: songDna.description,
+        songTitle: data.title,
+      })).manifest;
+      const playhead = audioRef.current?.currentTime ?? 0;
+      const lyricsText = data.lines.filter((l) => l.tag !== "adlib").map((l) => l.text).join("\n");
+      const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
+        body: {
+          title: data.title,
+          artist: data.artist,
+          lyrics: lyricsText,
+          userSceneDirection: direction.trim(),
+          includeHooks: false,
+        },
+      });
+      if (error) throw error;
+
+      const merged = normalizeSongDnaWithManifest({
+        ...songDna,
+        mood: result?.mood ?? songDna.mood,
+        description: result?.description ?? songDna.description,
+        meaning: result?.meaning ?? songDna.meaning,
+        physicsSpec: result?.physics_spec ?? songDna.physicsSpec,
+        scene_manifest: result?.scene_manifest || result?.sceneManifest || songDna.scene_manifest,
+      }, data.title);
+
+      const afterManifest = safeManifest(merged.scene_manifest || beforeManifest).manifest;
+      setManifestDiff(getManifestDiff(beforeManifest, afterManifest));
+      setSongDna(merged);
+      if (audioRef.current) audioRef.current.currentTime = playhead;
+    } catch (error) {
+      console.error("Director's Cut regenerate failed", error);
+      toast.error("Couldn't regenerate world direction");
+    } finally {
+      setDirectorsCutRegenerating(false);
+    }
+  }, [songDna, directorsCutRegenerating, data.title, data.artist, data.lines, getManifestDiff]);
+
+  const currentManifest = useMemo<FullSceneManifest | null>(() => {
+    if (!songDna) return null;
+    if (songDna.scene_manifest) return safeManifest(songDna.scene_manifest).manifest;
+    if (songDna.physicsSpec) {
+      return safeManifest(deriveSceneManifestFromSpec({
+        spec: songDna.physicsSpec as PhysicsSpec,
+        mood: songDna.mood,
+        description: songDna.description,
+        songTitle: data.title,
+      })).manifest;
+    }
+    return null;
+  }, [songDna, data.title]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw =
@@ -2413,6 +2525,51 @@ export function LyricDisplay({
           )}
         </DialogContent>
       </Dialog>
+
+
+      {currentManifest && (
+        <>
+          <div className="fixed bottom-4 right-4 z-[94]">
+            {showDirectorsCutTooltip && (
+              <div className="mb-2 max-w-xs rounded-lg border border-border/60 bg-background/95 p-3 text-xs shadow-xl">
+                <p>
+                  <strong>AI chose a world for this song.</strong>
+                  <br />
+                  Open Director&apos;s Cut to change the scene, colors, or atmosphere.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-2 h-7 text-xs"
+                  onClick={() => {
+                    window.localStorage.setItem("directors_cut_tooltip_seen", "1");
+                    setShowDirectorsCutTooltip(false);
+                  }}
+                >
+                  Got it
+                </Button>
+              </div>
+            )}
+
+            <Button
+              className="shadow-lg"
+              onClick={() => setDirectorsCutOpen(true)}
+            >
+              <Film className="mr-2 h-4 w-4" /> Director&apos;s Cut
+            </Button>
+          </div>
+
+          <DirectorsCutPanel
+            manifest={currentManifest}
+            isOpen={directorsCutOpen}
+            isRegenerating={directorsCutRegenerating}
+            onClose={() => setDirectorsCutOpen(false)}
+            onRegenerateWithDirection={handleRegenerateWithDirection}
+            onFieldOverride={handleFieldOverride}
+            onApply={() => setDirectorsCutOpen(false)}
+            diff={manifestDiff}
+          />
+        </>
+      )}
 
       <LyricVideoComposer
         open={videoComposerOpen}
