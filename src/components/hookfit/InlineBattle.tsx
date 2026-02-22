@@ -320,8 +320,8 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
-          {/* Mask overlay — inactive side */}
-          {activeHookSide !== "a" && (
+          {/* Mask overlay — when muted or inactive */}
+          {(isMuted || activeHookSide !== "a") && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
           )}
           {/* Hook label */}
@@ -354,8 +354,8 @@ export function InlineBattle({ battleId, visible = true, onBattleState, restartS
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
-          {/* Mask overlay — inactive side */}
-          {activeHookSide !== "b" && (
+          {/* Mask overlay — when muted or inactive */}
+          {(isMuted || activeHookSide !== "b") && (
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
           )}
           {/* Hook label */}
