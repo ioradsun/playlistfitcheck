@@ -7,7 +7,7 @@
  */
 
 import type { PhysicsState } from "./PhysicsIntegrator";
-import { type SystemStyle, getSystemStyle, buildFont, applyTransform, createGradientFill } from "./SystemStyles";
+import { type SystemStyle, getSystemStyle, buildFont, applyTransform, createGradientFill, computeStackedLayout, type StackedLayout } from "./SystemStyles";
 
 /** Measure total char-by-char width for the full string, matching how effects render */
 function measureCharByCharWidth(ctx: CanvasRenderingContext2D, displayText: string, st: SystemStyle): number {
@@ -52,7 +52,9 @@ export interface EffectState {
   rng: () => number;
   palette: string[];
   system?: string;
-  effectiveLetterSpacing?: number;  // overridden spacing from font sizer
+  effectiveLetterSpacing?: number;
+  /** Pre-computed stacked layout for narrow viewports */
+  stackedLayout?: StackedLayout;
 }
 
 type EffectFn = (ctx: CanvasRenderingContext2D, s: EffectState) => void;
@@ -86,6 +88,49 @@ function applyStyledFill(
       ctx.fillStyle = palette[0] || "#fff";
       break;
   }
+}
+
+/**
+ * Universal stacked text renderer for narrow viewports.
+ * Draws multi-line stacked text centered on screen.
+ * Returns true if it handled rendering (stacked mode), false otherwise.
+ */
+function drawAutoStacked(
+  ctx: CanvasRenderingContext2D,
+  s: EffectState,
+  cx: number,
+  cy: number,
+  extraTransform?: { scale?: number; alpha?: number; offsetY?: number }
+): boolean {
+  const layout = s.stackedLayout;
+  if (!layout || !layout.isStacked) return false;
+
+  const st = style(s);
+  const { lines, fs } = layout;
+  const lineH = fs * (st.lineHeight || 1.2);
+  const totalH = lines.length * lineH;
+  const startY = cy - totalH / 2 + lineH / 2 + (extraTransform?.offsetY || 0);
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = buildFont(st, fs);
+  if (extraTransform?.alpha !== undefined) ctx.globalAlpha = extraTransform.alpha;
+  if (extraTransform?.scale) {
+    ctx.translate(cx, cy + (extraTransform?.offsetY || 0));
+    ctx.scale(extraTransform.scale, extraTransform.scale);
+    ctx.translate(-cx, -(cy + (extraTransform?.offsetY || 0)));
+  }
+
+  lines.forEach((line, i) => {
+    const y = startY + i * lineH;
+    const measured = ctx.measureText(line).width;
+    applyStyledFill(ctx, st, s.palette, cx, y, measured);
+    ctx.fillText(line, cx, y);
+  });
+
+  ctx.restore();
+  return true;
 }
 
 // ── Individual effects ──────────────────────────────────────────────────────
@@ -138,21 +183,26 @@ const drawTunnelRush: EffectFn = (ctx, s) => {
   const t = Math.min(1, age / 500);
   const zoom = 0.3 + t * 0.7;
   const alpha = Math.min(1, age / 200);
+
+  ctx.shadowBlur = Math.min(20, physState.glow);
+  ctx.shadowColor = palette[1] || palette[0] || "#8b5cf6";
+
+  // Try stacked rendering first
   const measured = measureCharByCharWidth(ctx, displayText, st);
   const combinedScale = safeScale(measured, w, Math.min(1.6, zoom * physState.scale));
+  if (drawAutoStacked(ctx, s, w / 2, h / 2, { scale: combinedScale, alpha })) {
+    ctx.restore();
+    return;
+  }
 
   ctx.globalAlpha = alpha;
   ctx.translate(w / 2, h / 2);
   ctx.scale(combinedScale, combinedScale);
 
-  ctx.shadowBlur = Math.min(20, physState.glow);
-  ctx.shadowColor = palette[1] || palette[0] || "#8b5cf6";
-
   const measuredFill = ctx.measureText(displayText).width;
   applyStyledFill(ctx, st, palette, 0, 0, measuredFill);
   ctx.fillText(displayText, 0, 0);
 
-  // Duotone: second pass with offset
   if (st.colorMode === "duotone") {
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = palette[1] || "#a855f7";
@@ -178,7 +228,12 @@ const drawGravityDrop: EffectFn = (ctx, s) => {
   ctx.shadowBlur = physState.glow * 0.5;
   ctx.shadowColor = palette[1] || "#a855f7";
 
-  // Stacked layout: split into words and stack vertically
+  // Try stacked rendering first
+  if (drawAutoStacked(ctx, s, w / 2, h / 2, { alpha: ctx.globalAlpha, offsetY: dropY + bounce - h / 2 })) {
+    ctx.restore();
+    return;
+  }
+
   if (st.layout === "stacked") {
     const words = displayText.split(" ");
     const lineH = fs * st.lineHeight;
@@ -211,14 +266,20 @@ const drawPulseBloom: EffectFn = (ctx, s) => {
   ctx.font = buildFont(st, fs);
 
   const pulse = 1 + Math.sin(age * 0.008) * 0.15 * physState.heat;
-  const measured = measureCharByCharWidth(ctx, displayText, st);
-  const combinedScale = safeScale(measured, w, Math.min(1.6, pulse * physState.scale));
-  ctx.translate(w / 2, h / 2);
-  ctx.scale(combinedScale, combinedScale);
 
   ctx.shadowBlur = Math.min(20, physState.glow + Math.sin(age * 0.005) * 10);
   ctx.shadowColor = palette[2] || palette[0] || "#ec4899";
 
+  const measured = measureCharByCharWidth(ctx, displayText, st);
+  const combinedScale = safeScale(measured, w, Math.min(1.6, pulse * physState.scale));
+
+  if (drawAutoStacked(ctx, s, w / 2, h / 2, { scale: combinedScale, alpha: 0.9 + physState.heat * 0.1 })) {
+    ctx.restore();
+    return;
+  }
+
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(combinedScale, combinedScale);
   const measuredFill = ctx.measureText(displayText).width;
   applyStyledFill(ctx, st, palette, 0, 0, measuredFill);
   ctx.globalAlpha = 0.9 + physState.heat * 0.1;
@@ -235,18 +296,21 @@ const drawRippleOut: EffectFn = (ctx, s) => {
   ctx.textBaseline = "middle";
   ctx.font = buildFont(st, fs);
 
-  // Wide layout: extra letter-spacing via char-by-char
-  if (st.layout === "wide") {
-    const chars = displayText.split("");
-    const charPositions = getCharPositions(ctx, displayText, st, w / 2);
-    chars.forEach((char, i) => {
-      ctx.fillStyle = palette[0] || "#fff";
-      ctx.fillText(char, charPositions[i], h / 2);
-    });
-  } else {
-    const measured = ctx.measureText(displayText).width;
-    applyStyledFill(ctx, st, palette, w / 2, h / 2, measured);
-    ctx.fillText(displayText, w / 2, h / 2);
+  // Try stacked first
+  if (!drawAutoStacked(ctx, s, w / 2, h / 2)) {
+    // Wide layout: extra letter-spacing via char-by-char
+    if (st.layout === "wide") {
+      const chars = displayText.split("");
+      const charPositions = getCharPositions(ctx, displayText, st, w / 2);
+      chars.forEach((char, i) => {
+        ctx.fillStyle = palette[0] || "#fff";
+        ctx.fillText(char, charPositions[i], h / 2);
+      });
+    } else {
+      const measured = ctx.measureText(displayText).width;
+      applyStyledFill(ctx, st, palette, w / 2, h / 2, measured);
+      ctx.fillText(displayText, w / 2, h / 2);
+    }
   }
 
   // Ripple rings
@@ -277,6 +341,11 @@ const drawGlitchFlash: EffectFn = (ctx, s) => {
   const glitchOn = rng() > 0.7;
   const offsetX = glitchOn ? (rng() - 0.5) * 20 : 0;
   const sliceY = glitchOn ? (rng() - 0.5) * 10 : 0;
+
+  if (drawAutoStacked(ctx, s, w / 2, h / 2)) {
+    ctx.restore();
+    return;
+  }
 
   if (glitchOn) {
     ctx.globalAlpha = 0.6;
@@ -350,29 +419,30 @@ const drawEmberRise: EffectFn = (ctx, s) => {
 
   const rise = Math.min(30, age * 0.02);
 
-  // Stagger layout: slight horizontal offset per word
-  if (st.layout === "stagger") {
-    const words = displayText.split(" ");
-    const lineH = fs * st.lineHeight;
-    const totalH = words.length * lineH;
-    words.forEach((word, i) => {
-      const staggerX = (i % 2 === 0 ? -1 : 1) * w * 0.05;
-      const y = h / 2 - rise - totalH / 2 + i * lineH + lineH / 2;
-      const measured = ctx.measureText(word).width;
-      applyStyledFill(ctx, st, palette, w / 2 + staggerX, y, measured);
+  // Try stacked first
+  if (!drawAutoStacked(ctx, s, w / 2, h / 2, { offsetY: -rise })) {
+    if (st.layout === "stagger") {
+      const words = displayText.split(" ");
+      const lineH = fs * st.lineHeight;
+      const totalH = words.length * lineH;
+      words.forEach((word, i) => {
+        const staggerX = (i % 2 === 0 ? -1 : 1) * w * 0.05;
+        const y = h / 2 - rise - totalH / 2 + i * lineH + lineH / 2;
+        const measured = ctx.measureText(word).width;
+        applyStyledFill(ctx, st, palette, w / 2 + staggerX, y, measured);
+        ctx.shadowBlur = physState.glow;
+        ctx.shadowColor = palette[1] || "#f97316";
+        ctx.fillText(word, w / 2 + staggerX, y);
+      });
+    } else {
+      const measured = ctx.measureText(displayText).width;
+      applyStyledFill(ctx, st, palette, w / 2, h / 2 - rise, measured);
       ctx.shadowBlur = physState.glow;
       ctx.shadowColor = palette[1] || "#f97316";
-      ctx.fillText(word, w / 2 + staggerX, y);
-    });
-  } else {
-    const measured = ctx.measureText(displayText).width;
-    applyStyledFill(ctx, st, palette, w / 2, h / 2 - rise, measured);
-    ctx.shadowBlur = physState.glow;
-    ctx.shadowColor = palette[1] || "#f97316";
-    ctx.fillText(displayText, w / 2, h / 2 - rise);
+      ctx.fillText(displayText, w / 2, h / 2 - rise);
+    }
   }
 
-  // Ember particles
   const particleCount = Math.floor(physState.heat * 20);
   for (let i = 0; i < particleCount; i++) {
     const px = w / 2 + (rng() - 0.5) * w * 0.6;
@@ -398,6 +468,17 @@ const drawHookFracture: EffectFn = (ctx, s) => {
 
   const shakeX = (rng() - 0.5) * physState.shake;
   const shakeY = (rng() - 0.5) * physState.shake;
+
+  // In non-fractured state, use stacked rendering on narrow screens
+  if (!physState.isFractured) {
+    ctx.shadowBlur = Math.min(25, physState.glow * 2);
+    ctx.shadowColor = palette[1] || palette[0] || "#a855f7";
+    if (drawAutoStacked(ctx, s, w / 2 + shakeX, h / 2 + shakeY)) {
+      ctx.restore();
+      return;
+    }
+  }
+
   const measured = measureCharByCharWidth(ctx, displayText, st);
   const clampedScale = safeScale(measured, w, Math.min(1.5, physState.scale));
   ctx.translate(w / 2 + shakeX, h / 2 + shakeY);
@@ -414,9 +495,7 @@ const drawHookFracture: EffectFn = (ctx, s) => {
       const rot = (rng() - 0.5) * Math.min(physState.heat * 0.4, 0.3);
       ctx.translate(drift, yOff);
       ctx.rotate(rot);
-
       const x = charPositions[i];
-      // Chromatic aberration
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = "cyan";
       ctx.fillText(char, x + 3, 0);
@@ -432,10 +511,8 @@ const drawHookFracture: EffectFn = (ctx, s) => {
       ctx.restore();
     });
   } else {
-    ctx.shadowBlur = Math.min(25, physState.glow * 2);
-    ctx.shadowColor = palette[1] || palette[0] || "#a855f7";
-    const measured = ctx.measureText(displayText).width;
-    applyStyledFill(ctx, st, palette, 0, 0, measured);
+    const measuredFill = ctx.measureText(displayText).width;
+    applyStyledFill(ctx, st, palette, 0, 0, measuredFill);
     ctx.fillText(displayText, 0, 0);
   }
   ctx.restore();
@@ -453,15 +530,21 @@ const drawStaticResolve: EffectFn = (ctx, s) => {
   const t = Math.min(1, age / 400);
   const blur = (1 - t) * 8;
   ctx.filter = blur > 0.5 ? `blur(${blur}px)` : "none";
-  ctx.globalAlpha = t;
-
-  const measured = measureCharByCharWidth(ctx, displayText, st);
-  const clampedScale = safeScale(measured, w, Math.min(1.5, physState.scale));
-  ctx.translate(w / 2, h / 2);
-  ctx.scale(clampedScale, clampedScale);
 
   ctx.shadowBlur = Math.min(15, physState.glow * 0.5);
   ctx.shadowColor = palette[1] || "#8b5cf6";
+
+  const measured = measureCharByCharWidth(ctx, displayText, st);
+  const clampedScale = safeScale(measured, w, Math.min(1.5, physState.scale));
+
+  if (drawAutoStacked(ctx, s, w / 2, h / 2, { scale: clampedScale, alpha: t })) {
+    ctx.restore();
+    return;
+  }
+
+  ctx.globalAlpha = t;
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(clampedScale, clampedScale);
 
   const measuredFill = ctx.measureText(displayText).width;
   applyStyledFill(ctx, st, palette, 0, 0, measuredFill);

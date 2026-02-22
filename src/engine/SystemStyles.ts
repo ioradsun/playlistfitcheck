@@ -114,6 +114,89 @@ export function applyTransform(text: string, style: SystemStyle): string {
   }
 }
 
+/** Stacked layout info for narrow viewports */
+export interface StackedLayout {
+  lines: string[];
+  fs: number;
+  effectiveLetterSpacing: number;
+  isStacked: boolean;
+}
+
+const STACK_THRESHOLD = 400;
+const MAX_STACK_LINES = 3;
+
+/**
+ * For narrow canvases (<400px), split text into up to 3 stacked lines
+ * and compute the largest font size that fits within 85% of canvas width.
+ */
+export function computeStackedLayout(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  canvasW: number,
+  canvasH: number,
+  system: string,
+): StackedLayout {
+  const st = getSystemStyle(system);
+  const displayText = applyTransform(text, st);
+  const words = displayText.split(/\s+/).filter(Boolean);
+
+  if (canvasW >= STACK_THRESHOLD || words.length <= 2) {
+    const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, text, canvasW, system);
+    return { lines: [displayText], fs, effectiveLetterSpacing, isStacked: false };
+  }
+
+  const lineCount = Math.min(MAX_STACK_LINES, words.length);
+  const wordsPerLine = Math.ceil(words.length / lineCount);
+  const stackedLines: string[] = [];
+  for (let i = 0; i < words.length; i += wordsPerLine) {
+    stackedLines.push(words.slice(i, i + wordsPerLine).join(" "));
+  }
+
+  const targetW = canvasW * 0.85;
+  const targetH = canvasH * 0.70;
+  const REF = 100;
+  let ls = st.letterSpacing;
+
+  ctx.font = buildFont(st, REF);
+  let maxLineW = 0;
+  for (const line of stackedLines) {
+    let lineW = 0;
+    for (let i = 0; i < line.length; i++) {
+      lineW += ctx.measureText(line[i]).width + ls;
+    }
+    maxLineW = Math.max(maxLineW, lineW);
+  }
+
+  if (maxLineW <= 0) {
+    return { lines: stackedLines, fs: 24, effectiveLetterSpacing: ls, isStacked: true };
+  }
+
+  let fs = (targetW / maxLineW) * REF;
+
+  const lineHeight = st.lineHeight || 1.2;
+  const totalStackedH = fs * lineHeight * stackedLines.length;
+  if (totalStackedH > targetH) {
+    fs = targetH / (lineHeight * stackedLines.length);
+  }
+
+  ctx.font = buildFont(st, fs);
+  let worstW = 0;
+  for (const line of stackedLines) {
+    let lw = 0;
+    for (let i = 0; i < line.length; i++) {
+      lw += ctx.measureText(line[i]).width + ls;
+    }
+    worstW = Math.max(worstW, lw);
+  }
+  if (worstW > targetW && ls > 0) {
+    ls = Math.max(0, ls - (worstW - targetW) / Math.max(1, stackedLines.reduce((m, l) => Math.max(m, l.length), 0)));
+  }
+
+  fs = Math.max(fs, canvasW * 0.04);
+
+  return { lines: stackedLines, fs: Math.round(fs), effectiveLetterSpacing: ls, isStacked: true };
+}
+
 /** Create a gradient fill for text */
 export function createGradientFill(
   ctx: CanvasRenderingContext2D,
