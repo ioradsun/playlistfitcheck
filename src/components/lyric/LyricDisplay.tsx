@@ -30,6 +30,7 @@ import { PublishHookButton } from "./PublishHookButton";
 import { PublishLyricDanceButton } from "./PublishLyricDanceButton";
 import { applyProfanityFilter, type Strictness, type ProfanityReport } from "@/lib/profanityFilter";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
+import { ensureTypographyProfileReady, type TypographyProfile } from "@/engine/SystemStyles";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
 import type { HookDanceOverrides } from "./HookDanceControls";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -345,6 +346,7 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
       system: string;
       params: Record<string, number>;
       palette: string[];
+      typographyProfile?: TypographyProfile;
       effect_pool?: string[];
       logic_seed?: number;
       lexicon?: {
@@ -359,6 +361,12 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
   } | null>(initialSongDna ?? null);
   const [dnaLoading, setDnaLoading] = useState(false);
   const [dnaRequested, setDnaRequested] = useState(!!initialSongDna);
+
+
+  useEffect(() => {
+    const profile = (initialSongDna as any)?.physicsSpec?.typographyProfile as TypographyProfile | undefined;
+    if (profile?.fontFamily) void ensureTypographyProfileReady(profile);
+  }, [initialSongDna]);
 
   // Reset Song DNA when audio file changes (e.g. reupload)
   const audioFileRef = useRef(audioFile);
@@ -465,6 +473,11 @@ export function LyricDisplay({ data, audioFile, hasRealAudio = true, savedId, fm
         secondHookLabel: secondary?.label,
         physicsSpec: result?.physics_spec || null,
       });
+
+      const typographyProfile = result?.physics_spec?.typographyProfile as TypographyProfile | undefined;
+      if (typographyProfile?.fontFamily) {
+        void ensureTypographyProfileReady(typographyProfile);
+      }
     } catch (e) {
       console.error("Song DNA error:", e);
       toast.error("Couldn't generate Song DNA");

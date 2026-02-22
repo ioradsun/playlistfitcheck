@@ -28,6 +28,15 @@ export interface PhysicsSpec {
   system: string; // "fracture" | "pressure" | "breath" | "combustion" | "orbit"
   params: Record<string, number>;
   palette: string[];
+  typographyProfile?: {
+    fontFamily: string;
+    fontWeight: number;
+    letterSpacing: string;
+    textTransform: "uppercase" | "lowercase" | "none";
+    lineHeightMultiplier: number;
+    hasSerif: boolean;
+    personality: string;
+  };
   // v6.0 pool-based fields
   effect_pool?: string[];
   logic_seed?: number;
