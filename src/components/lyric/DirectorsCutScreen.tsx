@@ -1,7 +1,7 @@
 /**
- * DirectorsCutScreen — Editorial carousel for system selection.
- * Minimal, typography-led. Two canvases side-by-side with carousel nav.
- * All systems render live. Tap to select, confirm with "SELECT".
+ * DirectorsCutScreen — Horizontal carousel for system selection.
+ * Editorial style: mono type, minimal chrome, tap-to-select.
+ * All 7 systems render live simultaneously.
  */
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
@@ -28,7 +28,6 @@ const SYSTEM_LABELS: Record<SystemKey, { name: string; subtitle: string; light?:
   glass:      { name: "GLASS",       subtitle: "Your words refract light", light: true },
 };
 
-/** Multipliers applied to base AI spec per system */
 const SYSTEM_MULTIPLIERS: Record<SystemKey, Record<string, number>> = {
   fracture:   {},
   pressure:   { mass: 1.2, elasticity: 0.8 },
@@ -62,7 +61,7 @@ interface Props {
   onClose: () => void;
 }
 
-// ── Per-system canvas renderer ──────────────────────────────────────────────
+// ── Per-system renderer state ───────────────────────────────────────────────
 
 interface SystemRenderer {
   integrator: PhysicsIntegrator;
@@ -72,37 +71,27 @@ interface SystemRenderer {
   spec: PhysicsSpec;
 }
 
+// ── Component ───────────────────────────────────────────────────────────────
+
 export function DirectorsCutScreen({
-  baseSpec,
-  beats,
-  lines,
-  hookStart,
-  hookEnd,
-  audioFile,
-  seedBase,
-  onSelect,
-  onClose,
+  baseSpec, beats, lines, hookStart, hookEnd, audioFile, seedBase, onSelect, onClose,
 }: Props) {
-  const leftCanvasRef = useRef<HTMLCanvasElement>(null);
-  const rightCanvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>(new Array(SYSTEMS.length).fill(null));
+  const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const renderersRef = useRef<SystemRenderer[]>([]);
   const prevTimeRef = useRef(hookStart);
 
-  const [leftIndex, setLeftIndex] = useState(0);
-  const [rightIndex, setRightIndex] = useState(1);
-  const [selected, setSelected] = useState<SystemKey>(baseSpec.system as SystemKey || "fracture");
-
+  const [selected, setSelected] = useState<SystemKey | null>(null);
   const aiPick = (baseSpec.system as SystemKey) || "fracture";
 
-  // Filter beats to hook region
   const hookBeats = useMemo(
     () => beats.filter(b => b.time >= hookStart && b.time <= hookEnd).sort((a, b) => a.time - b.time),
     [beats, hookStart, hookEnd]
   );
 
-  // Initialize renderers for all systems
+  // Initialize renderers
   useEffect(() => {
     renderersRef.current = SYSTEMS.map((system, idx) => {
       const spec = deriveSpec(baseSpec, system);
@@ -113,7 +102,7 @@ export function DirectorsCutScreen({
     });
   }, [baseSpec, seedBase]);
 
-  // Canvas drawing
+  // Canvas draw function
   const drawSystemCanvas = useCallback((
     canvas: HTMLCanvasElement,
     physState: PhysicsState,
@@ -138,15 +127,9 @@ export function DirectorsCutScreen({
 
     const bgPalette = renderer.spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
     drawSystemBackground(ctx, {
-      system: renderer.system,
-      physState,
-      w, h,
-      time: currentTime,
-      beatCount: renderer.beatIndex,
-      rng: renderer.prng,
-      palette: bgPalette,
-      hookStart,
-      hookEnd,
+      system: renderer.system, physState, w, h,
+      time: currentTime, beatCount: renderer.beatIndex,
+      rng: renderer.prng, palette: bgPalette, hookStart, hookEnd,
     });
 
     const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
@@ -165,21 +148,13 @@ export function DirectorsCutScreen({
       const age = (currentTime - activeLine.start) * 1000;
       const lineDur = activeLine.end - activeLine.start;
       const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-
       const { fs, effectiveLetterSpacing } = computeFitFontSize(ctx, activeLine.text, w, renderer.system);
-
       const palette = spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
 
       const effectState: EffectState = {
-        text: activeLine.text,
-        physState,
-        w, h, fs, age, progress,
-        rng: renderer.prng,
-        palette,
-        system: renderer.system,
-        effectiveLetterSpacing,
+        text: activeLine.text, physState, w, h, fs, age, progress,
+        rng: renderer.prng, palette, system: renderer.system, effectiveLetterSpacing,
       };
-
       drawFn(ctx, effectState);
     }
 
@@ -193,7 +168,7 @@ export function DirectorsCutScreen({
     ctx.restore();
   }, [lines, hookStart, hookEnd]);
 
-  // Audio + animation loop
+  // Audio + animation loop — tick ALL 7 systems
   useEffect(() => {
     const ownUrl = URL.createObjectURL(audioFile);
     const audio = new Audio();
@@ -204,19 +179,11 @@ export function DirectorsCutScreen({
 
     let audioReady = false;
     let audioSeeked = false;
-    audio.addEventListener("canplay", () => {
-      audioReady = true;
-      audio.currentTime = hookStart;
-    });
+    audio.addEventListener("canplay", () => { audioReady = true; audio.currentTime = hookStart; });
     audio.addEventListener("seeked", () => {
-      if (audioReady) {
-        audioSeeked = true;
-        audio.play().catch((e) => console.warn("[DirectorsCut] audio play failed:", e));
-      }
+      if (audioReady) { audioSeeked = true; audio.play().catch(() => {}); }
     });
-    audio.addEventListener("error", (e) => {
-      console.warn("[DirectorsCut] audio error, using synthetic clock:", e);
-    });
+    audio.addEventListener("error", () => {});
     audio.src = ownUrl;
     audio.load();
 
@@ -234,9 +201,7 @@ export function DirectorsCutScreen({
       }
 
       if (ct >= hookEnd) {
-        if (useAudio && audioRef.current) {
-          audioRef.current.currentTime = hookStart;
-        }
+        if (useAudio && audioRef.current) audioRef.current.currentTime = hookStart;
         prevTimeRef.current = hookStart;
         renderersRef.current.forEach(r => { r.integrator.reset(); r.beatIndex = 0; });
         rafRef.current = requestAnimationFrame(tick);
@@ -245,23 +210,18 @@ export function DirectorsCutScreen({
 
       const prev = prevTimeRef.current;
 
-      for (const idx of [leftIndex, rightIndex]) {
+      // Tick and draw ALL systems
+      for (let idx = 0; idx < SYSTEMS.length; idx++) {
         const renderer = renderersRef.current[idx];
         if (!renderer) continue;
 
-        while (
-          renderer.beatIndex < hookBeats.length &&
-          hookBeats[renderer.beatIndex].time <= ct
-        ) {
+        while (renderer.beatIndex < hookBeats.length && hookBeats[renderer.beatIndex].time <= ct) {
           const beat = hookBeats[renderer.beatIndex];
-          if (beat.time > prev) {
-            renderer.integrator.onBeat(beat.strength, beat.isDownbeat);
-          }
+          if (beat.time > prev) renderer.integrator.onBeat(beat.strength, beat.isDownbeat);
           renderer.beatIndex++;
         }
         const state = renderer.integrator.tick();
-
-        const canvas = idx === leftIndex ? leftCanvasRef.current : rightCanvasRef.current;
+        const canvas = canvasRefs.current[idx];
         if (canvas) drawSystemCanvas(canvas, state, renderer, ct);
       }
 
@@ -278,26 +238,19 @@ export function DirectorsCutScreen({
       audioRef.current = null;
       URL.revokeObjectURL(ownUrl);
     };
-  }, [audioFile, hookStart, hookEnd, hookBeats, leftIndex, rightIndex, drawSystemCanvas]);
+  }, [audioFile, hookStart, hookEnd, hookBeats, drawSystemCanvas]);
 
-  const handleConfirm = useCallback(() => {
-    onSelect(selected);
-  }, [selected, onSelect]);
+  // Scroll by one card
+  const scrollCarousel = useCallback((dir: number) => {
+    if (!scrollRef.current) return;
+    const cardWidth = scrollRef.current.offsetWidth * 0.28 + 4; // card + gap
+    scrollRef.current.scrollBy({ left: dir * cardWidth, behavior: "smooth" });
+  }, []);
 
-  const cycleSide = (side: "left" | "right", dir: number) => {
-    const setter = side === "left" ? setLeftIndex : setRightIndex;
-    const other = side === "left" ? rightIndex : leftIndex;
-    setter(prev => {
-      let next = (prev + dir + SYSTEMS.length) % SYSTEMS.length;
-      if (next === other) next = (next + dir + SYSTEMS.length) % SYSTEMS.length;
-      return next;
-    });
-  };
-
-  const leftSys = SYSTEMS[leftIndex];
-  const rightSys = SYSTEMS[rightIndex];
-  const leftLabel = SYSTEM_LABELS[leftSys];
-  const rightLabel = SYSTEM_LABELS[rightSys];
+  const handleSelect = useCallback((system: SystemKey) => {
+    setSelected(system);
+    onSelect(system);
+  }, [onSelect]);
 
   return (
     <motion.div
@@ -320,144 +273,112 @@ export function DirectorsCutScreen({
         </button>
       </div>
 
-      {/* Split canvas area */}
-      <div className="flex-1 flex gap-1 px-1 min-h-0">
-        {/* Left panel */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <motion.div
-            className="flex-1 relative rounded-lg overflow-hidden cursor-pointer"
-            animate={{ opacity: selected === leftSys ? 1 : 0.4 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            onClick={() => setSelected(leftSys)}
-          >
-            <canvas
-              ref={leftCanvasRef}
-              className="absolute inset-0 w-full h-full"
-            />
-            {/* Selected indicator — subtle border */}
-            {selected === leftSys && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="absolute inset-0 rounded-lg pointer-events-none"
-                style={{ border: '1px solid rgba(255,255,255,0.15)' }}
-              />
-            )}
-            {/* AI pick — editorial label */}
-            {leftSys === aiPick && (
-              <div className="absolute top-2 left-2">
-                <p className="text-[8px] font-mono uppercase tracking-[0.3em] text-white/30">
-                  AI Pick
+      {/* Carousel area */}
+      <div className="flex-1 relative flex items-center min-h-0 px-1">
+        {/* Left chevron */}
+        <button
+          onClick={() => scrollCarousel(-1)}
+          className="absolute left-1 z-10 flex items-center justify-center w-10 h-10 text-white/20 hover:text-white/50 transition-colors"
+          style={{ top: '50%', transform: 'translateY(-50%)' }}
+        >
+          <span className="text-2xl font-mono">‹</span>
+        </button>
+
+        {/* Scroll container */}
+        <div
+          ref={scrollRef}
+          className="flex-1 flex gap-1 overflow-x-auto mx-10 min-h-0 h-full items-stretch"
+          style={{
+            scrollSnapType: 'x mandatory',
+            scrollbarWidth: 'none',
+            scrollBehavior: 'smooth',
+          }}
+        >
+          {SYSTEMS.map((system, idx) => {
+            const label = SYSTEM_LABELS[system];
+            const isSelected = selected === system;
+            const isAiPick = system === aiPick;
+
+            return (
+              <div
+                key={system}
+                className="shrink-0 flex flex-col"
+                style={{
+                  width: '28%',
+                  scrollSnapAlign: 'start',
+                }}
+              >
+                {/* Canvas card */}
+                <motion.div
+                  className="flex-1 relative rounded-lg overflow-hidden cursor-pointer"
+                  style={{
+                    border: isSelected ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.05)',
+                  }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => handleSelect(system)}
+                >
+                  <canvas
+                    ref={el => { canvasRefs.current[idx] = el; }}
+                    className="absolute inset-0 w-full h-full"
+                  />
+
+                  {/* AI Pick label */}
+                  {isAiPick && (
+                    <div className="absolute top-2 left-2">
+                      <p className="text-[8px] font-mono uppercase tracking-[0.3em] text-white/30">
+                        AI Pick
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Selected — neon green editorial label */}
+                  {isSelected && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="absolute bottom-2 left-0 right-0 flex justify-center"
+                    >
+                      <p
+                        className="text-[9px] font-mono uppercase tracking-[0.3em]"
+                        style={{ color: 'rgba(57, 255, 20, 0.45)' }}
+                      >
+                        Selected
+                      </p>
+                    </motion.div>
+                  )}
+                </motion.div>
+
+                {/* System name label */}
+                <p className={`text-[9px] font-mono uppercase tracking-[0.2em] text-center py-1.5 transition-colors ${
+                  isSelected ? 'text-white/60' : 'text-white/25'
+                }`}>
+                  {label.name}
                 </p>
               </div>
-            )}
-          </motion.div>
-
-          {/* Label + carousel nav */}
-          <div className="flex items-center justify-between py-2 px-1">
-            <button
-              onClick={() => cycleSide("left", -1)}
-              className="text-[10px] font-mono text-white/20 hover:text-white/50 transition-colors px-1"
-            >
-              ←
-            </button>
-            <div className="text-center min-w-0">
-              <p className={`text-[11px] font-mono uppercase tracking-[0.2em] transition-colors ${
-                selected === leftSys ? "text-white/70" : "text-white/30"
-              }`}>
-                {leftLabel.name}
-              </p>
-            </div>
-            <button
-              onClick={() => cycleSide("left", 1)}
-              className="text-[10px] font-mono text-white/20 hover:text-white/50 transition-colors px-1"
-            >
-              →
-            </button>
-          </div>
+            );
+          })}
         </div>
 
-        {/* Right panel */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <motion.div
-            className="flex-1 relative rounded-lg overflow-hidden cursor-pointer"
-            animate={{ opacity: selected === rightSys ? 1 : 0.4 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            onClick={() => setSelected(rightSys)}
-          >
-            <canvas
-              ref={rightCanvasRef}
-              className="absolute inset-0 w-full h-full"
-            />
-            {selected === rightSys && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="absolute inset-0 rounded-lg pointer-events-none"
-                style={{ border: '1px solid rgba(255,255,255,0.15)' }}
-              />
-            )}
-            {rightSys === aiPick && (
-              <div className="absolute top-2 left-2">
-                <p className="text-[8px] font-mono uppercase tracking-[0.3em] text-white/30">
-                  AI Pick
-                </p>
-              </div>
-            )}
-          </motion.div>
-
-          <div className="flex items-center justify-between py-2 px-1">
-            <button
-              onClick={() => cycleSide("right", -1)}
-              className="text-[10px] font-mono text-white/20 hover:text-white/50 transition-colors px-1"
-            >
-              ←
-            </button>
-            <div className="text-center min-w-0">
-              <p className={`text-[11px] font-mono uppercase tracking-[0.2em] transition-colors ${
-                selected === rightSys ? "text-white/70" : "text-white/30"
-              }`}>
-                {rightLabel.name}
-              </p>
-            </div>
-            <button
-              onClick={() => cycleSide("right", 1)}
-              className="text-[10px] font-mono text-white/20 hover:text-white/50 transition-colors px-1"
-            >
-              →
-            </button>
-          </div>
-        </div>
+        {/* Right chevron */}
+        <button
+          onClick={() => scrollCarousel(1)}
+          className="absolute right-1 z-10 flex items-center justify-center w-10 h-10 text-white/20 hover:text-white/50 transition-colors"
+          style={{ top: '50%', transform: 'translateY(-50%)' }}
+        >
+          <span className="text-2xl font-mono">›</span>
+        </button>
       </div>
 
-      {/* System position indicators */}
-      <div className="flex justify-center gap-2 py-1 shrink-0">
-        {SYSTEMS.map((s, i) => (
-          <button
+      {/* Dot indicators */}
+      <div className="flex justify-center gap-2 py-2 shrink-0">
+        {SYSTEMS.map((s) => (
+          <div
             key={s}
-            onClick={() => {
-              if (i !== rightIndex) setLeftIndex(i);
-              else setRightIndex(leftIndex);
-            }}
             className={`w-1 h-1 rounded-full transition-all ${
-              selected === s ? "bg-white/60 scale-150" :
-              i === leftIndex || i === rightIndex ? "bg-white/30" : "bg-white/10"
+              selected === s ? 'bg-white/60 scale-150' : 'bg-white/15'
             }`}
           />
         ))}
-      </div>
-
-      {/* Select button — editorial */}
-      <div className="px-5 pb-[env(safe-area-inset-bottom,16px)] pt-3 shrink-0">
-        <button
-          onClick={handleConfirm}
-          className="w-full py-3 text-[11px] font-mono uppercase tracking-[0.2em] text-white/70 hover:text-white bg-white/5 hover:bg-white/8 border border-white/10 rounded-lg transition-all"
-        >
-          Select
-        </button>
-        <p className="text-center text-[9px] font-mono text-white/15 mt-2 uppercase tracking-[0.2em]">
-          {SYSTEM_LABELS[selected].name} — {SYSTEM_LABELS[selected].subtitle}
-        </p>
       </div>
     </motion.div>
   );
