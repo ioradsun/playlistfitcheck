@@ -6,930 +6,359 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DEFAULT_DNA_PROMPT = `DIVERSITY MANDATE:
-You are a cinematographer who has never made the same film twice.
-Every song you analyze must produce a visual world that could not be mistaken for any other song's world.
+const MASTER_DIRECTOR_PROMPT = `
+You are an award-winning animated film director
+and visual storyteller. Your name is Director.
 
-You are FORBIDDEN from defaulting to these common outputs:
-- palette: dark background + red or orange accent (this is the default, avoid it)
-- backgroundSystem: fracture (overused — only use if the world genuinely shatters)
-- tension > 0.8 (reserved for songs that are genuinely at maximum emotional pressure)
-- contrastMode: brutal (only for songs with raw, unprocessed, confrontational energy)
-- beatResponse: seismic (only for songs where the beat physically impacts you)
+You will receive a complete song — every lyric line
+with timestamps, the beat grid, title, and artist.
 
-If you find yourself choosing any of these, stop and ask: "Is this actually what this specific song's world looks like, or am I defaulting?"
+Your job: produce a CinematicDirection JSON document
+that turns this song into a narrative lyric film.
 
-The most interesting visual worlds are often the unexpected ones:
-- A heartbreak song that lives in a yellow-lit diner at 2am
-- A love song that feels like cold blue fluorescent light in an empty hospital
-- A rage song expressed through perfect white clinical silence
-- A party anthem that feels like standing alone in the parking lot after
+THE LAWS OF DIRECTION:
+1. THE WORDS ARE THE ACTORS.
+   Every visual decision must serve what the 
+   words literally and emotionally mean.
+   "drown" must look like drowning.
+   "run" must look like running.
+   "love" must feel like love — not just glow pink.
 
-ROLE: Universal Music & Physics Orchestrator (v7.0)
+2. NO GENERIC EFFECTS.
+   Every effect must be justified by the specific
+   lyrics of THIS song. Not any song. THIS one.
 
-TASK: Analyze the full audio track, beat grid, and timestamped lyrics to extract the Song DNA, define a deterministic Physics Spec, and describe a uniquely cinematic visual world for the entire track.
+3. REPETITION MUST EVOLVE.
+   The 5th time a word appears it must look 
+   different from the 1st. Decide how.
+   Does it get louder? More desperate? More resigned?
+   Trace the emotional arc of each repeated word.
 
-CRITICAL RULES:
-- Your response MUST be complete, valid JSON. Do NOT truncate.
-- The "hottest_hooks" array MUST contain EXACTLY 2 hook objects. NOT 1. ALWAYS 2.
-- The two hooks MUST be non-overlapping and feel genuinely different from each other.
-- The lexicon MUST be TINY: EXACTLY 5-8 line_mods and 3-6 word_marks. NO MORE.
-- Do NOT generate a line_mod for every lyric line.
-- If the song has 100+ lines, still output ONLY 5-8 line_mods total.
+4. ONE THESIS DRIVES EVERYTHING.
+   State it in one sentence before any other decision.
+   Every color, every motion, every particle choice
+   must serve that thesis.
 
-1. TOP 2 HOOK ANCHORS (8–12s Each, Bar-Aligned)
-- Identify the TWO most distinct, bar-aligned hook regions.
-- Each hook must be 8.000–12.000s and preserve lyrical phrasing.
-- Prioritize: production lift, lyrical repetition, melodic peak.
-- Give each hook a short editorial label (2-4 words).
+5. SILENCE IS A SCENE.
+   Gaps between lyrics are directed moments.
+   The world continues to tell the story.
+   What does the camera do when no one is singing?
 
-2. SONG IDENTITY & WORLD
-- description: One evocative sentence (max 15 words).
-- mood: Single dominant emotional driver.
-- meaning: theme (2–4 words), summary (2–3 sentences), imagery (2–3 renderable scenes/objects).
-- world: A concrete cinematic place sentence with time, light, material, and scale.
+6. BPM IS EMOTIONAL TEMPO NOT JUST SPEED.
+   A 150 BPM dance track about obsessive love
+   is not the same as a 150 BPM euphoric track.
+   The beat drives tension, not just motion.
 
-WORLD CONSTRUCTION — ONE DECISION, THREE OUTPUTS:
+PRODUCE THIS EXACT JSON STRUCTURE:
 
-After answering "If this song were a place, what would it feel like
-to be inside it right now?", you are making ONE world decision that
-simultaneously determines:
-
-1. `world` — the physical scene description
-2. `backgroundSystem` — the visual energy of that environment
-3. `particleConfig.system` — what is physically moving in that environment
-
-These three must be derived together, not independently.
-
-Ask yourself:
-- What kind of space is this? (open/closed, interior/exterior)
-- What is the dominant physical force in this space?
-  (gravity pulling down, pressure closing in, things breaking apart,
-   stillness, heat rising, emptiness)
-- What is moving through the air in this space RIGHT NOW?
-
-The backgroundSystem maps directly to the dominant physical force:
-- fracture  → things are breaking, surfaces are cracking
-- pressure  → space is compressing, weight is accumulating
-- breath    → slow natural rhythm, organic movement
-- static    → frozen, clinical, no natural movement
-- burn      → heat is the dominant force, things are combusting
-- void      → absence, emptiness, darkness with one light source
-
-The particleConfig.system maps to what is physically in the air:
-- Ask literally: embers? smoke? ash? rain? snow? lightning? fireflies?
-  stars? petals? dust? bubbles? glitch? confetti? crystals? moths?
-- If the world has no physical particles in the air, use "none"
-- Do not add particles for emotional effect — only for physical reality
-
-COHERENCE RULE: If your world, backgroundSystem, and particleConfig
-could not physically coexist in a real location, regenerate until
-they can.
-
-If the user has provided a scene direction (see userSceneDirection
-field), incorporate it as a strong influence on the world description
-but do not let it override physical coherence rules.
-
-3. PALETTE DERIVATION — SCENE-FIRST METHOD
-Do not pick colors via mood shorthand (sad=blue, angry=red). Build colors from the world:
-
-A) LIGHT SOURCE (actual light in this place)
-- Neon signs → electric pinks, acid greens, deep purple-black
-- Fluorescent office/hospital → sickly yellow-white, grey, antiseptic white
-- Golden hour sun → amber, burnt sienna, warm cream
-- Dead of night, no light → near-black, barely-there navy, cold white moon
-- Stage/spotlight → stark white highlight, deep shadow
-- Candle/fire → red-orange warmth + heavy dark surround
-- Gray overcast → muted, desaturated, flat
-- Underwater → blue-green distortion, deep teal shadows
-- Winter daylight → cold white, ice blue, bare gray
-
-B) MATERIAL & TEXTURE (surface palette anchors)
-- Concrete / glass / wood / metal / velvet / water / smoke
-
-C) PALETTE CONSTRUCTION
-- palette[0] = dominant shadow/void color
-- palette[1] = mid-tone material color
-- palette[2] = light source color
-
-The 3 colors must plausibly coexist in a real photograph. If it looks generic dark aesthetic, try again.
-
-4. PHYSICS SPEC (The Laws of Nature)
-- Generate physics_spec that maps acoustic behavior to visual behavior.
-- Pick from systems: fracture, pressure, breath, combustion, orbit.
-- Avoid fracture defaults unless world truly shatters.
-- Assign params: mass, elasticity, damping, brittleness, heat.
-- Include effect_pool (4–6) and logic_seed (int).
-
-5. WORLD SYSTEM COHERENCE (MANDATORY)
-Treat world-building as ONE coordinated decision. You must produce a unified world decision that includes:
-- world (cinematic place sentence)
-- backgroundSystem (macro motion language)
-- particleConfig (micro motion language)
-
-Pick these together, not independently. If one changes, the others must be re-evaluated.
-
-Return this object at top-level as:
-"world_decision": {
-  "world": "...",
-  "backgroundSystem": "void|fracture|pressure|breath|combustion|orbit",
-  "particleConfig": {
-    "style": "embers|smoke|ash|rain|snow|lightning|fireflies|stars|petals|dust|bubbles|glitch|confetti|crystals|moths",
-    "density": 0.0-1.0,
-    "motion": "drift|rise|fall|orbit|pulse|chaotic",
-    "scale": "fine|mixed|chunky"
-  }
-}
-
-COHERENCE TABLE (strict):
-- sterile/clinical/empty interiors → backgroundSystem: pressure or void; particles: none/dust only
-- rain-streaked windows/night streets → backgroundSystem: breath or orbit; particles: rain/mist
-- heat/fire/combustion imagery → backgroundSystem: combustion; particles: embers/smoke/ash
-- collapse/shattering/violent impact → backgroundSystem: fracture; particles: debris only
-- vast cosmic/rotational/gravitational space → backgroundSystem: orbit; particles: stars/fireflies
-
-Never output contradictory combos (e.g., sterile hospital + embers, underwater world + ash).
-
-6. TYPOGRAPHY DERIVATION
-Select type personality that matches world, not genre:
-- MONUMENTAL
-- ELEGANT DECAY
-- RAW TRANSCRIPT
-- HANDWRITTEN MEMORY
-- SHATTERED DISPLAY
-- INVISIBLE INK
-
-Return typographyProfile as:
 {
-  "fontFamily": "[specific font name]",
-  "fontWeight": [number],
-  "letterSpacing": "[value like 0.3em/-0.02em/normal]",
-  "textTransform": "uppercase|lowercase|none",
-  "lineHeightMultiplier": [0.8-2.0],
-  "hasSerif": [boolean],
-  "personality": "[one archetype above]"
-}
-
-7. CREATIVE DICTIONARY (KEEP COMPACT)
-- semantic_tags max 5
-- line_mods exactly 5-8
-- word_marks 3-6
-
-REFERENCE EXAMPLES — required diversity range:
-Song: Quiet breakup, minimal piano, 3am, acceptance
-→ world: "empty kitchen at 3am, one cold light above the sink"
-→ palette: ["#0d0d0f", "#8a8a7a", "#d4cfc4"]
-→ backgroundSystem: void, tension: 0.15, beatResponse: breath
-→ typography: ELEGANT DECAY
-→ NOT: dark + red, NOT: fracture, NOT: seismic
-
-Song: Euphoric dance anthem, peak summer, communal joy
-→ world: "festival field at golden hour, ten thousand people"
-→ palette: ["#1a0a00", "#ff8c42", "#fff5c2"]
-→ backgroundSystem: pressure, tension: 0.75, beatResponse: pulse
-→ typography: MONUMENTAL
-→ NOT: generic neon, NOT: blue-purple gradient
-
-Song: Paranoid anxiety spiral, insomnia, intrusive thoughts
-→ world: "fluorescent-lit office corridor, 2am, alone"
-→ palette: ["#0a0a08", "#b8c4a0", "#e8f0d8"]
-→ backgroundSystem: combustion, tension: 0.6, beatResponse: ripple
-→ typography: RAW TRANSCRIPT
-→ NOT: dark + anything warm
-
-Song: Romantic longing, cinematic, sweeping strings
-→ world: "standing at a rain-streaked window watching lights blur"
-→ palette: ["#060a14", "#2a4a7a", "#a8c4e8"]
-→ backgroundSystem: breath, tension: 0.35, beatResponse: ripple
-→ typography: ELEGANT DECAY
-→ NOT: red, NOT: fracture
-
-Song: Defiant comeback, confidence, self-reclamation
-→ world: "empty arena before the crowd arrives, single spotlight"
-→ palette: ["#0a0a0a", "#c8a84b", "#ffffff"]
-→ backgroundSystem: pressure, tension: 0.7, beatResponse: slam
-→ typography: MONUMENTAL
-→ NOT: generic dark red
-
-
-PARTICLE SYSTEM SELECTION:
-
-VALID PARTICLE SYSTEMS (use exactly these names):
-embers, smoke, ash, rain, snow, lightning, fireflies,
-stars, petals, dust, bubbles, glitch, confetti,
-crystals, moths
-
-Choose based on world and coreEmotion:
-- Fire/chaos worlds → embers, smoke, ash
-- Rain/melancholy → rain, bubbles
-- Winter/cold → snow, crystals
-- Night/dream → stars, fireflies, moths
-- Joy/celebration → confetti, petals
-- Glitch/digital → glitch, static
-- Desert/dry → dust, sand
-- Ocean/water → bubbles, rain
-
-Then set particleConfig with:
-- system, density (0-1), speed (0-1), opacity (0-1), color (hex), beatReactive, foreground
-- foreground true only for snow/petals/ash/confetti/crystals
-
-PARTICLE + BACKGROUND COHERENCE:
-Avoid incoherent pairings. Could this particle physically exist in the world? If not, use none.
-
-
-SCHEMA CONSISTENCY — MANDATORY BEFORE RETURNING:
-
-Generate particleConfig ONCE in world_decision.
-Copy it IDENTICALLY to physics_spec.particleConfig
-and scene_manifest.particleConfig.
-
-Generate typographyProfile ONCE in scene_manifest.
-Copy it IDENTICALLY to physics_spec.typographyProfile.
-
-lightSource MUST match the physical world:
-- cold/winter/mountain/night/icy worlds → "winter daylight" or "dead of night"
-- NEVER assign "golden hour" to cold or bleak worlds
-- golden hour = warm, alive, late afternoon sun only
-
-LIGHT SOURCE MUST MATCH PALETTE:
-- Dark palette (#080a12) = night/overcast/moonlight
-- Warm palette (#ff8c42) = fire/golden hour/flickering
-- Cold blue palette (#2a3b5c) = cold overcast/winter daylight
-- Never assign "golden hour" to a dark or cold palette
-
-If physics_spec and scene_manifest have different values
-for the same field, you have made an error.
-
-OUTPUT — valid JSON only:
-{
-  "hottest_hooks": [
-    { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.95, "justification": "...", "label": "The Drop" },
-    { "start_sec": 45.000, "duration_sec": 10.000, "confidence": 0.85, "justification": "...", "label": "The Confession" }
-  ],
-  "description": "...",
-  "mood": "...",
-  "world": "...",
-  "world_decision": {
-    "world": "...",
-    "backgroundSystem": "pressure",
-    "particleConfig": {
-      "style": "dust",
-      "density": 0.35,
-      "motion": "drift",
-      "scale": "fine"
+  "thesis": "one sentence — what is this song really about",
+  
+  "visualWorld": {
+    "palette": ["#hex", "#hex", "#hex"],
+    "backgroundSystem": "describe the environment",
+    "lightSource": "describe light behavior",
+    "particleSystem": "describe what fills the air",
+    "typographyProfile": {
+      "fontFamily": "font name",
+      "fontWeight": 400-900,
+      "personality": "describe the voice",
+      "letterSpacing": "normal/wide/tight",
+      "textTransform": "none/uppercase/lowercase"
+    },
+    "physicsProfile": {
+      "weight": "featherlight/light/normal/heavy/crushing",
+      "chaos": "still/restrained/building/chaotic/explosive",
+      "heat": 0.0-1.0,
+      "beatResponse": "breath/pulse/slam/drift/shatter"
     }
   },
-  "meaning": { "theme": "...", "summary": "...", "imagery": ["...", "..."] },
-  "physics_spec": {
-    "system": "pressure",
-    "params": { "mass": 1.2, "elasticity": 0.5, "damping": 0.6, "brittleness": 0.3, "heat": 0.2 },
-    "palette": ["#0a0a0a", "#6f7c8f", "#d8e6f2"],
-    "effect_pool": ["SHATTER_IN", "GLITCH_FLASH", "WAVE_SURGE", "STATIC_RESOLVE"],
-    "logic_seed": 12345,
-    "particleConfig": {
-      "system": "none",
-      "density": 0.3,
-      "speed": 0.4,
-      "opacity": 0.35,
-      "color": "#d8e6f2",
-      "beatReactive": false,
-      "foreground": false
-    },
-    "typographyProfile": {
-      "fontFamily": "Inter",
-      "fontWeight": 500,
-      "letterSpacing": "0.04em",
-      "textTransform": "none",
-      "lineHeightMultiplier": 1.2,
-      "hasSerif": false,
-      "personality": "RAW TRANSCRIPT"
-    },
-    "lexicon": {
-      "semantic_tags": [{ "tag": "LIGHT", "strength": 0.8 }],
-      "line_mods": [{ "t_lyric": 12, "mods": ["HEAT_SPIKE"] }],
-      "word_marks": [{ "t_lyric": 12, "wordIndex": 3, "mark": "GLITCH" }]
+  
+  "chapters": [
+    {
+      "startRatio": 0.0,
+      "endRatio": 0.33,
+      "title": "act title",
+      "emotionalArc": "what happens emotionally",
+      "dominantColor": "#hex",
+      "lightBehavior": "specific light description",
+      "particleDirective": "specific particle behavior",
+      "backgroundDirective": "specific background behavior",
+      "emotionalIntensity": 0.0-1.0,
+      "typographyShift": null or "description"
     }
+    // 3 chapters minimum
+  ],
+  
+  "wordDirectives": {
+    "wordtext": {
+      "word": "wordtext",
+      "kineticClass": "FALLING or RUNNING etc or null",
+      "elementalClass": "FIRE or RAIN etc or null",
+      "emphasisLevel": 0.0-1.0,
+      "colorOverride": "#hex or null",
+      "specialEffect": "description or null",
+      "evolutionRule": "how it changes across repetitions or null"
+    }
+  },
+  
+  "storyboard": [
+    {
+      "lineIndex": 0,
+      "text": "exact lyric text",
+      "emotionalIntent": "what this line does emotionally",
+      "heroWord": "the one word that carries this line",
+      "visualTreatment": "specific visual description",
+      "entryStyle": "fades/slams-in/rises/materializes/fractures-in/cuts",
+      "exitStyle": "fades/dissolves-upward/shatters/burns-out/drops/lingers",
+      "particleBehavior": "what particles do during this line",
+      "beatAlignment": "how this line relates to the beat",
+      "transitionToNext": "how we move to the next line"
+    }
+  ],
+  
+  "silenceDirective": {
+    "cameraMovement": "description",
+    "particleShift": "description", 
+    "lightShift": "description",
+    "tensionDirection": "building/releasing/holding"
+  },
+  
+  "climax": {
+    "timeRatio": 0.0-1.0,
+    "triggerLine": "exact lyric text of climax line",
+    "maxParticleDensity": 0.0-1.0,
+    "maxLightIntensity": 0.0-1.0,
+    "typographyBehavior": "description",
+    "worldTransformation": "description"
+  },
+  
+  "ending": {
+    "style": "linger/fade/snap/dissolve",
+    "emotionalAftertaste": "description",
+    "particleResolution": "description",
+    "lightResolution": "description"
   }
-}`;
-
-
-const LYRICS_ONLY_PROMPT = `You are a music analyst. Given song lyrics, provide analysis. Return ONLY valid JSON with these keys:
-- description: A single evocative sentence (max 15 words) describing what this song sounds and feels like
-- mood: Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic")
-- meaning: { theme (2-4 words), summary (2-3 sentences), imagery (array of 2-3 short strings) }
-
-No markdown, no explanation — just JSON.`;
-
-interface LyricAnalyzeRequest {
-  songTitle: string;
-  artistName: string;
-  fullLyrics: string;
-  userSceneDirection?: string; // optional creative override from UI
 }
 
-async function getDnaPrompt(): Promise<string> {
+IMPORTANT:
+- Return ONLY valid JSON. No markdown. No explanation.
+- Every word directive must reference actual words 
+  from the lyrics — not generic words.
+- Chapter time ratios must cover 0.0 to 1.0 completely.
+- Storyboard must have one entry per lyric line.
+- The thesis must be specific to THIS song.
+  "A love song" is not a thesis.
+  "A person who knows they should leave but 
+   physically cannot stop loving someone" is a thesis.
+`;
+
+type LyricLine = { text: string; start?: number; end?: number };
+
+interface AnalyzeRequest {
+  title?: string;
+  artist?: string;
+  lines?: LyricLine[];
+  lyrics?: string;
+  beatGrid?: { bpm?: number; beats?: number[]; confidence?: number };
+  lyricId?: string;
+  id?: string;
+}
+
+function clamp(n: unknown, min: number, max: number, fallback: number): number {
+  if (typeof n !== "number" || Number.isNaN(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function extractJson(raw: string): Record<string, unknown> | null {
+  const cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
   try {
-    const sbUrl = Deno.env.get("SUPABASE_URL");
-    const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (sbUrl && sbKey) {
-      const res = await fetch(`${sbUrl}/rest/v1/ai_prompts?slug=eq.lyric-hook&select=prompt`, {
-        headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` },
-      });
-      if (res.ok) {
-        const rows = await res.json();
-        if (rows.length > 0 && rows[0].prompt) return rows[0].prompt;
-      }
-    }
-  } catch {}
-  return DEFAULT_DNA_PROMPT;
-}
-
-/** Try to parse JSON from a potentially messy AI response */
-function extractJson(raw: string): any | null {
-  let cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-  const jsonStart = cleaned.indexOf("{");
-  const jsonEnd = cleaned.lastIndexOf("}");
-  if (jsonStart === -1 || jsonEnd <= jsonStart) return null;
-  let jsonStr = cleaned.slice(jsonStart, jsonEnd + 1)
-    .replace(/,\s*}/g, "}").replace(/,\s*]/g, "]")
-    .replace(/[\x00-\x1F\x7F]/g, "");
-  try { return JSON.parse(jsonStr); } catch { return null; }
-}
-
-type ParticleSystemType =
-  | "embers" | "smoke" | "ash" | "rain" | "snow" | "lightning" | "fireflies"
-  | "stars" | "petals" | "dust" | "bubbles" | "glitch" | "confetti" | "crystals" | "moths" | "none";
-
-interface ParticleConfig {
-  system: ParticleSystemType;
-  density: number;
-  speed: number;
-  opacity: number;
-  color: string;
-  beatReactive: boolean;
-  foreground: boolean;
-}
-
-interface SceneManifest {
-  world?: string;
-  particleConfig?: ParticleConfig;
-  physics_spec?: { system?: string; palette?: string[]; typographyProfile?: any };
-}
-
-const RECENT_MANIFEST_LIMIT = 20;
-const recentManifests: SceneManifest[] = [];
-
-function normalizeHexColor(color: string): string | null {
-  if (typeof color !== "string") return null;
-  const c = color.trim().toLowerCase();
-  const short = /^#([0-9a-f]{3})$/i.exec(c);
-  if (short) {
-    const [r, g, b] = short[1].split("");
-    return `#${r}${r}${g}${g}${b}${b}`;
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    return null;
   }
-  const full = /^#([0-9a-f]{6})$/i.exec(c);
-  return full ? `#${full[1]}` : null;
 }
 
-function getLuminance(color: string): number {
-  const hex = normalizeHexColor(color);
-  if (!hex) return 1;
-  const channels = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255)
-    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
-}
-
-
-const VALID_PARTICLE_SYSTEMS: ParticleSystemType[] = [
-  "embers","smoke","ash","rain","snow","lightning","fireflies","stars","petals","dust","bubbles","glitch","confetti","crystals","moths","none",
-];
-
-function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
-  if (typeof value !== "number" || Number.isNaN(value)) return fallback;
-  return Math.min(max, Math.max(min, value));
-}
-
-function isValidHex(value: unknown): value is string {
+function isHex(value: unknown): value is string {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
 }
 
-function normalizeParticleConfig(raw: unknown, manifest: SceneManifest): ParticleConfig {
-  const defaults: ParticleConfig = {
-    system: "none",
-    density: 0.3,
-    speed: 0.4,
-    opacity: 0.35,
-    color: manifest.physics_spec?.palette?.[2] || "#e8e8e8",
-    beatReactive: false,
-    foreground: false,
-  };
-  if (!raw || typeof raw !== "object") return defaults;
-  const p = raw as Record<string, unknown>;
-  return {
-    system: VALID_PARTICLE_SYSTEMS.includes(p.system as ParticleSystemType) ? (p.system as ParticleSystemType) : "none",
-    density: clampNumber(p.density, 0, 1, defaults.density),
-    speed: clampNumber(p.speed, 0, 1, defaults.speed),
-    opacity: clampNumber(p.opacity, 0, 1, defaults.opacity),
-    color: isValidHex(p.color) ? p.color : defaults.color,
-    beatReactive: typeof p.beatReactive === "boolean" ? p.beatReactive : false,
-    foreground: typeof p.foreground === "boolean" ? p.foreground : false,
-  };
+function validateCinematicDirection(value: Record<string, unknown>, linesCount: number): string[] {
+  const errors: string[] = [];
+  const vw = value.visualWorld as Record<string, unknown> | undefined;
+  const chapters = value.chapters as Record<string, unknown>[] | undefined;
+  const storyboard = value.storyboard as Record<string, unknown>[] | undefined;
+  const climax = value.climax as Record<string, unknown> | undefined;
+
+  if (typeof value.thesis !== "string" || !value.thesis.trim()) errors.push("thesis is required");
+  if (!vw) errors.push("visualWorld is required");
+
+  const palette = vw?.palette as unknown[] | undefined;
+  if (!Array.isArray(palette) || palette.length !== 3 || !palette.every(isHex)) {
+    errors.push("visualWorld.palette must be 3 valid hex colors");
+  }
+
+  if (!Array.isArray(chapters) || chapters.length < 3) errors.push("chapters must have at least 3 entries");
+  if (Array.isArray(chapters) && chapters.length > 0) {
+    const sorted = [...chapters].sort((a, b) => Number(a.startRatio ?? 0) - Number(b.startRatio ?? 0));
+    if (Math.abs(Number(sorted[0].startRatio ?? 0) - 0) > 0.001) errors.push("chapters must start at 0.0");
+    if (Math.abs(Number(sorted[sorted.length - 1].endRatio ?? 0) - 1) > 0.001) errors.push("chapters must end at 1.0");
+  }
+
+  if (!Array.isArray(storyboard)) {
+    errors.push("storyboard must be an array");
+  } else if (storyboard.length !== linesCount) {
+    errors.push(`storyboard length ${storyboard.length} must equal lines length ${linesCount}`);
+  }
+
+  if (!climax || typeof climax.timeRatio !== "number") errors.push("climax.timeRatio is required");
+  if (climax && typeof climax.timeRatio === "number" && (climax.timeRatio < 0 || climax.timeRatio > 1)) {
+    errors.push("climax.timeRatio must be 0-1");
+  }
+
+  return errors;
 }
 
+async function persistCinematicDirection(cinematicDirection: Record<string, unknown>, lyricId?: string): Promise<void> {
+  if (!lyricId) return;
 
-function normalizeSongDna(
-  raw: Record<string, unknown>,
-): Record<string, unknown> {
-  const dna = { ...raw };
-  const worldDecision = (dna.world_decision ?? {}) as Record<string, unknown>;
-  const physicsSpec = (dna.physics_spec ?? {}) as Record<string, unknown>;
-  const sceneManifest = (dna.scene_manifest ?? {}) as Record<string, unknown>;
+  const sbUrl = Deno.env.get("SUPABASE_URL");
+  const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!sbUrl || !sbKey) return;
 
-  const wdP = worldDecision.particleConfig as Record<string, unknown> | undefined;
-  const psP = physicsSpec.particleConfig as Record<string, unknown> | undefined;
-  const smP = sceneManifest.particleConfig as Record<string, unknown> | undefined;
+  const payload = { cinematic_direction: cinematicDirection };
+  const headers = {
+    apikey: sbKey,
+    Authorization: `Bearer ${sbKey}`,
+    "Content-Type": "application/json",
+    Prefer: "return=minimal",
+  };
 
-  const authParticle =
-    wdP?.system && wdP.system !== "none"
-      ? wdP
-      : psP?.system && psP.system !== "none"
-        ? psP
-        : smP?.system && smP.system !== "none"
-          ? smP
-          : (wdP ??
-            psP ??
-            smP ?? {
-              system: "none",
-              density: 0.3,
-              speed: 0.4,
-              opacity: 0.35,
-              color: "#ffffff",
-              beatReactive: false,
-              foreground: false,
-            });
-
-  worldDecision.particleConfig = authParticle;
-  physicsSpec.particleConfig = authParticle;
-  sceneManifest.particleConfig = authParticle;
-
-  const psT = physicsSpec.typographyProfile as Record<string, unknown> | undefined;
-  const smT = sceneManifest.typographyProfile as Record<string, unknown> | undefined;
-
-  const authTypo =
-    psT?.fontFamily && psT.fontFamily !== "Inter"
-      ? psT
-      : smT?.fontFamily && smT.fontFamily !== "Inter"
-        ? smT
-        : (psT ??
-          smT ?? {
-            fontFamily: "Inter",
-            fontWeight: 400,
-            letterSpacing: "normal",
-            textTransform: "none",
-            lineHeightMultiplier: 1.4,
-            hasSerif: false,
-            personality: "RAW TRANSCRIPT",
-          });
-
-  physicsSpec.typographyProfile = authTypo;
-  sceneManifest.typographyProfile = authTypo;
-
-  if (worldDecision.backgroundSystem) {
-    sceneManifest.backgroundSystem = worldDecision.backgroundSystem;
-    physicsSpec.system = worldDecision.backgroundSystem;
-  }
-
-  if (physicsSpec.palette) {
-    sceneManifest.palette = physicsSpec.palette;
-  }
-
-  const palette = Array.isArray(sceneManifest.palette)
-    ? sceneManifest.palette
-    : Array.isArray(physicsSpec.palette)
-      ? physicsSpec.palette
-      : [];
-
-  const bg = typeof palette[0] === "string" ? palette[0] : "";
-  const bgLuminance = getLuminance(bg);
-  const emotion = String(
-    dna.coreEmotion ?? dna.emotion ?? dna.mood ?? sceneManifest.mood ?? "",
-  ).toLowerCase();
-
-  if (bgLuminance < 0.05 && sceneManifest.lightSource === "golden hour") {
-    if (["melancholy", "sad", "cold"].includes(emotion)) {
-      sceneManifest.lightSource = "cold overcast";
-    } else if (["manic", "angry"].includes(emotion)) {
-      sceneManifest.lightSource = "flickering left";
-    } else {
-      sceneManifest.lightSource = "moonlight";
+  const attempts = ["lyric_dance", "saved_lyrics"];
+  for (const table of attempts) {
+    const res = await fetch(`${sbUrl}/rest/v1/${table}?id=eq.${encodeURIComponent(lyricId)}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      console.log(`[lyric-analyze] Stored cinematic_direction in ${table} for ${lyricId}`);
+      return;
     }
-    console.warn("[normalizeSongDna] corrected dark palette + golden hour contradiction");
   }
 
-  const world = String(sceneManifest.world ?? "").toLowerCase();
-  const coldKeywords = [
-    "cold",
-    "winter",
-    "snow",
-    "mountain",
-    "icy",
-    "blizzard",
-    "frozen",
-    "night",
-    "dark",
-    "grey",
-  ];
-  const isColWorld = coldKeywords.some((k) => world.includes(k));
-
-  if (isColWorld && sceneManifest.lightSource === "golden hour") {
-    sceneManifest.lightSource = "winter daylight";
-    console.warn("[normalizeSongDna] corrected golden hour → winter daylight");
-  }
-
-  dna.world_decision = worldDecision;
-  dna.physics_spec = physicsSpec;
-  dna.scene_manifest = sceneManifest;
-
-  return dna;
-}
-
-function colorDistance(hex1: string, hex2: string): number {
-  const a = normalizeHexColor(hex1);
-  const b = normalizeHexColor(hex2);
-  if (!a || !b) return Number.POSITIVE_INFINITY;
-  const r1 = Number.parseInt(a.slice(1, 3), 16);
-  const g1 = Number.parseInt(a.slice(3, 5), 16);
-  const b1 = Number.parseInt(a.slice(5, 7), 16);
-  const r2 = Number.parseInt(b.slice(1, 3), 16);
-  const g2 = Number.parseInt(b.slice(3, 5), 16);
-  const b2 = Number.parseInt(b.slice(5, 7), 16);
-  return Math.sqrt((r2 - r1) ** 2 + (g2 - g1) ** 2 + (b2 - b1) ** 2);
-}
-
-function trackManifest(manifest: SceneManifest): void {
-  recentManifests.unshift({
-    world: manifest.world,
-    physics_spec: {
-      system: manifest.physics_spec?.system,
-      palette: manifest.physics_spec?.palette,
-      typographyProfile: manifest.physics_spec?.typographyProfile,
-    },
-  });
-  if (recentManifests.length > RECENT_MANIFEST_LIMIT) recentManifests.length = RECENT_MANIFEST_LIMIT;
-}
-
-function manifestTooSimilar(manifest: SceneManifest, recent: SceneManifest[]): boolean {
-  const system = manifest.physics_spec?.system;
-  const palette = manifest.physics_spec?.palette;
-  if (!system || !Array.isArray(palette) || palette.length === 0) return false;
-  const primary = palette[0];
-  if (!primary) return false;
-
-  return recent.some((m) => {
-    const rs = m.physics_spec?.system;
-    const rp = m.physics_spec?.palette;
-    if (!rs || !Array.isArray(rp) || rp.length < 3) return false;
-    const sameSystem = rs === system;
-
-    const primaryDistance = colorDistance(rp[0], palette[0]);
-    const midDistance = colorDistance(rp[1], palette[1]);
-    const lightDistance = colorDistance(rp[2], palette[2]);
-    const averageDistance = (primaryDistance + midDistance + lightDistance) / 3;
-    const similarPalette = averageDistance < 60;
-
-    return sameSystem && similarPalette;
-  });
-}
-
-function buildDiversityNote(recent: SceneManifest[]): string {
-  const recentSummary = recent
-    .slice(0, 5)
-    .map((m, i) => `${i + 1}. system=${m.physics_spec?.system || "unknown"}, palette=${JSON.stringify(m.physics_spec?.palette || [])}, world=${m.world || "unknown"}`)
-    .join("\n");
-
-  return `DIVERSITY CORRECTION REQUIRED. Your previous manifest was too similar to recent songs. Return a materially different world, system, and palette[0]. Avoid repeating these recent outputs:
-${recentSummary}`;
-}
-
-/** Check if parsed result has the critical fields — requires 2 hooks */
-function isComplete(parsed: any, includeHooks: boolean): boolean {
-  const hooks = parsed?.hottest_hooks;
-  const hasTwoHooks = Array.isArray(hooks) && hooks.length >= 2
-    && hooks[0]?.start_sec != null && hooks[1]?.start_sec != null
-    && hooks[0]?.label && hooks[1]?.label;
-  // Also accept legacy single hook on final fallback (handled elsewhere)
-  return !!(
-    (!includeHooks || hasTwoHooks) &&
-    parsed?.physics_spec?.system &&
-    parsed?.physics_spec?.params &&
-    Object.keys(parsed.physics_spec.params).length >= 3 &&
-    parsed?.mood
-  );
+  console.warn(`[lyric-analyze] Could not store cinematic_direction for ${lyricId}`);
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const body = (await req.json()) as Partial<LyricAnalyzeRequest> & Record<string, unknown>;
-    const title = String(body.title ?? body.songTitle ?? "");
-    const artist = String(body.artist ?? body.artistName ?? "");
-    const lyrics = String(body.lyrics ?? body.fullLyrics ?? "");
-    const audioBase64 = typeof body.audioBase64 === "string" ? body.audioBase64 : undefined;
-    const format = typeof body.format === "string" ? body.format : undefined;
-    const beatGrid = body.beatGrid as { bpm?: number; confidence?: number } | undefined;
-    const includeHooks = body.includeHooks as boolean | undefined;
-    const userSceneDirection = typeof body.userSceneDirection === "string"
-      ? body.userSceneDirection.trim()
-      : "";
-    const hooksEnabled = includeHooks !== false;
+    const body = (await req.json()) as AnalyzeRequest;
+    const lines = Array.isArray(body.lines)
+      ? body.lines
+      : typeof body.lyrics === "string"
+        ? body.lyrics.split(/\n+/).map((text, index) => ({ text: text.trim(), start: index, end: index + 1 })).filter((line) => line.text.length > 0)
+        : [];
+    const title = String(body.title ?? "").trim();
+    const artist = String(body.artist ?? "").trim();
+    const lyricId = typeof body.lyricId === "string" ? body.lyricId : typeof body.id === "string" ? body.id : undefined;
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
-    const hasAudio = typeof audioBase64 === "string" && audioBase64.length > 0;
-
-    let parsed: any;
-
-    if (hasAudio) {
-      const mimeMap: Record<string, string> = {
-        wav: "audio/wav", mp3: "audio/mpeg", m4a: "audio/mp4", mp4: "audio/mp4",
-        flac: "audio/flac", ogg: "audio/ogg", webm: "audio/webm",
-      };
-      const ext = format && mimeMap[format] ? format : "mp3";
-      const mimeType = mimeMap[ext] || "audio/mpeg";
-
-      const userContent: any[] = [
-        { type: "image_url", image_url: { url: `data:${mimeType};base64,${audioBase64}` } },
-      ];
-
-      let textInstruction = "";
-      if (beatGrid?.bpm) {
-        textInstruction += `[Beat Grid Context] Detected BPM: ${beatGrid.bpm} (confidence: ${beatGrid.confidence?.toFixed?.(2) ?? "N/A"}). Use this as ground truth for tempo.\n\n`;
-      }
-      if (lyrics) {
-        if (userSceneDirection) {
-          textInstruction += `The artist has provided a scene direction to consider:\n"${userSceneDirection}"\n\nIncorporate this direction into your world construction while\nmaintaining physical coherence. The direction is a creative influence,\nnot a literal instruction — if it conflicts with the lyrics,\nthe lyrics take precedence.\n\n`;
-        }
-        textInstruction += hooksEnabled
-          ? `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. MANDATORY: "hottest_hooks" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique "label". lexicon.line_mods must have EXACTLY 5-8 entries total. physics_spec.typographyProfile is REQUIRED.`
-          : `Lyrics:\n${lyrics}\n\nAnalyze this audio and its lyrics. Return ONLY the JSON schema specified. DO NOT return any hook fields (no hottest_hook and no hottest_hooks).`; 
-      } else {
-        textInstruction += hooksEnabled
-          ? "Analyze this audio. Return ONLY the JSON schema specified. MANDATORY: \"hottest_hooks\" must be an array of EXACTLY 2 hooks, not 1. Each hook needs a unique \"label\". lexicon.line_mods must have EXACTLY 5-8 entries total. physics_spec.typographyProfile is REQUIRED."
-          : "Analyze this audio. Return ONLY the JSON schema specified. DO NOT return any hook fields (no hottest_hook and no hottest_hooks).";
-      }
-      userContent.push({ type: "text", text: textInstruction });
-
-      console.log(`[song-dna] Audio mode: ~${(audioBase64.length * 0.75 / 1024 / 1024).toFixed(1)} MB, format: ${ext}, beatGrid: ${beatGrid ? `${beatGrid.bpm}bpm` : "none"}`);
-
-      const dnaPrompt = await getDnaPrompt();
-      console.log(`[song-dna] Prompt source: ${dnaPrompt.includes("ADAPTIVE HOOK ANCHOR") ? "v2-adaptive" : "v1-legacy"}, length: ${dnaPrompt.length}`);
-
-      // Try up to 2 attempts with increasing token limits
-      const attempts = [
-        { max_tokens: 4096, model: "google/gemini-2.5-flash" },
-        { max_tokens: 6000, model: "google/gemini-2.5-flash" },
-      ];
-
-      for (let attempt = 0; attempt < attempts.length; attempt++) {
-        const { max_tokens, model } = attempts[attempt];
-        console.log(`[song-dna] Attempt ${attempt + 1}: model=${model}, max_tokens=${max_tokens}`);
-
-        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: "system", content: dnaPrompt },
-              { role: "user", content: userContent },
-            ],
-            temperature: 0.1,
-            max_tokens,
-          }),
-        });
-
-        if (!response.ok) {
-          if (response.status === 429) {
-            return new Response(JSON.stringify({ error: "Rate limited, try again shortly" }), {
-              status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-          if (response.status === 402) {
-            return new Response(JSON.stringify({ error: "AI credits exhausted" }), {
-              status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-          const t = await response.text();
-          console.error("AI gateway error:", response.status, t);
-          throw new Error("AI gateway error");
-        }
-
-        const data = await response.json();
-        const raw = data.choices?.[0]?.message?.content ?? "";
-        const finishReason = data.choices?.[0]?.finish_reason ?? "unknown";
-
-        console.log(`[song-dna] Response length: ${raw.length}, finish_reason: ${finishReason}`);
-
-        parsed = extractJson(raw);
-
-        if (parsed && isComplete(parsed, hooksEnabled) && manifestTooSimilar(parsed as SceneManifest, recentManifests)) {
-          console.warn("[song-dna] Diversity guard: manifest too similar, regenerating");
-          const diversityNote = buildDiversityNote(recentManifests);
-          const regenResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model,
-              messages: [
-                { role: "system", content: dnaPrompt },
-                { role: "user", content: userContent },
-                { role: "user", content: diversityNote },
-              ],
-              temperature: 0.2,
-              max_tokens,
-            }),
-          });
-
-          if (regenResponse.ok) {
-            const regenData = await regenResponse.json();
-            const regenRaw = regenData.choices?.[0]?.message?.content ?? "";
-            const regenParsed = extractJson(regenRaw);
-            if (regenParsed) parsed = regenParsed;
-          }
-        }
-
-        if (parsed && isComplete(parsed, hooksEnabled)) {
-          // Normalize legacy format
-          if (hooksEnabled && parsed.hottest_hook && !parsed.hottest_hooks) {
-            parsed.hottest_hooks = [parsed.hottest_hook];
-          }
-          // If AI returned only 1 hook, synthesize a second from a different region
-          if (hooksEnabled && Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
-            const first = parsed.hottest_hooks[0];
-            const firstStart = Number(first.start_sec) || 60;
-            const secondStart = firstStart > 60 ? Math.max(firstStart - 40, 10) : firstStart + 30;
-            parsed.hottest_hooks.push({
-              start_sec: secondStart,
-              duration_sec: 10,
-              confidence: Math.max((Number(first.confidence) || 0.8) - 0.15, 0.5),
-              justification: "Secondary hook region (auto-detected)",
-              label: "The Other Side",
-            });
-            console.log(`[song-dna] Synthesized 2nd hook at ${secondStart}s (1st was at ${firstStart}s)`);
-          }
-          const firstHook = parsed.hottest_hooks?.[0] || parsed.hottest_hook;
-          console.log(`[song-dna] ✓ Complete on attempt ${attempt + 1}: mood=${parsed.mood}, system=${parsed.physics_spec.system}, hook=${firstHook?.start_sec}, hooks=${parsed.hottest_hooks?.length ?? 1}`);
-          break;
-        }
-
-        // If truncated (finish_reason=length or missing fields), retry with more tokens
-        console.warn(`[song-dna] Attempt ${attempt + 1} incomplete (finish_reason=${finishReason}). ${attempt < attempts.length - 1 ? "Retrying..." : "Using partial result."}`);
-        console.warn(`[song-dna] Raw ends with: "${raw.slice(-120)}"`);
-
-        if (attempt === attempts.length - 1) {
-          // If we got partial data, try to salvage what we can
-          if (!parsed) parsed = {};
-          
-          // Ensure critical fields exist with fallback defaults
-          if (!parsed.mood) parsed.mood = "determined";
-          if (!parsed.description) parsed.description = "A dynamic track with powerful energy.";
-          if (!parsed.meaning) parsed.meaning = { theme: "Expression", summary: "An expressive musical piece.", imagery: ["sound waves", "stage lights"] };
-          if (hooksEnabled && !parsed.hottest_hooks && !parsed.hottest_hook) {
-            // Estimate hooks as fallback
-            parsed.hottest_hooks = [
-              { start_sec: 60, duration_sec: 10, confidence: 0.80, justification: "Estimated hook region", label: "The Hook" },
-              { start_sec: 90, duration_sec: 10, confidence: 0.70, justification: "Estimated secondary hook", label: "The Bridge" },
-            ];
-          }
-          // Normalize legacy hottest_hook → hottest_hooks array
-          if (hooksEnabled && parsed.hottest_hook && !parsed.hottest_hooks) {
-            parsed.hottest_hooks = [parsed.hottest_hook];
-          }
-          // Ensure we always have 2 hooks in salvage path
-          if (hooksEnabled && Array.isArray(parsed.hottest_hooks) && parsed.hottest_hooks.length === 1) {
-            const first = parsed.hottest_hooks[0];
-            const firstStart = Number(first.start_sec) || 60;
-            const secondStart = firstStart > 60 ? Math.max(firstStart - 40, 10) : firstStart + 30;
-            parsed.hottest_hooks.push({
-              start_sec: secondStart,
-              duration_sec: 10,
-              confidence: Math.max((Number(first.confidence) || 0.8) - 0.15, 0.5),
-              justification: "Secondary hook region (auto-detected)",
-              label: "The Other Side",
-            });
-            console.log(`[song-dna] Salvage: synthesized 2nd hook at ${secondStart}s (1st at ${firstStart}s)`);
-          }
-          if (!parsed.physics_spec || !parsed.physics_spec.system) {
-            parsed.physics_spec = {
-              system: "pressure",
-              params: { mass: 1.5, elasticity: 0.5, damping: 0.6, brittleness: 0.3, heat: 0.4 },
-              palette: ["#1e2230", "#7d8aa3", "#e8edf5"],
-              effect_pool: ["SHATTER_IN", "GLITCH_FLASH", "WAVE_SURGE", "STATIC_RESOLVE"],
-              logic_seed: 42,
-              typographyProfile: {
-                fontFamily: "Inter",
-                fontWeight: 500,
-                letterSpacing: "0.04em",
-                textTransform: "none",
-                lineHeightMultiplier: 1.2,
-                hasSerif: false,
-                personality: "RAW TRANSCRIPT",
-              },
-              lexicon: { semantic_tags: [{ tag: "RISE", strength: 0.7 }], line_mods: [], word_marks: [] },
-            };
-          }
-          console.log(`[song-dna] Using salvaged/fallback result: mood=${parsed.mood}, system=${parsed.physics_spec.system}, hooks=${parsed.hottest_hooks?.length}`);
-        }
-      }
-
-      if (parsed?.physics_spec && !parsed.physics_spec.typographyProfile) {
-        parsed.physics_spec.typographyProfile = {
-          fontFamily: "Inter",
-          fontWeight: 500,
-          letterSpacing: "0.04em",
-          textTransform: "none",
-          lineHeightMultiplier: 1.2,
-          hasSerif: false,
-          personality: "RAW TRANSCRIPT",
-        };
-      }
-
-      // Final normalization: ensure hottest_hooks array exists
-      if (hooksEnabled && parsed?.hottest_hook && !parsed?.hottest_hooks) {
-        parsed.hottest_hooks = [parsed.hottest_hook];
-      }
-
-      if (!hooksEnabled && parsed) {
-        delete parsed.hottest_hook;
-        delete parsed.hottest_hooks;
-      }
-
-      console.log(`[song-dna] Final result: mood=${parsed?.mood ?? "none"}, hooks=${parsed?.hottest_hooks?.length ?? 0}, system=${parsed?.physics_spec?.system ?? "none"}, params=${JSON.stringify(parsed?.physics_spec?.params ?? {})}`);
-
-    } else {
-      // ── Lyrics-only mode ──
-      if (!lyrics || typeof lyrics !== "string") {
-        return new Response(JSON.stringify({ error: "Missing lyrics or audio" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      console.log(`[song-dna] Lyrics-only mode`);
-
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: LYRICS_ONLY_PROMPT },
-            { role: "user", content: `Song: "${title || "Unknown"}" by ${artist || "Unknown Artist"}${beatGrid?.bpm ? `\n[Beat Grid] BPM: ${beatGrid.bpm}` : ""}\n\nLyrics:\n${lyrics}` },
-          ],
-          response_format: { type: "json_object" },
-        }),
+    if (!title || !artist || lines.length === 0) {
+      return new Response(JSON.stringify({ error: "title, artist, and lines are required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-
-      if (!response.ok) {
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: "Rate limited, try again shortly" }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        const t = await response.text();
-        console.error("AI gateway error:", response.status, t);
-        throw new Error("AI gateway error");
-      }
-
-      const data = await response.json();
-      const raw = data.choices?.[0]?.message?.content ?? "";
-      try { parsed = JSON.parse(raw); } catch { parsed = { summary: raw }; }
     }
 
-    if (parsed) {
-      parsed = normalizeSongDna(parsed as Record<string, unknown>);
-      parsed.particleConfig = normalizeParticleConfig(parsed.particleConfig, parsed as SceneManifest);
+    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
+
+    const songPayload = {
+      title,
+      artist,
+      lines,
+      beatGrid: body.beatGrid ?? null,
+    };
+
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "anthropic/claude-sonnet-4",
+        messages: [
+          { role: "system", content: MASTER_DIRECTOR_PROMPT },
+          {
+            role: "user",
+            content: `Song Data:\n${JSON.stringify(songPayload)}`,
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 6000,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      const text = await aiResponse.text();
+      console.error("lyric-analyze ai error", aiResponse.status, text);
+      return new Response(JSON.stringify({ error: "AI request failed" }), {
+        status: aiResponse.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    if (parsed && parsed.physics_spec) trackManifest(parsed as SceneManifest);
+    const completion = await aiResponse.json();
+    const raw = completion?.choices?.[0]?.message?.content ?? "";
+    const parsed = extractJson(String(raw));
 
-    return new Response(JSON.stringify(parsed), {
+    if (!parsed) {
+      return new Response(JSON.stringify({ error: "Invalid AI JSON response" }), {
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Enforce numeric ranges on common keys before validation.
+    const visualWorld = (parsed.visualWorld ?? {}) as Record<string, unknown>;
+    const physicsProfile = (visualWorld.physicsProfile ?? {}) as Record<string, unknown>;
+    physicsProfile.heat = clamp(physicsProfile.heat, 0, 1, 0.5);
+    visualWorld.physicsProfile = physicsProfile;
+    parsed.visualWorld = visualWorld;
+
+    const climax = (parsed.climax ?? {}) as Record<string, unknown>;
+    climax.timeRatio = clamp(climax.timeRatio, 0, 1, 0.5);
+    climax.maxParticleDensity = clamp(climax.maxParticleDensity, 0, 1, 1);
+    climax.maxLightIntensity = clamp(climax.maxLightIntensity, 0, 1, 1);
+    parsed.climax = climax;
+
+    const validationErrors = validateCinematicDirection(parsed, lines.length);
+    if (validationErrors.length > 0) {
+      return new Response(JSON.stringify({ error: "CinematicDirection validation failed", details: validationErrors }), {
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    await persistCinematicDirection(parsed, lyricId);
+
+    console.log(`[lyric-analyze] title="${title}" artist="${artist}" lines=${lines.length}`);
+    console.log("[lyric-analyze] cinematic_direction", JSON.stringify(parsed));
+
+    return new Response(JSON.stringify({ cinematicDirection: parsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
-    console.error("lyric-analyze error:", e);
+  } catch (error) {
+    console.error("lyric-analyze error:", error);
     return new Response(JSON.stringify({ error: "Analysis failed" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
