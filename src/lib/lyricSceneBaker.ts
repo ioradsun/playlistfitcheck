@@ -37,6 +37,7 @@ export type Keyframe = {
   }>;
   cameraX: number;
   cameraY: number;
+  cameraZoom: number;
   beatIndex: number;
 };
 
