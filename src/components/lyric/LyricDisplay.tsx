@@ -351,11 +351,9 @@ export function LyricDisplay({
   const [isPlaying, setIsPlaying] = useState(false);
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
-  // Use pre-computed beat grid if available, otherwise run detection from decoded audio
-  const { beatGrid: detectedBeatGrid, loading: beatGridLoading } = useBeatGrid(
-    initialBeatGrid ? null : audioBuffer,
-  );
-  const beatGrid = initialBeatGrid ?? detectedBeatGrid;
+  // Beat grid from props only (no useBeatGrid hook — that's in FitTab now)
+  const beatGrid = initialBeatGrid ?? null;
+  const beatGridLoading = false;
   const rafRef = useRef<number | null>(null);
 
   // (timing offset removed — Scribe timestamps are accurate)
