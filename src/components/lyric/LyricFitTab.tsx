@@ -238,6 +238,11 @@ export function LyricFitTab({
 
   const startLyricAnalyze = useCallback(async (sourceLines: LyricLine[], targetAudioFile: File) => {
     if (!lyricData || !sourceLines.length || !targetAudioFile) return;
+    // Data-existence guard: if we already have songDna (e.g. loaded from DB), skip
+    if (songDna) {
+      setGenerationStatus(prev => prev.songDna === "done" ? prev : ({ ...prev, songDna: "done" }));
+      return;
+    }
     if (generationStatus.songDna === "running" || generationStatus.songDna === "done") return;
 
     setGenerationStatus(prev => ({ ...prev, songDna: "running" }));
