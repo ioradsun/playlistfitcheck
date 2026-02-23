@@ -87,6 +87,7 @@ export class HookDanceEngine {
   private boundTimeUpdate: (() => void) | null = null;
   private boundEnded: (() => void) | null = null;
   private activeManifest: SceneManifest | null = null;
+  private lastExternalBeatIntensity = 0;
 
   constructor(
     spec: PhysicsSpec,
@@ -125,6 +126,20 @@ export class HookDanceEngine {
 
   setViewportBounds(width: number, height: number) {
     this.integrator.setViewportBounds(width, height);
+  }
+
+  /**
+   * External frame-driven update path used by full-song canvas rendering.
+   * Allows callers to feed live beat intensity while preserving the spring world.
+   */
+  update(beatIntensity: number, isDownbeat = false): PhysicsState {
+    const clamped = Math.max(0, Math.min(1, beatIntensity));
+    const delta = Math.max(0, clamped - this.lastExternalBeatIntensity);
+    if (delta > 0.01) {
+      this.integrator.onBeat(Math.max(clamped, delta), isDownbeat);
+    }
+    this.lastExternalBeatIntensity = clamped;
+    return this.integrator.tick();
   }
 
   /**
@@ -183,12 +198,18 @@ export class HookDanceEngine {
     });
   }
 
+  resetPhysics() {
+    this.integrator.reset();
+    this.lastExternalBeatIntensity = 0;
+  }
+
   /** Start the engine — seeks audio to hookStart and begins ticking */
   start() {
     if (this.running) return;
     this.running = true;
     this.audioPlaying = false;
     this.integrator.reset();
+    this.lastExternalBeatIntensity = 0;
     this.beatIndex = 0;
     this.totalBeats = 0;
     this.prevTime = this.hookStart;
@@ -306,6 +327,7 @@ export class HookDanceEngine {
         .then(() => { this.audioPlaying = true; })
         .catch(() => { this.audioPlaying = false; });
       this.integrator.reset();
+      this.lastExternalBeatIntensity = 0;
       this.beatIndex = 0;
       this.prevTime = this.hookStart;
       this.syntheticStart = performance.now();
