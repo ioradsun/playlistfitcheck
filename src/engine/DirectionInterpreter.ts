@@ -7,7 +7,7 @@ import type {
 
 export class DirectionInterpreter {
   constructor(
-    private direction: CinematicDirection,
+    public readonly direction: CinematicDirection,
     private totalDuration: number,
   ) {}
 

@@ -1235,6 +1235,7 @@ export type Database = {
           audio_url: string
           background_url: string | null
           beat_grid: Json
+          cinematic_direction: Json | null
           created_at: string
           fire_count: number
           id: string
@@ -1256,6 +1257,7 @@ export type Database = {
           audio_url: string
           background_url?: string | null
           beat_grid: Json
+          cinematic_direction?: Json | null
           created_at?: string
           fire_count?: number
           id?: string
@@ -1277,6 +1279,7 @@ export type Database = {
           audio_url?: string
           background_url?: string | null
           beat_grid?: Json
+          cinematic_direction?: Json | null
           created_at?: string
           fire_count?: number
           id?: string
