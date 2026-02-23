@@ -356,6 +356,10 @@ export class LyricDancePlayer {
       // Second instance — bake in progress, wait for it
       console.log('[PLAYER] waiting for bake to complete');
       await globalBakePromise;
+      console.log('[PLAYER] instance 2 after wait — cache exists:',
+        !!globalTimelineCache, 'frames:', globalTimelineCache?.length,
+        'chunks:', globalChunkCache?.size,
+        'this.timeline after copy:', this.timeline.length);
     }
 
     if (globalTimelineCache && globalChunkCache) {
@@ -367,6 +371,8 @@ export class LyricDancePlayer {
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
     this.playing = true;
+    console.log('[PLAYER] starting RAF — timeline frames:', this.timeline.length,
+      'chunks:', this.chunks.size);
     this.rafHandle = requestAnimationFrame(this.tick);
   }
 
