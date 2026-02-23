@@ -17,7 +17,7 @@ import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { getTextShadow } from "@/engine/LightingSystem";
-import { renderChapterBackground } from "@/engine/BackgroundDirector";
+import { getSymbolStateForProgress, renderChapterBackground } from "@/engine/BackgroundDirector";
 import { renderChapterLighting } from "@/engine/LightingDirector";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
@@ -29,9 +29,9 @@ import { deriveCanvasManifest } from "@/engine/deriveCanvasManifest";
 import { applyKineticEffect } from "../engine/KineticEffects";
 import { drawElementalWord } from "../engine/ElementalEffects";
 import * as WordClassifier from "@/engine/WordClassifier";
-import { DirectionInterpreter } from "@/engine/DirectionInterpreter";
+import { DirectionInterpreter, getActiveShot, getCurrentTensionStage } from "@/engine/DirectionInterpreter";
 import type { WordHistory } from "@/engine/DirectionInterpreter";
-import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
+import type { CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -85,6 +85,15 @@ interface LiveDebugState {
   dirIntensity: number;
   dirBgDirective: string;
   dirLightBehavior: string;
+  symbolPrimary: string;
+  symbolSecondary: string;
+  symbolState: string;
+  cameraDistance: string;
+  cameraMovement: string;
+  tensionStage: string;
+  tensionMotion: number;
+  tensionParticles: number;
+  tensionTypo: number;
   // Word Directive
   wordDirectiveWord: string;
   wordDirectiveKinetic: string;
@@ -96,6 +105,8 @@ interface LiveDebugState {
   lineEntry: string;
   lineExit: string;
   lineIntent: string;
+  shotType: string;
+  shotDescription: string;
   // Evolution
   evolutionWord: string;
   evolutionCount: number;
@@ -211,6 +222,22 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
         <Row label="bgDirective" value={snap.dirBgDirective.slice(0, 30) + (snap.dirBgDirective.length > 30 ? "…" : "")} />
         <Row label="lightBehavior" value={snap.dirLightBehavior.slice(0, 30) + (snap.dirLightBehavior.length > 30 ? "…" : "")} />
       </Section>
+      <Section title="SYMBOL">
+        <Row label="primary" value={snap.symbolPrimary} />
+        <Row label="secondary" value={snap.symbolSecondary} />
+        <Row label="state" value={snap.symbolState.slice(0, 30) + (snap.symbolState.length > 30 ? "…" : "")} />
+      </Section>
+      <Section title="CAMERA">
+        <Row label="distance" value={snap.cameraDistance} />
+        <Row label="zoom" value={f(snap.zoom)} />
+        <Row label="movement" value={snap.cameraMovement} />
+      </Section>
+      <Section title="TENSION">
+        <Row label="stage" value={snap.tensionStage} />
+        <Row label="motion" value={f(snap.tensionMotion)} />
+        <Row label="particles" value={f(snap.tensionParticles)} />
+        <Row label="typo" value={f(snap.tensionTypo)} />
+      </Section>
       <Section title="WORD DIRECTIVE">
         <Row label="word" value={snap.wordDirectiveWord || "—"} />
         <Row label="kinetic" value={snap.wordDirectiveKinetic || "—"} />
@@ -223,6 +250,10 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
         <Row label="entry" value={snap.lineEntry} />
         <Row label="exit" value={snap.lineExit} />
         <Row label="intent" value={snap.lineIntent || "—"} />
+      </Section>
+      <Section title="SHOT">
+        <Row label="type" value={snap.shotType} />
+        <Row label="description" value={snap.shotDescription.slice(0, 30) + (snap.shotDescription.length > 30 ? "…" : "")} />
       </Section>
       <Section title="EVOLUTION">
         <Row label="word" value={`${snap.evolutionWord} count:${snap.evolutionCount}`} />
@@ -245,6 +276,15 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
 }
 
 
+
+
+const distanceToZoom: Record<string, number> = {
+  ExtremeWide: 0.85,
+  Wide: 1.0,
+  Medium: 1.08,
+  Close: 1.18,
+  ExtremeClose: 1.3,
+};
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -626,8 +666,10 @@ export default function ShareableLyricDance() {
     xOffset: 0, yBase: 0.5, xNudge: 0, shake: 0,
     backgroundSystem: "—", imageLoaded: false, zoom: 1, vignetteIntensity: 0, songProgress: 0,
     dirThesis: "—", dirChapter: "—", dirChapterProgress: 0, dirIntensity: 0, dirBgDirective: "—", dirLightBehavior: "—",
+    symbolPrimary: "—", symbolSecondary: "—", symbolState: "—",
+    cameraDistance: "Wide", cameraMovement: "—", tensionStage: "—", tensionMotion: 0, tensionParticles: 0, tensionTypo: 0,
     wordDirectiveWord: "", wordDirectiveKinetic: "—", wordDirectiveElemental: "—", wordDirectiveEmphasis: 0, wordDirectiveEvolution: "—",
-    lineHeroWord: "", lineEntry: "fades", lineExit: "fades", lineIntent: "—",
+    lineHeroWord: "", lineEntry: "fades", lineExit: "fades", lineIntent: "—", shotType: "FloatingInWorld", shotDescription: "—",
     evolutionWord: "—", evolutionCount: 0, evolutionScale: 1, evolutionGlow: 0, evolutionBubbles: 0, evolutionSinkPx: 0,
     fps: 60, drawCalls: 0, cacheHits: 0,
   });
@@ -645,6 +687,7 @@ export default function ShareableLyricDance() {
   const silenceZoomRef = useRef(1);
   const vignetteIntensityRef = useRef(0.55);
   const lightIntensityRef = useRef(1);
+  const cameraZoomRef = useRef(1);
   // Comment input (ShareableHook-style)
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -1054,6 +1097,16 @@ export default function ShareableLyricDance() {
       const isOnStrongBeat = activeLineBeatMap?.strongBeats.some(beat => Math.abs(currentTime - beat) < 0.05) ?? false;
       const beatDensity = activeLineBeatMap?.beatsPerSecond ?? 0;
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
+      const symbol = cinematicDirection?.symbolSystem;
+      const camera = cinematicDirection?.cameraLanguage;
+      const tensionStage = getCurrentTensionStage(songProgress, cinematicDirection?.tensionCurve as TensionStage[] | undefined);
+      const shot = activeLineIndex >= 0
+        ? getActiveShot(activeLineIndex, cinematicDirection?.shotProgression)
+        : null;
+      const chapterCamera = camera?.distanceByChapter
+        .find((d) => d.chapterIndex === activeChapterIndex);
+      const targetZoom = distanceToZoom[chapterCamera?.distance ?? 'Wide'] ?? 1.0;
+      cameraZoomRef.current += (targetZoom - cameraZoomRef.current) * 0.005;
       const nextLine = lines.find(l => l.start > currentTime) ?? null;
       const isInSilence = interpreterNow?.isInSilence(activeLine ?? null, nextLine ? { start: nextLine.start } : null, currentTime)
         ?? (!activeLine || Boolean(nextLine && currentTime < nextLine.start - 0.5));
@@ -1108,8 +1161,11 @@ export default function ShareableLyricDance() {
 
       // Camera shake — only on very strong downbeats, subtle and deterministic
       ctx.save();
+      ctx.translate(cw / 2, ch / 2);
+      const zoom = cameraZoomRef.current * silenceZoomRef.current;
+      ctx.scale(zoom, zoom);
+      ctx.translate(-cw / 2, -ch / 2);
       ctx.translate(0, silenceOffsetYRef.current);
-      ctx.scale(silenceZoomRef.current, silenceZoomRef.current);
       if (currentBeatIntensity > 0.92) {
         const shakePhase = currentTime * 37.7;
         const shakeX = Math.sin(shakePhase) * (currentBeatIntensity - 0.92) * 15;
@@ -1144,6 +1200,7 @@ export default function ShareableLyricDance() {
           songProgress,
           currentBeatIntensity,
           currentTime,
+          symbol,
         );
         lastBeatIntensityRef.current = currentBeatIntensity;
       }
@@ -1197,11 +1254,10 @@ export default function ShareableLyricDance() {
         }
         if (isClimax && cinematicDirection?.climax) {
           particleEngine.setDensityMultiplier(cinematicDirection.climax.maxParticleDensity);
-          lightIntensityRef.current = cinematicDirection.climax.maxLightIntensity;
         } else {
-          particleEngine.setDensityMultiplier(1);
-          lightIntensityRef.current = 1;
+          particleEngine.setDensityMultiplier(tensionStage?.particleDensity ?? 0.5);
         }
+        lightIntensityRef.current = tensionStage?.lightBrightness ?? 0.5;
         timedParticleConfig.density = Math.min(timedParticleConfig.density, maxParticles / 300);
         particleEngine.update(deltaMs, currentBeatIntensity, timedParticleConfig);
         particleEngine.draw(ctx, "far");
@@ -1387,11 +1443,46 @@ export default function ShareableLyricDance() {
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
         const lineProgress = Math.min(1, (currentTime - activeLine.start) / lineDur);
+        let lineOpacity = 1;
+        let entryOverride: string | null = null;
+        let exitOverride: string | null = null;
+        let useLetterFragmentation = false;
+        let drawSymbolOverText = false;
+
+        switch (shot?.shotType) {
+          case 'SubmergedInSymbol':
+            ctx.filter = 'blur(0.5px)';
+            ctx.fillStyle = 'rgba(100,150,220,0.08)';
+            ctx.fillRect(0, 0, cw, ch);
+            lineOpacity = 0.85;
+            break;
+          case 'EmergingFromSymbol':
+            entryOverride = 'materializes';
+            break;
+          case 'ConsumedBySymbol':
+            exitOverride = 'dissolves-upward';
+            drawSymbolOverText = true;
+            break;
+          case 'FragmentedBySymbol':
+            useLetterFragmentation = true;
+            break;
+          case 'AloneInVoid':
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(0, 0, cw, ch);
+            particleEngine?.setDensityMultiplier(0.05);
+            break;
+          case 'FloatingInWorld':
+          case 'ReflectedInSymbol':
+          default:
+            break;
+        }
         const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, effectiveSystem);
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
           ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
           : computeFitFontSize(ctx, activeLine.text, cw, effectiveSystem);
-        const fontSize = fs * activeLineAnim.fontScale;
+        const typoAggression = tensionStage?.typographyAggression ?? 0.5;
+        const baseWordScale = 0.9 + typoAggression * 0.4;
+        const fontSize = fs * activeLineAnim.fontScale * baseWordScale;
         frameFontSize = fontSize;
 
         const targetXOffset = 0;
@@ -1472,13 +1563,13 @@ export default function ShareableLyricDance() {
         ctx.save();
 
         // Compute entrance/exit alpha (these also apply ctx transforms for entrance/exit motion)
-        const lyricEntrance = lineDirection?.entryStyle ?? resolvedManifest?.lyricEntrance ?? "fades";
-        const lyricExit = lineDirection?.exitStyle ?? resolvedManifest?.lyricExit ?? "fades";
+        const lyricEntrance = (entryOverride as any) ?? lineDirection?.entryStyle ?? resolvedManifest?.lyricEntrance ?? "fades";
+        const lyricExit = (exitOverride as any) ?? lineDirection?.exitStyle ?? resolvedManifest?.lyricExit ?? "fades";
         const entryAlpha = applyEntrance(ctx, activeLineAnim.entryProgress, lyricEntrance, { spatialZone: sectionZone });
         const exitAlpha = activeLineAnim.exitProgress > 0
           ? applyExit(ctx, activeLineAnim.exitProgress, lyricExit)
           : 1.0;
-        const compositeAlpha = Math.min(entryAlpha, exitAlpha);
+        const compositeAlpha = Math.min(entryAlpha, exitAlpha) * lineOpacity;
 
         ctx.translate(lineX, lineY);
         // Keep lyrics horizontal by default; only apply transient beat-impact rotation.
@@ -1612,8 +1703,10 @@ export default function ShareableLyricDance() {
             ? (renderedIndex === renderedWords.length - 1 ? 1 : 0.4)
             : 1;
 
-          const finalX = wordX + props.xOffset;
-          const finalY = wordY + props.yOffset;
+          const fragmentationX = useLetterFragmentation ? (rng() - 0.5) * 6 : 0;
+          const fragmentationY = useLetterFragmentation ? (rng() - 0.5) * 4 : 0;
+          const finalX = wordX + props.xOffset + fragmentationX;
+          const finalY = wordY + props.yOffset + fragmentationY;
 
           if (finalX < -wordRenderWidth || finalX > cw + wordRenderWidth || finalY < -fontSize || finalY > ch + fontSize) {
             return;
@@ -1826,6 +1919,12 @@ export default function ShareableLyricDance() {
           ctx.shadowOffsetX = 0;
           ctx.shadowOffsetY = 0;
         }
+        if (drawSymbolOverText && symbol) {
+          ctx.save();
+          ctx.fillStyle = "rgba(180, 210, 255, 0.12)";
+          ctx.fillRect(0, 0, cw, ch);
+          ctx.restore();
+        }
         ctx.restore();
       }
 
@@ -1921,7 +2020,7 @@ export default function ShareableLyricDance() {
       // Background
       dbg.backgroundSystem = data?.system_type ?? "unknown";
       dbg.imageLoaded = bgImageRef.current !== null && bgImageRef.current.complete;
-      dbg.zoom = 1.0 + songProgress * (0.08 * baseAtmosphere);
+      dbg.zoom = cameraZoomRef.current;
       dbg.vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
       dbg.songProgress = songProgress;
       // Direction
@@ -1932,6 +2031,16 @@ export default function ShareableLyricDance() {
       dbg.dirIntensity = chapter?.emotionalIntensity ?? 0;
       dbg.dirBgDirective = chapter?.backgroundDirective ?? timelineManifest.backgroundSystem ?? "—";
       dbg.dirLightBehavior = chapter?.lightBehavior ?? timelineManifest.lightSource ?? "—";
+      const symbolState = getSymbolStateForProgress(songProgress, symbol);
+      dbg.symbolPrimary = symbol?.primary ?? '—';
+      dbg.symbolSecondary = symbol?.secondary ?? '—';
+      dbg.symbolState = symbolState ?? '—';
+      dbg.cameraDistance = chapterCamera?.distance ?? camera?.openingDistance ?? 'Wide';
+      dbg.cameraMovement = chapterCamera?.movement ?? camera?.movementType ?? '—';
+      dbg.tensionStage = tensionStage ? `${tensionStage.stage} (${songProgress.toFixed(2)})` : '—';
+      dbg.tensionMotion = tensionStage?.motionIntensity ?? 0;
+      dbg.tensionParticles = tensionStage?.particleDensity ?? 0;
+      dbg.tensionTypo = tensionStage?.typographyAggression ?? 0;
       // Word Directive (current hero word)
       const dbgLineDir = interpreterNow?.getLineDirection(activeLineIndex) ?? null;
       const dbgWords = activeLine ? activeLine.text.split(/\s+/) : [];
@@ -1947,6 +2056,8 @@ export default function ShareableLyricDance() {
       dbg.lineEntry = dbgLineDir?.entryStyle ?? resolvedManifest.lyricEntrance ?? "fades";
       dbg.lineExit = dbgLineDir?.exitStyle ?? "fades";
       dbg.lineIntent = dbgLineDir?.emotionalIntent ?? "—";
+      dbg.shotType = shot?.shotType ?? 'FloatingInWorld';
+      dbg.shotDescription = shot?.description ?? '—';
       const normalizedHeroWord = (dbgHeroWord || "").toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
       const trackedEvolution = dbgWordDir?.evolutionRule ? wordHistoryRef.current.get(normalizedHeroWord) : null;
       const evolutionCount = trackedEvolution?.count ?? 0;
