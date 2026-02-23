@@ -22,10 +22,10 @@ export type FitReadiness = "not_started" | "running" | "ready" | "error";
 
 export type PipelineStageStatus = "pending" | "running" | "done";
 export interface PipelineStages {
-  transcript: PipelineStageStatus;
   rhythm: PipelineStageStatus;
   songDna: PipelineStageStatus;
   cinematic: PipelineStageStatus;
+  transcript: PipelineStageStatus;
 }
 
 interface Props {
