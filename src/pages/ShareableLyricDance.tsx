@@ -1880,8 +1880,8 @@ export default function ShareableLyricDance() {
         className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer overflow-hidden"
         onClick={() => { if (!showCover) handleMuteToggle(); }}
       >
-        <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full" />
-        <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full" />
+        <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+        <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
         {/* Dark cover overlay */}
         <AnimatePresence>
