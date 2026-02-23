@@ -656,12 +656,13 @@ export default function ShareableLyricDance() {
         setLoading(false);
 
         // Phase 2: fetch cinematic direction asynchronously so rAF can start from phase 1 data.
-        supabase
-          .from("shareable_lyric_dances" as any)
-          .select(DIRECTION_COLUMNS)
-          .eq("id", d.id)
-          .maybeSingle()
-          .then(({ data: directionRow }) => {
+        Promise.resolve(
+          supabase
+            .from("shareable_lyric_dances" as any)
+            .select(DIRECTION_COLUMNS)
+            .eq("id", d.id)
+            .maybeSingle()
+        ).then(({ data: directionRow }) => {
             const deferredDirection = (directionRow as any)?.cinematic_direction
               ?? (directionRow as any)?.song_dna?.cinematic_direction
               ?? null;
@@ -1731,7 +1732,7 @@ export default function ShareableLyricDance() {
             <motion.div
               initial={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="absolute inset-0 z-20 flex flex-col items-center justify-center"
               style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(2px)" }}
             >
