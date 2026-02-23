@@ -120,6 +120,60 @@ export function getCurrentTensionStage(
   )) ?? null;
 }
 
+export function ensureFullTensionCurve(
+  tensionCurve: TensionStage[],
+): TensionStage[] {
+  if (tensionCurve.length >= 4) return tensionCurve;
+
+  const defaults: TensionStage[] = [
+    {
+      stage: "Setup",
+      startRatio: 0,
+      endRatio: 0.25,
+      motionIntensity: 0.3,
+      particleDensity: 0.4,
+      lightBrightness: 0.3,
+      cameraMovement: "steady",
+      typographyAggression: 0.2,
+    },
+    {
+      stage: "Build",
+      startRatio: 0.25,
+      endRatio: 0.6,
+      motionIntensity: 0.6,
+      particleDensity: 0.7,
+      lightBrightness: 0.5,
+      cameraMovement: "push",
+      typographyAggression: 0.5,
+    },
+    {
+      stage: "Peak",
+      startRatio: 0.6,
+      endRatio: 0.85,
+      motionIntensity: 1,
+      particleDensity: 1,
+      lightBrightness: 0.9,
+      cameraMovement: "shake",
+      typographyAggression: 0.9,
+    },
+    {
+      stage: "Release",
+      startRatio: 0.85,
+      endRatio: 1,
+      motionIntensity: 0.3,
+      particleDensity: 0.2,
+      lightBrightness: 0.4,
+      cameraMovement: "drift",
+      typographyAggression: 0.2,
+    },
+  ];
+
+  return defaults.map((def) => {
+    const existing = tensionCurve.find((t) => t.stage === def.stage);
+    return existing ?? def;
+  });
+}
+
 export function getActiveShot(
   lineIndex: number,
   shotProgression: ShotType[] | undefined,
@@ -130,14 +184,20 @@ export function getActiveShot(
 
 export class DirectionInterpreter {
   private evolutionCache = new Map<string, { count: number; props: EvolutionProps }>();
+  private normalizedDirection: CinematicDirection;
 
   constructor(
     public readonly direction: CinematicDirection,
     private totalDuration: number,
-  ) {}
+  ) {
+    this.normalizedDirection = {
+      ...direction,
+      tensionCurve: ensureFullTensionCurve(direction?.tensionCurve ?? []),
+    };
+  }
 
   getCurrentChapter(songProgress: number): Chapter | null {
-    const chapters = this.direction?.chapters;
+    const chapters = this.normalizedDirection?.chapters;
     if (!Array.isArray(chapters) || chapters.length === 0) {
       return null;
     }
@@ -147,19 +207,19 @@ export class DirectionInterpreter {
   }
 
   getWordDirective(word: string): WordDirective | null {
-    if (!this.direction?.wordDirectives) return null;
+    if (!this.normalizedDirection?.wordDirectives) return null;
     const key = word.toLowerCase().replace(/[^a-z]/g, "");
-    return this.direction.wordDirectives[key] ?? null;
+    return this.normalizedDirection.wordDirectives[key] ?? null;
   }
 
   getLineDirection(lineIndex: number): LineDirection | null {
-    if (!this.direction?.storyboard) return null;
-    return this.direction.storyboard[lineIndex] ?? null;
+    if (!this.normalizedDirection?.storyboard) return null;
+    return this.normalizedDirection.storyboard[lineIndex] ?? null;
   }
 
   isClimaxMoment(songProgress: number): boolean {
-    if (!this.direction?.climax) return false;
-    return Math.abs(songProgress - this.direction.climax.timeRatio) < 0.02;
+    if (!this.normalizedDirection?.climax) return false;
+    return Math.abs(songProgress - this.normalizedDirection.climax.timeRatio) < 0.02;
   }
 
   getParticleDirective(songProgress: number): string {
