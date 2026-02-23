@@ -600,6 +600,7 @@ export function LyricDisplay({
   }, [songDna]);
 
   useEffect(() => {
+    console.log("[LyricDisplay] backgroundImageUrl:",
       backgroundImageUrl
         ? backgroundImageUrl.slice(0, 80) + "..."
         : "null — image not yet generated or failed"
