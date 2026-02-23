@@ -57,7 +57,7 @@ import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest"
 import { HookDanceExporter } from "./HookDanceExporter";
 import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
-import { PublishLyricDanceButton } from "./PublishLyricDanceButton";
+// PublishLyricDanceButton removed — publishing handled by FitTab
 import {
   applyProfanityFilter,
   type Strictness,
