@@ -732,6 +732,8 @@ export default function ShareableLyricDance() {
         // Resolve animation mods via AnimationResolver
         const activeLineAnim = lineAnim ?? animationResolver.resolveLine(
           activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity,
+        const lineAnim = animationResolver.resolveLine(
+          activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette,
         );
         frameActiveMod = activeLineAnim.activeMod;
         frameIsHook = activeLineAnim.isHookLine;
@@ -746,7 +748,8 @@ export default function ShareableLyricDance() {
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
           ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
           : computeFitFontSize(ctx, activeLine.text, cw, effectiveSystem);
-        frameFontSize = fs;
+        const fontSize = fs * lineAnim.fontScale;
+        frameFontSize = fontSize;
 
         ctx.save();
 
@@ -774,10 +777,10 @@ export default function ShareableLyricDance() {
           text: activeLine.text,
           physState: state,
           w: cw, h: ch,
-          fs, age,
+          fs: fontSize, age,
           progress: lineProgress,
           rng,
-          palette: textPalette,
+          palette: [lineAnim.lineColor, textPalette[1], textPalette[2]],
           system: effectiveSystem,
           effectiveLetterSpacing,
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
