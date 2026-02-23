@@ -18,8 +18,11 @@ interface Particle {
   rotation: number;
   rotationSpeed: number;
   opacity: number;
+  depth: number;
   active: boolean;
 }
+
+type ParticleLayer = "all" | "far" | "near";
 
 interface LightRay {
   angle: number;
@@ -43,7 +46,7 @@ function parseHex(hex: string): [number, number, number] {
 export class ParticleEngine {
   private readonly maxParticles = MAX_PARTICLES;
   private readonly pool: Particle[] = Array.from({ length: MAX_PARTICLES }, () => ({
-    x: 0, y: 0, vx: 0, vy: 0, life: 0, decay: 0.01, size: 1, rotation: 0, rotationSpeed: 0, opacity: 0, active: false,
+    x: 0, y: 0, vx: 0, vy: 0, life: 0, decay: 0.01, size: 1, rotation: 0, rotationSpeed: 0, opacity: 0, depth: 0, active: false,
   }));
   private config: ParticleConfig;
   private manifest: SceneManifest;
@@ -116,6 +119,9 @@ export class ParticleEngine {
       if (!p.active) continue;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
+      const depthSpeed = 0.7 + p.depth * 0.3;
+      p.x += p.vx * dt * (depthSpeed - 1);
+      p.y += p.vy * dt * (depthSpeed - 1);
       if (this.config.system === "snow" || this.config.system === "petals" || this.config.system === "ash") p.x += sway * (0.3 + p.size * 0.05);
       if (this.config.system === "smoke") p.size += 0.03 * dt;
       p.rotation += p.rotationSpeed * dt;
@@ -125,7 +131,7 @@ export class ParticleEngine {
     this.beatBoostFrames = Math.max(0, this.beatBoostFrames - 1);
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
+  draw(ctx: CanvasRenderingContext2D, layer: ParticleLayer = "all"): void {
     if (this.config.system === "none") return;
     ctx.save();
     if (this.config.system === "light-rays") {
@@ -143,14 +149,19 @@ export class ParticleEngine {
     for (let i = 0; i < this.pool.length; i++) {
       const p = this.pool[i];
       if (!p.active) continue;
-      let alpha = p.opacity * p.life * this.config.opacity;
+      if (layer === "far" && p.depth >= 0.5) continue;
+      if (layer === "near" && p.depth < 0.5) continue;
+
+      const depthScale = 0.8 + p.depth * 0.2;
+      const depthOpacity = 0.6 + p.depth * 0.4;
+      let alpha = p.opacity * p.life * this.config.opacity * depthOpacity;
       const inSafe = p.x >= this.safeZone.x && p.x <= this.safeZone.x + this.safeZone.w && p.y >= this.safeZone.y && p.y <= this.safeZone.y + this.safeZone.h;
       if (inSafe) alpha *= 0.3;
       if (alpha < 0.005) continue;
       ctx.globalAlpha = alpha;
       ctx.fillStyle = `rgb(${r},${g},${b})`;
       ctx.strokeStyle = `rgb(${r},${g},${b})`;
-      this.drawParticle(ctx, p);
+      this.drawParticle(ctx, p, depthScale);
     }
     ctx.restore();
   }
@@ -195,6 +206,7 @@ export class ParticleEngine {
 
   private spawnParticle(particle: Particle): void {
     this.spawnForSystem(particle);
+    particle.depth = Math.random();
     particle.active = true;
   }
 
@@ -222,18 +234,19 @@ export class ParticleEngine {
     }
   }
 
-  private drawParticle(ctx: CanvasRenderingContext2D, p: Particle): void {
+  private drawParticle(ctx: CanvasRenderingContext2D, p: Particle, depthScale: number): void {
+    const particleSize = p.size * depthScale;
     switch (this.config.system) {
-      case "rain": ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.vx * 1.5, p.y + p.size); ctx.stroke(); break;
+      case "rain": ctx.lineWidth = Math.max(0.8, depthScale); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.vx * 1.5, p.y + particleSize); ctx.stroke(); break;
       case "sparks": ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.6, p.y - p.vy * 0.6); ctx.stroke(); break;
       case "petals":
-        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation); ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation); ctx.beginPath(); ctx.ellipse(0, 0, particleSize, particleSize * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
         break;
       case "flames":
-        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + p.vx * 3, p.y - p.size * 0.6, p.x + p.vx, p.y - p.size * 1.5); ctx.lineWidth = Math.max(1, p.size * 0.2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + p.vx * 3, p.y - particleSize * 0.6, p.x + p.vx, p.y - particleSize * 1.5); ctx.lineWidth = Math.max(1, particleSize * 0.2); ctx.stroke();
         break;
-      case "bubbles": ctx.lineWidth = 1.25; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.stroke(); break;
-      default: ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      case "bubbles": ctx.lineWidth = 1.25; ctx.beginPath(); ctx.arc(p.x, p.y, particleSize, 0, Math.PI * 2); ctx.stroke(); break;
+      default: ctx.beginPath(); ctx.arc(p.x, p.y, particleSize, 0, Math.PI * 2); ctx.fill();
     }
   }
 
