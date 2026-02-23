@@ -474,15 +474,15 @@ const Index = () => {
   }, [setActiveTab]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
-    // Reset everything first
+    // Only reset state for the tool being loaded — don't touch other tools'
+    // persisted state (e.g. loadedLyric) to prevent unnecessary remounts.
     setResult(null);
     setVibeAnalysis(null);
     setSongFitAnalysis(null);
-    setLoadedMixProject(null);
-    setProfitArtistUrl(null);
-    setProfitSavedReport(null);
-    setLoadedHitFitAnalysis(null);
-    setLoadedVibeFitResult(null);
+    if (type === "mix") setLoadedMixProject(null);
+    if (type === "profit") { setProfitArtistUrl(null); setProfitSavedReport(null); }
+    if (type === "hitfit") setLoadedHitFitAnalysis(null);
+    if (type === "vibefit") setLoadedVibeFitResult(null);
 
     switch (type) {
       case "profit": {
