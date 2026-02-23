@@ -501,6 +501,7 @@ export default function ShareableLyricDance() {
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
+  const loadedFontFamiliesRef = useRef<Set<string>>(new Set());
   const rngRef = useRef<() => number>(() => 0);
   const lineBeatMapRef = useRef<LineBeatMap[]>([]);
   const wordMeasureCache = useRef<Map<string, number>>(new Map());
@@ -543,6 +544,21 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     interpreterRefStable.current = interpreterRef.current;
+  }, [data?.cinematic_direction, data?.song_dna?.cinematic_direction]);
+
+  useEffect(() => {
+    const cinematicDirection = data?.cinematic_direction ?? data?.song_dna?.cinematic_direction ?? null;
+    const fontFamily = cinematicDirection?.visualWorld?.typography?.fontFamily ?? "Montserrat";
+    const trimmedFontFamily = fontFamily.trim();
+    if (!trimmedFontFamily || loadedFontFamiliesRef.current.has(trimmedFontFamily)) {
+      return;
+    }
+
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(trimmedFontFamily.replace(/ /g, "+"))}:wght@300;400;500;600;700&display=swap`;
+    document.head.appendChild(link);
+    loadedFontFamiliesRef.current.add(trimmedFontFamily);
   }, [data?.cinematic_direction, data?.song_dna?.cinematic_direction]);
 
   // Comments / constellation
@@ -740,7 +756,6 @@ export default function ShareableLyricDance() {
     const particleSystemName = resolvedManifest.particleConfig?.system ?? "none";
     const baseParticleConfig = resolvedManifest.particleConfig;
     const timelineManifest = resolvedManifest;
-    const typeFontFamily = resolvedManifest.typographyProfile?.fontFamily ?? "system-ui";
     const baseAtmosphere = Math.max(0, Math.min(1, resolvedManifest.backgroundIntensity ?? 1));
     const warmLightSource = (resolvedManifest.lightSource || "").toLowerCase();
     const warmEmotion = (resolvedManifest.coreEmotion || "").toLowerCase();
@@ -823,9 +838,10 @@ export default function ShareableLyricDance() {
 
     // Perf: word width cache with fast integer key (avoids template literal allocation)
     const wordWidthIntCache = new Map<number, number>();
-    const hashWordKey = (word: string, fSize: number): number => {
+    const hashWordKey = (word: string, fSize: number, fontFamily: string): number => {
       let h = fSize * 31;
       for (let i = 0; i < word.length; i++) h = (h * 31 + word.charCodeAt(i)) | 0;
+      for (let i = 0; i < fontFamily.length; i++) h = (h * 31 + fontFamily.charCodeAt(i)) | 0;
       return h;
     };
 
@@ -868,11 +884,12 @@ export default function ShareableLyricDance() {
       const ch = textCanvas.clientHeight || textCanvas.height / (window.devicePixelRatio || 1);
       const ctx = textCtx;
       ctx.clearRect(0, 0, cw, ch);
+      particleCtx.clearRect(0, 0, cw, ch);
       let drawCalls = 0;
       let cacheHits = 0;
       let cacheLookups = 0;
-      const getWordWidth = (word: string, fSize: number, _fontFamily: string): number => {
-        const intKey = hashWordKey(word, fSize);
+      const getWordWidth = (word: string, fSize: number, fontFamily: string): number => {
+        const intKey = hashWordKey(word, fSize, fontFamily);
         cacheLookups += 1;
         const cached = wordWidthIntCache.get(intKey);
         if (cached !== undefined) {
@@ -880,7 +897,7 @@ export default function ShareableLyricDance() {
           return cached;
         }
         const previousFont = textCtx.font;
-        textCtx.font = `${fSize}px Inter, ui-sans-serif, system-ui`;
+        textCtx.font = `${fSize}px ${fontFamily}`;
         const width = textCtx.measureText(word).width;
         textCtx.font = previousFont;
         wordWidthIntCache.set(intKey, width);
@@ -1077,6 +1094,11 @@ export default function ShareableLyricDance() {
       );
       lightIntensityRef.current = particleResult.lightIntensity;
       drawCalls += particleResult.drawCalls;
+
+      if (particleEngine) {
+        particleEngine.draw(ctx, "far");
+        drawCalls += 1;
+      }
 
       // Pre-hook darkness build (skipped during hook itself).
       if (canRenderEffects && isPreHook && !isInHook) {
@@ -1295,6 +1317,11 @@ export default function ShareableLyricDance() {
         }
       } else {
         particleEngine?.setSpeedMultiplier(1);
+      }
+
+      if (particleEngine) {
+        particleEngine.draw(ctx, "near");
+        drawCalls += 1;
       }
 
       ctx.restore();

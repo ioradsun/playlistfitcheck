@@ -206,6 +206,8 @@ export function renderText(
     state, interpreter, shot, tensionStage, chapterDirective, cinematicDirection,
     isClimax, particleEngine, rng, getWordWidth, isMobile, hardwareConcurrency, devicePixelRatio,
   } = input;
+  const cinematicFontFamily = cinematicDirection?.visualWorld?.typography?.fontFamily ?? "Montserrat";
+  const resolvedWordFont = `"${cinematicFontFamily}", Inter, ui-sans-serif, system-ui`;
 
   let drawCalls = 0;
   let activeWordPosition = {
@@ -450,7 +452,7 @@ export function renderText(
   const previousLine = activeLineIndex > 0 ? lines[activeLineIndex - 1] : null;
   if (displayMode === "two_line_stack" && previousLine) {
     ctx.save();
-    ctx.font = `${Math.max(14, fontSize * 0.86)}px Inter, ui-sans-serif, system-ui`;
+    ctx.font = `${Math.max(14, fontSize * 0.86)}px ${resolvedWordFont}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = activeLineAnim.lineColor;
@@ -465,8 +467,8 @@ export function renderText(
       ? words.map((text) => ({ text }))
       : drawWords;
 
-  const measuredWordWidths = renderedWords.map(word => getWordWidth(word.text, fontSize, "Inter, ui-sans-serif, system-ui"));
-  const baseSpaceWidth = getWordWidth(" ", fontSize, "Inter, ui-sans-serif, system-ui");
+  const measuredWordWidths = renderedWords.map(word => getWordWidth(word.text, fontSize, resolvedWordFont));
+  const baseSpaceWidth = getWordWidth(" ", fontSize, resolvedWordFont);
   const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, renderedWords.length - 1) * baseSpaceWidth;
   let cursorX = displayMode === "single_word" ? lineX : lineX - totalWidth / 2;
 
@@ -528,15 +530,15 @@ export function renderText(
       return;
     }
 
-    const wordWidth = getWordWidth(word.text, fontSize, "Inter, ui-sans-serif, system-ui");
+    const wordWidth = getWordWidth(word.text, fontSize, resolvedWordFont);
     const wordCenterX = displayMode === "single_word" ? lineX : cursorX + wordWidth / 2;
     const wordX = wordCenterX;
     let wordY = lineY;
 
-    ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui`;
+    ctx.font = `${fontSize}px ${resolvedWordFont}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    const wordRenderWidth = getWordWidth(word.text, fontSize, "Inter, ui-sans-serif, system-ui");
+    const wordRenderWidth = getWordWidth(word.text, fontSize, resolvedWordFont);
     const existingHistory = textState.wordHistory.get(normalizedWord);
     const appearance = existingHistory?.count ?? 0;
     const appearanceCount = appearance + 1;
