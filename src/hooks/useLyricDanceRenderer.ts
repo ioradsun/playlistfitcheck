@@ -20,22 +20,24 @@ export function useLyricDanceRenderer({
 }) {
   const workerRef = useRef<Worker | null>(null);
   const initializedRef = useRef(false);
-  const transferredRef = useRef(false);
+  const offscreenRef = useRef<OffscreenCanvas | null>(null);
 
   useEffect(() => {
     if (!payload || !canvasRef.current || workerRef.current) return;
-    if (transferredRef.current) return;
 
     const canvas = canvasRef.current;
-    let offscreen: OffscreenCanvas;
-    try {
-      offscreen = canvas.transferControlToOffscreen();
-      transferredRef.current = true;
-    } catch {
-      // Canvas was already transferred (e.g. strict mode double-fire)
-      return;
+
+    // Transfer only once; reuse cached offscreen on subsequent mounts
+    if (!offscreenRef.current) {
+      try {
+        offscreenRef.current = canvas.transferControlToOffscreen();
+      } catch {
+        // Already transferred (e.g. HMR) — cannot recover
+        return;
+      }
     }
 
+    const offscreen = offscreenRef.current;
     const worker = new LyricDanceRendererWorker();
     workerRef.current = worker;
     worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
