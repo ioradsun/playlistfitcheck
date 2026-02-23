@@ -618,6 +618,64 @@ export const EFFECT_REGISTRY: Record<string, EffectFn> = {
   STATIC_RESOLVE: drawStaticResolve,
 };
 
+/**
+ * Map AI-generated creative effect keys to the closest registered effect.
+ * The AI Song DNA prompt produces expressive keys (e.g. "SMOKE_BURST", "ICE_SHARD_BURST")
+ * that need to resolve to one of the 10 registered effects above.
+ */
+const AI_KEY_TO_EFFECT: Record<string, string> = {
+  // Mod-style keys
+  PULSE_SLOW: "PULSE_BLOOM",
+  PULSE_STRONG: "PULSE_BLOOM",
+  SHIMMER_FAST: "GLITCH_FLASH",
+  WAVE_DISTORT: "WAVE_SURGE",
+  DISTORT_WAVE: "WAVE_SURGE",
+  STATIC_GLITCH: "GLITCH_FLASH",
+  HEAT_SPIKE: "EMBER_RISE",
+  BLUR_OUT: "STATIC_RESOLVE",
+  FADE_OUT_FAST: "TUNNEL_RUSH",
+  // Fire / heat family
+  SMOKE_BURST: "EMBER_RISE",
+  EMBER_FLICKER: "GLITCH_FLASH",
+  ASH_FALL: "GRAVITY_DROP",
+  HEAT_WAVE: "WAVE_SURGE",
+  CRACKLE_STATIC: "GLITCH_FLASH",
+  FLAME_LICK: "EMBER_RISE",
+  SPARK_SHOWER: "EMBER_RISE",
+  // Ice / cold family
+  WIND_GUST: "WAVE_SURGE",
+  ICE_SHARD_BURST: "SHATTER_IN",
+  FROST_OVERLAY: "STATIC_RESOLVE",
+  CRYSTAL_SHATTER: "SHATTER_IN",
+  // Energy / light family
+  DEEP_RUMBLE: "PULSE_BLOOM",
+  PARTICLE_BURST: "SHATTER_IN",
+  RIPPLE_EXPAND: "RIPPLE_OUT",
+  FADE_IN_OUT: "TUNNEL_RUSH",
+  LIGHT_STREAK: "TUNNEL_RUSH",
+  THUNDER_CRACK: "GLITCH_FLASH",
+  FLASH_BANG: "GLITCH_FLASH",
+  NEON_PULSE: "PULSE_BLOOM",
+  BLOOM_BURST: "PULSE_BLOOM",
+  PRISM_SPLIT: "GLITCH_FLASH",
+  // Atmosphere family
+  MIST_ROLL: "STATIC_RESOLVE",
+  DUST_SCATTER: "SHATTER_IN",
+  AURORA_SWEEP: "WAVE_SURGE",
+  SHADOW_FLICKER: "GLITCH_FLASH",
+  // Transition family
+  VOID_PULL: "TUNNEL_RUSH",
+  ECHO_FADE: "STATIC_RESOLVE",
+  DISSOLVE: "STATIC_RESOLVE",
+  TREMOR: "RIPPLE_OUT",
+  FRACTURE: "HOOK_FRACTURE",
+};
+
+/** Resolve an AI-generated effect key to a registered effect function */
+export function resolveEffectKey(rawKey: string): string {
+  return AI_KEY_TO_EFFECT[rawKey] || (EFFECT_REGISTRY[rawKey] ? rawKey : "STATIC_RESOLVE");
+}
+
 export function getEffect(key: string): EffectFn {
   return EFFECT_REGISTRY[key] ?? drawStaticResolve;
 }

@@ -7,7 +7,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
-import { getEffect, type EffectState } from "@/engine/EffectRegistry";
+import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import type { LyricLine } from "./LyricDisplay";
@@ -141,7 +141,7 @@ export function DirectorsCutScreen({
       if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
         const systemOffset = SYSTEMS.indexOf(renderer.system);
         const poolIdx = (spec.logic_seed + systemOffset + activeLineIndex * 7) % spec.effect_pool.length;
-        effectKey = spec.effect_pool[poolIdx];
+        effectKey = resolveEffectKey(spec.effect_pool[poolIdx]);
       }
       const drawFn = getEffect(effectKey);
 

@@ -25,7 +25,7 @@ import {
   type PhysicsSpec,
   type PhysicsState,
 } from "@/engine/PhysicsIntegrator";
-import { getEffect, type EffectState } from "@/engine/EffectRegistry";
+import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import {
   computeFitFontSize,
@@ -318,7 +318,7 @@ export function LyricDanceExporter({
         ) {
           const poolIdx =
             (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
-          effectKey = spec.effect_pool[poolIdx];
+          effectKey = resolveEffectKey(spec.effect_pool[poolIdx]);
         }
         const drawFn = getEffect(effectKey);
 

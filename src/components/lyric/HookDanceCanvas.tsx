@@ -9,7 +9,7 @@
 import { useRef, useEffect, useState, useCallback, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download } from "lucide-react";
-import { getEffect, type EffectState } from "@/engine/EffectRegistry";
+import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { animationResolver } from "@/engine/AnimationResolver";
@@ -199,7 +199,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
             effectKey = "HOOK_FRACTURE";
           } else {
             const poolIdx = (sp.logic_seed + activeLineIndex * 7) % sp.effect_pool.length;
-            effectKey = sp.effect_pool[poolIdx];
+            effectKey = resolveEffectKey(sp.effect_pool[poolIdx]);
           }
         }
         const drawFn = getEffect(effectKey);

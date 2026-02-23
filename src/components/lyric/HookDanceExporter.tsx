@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PhysicsIntegrator, mulberry32, hashSeed, type PhysicsSpec, type PhysicsState } from "@/engine/PhysicsIntegrator";
-import { getEffect, type EffectState } from "@/engine/EffectRegistry";
+import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import type { BeatTick } from "@/engine/HookDanceEngine";
 import type { LyricLine } from "./LyricDisplay";
@@ -193,7 +193,7 @@ export function HookDanceExporter({
             effectKey = "HOOK_FRACTURE";
           } else {
             const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
-            effectKey = spec.effect_pool[poolIdx];
+            effectKey = resolveEffectKey(spec.effect_pool[poolIdx]);
           }
         }
         const drawFn = getEffect(effectKey);

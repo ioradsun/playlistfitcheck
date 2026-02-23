@@ -16,7 +16,7 @@ import { Bug, ChevronDown, ChevronRight } from "lucide-react";
 import { mulberry32, hashSeed, PhysicsIntegrator } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
-import { getEffect, type EffectState } from "@/engine/EffectRegistry";
+import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { ParticleEngine } from "@/engine/ParticleEngine";
 import type { SceneManifest } from "@/engine/SceneManifest";
@@ -664,23 +664,10 @@ export default function ShareableLyricDance() {
 
       if (activeLine) {
         // Map mod-style keys to actual effect registry keys for variety
-        const MOD_TO_EFFECT: Record<string, string> = {
-          PULSE_SLOW: "PULSE_BLOOM",
-          PULSE_STRONG: "PULSE_BLOOM",
-          SHIMMER_FAST: "GLITCH_FLASH",
-          WAVE_DISTORT: "WAVE_SURGE",
-          DISTORT_WAVE: "WAVE_SURGE",
-          STATIC_GLITCH: "GLITCH_FLASH",
-          HEAT_SPIKE: "EMBER_RISE",
-          BLUR_OUT: "STATIC_RESOLVE",
-          FADE_OUT_FAST: "TUNNEL_RUSH",
-        };
-
         let effectKey = "STATIC_RESOLVE";
         if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
           const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
-          const rawKey = spec.effect_pool[poolIdx];
-          effectKey = MOD_TO_EFFECT[rawKey] || rawKey;
+          effectKey = resolveEffectKey(spec.effect_pool[poolIdx]);
         }
         frameEffectKey = effectKey;
         const drawFn = getEffect(effectKey);
@@ -726,7 +713,6 @@ export default function ShareableLyricDance() {
         if (lineAnim.activeMod) {
           applyModEffect(ctx, lineAnim.activeMod, currentTime, currentBeatIntensity);
         }
-
         const effectState: EffectState = {
           text: activeLine.text,
           physState: state,

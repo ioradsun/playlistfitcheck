@@ -13,6 +13,7 @@ import type { SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver, type WordAnimation } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect, applyWordMark, getWordMarkColor } from "@/engine/LyricAnimations";
 import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
+import { resolveEffectKey } from "@/engine/EffectRegistry";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import { useBeatIntensity } from "@/hooks/useBeatIntensity";
@@ -216,7 +217,7 @@ export function useHookCanvas(
       if (isLastHookLine) currentEffectKey = "HOOK_FRACTURE";
       else {
         const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
-        currentEffectKey = spec.effect_pool[poolIdx];
+        currentEffectKey = resolveEffectKey(spec.effect_pool[poolIdx]);
       }
     }
     const isHookFracture = currentEffectKey === "HOOK_FRACTURE";
