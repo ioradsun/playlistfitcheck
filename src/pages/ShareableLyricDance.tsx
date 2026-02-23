@@ -339,9 +339,6 @@ interface LyricDanceData {
   artist_dna: ArtistDNA | null;
   seed: string;
   scene_manifest: any | null;
-  song_dna: {
-    cinematic_direction?: CinematicDirection | null;
-  } | null;
   cinematic_direction: CinematicDirection | null;
 }
 
@@ -387,8 +384,8 @@ function buildLineBeatMap(lines: LyricLine[], beatGrid: BeatGrid): LineBeatMap[]
   });
 }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,song_dna";
-const DIRECTION_COLUMNS = "cinematic_direction,song_dna";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest";
+const DIRECTION_COLUMNS = "cinematic_direction";
 
 /** Draggable progress bar overlay at bottom of canvas */
 function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
@@ -556,7 +553,6 @@ export default function ShareableLyricDance() {
   useEffect(() => {
     const rawCinematicDirection =
       data?.cinematic_direction ??
-      data?.song_dna?.cinematic_direction ??
       null;
     const cinematicDirection = rawCinematicDirection
       ? {
@@ -582,14 +578,14 @@ export default function ShareableLyricDance() {
       interpreterRef.current = null;
     }
     WordClassifier.setCinematicDirection(cinematicDirection);
-  }, [data?.cinematic_direction, data?.song_dna?.cinematic_direction, data?.lyrics]);
+  }, [data?.cinematic_direction, data?.lyrics]);
 
   useEffect(() => {
     interpreterRefStable.current = interpreterRef.current;
-  }, [data?.cinematic_direction, data?.song_dna?.cinematic_direction]);
+  }, [data?.cinematic_direction]);
 
   useEffect(() => {
-    const cinematicDirection = data?.cinematic_direction ?? data?.song_dna?.cinematic_direction ?? null;
+    const cinematicDirection = data?.cinematic_direction ?? null;
     const fontFamily = cinematicDirection?.visualWorld?.typographyProfile?.fontFamily ?? "Montserrat";
     const trimmedFontFamily = fontFamily.trim();
     if (!trimmedFontFamily || loadedFontFamiliesRef.current.has(trimmedFontFamily)) {
@@ -601,7 +597,7 @@ export default function ShareableLyricDance() {
     link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(trimmedFontFamily.replace(/ /g, "+"))}:wght@300;400;500;600;700&display=swap`;
     document.head.appendChild(link);
     loadedFontFamiliesRef.current.add(trimmedFontFamily);
-  }, [data?.cinematic_direction, data?.song_dna?.cinematic_direction]);
+  }, [data?.cinematic_direction]);
 
   // Comments / constellation
   const constellationRef = useRef<ConstellationNode[]>([]);
@@ -671,7 +667,6 @@ export default function ShareableLyricDance() {
             .maybeSingle()
         ).then(({ data: directionRow }) => {
             const deferredDirection = (directionRow as any)?.cinematic_direction
-              ?? (directionRow as any)?.song_dna?.cinematic_direction
               ?? null;
             if (deferredDirection) {
               setData(prev => prev ? { ...prev, cinematic_direction: deferredDirection } : prev);
@@ -681,7 +676,7 @@ export default function ShareableLyricDance() {
             console.warn("[ShareableLyricDance] direction fetch failed:", directionError);
           })
           .finally(() => {
-            if (d.cinematic_direction || d.song_dna?.cinematic_direction) {
+            if (d.cinematic_direction) {
               return;
             }
 
@@ -700,11 +695,6 @@ export default function ShareableLyricDance() {
             }
           });
 
-        Promise.resolve().then(() => {
-          if (d.song_dna?.cinematic_direction) {
-            setData(prev => prev ? { ...prev, cinematic_direction: d.song_dna?.cinematic_direction ?? null } : prev);
-          }
-        });
 
         // Non-critical: load profile + comments in parallel
         const [profileResult, commentsResult] = await Promise.all([
@@ -805,13 +795,13 @@ export default function ShareableLyricDance() {
       systemType: data.system_type,
     });
     // Override palette with cinematic direction visualWorld palette when available
-    const cinematicPalette = (data.cinematic_direction ?? data.song_dna?.cinematic_direction)?.visualWorld?.palette as string[] | undefined;
+    const cinematicPalette = data.cinematic_direction?.visualWorld?.palette as string[] | undefined;
     const effectivePalette = cinematicPalette && cinematicPalette.length >= 3
       ? cinematicPalette
       : resolvedManifest.palette;
     const effectiveSystem = resolvedManifest.backgroundSystem || spec.system;
 
-    const rawCinematicDirection = data.cinematic_direction ?? data.song_dna?.cinematic_direction ?? null;
+    const rawCinematicDirection = data.cinematic_direction ?? null;
     const cinematicDirection = rawCinematicDirection
       ? {
           ...rawCinematicDirection,
