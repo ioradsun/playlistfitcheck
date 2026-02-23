@@ -341,10 +341,10 @@ export class LyricDancePlayer {
       globalBakePromise = (async () => {
         const payload = this.buildScenePayload();
         try {
-          await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
+          const chunkSnapshot = await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
           globalTimelineCache = [...this.timeline];
-          globalChunkCache = new Map(this.chunks);
-          console.log('[PLAYER] bake done — frames:', this.timeline.length);
+          globalChunkCache = chunkSnapshot;
+          console.log('[PLAYER] bake done — frames:', globalTimelineCache.length, 'chunks:', globalChunkCache.size);
         } catch (e) {
           console.error('[PLAYER] bake failed:', e);
         } finally {
