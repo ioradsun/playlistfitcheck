@@ -70,6 +70,14 @@ export interface PhysicsState {
   heat: number;
   /** max per-frame offset budget derived from lyric container size */
   safeOffset: number;
+  /** suggested horizontal translation for text layer */
+  offsetX: number;
+  /** suggested vertical translation for text layer (negative = upward float) */
+  offsetY: number;
+  /** suggested rotation in radians */
+  rotation: number;
+  /** deterministic shatter pulse for brittle systems */
+  shatter: number;
 }
 
 interface PhysicsViewportBounds {
@@ -131,6 +139,7 @@ export class PhysicsIntegrator {
   private heat: number;
   private stress = 0;
   private impulseNow = 0;
+  private shatterPulse = 0;
   private viewportBounds: PhysicsViewportBounds = { width: 1280, height: 720 };
 
   public readonly spec: PhysicsSpec;
@@ -161,6 +170,13 @@ export class PhysicsIntegrator {
     const acceleration = (impulse * strength) / this.spec.material.mass;
     this.velocity += acceleration;
 
+    const normalizedStrength = Math.max(0, Math.min(1, strength));
+    const brittleness = Math.max(0.001, this.spec.material.brittleness);
+    const shatterThreshold = Math.min(1.25, 0.65 + brittleness * 0.2);
+    if (normalizedStrength + (isDownbeat ? 0.25 : 0) >= shatterThreshold) {
+      this.shatterPulse = Math.min(1, this.shatterPulse + normalizedStrength);
+    }
+
     // Increase thermal energy
     this.heat = Math.min(1, this.heat + 0.1 * impulse);
     this.impulseNow = impulse;
@@ -172,14 +188,16 @@ export class PhysicsIntegrator {
     const springForce = -this.spec.material.elasticity * this.position;
     // Viscous damping: F_damp = -c * v
     const dampingForce = -this.spec.material.damping * this.velocity;
+    const upwardThermalForce = -this.spec.material.heat * 0.22;
 
     // Semi-implicit Euler integration
-    this.velocity += (springForce + dampingForce) * DT;
+    this.velocity += (springForce + dampingForce + upwardThermalForce) * DT;
     this.position += this.velocity * DT;
 
     // Decay thermal & impulse
     this.heat *= 0.95;
     this.impulseNow *= 0.8;
+    this.shatterPulse *= 0.86;
 
     // Scale all motion budgets by the current lyric container size.
     const minViewportAxis = Math.max(1, Math.min(this.viewportBounds.width, this.viewportBounds.height));
@@ -198,6 +216,13 @@ export class PhysicsIntegrator {
       velocity: this.velocity,
       heat: this.heat,
       safeOffset: maxSafeOffset,
+      offsetX: Math.max(-maxSafeOffset, Math.min(maxSafeOffset, this.position * (maxSafeOffset * 0.55))),
+      offsetY: Math.max(
+        -maxSafeOffset,
+        Math.min(maxSafeOffset, this.position * (maxSafeOffset * 0.4) - this.heat * (maxSafeOffset * 0.8)),
+      ),
+      rotation: Math.max(-0.32, Math.min(0.32, this.velocity * 0.12 + this.position * 0.08)),
+      shatter: this.shatterPulse,
     };
   }
 
@@ -215,5 +240,6 @@ export class PhysicsIntegrator {
     this.heat = this.spec.material.heat;
     this.stress = 0;
     this.impulseNow = 0;
+    this.shatterPulse = 0;
   }
 }

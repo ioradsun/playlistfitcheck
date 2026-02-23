@@ -13,7 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bug, ChevronDown, ChevronRight } from "lucide-react";
 
-import { mulberry32, hashSeed, PhysicsIntegrator } from "@/engine/PhysicsIntegrator";
+import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
+import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
@@ -450,11 +451,15 @@ export default function ShareableLyricDance() {
       || warmEmotion.includes("burn")
       || warmEmotion.includes("ember");
 
-    const integrator = new PhysicsIntegrator(spec);
     const rng = mulberry32(hashSeed(data.seed || data.id));
     rngRef.current = rng;
 
     const sortedBeats = [...data.beat_grid.beats].sort((a, b) => a - b);
+    const beats: BeatTick[] = sortedBeats.map((time, index) => ({
+      time,
+      isDownbeat: index % 4 === 0,
+      strength: index % 4 === 0 ? 1 : 0.5,
+    }));
     const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const totalDuration = Math.max(0.001, songEnd - songStart);
@@ -469,6 +474,16 @@ export default function ShareableLyricDance() {
     audio.muted = true;
     audio.preload = "auto";
     audioRef.current = audio;
+
+    const physicsEngine = new HookDanceEngine(
+      { ...spec, system: effectiveSystem },
+      beats,
+      songStart,
+      songEnd,
+      audio,
+      { onFrame: () => {}, onEnd: () => {} },
+      `${data.seed || data.id}-shareable-dance`,
+    );
 
     audio.currentTime = songStart;
     audio.play().catch(() => {});
@@ -510,6 +525,7 @@ export default function ShareableLyricDance() {
         beatIndex = 0;
         prevTime = songStart;
         smoothBeatIntensity = 0;
+        physicsEngine.resetPhysics();
         return;
       }
 
@@ -517,18 +533,20 @@ export default function ShareableLyricDance() {
       const decayRate = Math.exp(-deltaMs / 120); // ~120ms half-life
       smoothBeatIntensity *= decayRate;
 
+      let frameHadDownbeat = false;
       while (beatIndex < sortedBeats.length && sortedBeats[beatIndex] <= currentTime) {
         if (sortedBeats[beatIndex] > prevTime) {
           const isDownbeat = beatIndex % 4 === 0;
           const strength = isDownbeat ? 1 : 0.5;
-          integrator.onBeat(strength, isDownbeat);
           smoothBeatIntensity = Math.max(smoothBeatIntensity, strength); // spike on beat
+          if (isDownbeat) frameHadDownbeat = true;
         }
         beatIndex++;
       }
       const currentBeatIntensity = smoothBeatIntensity;
 
-      const state = integrator.tick();
+      physicsEngine.setViewportBounds(cw, ch);
+      const state = physicsEngine.update(currentBeatIntensity, frameHadDownbeat);
       const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
@@ -844,8 +862,8 @@ export default function ShareableLyricDance() {
             break;
         }
 
-        const lineX = cw / 2 + xOffsetRef.current + xNudge;
-        const lineY = yBaseRef.current + yNudge;
+        const lineX = cw / 2 + xOffsetRef.current + xNudge + state.offsetX;
+        const lineY = yBaseRef.current + yNudge + state.offsetY;
 
         ctx.save();
 
@@ -859,7 +877,8 @@ export default function ShareableLyricDance() {
         const compositeAlpha = Math.min(entryAlpha, exitAlpha);
 
         ctx.translate(lineX, lineY);
-        ctx.scale(activeLineAnim.scale, activeLineAnim.scale);
+        ctx.rotate(state.rotation);
+        ctx.scale(activeLineAnim.scale * state.scale, activeLineAnim.scale * state.scale);
         ctx.translate(-lineX, -lineY);
 
         if (activeLineAnim.activeMod) {
@@ -936,6 +955,7 @@ export default function ShareableLyricDance() {
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener("resize", resize);
+      physicsEngine.stop();
       audio.pause();
       audio.src = "";
     };
