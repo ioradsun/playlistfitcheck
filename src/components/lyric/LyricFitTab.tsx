@@ -22,10 +22,10 @@ export type FitReadiness = "not_started" | "running" | "ready" | "error";
 
 export type PipelineStageStatus = "pending" | "running" | "done";
 export interface PipelineStages {
-  transcript: PipelineStageStatus;
   rhythm: PipelineStageStatus;
   songDna: PipelineStageStatus;
   cinematic: PipelineStageStatus;
+  transcript: PipelineStageStatus;
 }
 
 interface Props {
@@ -66,7 +66,7 @@ export function LyricFitTab({
   const [fitProgress, setFitProgress] = useState(0);
   const [fitStageLabel, setFitStageLabel] = useState("");
   const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
-    transcript: "pending", rhythm: "pending", songDna: "pending", cinematic: "pending",
+    rhythm: "pending", songDna: "pending", cinematic: "pending", transcript: "pending",
   });
   const pipelineRanOnce = useRef(false);
 
@@ -178,10 +178,10 @@ export function LyricFitTab({
     pipelineRanOnce.current = true;
     setFitReadiness("running");
     setFitProgress(5);
-    setFitStageLabel("Syncing transcript…");
-    setPipelineStages({ transcript: "running", rhythm: "pending", songDna: "pending", cinematic: "pending" });
+    setFitStageLabel("Analyzing rhythm…");
+    setPipelineStages({ rhythm: "running", songDna: "pending", cinematic: "pending", transcript: "pending" });
 
-    // 1. Sync latest transcript
+    // 1. Fetch latest lines (internal, no stage label)
     let freshLines = lines;
     if (savedId) {
       try {
@@ -198,7 +198,6 @@ export function LyricFitTab({
 
     setFitProgress(10);
     setFitStageLabel("Analyzing rhythm…");
-    setPipelineStages(prev => ({ ...prev, transcript: "done", rhythm: "running" }));
 
     // 2. Decode audio for beat detection if needed
     if (!beatGrid && hasRealAudio && audioFile.size > 0) {
@@ -339,10 +338,16 @@ export function LyricFitTab({
       setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
     }
 
+    setFitProgress(90);
+    setFitStageLabel("Final transcript sync…");
+    setPipelineStages(prev => ({ ...prev, cinematic: "done", transcript: "running" }));
+
+    // 5. Final transcript sync — placeholder for publish-time alignment
+    setPipelineStages(prev => ({ ...prev, transcript: "done" }));
+
     setFitProgress(100);
     setFitReadiness("ready");
     setFitStageLabel("Ready");
-    setPipelineStages({ transcript: "done", rhythm: "done", songDna: "done", cinematic: "done" });
     toast.success("Your Fit is ready! 🎬", { description: "Switch to the Fit tab to explore your song's DNA." });
   }, [lyricData, audioFile, lines, savedId, hasRealAudio, beatGrid]);
 
