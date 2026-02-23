@@ -290,17 +290,6 @@ function bakeFrame(
   state.currentZoom = state.currentZoom ?? 1.0;
   state.currentZoom += (targetZoom - state.currentZoom) * 0.015;
 
-  if (frameIndex === 500) {
-    console.log('[BAKER frame 500]', {
-      songProgress: songProgress.toFixed(3),
-      currentChapterIdx,
-      targetZoom,
-      currentZoom: state.currentZoom,
-      chapterCameraEntry,
-      tensionMotion: tensionMotion?.toFixed(3),
-      activeLineIndex,
-    });
-  }
 
   const chunks: Keyframe["chunks"] = [];
 
