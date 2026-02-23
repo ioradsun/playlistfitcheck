@@ -260,6 +260,7 @@ let globalChunkCache: Map<string, ChunkState> | null = null;
 let globalHasCinematicDirection = false;
 let globalSongStartSec = 0;
 let globalSongEndSec = 0;
+let globalInstanceCount = 0;
 
 // ──────────────────────────────────────────────────────────────
 // Player
