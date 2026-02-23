@@ -291,6 +291,8 @@ export default function ShareableLyricDance() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
   const rngRef = useRef<() => number>(() => 0);
+  const xOffsetRef = useRef(0);
+  const yBaseRef = useRef(0);
 
   // Comments / constellation
   const constellationRef = useRef<ConstellationNode[]>([]);
@@ -500,6 +502,8 @@ export default function ShareableLyricDance() {
       const cw = canvas.width / (window.devicePixelRatio || 1);
       const ch = canvas.height / (window.devicePixelRatio || 1);
       const currentTime = audio.currentTime;
+
+      if (yBaseRef.current === 0) yBaseRef.current = ch * 0.5;
 
       if (currentTime >= songEnd) {
         audio.currentTime = songStart;
@@ -719,6 +723,8 @@ export default function ShareableLyricDance() {
       let frameEntry = 0;
       let frameExit = 0;
 
+      const visibleLines = lines.filter(l => currentTime >= l.start && currentTime < l.end);
+
       if (activeLine) {
         // Map mod-style keys to actual effect registry keys for variety
         let effectKey = "STATIC_RESOLVE";
@@ -749,40 +755,122 @@ export default function ShareableLyricDance() {
         const fontSize = fs * activeLineAnim.fontScale;
         frameFontSize = fontSize;
 
+        const sectionProgress = songProgress;
+        let targetXOffset = 0;
+        let sectionZone: "verse" | "chorus" | "bridge" | "hook" | "outro" = "chorus";
+        if (sectionProgress < 0.33) {
+          targetXOffset = cw * -0.06;
+          sectionZone = "verse";
+        } else if (sectionProgress < 0.45) {
+          const t = (sectionProgress - 0.33) / 0.12;
+          targetXOffset = cw * (-0.06 + 0.06 * t);
+          sectionZone = "verse";
+        } else if (sectionProgress < 0.6) {
+          targetXOffset = 0;
+          sectionZone = "chorus";
+        } else if (sectionProgress < 0.75) {
+          targetXOffset = cw * 0.06;
+          sectionZone = "bridge";
+        } else {
+          const t = (sectionProgress - 0.75) / 0.25;
+          targetXOffset = cw * (0.06 * (1 - Math.max(0, Math.min(1, t))));
+          sectionZone = "outro";
+        }
+
+        if (activeLineAnim.isHookLine) {
+          targetXOffset = 0;
+          sectionZone = "hook";
+        }
+
+        const strongMods = new Set(["PULSE_STRONG", "HEAT_SPIKE", "ERUPT", "FLAME_BURST", "EXPLODE"]);
+        const softMods = new Set(["BLUR_OUT", "ECHO_FADE", "DISSOLVE", "FADE_OUT", "FADE_OUT_FAST"]);
+        let targetYBase = ch * 0.5;
+        if (activeLineAnim.isHookLine) {
+          targetYBase = ch * 0.44;
+        } else if (activeLineAnim.activeMod && strongMods.has(activeLineAnim.activeMod)) {
+          targetYBase = ch * 0.46;
+        } else if (activeLineAnim.activeMod && softMods.has(activeLineAnim.activeMod)) {
+          targetYBase = ch * 0.54;
+        }
+
+        const lineSpacing = visibleLines.length <= 1
+          ? ch * 0.12
+          : visibleLines.length <= 2
+            ? ch * 0.09
+            : ch * 0.07;
+
+        const visibleIndex = Math.max(0, visibleLines.findIndex(l => l.start === activeLine.start && l.end === activeLine.end && l.text === activeLine.text));
+        const yLineOffset = (visibleIndex - (visibleLines.length - 1) / 2) * lineSpacing;
+        targetYBase += yLineOffset;
+
+        if (activeLineAnim.isHookLine) {
+          targetYBase -= ch * 0.03;
+        }
+
+        xOffsetRef.current += (targetXOffset - xOffsetRef.current) * 0.05;
+        yBaseRef.current += (targetYBase - yBaseRef.current) * 0.05;
+
+        const nudge = currentBeatIntensity * 3;
+        let xNudge = 0;
+        let yNudge = 0;
+        switch (resolvedManifest.lightSource) {
+          case "flickering left":
+          case "left":
+            xNudge = -nudge;
+            break;
+          case "right":
+          case "flickering right":
+            xNudge = nudge;
+            break;
+          case "golden hour":
+          case "warm overhead":
+            yNudge = -nudge * 0.5;
+            break;
+          case "winter daylight":
+          case "dead of night":
+            yNudge = nudge * 0.3;
+            break;
+          default:
+            xNudge = 0;
+            yNudge = 0;
+            break;
+        }
+
+        const lineX = cw / 2 + xOffsetRef.current + xNudge;
+        const lineY = yBaseRef.current + yNudge;
+
         ctx.save();
 
         // Compute entrance/exit alpha (these also apply ctx transforms for entrance/exit motion)
         const lyricEntrance = resolvedManifest?.lyricEntrance ?? "fades";
         const lyricExit = resolvedManifest?.lyricExit ?? "fades";
-        const entryAlpha = applyEntrance(ctx, activeLineAnim.entryProgress, lyricEntrance);
+        const entryAlpha = applyEntrance(ctx, activeLineAnim.entryProgress, lyricEntrance, { spatialZone: sectionZone });
         const exitAlpha = activeLineAnim.exitProgress > 0
           ? applyExit(ctx, activeLineAnim.exitProgress, lyricExit)
           : 1.0;
         const compositeAlpha = Math.min(entryAlpha, exitAlpha);
 
-        // Apply scale from resolver (beat + hook awareness)
-        const lineX = cw / 2;
-        const lineY = ch / 2;
         ctx.translate(lineX, lineY);
         ctx.scale(activeLineAnim.scale, activeLineAnim.scale);
         ctx.translate(-lineX, -lineY);
 
-        // Apply active mod effect (pulse, shimmer, glitch, etc.)
         if (activeLineAnim.activeMod) {
           applyModEffect(ctx, activeLineAnim.activeMod, currentTime, currentBeatIntensity);
         }
         const effectState: EffectState = {
           text: activeLine.text,
           physState: state,
-          w: cw, h: ch,
-          fs: fontSize, age,
+          w: cw,
+          h: ch,
+          fs: fontSize,
+          age,
           progress: lineProgress,
           rng,
-          palette: [lineAnim.lineColor, textPalette[1], textPalette[2]],
+          palette: [activeLineAnim.lineColor, textPalette[1], textPalette[2]],
           system: effectiveSystem,
           effectiveLetterSpacing,
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
-          alphaMultiplier: compositeAlpha,
+          alphaMultiplier: compositeAlpha
         };
         drawFn(ctx, effectState);
         ctx.restore();

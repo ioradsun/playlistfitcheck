@@ -17,8 +17,29 @@ export function applyEntrance(
   ctx: CanvasRenderingContext2D,
   progress: number,
   entrance: string,
+  options?: { spatialZone?: "verse" | "chorus" | "bridge" | "hook" | "outro" },
 ): number {
   const e = easeOutCubic(progress);
+
+  switch (options?.spatialZone) {
+    case "verse":
+      ctx.translate(-(1 - e) * 20, 0);
+      break;
+    case "chorus":
+      ctx.translate(0, (1 - e) * 20);
+      break;
+    case "bridge":
+      ctx.translate((1 - e) * 20, 0);
+      break;
+    case "hook": {
+      const hookScale = 0.92 + e * 0.08;
+      ctx.scale(hookScale, hookScale);
+      break;
+    }
+    default:
+      break;
+  }
+
   switch (entrance) {
     case "materializes":
       ctx.globalAlpha *= e;
