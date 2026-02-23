@@ -23,6 +23,7 @@ import { safeManifest } from "@/engine/validateManifest";
 import type { SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
+import { getSafeTextColor } from "@/engine/SystemStyles";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -414,6 +415,11 @@ export default function ShareableLyricDance() {
     const effectivePalette = resolvedManifest?.palette || data.palette || ["#ffffff", "#a855f7", "#ec4899"];
     const effectiveSystem = resolvedManifest?.backgroundSystem || spec.system;
 
+    // Construct text-safe palette for effects: palette[0] must be a readable text color,
+    // NOT the background color. SceneManifest palette is [bg, mid, accent].
+    const safeTextColor = getSafeTextColor(effectivePalette as [string, string, string]);
+    const textPalette = [safeTextColor, effectivePalette[1] || "#a855f7", effectivePalette[2] || "#ec4899"];
+
     // Apply typography profile from manifest so SystemStyles uses correct font
     if (resolvedManifest?.typographyProfile) {
       applyTypographyProfile(resolvedManifest.typographyProfile);
@@ -663,10 +669,24 @@ export default function ShareableLyricDance() {
       let frameExit = 0;
 
       if (activeLine) {
+        // Map mod-style keys to actual effect registry keys for variety
+        const MOD_TO_EFFECT: Record<string, string> = {
+          PULSE_SLOW: "PULSE_BLOOM",
+          PULSE_STRONG: "PULSE_BLOOM",
+          SHIMMER_FAST: "GLITCH_FLASH",
+          WAVE_DISTORT: "WAVE_SURGE",
+          DISTORT_WAVE: "WAVE_SURGE",
+          STATIC_GLITCH: "GLITCH_FLASH",
+          HEAT_SPIKE: "EMBER_RISE",
+          BLUR_OUT: "STATIC_RESOLVE",
+          FADE_OUT_FAST: "TUNNEL_RUSH",
+        };
+
         let effectKey = "STATIC_RESOLVE";
         if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
           const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
-          effectKey = spec.effect_pool[poolIdx];
+          const rawKey = spec.effect_pool[poolIdx];
+          effectKey = MOD_TO_EFFECT[rawKey] || rawKey;
         }
         frameEffectKey = effectKey;
         const drawFn = getEffect(effectKey);
@@ -692,14 +712,14 @@ export default function ShareableLyricDance() {
 
         ctx.save();
 
-        // Apply entry/exit alpha from AnimationResolver
+        // Compute entrance/exit alpha (these also apply ctx transforms for entrance/exit motion)
         const lyricEntrance = resolvedManifest?.lyricEntrance ?? "fades";
         const lyricExit = resolvedManifest?.lyricExit ?? "fades";
         const entryAlpha = applyEntrance(ctx, lineAnim.entryProgress, lyricEntrance);
         const exitAlpha = lineAnim.exitProgress > 0
           ? applyExit(ctx, lineAnim.exitProgress, lyricExit)
           : 1.0;
-        ctx.globalAlpha = Math.min(entryAlpha, exitAlpha);
+        const compositeAlpha = Math.min(entryAlpha, exitAlpha);
 
         // Apply scale from resolver (beat + hook awareness)
         const lineX = cw / 2;
@@ -720,10 +740,11 @@ export default function ShareableLyricDance() {
           fs, age,
           progress: lineProgress,
           rng,
-          palette: effectivePalette,
+          palette: textPalette,
           system: effectiveSystem,
           effectiveLetterSpacing,
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
+          alphaMultiplier: compositeAlpha,
         };
         drawFn(ctx, effectState);
         ctx.restore();

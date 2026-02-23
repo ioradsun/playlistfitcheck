@@ -73,6 +73,8 @@ export interface EffectState {
   effectiveLetterSpacing?: number;
   /** Pre-computed stacked layout for narrow viewports */
   stackedLayout?: StackedLayout;
+  /** Multiplier applied to all alpha values (entrance/exit animations) */
+  alphaMultiplier?: number;
 }
 
 type EffectFn = (ctx: CanvasRenderingContext2D, s: EffectState) => void;
@@ -84,6 +86,11 @@ function style(s: EffectState): SystemStyle {
     return { ...st, letterSpacing: s.effectiveLetterSpacing };
   }
   return st;
+}
+
+/** Apply alpha with multiplier from entrance/exit animations */
+function setAlpha(ctx: CanvasRenderingContext2D, s: EffectState, value: number): void {
+  ctx.globalAlpha = value * (s.alphaMultiplier ?? 1);
 }
 
 // Helper: apply styled fill (solid, gradient, per-char, duotone)
@@ -133,7 +140,8 @@ function drawAutoStacked(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = buildFont(st, fs);
-  if (extraTransform?.alpha !== undefined) ctx.globalAlpha = extraTransform.alpha;
+  if (extraTransform?.alpha !== undefined) ctx.globalAlpha = extraTransform.alpha * (s.alphaMultiplier ?? 1);
+  else ctx.globalAlpha *= (s.alphaMultiplier ?? 1);
   if (extraTransform?.scale) {
     ctx.translate(cx, cy + (extraTransform?.offsetY || 0));
     ctx.scale(extraTransform.scale, extraTransform.scale);
@@ -176,7 +184,7 @@ const drawShatterIn: EffectFn = (ctx, s) => {
     const ease = 1 - Math.pow(1 - t, 3);
 
     const offsetY = (1 - ease) * (rng() > 0.5 ? -1 : 1) * Math.min(60, h * 0.18);
-    ctx.globalAlpha = ease;
+    setAlpha(ctx, s, ease);
 
     if (st.colorMode === "per-char") {
       ctx.fillStyle = palette[i % palette.length] || "#fff";
@@ -215,7 +223,7 @@ const drawTunnelRush: EffectFn = (ctx, s) => {
     return;
   }
 
-  ctx.globalAlpha = alpha;
+  setAlpha(ctx, s, alpha);
   ctx.translate(w / 2, h / 2);
   ctx.scale(combinedScale, combinedScale);
 
@@ -244,7 +252,7 @@ const drawGravityDrop: EffectFn = (ctx, s) => {
   const dropY = Math.min(h / 2, -h * 0.3 + 0.5 * 2000 * t * t);
   const bounce = t >= 1 ? Math.sin((age - 400) * 0.02) * 5 * (1 - Math.min(1, (age - 400) / 800)) : 0;
 
-  ctx.globalAlpha = Math.min(1, age / 150);
+  setAlpha(ctx, s, Math.min(1, age / 150));
   ctx.shadowBlur = physState.glow * 0.5;
   ctx.shadowColor = palette[1] || "#a855f7";
 
@@ -302,7 +310,7 @@ const drawPulseBloom: EffectFn = (ctx, s) => {
   ctx.scale(combinedScale, combinedScale);
   const measuredFill = ctx.measureText(displayText).width;
   applyStyledFill(ctx, st, palette, 0, 0, measuredFill);
-  ctx.globalAlpha = 0.9 + physState.heat * 0.1;
+  setAlpha(ctx, s, 0.9 + physState.heat * 0.1);
   ctx.fillText(displayText, 0, 0);
   ctx.restore();
 };
@@ -371,14 +379,14 @@ const drawGlitchFlash: EffectFn = (ctx, s) => {
   if (glitchOn) {
     const cyanP = clampPointToSafeZone(w / 2 + 3 + offsetX, h / 2 + sliceY, zone);
     const redP = clampPointToSafeZone(w / 2 - 3 + offsetX, h / 2 - sliceY, zone);
-    ctx.globalAlpha = 0.6;
+    setAlpha(ctx, s, 0.6);
     ctx.fillStyle = "cyan";
     ctx.fillText(displayText, cyanP.x, cyanP.y);
     ctx.fillStyle = "red";
     ctx.fillText(displayText, redP.x, redP.y);
   }
 
-  ctx.globalAlpha = 1;
+  setAlpha(ctx, s, 1);
   const measured = ctx.measureText(displayText).width;
   applyStyledFill(ctx, st, palette, w / 2, h / 2, measured);
   ctx.shadowBlur = physState.glow * 0.3;
@@ -417,7 +425,7 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
       ctx.translate(arcPoint.x, arcPoint.y);
       ctx.rotate(angle + Math.PI / 2);
       ctx.fillStyle = palette[i % palette.length] || "#fff";
-      ctx.globalAlpha = 0.85 + physState.heat * 0.15;
+      setAlpha(ctx, s, 0.85 + physState.heat * 0.15);
       ctx.fillText(char, 0, 0);
       ctx.restore();
     });
@@ -429,7 +437,7 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
       } else {
         ctx.fillStyle = palette[0] || "#fff";
       }
-      ctx.globalAlpha = 0.85 + physState.heat * 0.15;
+      setAlpha(ctx, s, 0.85 + physState.heat * 0.15);
       const p = clampPointToSafeZone(charPositions[i], h / 2 + wave, zone);
       ctx.fillText(char, p.x, p.y);
     });
@@ -483,7 +491,7 @@ const drawEmberRise: EffectFn = (ctx, s) => {
       zone,
     );
     const size = 1 + rng() * 3;
-    ctx.globalAlpha = Math.max(0, 1 - (age * 0.001));
+    setAlpha(ctx, s, Math.max(0, 1 - (age * 0.001)));
     ctx.fillStyle = palette[Math.floor(rng() * palette.length)] || "#f97316";
     ctx.beginPath();
     ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
@@ -539,12 +547,12 @@ const drawHookFracture: EffectFn = (ctx, s) => {
         top: zone.top - h / 2,
         bottom: zone.bottom - h / 2,
       });
-      ctx.globalAlpha = 0.5;
+      setAlpha(ctx, s, 0.5);
       ctx.fillStyle = "cyan";
       ctx.fillText(char, p.x + 3, p.y);
       ctx.fillStyle = "red";
       ctx.fillText(char, p.x - 3, p.y);
-      ctx.globalAlpha = 1;
+      setAlpha(ctx, s, 1);
       if (st.colorMode === "per-char") {
         ctx.fillStyle = palette[i % palette.length] || "#fff";
       } else {
@@ -585,7 +593,7 @@ const drawStaticResolve: EffectFn = (ctx, s) => {
     return;
   }
 
-  ctx.globalAlpha = t;
+  setAlpha(ctx, s, t);
   ctx.translate(w / 2, h / 2);
   ctx.scale(clampedScale, clampedScale);
 
