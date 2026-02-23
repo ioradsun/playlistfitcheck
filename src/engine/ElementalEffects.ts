@@ -155,7 +155,7 @@ export function drawElementalWord(
       const glowAlpha = isHeroWord ? 0.18 + beatIntensity * 0.22 : 0.08;
       const glowRadius = isHeroWord ? fontSize * 1.35 : fontSize * 0.9;
       const glow = ctx.createRadialGradient(wordWidth / 2, -fontSize * 0.45, 0, wordWidth / 2, -fontSize * 0.45, glowRadius);
-      glow.addColorStop(0, alphaColor(neonColor, glowAlpha));
+      glow.addColorStop(0, `rgba(${parseInt(neonColor.slice(1,3),16)},${parseInt(neonColor.slice(3,5),16)},${parseInt(neonColor.slice(5,7),16)},${glowAlpha})`);
       glow.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = glow;
       ctx.fillRect(-glowRadius * 0.4, -fontSize - glowRadius * 0.6, wordWidth + glowRadius * 0.8, glowRadius * 1.4);
