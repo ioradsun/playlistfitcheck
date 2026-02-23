@@ -11,8 +11,6 @@ import {
   AlertCircle,
   Video,
   Film,
-  Sparkles,
-  Loader2,
   RotateCcw,
   X,
 } from "lucide-react";
