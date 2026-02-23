@@ -22,6 +22,19 @@ interface Particle {
   active: boolean;
 }
 
+interface ParticleSpawnOverrides {
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+  size?: number;
+  opacity?: number;
+  life?: number;
+  rotation?: number;
+  rotationSpeed?: number;
+  depth?: number;
+}
+
 type ParticleLayer = "all" | "far" | "near";
 
 interface LightRay {
@@ -117,6 +130,21 @@ export class ParticleEngine {
     for (let i = 0; i < this.pool.length; i++) {
       const p = this.pool[i];
       if (!p.active) continue;
+      p.vx += (Math.random() - 0.5) * 0.08;
+      p.vy += (Math.random() - 0.5) * 0.04;
+      if (this.config.system === "embers") {
+        const spiral = Math.sin(this.time * 0.005 + p.rotation + p.depth * Math.PI * 2);
+        p.vx += spiral * (0.03 + p.depth * 0.05);
+        p.vy -= 0.01 + p.depth * 0.015;
+        if (beatIntensity > 0.75 && this.config.beatReactive && Math.random() < beatIntensity * 0.18) {
+          p.opacity = Math.min(1.4, p.opacity + beatIntensity * 0.45);
+          p.size *= 1 + beatIntensity * 0.05;
+        }
+      }
+      if (this.config.system === "rain") {
+        if (Math.random() < 0.08) p.vx += (Math.random() - 0.5) * 0.2;
+        if (Math.random() < 0.06) p.vy += Math.random() * 0.25;
+      }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       const depthSpeed = 0.7 + p.depth * 0.3;
@@ -186,13 +214,33 @@ export class ParticleEngine {
     if (this.beatBoostFrames > 0 && this.config.beatReactive) needed = Math.floor(needed * 2);
     if (beatIntensity > 0.8 && this.config.system === "sparks") needed += 12;
     if (beatIntensity > 0.75 && this.config.system === "embers") needed += 6;
-    if (needed <= 0) return;
+    if (needed > 0) {
+      for (let i = 0; i < this.pool.length && needed > 0; i++) {
+        const p = this.pool[i];
+        if (p.active) continue;
+        this.spawnParticle(p);
+        needed--;
+      }
+    }
 
-    for (let i = 0; i < this.pool.length && needed > 0; i++) {
-      const p = this.pool[i];
-      if (p.active) continue;
-      this.spawnParticle(p);
-      needed--;
+    if (this.config.beatReactive && beatIntensity > 0.7) {
+      const burstCount = Math.floor(beatIntensity * 8);
+      const { x: activeLineX, y: activeLineY } = this.getActiveLyricAnchor();
+      let burstSpawned = 0;
+      for (let i = 0; i < this.pool.length && burstSpawned < burstCount; i++) {
+        const p = this.pool[i];
+        if (p.active) continue;
+        this.spawnParticle(p, {
+          x: activeLineX + (Math.random() - 0.5) * 24,
+          y: activeLineY + (Math.random() - 0.5) * 12,
+          vx: (Math.random() - 0.5) * beatIntensity * 8,
+          vy: -(Math.random() * beatIntensity * 6 + 0.4),
+          life: Math.random() * 0.5 + 0.75,
+          opacity: (Math.random() * 0.4 + 0.6) * this.config.opacity,
+          depth: Math.random(),
+        });
+        burstSpawned++;
+      }
     }
   }
 
@@ -204,9 +252,18 @@ export class ParticleEngine {
     return null;
   }
 
-  private spawnParticle(particle: Particle): void {
+  private spawnParticle(particle: Particle, overrides?: ParticleSpawnOverrides): void {
     this.spawnForSystem(particle);
-    particle.depth = Math.random();
+    particle.depth = overrides?.depth ?? Math.random();
+    particle.x = overrides?.x ?? particle.x;
+    particle.y = overrides?.y ?? particle.y;
+    particle.vx = overrides?.vx ?? particle.vx;
+    particle.vy = overrides?.vy ?? particle.vy;
+    particle.size = overrides?.size ?? particle.size;
+    particle.opacity = overrides?.opacity ?? particle.opacity;
+    particle.life = overrides?.life ?? particle.life;
+    particle.rotation = overrides?.rotation ?? particle.rotation;
+    particle.rotationSpeed = overrides?.rotationSpeed ?? particle.rotationSpeed;
     particle.active = true;
   }
 
@@ -218,11 +275,14 @@ export class ParticleEngine {
     p.rotationSpeed = (Math.random() - 0.5) * 0.08;
     p.opacity = 0.6;
     p.decay = 0.01;
+    const baseSize = 1.5 + this.config.density * 2;
+    const baseLife = Math.random() * 0.5 + 0.75;
+    const randomDepth = Math.random();
 
     switch (this.config.system) {
-      case "rain": p.x = b.x + Math.random() * b.w; p.y = b.y - 20; p.vx = 0.8 * speed; p.vy = 8 + Math.random() * 6 * speed; p.size = 8 + Math.random() * 12; p.decay = 0.03; break;
+      case "rain": p.x = b.x + Math.random() * b.w; p.y = b.y - 20; p.vx = (Math.random() - 0.5) * speed * 3 + 0.8 * speed; p.vy = 6 + Math.random() * 8 * speed; if (Math.random() > 0.82) p.vy *= 1.35; p.size = (Math.random() * 0.6 + 0.7) * (8 + Math.random() * 10); p.opacity = (Math.random() * 0.4 + 0.6) * 0.8; p.life = baseLife; p.rotation = Math.random() * Math.PI * 2; p.rotationSpeed = (Math.random() - 0.5) * 0.1; p.depth = randomDepth; p.decay = 0.03; break;
       case "snow": p.x = b.x + Math.random() * b.w; p.y = b.y - 10; p.vx = (Math.random() - 0.5) * 1.2 * speed; p.vy = 1.2 + Math.random() * 1.2 * speed; p.size = 1 + Math.random() * 3; p.decay = 0.004; break;
-      case "embers": p.x = b.x + b.w * 0.2 + Math.random() * b.w * 0.6; p.y = b.y + b.h * 0.8 + Math.random() * b.h * 0.2; p.vx = (Math.random() - 0.5) * 1.4; p.vy = -(1 + Math.random() * 2.5 * speed); p.size = 1 + Math.random() * 2; p.decay = 0.02; break;
+      case "embers": p.x = b.x + b.w * 0.2 + Math.random() * b.w * 0.6; p.y = b.y + b.h * 0.8 + Math.random() * b.h * 0.2; p.vx = (Math.random() - 0.5) * speed * 3; p.vy = -(Math.random() * speed * 2 + 0.5); p.size = (Math.random() * 0.6 + 0.7) * baseSize * (0.6 + randomDepth * 1.2); p.opacity = (Math.random() * 0.4 + 0.6) * this.config.opacity; p.life = baseLife; p.rotation = Math.random() * Math.PI * 2; p.rotationSpeed = (Math.random() - 0.5) * 0.1; p.depth = randomDepth; p.decay = 0.018; break;
       case "flames": p.x = b.x + Math.random() * b.w; p.y = b.y + b.h + 10; p.vx = (Math.random() - 0.5) * 2.2; p.vy = -(2 + Math.random() * 4 * speed); p.size = 5 + Math.random() * 8; p.decay = 0.035; break;
       case "dust": p.x = b.x + Math.random() * b.w; p.y = b.y + b.h * (0.3 + Math.random() * 0.4); p.vx = (Math.random() - 0.5) * 0.9; p.vy = 0.05 + Math.random() * 0.15; p.size = 1 + Math.random() * 2; p.opacity = 0.25; p.decay = 0.003; break;
       case "smoke": p.x = b.x + Math.random() * b.w; p.y = b.y + b.h + 20; p.vx = (Math.random() - 0.5) * 1.3; p.vy = -(0.7 + Math.random() * 1.2); p.size = 15 + Math.random() * 25; p.opacity = 0.1; p.decay = 0.006; break;
@@ -232,6 +292,21 @@ export class ParticleEngine {
       case "bubbles": p.x = b.x + Math.random() * b.w; p.y = b.y + b.h + 8; p.vx = (Math.random() - 0.5) * 0.8; p.vy = -(0.5 + Math.random() * 1.1 * speed); p.size = 4 + Math.random() * 8; p.opacity = 0.35; p.decay = 0.006; break;
       default: p.active = false;
     }
+  }
+
+  private getActiveLyricAnchor(): { x: number; y: number } {
+    const safeVisible = this.safeZone.w > 0 && this.safeZone.h > 0;
+    if (safeVisible) {
+      return {
+        x: this.safeZone.x + this.safeZone.w * 0.5,
+        y: this.safeZone.y + this.safeZone.h * 0.5,
+      };
+    }
+
+    return {
+      x: this.bounds.x + this.bounds.w * 0.5,
+      y: this.bounds.y + this.bounds.h * 0.5,
+    };
   }
 
   private drawParticle(ctx: CanvasRenderingContext2D, p: Particle, depthScale: number): void {
