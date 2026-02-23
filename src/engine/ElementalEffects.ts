@@ -1,3 +1,5 @@
+import { drawBubble, drawEmber, drawNeonOrb, drawSmoke } from "./ElementalRenderers";
+
 export function drawElementalWord(
   ctx: CanvasRenderingContext2D,
   word: string,
@@ -51,11 +53,7 @@ export function drawElementalWord(
         const by = byBase - byOffset;
         const opacity = Math.max(0, 0.6 - byOffset / 40);
 
-        ctx.beginPath();
-        ctx.arc(bx, by, 1.5 + i % 3, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(150,200,255,${opacity})`;
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
+        drawBubble(ctx, bx, by, 1.5 + i % 3, opacity);
       }
 
       // Water drip from bottom
@@ -106,11 +104,7 @@ export function drawElementalWord(
         const eyOffset = (currentTime * 25 + i * 15) % 35;
         const ey = -fontSize - eyOffset;
         const eOpacity = Math.max(0, 0.8 - eyOffset / 35);
-
-        ctx.beginPath();
-        ctx.arc(ex, ey, 1.5 + Math.random(), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,${100 + Math.floor(Math.random() * 100)},0,${eOpacity})`;
-        ctx.fill();
+        drawEmber(ctx, ex, ey, 1.4 + (i % 2), eOpacity, currentTime * 1000, i);
       }
       break;
     }
@@ -128,19 +122,15 @@ export function drawElementalWord(
 
       // Expanding smoke rings
       const smokeAge = (currentTime * 0.4) % 1;
-      ctx.beginPath();
-      ctx.ellipse(
+      drawSmoke(
+        ctx,
         wordWidth / 2,
         -fontSize / 2,
         (wordWidth / 2) * (1 + smokeAge * 0.5),
-        (fontSize / 2) * (1 + smokeAge * 0.4),
-        0,
-        0,
-        Math.PI * 2,
+        Math.max(0, 0.3 - smokeAge * 0.25),
+        currentTime * 1000,
+        appearanceCount,
       );
-      ctx.strokeStyle = `rgba(140,130,120,${0.15 - smokeAge * 0.15})`;
-      ctx.lineWidth = 6;
-      ctx.stroke();
       break;
     }
 
@@ -153,6 +143,14 @@ export function drawElementalWord(
       ctx.fillStyle = "#ffffff";
       ctx.fillText(word, 0, 0);
       ctx.shadowBlur = 0;
+
+      // Neon orb glow accents
+      const orbCount = isHeroWord ? 3 : 2;
+      for (let i = 0; i < orbCount; i += 1) {
+        const ox = (wordWidth * (i + 1)) / (orbCount + 1);
+        const oy = -fontSize * (0.55 + i * 0.18);
+        drawNeonOrb(ctx, ox, oy, 2.8 + beatIntensity * 2, 0.35 + beatIntensity * 0.45, currentTime * 1000, neonColor);
+      }
 
       // Electric arc on strong beats
       if (beatIntensity > 0.55) {
