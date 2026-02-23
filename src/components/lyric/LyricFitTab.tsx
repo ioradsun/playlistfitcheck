@@ -352,14 +352,18 @@ export function LyricFitTab({
 
     // 5. Persist songDna + cinematicDirection to saved_lyrics
     if (savedId) {
-      try {
-        await supabase
-          .from("saved_lyrics")
-          .update({ song_dna: { ...nextSongDna, cinematicDirection: resolvedCinematic } as any, updated_at: new Date().toISOString() })
-          .eq("id", savedId);
-      } catch (e) {
-        console.warn("[Pipeline] Failed to persist song_dna:", e);
+      const songDnaPayload = { ...nextSongDna, cinematicDirection: resolvedCinematic };
+      const { error: persistError } = await supabase
+        .from("saved_lyrics")
+        .update({ song_dna: songDnaPayload as any, updated_at: new Date().toISOString() })
+        .eq("id", savedId);
+      if (persistError) {
+        console.error("[Pipeline] Failed to persist song_dna:", persistError);
+      } else {
+        console.log("[Pipeline] song_dna persisted to", savedId);
       }
+    } else {
+      console.warn("[Pipeline] No savedId — song_dna not persisted");
     }
 
     setPipelineStages(prev => ({ ...prev, transcript: "done" }));
