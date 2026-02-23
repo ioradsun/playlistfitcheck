@@ -894,6 +894,11 @@ export class LyricDancePlayer {
         fontSize: c.fontSize,
         color: c.color,
         visible: c.visible,
+        entryOffsetY: c.entryOffsetY,
+        entryOffsetX: c.entryOffsetX,
+        entryScale: c.entryScale,
+        exitOffsetY: c.exitOffsetY,
+        exitScale: c.exitScale,
       })),
     }));
   }
