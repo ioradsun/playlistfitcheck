@@ -625,7 +625,6 @@ export class LyricDancePlayer {
     const cy = this.height / 2;
 
     let drawCalls = 0;
-    let loggedFirstChunk = false;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
 
