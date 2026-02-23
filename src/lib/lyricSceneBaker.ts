@@ -102,13 +102,9 @@ function getChapterIndexAndData(
   return { chapterIndex: chapters.length - 1, chapter: chapters[chapters.length - 1] };
 }
 
-function getShotY(cinematicDirection: CinematicDirection | null, chapter: ChapterLike | null): number {
-  if (!cinematicDirection || !chapter) return 540 * 0.52;
-
-  const distance = (chapter.cameraDistance ?? "Medium").toLowerCase();
-  if (distance.includes("wide")) return 540 * 0.65;
-  if (distance.includes("close")) return 540 * 0.35;
-  return BASE_Y_CENTER;
+function getShotY(_cinematicDirection: CinematicDirection | null, _chapter: ChapterLike | null): number {
+  // True vertical center — no chapter-based y positioning until basic layout is solid
+  return 540 * 0.48;
 }
 
 function getTensionMotion(
@@ -236,21 +232,15 @@ function bakeFrame(
 
 function getLinePositions(payload: ScenePayload): number[] {
   return payload.lines.map((_, idx) => {
-    const lineVariance = ((idx % 7) - 3) * 12;
-    return 960 * 0.5 + lineVariance;
+    const centerX = 960 * 0.5;
+    const lineVariance = ((idx % 3) - 1) * 20; // max ±20px only
+    return centerX + lineVariance;
   });
 }
 
 function getLineChapterOffsets(payload: ScenePayload): number[] {
-  return payload.lines.map((line) => {
-    const lineMidSec = (line.start + line.end) / 2;
-    const lineProgress =
-      payload.songEnd > payload.songStart
-        ? Math.min(1, Math.max(0, (lineMidSec - payload.songStart) / (payload.songEnd - payload.songStart)))
-        : 0;
-    const { chapterIndex } = getChapterIndexAndData(payload.cinematic_direction, lineProgress);
-    return ((Math.max(0, chapterIndex) % 3) - 1) * 60;
-  });
+  // No chapter offset for now — keep centered until basic layout is solid
+  return payload.lines.map(() => 0);
 }
 
 function createBakeState(payload: ScenePayload): BakeState {
