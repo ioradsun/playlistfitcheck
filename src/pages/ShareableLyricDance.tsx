@@ -2,139 +2,123 @@
  * ShareableLyricDance — Public page for a full-song lyric dance.
  * Route: /:artistSlug/:songSlug/lyric-dance
  *
- * Ungated, lightweight — bypasses main provider tree like ShareableHook.
- * Renders the full song with the physics engine on a canvas.
- * Social features: artist header, canvas comments, signal buttons.
+ * Thin React shell — all rendering is delegated to LyricDancePlayer.
  */
 
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-// lucide icons removed — HUD uses no icons
-
-import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
-import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
-import { getSymbolStateForProgress } from "@/engine/BackgroundDirector";
-import { renderBackground, renderParticles, type BackgroundState, type ParticleState } from "@/engine/renderFrame";
-import { renderText, type TextState } from "@/engine/renderText";
-import { ParticleEngine } from "@/engine/ParticleEngine";
-import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
-import { animationResolver } from "@/engine/AnimationResolver";
-import { deriveCanvasManifest } from "@/engine/deriveCanvasManifest";
-import BeatAnalyzerWorker from "@/workers/beatAnalyzer.worker?worker";
-import * as WordClassifier from "@/engine/WordClassifier";
-import { DirectionInterpreter, ensureFullTensionCurve } from "@/engine/DirectionInterpreter";
-import { buildWordPlan, getActiveLineIndexMonotonic, getNextStartAfterMonotonic, type WordPlan } from "@/engine/precomputeWordPlan";
-import type { CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
-import type { LyricLine } from "@/components/lyric/LyricDisplay";
-import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import { getSessionId } from "@/lib/sessionId";
 import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
-import { renderSymbol } from "@/engine/SymbolRenderer";
-import { useLyricDanceRenderer } from "@/hooks/useLyricDanceRenderer";
-import type { ScenePayload } from "@/lib/lyricSceneBaker";
+import { LyricDancePlayer, DEFAULT_DEBUG_STATE, type LyricDanceData, type LiveDebugState } from "@/engine/LyricDancePlayer";
+import type { LyricLine } from "@/components/lyric/LyricDisplay";
+import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
+import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
+import type { CinematicDirection } from "@/types/CinematicDirection";
 
-/** Live debug state updated every frame from the render loop */
-interface LiveDebugState {
-  // Beat
-  beatIntensity: number;
-  physGlow: number;
-  // Physics Engine
-  physicsActive: boolean;
-  wordCount: number;
-  heat: number;
-  velocity: number;
-  rotation: number;
-  lastBeatForce: number;
-  // Animation
-  effectKey: string;
-  entryProgress: number;
-  exitProgress: number;
-  activeMod: string | null;
-  fontScale: number;
-  scale: number;
-  lineColor: string;
-  isHookLine: boolean;
-  repIndex: number;
-  repTotal: number;
-  // Particles
-  particleSystem: string;
-  particleDensity: number;
-  particleSpeed: number;
-  particleCount: number;
-  songSection: string;
-  // Position
-  xOffset: number;
-  yBase: number;
-  xNudge: number;
-  shake: number;
-  // Background
-  backgroundSystem: string;
-  imageLoaded: boolean;
-  zoom: number;
-  vignetteIntensity: number;
-  songProgress: number;
-  // Direction
-  dirThesis: string;
-  dirChapter: string;
-  dirChapterProgress: number;
-  dirIntensity: number;
-  dirBgDirective: string;
-  dirLightBehavior: string;
-  symbolPrimary: string;
-  symbolSecondary: string;
-  symbolState: string;
-  cameraDistance: string;
-  cameraMovement: string;
-  tensionStage: string;
-  tensionMotion: number;
-  tensionParticles: number;
-  tensionTypo: number;
-  // Word Directive
-  wordDirectiveWord: string;
-  wordDirectiveKinetic: string;
-  wordDirectiveElemental: string;
-  wordDirectiveEmphasis: number;
-  wordDirectiveEvolution: string;
-  // Line Direction
-  lineHeroWord: string;
-  lineEntry: string;
-  lineExit: string;
-  lineIntent: string;
-  shotType: string;
-  shotDescription: string;
-  // Evolution
-  evolutionWord: string;
-  evolutionCount: number;
-  evolutionScale: number;
-  evolutionGlow: number;
-  evolutionBubbles: number;
-  evolutionSinkPx: number;
-  // Performance
-  fps: number;
-  drawCalls: number;
-  cacheHits: number;
-  // Frame timing (ms)
-  perfBg: number;
-  perfSymbol: number;
-  perfParticlesFar: number;
-  perfText: number;
-  perfOverlays: number;
-  perfNear: number;
-  perfTotal: number;
-  // Meta
-  time: number;
+// ─── Types ──────────────────────────────────────────────────────────
+
+interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
+interface DanceComment { id: string; text: string; submitted_at: string; }
+
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest";
+const DIRECTION_COLUMNS = "cinematic_direction";
+
+// ─── Progress Bar ───────────────────────────────────────────────────
+
+function ProgressBar({ player, data, onSeekStart, onSeekEnd, palette }: {
+  player: LyricDancePlayer | null;
+  data: LyricDanceData;
+  onSeekStart: () => void;
+  onSeekEnd: () => void;
+  palette: string[];
+}) {
+  const [progress, setProgress] = useState(0);
+  const barRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const wasPlaying = useRef(false);
+
+  useEffect(() => {
+    if (!player) return;
+    const audio = player.audio;
+    const lines = data.lyrics;
+    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
+    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
+    const duration = songEnd - songStart;
+    let rafId = 0;
+    const update = () => {
+      const p = duration > 0 ? (audio.currentTime - songStart) / duration : 0;
+      setProgress(Math.max(0, Math.min(1, p)));
+      rafId = requestAnimationFrame(update);
+    };
+    rafId = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(rafId);
+  }, [player, data]);
+
+  const seekTo = useCallback((clientX: number) => {
+    if (!barRef.current || !player) return;
+    const rect = barRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const lines = data.lyrics;
+    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
+    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
+    player.seek(songStart + ratio * (songEnd - songStart));
+  }, [player, data]);
+
+  const handleDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (!player) return;
+    e.stopPropagation();
+    dragging.current = true;
+    wasPlaying.current = !player.audio.paused;
+    player.pause();
+    onSeekStart();
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    seekTo(clientX);
+
+    const onMove = (ev: MouseEvent | TouchEvent) => {
+      const cx = "touches" in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX;
+      seekTo(cx);
+    };
+    const onUp = () => {
+      dragging.current = false;
+      onSeekEnd();
+      if (wasPlaying.current) player.play();
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onUp);
+  }, [player, seekTo, onSeekStart, onSeekEnd]);
+
+  return (
+    <div
+      ref={barRef}
+      onMouseDown={handleDown}
+      onTouchStart={handleDown}
+      onClick={e => e.stopPropagation()}
+      className="absolute bottom-0 left-0 right-0 z-10 h-3 cursor-pointer group"
+      style={{ touchAction: "none" }}
+    >
+      <div className="absolute inset-0 bg-white/5" />
+      <div className="absolute left-0 top-0 h-full transition-none" style={{ width: `${progress * 100}%`, background: palette[1] || "#a855f7", opacity: 0.6 }} />
+      <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity" style={{ left: `calc(${progress * 100}% - 6px)` }} />
+    </div>
+  );
 }
 
-/** Compact engine debug HUD — toggled with D key */
-function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebugState> }) {
-  const [open, setOpen] = useState(false);
-  const [snap, setSnap] = useState<LiveDebugState>(stateRef.current);
+// ─── Live Debug HUD ─────────────────────────────────────────────────
 
-  // Toggle with D key
+function LiveDebugHUD({ player }: { player: LyricDancePlayer | null }) {
+  const [open, setOpen] = useState(false);
+  const [snap, setSnap] = useState<LiveDebugState>(DEFAULT_DEBUG_STATE);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "d" || e.key === "D") {
@@ -146,12 +130,11 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Poll at 100ms
   useEffect(() => {
-    if (!open) return;
-    const id = setInterval(() => setSnap({ ...stateRef.current }), 100);
+    if (!open || !player) return;
+    const id = setInterval(() => setSnap({ ...player.debugState }), 100);
     return () => clearInterval(id);
-  }, [open, stateRef]);
+  }, [open, player]);
 
   if (!open) return null;
 
@@ -179,322 +162,18 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
       fontSize: 11, lineHeight: "1.55", color: "#4ade80",
       pointerEvents: "auto", overflowY: "auto", maxHeight: "90vh",
     }}>
-      <Section title="BEAT">
-        <Row label="intensity" value={f(snap.beatIntensity)} />
-        <Row label="physGlow" value={f(snap.physGlow)} />
-      </Section>
-      <Section title="PHYSICS ENGINE">
-        <Row label="active" value={snap.physicsActive ? "true" : "false"} />
-        <Row label="words" value={String(snap.wordCount)} />
-        <Row label="heat" value={f(snap.heat)} />
-        <Row label="avgVelocityY" value={f(snap.velocity)} />
-        <Row label="avgRotation" value={f(snap.rotation, 3)} />
-        <Row label="lastBeatForce" value={f(snap.lastBeatForce)} />
-      </Section>
-      <Section title="ANIMATION">
-        <Row label="effect" value={snap.effectKey} />
-        <Row label="entryProgress" value={f(snap.entryProgress)} />
-        <Row label="exitProgress" value={f(snap.exitProgress)} />
-        <Row label="activeMod" value={snap.activeMod ?? "none"} />
-        <Row label="fontScale" value={f(snap.fontScale)} />
-        <Row label="scale" value={f(snap.scale)} />
-        <Row label="lineColor" value={snap.lineColor} />
-        <Row label="isHookLine" value={snap.isHookLine ? "true" : "false"} />
-        <Row label="repIndex" value={`${snap.repIndex}/${snap.repTotal}`} />
-      </Section>
-      <Section title="PARTICLES">
-        <Row label="system" value={snap.particleSystem} />
-        <Row label="density" value={f(snap.particleDensity)} />
-        <Row label="speed" value={f(snap.particleSpeed)} />
-        <Row label="count" value={String(snap.particleCount)} />
-        <Row label="songSection" value={snap.songSection} />
-      </Section>
-      <Section title="POSITION">
-        <Row label="xOffset" value={`${f(snap.xOffset, 1)}px`} />
-        <Row label="yBase" value={f(snap.yBase)} />
-        <Row label="xNudge" value={`${f(snap.xNudge, 1)}px`} />
-        <Row label="shake" value={f(snap.shake)} />
-      </Section>
-      <Section title="BACKGROUND">
-        <Row label="system" value={snap.backgroundSystem} />
-        <Row label="imageLoaded" value={snap.imageLoaded ? "true" : "false"} />
-        <Row label="zoom" value={f(snap.zoom)} />
-        <Row label="vignetteIntensity" value={f(snap.vignetteIntensity)} />
-        <Row label="songProgress" value={f(snap.songProgress)} />
-      </Section>
-      <Section title="DIRECTION">
-        <Row label="thesis" value={snap.dirThesis.slice(0, 40) + (snap.dirThesis.length > 40 ? "…" : "")} />
-        <Row label="chapter" value={`${snap.dirChapter} (${f(snap.dirChapterProgress)})`} />
-        <Row label="chapterIntensity" value={f(snap.dirIntensity)} />
-        <Row label="bgDirective" value={snap.dirBgDirective.slice(0, 30) + (snap.dirBgDirective.length > 30 ? "…" : "")} />
-        <Row label="lightBehavior" value={snap.dirLightBehavior.slice(0, 30) + (snap.dirLightBehavior.length > 30 ? "…" : "")} />
-      </Section>
-      <Section title="SYMBOL">
-        <Row label="primary" value={snap.symbolPrimary} />
-        <Row label="secondary" value={snap.symbolSecondary} />
-        <Row label="state" value={snap.symbolState.slice(0, 30) + (snap.symbolState.length > 30 ? "…" : "")} />
-      </Section>
-      <Section title="CAMERA">
-        <Row label="distance" value={snap.cameraDistance} />
-        <Row label="zoom" value={f(snap.zoom)} />
-        <Row label="movement" value={snap.cameraMovement} />
-      </Section>
-      <Section title="TENSION">
-        <Row label="stage" value={snap.tensionStage} />
-        <Row label="motion" value={f(snap.tensionMotion)} />
-        <Row label="particles" value={f(snap.tensionParticles)} />
-        <Row label="typo" value={f(snap.tensionTypo)} />
-      </Section>
-      <Section title="WORD DIRECTIVE">
-        <Row label="word" value={snap.wordDirectiveWord || "—"} />
-        <Row label="kinetic" value={snap.wordDirectiveKinetic || "—"} />
-        <Row label="elemental" value={snap.wordDirectiveElemental || "—"} />
-        <Row label="emphasis" value={f(snap.wordDirectiveEmphasis)} />
-        <Row label="evolution" value={snap.wordDirectiveEvolution || "—"} />
-      </Section>
-      <Section title="LINE DIRECTION">
-        <Row label="heroWord" value={snap.lineHeroWord || "—"} />
-        <Row label="entry" value={snap.lineEntry} />
-        <Row label="exit" value={snap.lineExit} />
-        <Row label="intent" value={snap.lineIntent || "—"} />
-      </Section>
-      <Section title="SHOT">
-        <Row label="type" value={snap.shotType} />
-        <Row label="description" value={snap.shotDescription.slice(0, 30) + (snap.shotDescription.length > 30 ? "…" : "")} />
-      </Section>
-      <Section title="EVOLUTION">
-        <Row label="word" value={`${snap.evolutionWord} count:${snap.evolutionCount}`} />
-        <Row label="scale" value={f(snap.evolutionScale)} />
-        <Row label="glow" value={String(Math.round(snap.evolutionGlow))} />
-        <Row label="bubbles" value={String(Math.round(snap.evolutionBubbles))} />
-        <Row label="sink" value={`${Math.round(snap.evolutionSinkPx)}px`} />
-      </Section>
-      <Section title="PERFORMANCE">
-        <Row label="fps" value={String(Math.round(snap.fps))} />
-        <Row label="drawCalls" value={String(Math.round(snap.drawCalls))} />
-        <Row label="particleCount" value={String(snap.particleCount)} />
-        <Row label="cacheHits" value={`${Math.round(snap.cacheHits * 100)}%`} />
-      </Section>
-      <Section title="FRAME TIMING (ms)">
-        <Row label="background" value={snap.perfBg.toFixed(2)} />
-        <Row label="symbol" value={snap.perfSymbol.toFixed(2)} />
-        <Row label="particlesFar" value={snap.perfParticlesFar.toFixed(2)} />
-        <Row label="text" value={snap.perfText.toFixed(2)} />
-        <Row label="overlays" value={snap.perfOverlays.toFixed(2)} />
-        <Row label="nearPass" value={snap.perfNear.toFixed(2)} />
-        <Row label="total" value={snap.perfTotal.toFixed(2)} />
-      </Section>
-      <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" as const }}>
-        {f(snap.time, 2)}s · press D to close
-      </div>
+      <Section title="BEAT"><Row label="intensity" value={f(snap.beatIntensity)} /><Row label="physGlow" value={f(snap.physGlow)} /></Section>
+      <Section title="PHYSICS"><Row label="heat" value={f(snap.heat)} /><Row label="velocity" value={f(snap.velocity)} /><Row label="words" value={String(snap.wordCount)} /></Section>
+      <Section title="ANIMATION"><Row label="effect" value={snap.effectKey} /><Row label="entry" value={f(snap.entryProgress)} /><Row label="exit" value={f(snap.exitProgress)} /><Row label="mod" value={snap.activeMod ?? "none"} /></Section>
+      <Section title="PARTICLES"><Row label="system" value={snap.particleSystem} /><Row label="count" value={String(snap.particleCount)} /></Section>
+      <Section title="DIRECTION"><Row label="chapter" value={snap.dirChapter} /><Row label="tension" value={snap.tensionStage} /></Section>
+      <Section title="PERFORMANCE"><Row label="fps" value={String(Math.round(snap.fps))} /><Row label="total" value={snap.perfTotal.toFixed(2)} /><Row label="text" value={snap.perfText.toFixed(2)} /><Row label="bg" value={snap.perfBg.toFixed(2)} /></Section>
+      <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" as const }}>{f(snap.time, 2)}s · press D to close</div>
     </div>
   );
 }
 
-
-
-
-const distanceToZoom: Record<string, number> = {
-  ExtremeWide: 0.7,
-  Wide: 0.85,
-  MediumWide: 0.9,
-  Medium: 1.0,
-  MediumClose: 1.1,
-  Close: 1.2,
-  ExtremeClose: 1.5,
-};
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
-function hexToRgbString(hex: string): string {
-  const safe = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : "#000000";
-  const r = parseInt(safe.slice(1, 3), 16);
-  const g = parseInt(safe.slice(3, 5), 16);
-  const b = parseInt(safe.slice(5, 7), 16);
-  return `${r},${g},${b}`;
-}
-
-
-function getSongSection(progress: number): string {
-  if (progress < 0.08) return "intro";
-  if (progress < 0.33) return "verse";
-  if (progress < 0.6) return "chorus";
-  if (progress < 0.75) return "bridge";
-  return "outro";
-}
-
-interface LyricDanceData {
-  id: string;
-  user_id: string;
-  artist_slug: string;
-  song_slug: string;
-  artist_name: string;
-  song_name: string;
-  audio_url: string;
-  lyrics: LyricLine[];
-  physics_spec: PhysicsSpec;
-  beat_grid: BeatGrid;
-  palette: string[];
-  system_type: string;
-  artist_dna: ArtistDNA | null;
-  seed: string;
-  scene_manifest: any | null;
-  cinematic_direction: CinematicDirection | null;
-}
-
-interface ProfileInfo {
-  display_name: string | null;
-  avatar_url: string | null;
-}
-
-interface DanceComment {
-  id: string;
-  text: string;
-  submitted_at: string;
-}
-
-interface BeatGrid {
-  bpm: number;
-  beats: number[];
-  confidence: number;
-}
-
-interface LineBeatMap {
-  lineIndex: number;
-  beats: number[];
-  strongBeats: number[];
-  beatCount: number;
-  beatsPerSecond: number;
-  firstBeat: number;
-  lastBeat: number;
-}
-
-interface CollisionBox {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-interface SpatialGrid {
-  cellSize: number;
-  buckets: Map<string, number[]>;
-}
-
-function intersectsAABB(a: CollisionBox, b: CollisionBox): boolean {
-  return !(
-    a.x + a.w <= b.x ||
-    b.x + b.w <= a.x ||
-    a.y + a.h <= b.y ||
-    b.y + b.h <= a.y
-  );
-}
-
-function resolveAABBCollision(a: CollisionBox, b: CollisionBox, strength: number): void {
-  const axCenter = a.x + a.w * 0.5;
-  const ayCenter = a.y + a.h * 0.5;
-  const bxCenter = b.x + b.w * 0.5;
-  const byCenter = b.y + b.h * 0.5;
-  const overlapX = (a.w + b.w) * 0.5 - Math.abs(axCenter - bxCenter);
-  const overlapY = (a.h + b.h) * 0.5 - Math.abs(ayCenter - byCenter);
-  if (overlapX <= 0 || overlapY <= 0) return;
-
-  if (overlapX < overlapY) {
-    const direction = axCenter < bxCenter ? -1 : 1;
-    a.x += direction * overlapX * strength;
-  } else {
-    const direction = ayCenter < byCenter ? -1 : 1;
-    a.y += direction * overlapY * strength;
-  }
-}
-
-function gridKey(gx: number, gy: number): string {
-  return `${gx}:${gy}`;
-}
-
-function buildLineBeatMap(lines: LyricLine[], beatGrid: BeatGrid): LineBeatMap[] {
-  return lines.map((line, i) => {
-    const lineBeats = beatGrid.beats.filter(beat => beat >= line.start && beat <= line.end);
-    return {
-      lineIndex: i,
-      beats: lineBeats,
-      strongBeats: lineBeats.filter((_, beatIdx) => beatIdx % 2 === 0),
-      beatCount: lineBeats.length,
-      beatsPerSecond: lineBeats.length / Math.max(0.001, line.end - line.start),
-      firstBeat: lineBeats[0] ?? line.start,
-      lastBeat: lineBeats[lineBeats.length - 1] ?? line.end,
-    };
-  });
-}
-
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest";
-const DIRECTION_COLUMNS = "cinematic_direction";
-
-/** Draggable progress bar overlay at bottom of canvas */
-function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
-  audioRef: React.MutableRefObject<HTMLAudioElement | null>;
-  data: LyricDanceData;
-  progressBarRef: React.RefObject<HTMLDivElement>;
-  onMouseDown: (e: React.MouseEvent) => void;
-  onTouchStart: (e: React.TouchEvent) => void;
-  palette: string[];
-}) {
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const lines = data.lyrics;
-    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
-    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
-    const duration = songEnd - songStart;
-
-    let rafId = 0;
-    const update = () => {
-      const p = duration > 0 ? (audio.currentTime - songStart) / duration : 0;
-      setProgress(Math.max(0, Math.min(1, p)));
-      rafId = requestAnimationFrame(update);
-    };
-    rafId = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(rafId);
-  }, [audioRef, data]);
-
-  return (
-    <div
-      ref={progressBarRef}
-      onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e); }}
-      onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e); }}
-      onClick={(e) => e.stopPropagation()}
-      className="absolute bottom-0 left-0 right-0 z-10 h-3 cursor-pointer group"
-      style={{ touchAction: "none" }}
-    >
-      <div className="absolute inset-0 bg-white/5" />
-      <div
-        className="absolute left-0 top-0 h-full transition-none"
-        style={{
-          width: `${progress * 100}%`,
-          background: palette[1] || "#a855f7",
-          opacity: 0.6,
-        }}
-      />
-      {/* Thumb */}
-      <div
-        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ left: `calc(${progress * 100}% - 6px)` }}
-      />
-    </div>
-  );
-}
-
-/**
- * USE_WORKER toggle — flip to true once renderFrame.ts is fully extracted.
- * When true, the render loop runs on an OffscreenCanvas in a Web Worker.
- * When false (current), the existing rAF loop runs on the main thread.
- */
-const USE_WORKER = false;
+// ─── Main Component ─────────────────────────────────────────────────
 
 export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
@@ -503,217 +182,19 @@ export default function ShareableLyricDance() {
   const [data, setData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [bakingProgress, setBakingProgress] = useState(0);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
-  const [fireCount, setFireCount] = useState(0);
-
-  // Live debug ref — written by render loop, read by HUD
-  const liveDebugRef = useRef<LiveDebugState>({
-    time: 0, beatIntensity: 0, physGlow: 0,
-    physicsActive: false, wordCount: 0, heat: 0, velocity: 0, rotation: 0, lastBeatForce: 0,
-    effectKey: "—", entryProgress: 0, exitProgress: 0, activeMod: null,
-    fontScale: 1, scale: 1, lineColor: "#ffffff", isHookLine: false, repIndex: 0, repTotal: 0,
-    particleSystem: "none", particleDensity: 0, particleSpeed: 0, particleCount: 0, songSection: "intro",
-    xOffset: 0, yBase: 0.5, xNudge: 0, shake: 0,
-    backgroundSystem: "—", imageLoaded: false, zoom: 1, vignetteIntensity: 0, songProgress: 0,
-    dirThesis: "—", dirChapter: "—", dirChapterProgress: 0, dirIntensity: 0, dirBgDirective: "—", dirLightBehavior: "—",
-    symbolPrimary: "—", symbolSecondary: "—", symbolState: "—",
-    cameraDistance: "Wide", cameraMovement: "—", tensionStage: "—", tensionMotion: 0, tensionParticles: 0, tensionTypo: 0,
-    wordDirectiveWord: "", wordDirectiveKinetic: "—", wordDirectiveElemental: "—", wordDirectiveEmphasis: 0, wordDirectiveEvolution: "—",
-    lineHeroWord: "", lineEntry: "fades", lineExit: "fades", lineIntent: "—", shotType: "FloatingInWorld", shotDescription: "—",
-    evolutionWord: "—", evolutionCount: 0, evolutionScale: 1, evolutionGlow: 0, evolutionBubbles: 0, evolutionSinkPx: 0,
-    fps: 60, drawCalls: 0, cacheHits: 0,
-    perfBg: 0, perfSymbol: 0, perfParticlesFar: 0, perfText: 0, perfOverlays: 0, perfNear: 0, perfTotal: 0,
-  });
-  const particleEngineRef = useRef<ParticleEngine | null>(null);
-  const interpreterRef = useRef<DirectionInterpreter | null>(null);
-  const interpreterRefStable = useRef<DirectionInterpreter | null>(null);
-  const chapterTransitionRef = useRef<{ previous: string | null; current: string | null; progress: number }>({
-    previous: null,
-    current: null,
-    progress: 1,
-  });
-  const textStateRef = useRef<TextState>({
-    xOffset: 0,
-    yBase: 0,
-    beatScale: 1,
-    wordCounts: new Map(),
-    seenAppearances: new Set(),
-    wordHistory: new Map(),
-    directiveCache: new Map(),
-    evolutionCache: new Map(),
-  });
-  const climaxActiveRef = useRef(false);
-  const silenceOffsetYRef = useRef(0);
-  const silenceZoomRef = useRef(1);
-  const vignetteIntensityRef = useRef(0.55);
-  const lightIntensityRef = useRef(1);
-  const cameraZoomRef = useRef(1);
-  const cameraOffsetRef = useRef({ x: 0, y: 0 });
-  const cameraTargetRef = useRef({ zoom: 1, x: 0, y: 0 });
-  const cameraChapterRef = useRef(-1);
-  const beatIntensityRef = useRef(0);
-  // Comment input (ShareableHook-style)
+  const [muted, setMuted] = useState(true);
+  const [showCover, setShowCover] = useState(true);
+  const [badgeVisible, setBadgeVisible] = useState(false);
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [comments, setComments] = useState<DanceComment[]>([]);
 
-  // Progress bar dragging
-  const [isDragging, setIsDragging] = useState(false);
-  const progressBarRef = useRef<HTMLDivElement>(null);
-
-  // Audio
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [muted, setMuted] = useState(true);
-  const engineRef = useRef<HookDanceEngine | null>(null);
-  const physicsSpec = data?.physics_spec;
-  const lineBeatMapRef = useRef<LineBeatMap[]>([]);
-
-  const workerScenePayload = useMemo<ScenePayload | null>(() => {
-    if (!data) return null;
-    const lines = data.lyrics ?? [];
-    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
-    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
-    return {
-      lines,
-      beat_grid: data.beat_grid,
-      physics_spec: data.physics_spec,
-      scene_manifest: (data.scene_manifest ?? null) as any,
-      cinematic_direction: data.cinematic_direction ?? null,
-      palette: data.palette ?? [],
-      lineBeatMap: lineBeatMapRef.current,
-      songStart,
-      songEnd,
-    };
-  }, [data]);
-
-  // Canvas
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const animRef = useRef<number>(0);
-  const loadedFontFamiliesRef = useRef<Set<string>>(new Set());
-  const rngRef = useRef<() => number>(() => 0);
+  const playerRef = useRef<LyricDancePlayer | null>(null);
 
-  useLyricDanceRenderer({
-    canvasRef: textCanvasRef,
-    payload: USE_WORKER ? workerScenePayload : null,
-    currentTime: audioRef.current?.currentTime ?? 0,
-    isPlaying: !!audioRef.current && !audioRef.current.paused && !isDragging,
-    onBakingProgress: setBakingProgress,
-  });
-  const wordMeasureCache = useRef<Map<string, number>>(new Map());
-  const particleStateRef = useRef<ParticleState>({ configCache: { bucket: -1, config: null }, slowFrameCount: 0, adaptiveMaxParticles: 0, frameCount: 0 });
-  const chapterBoundaryRef = useRef<{ key: number; chapter: ReturnType<DirectionInterpreter["getCurrentChapter"]> | null }>({ key: -1, chapter: null });
-  const tensionBoundaryRef = useRef<{ key: number; stage: TensionStage | null }>({ key: -1, stage: null });
-  const bgStateRef = useRef<BackgroundState>({ lastChapterTitle: "", lastBeatIntensity: 0, lastProgress: 0, lastDrawTime: 0 });
-  // Perf: constellation offscreen canvas
-  const constellationCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const wordPlanRef = useRef<WordPlan | null>(null);
-  const lineIndexRef = useRef(-1);
-  const nextLinePtrRef = useRef(0);
-  const nextHookPtrRef = useRef(0);
-  const chapterIndexRef = useRef(0);
-  const tensionIndexRef = useRef(0);
-
-  useEffect(() => {
-    wordMeasureCache.current.clear();
-    textStateRef.current.evolutionCache.clear();
-    textStateRef.current.directiveCache.clear();
-    interpreterRef.current?.invalidateEvolutionCache();
-    interpreterRefStable.current?.invalidateEvolutionCache();
-  }, [data?.lyrics?.length]);
-
-
-  useEffect(() => {
-    const rawCinematicDirection =
-      data?.cinematic_direction ??
-      null;
-    const cinematicDirection = rawCinematicDirection
-      ? {
-          ...rawCinematicDirection,
-          tensionCurve: ensureFullTensionCurve(rawCinematicDirection.tensionCurve ?? []),
-        }
-      : null;
-    const lines = data?.lyrics ?? [];
-    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
-    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
-    const totalDuration = Math.max(0.001, songEnd - songStart);
-
-    if (cinematicDirection) {
-      // interpreter created in render loop useEffect
-      interpreterRef.current = new DirectionInterpreter(
-        cinematicDirection,
-        totalDuration
-      );
-      if (cinematicDirection?.visualWorld?.particleSystem) {
-        particleEngineRef.current?.setSystem(cinematicDirection.visualWorld.particleSystem);
-      }
-    } else {
-      interpreterRef.current = null;
-    }
-    WordClassifier.setCinematicDirection(cinematicDirection);
-  }, [data?.cinematic_direction, data?.lyrics]);
-
-  useEffect(() => {
-    interpreterRefStable.current = interpreterRef.current;
-  }, [data?.cinematic_direction]);
-
-  useEffect(() => {
-    const cinematicDirection = data?.cinematic_direction ?? null;
-    const fontFamily = cinematicDirection?.visualWorld?.typographyProfile?.fontFamily ?? "Montserrat";
-    const trimmedFontFamily = fontFamily.trim();
-    if (!trimmedFontFamily || loadedFontFamiliesRef.current.has(trimmedFontFamily)) {
-      return;
-    }
-
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(trimmedFontFamily.replace(/ /g, "+"))}:wght@300;400;500;600;700&display=swap`;
-    document.head.appendChild(link);
-    loadedFontFamiliesRef.current.add(trimmedFontFamily);
-  }, [data?.cinematic_direction]);
-
-  // Comments / constellation
-  const constellationRef = useRef<ConstellationNode[]>([]);
-  const riverOffsetsRef = useRef<number[]>([0, 0, 0, 0]);
-  const constellationCollisionBoxesRef = useRef<CollisionBox[]>([]);
-  const constellationGridRef = useRef<SpatialGrid>({ cellSize: 96, buckets: new Map() });
-
-  // Badge
-  const [badgeVisible, setBadgeVisible] = useState(false);
-  // Cover overlay
-  const [showCover, setShowCover] = useState(true);
-
-  useEffect(() => {
-    if (!physicsSpec) {
-      engineRef.current = null;
-      return;
-    }
-    engineRef.current = new HookDanceEngine(physicsSpec);
-  }, [physicsSpec]);
-
-  useEffect(() => {
-    const lines = data?.lyrics;
-    const beatGrid = data?.beat_grid;
-    if (!lines || !beatGrid) {
-      lineBeatMapRef.current = [];
-      return;
-    }
-
-    const worker = new BeatAnalyzerWorker();
-    worker.postMessage({ lines, beats: beatGrid.beats ?? [] });
-    worker.onmessage = (e: MessageEvent<{ lineBeatMap: LineBeatMap[] }>) => {
-      lineBeatMapRef.current = e.data.lineBeatMap ?? [];
-    };
-    worker.onerror = () => {
-      lineBeatMapRef.current = buildLineBeatMap(lines, beatGrid);
-    };
-
-    return () => worker.terminate();
-  }, [data?.lyrics, data?.beat_grid]);
-
-  // ── Load data ─────────────────────────────────────────────────────────────
+  // ── Data fetch ──────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!artistSlug || !songSlug) return;
@@ -726,1030 +207,75 @@ export default function ShareableLyricDance() {
       .eq("song_slug", songSlug)
       .maybeSingle()
       .then(async ({ data: row, error }) => {
-        if (error || !row) {
-          setNotFound(true);
-          setLoading(false);
-          return;
-        }
+        if (error || !row) { setNotFound(true); setLoading(false); return; }
         const d = row as any as LyricDanceData;
         setData({ ...d, cinematic_direction: null });
         setLoading(false);
 
-        // Phase 2: fetch cinematic direction asynchronously so rAF can start from phase 1 data.
+        // Phase 2: cinematic direction
         Promise.resolve(
-          supabase
-            .from("shareable_lyric_dances" as any)
-            .select(DIRECTION_COLUMNS)
-            .eq("id", d.id)
-            .maybeSingle()
-        ).then(({ data: directionRow }) => {
-            const deferredDirection = (directionRow as any)?.cinematic_direction
-              ?? null;
-            if (deferredDirection) {
-              setData(prev => prev ? { ...prev, cinematic_direction: deferredDirection } : prev);
-            }
-          })
-          .catch((directionError) => {
-            console.warn("[ShareableLyricDance] direction fetch failed:", directionError);
-          })
-          .finally(() => {
-            if (d.cinematic_direction) {
-              return;
-            }
+          supabase.from("shareable_lyric_dances" as any).select(DIRECTION_COLUMNS).eq("id", d.id).maybeSingle()
+        ).then(({ data: dirRow }) => {
+          const dir = (dirRow as any)?.cinematic_direction ?? null;
+          if (dir) setData(prev => prev ? { ...prev, cinematic_direction: dir } : prev);
+        }).catch(() => {}).finally(() => {
+          if (d.cinematic_direction) return;
+          if (d.lyrics?.length > 0) {
+            const linesForDir = (d.lyrics as any[]).filter((l: any) => l.tag !== "adlib").map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+            supabase.functions.invoke("cinematic-direction", {
+              body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
+            }).then(({ data: dirResult }) => {
+              if (dirResult?.cinematicDirection) setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+            }).catch(() => {});
+          }
+        });
 
-            // Generate cinematic direction on-the-fly if missing from DB
-            if (d.lyrics?.length > 0) {
-              const linesForDir = (d.lyrics as any[])
-                .filter((l: any) => l.tag !== 'adlib')
-                .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-              supabase.functions.invoke("cinematic-direction", {
-                body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
-              }).then(({ data: dirResult }) => {
-                if (dirResult?.cinematicDirection) {
-                  setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
-                }
-              }).catch(e => console.warn('[ShareableLyricDance] cinematic direction generation failed:', e));
-            }
-          });
-
-
-        // Non-critical: load profile + comments in parallel
+        // Profile + comments
         const [profileResult, commentsResult] = await Promise.all([
-          supabase
-            .from("profiles")
-            .select("display_name, avatar_url")
-            .eq("id", d.user_id)
-            .maybeSingle(),
-          supabase
-            .from("lyric_dance_comments" as any)
-            .select("id, text, submitted_at")
-            .eq("dance_id", d.id)
-            .order("submitted_at", { ascending: true })
-            .limit(100),
+          supabase.from("profiles").select("display_name, avatar_url").eq("id", d.user_id).maybeSingle(),
+          supabase.from("lyric_dance_comments" as any).select("id, text, submitted_at").eq("dance_id", d.id).order("submitted_at", { ascending: true }).limit(100),
         ]);
-
         if (profileResult.data) setProfile(profileResult.data as ProfileInfo);
-        if (commentsResult.data) {
-          const c = commentsResult.data as any as DanceComment[];
-          setComments(c);
-          setFireCount(c.length);
-          buildConstellation(c);
-        }
       });
   }, [artistSlug, songSlug]);
 
-  // ── Build constellation from comments ─────────────────────────────────────
-
-  const buildConstellation = useCallback((comments: DanceComment[]) => {
-    if (comments.length === 0) return;
-    const now = Date.now();
-    const timestamps = comments.map(c => new Date(c.submitted_at).getTime());
-    const oldest = Math.min(...timestamps);
-    const newest = Math.max(...timestamps);
-    const timeSpan = Math.max(newest - oldest, 1);
-
-    const riverCount = Math.min(comments.length, RIVER_ROWS.length * 5);
-    const riverStartIdx = Math.max(0, comments.length - riverCount);
-
-    const nodes: ConstellationNode[] = comments.map((c, idx) => {
-      const ts = new Date(c.submitted_at).getTime();
-      const rng = mulberry32(hashSeed(c.id));
-      const ageRatio = timeSpan > 0 ? (newest - ts) / timeSpan : 0;
-
-      const angle = rng() * Math.PI * 2;
-      const maxRadius = 0.2 + ageRatio * 0.3;
-      const radius = rng() * maxRadius;
-      const seedX = 0.5 + Math.cos(angle) * radius;
-      const seedY = 0.5 + Math.sin(angle) * radius;
-
-      const driftSpeed = 0.008 + rng() * 0.012;
-      const driftAngle = rng() * Math.PI * 2;
-      const baseOpacity = 0.06 - ageRatio * 0.03;
-
-      const isRiver = idx >= riverStartIdx;
-      const riverRowIndex = isRiver ? (idx - riverStartIdx) % RIVER_ROWS.length : 0;
-
-      return {
-        id: c.id, text: c.text,
-        submittedAt: ts,
-        seedX, seedY,
-        x: seedX, y: seedY,
-        driftSpeed, driftAngle,
-        phase: (isRiver ? "river" : "constellation") as ConstellationNode["phase"],
-        phaseStartTime: now,
-        riverRowIndex,
-        currentSize: isRiver ? 12 : 11,
-        baseOpacity,
-      };
-    });
-    constellationRef.current = nodes;
-    riverOffsetsRef.current = [0, 0, 0, 0];
-  }, []);
-
-  // ── Canvas render loop ────────────────────────────────────────────────────
+  // ── Player lifecycle ────────────────────────────────────────────────
 
   useEffect(() => {
-    if (USE_WORKER) return;
     if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
-    
-    let audio: HTMLAudioElement | null = null;
-    let resizeHandler: (() => void) | null = null;
+
+    const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, containerRef.current);
+    playerRef.current = player;
+
     try {
-    const bgCanvas = bgCanvasRef.current;
-    const textCanvas = textCanvasRef.current;
-    const container = containerRef.current;
-    const bgCtx = bgCanvas.getContext("2d", { alpha: false })!;
-    const textCtx = textCanvas.getContext("2d", { alpha: true })!;
-
-    let activePixelRatio = 1;
-    const spec = data.physics_spec;
-    const lines = data.lyrics;
-
-    // ── Derive SceneManifest via shared pipeline ─────────────────────────────
-    const { manifest: resolvedManifest, textPalette, textColor, contrastRatio } = deriveCanvasManifest({
-      physicsSpec: spec,
-      storedManifest: data.scene_manifest as Record<string, unknown> | null,
-      fallbackPalette: data.palette,
-      systemType: data.system_type,
-    });
-    // Override palette with cinematic direction visualWorld palette when available
-    const cinematicPalette = data.cinematic_direction?.visualWorld?.palette as string[] | undefined;
-    const effectivePalette = cinematicPalette && cinematicPalette.length >= 3
-      ? cinematicPalette
-      : resolvedManifest.palette;
-    const effectiveSystem = resolvedManifest.backgroundSystem || spec.system;
-
-    const rawCinematicDirection = data.cinematic_direction ?? null;
-    const cinematicDirection = rawCinematicDirection
-      ? {
-          ...rawCinematicDirection,
-          tensionCurve: ensureFullTensionCurve(rawCinematicDirection.tensionCurve ?? []),
-        }
-      : null;
-
-    // Create interpreter directly in render loop closure so it's always available
-    const loopInterpreter = cinematicDirection
-      ? new DirectionInterpreter(cinematicDirection, Math.max(0.001, (lines.length > 0 ? lines[lines.length - 1].end + 1 : 0) - (lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0)))
-      : null;
-    interpreterRef.current = loopInterpreter;
-    interpreterRefStable.current = loopInterpreter;
-
-    // Always create particle engine — cinematic direction may override the system
-    let particleEngine: ParticleEngine | null = new ParticleEngine(resolvedManifest);
-    particleEngineRef.current = particleEngine;
-    if (cinematicDirection?.visualWorld?.particleSystem) {
-      particleEngine.setSystem(cinematicDirection.visualWorld.particleSystem);
-    }
-
-    // Load AnimationResolver with song DNA
-    animationResolver.loadFromDna(
-      { physics_spec: spec, physicsSpec: spec } as any,
-      lines.map(l => ({ text: l.text, start: l.start })),
-    );
-
-    const particleSystemName = resolvedManifest.particleConfig?.system ?? "none";
-    const baseParticleConfig = resolvedManifest.particleConfig;
-    const timelineManifest = resolvedManifest;
-    const baseAtmosphere = Math.max(0, Math.min(1, resolvedManifest.backgroundIntensity ?? 1));
-    const warmLightSource = (resolvedManifest.lightSource || "").toLowerCase();
-    const warmEmotion = (resolvedManifest.coreEmotion || "").toLowerCase();
-    const isFireWorld = ["flickering left", "flickering right", "ember glow", "flame"].some(k => warmLightSource.includes(k))
-      || warmEmotion.includes("fire")
-      || warmEmotion.includes("burn")
-      || warmEmotion.includes("ember");
-
-    const rng = mulberry32(hashSeed(data.seed || data.id));
-    rngRef.current = rng;
-
-    const safeBeats = data.beat_grid?.beats ?? [];
-    const sortedBeats = [...safeBeats].sort((a, b) => a - b);
-    const beats: BeatTick[] = sortedBeats.map((time, index) => ({
-      time,
-      isDownbeat: index % 4 === 0,
-      strength: index % 4 === 0 ? 1 : 0.5,
-    }));
-    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
-    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
-    const totalDuration = Math.max(0.001, songEnd - songStart);
-    const lineBeatMap = lineBeatMapRef.current;
-    const climaxLine = lines.find(line => line.text.toLowerCase().includes("drown"));
-    const climaxBeat = sortedBeats.find(beat => (
-      beat >= (climaxLine?.start ?? 0) && beat <= (climaxLine?.start ?? 0) + 1.0
-    ));
-
-    // Perf: init adaptive max particles
-    particleStateRef.current.adaptiveMaxParticles = window.devicePixelRatio > 1 ? 150 : 80;
-    particleStateRef.current.slowFrameCount = 0;
-
-    // Perf: create offscreen canvas for constellation rendering
-    const constellationCanvas = document.createElement("canvas");
-    constellationCanvasRef.current = constellationCanvas;
-    let constellationDirty = true;
-    let constellationLastFrame = 0;
-
-    // Set up audio
-    audio = new Audio(data.audio_url);
-    audio.loop = true;
-    audio.muted = true;
-    audio.preload = "auto";
-    audioRef.current = audio;
-
-
-    audio.currentTime = songStart;
-    audio.play().catch(() => {});
-
-    engineRef.current = new HookDanceEngine(
-      { ...spec, system: effectiveSystem },
-      beats,
-      songStart,
-      songEnd,
-      audio,
-      { onFrame: () => {}, onEnd: () => {} },
-      `${data.seed || data.id}-shareable-dance`,
-    );
-
-    let beatIndex = 0;
-    let prevTime = songStart;
-    lineIndexRef.current = -1;
-    nextLinePtrRef.current = 0;
-    nextHookPtrRef.current = 0;
-    chapterIndexRef.current = 0;
-    tensionIndexRef.current = 0;
-    let lastFrameTime = performance.now();
-    let smoothBeatIntensity = 0; // exponential-decay beat intensity
-
-    // Perf: word width cache with fast integer key (avoids template literal allocation)
-    const wordWidthIntCache = new Map<number, number>();
-    const commentTextCache = new Map<string, string>();
-    const commentWidthCache = new Map<string, number>();
-    const riverNodeBuckets: ConstellationNode[][] = Array.from({ length: RIVER_ROWS.length }, () => []);
-    const hashWordKey = (word: string, fSize: number, fontFamily: string): number => {
-      let h = fSize * 31;
-      for (let i = 0; i < word.length; i++) h = (h * 31 + word.charCodeAt(i)) | 0;
-      for (let i = 0; i < fontFamily.length; i++) h = (h * 31 + fontFamily.charCodeAt(i)) | 0;
-      return h;
-    };
-
-    const getTruncatedComment = (node: ConstellationNode): string => {
-      const cached = commentTextCache.get(node.id);
-      if (cached) return cached;
-      const truncated = node.text.length > 40 ? `${node.text.slice(0, 40)}…` : node.text;
-      commentTextCache.set(node.id, truncated);
-      return truncated;
-    };
-
-    resizeHandler = () => {
-      const isMobile = window.innerWidth < 768;
-      const pixelRatio = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
-      activePixelRatio = pixelRatio;
-      const rect = container.getBoundingClientRect();
-      [bgCanvas, textCanvas].forEach((layerCanvas) => {
-        layerCanvas.width = rect.width * pixelRatio;
-        layerCanvas.height = rect.height * pixelRatio;
-        layerCanvas.style.width = `${rect.width}px`;
-        layerCanvas.style.height = `${rect.height}px`;
-      });
-      bgCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      textCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      wordMeasureCache.current.clear();
-      wordWidthIntCache.clear();
-      textStateRef.current.evolutionCache.clear();
-      interpreterRef.current?.invalidateEvolutionCache();
-      constellationDirty = true;
-      if (particleEngine) {
-        particleEngine.setBounds({ x: 0, y: 0, w: rect.width, h: rect.height });
-        particleEngine.init(resolvedManifest.particleConfig, resolvedManifest);
-      }
-      wordPlanRef.current = buildWordPlan({
-        ctx: textCtx,
-        lines,
-        sortedBeats,
-        interpreter: loopInterpreter,
-        chapters: cinematicDirection?.chapters,
-        tensionCurve: cinematicDirection?.tensionCurve as TensionStage[] | undefined,
-        shotProgression: cinematicDirection?.shotProgression,
-        cameraDistanceByChapter: cinematicDirection?.cameraLanguage?.distanceByChapter,
-        effectiveSystem,
-        cw: rect.width,
-        ch: rect.height,
-        cinematicTextTransform: cinematicDirection?.visualWorld?.typographyProfile?.textTransform,
-      });
-    };
-    resizeHandler();
-    window.addEventListener("resize", resizeHandler);
-
-    const FRAME_BUDGET_MS = 14;
-
-    const render = () => {
-      animRef.current = requestAnimationFrame(render);
-      const frameStart = performance.now();
-      const now = frameStart;
-      const deltaMs = Math.min(100, now - lastFrameTime);
-      lastFrameTime = now;
-
-      const cw = textCanvas.width / activePixelRatio;
-      const ch = textCanvas.height / activePixelRatio;
-      const ctx = textCtx;
-      ctx.clearRect(0, 0, cw, ch);
-      let drawCalls = 0;
-      let cacheHits = 0;
-      let cacheLookups = 0;
-      const getWordWidth = (word: string, fSize: number, fontFamily: string): number => {
-        const intKey = hashWordKey(word, fSize, fontFamily);
-        cacheLookups += 1;
-        const cached = wordWidthIntCache.get(intKey);
-        if (cached !== undefined) {
-          cacheHits += 1;
-          return cached;
-        }
-        const previousFont = textCtx.font;
-        textCtx.font = `${fSize}px ${fontFamily}`;
-        const width = textCtx.measureText(word).width;
-        textCtx.font = previousFont;
-        wordWidthIntCache.set(intKey, width);
-        return width;
-      };
-      const currentTime = audio.currentTime;
-      const interpreterNow = loopInterpreter;
-
-
-      if (textStateRef.current.yBase === 0) textStateRef.current.yBase = ch * 0.5;
-
-      if (currentTime >= songEnd) {
-        audio.currentTime = songStart;
-        beatIndex = 0;
-        prevTime = songStart;
-        smoothBeatIntensity = 0;
-        engineRef.current?.resetPhysics();
-        return;
-      }
-
-      // Decay beat intensity smoothly between beats (~85% per frame at 60fps)
-      const decayRate = Math.exp(-deltaMs / 120); // ~120ms half-life
-      smoothBeatIntensity *= decayRate;
-
-      let frameHadDownbeat = false;
-      while (beatIndex < sortedBeats.length && sortedBeats[beatIndex] <= currentTime) {
-        if (sortedBeats[beatIndex] > prevTime) {
-          const isDownbeat = beatIndex % 4 === 0;
-          const strength = isDownbeat ? 1 : 0.5;
-          smoothBeatIntensity = Math.max(smoothBeatIntensity, strength); // spike on beat
-          if (isDownbeat) frameHadDownbeat = true;
-        }
-        beatIndex++;
-      }
-      const currentBeatIntensity = smoothBeatIntensity;
-      beatIntensityRef.current = currentBeatIntensity;
-
-      engineRef.current?.setViewportBounds(cw, ch);
-      engineRef.current?.update(currentBeatIntensity, deltaMs / 1000, frameHadDownbeat);
-      const physicsState = engineRef.current?.getState();
-      const state = physicsState ?? {
-        scale: 1, blur: 0, glow: 0, shake: 0, isFractured: false,
-        position: 0, velocity: 0, heat: 0, safeOffset: 0,
-        offsetX: 0, offsetY: 0, rotation: 0, shatter: 0, wordOffsets: [],
-      };
-      const plan = wordPlanRef.current;
-      const activeLineIndex = plan
-        ? getActiveLineIndexMonotonic(currentTime, plan.lineStarts, plan.lineEnds, lineIndexRef.current)
-        : lines.findIndex((l) => currentTime >= l.start && currentTime < l.end);
-      lineIndexRef.current = activeLineIndex;
-      const activeLine = activeLineIndex >= 0 ? lines[activeLineIndex] : null;
-      const activePlanLine = activeLineIndex >= 0 ? plan?.lines[activeLineIndex] ?? null : null;
-      const activeLineBeatMap = activeLineIndex >= 0 ? lineBeatMap[activeLineIndex] : undefined;
-      const beatDensity = activeLineBeatMap?.beatsPerSecond ?? 0;
-      const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
-      const symbol = cinematicDirection?.symbolSystem;
-      const camera = cinematicDirection?.cameraLanguage;
-
-      let chapterDirective = chapterBoundaryRef.current.chapter;
-      if (plan?.chapterBoundaries?.length) {
-        let ci = chapterIndexRef.current;
-        while (ci + 1 < plan.chapterBoundaries.length && songProgress > plan.chapterBoundaries[ci].end) ci += 1;
-        while (ci > 0 && songProgress < plan.chapterBoundaries[ci].start) ci -= 1;
-        chapterIndexRef.current = ci;
-        chapterDirective = plan.chapterBoundaries[ci]?.chapter ?? null;
-      } else {
-        const chapterBoundaryKey = Math.floor(songProgress * 100 / 5);
-        if (chapterBoundaryRef.current.key !== chapterBoundaryKey) {
-          chapterBoundaryRef.current = { key: chapterBoundaryKey, chapter: interpreterNow?.getCurrentChapter(songProgress) ?? null };
-        }
-        chapterDirective = chapterBoundaryRef.current.chapter;
-      }
-
-      let tensionStage = tensionBoundaryRef.current.stage;
-      if (plan?.tensionBoundaries?.length) {
-        let ti = tensionIndexRef.current;
-        while (ti + 1 < plan.tensionBoundaries.length && songProgress > plan.tensionBoundaries[ti].end) ti += 1;
-        while (ti > 0 && songProgress < plan.tensionBoundaries[ti].start) ti -= 1;
-        tensionIndexRef.current = ti;
-        tensionStage = plan.tensionBoundaries[ti]?.stage ?? null;
-      }
-
-      const shot = activeLineIndex >= 0
-        ? (plan?.shotsByLineIndex.get(activeLineIndex) ?? null)
-        : null;
-      const chapterCamera = plan?.cameraByChapterIndex.get(chapterIndexRef.current) ?? null;
-
-      const movement = String(chapterCamera?.movement ?? "").toLowerCase();
-      let targetOffsetX = 0;
-      let targetOffsetY = 0;
-      let targetZoom = distanceToZoom[chapterCamera?.distance ?? "Wide"] ?? 1.0;
-
-      if (movement.includes("upwards")) {
-        targetOffsetY = -0.2 * ch;
-      } else if (movement.includes("downwards")) {
-        targetOffsetY = 0.2 * ch;
-      } else if (movement.includes("static")) {
-        targetOffsetX = 0;
-        targetOffsetY = 0;
-      }
-
-      if (movement.includes("pull back")) {
-        targetZoom = 0.8;
-      }
-
-      if (cameraChapterRef.current !== chapterIndexRef.current) {
-        cameraChapterRef.current = chapterIndexRef.current;
-        cameraTargetRef.current = { zoom: targetZoom, x: targetOffsetX, y: targetOffsetY };
-      }
-
-      const cameraLerp = Math.min(1, deltaMs / 2000);
-      cameraZoomRef.current += (cameraTargetRef.current.zoom - cameraZoomRef.current) * cameraLerp;
-      cameraOffsetRef.current.x += (cameraTargetRef.current.x - cameraOffsetRef.current.x) * cameraLerp;
-      cameraOffsetRef.current.y += (cameraTargetRef.current.y - cameraOffsetRef.current.y) * cameraLerp;
-      const nextLineStart = plan ? getNextStartAfterMonotonic(currentTime, plan.lineStarts, nextLinePtrRef.current) : { value: (lines.find(l => l.start > currentTime)?.start ?? Number.POSITIVE_INFINITY), ptr: nextLinePtrRef.current };
-      nextLinePtrRef.current = nextLineStart.ptr;
-      const nextLine = Number.isFinite(nextLineStart.value) ? { start: nextLineStart.value } : null;
-      const isInSilence = interpreterNow?.isInSilence(activeLine ?? null, nextLine ? { start: nextLine.start } : null, currentTime)
-        ?? (!activeLine || Boolean(nextLine && currentTime < nextLine.start - 0.5));
-      if (isInSilence && cinematicDirection?.silenceDirective) {
-        const silence = cinematicDirection.silenceDirective;
-        // Target-based — no accumulation, smooth lerp toward fixed target
-        const targetOffsetY = silence.cameraMovement.includes("downward") ? 12 : 0;
-        const targetZoom = silence.cameraMovement.includes("push") ? 1.03 : 1;
-        silenceOffsetYRef.current += (targetOffsetY - silenceOffsetYRef.current) * 0.02;
-        silenceZoomRef.current += (targetZoom - silenceZoomRef.current) * 0.02;
-        if (silence.tensionDirection === "building") vignetteIntensityRef.current = Math.min(0.8, vignetteIntensityRef.current + 0.001);
-        else if (silence.tensionDirection === "releasing") vignetteIntensityRef.current = Math.max(0.3, vignetteIntensityRef.current - 0.001);
-      } else {
-        // Lerp back to neutral
-        silenceOffsetYRef.current += (0 - silenceOffsetYRef.current) * 0.05;
-        silenceZoomRef.current += (1 - silenceZoomRef.current) * 0.05;
-        if (Math.abs(silenceOffsetYRef.current) < 0.1) silenceOffsetYRef.current = 0;
-        if (Math.abs(silenceZoomRef.current - 1) < 0.001) silenceZoomRef.current = 1;
-      }
-      const baselineY = textStateRef.current.yBase === 0 ? ch * 0.5 : textStateRef.current.yBase;
-      let activeWordPosition = {
-        x: cw / 2 + textStateRef.current.xOffset + state.offsetX,
-        y: baselineY + state.offsetY,
-      };
-
-      const lineAnim = activeLine
-        ? animationResolver.resolveLine(activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette)
-        : null;
-      const isInHook = lineAnim?.isHookLine ?? false;
-      const hookProgress = lineAnim
-        ? Math.max(0, Math.min(1, (currentTime - activeLine!.start) / Math.max(0.001, activeLine!.end - activeLine!.start)))
-        : 0;
-      const hookOffsetX = 0; // No background oscillation — Ken Burns zoom only
-      const hookOffsetY = 0;
-
-      const hookStarts = plan?.hookStartTimes;
-      let nextHookStart = Number.POSITIVE_INFINITY;
-      if (hookStarts && hookStarts.length > 0) {
-        const next = getNextStartAfterMonotonic(currentTime, hookStarts, nextHookPtrRef.current);
-        nextHookPtrRef.current = next.ptr;
-        nextHookStart = next.value;
-      }
-      const timeToNextHook = nextHookStart - currentTime;
-      const isPreHook = Number.isFinite(nextHookStart) && timeToNextHook > 0 && timeToNextHook < 2.0;
-
-      if (chapterDirective?.title !== chapterTransitionRef.current.current) {
-        chapterTransitionRef.current = {
-          previous: chapterTransitionRef.current.current,
-          current: chapterDirective?.title ?? null,
-          progress: 0,
-        };
-      }
-      chapterTransitionRef.current.progress = Math.min(1, chapterTransitionRef.current.progress + 1 / 120);
-
-      const isClimax = interpreterNow?.isClimaxMoment(songProgress) ?? false;
-      climaxActiveRef.current = isClimax;
-
-      // Camera transform — zoom disabled to prevent picture-in-picture; pan only
-      // const zoom = cameraZoomRef.current * silenceZoomRef.current; // TODO: re-enable once transform math is confirmed
-      const camOffX = cameraOffsetRef.current.x + (currentBeatIntensity > 0.92
-        ? Math.sin(currentTime * 37.7) * (currentBeatIntensity - 0.92) * 15
-        : 0);
-      const camOffY = cameraOffsetRef.current.y + silenceOffsetYRef.current + (currentBeatIntensity > 0.92
-        ? Math.cos(currentTime * 37.7 * 1.3) * (currentBeatIntensity - 0.92) * 5
-        : 0);
-      container.style.willChange = "transform";
-      container.style.transform = camOffX !== 0 || camOffY !== 0
-        ? `translate3d(${camOffX}px, ${camOffY}px, 0)`
-        : "translate3d(0, 0, 0)";
-      container.style.transformOrigin = "center center";
-
-      // Background — draw on bgCanvas only when dirty; text canvas stays transparent
-      const chapterForRender = chapterDirective ?? {
-        startRatio: 0,
-        endRatio: 1,
-        title: "default",
-        emotionalArc: "ambient",
-        dominantColor: timelineManifest.palette[1] ?? "#0a0a0a",
-        lightBehavior: timelineManifest.lightSource,
-        particleDirective: timelineManifest.particleConfig.system,
-        backgroundDirective: timelineManifest.backgroundSystem,
-        emotionalIntensity: 0.5,
-        typographyShift: null,
-      };
-
-      const budgetElapsed = () => performance.now() - frameStart;
-      const canRenderBackground = budgetElapsed() < 8;
-      const canRenderParticles = budgetElapsed() < 11;
-      const canRenderEffects = budgetElapsed() < FRAME_BUDGET_MS - 1;
-      const t0 = performance.now();
-
-      drawCalls += renderBackground(
-        bgCtx, bgCanvas, ctx, textCanvas,
-        {
-          chapter: chapterForRender,
-          songProgress,
-          beatIntensity: currentBeatIntensity,
-          currentTime,
-          now,
-          lightIntensity: lightIntensityRef.current,
-          activeWordPosition,
-          symbol,
-        },
-        bgStateRef.current,
-      );
-      const t1 = performance.now();
-
-      // Particle engine: update via extracted function, then draw far layer on textCtx
-      const lineDir = lineAnim ? (interpreterNow?.getLineDirection(activeLineIndex) ?? null) : null;
-      const { drawCalls: particleDrawCalls, lightIntensity } = renderParticles(
-        ctx, ctx,
-        {
-          particleEngine,
-          baseParticleConfig,
-          timelineManifest,
-          physicsSpec: spec,
-          songProgress,
-          beatIntensity: currentBeatIntensity,
-          deltaMs,
-          cw, ch,
-          chapterDirective: chapterDirective ?? null,
-          isClimax,
-          climaxMaxParticleDensity: cinematicDirection?.climax?.maxParticleDensity ?? null,
-          tensionParticleDensity: tensionStage?.particleDensity ?? null,
-          tensionLightBrightness: tensionStage?.lightBrightness ?? null,
-          hasLineAnim: !!lineAnim,
-          particleBehavior: lineDir?.particleBehavior ?? null,
-          interpreter: interpreterNow ?? null,
-          activeLineIndex,
-        },
-        particleStateRef.current,
-      );
-      lightIntensityRef.current = lightIntensity;
-      drawCalls += particleDrawCalls;
-
-      if (symbol) {
-        renderSymbol(ctx, symbol, songProgress, cw, ch);
-      }
-      const t2 = performance.now();
-
-      // PASS 1 — Far-layer particles (behind text, atmospheric)
-      if (particleEngine) {
-        particleEngine.draw(ctx, "far");
-        drawCalls += 1;
-      }
-      const t3 = performance.now();
-
-      // Pre-hook darkness build (skipped during hook itself).
-      if (canRenderEffects && isPreHook && !isInHook) {
-        const buildIntensity = (1 - (timeToNextHook / 2.0)) * 0.3 * baseAtmosphere;
-        ctx.fillStyle = `rgba(0,0,0,${Math.max(0, buildIntensity)})`;
-        ctx.fillRect(0, 0, cw, ch);
-      }
-
-      // Fire-world warm flicker bloom on strong beats.
-      if (canRenderEffects && isFireWorld && currentBeatIntensity > 0.6) {
-        const flickerAlpha = currentBeatIntensity * 0.06 * baseAtmosphere;
-        ctx.fillStyle = `rgba(255,140,0,${flickerAlpha})`;
-        ctx.fillRect(0, 0, cw, ch);
-      }
-
-      // Beat scale baseline decay — now handled inside renderText via textState.beatScale
-
-      // ── Comment rendering (constellation + river + center) ──
-      // Perf opt 2: render constellation/river to offscreen canvas at 10fps, blit in rAF
-      const nodes = constellationRef.current;
-      const commentNow = Date.now();
-      if (now - constellationLastFrame >= 100) {
-        constellationDirty = true;
-        constellationLastFrame = now;
-      }
-
-      if (constellationDirty && nodes.length > 0) {
-        constellationDirty = false;
-        const offCanvas = constellationCanvasRef.current!;
-        if (offCanvas.width !== cw || offCanvas.height !== ch) {
-          offCanvas.width = cw;
-          offCanvas.height = ch;
-        }
-        const offCtx = offCanvas.getContext("2d")!;
-        offCtx.clearRect(0, 0, cw, ch);
-        offCtx.textBaseline = "middle";
-        offCtx.textAlign = "center";
-
-        // Pass 1: Constellation nodes
-        for (const node of nodes) {
-          if (node.phase !== "constellation") continue;
-          node.x += Math.cos(node.driftAngle) * node.driftSpeed / cw;
-          node.y += Math.sin(node.driftAngle) * node.driftSpeed / ch;
-          if (node.x < -0.1) node.x = 1.1;
-          if (node.x > 1.1) node.x = -0.1;
-          if (node.y < -0.1) node.y = 1.1;
-          if (node.y > 1.1) node.y = -0.1;
-
-          offCtx.font = "300 10px system-ui, -apple-system, sans-serif";
-          offCtx.globalAlpha = node.baseOpacity;
-          offCtx.fillStyle = "#ffffff";
-          const truncated = getTruncatedComment(node);
-          offCtx.fillText(truncated, node.x * cw, node.y * ch);
-        }
-
-        // Pass 2: River rows (bucketed, cached widths, and AABB collision nudge)
-        for (let ri = 0; ri < riverNodeBuckets.length; ri++) riverNodeBuckets[ri].length = 0;
-        for (let ni = 0; ni < nodes.length; ni++) {
-          const node = nodes[ni];
-          if (node.phase === "river" && node.riverRowIndex >= 0 && node.riverRowIndex < riverNodeBuckets.length) {
-            riverNodeBuckets[node.riverRowIndex].push(node);
-          }
-        }
-
-        const offsets = riverOffsetsRef.current;
-        const grid = constellationGridRef.current;
-        grid.buckets.clear();
-        const boxes = constellationCollisionBoxesRef.current;
-        boxes.length = 0;
-
-        for (let ri = 0; ri < RIVER_ROWS.length; ri++) {
-          const row = RIVER_ROWS[ri];
-          offsets[ri] += row.speed * row.direction;
-          const rowComments = riverNodeBuckets[ri];
-          if (rowComments.length === 0) continue;
-
-          offCtx.font = "300 11px system-ui, -apple-system, sans-serif";
-          offCtx.globalAlpha = row.opacity;
-          offCtx.fillStyle = "#ffffff";
-
-          const rowY = row.y * ch;
-          let totalWidth = 0;
-          for (let ci = 0; ci < rowComments.length; ci++) {
-            const node = rowComments[ci];
-            const truncated = getTruncatedComment(node);
-            const widthKey = `${node.id}:11`;
-            let textWidth = commentWidthCache.get(widthKey);
-            if (textWidth === undefined) {
-              textWidth = offCtx.measureText(truncated).width;
-              commentWidthCache.set(widthKey, textWidth);
-            }
-            totalWidth += textWidth + 120;
-          }
-          const wrapWidth = Math.max(totalWidth, cw + 200);
-
-          let xBase = offsets[ri];
-          for (let ci = 0; ci < rowComments.length; ci++) {
-            const node = rowComments[ci];
-            const truncated = getTruncatedComment(node);
-            const widthKey = `${node.id}:11`;
-            const textWidth = commentWidthCache.get(widthKey) ?? 0;
-            let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
-            if (drawX > cw + 100) drawX -= wrapWidth;
-
-            const box: CollisionBox = { id: node.id, x: drawX - textWidth * 0.5, y: rowY - 8, w: textWidth, h: 16 };
-            const minGX = Math.floor(box.x / grid.cellSize);
-            const maxGX = Math.floor((box.x + box.w) / grid.cellSize);
-            const minGY = Math.floor(box.y / grid.cellSize);
-            const maxGY = Math.floor((box.y + box.h) / grid.cellSize);
-            for (let gx = minGX; gx <= maxGX; gx++) {
-              for (let gy = minGY; gy <= maxGY; gy++) {
-                const bucket = grid.buckets.get(gridKey(gx, gy));
-                if (!bucket) continue;
-                for (let bi = 0; bi < bucket.length; bi++) {
-                  const other = boxes[bucket[bi]];
-                  if (other && intersectsAABB(box, other)) {
-                    resolveAABBCollision(box, other, 0.35);
-                  }
-                }
-              }
-            }
-            const boxIndex = boxes.length;
-            boxes.push(box);
-            for (let gx = minGX; gx <= maxGX; gx++) {
-              for (let gy = minGY; gy <= maxGY; gy++) {
-                const key = gridKey(gx, gy);
-                const bucket = grid.buckets.get(key);
-                if (bucket) bucket.push(boxIndex);
-                else grid.buckets.set(key, [boxIndex]);
-              }
-            }
-
-            offCtx.fillText(truncated, box.x + box.w * 0.5, box.y + box.h * 0.5);
-            node.x = (box.x + box.w * 0.5) / cw;
-            node.y = (box.y + box.h * 0.5) / ch;
-            xBase += textWidth + 120;
-          }
-        }
-      }
-
-      // Blit offscreen constellation layer
-      if (nodes.length > 0 && constellationCanvasRef.current) {
-        ctx.drawImage(constellationCanvasRef.current, 0, 0);
-      }
-
-      // Pass 3: New submissions (center → transitioning → river) — always drawn live
-      ctx.textBaseline = "middle";
-      ctx.textAlign = "center";
-      for (const node of nodes) {
-        if (node.phase === "center") {
-          const elapsed = commentNow - node.phaseStartTime;
-          ctx.font = "400 14px system-ui, -apple-system, sans-serif";
-          ctx.globalAlpha = 0.45;
-          ctx.fillStyle = "#ffffff";
-          ctx.textAlign = "center";
-          const truncated = getTruncatedComment(node);
-          ctx.fillText(truncated, cw / 2, ch / 2);
-          ctx.textAlign = "start";
-          if (elapsed >= 800) { node.phase = "transitioning"; node.phaseStartTime = commentNow; }
-        } else if (node.phase === "transitioning") {
-          const elapsed = commentNow - node.phaseStartTime;
-          const t = Math.min(1, elapsed / 4000);
-          const targetRow = RIVER_ROWS[node.riverRowIndex];
-          const targetY = targetRow ? targetRow.y : node.seedY;
-          const cx2 = 0.5, cy2 = 0.5;
-          const curX = cx2 + (node.seedX - cx2) * t * 0.3;
-          const curY = cy2 + (targetY - cy2) * t;
-          const size = 14 - (14 - 11) * t;
-          const targetOpacity = targetRow?.opacity || 0.09;
-          const opacity = 0.45 - (0.45 - targetOpacity) * t;
-
-          ctx.font = `300 ${Math.round(size)}px system-ui, -apple-system, sans-serif`;
-          ctx.globalAlpha = opacity;
-          ctx.fillStyle = "#ffffff";
-          const truncated = getTruncatedComment(node);
-          ctx.fillText(truncated, curX * cw, curY * ch);
-          node.x = curX; node.y = curY; node.currentSize = size;
-          if (elapsed >= 4000) { node.phase = "river"; node.phaseStartTime = commentNow; }
-        }
-      }
-      ctx.globalAlpha = 1;
-
-      // Active line — delegated to renderText engine
-      const visibleLines = activeLine ? [activeLine] : [];
-      const isMobile = window.innerWidth < 768;
-      const textResult = renderText(ctx, {
-        lines,
-        activeLine: activeLine ?? null,
-        activeLineIndex,
-        visibleLines,
-        currentTime,
-        songProgress,
-        beatIntensity: currentBeatIntensity,
-        beatIndex,
-        sortedBeats,
-        cw, ch,
-        effectivePalette,
-        effectiveSystem,
-        resolvedManifest,
-        textPalette,
-        spec,
-        state,
-        interpreter: interpreterNow ?? null,
-        shot,
-        tensionStage,
-        chapterDirective: chapterDirective ?? null,
-        cinematicDirection: cinematicDirection ?? null,
-        isClimax,
-        particleEngine,
-        rng,
-        getWordWidth,
-        isMobile,
-        hardwareConcurrency: navigator.hardwareConcurrency ?? 4,
-        devicePixelRatio: activePixelRatio,
-        precomputedLine: activePlanLine,
-      }, textStateRef.current);
-      const t4 = performance.now();
-      activeWordPosition = textResult.activeWordPosition;
-      drawCalls += textResult.drawCalls;
-      const frameEffectKey = textResult.effectKey;
-      const frameFontSize = textResult.fontSize;
-      const frameActiveMod = textResult.activeMod;
-      const frameIsHook = textResult.isHook;
-      const frameBeatMult = textResult.beatMult;
-      const frameEntry = textResult.entry;
-      const frameExit = textResult.exit;
-      const frameFontScale = textResult.fontScale;
-      const frameScale = textResult.scale;
-      const frameLineColor = textResult.lineColor;
-      const frameRepIndex = textResult.repIndex;
-      const frameRepTotal = textResult.repTotal;
-      const frameXNudge = textResult.xNudge;
-      const frameSectionZone = textResult.sectionZone;
-      const frameWordsProcessed = textResult.wordsProcessed;
-
-      if (chapterTransitionRef.current.progress < 1 && chapterDirective) {
-        const chapterTransitionProgress = chapterTransitionRef.current.progress;
-        const transitionRgb = hexToRgbString(chapterDirective.dominantColor);
-        ctx.fillStyle = `rgba(${transitionRgb}, ${(1 - chapterTransitionProgress) * 0.3})`;
-        ctx.fillRect(0, 0, cw, ch);
-      }
-      // Single composite overlay pass
-      const overlayR = isClimax ? 255 : 0;
-      const overlayG = isClimax ? 255 : 0;
-      const overlayB = isClimax ? 255 : 0;
-      const chapterOverlay = (chapterForRender.emotionalIntensity ?? 0.5) * 0.2;
-      const vignetteOverlay = (vignetteIntensityRef.current + currentBeatIntensity * 0.15) * baseAtmosphere * 0.35;
-      const climaxOverlay = isClimax ? currentBeatIntensity * 0.15 : 0;
-      const overlayA = Math.max(0, Math.min(0.9, chapterOverlay + vignetteOverlay + climaxOverlay));
-      ctx.fillStyle = `rgba(${overlayR},${overlayG},${overlayB},${overlayA})`;
-      ctx.fillRect(0, 0, cw, ch);
-
-      if (songProgress > 0.95 && cinematicDirection) {
-        const ending = cinematicDirection.ending;
-        const endProgress = (songProgress - 0.95) / 0.05;
-        switch (ending.style) {
-          case "dissolve":
-            ctx.fillStyle = `rgba(${hexToRgbString(chapterDirective?.dominantColor ?? timelineManifest.palette[1])}, ${endProgress * 0.8})`;
-            ctx.fillRect(0, 0, cw, ch);
-            break;
-          case "fade":
-            ctx.fillStyle = `rgba(0,0,0,${endProgress})`;
-            ctx.fillRect(0, 0, cw, ch);
-            break;
-          case "linger":
-            particleEngine?.setSpeedMultiplier(1 - endProgress * 0.8);
-            break;
-          case "snap":
-            if (endProgress > 0.8) {
-              ctx.fillStyle = "#000000";
-              ctx.fillRect(0, 0, cw, ch);
-            }
-            break;
-          default:
-            break;
-        }
-      } else {
-        particleEngine?.setSpeedMultiplier(1);
-      }
-      const t5 = performance.now();
-
-      if (particleEngine) {
-        particleEngine.draw(ctx, "near");
-        drawCalls += 1;
-      }
-      const t6 = performance.now();
-
-
-      // Camera transform reset handled by CSS — no ctx.restore needed
-
-      // ── Update live debug ref (no React setState — zero GC pressure) ──
-      const dbg = liveDebugRef.current;
-      // Frame timing
-      dbg.perfBg = t1 - t0;
-      dbg.perfSymbol = t2 - t1;
-      dbg.perfParticlesFar = t3 - t2;
-      dbg.perfText = t4 - t3;
-      dbg.perfOverlays = t5 - t4;
-      dbg.perfNear = t6 - t5;
-      dbg.perfTotal = t6 - t0;
-      dbg.time = currentTime;
-      // Beat
-      dbg.beatIntensity = beatIntensityRef.current;
-      dbg.physGlow = state.glow;
-      // Physics Engine
-      dbg.physicsActive = true;
-      dbg.wordCount = frameWordsProcessed;
-      dbg.heat = state.heat;
-      dbg.velocity = state.velocity;
-      dbg.rotation = state.rotation;
-      dbg.lastBeatForce = beatIntensityRef.current;
-      // Animation
-      dbg.effectKey = frameEffectKey;
-      dbg.entryProgress = frameEntry;
-      dbg.exitProgress = frameExit;
-      dbg.activeMod = frameActiveMod;
-      dbg.fontScale = frameFontScale;
-      dbg.scale = frameScale;
-      dbg.lineColor = frameLineColor;
-      dbg.isHookLine = frameIsHook;
-      dbg.repIndex = frameRepIndex;
-      dbg.repTotal = frameRepTotal;
-      // Particles
-      dbg.particleSystem = particleEngine?.getConfig().system ?? "none";
-      dbg.particleDensity = particleEngine?.getConfig().density ?? 0;
-      dbg.particleSpeed = particleEngine?.getConfig().speed ?? 0;
-      dbg.particleCount = particleEngineRef.current?.getActiveCount() ?? 0;
-      dbg.songSection = `${frameSectionZone || getSongSection(songProgress)} · ${beatDensity.toFixed(1)}bps`;
-      // Position
-      dbg.xOffset = textStateRef.current.xOffset;
-      dbg.yBase = textStateRef.current.yBase / ch;
-      dbg.xNudge = frameXNudge;
-      dbg.shake = state.shake;
-      // Background
-      dbg.backgroundSystem = data?.system_type ?? "unknown";
-      dbg.imageLoaded = false;
-      dbg.zoom = 1;
-      dbg.vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
-      dbg.songProgress = songProgress;
-      // Direction
-      const chapter = chapterDirective;
-      dbg.dirThesis = interpreterNow?.direction?.thesis ?? "—";
-      dbg.dirChapter = chapter?.title ?? "—";
-      dbg.dirChapterProgress = chapter ? Math.max(0, Math.min(1, (songProgress - chapter.startRatio) / Math.max(0.001, chapter.endRatio - chapter.startRatio))) : 0;
-      dbg.dirIntensity = chapter?.emotionalIntensity ?? 0;
-      dbg.dirBgDirective = chapter?.backgroundDirective ?? timelineManifest.backgroundSystem ?? "—";
-      dbg.dirLightBehavior = chapter?.lightBehavior ?? timelineManifest.lightSource ?? "—";
-      const symbolState = getSymbolStateForProgress(songProgress, symbol);
-      dbg.symbolPrimary = symbol?.primary ?? '—';
-      dbg.symbolSecondary = symbol?.secondary ?? '—';
-      dbg.symbolState = symbolState ?? '—';
-      dbg.cameraDistance = chapterCamera?.distance ?? camera?.openingDistance ?? 'Wide';
-      dbg.cameraMovement = chapterCamera?.movement ?? camera?.movementType ?? '—';
-      dbg.tensionStage = tensionStage ? `${tensionStage.stage} (${songProgress.toFixed(2)})` : '—';
-      dbg.tensionMotion = tensionStage?.motionIntensity ?? 0;
-      dbg.tensionParticles = tensionStage?.particleDensity ?? 0;
-      dbg.tensionTypo = tensionStage?.typographyAggression ?? 0;
-      // Word Directive (current hero word)
-      const dbgLineDir = interpreterNow?.getLineDirection(activeLineIndex) ?? null;
-      const dbgWords = activeLine ? activeLine.text.split(/\s+/) : [];
-      const dbgHeroWord = dbgLineDir?.heroWord ?? dbgWords.find(w => WordClassifier.classifyWord(w) !== "FILLER") ?? dbgWords[0] ?? "";
-      const dbgWordDir = interpreterNow?.getWordDirective(dbgHeroWord) ?? null;
-      dbg.wordDirectiveWord = dbgHeroWord;
-      dbg.wordDirectiveKinetic = dbgWordDir?.kineticClass ?? WordClassifier.classifyWord(dbgHeroWord);
-      dbg.wordDirectiveElemental = dbgWordDir?.elementalClass ?? WordClassifier.getElementalClass(dbgHeroWord);
-      dbg.wordDirectiveEmphasis = dbgWordDir?.emphasisLevel ?? 0;
-      dbg.wordDirectiveEvolution = dbgWordDir?.evolutionRule ?? "—";
-      // Line Direction
-      dbg.lineHeroWord = dbgLineDir?.heroWord ?? dbgHeroWord;
-      dbg.lineEntry = dbgLineDir?.entryStyle ?? resolvedManifest.lyricEntrance ?? "fades";
-      dbg.lineExit = dbgLineDir?.exitStyle ?? "fades";
-      dbg.lineIntent = dbgLineDir?.emotionalIntent ?? "—";
-      dbg.shotType = shot?.shotType ?? 'FloatingInWorld';
-      dbg.shotDescription = shot?.description ?? '—';
-      const normalizedHeroWord = (dbgHeroWord || "").toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
-      const trackedEvolution = dbgWordDir?.evolutionRule ? textStateRef.current.wordHistory.get(normalizedHeroWord) : null;
-      const evolutionCount = trackedEvolution?.count ?? 0;
-      dbg.evolutionWord = dbgHeroWord || "—";
-      dbg.evolutionCount = evolutionCount;
-      dbg.evolutionScale = 1 + evolutionCount * 0.06;
-      dbg.evolutionGlow = evolutionCount * 4;
-      dbg.evolutionBubbles = dbg.evolutionWord.toLowerCase() === "drown" ? Math.min(20, 3 + evolutionCount * 2) : 0;
-      dbg.evolutionSinkPx = dbg.evolutionWord.toLowerCase() === "down" ? evolutionCount * 3 : 0;
-      dbg.fps = deltaMs > 0 ? 1000 / deltaMs : 60;
-      dbg.drawCalls = drawCalls;
-      dbg.cacheHits = cacheLookups > 0 ? cacheHits / cacheLookups : 1;
-
-
-      prevTime = currentTime;
-    };
-
-    animRef.current = requestAnimationFrame(render);
-
-    } catch (err: any) {
-      console.error('SETUP CRASH:', err);
-      console.error('Stack:', err?.stack);
+      player.init();
+    } catch (err) {
+      console.error("LyricDancePlayer init failed:", err);
     }
 
     return () => {
-      cancelAnimationFrame(animRef.current);
-      if (resizeHandler) window.removeEventListener("resize", resizeHandler);
-      engineRef.current?.stop();
-      if (audio) {
-        audio.pause();
-        audio.src = "";
-      }
-      if (containerRef.current) {
-        containerRef.current.style.willChange = "auto";
-        containerRef.current.style.transform = "translate3d(0, 0, 0)";
-      }
+      player.destroy();
+      playerRef.current = null;
     };
   }, [data]);
 
-  // ── Mute toggle ───────────────────────────────────────────────────────────
+  // Update cinematic direction on late arrival
+  useEffect(() => {
+    if (!data?.cinematic_direction || !playerRef.current) return;
+    playerRef.current.updateCinematicDirection(data.cinematic_direction);
+  }, [data?.cinematic_direction]);
+
+  // ── Mute toggle ─────────────────────────────────────────────────────
 
   const handleMuteToggle = useCallback(() => {
-    if (!audioRef.current) return;
+    const player = playerRef.current;
+    if (!player) return;
     const newMuted = !muted;
-    audioRef.current.muted = newMuted;
-    if (!newMuted) audioRef.current.play().catch(() => {});
+    player.setMuted(newMuted);
     setMuted(newMuted);
   }, [muted]);
 
-  // ── Submit comment (ShareableHook-style) ──────────────────────────────────
+  // ── Comment submit ──────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async () => {
     if (!inputText.trim() || !data || hasSubmitted) return;
@@ -1764,93 +290,35 @@ export default function ShareableLyricDance() {
 
     if (inserted) {
       const newComment = inserted as any as DanceComment;
-      setComments(prev => [...prev, newComment]);
-      setFireCount(prev => prev + 1);
       setHasSubmitted(true);
       setInputText("");
 
-      // Push to constellation as center phase node
-      const rng = mulberry32(hashSeed(newComment.id));
-      const angle = rng() * Math.PI * 2;
-      const radius = rng() * 0.2;
-      const seedX = 0.5 + Math.cos(angle) * radius;
-      const seedY = 0.5 + Math.sin(angle) * radius;
-      constellationRef.current.push({
-        id: newComment.id, text: newComment.text,
-        submittedAt: Date.now(),
-        seedX, seedY,
-        x: 0.5, y: 0.5,
-        driftSpeed: 0.008 + rng() * 0.012,
-        driftAngle: rng() * Math.PI * 2,
-        phase: "center",
-        phaseStartTime: Date.now(),
-        riverRowIndex: Math.floor(rng() * RIVER_ROWS.length),
-        currentSize: 16,
-        baseOpacity: 0.06,
-      });
+      // Push to player constellation
+      const player = playerRef.current;
+      if (player) {
+        const rng = mulberry32(hashSeed(newComment.id));
+        const angle = rng() * Math.PI * 2;
+        const radius = rng() * 0.2;
+        player.constellationNodes.push({
+          id: newComment.id, text: newComment.text,
+          submittedAt: Date.now(),
+          seedX: 0.5 + Math.cos(angle) * radius,
+          seedY: 0.5 + Math.sin(angle) * radius,
+          x: 0.5, y: 0.5,
+          driftSpeed: 0.008 + rng() * 0.012,
+          driftAngle: rng() * Math.PI * 2,
+          phase: "center",
+          phaseStartTime: Date.now(),
+          riverRowIndex: Math.floor(rng() * RIVER_ROWS.length),
+          currentSize: 16,
+          baseOpacity: 0.06,
+        });
+      }
     }
   }, [inputText, data, hasSubmitted]);
 
-  // ── Progress bar seek ──────────────────────────────────────────────────────
-
-  // Track whether audio was playing before drag started
-  const wasPlayingBeforeDrag = useRef(false);
-
-  const seekToPosition = useCallback((clientX: number) => {
-    if (!progressBarRef.current || !audioRef.current || !data) return;
-    const audio = audioRef.current;
-    const rect = progressBarRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const lines = data.lyrics;
-    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
-    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
-    audio.currentTime = songStart + ratio * (songEnd - songStart);
-  }, [data]);
-
-  const handleProgressDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    // Remember play state and pause during drag to avoid hammering play()
-    wasPlayingBeforeDrag.current = !audio.paused;
-    audio.pause();
-    setIsDragging(true);
-    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
-    seekToPosition(clientX);
-  }, [seekToPosition]);
-
-  useEffect(() => {
-    if (!isDragging) return;
-    const onMove = (e: MouseEvent | TouchEvent) => {
-      const clientX = "touches" in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-      seekToPosition(clientX);
-    };
-    const onUp = () => {
-      setIsDragging(false);
-      // Resume playback once, cleanly, after the user lifts their finger/mouse
-      const audio = audioRef.current;
-      if (audio && wasPlayingBeforeDrag.current) {
-        audio.play().catch(() => {});
-      }
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchmove", onMove);
-    window.addEventListener("touchend", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onUp);
-    };
-  }, [isDragging, seekToPosition]);
-
-  // Badge timer
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => setBadgeVisible(true), 1000);
-    return () => window.clearTimeout(timeoutId);
-  }, []);
-
-  // Hide Lovable widget
+  // Badge timer + hide Lovable widget
+  useEffect(() => { const t = setTimeout(() => setBadgeVisible(true), 1000); return () => clearTimeout(t); }, []);
   useEffect(() => {
     const style = document.createElement("style");
     style.id = "hide-lovable-badge-ld";
@@ -1859,7 +327,7 @@ export default function ShareableLyricDance() {
     return () => { style.remove(); };
   }, []);
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // ── Loading / Not Found ─────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -1876,43 +344,36 @@ export default function ShareableLyricDance() {
     return (
       <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 z-50">
         <p className="text-white/40 text-lg font-mono">Lyric Dance not found.</p>
-        <button onClick={() => navigate("/")} className="text-white/30 text-sm hover:text-white/60 transition-colors">
-          tools.fm
-        </button>
+        <button onClick={() => navigate("/")} className="text-white/30 text-sm hover:text-white/60 transition-colors">tools.fm</button>
       </div>
     );
   }
 
-  const placeholder = "DROP YOUR TAKE LIVE";
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
-      {/* Close / back button — outside canvas, always clickable */}
+      {/* Close button */}
       <button
         onClick={() => navigate(-1)}
         className="fixed top-4 right-4 z-[70] w-8 h-8 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/70 transition-all text-white/60 hover:text-white/90"
         aria-label="Close"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-          <line x1="2" y1="2" x2="12" y2="12" />
-          <line x1="12" y1="2" x2="2" y2="12" />
+          <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
         </svg>
       </button>
-      {/* Fit by toolsFM badge */}
+
+      {/* Badge */}
       <AnimatePresence>
         {badgeVisible && (
           <motion.button
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.4 }}
             onClick={() => navigate(`/?from=lyric-dance&song=${encodeURIComponent(data.song_name)}`)}
             className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
           >
-            <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
-              Fit by toolsFM
-            </span>
+            <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">Fit by toolsFM</span>
           </motion.button>
         )}
       </AnimatePresence>
@@ -1923,70 +384,35 @@ export default function ShareableLyricDance() {
         className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer overflow-hidden"
         onClick={() => { if (!showCover) handleMuteToggle(); }}
       >
-        {!USE_WORKER && (
-          <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-        )}
+        <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
         <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-        {USE_WORKER && bakingProgress < 1 && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="w-[260px] rounded-lg border border-white/10 bg-black/60 p-4">
-              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/70 mb-2">Pre-baking Scene</p>
-              <div className="h-2 w-full rounded bg-white/10 overflow-hidden">
-                <div className="h-full bg-white/70" style={{ width: `${Math.round(bakingProgress * 100)}%` }} />
-              </div>
-              <p className="mt-2 text-[10px] font-mono text-white/50">{Math.round(bakingProgress * 100)}%</p>
-            </div>
-          </div>
-        )}
-
-        {/* Dark cover overlay */}
+        {/* Cover overlay */}
         <AnimatePresence>
-          {showCover && data && (
+          {showCover && (
             <motion.div
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
+              initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: "easeOut" }}
               className="absolute inset-0 z-20 flex flex-col items-center justify-center"
               style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(2px)" }}
             >
-              {/* Profile pic */}
               <div className="mb-5">
                 {profile?.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt={profile.display_name || data.artist_name}
-                    className="w-20 h-20 rounded-full object-cover border border-white/10"
-                  />
+                  <img src={profile.avatar_url} alt={profile.display_name || data.artist_name} className="w-20 h-20 rounded-full object-cover border border-white/10" />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center">
-                    <span className="text-2xl font-mono text-white/40">
-                      {(data.artist_name || "?")[0].toUpperCase()}
-                    </span>
+                    <span className="text-2xl font-mono text-white/40">{(data.artist_name || "?")[0].toUpperCase()}</span>
                   </div>
                 )}
               </div>
-
-              {/* Song title — editorial headline */}
-              <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[80%] mb-1">
-                {data.song_name}
-              </h2>
-
-              {/* Artist name */}
-              <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-white/40 mb-8">
-                {profile?.display_name || data.artist_name}
-              </p>
-
-              {/* Listen Now */}
+              <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[80%] mb-1">{data.song_name}</h2>
+              <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-white/40 mb-8">{profile?.display_name || data.artist_name}</p>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowCover(false);
-                  if (audioRef.current) {
-                    audioRef.current.muted = false;
-                    audioRef.current.play().catch(() => {});
-                    setMuted(false);
-                  }
+                  playerRef.current?.setMuted(false);
+                  playerRef.current?.play();
+                  setMuted(false);
                 }}
                 className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
               >
@@ -1996,120 +422,74 @@ export default function ShareableLyricDance() {
           )}
         </AnimatePresence>
 
-        {/* canvases get pointer-events:none so overlays stay clickable */}
-
-        {/* Top-left identity label (visible after cover dismissed) */}
-        {!showCover && data && (
+        {/* Identity label */}
+        {!showCover && (
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2.5">
             {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={profile.display_name || data.artist_name}
-                className="w-8 h-8 rounded-full object-cover border border-white/10"
-              />
+              <img src={profile.avatar_url} alt={profile.display_name || data.artist_name} className="w-8 h-8 rounded-full object-cover border border-white/10" />
             ) : (
               <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                <span className="text-xs font-mono text-white/40">
-                  {(data.artist_name || "?")[0].toUpperCase()}
-                </span>
+                <span className="text-xs font-mono text-white/40">{(data.artist_name || "?")[0].toUpperCase()}</span>
               </div>
             )}
             <div className="flex flex-col">
-              <span className="text-[11px] font-semibold text-white/70 leading-tight truncate max-w-[180px]">
-                {data.song_name}
-              </span>
-              <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">
-                {profile?.display_name || data.artist_name}
-              </span>
+              <span className="text-[11px] font-semibold text-white/70 leading-tight truncate max-w-[180px]">{data.song_name}</span>
+              <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{profile?.display_name || data.artist_name}</span>
             </div>
           </div>
         )}
 
-        {/* Draggable progress bar */}
-        {!showCover && data && (
+        {/* Progress bar */}
+        {!showCover && (
           <ProgressBar
-            audioRef={audioRef}
+            player={playerRef.current}
             data={data}
-            progressBarRef={progressBarRef}
-            onMouseDown={handleProgressDown}
-            onTouchStart={handleProgressDown}
+            onSeekStart={() => {}}
+            onSeekEnd={() => {}}
             palette={data.palette}
           />
         )}
-
       </div>
 
-      {/* Below-canvas content */}
+      {/* Comment input */}
       <div className="w-full" style={{ background: "#0a0a0a" }}>
         <div className="max-w-[480px] mx-auto px-5 py-4 space-y-3">
-
-          {/* Comment input */}
           <AnimatePresence mode="wait">
             {hasSubmitted ? (
-              <motion.p
-                key="notified"
-                initial={{ opacity: 1 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.6 }}
-                onAnimationComplete={() => {
-                  setTimeout(() => setHasSubmitted(false), 2500);
-                }}
-                className="text-center text-sm text-white/30"
-              >
-                FMLY Notified
-              </motion.p>
+              <motion.p key="notified" initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}
+                onAnimationComplete={() => { setTimeout(() => setHasSubmitted(false), 2500); }}
+                className="text-center text-sm text-white/30">FMLY Notified</motion.p>
             ) : (
-              <motion.div
-                key="input"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.4 }}
-                className="relative"
-              >
+              <motion.div key="input" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="relative">
                 <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-                  placeholder={placeholder}
-                  maxLength={200}
+                  type="text" value={inputText} onChange={e => setInputText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
+                  placeholder="DROP YOUR TAKE LIVE" maxLength={200}
                   className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 pr-20 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/20 pointer-events-none">
-                  Press Enter
-                </span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/20 pointer-events-none">Press Enter</span>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </div>
 
-      {/* Live Debug HUD — real-time engine values */}
-      <LiveDebugHUD stateRef={liveDebugRef} />
-
-      {/* Static Debug Panel — song DNA, beat grid, manifest */}
+      {/* Debug */}
+      <LiveDebugHUD player={playerRef.current} />
       <LyricDanceDebugPanel
         data={{
           songDna: {
-            mood: (data.physics_spec as any)?.mood,
-            description: (data.physics_spec as any)?.description,
-            meaning: (data.physics_spec as any)?.meaning,
-            hook: (data.physics_spec as any)?.hook,
-            secondHook: (data.physics_spec as any)?.secondHook,
-            hookLabel: (data.physics_spec as any)?.hookLabel,
+            mood: (data.physics_spec as any)?.mood, description: (data.physics_spec as any)?.description,
+            meaning: (data.physics_spec as any)?.meaning, hook: (data.physics_spec as any)?.hook,
+            secondHook: (data.physics_spec as any)?.secondHook, hookLabel: (data.physics_spec as any)?.hookLabel,
             secondHookLabel: (data.physics_spec as any)?.secondHookLabel,
             hookJustification: (data.physics_spec as any)?.hookJustification,
             secondHookJustification: (data.physics_spec as any)?.secondHookJustification,
-            physicsSpec: data.physics_spec as any,
-            scene_manifest: data.scene_manifest,
+            physicsSpec: data.physics_spec as any, scene_manifest: data.scene_manifest,
           },
-          beatGrid: data.beat_grid,
-          lines: data.lyrics,
-          title: data.song_name,
-          artist: data.artist_name,
-          overrides: {},
-          fingerprint: data.artist_dna,
+          beatGrid: data.beat_grid, lines: data.lyrics,
+          title: data.song_name, artist: data.artist_name,
+          overrides: {}, fingerprint: data.artist_dna,
         }}
       />
     </div>
