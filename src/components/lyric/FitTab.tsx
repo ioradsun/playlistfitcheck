@@ -278,6 +278,8 @@ export function FitTab({
       if (insertError) throw insertError;
 
       const url = `/${artistSlug}/${songSlug}/lyric-dance`;
+      setPublishedUrl(url);
+      setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
       window.location.href = url;
     } catch (e: any) {
