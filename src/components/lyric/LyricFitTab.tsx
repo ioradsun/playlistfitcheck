@@ -126,7 +126,13 @@ export function LyricFitTab({
       if (savedBg) setBeatGrid(savedBg as BeatGridData);
 
       const loadedSongDna = (initialLyric as any).song_dna ?? null;
-      if (loadedSongDna) setSongDna(loadedSongDna);
+      if (loadedSongDna) {
+        setSongDna(loadedSongDna);
+        // Restore cinematicDirection if persisted inside song_dna
+        if ((loadedSongDna as any).cinematicDirection) {
+          setCinematicDirection((loadedSongDna as any).cinematicDirection);
+        }
+      }
 
       const savedSignature = (initialLyric as any).song_signature;
       if (savedSignature) setSongSignature(savedSignature as SongSignature);
