@@ -2464,19 +2464,17 @@ export function LyricDisplay({
       )}
 
       {/* Debug Panel */}
-      {songDna && (
-        <LyricDanceDebugPanel
-          data={{
-            songDna,
-            beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : null,
-            lines: data.lines,
-            title: data.title,
-            artist: data.artist,
-            overrides: hookDanceOverrides as unknown as Record<string, unknown>,
-            fingerprint: artistFingerprint,
-          }}
-        />
-      )}
+      <LyricDanceDebugPanel
+        data={{
+          songDna: songDna ?? null,
+          beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : null,
+          lines: data.lines,
+          title: data.title,
+          artist: data.artist,
+          overrides: hookDanceOverrides as unknown as Record<string, unknown>,
+          fingerprint: artistFingerprint,
+        }}
+      />
 
       {/* Battle Page Popup Overlay */}
       <AnimatePresence>
