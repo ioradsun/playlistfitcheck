@@ -342,7 +342,18 @@ export function LyricFitTab({
     setFitStageLabel("Final transcript sync…");
     setPipelineStages(prev => ({ ...prev, cinematic: "done", transcript: "running" }));
 
-    // 5. Final transcript sync — placeholder for publish-time alignment
+    // 5. Persist songDna + cinematicDirection to saved_lyrics
+    if (savedId) {
+      try {
+        await supabase
+          .from("saved_lyrics")
+          .update({ song_dna: { ...nextSongDna, cinematicDirection: cinematicDirection ?? undefined } as any, updated_at: new Date().toISOString() })
+          .eq("id", savedId);
+      } catch (e) {
+        console.warn("[Pipeline] Failed to persist song_dna:", e);
+      }
+    }
+
     setPipelineStages(prev => ({ ...prev, transcript: "done" }));
 
     setFitProgress(100);
