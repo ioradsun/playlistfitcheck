@@ -740,9 +740,6 @@ export default function ShareableLyricDance() {
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
           alphaMultiplier: compositeAlpha,
         };
-        // ── HARDCODED DIAGNOSTIC — remove after test ──
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.5 + (currentBeatIntensity * 0.5);
         drawFn(ctx, effectState);
         ctx.restore();
       }
