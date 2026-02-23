@@ -192,9 +192,6 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function lerp(start: number, end: number, progress: number): number {
-  return start + (end - start) * progress;
-}
 
 function drawWithLetterSpacing(
   ctx: CanvasRenderingContext2D,
@@ -236,33 +233,96 @@ function getParticleConfigForTime(
   manifest: SceneManifest,
   physicsSpec: PhysicsSpec | undefined,
   songProgress: number,
-  beatIntensity: number,
 ): ParticleConfig {
   const progress = clamp01(songProgress);
-  const beat = clamp01(beatIntensity);
   const heat = Number(physicsSpec?.params?.heat ?? 0);
   const isBurnWorld = manifest.backgroundSystem === "burn" || heat > 0.7;
+  const isRainWorld = manifest.backgroundSystem === "breath" || heat < 0.25;
 
   if (isBurnWorld) {
     if (progress < 0.15) {
-      return { ...baseConfig, system: "smoke", density: lerp(0.2, 0.4, progress / 0.15), speed: 0.3, opacity: 0.3 };
-    } else if (progress < 0.5) {
-      const t = (progress - 0.15) / 0.35;
-      return { ...baseConfig, system: "embers", density: lerp(0.3, 0.7, t), speed: lerp(0.4, 0.7, t), opacity: lerp(0.4, 0.7, t) };
-    } else if (progress < 0.8) {
-      const t = (progress - 0.5) / 0.3;
-      return { ...baseConfig, system: "embers", density: lerp(0.5, 0.9, t) + beat * 0.15, speed: lerp(0.5, 0.9, t), opacity: lerp(0.6, 0.9, t) };
-    } else {
-      const t = (progress - 0.8) / 0.2;
-      return { ...baseConfig, system: "ash", density: lerp(0.8, 0.4, t), speed: lerp(0.6, 0.3, t), opacity: lerp(0.7, 0.3, t) };
+      return {
+        ...baseConfig,
+        system: "smoke",
+        renderStyle: "burn-smoke",
+        density: 0.2,
+        speed: 0.2,
+        opacity: 0.35,
+        color: "#4a3a2a",
+      };
     }
+    if (progress < 0.55) {
+      return {
+        ...baseConfig,
+        system: "embers",
+        renderStyle: "burn-embers",
+        density: 0.8,
+        speed: 0.7,
+        opacity: 0.78,
+        color: "#ff8c42",
+      };
+    }
+    if (progress < 0.75) {
+      return {
+        ...baseConfig,
+        system: "embers",
+        renderStyle: "burn-embers",
+        density: 0.4,
+        speed: 0.55,
+        opacity: 0.52,
+        color: "#ff8c42",
+      };
+    }
+    return {
+      ...baseConfig,
+      system: "ash",
+      renderStyle: "burn-ash",
+      density: 0.3,
+      speed: 0.35,
+      opacity: 0.55,
+      color: "#aaaaaa",
+    };
   }
 
-  // Non-burn worlds: gentle density ramp
+  if (manifest.backgroundSystem === "rain" || isRainWorld) {
+    if (progress < 0.20) {
+      return {
+        ...baseConfig,
+        system: "smoke",
+        renderStyle: "rain-mist",
+        density: 0.2,
+        speed: 0.2,
+        opacity: 0.25,
+        color: "#a7b4c8",
+      };
+    }
+    if (progress < 0.70) {
+      return {
+        ...baseConfig,
+        system: "rain",
+        renderStyle: "rain",
+        density: 0.6,
+        speed: 0.75,
+        opacity: 0.7,
+        color: "#b9c8de",
+      };
+    }
+    return {
+      ...baseConfig,
+      system: "rain",
+      renderStyle: "rain-drizzle",
+      density: 0.3,
+      speed: 0.4,
+      opacity: 0.45,
+      color: "#c5cfdf",
+    };
+  }
+
   return {
     ...baseConfig,
-    density: clamp01(baseConfig.density * (0.6 + progress * 0.4 + beat * 0.15)),
-    speed: clamp01(baseConfig.speed * (0.8 + beat * 0.3)),
+    renderStyle: "default",
+    density: clamp01(baseConfig.density * (0.6 + progress * 0.4)),
+    speed: clamp01(baseConfig.speed),
     opacity: clamp01(baseConfig.opacity * (0.7 + progress * 0.3)),
   };
 }
@@ -791,10 +851,8 @@ export default function ShareableLyricDance() {
           timelineManifest,
           spec,
           songProgress,
-          currentBeatIntensity,
         );
-        particleEngine.setConfig(timedParticleConfig);
-        particleEngine.update(deltaMs, currentBeatIntensity);
+        particleEngine.update(deltaMs, currentBeatIntensity, timedParticleConfig);
         particleEngine.draw(ctx, "far");
       }
 
