@@ -529,7 +529,7 @@ export class LyricDancePlayer {
 
     const fontFamily =
       payload.cinematic_direction?.visualWorld?.typographyProfile?.fontFamily?.trim() || "Montserrat";
-    const baseFontPx = 44;
+    const baseFontPx = 36;
 
     // Measurement happens here only (never in draw loop)
     const prevFont = this.ctx.font;
