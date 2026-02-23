@@ -136,10 +136,10 @@ export class DirectionInterpreter {
     private totalDuration: number,
   ) {}
 
-  getCurrentChapter(songProgress: number): Chapter {
-    const chapters = this.direction.chapters;
+  getCurrentChapter(songProgress: number): Chapter | null {
+    const chapters = this.direction?.chapters;
     if (!Array.isArray(chapters) || chapters.length === 0) {
-      return { startRatio: 0, endRatio: 1, title: "Full Song", emotionalArc: "neutral", dominantColor: "#333333", lightBehavior: "steady", particleDirective: "ambient", backgroundDirective: "hold", emotionalIntensity: 0.5, typographyShift: null } as Chapter;
+      return null;
     }
     return chapters.find((c) => (
       songProgress >= c.startRatio && songProgress <= c.endRatio
@@ -147,24 +147,27 @@ export class DirectionInterpreter {
   }
 
   getWordDirective(word: string): WordDirective | null {
+    if (!this.direction?.wordDirectives) return null;
     const key = word.toLowerCase().replace(/[^a-z]/g, "");
-    return this.direction.wordDirectives?.[key] ?? null;
+    return this.direction.wordDirectives[key] ?? null;
   }
 
   getLineDirection(lineIndex: number): LineDirection | null {
+    if (!this.direction?.storyboard) return null;
     return this.direction.storyboard[lineIndex] ?? null;
   }
 
   isClimaxMoment(songProgress: number): boolean {
+    if (!this.direction?.climax) return false;
     return Math.abs(songProgress - this.direction.climax.timeRatio) < 0.02;
   }
 
   getParticleDirective(songProgress: number): string {
-    return this.getCurrentChapter(songProgress).particleDirective;
+    return this.getCurrentChapter(songProgress)?.particleDirective ?? "ambient";
   }
 
   getLightDirective(songProgress: number): string {
-    return this.getCurrentChapter(songProgress).lightBehavior;
+    return this.getCurrentChapter(songProgress)?.lightBehavior ?? "steady";
   }
 
   getSongTime(songProgress: number): number {
