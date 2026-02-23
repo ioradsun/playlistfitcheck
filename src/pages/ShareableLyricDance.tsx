@@ -390,9 +390,9 @@ function getParticleConfigForTime(
         ...baseConfig,
         system: "smoke",
         renderStyle: "burn-smoke",
-        density: 0.2,
+        density: 0.35,
         speed: 0.2,
-        opacity: 0.35,
+        opacity: 0.55,
         color: "#4a3a2a",
       };
     }
@@ -435,9 +435,9 @@ function getParticleConfigForTime(
         ...baseConfig,
         system: "smoke",
         renderStyle: "rain-mist",
-        density: 0.2,
+        density: 0.35,
         speed: 0.2,
-        opacity: 0.25,
+        opacity: 0.5,
         color: "#a7b4c8",
       };
     }
@@ -446,9 +446,9 @@ function getParticleConfigForTime(
         ...baseConfig,
         system: "rain",
         renderStyle: "rain",
-        density: 0.6,
+        density: 0.7,
         speed: 0.75,
-        opacity: 0.7,
+        opacity: 0.85,
         color: "#b9c8de",
       };
     }
@@ -456,9 +456,9 @@ function getParticleConfigForTime(
       ...baseConfig,
       system: "rain",
       renderStyle: "rain-drizzle",
-      density: 0.3,
+      density: 0.4,
       speed: 0.4,
-      opacity: 0.45,
+      opacity: 0.6,
       color: "#c5cfdf",
     };
   }
@@ -1322,24 +1322,30 @@ export default function ShareableLyricDance() {
       }
 
       if (particleEngine) {
-        const maxParticles = adaptiveMaxParticlesRef.current;
-        // Perf opt 3: cache particle config by progress bucket
+        // Perf opt 3: cache particle config by progress bucket (clone to avoid mutation)
         const progressBucket = Math.floor(songProgress * 20);
         let timedParticleConfig: ParticleConfig;
         if (particleConfigCacheRef.current.bucket === progressBucket && particleConfigCacheRef.current.config) {
-          timedParticleConfig = particleConfigCacheRef.current.config;
+          timedParticleConfig = { ...particleConfigCacheRef.current.config };
         } else {
-          timedParticleConfig = getParticleConfigForTime(
+          const freshConfig = getParticleConfigForTime(
             baseParticleConfig,
             timelineManifest,
             spec,
             songProgress,
           );
-          particleConfigCacheRef.current = { bucket: progressBucket, config: timedParticleConfig };
+          particleConfigCacheRef.current = { bucket: progressBucket, config: freshConfig };
+          timedParticleConfig = { ...freshConfig };
         }
-        const particleDirective = chapterDirective?.particleDirective ?? timelineManifest.particleConfig.system;
-        timedParticleConfig.system = particleDirective as any;
-        particleEngine.setChapterDirective(particleDirective);
+        // Use timed system from getParticleConfigForTime (rain/embers/smoke based on progress),
+        // only fallback to chapter directive if the timed config didn't change the system
+        if (timedParticleConfig.system === baseParticleConfig.system) {
+          const particleDirective = chapterDirective?.particleDirective ?? timelineManifest.particleConfig.system;
+          timedParticleConfig.system = particleDirective as any;
+          particleEngine.setChapterDirective(particleDirective);
+        } else {
+          particleEngine.setChapterDirective(timedParticleConfig.system);
+        }
         if (lineAnim) {
           const lineDir = interpreterNow?.getLineDirection(activeLineIndex) ?? null;
           particleEngine.setBehaviorHint(lineDir?.particleBehavior ?? null);
@@ -1347,16 +1353,16 @@ export default function ShareableLyricDance() {
         if (isClimax && cinematicDirection?.climax) {
           particleEngine.setDensityMultiplier(cinematicDirection.climax.maxParticleDensity);
         } else {
-          particleEngine.setDensityMultiplier(tensionStage?.particleDensity ?? 0.5);
+          particleEngine.setDensityMultiplier(tensionStage?.particleDensity ?? 1.0);
         }
         lightIntensityRef.current = tensionStage?.lightBrightness ?? 0.5;
-        timedParticleConfig.density = Math.min(timedParticleConfig.density, maxParticles / 300);
+        // Don't cap density too aggressively — keep at least 0.15 for visibility
+        timedParticleConfig.density = Math.max(0.15, timedParticleConfig.density);
         particleEngine.update(deltaMs, currentBeatIntensity, timedParticleConfig);
         particleFrameRef.current += 1;
         // Draw particles to both particle canvas and text canvas for guaranteed visibility
         particleCtx.clearRect(0, 0, cw, ch);
         particleEngine.draw(particleCtx, "all");
-        // Also draw background (far) particles behind text on main ctx
         particleEngine.draw(ctx, "all");
         drawCalls += 2;
       }

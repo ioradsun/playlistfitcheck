@@ -58,7 +58,7 @@ export function drawSmoke(
 
   ctx.save();
   ctx.filter = "blur(3px)";
-  ctx.fillStyle = `rgba(60,50,40,${opacity * 0.55})`;
+  ctx.fillStyle = `rgba(60,50,40,${opacity * 0.85})`;
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.fill();
