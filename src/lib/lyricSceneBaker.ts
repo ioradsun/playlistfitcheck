@@ -134,9 +134,10 @@ function bakeFrame(
   const beatPulse = pulseProgress * pulseProgress * 0.08;
 
   const { chapter } = getChapterIndexAndData(payload.cinematic_direction, songProgress);
-  const tensionMotion = payload.cinematic_direction?.tensionCurve?.find(
-    (s) => tSec >= (s.startSec ?? 0) && tSec < (s.endSec ?? 9999),
-  )?.motion ?? 0.5;
+  const tensionStages = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
+  const tensionMotion = tensionStages.find(
+    (s) => tSec >= (s.startRatio ?? 0) && tSec < (s.endRatio ?? 9999),
+  )?.motionIntensity ?? 0.5;
 
   const chunks: Keyframe["chunks"] = [];
 
