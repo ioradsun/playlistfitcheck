@@ -129,9 +129,10 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
   const chapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
   const wordDirectives = normalizeWordDirectives(payload.cinematic_direction);
   const tensionCurve = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
-  const energy = payload.physics_spec?.energy ?? 0.5;
-  const density = payload.physics_spec?.density ?? 0.5;
-  const storyboards = (payload.cinematic_direction?.storyboard ?? []) as StoryboardLike[];
+  const physSpec = payload.physics_spec as unknown as Record<string, unknown> | null;
+  const energy = Number(physSpec?.energy ?? 0.5);
+  const density = Number(physSpec?.density ?? 0.5);
+  const storyboards = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
 
   const lineChapterIndex = payload.lines.map((line) => {
     for (let i = 0; i < chapters.length; i += 1) {

@@ -803,6 +803,8 @@ export class LyricDancePlayer {
     return this.timeline.map((f) => ({
       timeMs: f.timeMs,
       beatIndex: f.beatIndex,
+      bgBlend: f.bgBlend,
+      particles: f.particles,
       cameraX: sx ? f.cameraX / sx : f.cameraX,
       cameraY: sy ? f.cameraY / sy : f.cameraY,
       cameraZoom: f.cameraZoom,
@@ -812,6 +814,7 @@ export class LyricDancePlayer {
         y: sy ? c.y / sy : c.y,
         alpha: c.alpha,
         glow: c.glow,
+        scale: c.scale,
         visible: c.visible,
       })),
     }));
