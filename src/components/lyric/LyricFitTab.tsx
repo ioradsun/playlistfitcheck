@@ -20,6 +20,14 @@ import { FitTab } from "./FitTab";
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 
+export type PipelineStageStatus = "pending" | "running" | "done";
+export interface PipelineStages {
+  transcript: PipelineStageStatus;
+  rhythm: PipelineStageStatus;
+  songDna: PipelineStageStatus;
+  cinematic: PipelineStageStatus;
+}
+
 interface Props {
   initialLyric?: any;
   onProjectSaved?: () => void;
