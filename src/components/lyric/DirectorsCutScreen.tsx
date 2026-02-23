@@ -270,8 +270,8 @@ export function DirectorsCutScreen({
           Director's Cut
         </p>
         <button
-          onClick={onClose}
-          className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/20 hover:text-white/50 transition-colors"
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center text-sm font-mono text-white/40 hover:text-white/70 active:text-white transition-colors"
         >
           ✕
         </button>
