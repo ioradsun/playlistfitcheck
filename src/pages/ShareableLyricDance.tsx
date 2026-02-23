@@ -1103,6 +1103,7 @@ export default function ShareableLyricDance() {
       const canRenderBackground = budgetElapsed() < 8;
       const canRenderParticles = budgetElapsed() < 11;
       const canRenderEffects = budgetElapsed() < FRAME_BUDGET_MS - 1;
+      const t0 = performance.now();
 
       drawCalls += renderBackground(
         bgCtx, bgCanvas, ctx, textCanvas,
@@ -1118,6 +1119,7 @@ export default function ShareableLyricDance() {
         },
         bgStateRef.current,
       );
+      const t1 = performance.now();
 
       // Particle engine: update via extracted function, then draw far layer on textCtx
       const lineDir = lineAnim ? (interpreterNow?.getLineDirection(activeLineIndex) ?? null) : null;
@@ -1150,12 +1152,14 @@ export default function ShareableLyricDance() {
       if (symbol) {
         renderSymbol(ctx, symbol, songProgress, cw, ch);
       }
+      const t2 = performance.now();
 
       // PASS 1 — Far-layer particles (behind text, atmospheric)
       if (particleEngine) {
         particleEngine.draw(ctx, "far");
         drawCalls += 1;
       }
+      const t3 = performance.now();
 
       // Pre-hook darkness build (skipped during hook itself).
       if (canRenderEffects && isPreHook && !isInHook) {
@@ -1314,6 +1318,7 @@ export default function ShareableLyricDance() {
         hardwareConcurrency: navigator.hardwareConcurrency ?? 4,
         devicePixelRatio: window.devicePixelRatio ?? 1,
       }, textStateRef.current);
+      const t4 = performance.now();
       activeWordPosition = textResult.activeWordPosition;
       drawCalls += textResult.drawCalls;
       const frameEffectKey = textResult.effectKey;
@@ -1375,10 +1380,25 @@ export default function ShareableLyricDance() {
       } else {
         particleEngine?.setSpeedMultiplier(1);
       }
+      const t5 = performance.now();
 
       if (particleEngine) {
         particleEngine.draw(ctx, "near");
         drawCalls += 1;
+      }
+      const t6 = performance.now();
+
+      const frameCount = particleStateRef.current.frameCount;
+      if (frameCount % 60 === 0) {
+        console.log("FRAME TIMING (ms):", {
+          background: (t1 - t0).toFixed(2),
+          symbol: (t2 - t1).toFixed(2),
+          particles: (t3 - t2).toFixed(2),
+          text: (t4 - t3).toFixed(2),
+          overlays: (t5 - t4).toFixed(2),
+          nearPass: (t6 - t5).toFixed(2),
+          total: (t6 - t0).toFixed(2),
+        });
       }
 
       // Camera transform reset handled by CSS — no ctx.restore needed
