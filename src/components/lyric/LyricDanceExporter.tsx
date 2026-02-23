@@ -381,11 +381,11 @@ export function LyricDanceExporter({
       drawFilmGrain(ctx, cw, ch, rng);
 
       // Progress bar
-      const songProgress = (currentTime - songStart) / (songEnd - songStart);
+      const progressBarSongProgress = (currentTime - songStart) / (songEnd - songStart);
       ctx.save();
       ctx.fillStyle = spec.palette?.[1] || "#a855f7";
       ctx.globalAlpha = 0.5;
-      ctx.fillRect(0, ch - 3, cw * Math.max(0, Math.min(1, songProgress)), 3);
+      ctx.fillRect(0, ch - 3, cw * Math.max(0, Math.min(1, progressBarSongProgress)), 3);
       ctx.restore();
 
       // System label
