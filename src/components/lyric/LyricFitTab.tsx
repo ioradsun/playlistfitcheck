@@ -50,6 +50,7 @@ export function LyricFitTab({
   onSavedId,
 }: Props) {
   const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
+  const [fitUnlocked, setFitUnlocked] = useState(false);
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [hasRealAudio, setHasRealAudio] = useState(false);
@@ -432,6 +433,17 @@ export function LyricFitTab({
     startCinematicDirection(lines);
   }, [audioFile, lines, startBeatAnalysis, startLyricAnalyze, startCinematicDirection]);
 
+  useEffect(() => {
+    if (fitUnlocked || fitReadiness === "ready") {
+      setFitUnlocked(true);
+    }
+  }, [fitUnlocked, fitReadiness]);
+
+  const handleViewChange = useCallback((nextView: LyricFitView) => {
+    if (nextView === "fit" && !fitUnlocked && fitReadiness !== "ready") return;
+    setActiveTab(nextView);
+  }, [fitUnlocked, fitReadiness]);
+
   const fitDisabled = !lines || lines.length === 0;
 
   return (
@@ -439,8 +451,9 @@ export function LyricFitTab({
       {lyricData && (
         <LyricFitToggle
           view={activeTab}
-          onViewChange={setActiveTab}
+          onViewChange={handleViewChange}
           fitDisabled={fitDisabled}
+          fitUnlocked={fitUnlocked}
           fitReadiness={fitReadiness}
           fitProgress={fitProgress}
           fitStageLabel={fitStageLabel}
@@ -475,6 +488,7 @@ export function LyricFitTab({
             setLines([]);
             setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
             setFitReadiness("not_started");
+            setFitUnlocked(false);
             onNewProject?.();
           }}
           onHeaderProject={onHeaderProject}
@@ -503,7 +517,7 @@ export function LyricFitTab({
           generationStatus={generationStatus}
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
-          onBack={() => setActiveTab("lyrics")}
+          onBack={() => handleViewChange("lyrics")}
         />
       ) : null}
     </div>

@@ -10,6 +10,7 @@ interface Props {
   view: LyricFitView;
   onViewChange: (v: LyricFitView) => void;
   fitDisabled?: boolean;
+  fitUnlocked?: boolean;
   fitReadiness?: FitReadiness;
   fitProgress?: number;
   fitStageLabel?: string;
@@ -52,8 +53,8 @@ const FitButton = forwardRef<HTMLButtonElement, { isLocked: boolean; isRunning: 
 );
 FitButton.displayName = "FitButton";
 
-export function LyricFitToggle({ view, onViewChange, fitDisabled, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages }: Props) {
-  const isLocked = fitDisabled || (fitReadiness !== "ready");
+export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages }: Props) {
+  const isLocked = fitDisabled || (!fitUnlocked && fitReadiness !== "ready");
   const isRunning = fitReadiness === "running";
   const isError = fitReadiness === "error";
   const isReady = fitReadiness === "ready";
