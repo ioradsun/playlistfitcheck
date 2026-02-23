@@ -73,7 +73,7 @@ import type {
   ArtistDNA,
   FingerprintSongContext,
 } from "./ArtistFingerprintTypes";
-import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
+// deriveSceneManifestFromSpec removed — manifest comes from FitTab
 import { safeManifest } from "@/engine/validateManifest";
 import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
 import { animationResolver } from "@/engine/AnimationResolver";
