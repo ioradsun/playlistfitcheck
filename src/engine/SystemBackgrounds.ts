@@ -55,6 +55,7 @@ const orbitStars = new WeakMap<CanvasRenderingContext2D, OrbitStar[]>();
 const pressureRuleExtent = new WeakMap<CanvasRenderingContext2D, { extent: number; lastBeat: number }>();
 const particleEngines = new WeakMap<CanvasRenderingContext2D, ParticleEngine>();
 const particleSignatures = new WeakMap<CanvasRenderingContext2D, string>();
+const systemTransitionState = new WeakMap<CanvasRenderingContext2D, { fromSystem: string; toSystem: string; transitionProgress: number }>();
 
 // ── FRACTURE — Raw concrete with glowing stress cracks ─────────────────────
 
@@ -770,13 +771,61 @@ export function drawForegroundParticles(ctx: CanvasRenderingContext2D, s: Backgr
   engine.draw(ctx);
 }
 
-export function drawSystemBackground(ctx: CanvasRenderingContext2D, s: BackgroundState): void {
-  const renderer = BG_RENDERERS[s.system];
+
+function resolveRendererSystem(system: string): string {
+  const normalized = system.toLowerCase();
+  const aliases: Record<string, string> = {
+    burn: "combustion",
+    ember: "combustion",
+    haze: "breath",
+    mist: "breath",
+    rain: "pressure",
+    downpour: "pressure",
+    frost: "glass",
+    blizzard: "glass",
+    winter: "glass",
+    static: "paper",
+    void: "pressure",
+  };
+  return aliases[normalized] ?? normalized;
+}
+
+function drawSingleSystemLayer(ctx: CanvasRenderingContext2D, s: BackgroundState, system: string): void {
+  const renderer = BG_RENDERERS[resolveRendererSystem(system)];
   if (renderer) {
-    renderer(ctx, s);
+    renderer(ctx, { ...s, system });
+    return;
+  }
+  ctx.fillStyle = "rgba(0, 0, 0, 0.92)";
+  ctx.fillRect(0, 0, s.w, s.h);
+}
+
+export function drawSystemBackground(ctx: CanvasRenderingContext2D, s: BackgroundState): void {
+  const activeSystem = s.system;
+  if (!systemTransitionState.has(ctx)) {
+    systemTransitionState.set(ctx, { fromSystem: activeSystem, toSystem: activeSystem, transitionProgress: 1 });
+  }
+  const transition = systemTransitionState.get(ctx)!;
+
+  if (activeSystem !== transition.toSystem) {
+    transition.fromSystem = transition.toSystem;
+    transition.toSystem = activeSystem;
+    transition.transitionProgress = 0;
+  }
+  transition.transitionProgress = Math.min(1, transition.transitionProgress + 1 / 60);
+
+  if (transition.transitionProgress < 1) {
+    ctx.save();
+    ctx.globalAlpha = 1 - transition.transitionProgress;
+    drawSingleSystemLayer(ctx, s, transition.fromSystem);
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = transition.transitionProgress;
+    drawSingleSystemLayer(ctx, s, transition.toSystem);
+    ctx.restore();
   } else {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.92)";
-    ctx.fillRect(0, 0, s.w, s.h);
+    drawSingleSystemLayer(ctx, s, transition.toSystem);
   }
 
   if (s.manifest) {
