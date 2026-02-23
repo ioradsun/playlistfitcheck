@@ -281,7 +281,6 @@ export function FitTab({
       setPublishedUrl(url);
       setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
-      window.location.href = url;
     } catch (e: any) {
       console.error("Dance publish error:", e);
       toast.error(e.message || "Failed to publish lyric dance");
@@ -502,10 +501,12 @@ export function FitTab({
       {publishedUrl && !danceNeedsRegeneration ? (
         <a
           href={publishedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
           className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
         >
           <Film size={14} />
-          View Dance
+          Watch Your Lyrics Dance
         </a>
       ) : (
         <button
