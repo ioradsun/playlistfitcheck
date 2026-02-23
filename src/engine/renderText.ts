@@ -29,8 +29,11 @@ function drawWithLetterSpacing(
   letterSpacing: string,
 ): void {
   const parsedSpacing = Number.parseFloat(letterSpacing);
+  // Extract font size from ctx.font (e.g. "300 48px Montserrat" → 48)
+  const fontSizeMatch = ctx.font.match(/(\d+(?:\.\d+)?)px/);
+  const currentFontSize = fontSizeMatch ? Number.parseFloat(fontSizeMatch[1]) : 16;
   const spacingPx = Number.isFinite(parsedSpacing)
-    ? parsedSpacing * Number.parseFloat(ctx.font) * 0.5
+    ? parsedSpacing * currentFontSize
     : 0;
 
   if (spacingPx === 0 || text.length <= 1) {
@@ -206,8 +209,14 @@ export function renderText(
     state, interpreter, shot, tensionStage, chapterDirective, cinematicDirection,
     isClimax, particleEngine, rng, getWordWidth, isMobile, hardwareConcurrency, devicePixelRatio,
   } = input;
-  const cinematicFontFamily = cinematicDirection?.visualWorld?.typographyProfile?.fontFamily ?? "Montserrat";
+  const baseTypoProfile = cinematicDirection?.visualWorld?.typographyProfile;
+  const chapterTypoShift = chapterDirective?.typographyShift as { fontWeight?: number; letterSpacing?: string } | undefined;
+  const cinematicFontFamily = baseTypoProfile?.fontFamily ?? "Montserrat";
+  const cinematicFontWeight = chapterTypoShift?.fontWeight ?? baseTypoProfile?.fontWeight ?? 400;
+  const cinematicLetterSpacing = chapterTypoShift?.letterSpacing ?? baseTypoProfile?.letterSpacing ?? "0";
+  const cinematicTextTransform = baseTypoProfile?.textTransform as string | undefined;
   const resolvedWordFont = `"${cinematicFontFamily}", Inter, ui-sans-serif, system-ui`;
+  const buildWordFont = (size: number) => `${cinematicFontWeight} ${size}px ${resolvedWordFont}`;
 
   let drawCalls = 0;
   let activeWordPosition = {
@@ -452,7 +461,7 @@ export function renderText(
   const previousLine = activeLineIndex > 0 ? lines[activeLineIndex - 1] : null;
   if (displayMode === "two_line_stack" && previousLine) {
     ctx.save();
-    ctx.font = `${Math.max(14, fontSize * 0.86)}px ${resolvedWordFont}`;
+    ctx.font = buildWordFont(Math.max(14, fontSize * 0.86));
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = activeLineAnim.lineColor;
@@ -494,6 +503,7 @@ export function renderText(
 
   // ── Per-word rendering ────────────────────────────────────────────
   renderedWords.forEach((word, renderedIndex) => {
+    const displayWord = cinematicTextTransform === "uppercase" ? word.text.toUpperCase() : word.text;
     const normalizedWord = word.text.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
     const sourceWordIndex = displayMode === "single_word"
       ? Math.max(0, visibleWordCount - 1)
@@ -530,15 +540,15 @@ export function renderText(
       return;
     }
 
-    const wordWidth = getWordWidth(word.text, fontSize, resolvedWordFont);
+    const wordWidth = getWordWidth(displayWord, fontSize, resolvedWordFont);
     const wordCenterX = displayMode === "single_word" ? lineX : cursorX + wordWidth / 2;
     const wordX = wordCenterX;
     let wordY = lineY;
 
-    ctx.font = `${fontSize}px ${resolvedWordFont}`;
+    ctx.font = buildWordFont(fontSize);
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    const wordRenderWidth = getWordWidth(word.text, fontSize, resolvedWordFont);
+    const wordRenderWidth = getWordWidth(displayWord, fontSize, resolvedWordFont);
     const existingHistory = textState.wordHistory.get(normalizedWord);
     const appearance = existingHistory?.count ?? 0;
     const appearanceCount = appearance + 1;
@@ -576,7 +586,7 @@ export function renderText(
         ctx.save();
         ctx.globalAlpha = 0.08;
         ctx.fillStyle = directive.colorOverride ?? "#ffffff";
-        ctx.fillText(word.text, lastPos.x, lastPos.y);
+        ctx.fillText(displayWord, lastPos.x, lastPos.y);
         ctx.restore();
       }
     }
@@ -691,7 +701,7 @@ export function renderText(
       applyKineticEffect(
         ctx,
         directive.kineticClass,
-        word.text,
+        displayWord,
         wordRenderWidth,
         fontSize,
         currentTime,
@@ -715,7 +725,7 @@ export function renderText(
       const bubbleXPositions = Array.from({ length: bubbleCount }, (_, i) => wordRenderWidth * (i / Math.max(1, bubbleCount)));
       drawElementalWord(
         ctx,
-        word.text,
+        displayWord,
         fontSize,
         wordRenderWidth,
         directive.elementalClass,
@@ -734,10 +744,10 @@ export function renderText(
           canvasHeight: ch,
         },
       );
-    } else if (props.letterSpacing !== "0em") {
-      drawWithLetterSpacing(ctx, word.text, 0, 0, props.letterSpacing);
+    } else if (props.letterSpacing !== "0em" || cinematicLetterSpacing !== "0") {
+      drawWithLetterSpacing(ctx, displayWord, 0, 0, props.letterSpacing !== "0em" ? props.letterSpacing : cinematicLetterSpacing);
     } else {
-      ctx.fillText(word.text, 0, 0);
+      ctx.fillText(displayWord, 0, 0);
     }
 
     ctx.restore();
@@ -746,7 +756,7 @@ export function renderText(
     if (props.showTrail) {
       for (let t = 1; t <= props.trailCount; t += 1) {
         ctx.globalAlpha = (props.opacity * 0.3) / t;
-        ctx.fillText(word.text, finalX - (t * 4), finalY);
+        ctx.fillText(displayWord, finalX - (t * 4), finalY);
         drawCalls += 1;
       }
     }
