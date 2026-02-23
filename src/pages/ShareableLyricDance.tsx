@@ -582,7 +582,7 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     interpreterRefStable.current = interpreterRef.current;
-  }, [data?.cinematic_direction, data?.song_dna?.cinematic_direction]);
+  }, [data?.cinematic_direction]);
 
   useEffect(() => {
     const cinematicDirection = data?.cinematic_direction ?? data?.song_dna?.cinematic_direction ?? null;
