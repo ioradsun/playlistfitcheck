@@ -522,39 +522,21 @@ export class LyricDancePlayer {
       this.fpsAccum.frames = 0;
     }
 
-    // Derive progress
     const duration = this.songEndSec - this.songStartSec;
     const songProgress = duration > 0 ? Math.max(0, Math.min(1, (clamped - this.songStartSec) / duration)) : 0;
-
-    // Find current chapter from cinematic direction
     const cd = this.payload?.cinematic_direction;
     const chapters = cd?.chapters ?? [];
     const currentChapter = chapters.find(
       (ch: any) => songProgress >= (ch.startRatio ?? 0) && songProgress <= (ch.endRatio ?? 1)
     ) ?? chapters[0];
-
-    // Find current tension stage
-    const tensionCurve = cd?.tensionCurve ?? [];
+    const tensionCurve = (cd as any)?.tensionCurve ?? [];
     const currentTension = tensionCurve.find(
       (ts: any) => songProgress >= (ts.startRatio ?? 0) && songProgress <= (ts.endRatio ?? 1)
     ) ?? tensionCurve[0];
-
-    // Find active line
     const lines = this.payload?.lines ?? [];
     const activeLine = lines.find((l: any) => clamped >= l.start && clamped <= l.end);
-
-    // Chapter-relative progress
-    const chapterProgress = currentChapter
-      ? Math.max(0, Math.min(1, (songProgress - (currentChapter.startRatio ?? 0)) /
-          Math.max(0.001, (currentChapter.endRatio ?? 1) - (currentChapter.startRatio ?? 0))))
-      : 0;
-
-    // Simulated beat intensity from progress (ramp up in middle, peak at climax)
-    const climaxRatio = cd?.climax?.timeRatio ?? 0.75;
-    const distFromClimax = Math.abs(songProgress - climaxRatio);
-    const simulatedBeat = Math.max(0.1, 1 - distFromClimax * 2);
-
-    // Get current frame for draw-call-level data
+    const climaxRatio = (cd as any)?.climax?.timeRatio ?? 0.75;
+    const simulatedBeat = Math.max(0.1, 1 - Math.abs(songProgress - climaxRatio) * 2);
     const frame = this.getFrame(this.currentTimeMs);
     const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
 
@@ -564,64 +546,39 @@ export class LyricDancePlayer {
       fps: Math.round(this.fpsAccum.fps),
       songProgress,
       perfTotal: deltaMs,
-
-      // Beat (simulated from position)
+      perfBg: 0,
+      perfText: 0,
       beatIntensity: simulatedBeat,
       physGlow: simulatedBeat * 0.6,
       lastBeatForce: simulatedBeat * 0.8,
-
-      // Physics (from manifest/payload)
       physicsActive: this.playing,
       heat: (this.payload as any)?.physicsSpec?.params?.heat ?? 0,
       velocity: simulatedBeat * 0.5,
-      rotation: 0,
       wordCount: lines.length,
-
-      // Animation (from current frame)
       effectKey: visibleChunks.length > 0 ? "baked" : "—",
       entryProgress: activeLine ? Math.min(1, (clamped - activeLine.start) / Math.max(0.1, activeLine.end - activeLine.start)) : 0,
       exitProgress: activeLine ? Math.max(0, 1 - (activeLine.end - clamped) / Math.max(0.1, activeLine.end - activeLine.start)) : 0,
       fontScale: frame?.cameraZoom ?? 1,
       scale: frame?.cameraZoom ?? 1,
-      lineColor: (visibleChunks[0] as any)?.color ?? "#ffffff",
       zoom: frame?.cameraZoom ?? 1,
-
-      // Particles (from manifest)
+      lineColor: (visibleChunks[0] as any)?.color ?? "#ffffff",
       particleSystem: this.payload?.scene_manifest?.particleConfig?.system ?? "—",
       particleDensity: this.payload?.scene_manifest?.particleConfig?.density ?? 0,
       particleSpeed: this.payload?.scene_manifest?.particleConfig?.speed ?? 0,
-      particleCount: 0, // baked pipeline doesn't run live particles
-
-      // Direction
-      dirThesis: cd?.thesis ?? "—",
+      dirThesis: (cd as any)?.thesis ?? "—",
       dirChapter: currentChapter?.title ?? "—",
-      dirChapterProgress: chapterProgress,
-      dirIntensity: currentChapter?.emotionalIntensity ? (typeof currentChapter.emotionalIntensity === 'number' ? currentChapter.emotionalIntensity : simulatedBeat) : simulatedBeat,
+      dirChapterProgress: currentChapter ? Math.max(0, Math.min(1, (songProgress - (currentChapter.startRatio ?? 0)) / Math.max(0.001, (currentChapter.endRatio ?? 1) - (currentChapter.startRatio ?? 0)))) : 0,
+      dirIntensity: simulatedBeat,
       dirBgDirective: currentChapter?.backgroundDirective ?? "—",
       dirLightBehavior: currentChapter?.lightBehavior ?? "—",
-
-      // Camera & Tension
       cameraDistance: (currentChapter as any)?.cameraDistance ?? "—",
       cameraMovement: (currentChapter as any)?.cameraMovement ?? "—",
       tensionStage: currentTension?.stage ?? "—",
       tensionMotion: currentTension?.motionIntensity ?? 0,
       tensionParticles: currentTension?.particleDensity ?? 0,
-      tensionTypo: (currentTension as any)?.typographyScale ?? 1,
-
-      // Symbols
-      symbolPrimary: cd?.symbolSystem?.primary ?? "—",
-      symbolSecondary: cd?.symbolSystem?.secondary ?? "—",
-      symbolState: songProgress < 0.33 ? "dormant" : songProgress < 0.66 ? "active" : "transformed",
-
-      // Line
-      lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
-      lineEntry: currentChapter?.typographyShift ?? "—",
-      lineExit: "—",
-      lineIntent: currentChapter?.emotionalArc ?? "—",
-      shotType: (currentChapter as any)?.cameraDistance ?? "—",
-
-      // Background
       backgroundSystem: this.payload?.scene_manifest?.backgroundSystem ?? "—",
+      lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
+      lineIntent: currentChapter?.emotionalArc ?? "—",
     };
   }
 
@@ -679,26 +636,29 @@ export class LyricDancePlayer {
   private buildScenePayload(): ScenePayload {
     const lines = this.data.lyrics ?? [];
     console.log('[PLAYER] buildScenePayload — lyrics count:', this.data.lyrics?.length, 'lines:', lines.length);
+    console.log('[PAYLOAD] cinematic_direction keys:', Object.keys(this.data.cinematic_direction ?? {}));
+    console.log('[PAYLOAD] chapters:', this.data.cinematic_direction?.chapters?.length);
     const songStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
     const songEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
 
     console.log('[PAYLOAD] songStart:', songStart, 'songEnd:', songEnd,
       'first line start:', lines[0]?.start, 'last line end:', lines[lines.length - 1]?.end);
-    console.log('[PAYLOAD] cinematic_direction keys:',
-      Object.keys(this.data.cinematic_direction ?? {}),
-      'chapters:', this.data.cinematic_direction?.chapters?.length);
 
-    return {
+    const payload = {
       lines,
-      beat_grid: this.data.beat_grid ?? null,
-      cinematic_direction: this.data.cinematic_direction ?? null,
+      beat_grid: this.data.beat_grid,
       physics_spec: this.data.physics_spec,
       scene_manifest: this.data.scene_manifest ?? null,
-      palette: this.data.cinematic_direction?.visualWorld?.palette ?? ["#0a0a0a", "#111827", "#1a2a4a"],
+      cinematic_direction: this.data.cinematic_direction ?? null,
+      palette: this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"],
       lineBeatMap: [],
       songStart,
       songEnd,
     };
+
+    console.log('[PAYLOAD] payload being sent to baker — cinematic_direction:', !!payload.cinematic_direction);
+
+    return payload;
   }
 
   private buildChunkCache(payload: ScenePayload): void {
