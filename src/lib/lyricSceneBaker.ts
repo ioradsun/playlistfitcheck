@@ -32,7 +32,7 @@ export type Keyframe = {
     x: number;
     y: number;
     alpha: number;
-    scale: number;
+    glow: number;
     visible: boolean;
   }>;
   cameraX: number;
