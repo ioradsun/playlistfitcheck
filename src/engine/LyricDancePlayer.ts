@@ -552,6 +552,7 @@ export class LyricDancePlayer {
 
   private buildScenePayload(): ScenePayload {
     const lines = this.data.lyrics ?? [];
+    console.log('[PLAYER] buildScenePayload — lyrics count:', this.data.lyrics?.length, 'lines:', lines.length);
     const songStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
     const songEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
 
@@ -585,6 +586,7 @@ export class LyricDancePlayer {
     measureCtx.font = font;
 
     for (let i = 0; i < payload.lines.length; i++) {
+      if (i === 0) console.log('[PLAYER] first line text:', payload.lines[0]?.text);
       const text = payload.lines[i]?.text ?? '';
       const color = payload.palette?.[2] ?? '#ffffff';
       const width = measureCtx.measureText(text).width;
@@ -596,6 +598,7 @@ export class LyricDancePlayer {
         font,
         width,
       });
+      if (i === 0) console.log('[PLAYER] first chunk set — size now:', this.chunks.size);
     }
 
     console.log('[PLAYER] buildChunkCache done — chunks:', this.chunks.size);
