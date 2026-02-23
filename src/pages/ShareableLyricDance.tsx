@@ -384,8 +384,8 @@ function buildLineBeatMap(lines: LyricLine[], beatGrid: BeatGrid): LineBeatMap[]
   });
 }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,song_dna";
-const DIRECTION_COLUMNS = "cinematic_direction,song_dna";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest";
+const DIRECTION_COLUMNS = "cinematic_direction";
 
 /** Draggable progress bar overlay at bottom of canvas */
 function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
