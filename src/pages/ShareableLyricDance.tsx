@@ -1072,19 +1072,18 @@ export default function ShareableLyricDance() {
       const isClimax = interpreterNow?.isClimaxMoment(songProgress) ?? false;
       climaxActiveRef.current = isClimax;
 
-      // Camera shake — only on very strong downbeats, subtle and deterministic
-      ctx.save();
-      ctx.translate(cw / 2, ch / 2);
+      // Camera transform — applied via CSS on container so both canvases zoom together
       const zoom = cameraZoomRef.current * silenceZoomRef.current;
-      ctx.scale(zoom, zoom);
-      ctx.translate(-cw / 2, -ch / 2);
-      ctx.translate(cameraOffsetRef.current.x, cameraOffsetRef.current.y + silenceOffsetYRef.current);
-      if (currentBeatIntensity > 0.92) {
-        const shakePhase = currentTime * 37.7;
-        const shakeX = Math.sin(shakePhase) * (currentBeatIntensity - 0.92) * 15;
-        const shakeY = Math.cos(shakePhase * 1.3) * (currentBeatIntensity - 0.92) * 5;
-        ctx.translate(shakeX, shakeY);
-      }
+      const camOffX = cameraOffsetRef.current.x + (currentBeatIntensity > 0.92
+        ? Math.sin(currentTime * 37.7) * (currentBeatIntensity - 0.92) * 15
+        : 0);
+      const camOffY = cameraOffsetRef.current.y + silenceOffsetYRef.current + (currentBeatIntensity > 0.92
+        ? Math.cos(currentTime * 37.7 * 1.3) * (currentBeatIntensity - 0.92) * 5
+        : 0);
+      container.style.transform = zoom !== 1 || camOffX !== 0 || camOffY !== 0
+        ? `scale(${zoom}) translate(${camOffX}px, ${camOffY}px)`
+        : "";
+      container.style.transformOrigin = "center center";
 
       // Background — draw on bgCanvas only when dirty; text canvas stays transparent
       const chapterForRender = chapterDirective ?? {
@@ -1382,7 +1381,7 @@ export default function ShareableLyricDance() {
         drawCalls += 1;
       }
 
-      ctx.restore();
+      // Camera transform reset handled by CSS — no ctx.restore needed
 
       // ── Update live debug ref (no React setState — zero GC pressure) ──
       const dbg = liveDebugRef.current;
@@ -1663,7 +1662,7 @@ export default function ShareableLyricDance() {
       {/* Canvas area */}
       <div
         ref={containerRef}
-        className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer"
+        className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer overflow-hidden"
         onClick={() => { if (!showCover) handleMuteToggle(); }}
       >
         <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full" />
