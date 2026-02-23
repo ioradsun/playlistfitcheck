@@ -17,6 +17,7 @@ import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
 import type { HeaderProjectSetter } from "./LyricsTab";
+import type { GenerationStatus } from "./LyricFitTab";
 
 const PEAK_SAMPLES = 200;
 
@@ -54,6 +55,7 @@ interface Props {
   setCinematicDirection: (d: any) => void;
   bgImageUrl: string | null;
   setBgImageUrl: (u: string | null) => void;
+  generationStatus: GenerationStatus;
   onRetry?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
@@ -76,6 +78,7 @@ export function FitTab({
   setCinematicDirection,
   bgImageUrl,
   setBgImageUrl,
+  generationStatus,
   onRetry,
   onHeaderProject,
   onBack,
@@ -247,7 +250,12 @@ export function FitTab({
     }
   }, [user, sceneManifest, lyricData, audioFile, publishing, songDna, beatGrid, cinematicDirection, setBgImageUrl]);
 
-  const danceDisabled = !sceneManifest || publishing;
+  const allReady =
+    generationStatus.beatGrid === "done" &&
+    generationStatus.songDna === "done" &&
+    generationStatus.cinematicDirection === "done";
+  const hasErrors = Object.values(generationStatus).includes("error");
+  const danceDisabled = !sceneManifest || publishing || !allReady;
 
   // ── Sections derived from songDna ─────────────────────────────────────
   const physicsSpec = songDna?.physicsSpec;
@@ -271,6 +279,25 @@ export function FitTab({
       )}
 
       {/* Song overview hero */}
+      {!allReady && (
+        <div className="glass-card rounded-xl p-4 space-y-2">
+          <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Generating Fit in background</p>
+          <div className="space-y-1.5 text-xs text-muted-foreground">
+            <div>Rhythm: {generationStatus.beatGrid}</div>
+            <div>Song DNA: {generationStatus.songDna}</div>
+            <div>Cinematic direction: {generationStatus.cinematicDirection}</div>
+          </div>
+          {hasErrors && onRetry && (
+            <button
+              onClick={onRetry}
+              className="text-[11px] font-mono text-primary hover:text-primary/80 transition-colors"
+            >
+              Retry failed steps
+            </button>
+          )}
+        </div>
+      )}
+
       {songDna?.description && (
         <div className="glass-card rounded-xl p-4 space-y-2">
           <p className="text-sm text-muted-foreground italic leading-relaxed">{songDna.description}</p>
@@ -288,7 +315,7 @@ export function FitTab({
           {/* Header + Test Again */}
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Song DNA</span>
-            {onRetry && (
+            {onRetry && hasErrors && (
               <button
                 onClick={onRetry}
                 className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
