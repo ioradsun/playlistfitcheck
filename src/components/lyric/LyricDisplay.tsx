@@ -2312,8 +2312,8 @@ export function LyricDisplay({
               );
             })()}
 
-          {/* ── Lyric Dance — Full Song Video ── */}
-          {songDna?.physicsSpec && beatGrid && (
+          {/* ── Export Video — Full Song Video ── */}
+          {features?.export_video && songDna?.physicsSpec && beatGrid && (
             <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
               <div className="flex items-center gap-1.5">
                 <Film size={11} className="text-primary" />
@@ -2332,7 +2332,7 @@ export function LyricDisplay({
                 className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
               >
                 <Film size={10} />
-                Create Lyric Dance
+                Export Video
               </button>
               <PublishLyricDanceButton
                 physicsSpec={songDna.physicsSpec as PhysicsSpec}
