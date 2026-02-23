@@ -563,6 +563,12 @@ export class LyricDancePlayer {
 
   private buildChunkCache(payload: ScenePayload): void {
     this.chunks.clear();
+    console.log('[PLAYER] buildChunkCache — canvas size:', this.width, this.height, 'ctx:', !!this.ctx);
+
+    if (!this.ctx || this.width === 0) {
+      console.warn('[PLAYER] buildChunkCache skipped — canvas not ready');
+      return;
+    }
 
     const fontFamily =
       payload.cinematic_direction?.visualWorld?.typographyProfile?.fontFamily?.trim() || "Montserrat";
