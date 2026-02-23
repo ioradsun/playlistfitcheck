@@ -327,9 +327,28 @@ export class LyricDancePlayer {
   }
 
   // Compatibility with existing React shell
-  init(): void {
-    this.resize(this.canvas.offsetWidth || 0, this.canvas.offsetHeight || 0);
-    this.load(this.buildScenePayload(), () => {}).catch(() => {});
+  async init(): Promise<void> {
+    this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
+    const payload = this.buildScenePayload();
+
+    console.log(
+      "[LyricDancePlayer] init — lines:",
+      payload.lines.length,
+      "songStart:",
+      payload.songStart,
+      "songEnd:",
+      payload.songEnd,
+    );
+
+    try {
+      await this.load(payload, (pct) => {
+        console.log("[LyricDancePlayer] baking:", `${pct}%`);
+      });
+      console.log("[LyricDancePlayer] bake complete — frames:", this.timeline.length);
+    } catch (e) {
+      console.error("[LyricDancePlayer] bake failed:", e);
+    }
+
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
     this.playing = true;

@@ -247,11 +247,13 @@ export default function ShareableLyricDance() {
     const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, containerRef.current);
     playerRef.current = player;
 
-    try {
-      player.init();
-    } catch (err) {
-      console.error("LyricDancePlayer init failed:", err);
-    }
+    (async () => {
+      try {
+        await player.init();
+      } catch (err) {
+        console.error("LyricDancePlayer init failed:", err);
+      }
+    })();
 
     return () => {
       player.destroy();
