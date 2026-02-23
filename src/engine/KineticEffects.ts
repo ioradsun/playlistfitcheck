@@ -12,16 +12,16 @@ export function applyKineticEffect(
   switch (kineticClass) {
     case "FALLING":
     case "SINKING": {
-      // Word sinks below baseline
-      const sinkDepth = appearanceCount * 2;
+      // Fresh calculation each frame — never accumulated
+      const sinkDepth = Math.min(appearanceCount * 3, 20);
       const sinkBob = Math.sin(currentTime * 2) * 3;
-      ctx.translate(0, sinkDepth + sinkBob);
+      const totalSink = sinkDepth + sinkBob;
+      ctx.translate(0, totalSink);
       // Shadow copies above — trail of where it was
       ctx.globalAlpha *= 0.2;
       ctx.fillText(word, 0, -10);
       ctx.fillText(word, 0, -20);
       ctx.globalAlpha /= 0.2;
-      ctx.translate(0, -(sinkDepth + sinkBob));
       break;
     }
 
@@ -105,9 +105,10 @@ export function applyKineticEffect(
     }
 
     case "RISING": {
-      // Slight upward drift, shadow below
-      const riseY = -(currentTime % 3) * 1.5;
-      ctx.translate(0, riseY % (-fontSize * 0.3));
+      // Fresh calculation each frame — capped drift
+      const riseCycle = (currentTime % 3) / 3; // 0→1 over 3s
+      const riseY = -Math.min(riseCycle * fontSize * 0.3, 20);
+      ctx.translate(0, riseY);
       ctx.globalAlpha *= 0.2;
       ctx.fillText(word, 0, 10);
       ctx.fillText(word, 0, 20);
