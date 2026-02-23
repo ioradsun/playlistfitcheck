@@ -779,6 +779,7 @@ export class LyricDancePlayer {
       beatIndex: f.beatIndex,
       cameraX: f.cameraX * sx,
       cameraY: f.cameraY * sy,
+      cameraZoom: f.cameraZoom,
       chunks: f.chunks.map((c) => ({
         id: c.id,
         x: c.x * sx,
