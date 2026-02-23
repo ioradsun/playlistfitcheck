@@ -8,14 +8,21 @@ import { PaletteEditor } from "./PaletteEditor";
 
 const PARTICLE_SYSTEMS = [
   "none",
+  "embers",
+  "smoke",
+  "ash",
   "rain",
   "snow",
-  "smoke",
-  "dust",
-  "sparks",
+  "lightning",
+  "fireflies",
+  "stars",
   "petals",
-  "ash",
-  "light_beams",
+  "dust",
+  "bubbles",
+  "glitch",
+  "confetti",
+  "crystals",
+  "moths",
 ] as const;
 
 const TYPOGRAPHY_PERSONAS: SceneManifest["typographyProfile"]["personality"][] = [

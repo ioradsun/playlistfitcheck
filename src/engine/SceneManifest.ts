@@ -18,15 +18,18 @@ export type ParticleSystemType =
   | "rain"
   | "snow"
   | "embers"
-  | "flames"
   | "dust"
   | "smoke"
-  | "sparks"
   | "petals"
   | "ash"
-  | "light-rays"
-  | "static-noise"
   | "bubbles"
+  | "lightning"
+  | "fireflies"
+  | "stars"
+  | "glitch"
+  | "confetti"
+  | "crystals"
+  | "moths"
   | "none";
 
 export interface ParticleConfig {

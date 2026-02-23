@@ -59,8 +59,8 @@ const TYPOGRAPHY_PERSONAS = [
 ] as const;
 const TEXT_TRANSFORMS = ["uppercase", "lowercase", "none"] as const;
 const VALID_PARTICLE_SYSTEMS = [
-  "rain", "snow", "embers", "flames", "dust", "smoke",
-  "sparks", "petals", "ash", "light-rays", "static-noise", "bubbles", "none",
+  "rain", "snow", "embers", "dust", "smoke", "petals", "ash", "bubbles",
+  "lightning", "fireflies", "stars", "glitch", "confetti", "crystals", "moths", "none",
 ] as const;
 
 export interface ManifestValidationResult {
