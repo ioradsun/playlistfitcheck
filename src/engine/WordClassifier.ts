@@ -59,7 +59,7 @@ export function setCinematicDirection(direction: CinematicDirection | null): voi
 }
 
 function getDirectionDirective(word: string) {
-  if (!cinematicDirectionRef) return null;
+  if (!cinematicDirectionRef?.wordDirectives) return null;
   const key = normalizeWord(word).replace(/[^a-z]/g, "");
   return cinematicDirectionRef.wordDirectives[key] ?? null;
 }
