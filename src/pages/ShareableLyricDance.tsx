@@ -11,7 +11,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bug, ChevronDown, ChevronRight } from "lucide-react";
+// lucide icons removed — HUD uses no icons
 
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
@@ -31,7 +31,161 @@ import { getSessionId } from "@/lib/sessionId";
 import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
 
 /** Live debug state updated every frame from the render loop */
+interface LiveDebugState {
+  // Beat
+  beatIntensity: number;
+  physGlow: number;
+  // Physics Engine
+  physicsActive: boolean;
+  wordCount: number;
+  heat: number;
+  velocity: number;
+  rotation: number;
+  lastBeatForce: number;
+  // Animation
+  effectKey: string;
+  entryProgress: number;
+  exitProgress: number;
+  activeMod: string | null;
+  fontScale: number;
+  scale: number;
+  lineColor: string;
+  isHookLine: boolean;
+  repIndex: number;
+  repTotal: number;
+  // Particles
+  particleSystem: string;
+  particleDensity: number;
+  particleSpeed: number;
+  particleCount: number;
+  songSection: string;
+  // Position
+  xOffset: number;
+  yBase: number;
+  xNudge: number;
+  shake: number;
+  // Background
+  backgroundSystem: string;
+  imageLoaded: boolean;
+  zoom: number;
+  vignetteIntensity: number;
+  songProgress: number;
+  // Manifest
+  world: string;
+  palette: string[];
+  entrance: string;
+  lightSource: string;
+  tension: number;
+  // Meta
+  time: number;
+}
 
+/** Compact engine debug HUD — toggled with D key */
+function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebugState> }) {
+  const [open, setOpen] = useState(false);
+  const [snap, setSnap] = useState<LiveDebugState>(stateRef.current);
+
+  // Toggle with D key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "d" || e.key === "D") {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        setOpen(prev => !prev);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Poll at 100ms
+  useEffect(() => {
+    if (!open) return;
+    const id = setInterval(() => setSnap({ ...stateRef.current }), 100);
+    return () => clearInterval(id);
+  }, [open, stateRef]);
+
+  if (!open) return null;
+
+  const f = (v: number, d = 2) => v.toFixed(d);
+  const Row = ({ label, value }: { label: string; value: string }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+      <span style={{ color: "#4ade80" }}>{label}:</span>
+      <span style={{ color: "#d1fae5" }}>{value}</span>
+    </div>
+  );
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ color: "#22c55e", fontWeight: 700, marginBottom: 2, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" as const }}>{title}</div>
+      {children}
+    </div>
+  );
+
+  return (
+    <div style={{
+      position: "fixed", top: 12, left: 12, zIndex: 200,
+      background: "rgba(0,0,0,0.88)", backdropFilter: "blur(4px)",
+      border: "1px solid rgba(74,222,128,0.15)", borderRadius: 6,
+      padding: 12, maxWidth: 280, minWidth: 240,
+      fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
+      fontSize: 11, lineHeight: "1.55", color: "#4ade80",
+      pointerEvents: "auto", overflowY: "auto", maxHeight: "90vh",
+    }}>
+      <Section title="BEAT">
+        <Row label="intensity" value={f(snap.beatIntensity)} />
+        <Row label="physGlow" value={f(snap.physGlow)} />
+      </Section>
+      <Section title="PHYSICS ENGINE">
+        <Row label="active" value={snap.physicsActive ? "true" : "false"} />
+        <Row label="words" value={String(snap.wordCount)} />
+        <Row label="heat" value={f(snap.heat)} />
+        <Row label="avgVelocityY" value={f(snap.velocity)} />
+        <Row label="avgRotation" value={f(snap.rotation, 3)} />
+        <Row label="lastBeatForce" value={f(snap.lastBeatForce)} />
+      </Section>
+      <Section title="ANIMATION">
+        <Row label="effect" value={snap.effectKey} />
+        <Row label="entryProgress" value={f(snap.entryProgress)} />
+        <Row label="exitProgress" value={f(snap.exitProgress)} />
+        <Row label="activeMod" value={snap.activeMod ?? "none"} />
+        <Row label="fontScale" value={f(snap.fontScale)} />
+        <Row label="scale" value={f(snap.scale)} />
+        <Row label="lineColor" value={snap.lineColor} />
+        <Row label="isHookLine" value={snap.isHookLine ? "true" : "false"} />
+        <Row label="repIndex" value={`${snap.repIndex}/${snap.repTotal}`} />
+      </Section>
+      <Section title="PARTICLES">
+        <Row label="system" value={snap.particleSystem} />
+        <Row label="density" value={f(snap.particleDensity)} />
+        <Row label="speed" value={f(snap.particleSpeed)} />
+        <Row label="count" value={String(snap.particleCount)} />
+        <Row label="songSection" value={snap.songSection} />
+      </Section>
+      <Section title="POSITION">
+        <Row label="xOffset" value={`${f(snap.xOffset, 1)}px`} />
+        <Row label="yBase" value={f(snap.yBase)} />
+        <Row label="xNudge" value={`${f(snap.xNudge, 1)}px`} />
+        <Row label="shake" value={f(snap.shake)} />
+      </Section>
+      <Section title="BACKGROUND">
+        <Row label="system" value={snap.backgroundSystem} />
+        <Row label="imageLoaded" value={snap.imageLoaded ? "true" : "false"} />
+        <Row label="zoom" value={f(snap.zoom)} />
+        <Row label="vignetteIntensity" value={f(snap.vignetteIntensity)} />
+        <Row label="songProgress" value={f(snap.songProgress)} />
+      </Section>
+      <Section title="MANIFEST">
+        <Row label="world" value={snap.world.slice(0, 20) + (snap.world.length > 20 ? "…" : "")} />
+        <Row label="palette" value={`[${snap.palette.join(", ")}]`} />
+        <Row label="entrance" value={snap.entrance} />
+        <Row label="lightSource" value={snap.lightSource} />
+        <Row label="tension" value={f(snap.tension)} />
+      </Section>
+      <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" as const }}>
+        {f(snap.time, 2)}s · press D to close
+      </div>
+    </div>
+  );
+}
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -55,214 +209,34 @@ function getParticleConfigForTime(
 
   if (isBurnWorld) {
     if (progress < 0.15) {
-      return {
-        ...baseConfig,
-        system: "smoke",
-        density: 0.2,
-        speed: 0.2,
-        opacity: 0.4,
-        color: "#4a3a2a",
-      };
+      return { ...baseConfig, system: "smoke", density: lerp(0.2, 0.4, progress / 0.15), speed: 0.3, opacity: 0.3 };
+    } else if (progress < 0.5) {
+      const t = (progress - 0.15) / 0.35;
+      return { ...baseConfig, system: "embers", density: lerp(0.3, 0.7, t), speed: lerp(0.4, 0.7, t), opacity: lerp(0.4, 0.7, t) };
+    } else if (progress < 0.8) {
+      const t = (progress - 0.5) / 0.3;
+      return { ...baseConfig, system: "flames", density: lerp(0.5, 0.9, t) + beat * 0.15, speed: lerp(0.5, 0.9, t), opacity: lerp(0.6, 0.9, t) };
+    } else {
+      const t = (progress - 0.8) / 0.2;
+      return { ...baseConfig, system: "ash", density: lerp(0.8, 0.4, t), speed: lerp(0.6, 0.3, t), opacity: lerp(0.7, 0.3, t) };
     }
-
-    if (progress < 0.35) {
-      const mix = clamp01((progress - 0.15) / 0.2);
-      return {
-        ...baseConfig,
-        system: mix > 0.7 ? "embers" : "smoke",
-        density: lerp(0.35, 0.5, mix),
-        speed: lerp(0.35, 0.5, mix),
-        opacity: lerp(0.45, 0.7, mix),
-        color: mix > 0.5 ? baseConfig.color : "#4a3a2a",
-      };
-    }
-
-    if (progress < 0.55) {
-      return {
-        ...baseConfig,
-        system: "embers",
-        density: Math.min(0.9, 0.8 + beat * 0.2),
-        speed: Math.min(1, 0.7 + beat * 0.3),
-        opacity: 0.9,
-      };
-    }
-
-    if (progress < 0.7) {
-      const mix = clamp01((progress - 0.55) / 0.15);
-      return {
-        ...baseConfig,
-        system: mix > 0.6 ? "smoke" : "embers",
-        density: lerp(0.4, 0.3, mix),
-        speed: lerp(0.4, 0.3, mix),
-        opacity: lerp(0.75, 0.55, mix),
-        color: mix > 0.6 ? "#4a3a2a" : baseConfig.color,
-      };
-    }
-
-    if (progress < 0.85) {
-      return {
-        ...baseConfig,
-        system: "ash",
-        density: 0.5,
-        speed: 0.15,
-        opacity: 0.6,
-        color: "#7f7f7f",
-      };
-    }
-
-    return {
-      ...baseConfig,
-      system: "embers",
-      density: 0.2,
-      speed: 0.2,
-      opacity: 0.4,
-    };
   }
 
-  if (baseConfig.system === "rain") {
-    const intensity = progress < 0.5 ? progress * 2 : 2 - progress * 2;
-    return {
-      ...baseConfig,
-      density: 0.4 + intensity * 0.4,
-      speed: 0.5 + intensity * 0.3,
-    };
-  }
-
-  return baseConfig;
-}
-interface LiveDebugState {
-  time: number;
-  beatIntensity: number;
-  beatIndex: number;
-  totalBeats: number;
-  bpm: number;
-  physHeat: number;
-  physDrift: number;
-  physGlow: number;
-  activeLine: string | null;
-  activeLineIndex: number;
-  effectKey: string;
-  effectSystem: string;
-  particleSystem: string;
-  palette: string[];
-  activeMod: string | null;
-  isHookLine: boolean;
-  beatMultiplier: number;
-  entryProgress: number;
-  exitProgress: number;
-  fontFamily: string;
-  fontSize: number;
-  textColor: string;
-  contrastRatio: number;
-  lyricEntrance: string;
-  lyricExit: string;
+  // Non-burn worlds: gentle density ramp
+  return {
+    ...baseConfig,
+    density: clamp01(baseConfig.density * (0.6 + progress * 0.4 + beat * 0.15)),
+    speed: clamp01(baseConfig.speed * (0.8 + beat * 0.3)),
+    opacity: clamp01(baseConfig.opacity * (0.7 + progress * 0.3)),
+  };
 }
 
-/** Tiny live HUD overlay — polls a ref at 10 fps */
-function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebugState> }) {
-  const [open, setOpen] = useState(false);
-  const [snap, setSnap] = useState<LiveDebugState>(stateRef.current);
-  const [sections, setSections] = useState<Record<string, boolean>>({
-    beat: true, physics: true, line: true, engine: true, manifest: false,
-  });
-
-  useEffect(() => {
-    if (!open) return;
-    const id = setInterval(() => setSnap({ ...stateRef.current }), 100);
-    return () => clearInterval(id);
-  }, [open, stateRef]);
-
-  const toggle = (key: string) => setSections(s => ({ ...s, [key]: !s[key] }));
-
-  const Row = ({ label, value, highlight }: { label: string; value: string | number | null; highlight?: boolean }) => (
-    <div className="flex justify-between gap-3 text-[10px] font-mono leading-relaxed">
-      <span className="text-white/40 shrink-0">{label}</span>
-      <span className={highlight ? "text-amber-400" : "text-white/80"}>{value ?? "—"}</span>
-    </div>
-  );
-
-  const Section = ({ id, title, children }: { id: string; title: string; children: React.ReactNode }) => (
-    <div className="border-t border-white/10 first:border-t-0">
-      <button onClick={() => toggle(id)} className="w-full flex items-center gap-1 py-1.5 text-[9px] font-mono uppercase tracking-wider text-white/30 hover:text-white/60">
-        {sections[id] ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-        {title}
-      </button>
-      {sections[id] && <div className="pb-2 space-y-0.5">{children}</div>}
-    </div>
-  );
-
-  return (
-    <>
-      <button
-        onClick={() => setOpen(!open)}
-        className="fixed top-4 right-4 z-[100] flex items-center gap-1.5 rounded-full bg-black/80 backdrop-blur border border-white/10 px-3 py-1.5 text-[10px] font-mono text-white/50 hover:text-white/80 shadow-lg transition-colors"
-      >
-        <Bug size={12} />
-        Live
-      </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="fixed top-14 right-4 z-[100] w-[280px] max-h-[70vh] overflow-y-auto rounded-lg bg-black/90 backdrop-blur-md border border-white/10 shadow-2xl p-3 space-y-0"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/60">Live Engine State</span>
-              <span className="text-[9px] font-mono text-white/30">{snap.time.toFixed(2)}s</span>
-            </div>
-
-            <Section id="beat" title="Beat Grid">
-              <Row label="beatIntensity" value={snap.beatIntensity.toFixed(2)} highlight={snap.beatIntensity > 0} />
-              <Row label="beatIndex" value={`${snap.beatIndex} / ${snap.totalBeats}`} />
-              <Row label="BPM" value={snap.bpm.toFixed(1)} />
-            </Section>
-
-            <Section id="physics" title="Physics State">
-              <Row label="heat" value={snap.physHeat.toFixed(3)} highlight={snap.physHeat > 0.5} />
-              <Row label="drift" value={snap.physDrift.toFixed(3)} />
-              <Row label="glow" value={snap.physGlow.toFixed(3)} highlight={snap.physGlow > 0.3} />
-            </Section>
-
-            <Section id="line" title="Active Line">
-              <Row label="index" value={snap.activeLineIndex >= 0 ? snap.activeLineIndex : "none"} />
-              <Row label="text" value={snap.activeLine ? (snap.activeLine.length > 30 ? snap.activeLine.slice(0, 30) + "…" : snap.activeLine) : "—"} />
-              <Row label="activeMod" value={snap.activeMod} highlight={snap.activeMod !== null} />
-              <Row label="isHookLine" value={snap.isHookLine ? "YES" : "no"} highlight={snap.isHookLine} />
-              <Row label="beatMultiplier" value={snap.beatMultiplier.toFixed(2)} />
-              <Row label="entry" value={snap.entryProgress.toFixed(2)} />
-              <Row label="exit" value={snap.exitProgress.toFixed(2)} />
-            </Section>
-
-            <Section id="engine" title="Engine Config">
-              <Row label="effectKey" value={snap.effectKey} />
-              <Row label="effectSystem" value={snap.effectSystem} />
-              <Row label="particleSystem" value={snap.particleSystem} highlight={snap.particleSystem !== "none"} />
-              <Row label="fontFamily" value={snap.fontFamily} />
-              <Row label="fontSize" value={`${snap.fontSize}px`} />
-              <Row label="entrance" value={snap.lyricEntrance} />
-              <Row label="exit" value={snap.lyricExit} />
-            </Section>
-
-            <Section id="manifest" title="Palette & Contrast">
-              <Row label="textColor" value={snap.textColor} highlight />
-              <Row label="contrast" value={`${snap.contrastRatio.toFixed(1)}:1`} highlight={snap.contrastRatio < 4.5} />
-              <div className="flex gap-1 mt-1">
-                {snap.palette.map((c, i) => (
-                  <div key={i} className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-sm border border-white/20" style={{ background: c }} />
-                    <span className="text-[9px] font-mono text-white/50">{c}</span>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
-  );
+function getSongSection(progress: number): string {
+  if (progress < 0.08) return "intro";
+  if (progress < 0.33) return "verse";
+  if (progress < 0.6) return "chorus";
+  if (progress < 0.75) return "bridge";
+  return "outro";
 }
 
 interface LyricDanceData {
@@ -364,14 +338,16 @@ export default function ShareableLyricDance() {
 
   // Live debug ref — written by render loop, read by HUD
   const liveDebugRef = useRef<LiveDebugState>({
-    time: 0, beatIntensity: 0, beatIndex: 0, totalBeats: 0, bpm: 0,
-    physHeat: 0, physDrift: 0, physGlow: 0,
-    activeLine: null, activeLineIndex: -1,
-    effectKey: "—", effectSystem: "—", particleSystem: "none",
-    palette: [], activeMod: null, isHookLine: false, beatMultiplier: 1,
-    entryProgress: 0, exitProgress: 0, fontFamily: "—", fontSize: 0,
-    textColor: "#ffffff", contrastRatio: 0, lyricEntrance: "fades", lyricExit: "fades",
+    time: 0, beatIntensity: 0, physGlow: 0,
+    physicsActive: false, wordCount: 0, heat: 0, velocity: 0, rotation: 0, lastBeatForce: 0,
+    effectKey: "—", entryProgress: 0, exitProgress: 0, activeMod: null,
+    fontScale: 1, scale: 1, lineColor: "#ffffff", isHookLine: false, repIndex: 0, repTotal: 0,
+    particleSystem: "none", particleDensity: 0, particleSpeed: 0, particleCount: 0, songSection: "intro",
+    xOffset: 0, yBase: 0.5, xNudge: 0, shake: 0,
+    backgroundSystem: "—", imageLoaded: false, zoom: 1, vignetteIntensity: 0, songProgress: 0,
+    world: "", palette: [], entrance: "fades", lightSource: "—", tension: 0,
   });
+  const particleEngineRef = useRef<ParticleEngine | null>(null);
   // Comment input (ShareableHook-style)
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -533,6 +509,7 @@ export default function ShareableLyricDance() {
     if (resolvedManifest.particleConfig?.system !== "none") {
       particleEngine = new ParticleEngine(resolvedManifest);
     }
+    particleEngineRef.current = particleEngine;
 
     // Load AnimationResolver with song DNA
     animationResolver.loadFromDna(
@@ -857,6 +834,13 @@ export default function ShareableLyricDance() {
       let frameBeatMult = 1;
       let frameEntry = 0;
       let frameExit = 0;
+      let frameFontScale = 1;
+      let frameScale = 1;
+      let frameLineColor = "#ffffff";
+      let frameRepIndex = 0;
+      let frameRepTotal = 0;
+      let frameXNudge = 0;
+      let frameSectionZone = "chorus";
 
       const visibleLines = lines.filter(l => currentTime >= l.start && currentTime < l.end);
 
@@ -879,6 +863,11 @@ export default function ShareableLyricDance() {
         frameBeatMult = activeLineAnim.beatMultiplier;
         frameEntry = activeLineAnim.entryProgress;
         frameExit = activeLineAnim.exitProgress;
+        frameFontScale = activeLineAnim.fontScale;
+        frameScale = activeLineAnim.scale;
+        frameLineColor = activeLineAnim.lineColor;
+        frameRepIndex = 0;
+        frameRepTotal = 0;
 
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
@@ -916,6 +905,7 @@ export default function ShareableLyricDance() {
           targetXOffset = 0;
           sectionZone = "hook";
         }
+        frameSectionZone = sectionZone;
 
         const strongMods = new Set(["PULSE_STRONG", "HEAT_SPIKE", "ERUPT", "FLAME_BURST", "EXPLODE"]);
         const softMods = new Set(["BLUR_OUT", "ECHO_FADE", "DISSOLVE", "FADE_OUT", "FADE_OUT_FAST"]);
@@ -971,6 +961,7 @@ export default function ShareableLyricDance() {
             break;
         }
 
+        frameXNudge = xNudge;
         // Physics-driven shake: deterministic angle from beat index + time
         const physShakeAngle = (beatIndex * 2.3 + currentTime * 7.1) % (Math.PI * 2);
         const physShakeX = Math.cos(physShakeAngle) * state.shake;
@@ -1021,30 +1012,50 @@ export default function ShareableLyricDance() {
       // ── Update live debug ref (no React setState — zero GC pressure) ──
       const dbg = liveDebugRef.current;
       dbg.time = currentTime;
+      // Beat
       dbg.beatIntensity = currentBeatIntensity;
-      dbg.beatIndex = beatIndex;
-      dbg.totalBeats = sortedBeats.length;
-      dbg.bpm = data.beat_grid.bpm;
-      dbg.physHeat = state.heat;
-      dbg.physDrift = state.position;
       dbg.physGlow = state.glow;
-      dbg.activeLine = activeLine?.text ?? null;
-      dbg.activeLineIndex = activeLineIndex;
+      // Physics Engine
+      dbg.physicsActive = true;
+      dbg.wordCount = activeLine ? activeLine.text.split(/\s+/).length : 0;
+      dbg.heat = state.heat;
+      dbg.velocity = state.velocity;
+      dbg.rotation = state.rotation;
+      dbg.lastBeatForce = currentBeatIntensity;
+      // Animation
       dbg.effectKey = frameEffectKey;
-      dbg.effectSystem = effectiveSystem;
-      dbg.particleSystem = particleSystemName;
-      dbg.palette = effectivePalette as string[];
-      dbg.activeMod = frameActiveMod;
-      dbg.isHookLine = frameIsHook;
-      dbg.beatMultiplier = frameBeatMult;
       dbg.entryProgress = frameEntry;
       dbg.exitProgress = frameExit;
-      dbg.fontFamily = typeFontFamily;
-      dbg.fontSize = frameFontSize;
-      dbg.textColor = textColor;
-      dbg.contrastRatio = contrastRatio;
-      dbg.lyricEntrance = resolvedManifest.lyricEntrance ?? "fades";
-      dbg.lyricExit = resolvedManifest.lyricExit ?? "fades";
+      dbg.activeMod = frameActiveMod;
+      dbg.fontScale = frameFontScale;
+      dbg.scale = frameScale;
+      dbg.lineColor = frameLineColor;
+      dbg.isHookLine = frameIsHook;
+      dbg.repIndex = frameRepIndex;
+      dbg.repTotal = frameRepTotal;
+      // Particles
+      dbg.particleSystem = particleEngine?.getConfig().system ?? "none";
+      dbg.particleDensity = particleEngine?.getConfig().density ?? 0;
+      dbg.particleSpeed = particleEngine?.getConfig().speed ?? 0;
+      dbg.particleCount = particleEngine?.getActiveCount() ?? 0;
+      dbg.songSection = frameSectionZone || getSongSection(songProgress);
+      // Position
+      dbg.xOffset = xOffsetRef.current;
+      dbg.yBase = yBaseRef.current / ch;
+      dbg.xNudge = frameXNudge;
+      dbg.shake = state.shake;
+      // Background
+      dbg.backgroundSystem = effectiveSystem;
+      dbg.imageLoaded = bgImageRef.current !== null && bgImageRef.current.complete;
+      dbg.zoom = 1.0 + songProgress * (0.08 * baseAtmosphere);
+      dbg.vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
+      dbg.songProgress = songProgress;
+      // Manifest
+      dbg.world = resolvedManifest.world ?? "";
+      dbg.palette = effectivePalette as string[];
+      dbg.entrance = resolvedManifest.lyricEntrance ?? "fades";
+      dbg.lightSource = resolvedManifest.lightSource ?? "—";
+      dbg.tension = resolvedManifest.tension ?? 0;
 
       // 1Hz diagnostic log
       logManifestDiagnostics("LyricDance", {
