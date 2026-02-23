@@ -261,6 +261,7 @@ export function LyricsTab({
           audioFile={audioFile}
           hasRealAudio={hasRealAudio}
           savedId={savedId}
+          initialBeatGrid={beatGrid}
           fmlyLines={fmlyLines}
           versionMeta={versionMeta}
           debugData={debugData}
