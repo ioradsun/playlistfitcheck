@@ -377,7 +377,7 @@ export function LyricFitTab({
     setFitReadiness("ready");
     setFitStageLabel("Ready");
     toast.success("Your Fit is ready! 🎬", { description: "Switch to the Fit tab to explore your song's DNA." });
-  }, [lyricData, audioFile, lines, savedId, hasRealAudio, beatGrid]);
+  }, [lyricData, audioFile, lines, hasRealAudio, beatGrid]);
 
   // Auto-trigger pipeline when lyrics are first transcribed
   const prevLinesLen = useRef(0);
