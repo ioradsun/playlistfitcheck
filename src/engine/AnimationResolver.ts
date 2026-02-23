@@ -151,7 +151,7 @@ export class AnimationResolver {
     };
 
     let lineColor = isHookLine
-      ? "#ffffff"
+      ? (palette?.[2] ?? "#ffffff")
       : exitProgress > 0.5
         ? (palette?.[1] ?? "#888888")
         : getSafeTextColor(palette);
@@ -164,13 +164,13 @@ export class AnimationResolver {
       } else if (progress < 0.66) {
         lineColor = getSafeTextColor(palette);
       } else {
-        lineColor = "#ffffff";
+        lineColor = palette?.[2] ?? "#ffffff";
       }
     }
 
     const modColorIndex = activeMod ? MOD_COLORS[activeMod] : undefined;
     if (modColorIndex === -1) {
-      lineColor = "#ffffff";
+      lineColor = palette?.[2] ?? "#ffffff";
     } else if (modColorIndex !== undefined) {
       lineColor = palette?.[modColorIndex] ?? lineColor;
     }
