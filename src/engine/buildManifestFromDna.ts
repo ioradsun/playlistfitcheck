@@ -51,14 +51,5 @@ export function buildManifestFromDna(
     systemType: systemType ?? undefined,
   });
 
-  console.log("[buildManifestFromDna] via shared pipeline:", {
-    world: manifest.world,
-    backgroundSystem: manifest.backgroundSystem,
-    particles: manifest.particleConfig?.system,
-    typography: manifest.typographyProfile?.personality,
-    fontFamily: manifest.typographyProfile?.fontFamily,
-    palette: manifest.palette,
-  });
-
   return manifest;
 }

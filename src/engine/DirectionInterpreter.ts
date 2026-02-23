@@ -12,6 +12,13 @@ export interface WordHistory {
   positions: Array<{ x: number; y: number }>;
 }
 
+export interface EvolutionProps {
+  scaleMultiplier: number;
+  glowRadius: number;
+  opacityMultiplier: number;
+  yOffset: number;
+}
+
 export function applyEvolutionRule(
   ctx: CanvasRenderingContext2D,
   rule: string,
@@ -22,7 +29,7 @@ export function applyEvolutionRule(
   fontSize: number,
   beatIntensity: number,
   palette: string[],
-): { scaleMultiplier: number; glowRadius: number; opacityMultiplier: number; yOffset: number } {
+): EvolutionProps {
   const count = history.count;
   const r = rule.toLowerCase();
 
@@ -101,6 +108,8 @@ export function applyEvolutionRule(
 }
 
 export class DirectionInterpreter {
+  private evolutionCache = new Map<string, { count: number; props: EvolutionProps }>();
+
   constructor(
     public readonly direction: CinematicDirection,
     private totalDuration: number,
@@ -114,7 +123,6 @@ export class DirectionInterpreter {
 
   getWordDirective(word: string): WordDirective | null {
     const key = word.toLowerCase().replace(/[^a-z]/g, "");
-    console.log('looking up:', key, 'available keys:', Object.keys(this.direction.wordDirectives ?? {}));
     return this.direction.wordDirectives?.[key] ?? null;
   }
 
@@ -156,8 +164,24 @@ export class DirectionInterpreter {
     fontSize: number,
     beatIntensity: number,
     palette: string[],
-  ): { scaleMultiplier: number; glowRadius: number; opacityMultiplier: number; yOffset: number } {
-    return applyEvolutionRule(
+  ): EvolutionProps {
+    const normalizedRule = rule.toLowerCase();
+    const hasDrawSideEffects = normalizedRule.includes("expands")
+      || normalizedRule.includes("aura")
+      || normalizedRule.includes("field")
+      || normalizedRule.includes("consuming")
+      || normalizedRule.includes("color")
+      || normalizedRule.includes("shifts");
+
+    const cacheKey = `${normalizedRule}::${history.count}`;
+    if (!hasDrawSideEffects) {
+      const cached = this.evolutionCache.get(cacheKey);
+      if (cached && cached.count === history.count) {
+        return cached.props;
+      }
+    }
+
+    const props = applyEvolutionRule(
       ctx,
       rule,
       history,
@@ -168,5 +192,15 @@ export class DirectionInterpreter {
       beatIntensity,
       palette,
     );
+
+    if (!hasDrawSideEffects) {
+      this.evolutionCache.set(cacheKey, { count: history.count, props });
+    }
+
+    return props;
+  }
+
+  invalidateEvolutionCache(): void {
+    this.evolutionCache.clear();
   }
 }

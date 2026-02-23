@@ -82,7 +82,6 @@ export class AnimationResolver {
       }
 
       if (this.hookRanges.length > 0) {
-        console.log("[AnimationResolver] synthetic hooks from repetition:", this.hookRanges);
       }
     }
 
@@ -104,12 +103,6 @@ export class AnimationResolver {
         });
       }
     }
-
-    console.log("[AnimationResolver] loaded:", {
-      lineMods: this.lineMods.size,
-      wordMarks: this.wordMarks.size,
-      hooks: this.hookRanges,
-    });
   }
 
   resolveLine(

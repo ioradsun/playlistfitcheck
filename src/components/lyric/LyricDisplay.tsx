@@ -50,6 +50,7 @@ import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import { LyricDanceDebugPanel } from "./LyricDanceDebugPanel";
 import { HookDanceCanvas } from "./HookDanceCanvas";
+import type { CinematicDirection } from "@/types/CinematicDirection";
 import { LyricStage } from "./LyricStage";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { DirectorsCutPanel } from "./DirectorsCutPanel";
@@ -596,11 +597,9 @@ export function LyricDisplay({
     hookDanceRef.current?.loadManifest(manifestFromDna);
     animationResolver.loadFromDna(songDna as Record<string, unknown>);
 
-    console.log("[LyricDisplay] engine loaded with manifest");
   }, [songDna]);
 
   useEffect(() => {
-    console.log("[LyricDisplay] backgroundImageUrl:",
       backgroundImageUrl
         ? backgroundImageUrl.slice(0, 80) + "..."
         : "null — image not yet generated or failed"
@@ -734,7 +733,6 @@ export function LyricDisplay({
       }).then(({ data: dirResult }) => {
         if (dirResult?.cinematicDirection) {
           setSongDna((prev: any) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
-          console.log("[LyricDisplay] cinematic direction loaded");
         }
       }).catch((e) => console.warn("[LyricDisplay] cinematic direction failed:", e));
 
@@ -1429,6 +1427,23 @@ export function LyricDisplay({
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const hookDirection = useMemo(() => {
+    const cinematicDirection = (songDna as any)?.cinematic_direction as CinematicDirection | undefined;
+    const hookStartRatio = (songDna?.hook?.start && data?.duration)
+      ? songDna.hook.start / Math.max(0.001, data.duration)
+      : 0;
+    if (!cinematicDirection) return null;
+    return {
+      thesis: cinematicDirection.thesis,
+      visualWorld: cinematicDirection.visualWorld,
+      wordDirectives: cinematicDirection.wordDirectives,
+      climax: cinematicDirection.climax,
+      activeChapter: cinematicDirection.chapters.find(c => (
+        hookStartRatio >= c.startRatio && hookStartRatio <= c.endRatio
+      )),
+    };
+  }, [songDna, data?.duration]);
+
   return (
     <motion.div
       className="w-full space-y-4"
@@ -2570,6 +2585,7 @@ export function LyricDisplay({
                   hook_lyric: songDna?.hook?.previewText,
                   description: songDna?.description,
                 }}
+                hookDirection={hookDirection}
               />
             </LyricStage>
           )}

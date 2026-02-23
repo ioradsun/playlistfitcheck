@@ -146,13 +146,9 @@ function buildFromSpec(spec: PhysicsSpec, systemType?: string): Record<string, u
   };
 }
 
-// ── 1Hz throttled diagnostic logger ─────────────────────────────────────────
-
-let lastLogTime = 0;
-
 export function logManifestDiagnostics(
-  label: string,
-  data: {
+  _label: string,
+  _data: {
     palette: string[];
     fontFamily: string;
     particleSystem: string;
@@ -165,20 +161,5 @@ export function logManifestDiagnostics(
     effectKey?: string;
   },
 ): void {
-  const now = performance.now();
-  if (now - lastLogTime < 1000) return; // 1Hz throttle
-  lastLogTime = now;
-
-  console.log(`[${label}] manifest flow`, {
-    palette: data.palette,
-    fontFamily: data.fontFamily,
-    particles: data.particleSystem,
-    beatIntensity: Number(data.beatIntensity.toFixed(3)),
-    activeMod: data.activeMod,
-    entry: Number(data.entryProgress.toFixed(2)),
-    exit: Number(data.exitProgress.toFixed(2)),
-    textColor: data.textColor,
-    contrast: Number(data.contrastRatio.toFixed(2)),
-    effectKey: data.effectKey ?? "—",
-  });
+  // no-op: diagnostics intentionally disabled
 }
