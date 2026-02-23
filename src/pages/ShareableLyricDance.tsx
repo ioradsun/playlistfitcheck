@@ -440,6 +440,13 @@ export default function ShareableLyricDance() {
 
     const particleSystemName = resolvedManifest.particleConfig?.system ?? "none";
     const typeFontFamily = resolvedManifest.typographyProfile?.fontFamily ?? "system-ui";
+    const baseAtmosphere = Math.max(0, Math.min(1, resolvedManifest.backgroundIntensity ?? 1));
+    const warmLightSource = (resolvedManifest.lightSource || "").toLowerCase();
+    const warmEmotion = (resolvedManifest.coreEmotion || "").toLowerCase();
+    const isFireWorld = ["flickering left", "flickering right", "ember glow", "flame"].some(k => warmLightSource.includes(k))
+      || warmEmotion.includes("fire")
+      || warmEmotion.includes("burn")
+      || warmEmotion.includes("ember");
 
     const integrator = new PhysicsIntegrator(spec);
     const rng = mulberry32(hashSeed(data.seed || data.id));
@@ -448,6 +455,11 @@ export default function ShareableLyricDance() {
     const sortedBeats = [...data.beat_grid.beats].sort((a, b) => a - b);
     const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
+    const totalDuration = Math.max(0.001, songEnd - songStart);
+    const hookStartTimes = lines
+      .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0).isHookLine)
+      .map(line => line.start)
+      .sort((a, b) => a - b);
 
     // Set up audio
     const audio = new Audio(data.audio_url);
@@ -515,31 +527,42 @@ export default function ShareableLyricDance() {
       const state = integrator.tick();
       const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
+      const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
+
+      const lineAnim = activeLine
+        ? animationResolver.resolveLine(activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity)
+        : null;
+      const isInHook = lineAnim?.isHookLine ?? false;
+      const hookProgress = lineAnim
+        ? Math.max(0, Math.min(1, (currentTime - activeLine!.start) / Math.max(0.001, activeLine!.end - activeLine!.start)))
+        : 0;
+      const hookOffsetX = isInHook ? Math.sin(hookProgress * Math.PI) * 0.03 * baseAtmosphere : 0;
+      const hookOffsetY = isInHook ? Math.cos(hookProgress * Math.PI) * 0.02 * baseAtmosphere : 0;
+
+      const nextHookStart = hookStartTimes.find(t => t > currentTime) ?? Number.POSITIVE_INFINITY;
+      const timeToNextHook = nextHookStart - currentTime;
+      const isPreHook = Number.isFinite(nextHookStart) && timeToNextHook > 0 && timeToNextHook < 2.0;
 
       // Background
       ctx.fillStyle = "#0a0a0a";
       ctx.fillRect(0, 0, cw, ch);
 
-      // AI-generated background image (Ken Burns subtle drift)
+      // AI-generated background image with slow cinematic push and hook reframe.
       const bgImg = bgImageRef.current;
       if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
-        const scale = 1.05;
-        const driftX = Math.sin(currentTime * 0.02) * cw * 0.015;
-        const driftY = Math.cos(currentTime * 0.015) * ch * 0.01;
-        const imgAspect = bgImg.naturalWidth / bgImg.naturalHeight;
-        const canvasAspect = cw / ch;
-        let drawW: number, drawH: number;
-        if (imgAspect > canvasAspect) {
-          drawH = ch * scale;
-          drawW = drawH * imgAspect;
-        } else {
-          drawW = cw * scale;
-          drawH = drawW / imgAspect;
-        }
-        const dx = (cw - drawW) / 2 + driftX;
-        const dy = (ch - drawH) / 2 + driftY;
+        const zoom = 1.0 + songProgress * (0.08 * baseAtmosphere);
+        const offsetX = (cw * (zoom - 1)) / 2;
+        const offsetY = (ch * (zoom - 1)) / 2;
+        const reframeX = hookOffsetX * cw;
+        const reframeY = hookOffsetY * ch;
         ctx.globalAlpha = 0.55;
-        ctx.drawImage(bgImg, dx, dy, drawW, drawH);
+        ctx.drawImage(
+          bgImg,
+          -offsetX + reframeX,
+          -offsetY + reframeY,
+          cw * zoom,
+          ch * zoom,
+        );
         ctx.globalAlpha = 1;
       }
 
@@ -556,12 +579,29 @@ export default function ShareableLyricDance() {
         hookEnd: songEnd,
       });
 
-      // Particle engine (behind text if not foreground)
+      // Particle engine: update then draw parallax split layers.
       if (particleEngine) {
         particleEngine.update(deltaMs, currentBeatIntensity);
-        if (!particleEngine.shouldRenderForeground()) {
-          particleEngine.draw(ctx);
-        }
+        particleEngine.draw(ctx, "far");
+      }
+
+      // Pre-hook darkness build (skipped during hook itself).
+      if (isPreHook && !isInHook) {
+        const buildIntensity = (1 - (timeToNextHook / 2.0)) * 0.3 * baseAtmosphere;
+        ctx.fillStyle = `rgba(0,0,0,${Math.max(0, buildIntensity)})`;
+        ctx.fillRect(0, 0, cw, ch);
+      }
+
+      // Fire-world warm flicker bloom on strong beats.
+      if (isFireWorld && currentBeatIntensity > 0.6) {
+        const flickerAlpha = currentBeatIntensity * 0.06 * baseAtmosphere;
+        ctx.fillStyle = `rgba(255,140,0,${flickerAlpha})`;
+        ctx.fillRect(0, 0, cw, ch);
+      }
+
+      // Near particles after overlays for cinematic depth.
+      if (particleEngine) {
+        particleEngine.draw(ctx, "near");
       }
 
       // ── Comment rendering (constellation + river + center) ──
@@ -653,6 +693,23 @@ export default function ShareableLyricDance() {
       }
       ctx.globalAlpha = 1;
 
+      // Breathing vignette pulse
+      const vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
+      const vignetteCx = cw / 2;
+      const vignetteCy = ch / 2;
+      const vignette = ctx.createRadialGradient(
+        vignetteCx,
+        vignetteCy,
+        ch * 0.3,
+        vignetteCx,
+        vignetteCy,
+        ch * 0.85,
+      );
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, `rgba(0,0,0,${Math.max(0, Math.min(1, vignetteIntensity))})`);
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, cw, ch);
+
       // Active line
       let frameEffectKey = "—";
       let frameFontSize = 0;
@@ -673,14 +730,16 @@ export default function ShareableLyricDance() {
         const drawFn = getEffect(effectKey);
 
         // Resolve animation mods via AnimationResolver
+        const activeLineAnim = lineAnim ?? animationResolver.resolveLine(
+          activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity,
         const lineAnim = animationResolver.resolveLine(
           activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette,
         );
-        frameActiveMod = lineAnim.activeMod;
-        frameIsHook = lineAnim.isHookLine;
-        frameBeatMult = lineAnim.beatMultiplier;
-        frameEntry = lineAnim.entryProgress;
-        frameExit = lineAnim.exitProgress;
+        frameActiveMod = activeLineAnim.activeMod;
+        frameIsHook = activeLineAnim.isHookLine;
+        frameBeatMult = activeLineAnim.beatMultiplier;
+        frameEntry = activeLineAnim.entryProgress;
+        frameExit = activeLineAnim.exitProgress;
 
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
@@ -697,9 +756,9 @@ export default function ShareableLyricDance() {
         // Compute entrance/exit alpha (these also apply ctx transforms for entrance/exit motion)
         const lyricEntrance = resolvedManifest?.lyricEntrance ?? "fades";
         const lyricExit = resolvedManifest?.lyricExit ?? "fades";
-        const entryAlpha = applyEntrance(ctx, lineAnim.entryProgress, lyricEntrance);
-        const exitAlpha = lineAnim.exitProgress > 0
-          ? applyExit(ctx, lineAnim.exitProgress, lyricExit)
+        const entryAlpha = applyEntrance(ctx, activeLineAnim.entryProgress, lyricEntrance);
+        const exitAlpha = activeLineAnim.exitProgress > 0
+          ? applyExit(ctx, activeLineAnim.exitProgress, lyricExit)
           : 1.0;
         const compositeAlpha = Math.min(entryAlpha, exitAlpha);
 
@@ -707,12 +766,12 @@ export default function ShareableLyricDance() {
         const lineX = cw / 2;
         const lineY = ch / 2;
         ctx.translate(lineX, lineY);
-        ctx.scale(lineAnim.scale, lineAnim.scale);
+        ctx.scale(activeLineAnim.scale, activeLineAnim.scale);
         ctx.translate(-lineX, -lineY);
 
         // Apply active mod effect (pulse, shimmer, glitch, etc.)
-        if (lineAnim.activeMod) {
-          applyModEffect(ctx, lineAnim.activeMod, currentTime, currentBeatIntensity);
+        if (activeLineAnim.activeMod) {
+          applyModEffect(ctx, activeLineAnim.activeMod, currentTime, currentBeatIntensity);
         }
         const effectState: EffectState = {
           text: activeLine.text,
@@ -729,11 +788,6 @@ export default function ShareableLyricDance() {
         };
         drawFn(ctx, effectState);
         ctx.restore();
-      }
-
-      // Foreground particles (snow, petals, ash, light-rays) render on top of text
-      if (particleEngine && particleEngine.shouldRenderForeground()) {
-        particleEngine.draw(ctx);
       }
 
       // ── Update live debug ref (no React setState — zero GC pressure) ──
