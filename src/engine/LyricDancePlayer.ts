@@ -392,7 +392,6 @@ export class LyricDancePlayer {
     this.songStartSec = globalSongStartSec;
     this.songEndSec = globalSongEndSec;
     this.buildBgCache();
-    console.log('[PLAYER] ready — frames:', this.timeline.length, 'chunks:', this.chunks.size);
 
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
