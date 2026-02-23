@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
-import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
+// deriveSceneManifestFromSpec fallback removed — sceneManifest must come from props
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import type { ArtistDNA } from "./ArtistFingerprintTypes";
@@ -99,17 +99,12 @@ export function PublishLyricDanceButton({
 
       const audioUrl = urlData.publicUrl;
 
-      // ── Derive SceneManifest ──────────────────────────────────────
+      // ── Scene manifest from props (no fallback derivation) ────────
       setStatus("Building scene…");
       const sceneManifest =
         songDna?.scene_manifest ||
         songDna?.sceneManifest ||
-        deriveSceneManifestFromSpec({
-          spec: physicsSpec,
-          mood: songDna?.mood,
-          description: songDna?.description,
-          songTitle,
-        });
+        null;
 
       const backgroundUrl: string | null = null;
 

@@ -37,8 +37,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
-import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
-import type { SongSignature } from "@/lib/songSignatureAnalyzer";
+import { type BeatGridData } from "@/hooks/useBeatGrid";
 import { LyricWaveform } from "./LyricWaveform";
 import { VersionToggle, type ActiveVersion } from "./VersionToggle";
 import {
@@ -58,7 +57,7 @@ import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest"
 import { HookDanceExporter } from "./HookDanceExporter";
 import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
-import { PublishLyricDanceButton } from "./PublishLyricDanceButton";
+// PublishLyricDanceButton removed — publishing handled by FitTab
 import {
   applyProfanityFilter,
   type Strictness,
@@ -74,7 +73,7 @@ import type {
   ArtistDNA,
   FingerprintSongContext,
 } from "./ArtistFingerprintTypes";
-import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
+// deriveSceneManifestFromSpec removed — manifest comes from FitTab
 import { safeManifest } from "@/engine/validateManifest";
 import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
 import { animationResolver } from "@/engine/AnimationResolver";
@@ -147,16 +146,6 @@ function normalizeSongDnaWithManifest(
     return { ...songDna, scene_manifest: checked.manifest };
   }
 
-  if (songDna.physicsSpec) {
-    const derived = deriveSceneManifestFromSpec({
-      spec: songDna.physicsSpec as PhysicsSpec,
-      mood: songDna.mood,
-      description: songDna.description,
-      songTitle: fallbackTitle,
-    });
-    return { ...songDna, scene_manifest: safeManifest(derived).manifest };
-  }
-
   return songDna;
 }
 
@@ -173,7 +162,6 @@ interface Props {
   } | null;
   debugData?: any | null;
   initialBeatGrid?: BeatGridData | null;
-  initialSongSignature?: SongSignature | null;
   initialSongDna?: any | null;
   initialBackgroundImageUrl?: string | null;
   onBack: () => void;
@@ -339,7 +327,6 @@ export function LyricDisplay({
   versionMeta: initVersionMeta,
   debugData,
   initialBeatGrid,
-  initialSongSignature,
   initialSongDna,
   initialBackgroundImageUrl,
   onBack,
@@ -364,11 +351,9 @@ export function LyricDisplay({
   const [isPlaying, setIsPlaying] = useState(false);
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
-  // Use pre-computed beat grid if available, otherwise run detection from decoded audio
-  const { beatGrid: detectedBeatGrid, loading: beatGridLoading } = useBeatGrid(
-    initialBeatGrid ? null : audioBuffer,
-  );
-  const beatGrid = initialBeatGrid ?? detectedBeatGrid;
+  // Beat grid from props only (no useBeatGrid hook — that's in FitTab now)
+  const beatGrid = initialBeatGrid ?? null;
+  const beatGridLoading = false;
   const rafRef = useRef<number | null>(null);
 
   // (timing offset removed — Scribe timestamps are accurate)
@@ -826,12 +811,7 @@ export function LyricDisplay({
   const handleFieldOverride = useCallback((field: keyof FullSceneManifest | string, value: unknown) => {
     setSongDna((prev) => {
       if (!prev) return prev;
-      const current = safeManifest(prev.scene_manifest || deriveSceneManifestFromSpec({
-        spec: prev.physicsSpec as PhysicsSpec,
-        mood: prev.mood,
-        description: prev.description,
-        songTitle: data.title,
-      })).manifest;
+      const current = safeManifest(prev.scene_manifest || {}).manifest;
       const next = { ...current } as any;
       if (field.includes(".")) {
         const [parent, child] = field.split(".");
@@ -848,12 +828,7 @@ export function LyricDisplay({
     if (!songDna || directorsCutRegenerating || !direction.trim()) return;
     setDirectorsCutRegenerating(true);
     try {
-      const beforeManifest = safeManifest(songDna.scene_manifest || deriveSceneManifestFromSpec({
-        spec: songDna.physicsSpec as PhysicsSpec,
-        mood: songDna.mood,
-        description: songDna.description,
-        songTitle: data.title,
-      })).manifest;
+      const beforeManifest = safeManifest(songDna.scene_manifest || {}).manifest;
       const playhead = audioRef.current?.currentTime ?? 0;
       const lyricsText = data.lines.filter((l) => l.tag !== "adlib").map((l) => l.text).join("\n");
       const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
@@ -894,16 +869,8 @@ export function LyricDisplay({
     if (manifest) return manifest;
     if (!songDna) return null;
     if (songDna.scene_manifest) return safeManifest(songDna.scene_manifest).manifest;
-    if (songDna.physicsSpec) {
-      return safeManifest(deriveSceneManifestFromSpec({
-        spec: songDna.physicsSpec as PhysicsSpec,
-        mood: songDna.mood,
-        description: songDna.description,
-        songTitle: data.title,
-      })).manifest;
-    }
     return null;
-  }, [manifest, songDna, data.title]);
+  }, [manifest, songDna]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw =
@@ -1171,7 +1138,7 @@ export function LyricDisplay({
               confidence: beatGrid.confidence,
             } as any)
           : null,
-        song_signature: (initialSongSignature as any) ?? null,
+        song_signature: null,
         song_dna: (songDna as any) ?? null,
         updated_at: new Date().toISOString(),
       };
@@ -1214,7 +1181,7 @@ export function LyricDisplay({
     hasRealAudio,
     onSaved,
     beatGrid,
-    initialSongSignature,
+    songDna,
     songDna,
     backgroundImageUrl,
   ]);
@@ -2440,35 +2407,7 @@ export function LyricDisplay({
                 <Film size={10} />
                 Export Video
               </button>
-              <PublishLyricDanceButton
-                physicsSpec={songDna.physicsSpec as PhysicsSpec}
-                lines={data.lines}
-                beatGrid={{
-                  bpm: beatGrid.bpm,
-                  beats: beatGrid.beats,
-                  confidence: beatGrid.confidence,
-                }}
-                audioFile={audioFile}
-                songTitle={data.title}
-                artistName={
-                  data.artist &&
-                  data.artist !== "Unknown" &&
-                  data.artist !== "UNKNOWN"
-                    ? data.artist
-                    : "—"
-                }
-                system={songDna.physicsSpec.system}
-                palette={
-                  songDna.physicsSpec.palette || [
-                    "#ffffff",
-                    "#a855f7",
-                    "#ec4899",
-                  ]
-                }
-                fingerprint={artistFingerprint}
-                seed={`${data.title}-lyric-dance`}
-                songDna={songDna}
-              />
+              {/* PublishLyricDanceButton removed — publishing handled by FitTab */}
             </div>
           )}
 
