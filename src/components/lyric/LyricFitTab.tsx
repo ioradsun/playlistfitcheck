@@ -473,14 +473,19 @@ export function LyricFitTab({
 
   const retryGeneration = useCallback(() => {
     if (!audioFile || !lines.length) return;
-    setGenerationStatus(prev => ({
-      beatGrid: prev.beatGrid === "error" ? "idle" : prev.beatGrid,
-      songDna: prev.songDna === "error" ? "idle" : prev.songDna,
-      cinematicDirection: prev.cinematicDirection === "error" ? "idle" : prev.cinematicDirection,
-    }));
-    startBeatAnalysis(audioFile);
-    startLyricAnalyze(lines, audioFile);
-    startCinematicDirection(lines);
+    // Reset all non-done statuses to idle so pipeline functions re-run
+    setSongDna(null);
+    setCinematicDirection(null);
+    setBeatGrid(null);
+    setSceneManifest(null);
+    setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
+    pipelineTriggeredRef.current = false;
+    // Delay to let state clear before re-triggering
+    setTimeout(() => {
+      startBeatAnalysis(audioFile);
+      startLyricAnalyze(lines, audioFile);
+      startCinematicDirection(lines);
+    }, 100);
   }, [audioFile, lines, startBeatAnalysis, startLyricAnalyze, startCinematicDirection]);
 
   useEffect(() => {
