@@ -386,7 +386,8 @@ function buildLineBeatMap(lines: LyricLine[], beatGrid: BeatGrid): LineBeatMap[]
   });
 }
 
-const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,cinematic_direction";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,song_dna";
+const DIRECTION_COLUMNS = "cinematic_direction,song_dna";
 
 /** Draggable progress bar overlay at bottom of canvas */
 function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
@@ -640,7 +641,7 @@ export default function ShareableLyricDance() {
 
     supabase
       .from("shareable_lyric_dances" as any)
-      .select(COLUMNS)
+      .select(PHASE1_COLUMNS)
       .eq("artist_slug", artistSlug)
       .eq("song_slug", songSlug)
       .maybeSingle()
@@ -651,29 +652,51 @@ export default function ShareableLyricDance() {
           return;
         }
         const d = row as any as LyricDanceData;
-        const deferredDirection = d.cinematic_direction ?? null;
         setData({ ...d, cinematic_direction: null });
         setLoading(false);
 
+        // Phase 2: fetch cinematic direction asynchronously so rAF can start from phase 1 data.
+        supabase
+          .from("shareable_lyric_dances" as any)
+          .select(DIRECTION_COLUMNS)
+          .eq("id", d.id)
+          .maybeSingle()
+          .then(({ data: directionRow }) => {
+            const deferredDirection = (directionRow as any)?.cinematic_direction
+              ?? (directionRow as any)?.song_dna?.cinematic_direction
+              ?? null;
+            if (deferredDirection) {
+              setData(prev => prev ? { ...prev, cinematic_direction: deferredDirection } : prev);
+            }
+          })
+          .catch((directionError) => {
+            console.warn("[ShareableLyricDance] direction fetch failed:", directionError);
+          })
+          .finally(() => {
+            if (d.cinematic_direction || d.song_dna?.cinematic_direction) {
+              return;
+            }
+
+            // Generate cinematic direction on-the-fly if missing from DB
+            if (d.lyrics?.length > 0) {
+              const linesForDir = (d.lyrics as any[])
+                .filter((l: any) => l.tag !== 'adlib')
+                .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+              supabase.functions.invoke("cinematic-direction", {
+                body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
+              }).then(({ data: dirResult }) => {
+                if (dirResult?.cinematicDirection) {
+                  setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+                }
+              }).catch(e => console.warn('[ShareableLyricDance] cinematic direction generation failed:', e));
+            }
+          });
+
         Promise.resolve().then(() => {
-          if (deferredDirection) {
-            setData(prev => prev ? { ...prev, cinematic_direction: deferredDirection } : prev);
+          if (d.song_dna?.cinematic_direction) {
+            setData(prev => prev ? { ...prev, cinematic_direction: d.song_dna?.cinematic_direction ?? null } : prev);
           }
         });
-
-        // Generate cinematic direction on-the-fly if missing from DB
-        if (!d.cinematic_direction && d.lyrics?.length > 0) {
-          const linesForDir = (d.lyrics as any[])
-            .filter((l: any) => l.tag !== 'adlib')
-            .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-          supabase.functions.invoke("cinematic-direction", {
-            body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
-          }).then(({ data: dirResult }) => {
-            if (dirResult?.cinematicDirection) {
-              setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
-            }
-          }).catch(e => console.warn('[ShareableLyricDance] cinematic direction generation failed:', e));
-        }
 
         // Non-critical: load profile + comments in parallel
         const [profileResult, commentsResult] = await Promise.all([

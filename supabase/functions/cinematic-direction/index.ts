@@ -361,12 +361,12 @@ function validateCinematicDirection(value: Record<string, unknown>, linesCount: 
   return errors;
 }
 
-async function persistCinematicDirection(cinematicDirection: Record<string, unknown>, lyricId?: string): Promise<void> {
-  if (!lyricId) return;
+async function persistCinematicDirection(cinematicDirection: Record<string, unknown>, lyricId?: string): Promise<boolean> {
+  if (!lyricId) return false;
 
   const sbUrl = Deno.env.get("SUPABASE_URL");
   const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!sbUrl || !sbKey) return;
+  if (!sbUrl || !sbKey) return false;
 
   const payload = { cinematic_direction: cinematicDirection };
   const headers = {
@@ -385,11 +385,12 @@ async function persistCinematicDirection(cinematicDirection: Record<string, unkn
     });
     if (res.ok) {
       console.log(`[cinematic-direction] Stored in ${table} for ${lyricId}`);
-      return;
+      return true;
     }
   }
 
   console.warn(`[cinematic-direction] Could not store for ${lyricId}`);
+  return false;
 }
 
 serve(async (req) => {
@@ -641,7 +642,8 @@ serve(async (req) => {
       // Don't fail — return with warnings so debug panel can still show data
     }
 
-    await persistCinematicDirection(parsed, lyricId);
+    const saved = await persistCinematicDirection(parsed, lyricId);
+    console.log("Saved cinematic direction:", saved ? "OK" : "FAILED");
 
     console.log(`[cinematic-direction] ✓ Generated for "${title}" by "${artist}"`);
 
