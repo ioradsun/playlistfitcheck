@@ -344,7 +344,7 @@ export function LyricFitTab({
     if (savedIdRef.current) {
       await persistSongDna(savedIdRef.current, { ...nextSongDna, cinematicDirection });
     }
-  }, [lyricData, generationStatus.songDna, hasRealAudio, beatGrid, cinematicDirection, persistSongDna]);
+  }, [lyricData, generationStatus.songDna, hasRealAudio, beatGrid, cinematicDirection, persistSongDna, songDna]);
 
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[]) => {
     if (!lyricData || !sourceLines.length) return;
