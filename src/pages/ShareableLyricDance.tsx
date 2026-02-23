@@ -381,6 +381,87 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+function hexToRgbString(hex: string): string {
+  const safe = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : "#000000";
+  const r = parseInt(safe.slice(1, 3), 16);
+  const g = parseInt(safe.slice(3, 5), 16);
+  const b = parseInt(safe.slice(5, 7), 16);
+  return `${r},${g},${b}`;
+}
+
+function ensureContrast(color: string, bg: string): string {
+  const normalizeHex = (value: string): string => {
+    if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
+    return "#ffffff";
+  };
+  const c = normalizeHex(color);
+  const b = normalizeHex(bg);
+  const toRgb = (v: string) => [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)] as const;
+  const luminance = ([r, g, bb]: readonly number[]) => (0.2126 * r + 0.7152 * g + 0.0722 * bb) / 255;
+  const cr = toRgb(c);
+  const br = toRgb(b);
+  if (Math.abs(luminance(cr) - luminance(br)) > 0.2) return c;
+  return luminance(br) > 0.5 ? "#111111" : "#f8fafc";
+}
+
+function applyKineticEffect(
+  ctx: CanvasRenderingContext2D,
+  kineticClass: string,
+  wordX: number,
+  wordY: number,
+  currentTime: number,
+  beatIntensity: number,
+  wordIndex: number,
+): { yOffset: number } {
+  let yOffset = 0;
+  switch (kineticClass) {
+    case "RUNNING":
+      ctx.transform(1, 0, 0, 1, Math.sin(currentTime * 6 + wordIndex) * (2 + beatIntensity * 3), 0);
+      break;
+    case "FALLING":
+      yOffset += Math.abs(Math.sin(currentTime * 4 + wordIndex)) * (2 + beatIntensity * 4);
+      break;
+    case "SHAKING":
+    case "SCREAMING":
+      ctx.transform(1, 0, 0, 1, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 2);
+      break;
+    case "RISING":
+      yOffset -= Math.abs(Math.sin(currentTime * 3 + wordIndex)) * 2.5;
+      break;
+    case "SPINNING":
+      ctx.translate(wordX, wordY);
+      ctx.rotate(Math.sin(currentTime * 3 + wordIndex) * 0.08);
+      ctx.translate(-wordX, -wordY);
+      break;
+    default:
+      break;
+  }
+  return { yOffset };
+}
+
+function drawBubbles(
+  ctx: CanvasRenderingContext2D,
+  wordX: number,
+  wordY: number,
+  wordWidth: number,
+  fontSize: number,
+  bubbleCount: number,
+  bubbleSpeed: number,
+  currentTime: number,
+): void {
+  for (let i = 0; i < bubbleCount; i += 1) {
+    const bx = wordX - wordWidth / 2 + (i / Math.max(1, bubbleCount - 1)) * wordWidth;
+    const rise = (currentTime * 18 * bubbleSpeed + i * 8) % (fontSize * 1.8);
+    const by = wordY - rise;
+    const alpha = Math.max(0.1, 0.8 - rise / (fontSize * 2));
+    ctx.beginPath();
+    ctx.arc(bx, by, 1.6 + (i % 3), 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(180,220,255,${alpha})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
 
 function drawWithLetterSpacing(
   ctx: CanvasRenderingContext2D,
@@ -712,6 +793,19 @@ export default function ShareableLyricDance() {
     lineHeroWord: "", lineEntry: "fades", lineExit: "fades", lineIntent: "—",
   });
   const particleEngineRef = useRef<ParticleEngine | null>(null);
+  const interpreterRef = useRef<DirectionInterpreter | null>(null);
+  const interpreterRefStable = useRef<DirectionInterpreter | null>(null);
+  const chapterTransitionRef = useRef<{ previous: string | null; current: string | null; progress: number }>({
+    previous: null,
+    current: null,
+    progress: 1,
+  });
+  const wordAppearanceRef = useRef<Map<string, number>>(new Map());
+  const climaxActiveRef = useRef(false);
+  const silenceOffsetYRef = useRef(0);
+  const silenceZoomRef = useRef(1);
+  const vignetteIntensityRef = useRef(0.55);
+  const lightIntensityRef = useRef(1);
   // Comment input (ShareableHook-style)
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -739,6 +833,25 @@ export default function ShareableLyricDance() {
   const beatScaleRef = useRef(1);
   const lineBeatMapRef = useRef<LineBeatMap[]>([]);
 
+
+  useEffect(() => {
+    const cinematicDirection = data?.cinematic_direction ?? null;
+    const lines = data?.lyrics ?? [];
+    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
+    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
+    const totalDuration = Math.max(0.001, songEnd - songStart);
+
+    if (cinematicDirection && totalDuration) {
+      interpreterRef.current = new DirectionInterpreter(cinematicDirection, totalDuration);
+    } else {
+      interpreterRef.current = null;
+    }
+    WordClassifier.setCinematicDirection(cinematicDirection);
+  }, [data?.cinematic_direction, data?.lyrics]);
+
+  useEffect(() => {
+    interpreterRefStable.current = interpreterRef.current;
+  }, [interpreterRef.current]);
 
   // Comments / constellation
   const constellationRef = useRef<ConstellationNode[]>([]);
@@ -930,9 +1043,6 @@ export default function ShareableLyricDance() {
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const totalDuration = Math.max(0.001, songEnd - songStart);
     const cinematicDirection = data.cinematic_direction;
-    const interpreter = cinematicDirection
-      ? new DirectionInterpreter(cinematicDirection, totalDuration)
-      : null;
     const hookStartTimes = lines
       .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0, effectivePalette).isHookLine)
       .map(line => line.start)
@@ -1005,6 +1115,7 @@ export default function ShareableLyricDance() {
       const cw = canvas.width / (window.devicePixelRatio || 1);
       const ch = canvas.height / (window.devicePixelRatio || 1);
       const currentTime = audio.currentTime;
+      const interpreterNow = interpreterRefStable.current;
 
       if (yBaseRef.current === 0) yBaseRef.current = ch * 0.5;
 
@@ -1048,6 +1159,16 @@ export default function ShareableLyricDance() {
       const isOnStrongBeat = activeLineBeatMap?.strongBeats.some(beat => Math.abs(currentTime - beat) < 0.05) ?? false;
       const beatDensity = activeLineBeatMap?.beatsPerSecond ?? 0;
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
+      const nextLine = lines.find(l => l.start > currentTime) ?? null;
+      const isInSilence = interpreterNow?.isInSilence(activeLine ?? null, nextLine ? { start: nextLine.start } : null, currentTime)
+        ?? (!activeLine || Boolean(nextLine && currentTime < nextLine.start - 0.5));
+      if (isInSilence && cinematicDirection?.silenceDirective) {
+        const silence = cinematicDirection.silenceDirective;
+        if (silence.cameraMovement.includes("downward")) silenceOffsetYRef.current += 0.3;
+        if (silence.cameraMovement.includes("push")) silenceZoomRef.current += 0.0002;
+        if (silence.tensionDirection === "building") vignetteIntensityRef.current = Math.min(0.8, vignetteIntensityRef.current + 0.001);
+        else if (silence.tensionDirection === "releasing") vignetteIntensityRef.current = Math.max(0.3, vignetteIntensityRef.current - 0.001);
+      }
       const baselineY = yBaseRef.current === 0 ? ch * 0.5 : yBaseRef.current;
       let activeWordPosition = {
         x: cw / 2 + xOffsetRef.current + state.offsetX,
@@ -1068,8 +1189,23 @@ export default function ShareableLyricDance() {
       const timeToNextHook = nextHookStart - currentTime;
       const isPreHook = Number.isFinite(nextHookStart) && timeToNextHook > 0 && timeToNextHook < 2.0;
 
+      const chapterDirective = interpreterNow?.getCurrentChapter(songProgress) ?? null;
+      if (chapterDirective?.title !== chapterTransitionRef.current.current) {
+        chapterTransitionRef.current = {
+          previous: chapterTransitionRef.current.current,
+          current: chapterDirective?.title ?? null,
+          progress: 0,
+        };
+      }
+      chapterTransitionRef.current.progress = Math.min(1, chapterTransitionRef.current.progress + 1 / 120);
+
+      const isClimax = interpreterNow?.isClimaxMoment(songProgress) ?? false;
+      climaxActiveRef.current = isClimax;
+
       // Camera shake on strong downbeats only (horizontal shake 3x vertical).
       ctx.save();
+      ctx.translate(0, silenceOffsetYRef.current);
+      ctx.scale(silenceZoomRef.current, silenceZoomRef.current);
       if (currentBeatIntensity > 0.75) {
         const shakeX = (Math.random() - 0.5) * currentBeatIntensity * 6;
         const shakeY = (Math.random() - 0.5) * currentBeatIntensity * 2;
@@ -1099,31 +1235,13 @@ export default function ShareableLyricDance() {
         ctx.globalAlpha = 1;
       }
 
-      const interpretedChapter = interpreter?.getCurrentChapter(songProgress) ?? null;
-      if (chapters.length > 0) {
-        const nextChapter = chapters[Math.min(activeChapterIndex + 1, chapters.length - 1)];
-        if (nextChapter && nextChapter.startRatio <= songProgress && !pendingChapterTransition) {
-          pendingChapterTransition = nextChapter;
-        }
-        if (pendingChapterTransition) {
-          while (chapterBeatIndex < sortedBeats.length && sortedBeats[chapterBeatIndex] < currentTime - 0.06) {
-            chapterBeatIndex += 1;
-          }
-          const chapterBoundaryStart = pendingChapterTransition.startRatio * totalDuration;
-          const chapterBoundaryBeat = sortedBeats.find(beat => (
-            beat >= chapterBoundaryStart && beat <= chapterBoundaryStart + 0.5
-          ));
-          if (chapterBoundaryBeat && Math.abs(currentTime - chapterBoundaryBeat) < 0.05) {
-            triggerChapterTransition(pendingChapterTransition);
-          }
-        }
-      }
-      const chapterDirective = chapters[activeChapterIndex] ?? interpretedChapter;
-      const activeSystem = chapterDirective?.backgroundDirective || getBackgroundSystemForTime(
+      const backgroundDirective = chapterDirective?.backgroundDirective ?? timelineManifest.backgroundSystem;
+      const activeSystem = backgroundDirective || getBackgroundSystemForTime(
         timelineManifest,
         songProgress,
         currentBeatIntensity,
       );
+      const dominantColor = chapterDirective?.dominantColor ?? timelineManifest.palette[1];
 
       // Procedural background system — timeline-aware system switching
       drawSystemBackground(ctx, {
@@ -1138,12 +1256,13 @@ export default function ShareableLyricDance() {
         hookEnd: songEnd,
       });
 
+      const lightDirective = chapterDirective?.lightBehavior ?? timelineManifest.lightSource;
       drawLighting(
         ctx,
         canvas,
-        timelineManifest,
+        { ...timelineManifest, lightSource: lightDirective },
         songProgress,
-        currentBeatIntensity,
+        currentBeatIntensity * lightIntensityRef.current,
         activeWordPosition,
       );
 
@@ -1155,8 +1274,18 @@ export default function ShareableLyricDance() {
           spec,
           songProgress,
         );
-        if (chapterDirective?.particleDirective) {
-          timedParticleConfig.system = chapterDirective.particleDirective as any;
+        const particleDirective = chapterDirective?.particleDirective ?? timelineManifest.particleConfig.system;
+        timedParticleConfig.system = particleDirective as any;
+        if (lineAnim) {
+          const lineDir = interpreterNow?.getLineDirection(activeLineIndex) ?? null;
+          particleEngine.setBehaviorHint(lineDir?.particleBehavior ?? null);
+        }
+        if (isClimax && cinematicDirection?.climax) {
+          particleEngine.setDensityMultiplier(cinematicDirection.climax.maxParticleDensity);
+          lightIntensityRef.current = cinematicDirection.climax.maxLightIntensity;
+        } else {
+          particleEngine.setDensityMultiplier(1);
+          lightIntensityRef.current = 1;
         }
         particleEngine.update(deltaMs, currentBeatIntensity, timedParticleConfig);
         particleEngine.draw(ctx, "far");
@@ -1274,7 +1403,7 @@ export default function ShareableLyricDance() {
       ctx.globalAlpha = 1;
 
       // Breathing vignette pulse
-      const vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
+      const vignetteIntensity = (vignetteIntensityRef.current + currentBeatIntensity * 0.15) * baseAtmosphere;
       const vignetteCx = cw / 2;
       const vignetteCy = ch / 2;
       const vignette = ctx.createRadialGradient(
@@ -1328,51 +1457,9 @@ export default function ShareableLyricDance() {
           effectKey = resolveEffectKey(spec.effect_pool[poolIdx]);
         }
 
-        const lineDirection = interpreter?.getLineDirection(activeLineIndex) ?? null;
-        const beatAlignment = (lineDirection?.beatAlignment ?? "").toLowerCase();
-        if (beatAlignment.includes("explosive") || beatAlignment.includes("heavy")) {
-          if (isOnStrongBeat) {
-            const shakeX = (Math.random() - 0.5) * 8;
-            const shakeY = (Math.random() - 0.5) * 3;
-            ctx.translate(shakeX, shakeY);
-            beatScaleRef.current = Math.max(beatScaleRef.current, 1.15);
-          }
-        }
-        if (beatAlignment.includes("gentle") || beatAlignment.includes("subtle")) {
-          if (isOnBeat) {
-            beatScaleRef.current = Math.max(beatScaleRef.current, 1.04);
-          }
-        }
-        if (beatAlignment.includes("accelerating")) {
-          const beatAtTime = activeLineBeatMap?.beats.findIndex(beat => Math.abs(currentTime - beat) < 0.05) ?? 0;
-          const acceleration = 1 + Math.max(0, beatAtTime) * 0.02;
-          beatScaleRef.current = Math.max(
-            beatScaleRef.current,
-            1.0 + (currentBeatIntensity * acceleration * 0.08),
-          );
-        }
-        if (beatAlignment.includes("sustained")) {
-          beatScaleRef.current = Math.max(
-            beatScaleRef.current - 0.01,
-            1.0 + currentBeatIntensity * 0.05,
-          );
-        }
-        if (beatAlignment.includes("rapid") || beatAlignment.includes("all-encompassing")) {
-          if (isOnBeat) {
-            ctx.fillStyle = `rgba(255,255,255,${currentBeatIntensity * 0.08})`;
-            ctx.fillRect(0, 0, cw, ch);
-          }
-        }
-
-        if (climaxBeat && Math.abs(currentTime - climaxBeat) < 0.05 && particleEngine) {
-          particleEngine.burst(50, activeWordPosition.x, activeWordPosition.y);
-          ctx.translate((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 4);
-          ctx.fillStyle = "rgba(255,255,255,0.2)";
-          ctx.fillRect(0, 0, cw, ch);
-        }
-
+        const lineDirection = interpreterNow?.getLineDirection(activeLineIndex) ?? null;
         const lineHeroDirective = lineDirection?.heroWord
-          ? interpreter?.getWordDirective(lineDirection.heroWord) ?? null
+          ? interpreterNow?.getWordDirective(lineDirection.heroWord) ?? null
           : null;
         const directiveEffect = getDirectiveEffectKey(lineHeroDirective);
         if (directiveEffect) {
@@ -1484,8 +1571,8 @@ export default function ShareableLyricDance() {
         ctx.save();
 
         // Compute entrance/exit alpha (these also apply ctx transforms for entrance/exit motion)
-        const lyricEntrance = resolvedManifest?.lyricEntrance ?? "fades";
-        const lyricExit = resolvedManifest?.lyricExit ?? "fades";
+        const lyricEntrance = lineDirection?.entryStyle ?? resolvedManifest?.lyricEntrance ?? "fades";
+        const lyricExit = lineDirection?.exitStyle ?? resolvedManifest?.lyricExit ?? "fades";
         const entryAlpha = applyEntrance(ctx, activeLineAnim.entryProgress, lyricEntrance, { spatialZone: sectionZone });
         const exitAlpha = activeLineAnim.exitProgress > 0
           ? applyExit(ctx, activeLineAnim.exitProgress, lyricExit)
@@ -1580,9 +1667,10 @@ export default function ShareableLyricDance() {
             wordCountRef.current.get(word.text) ?? 0,
           );
 
-          const directive = interpreter?.getWordDirective(word.text) ?? null;
+          const wordText = word.text.toLowerCase().replace(/[^a-z]/g, "");
+          const directive = interpreterNow?.getWordDirective(wordText) ?? null;
           if (directive?.colorOverride) {
-            props.color = directive.colorOverride;
+            props.color = ensureContrast(directive.colorOverride, resolvedManifest.palette[0]);
           }
           if (typeof directive?.emphasisLevel === "number") {
             props.scale = props.scale * (1 + directive.emphasisLevel * 0.2);
@@ -1598,19 +1686,80 @@ export default function ShareableLyricDance() {
             ? lineX
             : cursorX + wordWidth / 2;
           const wordX = wordCenterX;
-          const wordY = lineY;
+          let wordY = lineY;
 
           ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui`;
           ctx.textAlign = "center";
           ctx.textBaseline = "alphabetic";
           const wordRenderWidth = ctx.measureText(word.text).width;
-          const elementalClass = WordClassifier.getElementalClass(word.text);
+          const elementalClass = directive?.elementalClass === "ICE"
+            ? "COLD"
+            : directive?.elementalClass === "RAIN"
+              ? "RAIN"
+              : directive?.elementalClass === "FIRE"
+                ? "FIRE"
+                : WordClassifier.getElementalClass(word.text);
+
+          const appearance = wordAppearanceRef.current.get(wordText) ?? 0;
+          if (directive?.evolutionRule) {
+            if (wordText === "drown") {
+              const bubbleSpeed = 1 + appearance * 0.5;
+              const bubbleCount = 3 + appearance * 2;
+              drawBubbles(ctx, wordX, wordY, wordRenderWidth, fontSize, bubbleCount, bubbleSpeed, currentTime);
+            }
+            if (wordText === "down") {
+              const fallSpeed = 1 + appearance * 0.3;
+              wordY += Math.sin(currentTime * fallSpeed) * 3;
+            }
+          }
 
           // Scale
           ctx.save();
           ctx.translate(wordX, wordY);
           ctx.scale(props.scale, props.scale);
           ctx.translate(-wordX, -wordY);
+
+          if (directive?.emphasisLevel) {
+            const emphasisScale = 0.8 + directive.emphasisLevel * 0.5;
+            ctx.translate(wordX, wordY);
+            ctx.scale(emphasisScale, emphasisScale);
+            ctx.translate(-wordX, -wordY);
+          }
+
+          const kineticOffset = directive?.kineticClass
+            ? applyKineticEffect(ctx, directive.kineticClass, wordX, wordY, currentTime, currentBeatIntensity, renderedIndex)
+            : { yOffset: 0 };
+          wordY += kineticOffset.yOffset;
+
+          if (directive?.evolutionRule) {
+            const evo = interpreterNow?.applyEvolutionRule(
+              directive.evolutionRule,
+              appearance,
+              ctx,
+              wordX,
+              wordY,
+              directive.colorOverride,
+            );
+            wordY += evo?.yOffset ?? 0;
+          }
+
+          const isHeroWord = Boolean(lineDirection?.heroWord && word.text.toLowerCase().includes(lineDirection.heroWord.toLowerCase()));
+          if (isHeroWord) {
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = resolvedManifest.palette[2];
+            ctx.translate(wordX, wordY);
+            ctx.scale(1.2, 1.2);
+            ctx.translate(-wordX, -wordY);
+          }
+
+          if (climaxActiveRef.current) {
+            ctx.translate(wordX, wordY);
+            ctx.scale(1.08, 1.08);
+            if (wordText === "you") {
+              ctx.scale(1.22, 1.22);
+            }
+            ctx.translate(-wordX, -wordY);
+          }
 
           // Color
           ctx.fillStyle = props.color;
@@ -1632,7 +1781,19 @@ export default function ShareableLyricDance() {
           const finalY = wordY + props.yOffset;
 
           // Letter spacing (draw char by char if non-default)
-          if (props.letterSpacing !== "0em") {
+          if (directive?.elementalClass && elementalClass !== "NONE") {
+            drawElementalWordTexture(ctx, {
+              word: word.text,
+              wordIndex: renderedIndex,
+              wordX: finalX,
+              wordY: finalY,
+              wordWidth: wordRenderWidth,
+              fontSize,
+              currentTime,
+              beatIntensity: currentBeatIntensity,
+              elementalClass,
+            });
+          } else if (props.letterSpacing !== "0em") {
             drawWithLetterSpacing(ctx, word.text, finalX, finalY, props.letterSpacing);
           } else {
             ctx.fillText(word.text, finalX, finalY);
@@ -1651,8 +1812,7 @@ export default function ShareableLyricDance() {
           }
 
           // Track word appearances for escalation
-          const count = wordCountRef.current.get(word.text) ?? 0;
-          wordCountRef.current.set(word.text, count + 1);
+          wordAppearanceRef.current.set(wordText, appearance + 1);
 
           ctx.globalAlpha = 1;
           if (displayMode !== "single_word") {
@@ -1686,6 +1846,40 @@ export default function ShareableLyricDance() {
           ctx.shadowOffsetY = 0;
         }
         ctx.restore();
+      }
+
+      if (chapterTransitionRef.current.progress < 1) {
+        const blend = 1 - chapterTransitionRef.current.progress;
+        ctx.fillStyle = `rgba(0,0,0,${0.22 * blend})`;
+        ctx.fillRect(0, 0, cw, ch);
+      }
+
+      if (songProgress > 0.95 && cinematicDirection) {
+        const ending = cinematicDirection.ending;
+        const endProgress = (songProgress - 0.95) / 0.05;
+        switch (ending.style) {
+          case "dissolve":
+            ctx.fillStyle = `rgba(${hexToRgbString(chapterDirective?.dominantColor ?? timelineManifest.palette[1])}, ${endProgress * 0.8})`;
+            ctx.fillRect(0, 0, cw, ch);
+            break;
+          case "fade":
+            ctx.fillStyle = `rgba(0,0,0,${endProgress})`;
+            ctx.fillRect(0, 0, cw, ch);
+            break;
+          case "linger":
+            particleEngine?.setSpeedMultiplier(1 - endProgress * 0.8);
+            break;
+          case "snap":
+            if (endProgress > 0.8) {
+              ctx.fillStyle = "#000000";
+              ctx.fillRect(0, 0, cw, ch);
+            }
+            break;
+          default:
+            break;
+        }
+      } else {
+        particleEngine?.setSpeedMultiplier(1);
       }
 
       ctx.restore();
@@ -1732,16 +1926,16 @@ export default function ShareableLyricDance() {
       dbg.vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
       dbg.songProgress = songProgress;
       // Direction
-      const chapter = interpreter?.getCurrentChapter(songProgress);
-      dbg.dirThesis = interpreter?.direction?.thesis ?? "—";
+      const chapter = interpreterNow?.getCurrentChapter(songProgress);
+      dbg.dirThesis = interpreterNow?.direction?.thesis ?? "—";
       dbg.dirChapter = chapter?.title ?? "—";
       dbg.dirChapterProgress = chapter ? Math.max(0, Math.min(1, (songProgress - chapter.startRatio) / Math.max(0.001, chapter.endRatio - chapter.startRatio))) : 0;
       dbg.dirIntensity = chapter?.emotionalIntensity ?? 0;
       // Word Directive (current hero word)
-      const dbgLineDir = interpreter?.getLineDirection(activeLineIndex) ?? null;
+      const dbgLineDir = interpreterNow?.getLineDirection(activeLineIndex) ?? null;
       const dbgWords = activeLine ? activeLine.text.split(/\s+/) : [];
       const dbgHeroWord = dbgLineDir?.heroWord ?? dbgWords.find(w => WordClassifier.classifyWord(w) !== "FILLER") ?? dbgWords[0] ?? "";
-      const dbgWordDir = interpreter?.getWordDirective(dbgHeroWord) ?? null;
+      const dbgWordDir = interpreterNow?.getWordDirective(dbgHeroWord) ?? null;
       dbg.wordDirectiveWord = dbgHeroWord;
       dbg.wordDirectiveKinetic = dbgWordDir?.kineticClass ?? WordClassifier.classifyWord(dbgHeroWord);
       dbg.wordDirectiveElemental = dbgWordDir?.elementalClass ?? WordClassifier.getElementalClass(dbgHeroWord);

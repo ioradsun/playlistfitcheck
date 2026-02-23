@@ -1,4 +1,5 @@
 import type { LineAnimation } from "@/engine/AnimationResolver";
+import type { CinematicDirection } from "@/types/CinematicDirection";
 
 export type WordClass =
   | "IMPACT"
@@ -51,6 +52,18 @@ function normalizeWord(word: string): string {
   return word.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
 }
 
+let cinematicDirectionRef: CinematicDirection | null = null;
+
+export function setCinematicDirection(direction: CinematicDirection | null): void {
+  cinematicDirectionRef = direction;
+}
+
+function getDirectionDirective(word: string) {
+  if (!cinematicDirectionRef) return null;
+  const key = normalizeWord(word).replace(/[^a-z]/g, "");
+  return cinematicDirectionRef.wordDirectives[key] ?? null;
+}
+
 function toSoftTint(hexColor: string): string {
   const hex = hexColor.replace("#", "");
   if (hex.length !== 6) return "#ffd4c4";
@@ -68,6 +81,15 @@ function isLongVowelWord(word: string): boolean {
 }
 
 export function classifyWord(word: string): WordClass {
+  const directive = getDirectionDirective(word);
+  if (directive?.kineticClass) {
+    const k = directive.kineticClass;
+    if (["IMPACT", "SCREAMING", "BREAKING"].includes(k)) return "IMPACT";
+    if (["TENDER", "WHISPERING"].includes(k)) return "TENDER";
+    if (["RUNNING", "FALLING", "SPINNING", "FLOATING", "RISING"].includes(k)) return "MOTION";
+    if (k === "NEGATION") return "NEGATION";
+    if (k === "STILL") return "NEUTRAL";
+  }
   const normalized = normalizeWord(word);
   if (!normalized) return "NEUTRAL";
   if (FILLER_WORDS.has(normalized)) return "FILLER";
@@ -82,6 +104,13 @@ export function getPhoneticClass(word: string): PhoneticClass {
 }
 
 export function getElementalClass(word: string): ElementalClass {
+  const directive = getDirectionDirective(word);
+  if (directive?.elementalClass) {
+    if (directive.elementalClass === "FIRE") return "FIRE";
+    if (directive.elementalClass === "RAIN") return "RAIN";
+    if (directive.elementalClass === "ICE") return "COLD";
+  }
+
   const normalized = normalizeWord(word);
   if (!normalized) return "NONE";
 
