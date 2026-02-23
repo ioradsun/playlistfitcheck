@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback } from "react";
+import type { BeatGridData } from "@/hooks/useBeatGrid";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
