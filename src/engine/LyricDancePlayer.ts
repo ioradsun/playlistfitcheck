@@ -505,9 +505,10 @@ export class LyricDancePlayer {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
-    if (this.currentTimeMs < 100) {
-      console.log('[UPDATE] audio.currentTime:', this.audio.currentTime,
+    if (this.currentTimeMs < 5000) {
+      console.log('[UPDATE] audio.currentTime:', t,
         'songStartSec:', this.songStartSec,
+        'songEndSec:', this.songEndSec,
         'currentTimeMs:', this.currentTimeMs);
     }
 
