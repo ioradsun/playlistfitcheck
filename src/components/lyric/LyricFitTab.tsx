@@ -123,6 +123,7 @@ export function LyricFitTab({
       setLyricData(newData);
       setLines(initialLyric.lines as any[]);
       setSavedId(initialLyric.id);
+      savedIdRef.current = initialLyric.id;
       setFmlyLines((initialLyric as any).fmly_lines ?? null);
       setVersionMeta((initialLyric as any).version_meta ?? null);
 
