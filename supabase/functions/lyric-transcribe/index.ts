@@ -654,8 +654,8 @@ serve(async (req) => {
       : "google/gemini-2.5-flash";
 
     // Gemini transcription model — use analysis model or default
-    const geminiTranscribeModel = VALID_ANALYSIS_MODELS.includes(transcriptionModel)
-      ? transcriptionModel
+    const geminiTranscribeModel = VALID_ANALYSIS_MODELS.includes(transcriptionModel ?? "")
+      ? transcriptionModel!
       : resolvedAnalysisModel;
 
     const estimatedBytes = audioBase64.length * 0.75;
