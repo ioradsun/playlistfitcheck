@@ -221,6 +221,13 @@ export function LyricFitTab({
     }
   }, []);
 
+  // Persist song_dna whenever we have both a saved project and computed DNA
+  useEffect(() => {
+    if (savedIdRef.current && songDna) {
+      persistSongDna(savedIdRef.current, { ...songDna, cinematicDirection });
+    }
+  }, [savedId, songDna, cinematicDirection, persistSongDna]);
+
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
     if (!targetAudioFile || !hasRealAudio || targetAudioFile.size === 0) return;
     // Data-existence guard: if we already have beatGrid (e.g. loaded from DB), skip
