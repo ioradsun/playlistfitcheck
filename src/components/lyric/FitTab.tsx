@@ -449,11 +449,6 @@ export function FitTab({
         )}
       </button>
 
-      {!sceneManifest && !publishing && (
-        <p className="text-[10px] text-muted-foreground text-center">
-          Scene manifest could not be generated. Try re-analyzing.
-        </p>
-      )}
     </div>
   );
 }
