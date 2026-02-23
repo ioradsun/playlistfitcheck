@@ -291,6 +291,7 @@ export class LyricDancePlayer {
 
   // Public debug surface (React reads this)
   public debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
+  private _hasLoggedDrawChunk = false;
 
   // Public writeable surface (React pushes comments here)
   public constellationNodes: any[] = [];
@@ -626,6 +627,21 @@ export class LyricDancePlayer {
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
+
+      if (!this._hasLoggedDrawChunk) {
+        this._hasLoggedDrawChunk = true;
+        const drawScale = (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
+        const zoom = frame.cameraZoom ?? 1.0;
+        const fontSize = chunk.fontSize ?? 36;
+        console.log('[DRAW] chunk:', chunk.id,
+          'entryScale:', chunk.entryScale,
+          'exitScale:', chunk.exitScale,
+          'entryOffsetY:', chunk.entryOffsetY,
+          'drawScale being used:', drawScale,
+          'fontSize:', fontSize,
+          'zoom:', zoom,
+          'final px:', Math.round(fontSize * zoom * drawScale));
+      }
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
