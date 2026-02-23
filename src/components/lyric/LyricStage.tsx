@@ -57,7 +57,7 @@ export function LyricStage({ manifest, backgroundImageUrl, isPlaying, beatIntens
   }, [manifest.lightSource]);
 
   const contrast = COMPOSITING_DECISION_TABLE[manifest.contrastMode] ?? COMPOSITING_DECISION_TABLE.raw;
-  const maskOpacity = Math.min(0.95, contrast.maskOpacity + (isMobile ? 0.15 : 0));
+  const maskOpacity = Math.min(0.3, contrast.maskOpacity + (isMobile ? 0.15 : 0));
   const bloomScale = (isMobile ? 0.75 : 1) * (1 + beatIntensity * 0.15);
   const bloomOpacity = contrast.bloomIntensity + beatIntensity * 0.12;
   const vignetteInner = isMobile ? 60 : 75;
