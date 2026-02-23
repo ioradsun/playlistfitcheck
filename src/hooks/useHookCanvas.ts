@@ -469,7 +469,7 @@ export function useHookCanvas(
         ctx.restore();
       });
 
-      const visibleWords = activeLineWords.filter((word) => ct >= word.start);
+      const visibleWords = words.map((word, index) => ({ word, index, start: activeLine.start + index * 0.05 })).filter((w) => ct >= w.start);
       if (visibleWords.length > 0) {
         const activeWordIndex = visibleWords[visibleWords.length - 1].index;
 

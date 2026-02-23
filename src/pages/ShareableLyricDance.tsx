@@ -451,7 +451,7 @@ function getParticleConfigForTime(
     };
   }
 
-  if (manifest.backgroundSystem === "rain" || isRainWorld) {
+  if ((manifest.backgroundSystem as string) === "rain" || isRainWorld) {
     if (progress < 0.20) {
       return {
         ...baseConfig,
@@ -1442,7 +1442,7 @@ export default function ShareableLyricDance() {
           ctx.textAlign = "center";
           ctx.textBaseline = "alphabetic";
           const wordRenderWidth = ctx.measureText(word.text).width;
-          const elementalClass = getElementalClass(word.text);
+          const elementalClass = WordClassifier.getElementalClass(word.text);
 
           // Scale
           ctx.save();
@@ -1598,7 +1598,7 @@ export default function ShareableLyricDance() {
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener("resize", resize);
-      physicsEngine.stop();
+      engineRef.current?.stop();
       audio.pause();
       audio.src = "";
     };
