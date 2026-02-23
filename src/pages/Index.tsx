@@ -148,6 +148,8 @@ const Index = () => {
 
   useEffect(() => {
     if (activeTab !== "lyric" || !projectId || !user) return;
+    // Skip re-fetch if we already have this project loaded
+    if (projectLoadedRef.current === projectId) return;
 
     (async () => {
       const { data, error } = await supabase
@@ -466,13 +468,9 @@ const Index = () => {
 
   const handleSidebarTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
-
-    // Clicking the main LyricFit nav item should always return to a fresh upload flow
-    // while still keeping LyricFit active so recents expand in the sidebar.
-    if (tab === "lyric") {
-      projectLoadedRef.current = null;
-      setLoadedLyric(null);
-    }
+    // NOTE: Do NOT null loadedLyric here — that causes LyricFitTab to remount
+    // and lose all in-memory state (pipeline results, audio, etc.).
+    // The "New Project" flow is handled by handleNewLyric instead.
   }, [setActiveTab]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
