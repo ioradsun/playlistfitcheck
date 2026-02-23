@@ -146,10 +146,6 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
   const chapterCount = Math.max(1, chapters.length || 4);
 
-  console.log('[BAKER] ratio-based setup — chapters:', chapters.length,
-    'first chapter ratio:', chapters[0]?.startRatio, '-', chapters[0]?.endRatio,
-    'tension stages:', tensionCurve.length,
-    'distanceByChapter:', payload.cinematic_direction?.cameraLanguage?.distanceByChapter?.length);
 
   const lineShotTypes = payload.lines.map((line, lineIndex) => {
     const storyboardEntry = storyboards[lineIndex] ?? null;
