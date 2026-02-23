@@ -34,11 +34,20 @@ export type Keyframe = {
     alpha: number;
     glow: number;
     visible: boolean;
+    fontSize: number;
+    color: string;
   }>;
   cameraX: number;
   cameraY: number;
   cameraZoom: number;
   beatIndex: number;
+  bgBlend: number;
+  particles: Array<{
+    x: number;
+    y: number;
+    size: number;
+    alpha: number;
+  }>;
 };
 
 export type BakedTimeline = Keyframe[];
@@ -47,15 +56,20 @@ const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
 
+type StoryboardLike = {
+  startSec?: number;
+  endSec?: number;
+  shotType?: string;
+};
+
 type WordDirectiveLike = {
   word?: string;
 };
 
 type TensionStageLike = {
-  startRatio?: number;
-  endRatio?: number;
+  startSec?: number;
+  endSec?: number;
   motion?: number;
-  motionIntensity?: number;
 };
 
 type StoryboardEntryLike = {
@@ -65,10 +79,8 @@ type StoryboardEntryLike = {
 };
 
 type ChapterLike = {
-  startRatio?: number;
-  endRatio?: number;
-  cameraDistance?: string;
-  cameraMovement?: string;
+  startSec?: number;
+  endSec?: number;
 };
 
 type BakeState = {
@@ -79,8 +91,141 @@ type BakeState = {
   currentZoom: number;
 };
 
+type PrebakedData = {
+  chapters: ChapterLike[];
+  tensionMotionByFrame: number[];
+  chapterIndexByFrame: number[];
+  activeLineByFrame: number[];
+  lineHeroWords: Array<string | null>;
+  lineFontSizes: number[];
+  lineColors: string[];
+  energy: number;
+  density: number;
+};
+
+function normalizeWordDirectives(source: CinematicDirection | null): WordDirectiveLike[] {
+  const raw = source?.wordDirectives;
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as WordDirectiveLike[];
+  return Object.values(raw as Record<string, WordDirectiveLike>);
+}
+
+export function blendWithWhite(hex: string, whiteFraction: number): string {
+  const clean = (hex ?? "").replace("#", "");
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return "#cccccc";
+  const br = Math.round(r + (255 - r) * whiteFraction);
+  const bg = Math.round(g + (255 - g) * whiteFraction);
+  const bb = Math.round(b + (255 - b) * whiteFraction);
+  return `#${br.toString(16).padStart(2, "0")}${bg.toString(16).padStart(2, "0")}${bb.toString(16).padStart(2, "0")}`;
+}
+
+function createPrebakedData(payload: ScenePayload, totalFrames: number): PrebakedData {
+  const chapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
+  const wordDirectives = normalizeWordDirectives(payload.cinematic_direction);
+  const tensionCurve = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
+  const energy = payload.physics_spec?.energy ?? 0.5;
+  const density = payload.physics_spec?.density ?? 0.5;
+  const storyboards = (payload.cinematic_direction?.storyboard ?? []) as StoryboardLike[];
+
+  const lineChapterIndex = payload.lines.map((line) => {
+    for (let i = 0; i < chapters.length; i += 1) {
+      const ch = chapters[i];
+      if ((line.start ?? 0) >= (ch.startSec ?? 0) && (line.start ?? 0) < (ch.endSec ?? 9999)) return i;
+    }
+    return -1;
+  });
+
+  const lineShotTypes = payload.lines.map((line) => {
+    for (let i = 0; i < storyboards.length; i += 1) {
+      const s = storyboards[i];
+      if ((line.start ?? 0) >= (s.startSec ?? 0) && (line.start ?? 0) < (s.endSec ?? 9999)) {
+        return s.shotType ?? "Medium";
+      }
+    }
+    return "Medium";
+  });
+
+  const lineHeroWords = payload.lines.map((line) => {
+    const text = line.text?.toLowerCase() ?? "";
+    for (let i = 0; i < wordDirectives.length; i += 1) {
+      const word = wordDirectives[i]?.word?.toLowerCase();
+      if (word && text.includes(word)) return wordDirectives[i]?.word ?? null;
+    }
+    return null;
+  });
+
+  const lineFontSizes = payload.lines.map((_, idx) => {
+    const shot = lineShotTypes[idx];
+    if (shot === "CloseUp") return 48;
+    if (shot === "Wide") return 24;
+    return 36;
+  });
+
+  const lineColors = payload.lines.map((_, idx) => {
+    const ci = lineChapterIndex[idx];
+    if (ci < 0 || !payload.palette?.length) return "#ffffff";
+    return blendWithWhite(payload.palette[ci % payload.palette.length] ?? "#ffffff", 0.45);
+  });
+
+  const chapterIndexByFrame = new Array<number>(totalFrames + 1).fill(-1);
+  const tensionMotionByFrame = new Array<number>(totalFrames + 1).fill(0.5);
+  const activeLineByFrame = new Array<number>(totalFrames + 1).fill(-1);
+
+  let chapterCursor = 0;
+  let tensionCursor = 0;
+
+  for (let frameIndex = 0; frameIndex <= totalFrames; frameIndex += 1) {
+    const tSec = payload.songStart + (frameIndex * FRAME_STEP_MS) / 1000;
+
+    while (chapterCursor < chapters.length && tSec >= (chapters[chapterCursor].endSec ?? 9999)) {
+      chapterCursor += 1;
+    }
+    if (
+      chapterCursor < chapters.length &&
+      tSec >= (chapters[chapterCursor].startSec ?? 0) &&
+      tSec < (chapters[chapterCursor].endSec ?? 9999)
+    ) {
+      chapterIndexByFrame[frameIndex] = chapterCursor;
+    }
+
+    while (tensionCursor < tensionCurve.length && tSec >= (tensionCurve[tensionCursor].endSec ?? 9999)) {
+      tensionCursor += 1;
+    }
+    if (
+      tensionCursor < tensionCurve.length &&
+      tSec >= (tensionCurve[tensionCursor].startSec ?? 0) &&
+      tSec < (tensionCurve[tensionCursor].endSec ?? 9999)
+    ) {
+      tensionMotionByFrame[frameIndex] = tensionCurve[tensionCursor].motion ?? 0.5;
+    }
+
+    for (let idx = 0; idx < payload.lines.length; idx += 1) {
+      const line = payload.lines[idx];
+      if (tSec >= (line.start ?? 0) && tSec < (line.end ?? 0)) {
+        activeLineByFrame[frameIndex] = idx;
+        break;
+      }
+    }
+  }
+
+  return {
+    chapters,
+    tensionMotionByFrame,
+    chapterIndexByFrame,
+    activeLineByFrame,
+    lineHeroWords,
+    lineFontSizes,
+    lineColors,
+    energy,
+    density,
+  };
+}
+
 function getBeatIndex(tSec: number, state: BakeState): number {
-  if (!state.beats.length) return 0;
+  if (!state.beats.length) return -1;
 
   while (state.beatCursor + 1 < state.beats.length && state.beats[state.beatCursor + 1] <= tSec) {
     state.beatCursor += 1;
@@ -93,44 +238,17 @@ function getBeatIndex(tSec: number, state: BakeState): number {
   return state.beatCursor;
 }
 
-function getChapterIndexAndData(
-  cinematicDirection: CinematicDirection | null,
-  songProgress: number,
-): { chapterIndex: number; chapter: ChapterLike | null } {
-  const chapters = (cinematicDirection?.chapters ?? []) as ChapterLike[];
-  if (!chapters.length) return { chapterIndex: -1, chapter: null };
-
-  const idx = chapters.findIndex((chapter) => {
-    const startRatio = chapter.startRatio ?? 0;
-    const endRatio = chapter.endRatio ?? 1;
-    return songProgress >= startRatio && songProgress <= endRatio;
-  });
-
-  if (idx >= 0) return { chapterIndex: idx, chapter: chapters[idx] };
-  return { chapterIndex: chapters.length - 1, chapter: chapters[chapters.length - 1] };
-}
-
-function getShotY(_cinematicDirection: CinematicDirection | null, _chapter: ChapterLike | null): number {
-  // True vertical center — no chapter-based y positioning until basic layout is solid
-  return 540 * 0.48;
-}
-
-function getActiveLineIndex(lines: LyricLine[], tSec: number): number {
-  return lines.findIndex((line) => tSec >= line.start && tSec < line.end);
-}
-
 function bakeFrame(
   frameIndex: number,
   payload: ScenePayload,
   durationMs: number,
   state: BakeState,
-  linePositions: number[],
-  lineChapterOffsets: number[],
+  pre: PrebakedData,
 ): Keyframe {
   const timeMs = frameIndex * FRAME_STEP_MS;
   const tSec = payload.songStart + timeMs / 1000;
   const songProgress = Math.min(1, timeMs / durationMs);
-  const activeLineIndex = getActiveLineIndex(payload.lines, tSec);
+  const activeLineIndex = pre.activeLineByFrame[frameIndex] ?? -1;
   const beatIndex = getBeatIndex(tSec, state);
 
   if (beatIndex !== state.lastBeatIndex) {
@@ -230,20 +348,9 @@ function bakeFrame(
     cameraY: Math.cos(songProgress * Math.PI * 2.3) * 7 * tensionMotion,
     cameraZoom: state.currentZoom,
     beatIndex,
+    bgBlend,
+    particles,
   };
-}
-
-function getLinePositions(payload: ScenePayload): number[] {
-  return payload.lines.map((_, idx) => {
-    const centerX = 960 * 0.5;
-    const lineVariance = ((idx % 3) - 1) * 20; // max ±20px only
-    return centerX + lineVariance;
-  });
-}
-
-function getLineChapterOffsets(payload: ScenePayload): number[] {
-  // No chapter offset for now — keep centered until basic layout is solid
-  return payload.lines.map(() => 0);
 }
 
 function createBakeState(payload: ScenePayload): BakeState {
@@ -260,18 +367,14 @@ export function bakeScene(
   payload: ScenePayload,
   onProgress?: (progress: number) => void,
 ): BakedTimeline {
-  const linePositions = getLinePositions(payload);
-  const lineChapterOffsets = getLineChapterOffsets(payload);
-
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const frames: BakedTimeline = [];
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
   const state = createBakeState(payload);
-
-  console.log("[lyricSceneBaker] tensionCurveLength", payload.cinematic_direction?.tensionCurve?.length);
+  const pre = createPrebakedData(payload, totalFrames);
 
   for (let frameIndex = 0; frameIndex <= totalFrames; frameIndex += 1) {
-    frames.push(bakeFrame(frameIndex, payload, durationMs, state, linePositions, lineChapterOffsets));
+    frames.push(bakeFrame(frameIndex, payload, durationMs, state, pre));
 
     if (onProgress && frameIndex % 20 === 0) {
       onProgress(Math.min(1, frameIndex / totalFrames));
@@ -287,11 +390,10 @@ export function bakeSceneChunked(
   onProgress?: (progress: number) => void,
   framesPerChunk = 120,
 ): Promise<BakedTimeline> {
-  const linePositions = getLinePositions(payload);
-  const lineChapterOffsets = getLineChapterOffsets(payload);
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
   const state = createBakeState(payload);
+  const pre = createPrebakedData(payload, totalFrames);
 
   const frames: BakedTimeline = [];
   let frameIndex = 0;
@@ -301,7 +403,7 @@ export function bakeSceneChunked(
       const end = Math.min(totalFrames, frameIndex + Math.max(1, framesPerChunk));
 
       for (; frameIndex <= end; frameIndex += 1) {
-        frames.push(bakeFrame(frameIndex, payload, durationMs, state, linePositions, lineChapterOffsets));
+        frames.push(bakeFrame(frameIndex, payload, durationMs, state, pre));
 
         if (frameIndex === totalFrames) break;
       }
