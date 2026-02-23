@@ -679,7 +679,7 @@ const AI_KEY_TO_EFFECT: Record<string, string> = {
   ASH_CLOUD: "GRAVITY_DROP",
   // Additional transition / generic
   RIPPLE_OUT: "RIPPLE_OUT",
-  FADE_OUT: "STATIC_RESOLVE",
+  FADE_OUT: "TUNNEL_RUSH",
   FADE_IN: "TUNNEL_RUSH",
   PULSE_SOFT: "PULSE_BLOOM",
   WAVE_SURGE: "WAVE_SURGE",
