@@ -321,18 +321,21 @@ export function FitTab({
       {/* Song overview hero */}
       {!allReady && (
         <div className="glass-card rounded-xl p-4 space-y-2">
-          <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Generating Fit in background</p>
+          <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+            {hasErrors ? "Some steps failed" : Object.values(generationStatus).some(v => v === "running") ? "Generating Fit in background" : "Analysis not yet complete"}
+          </p>
           <div className="space-y-1.5 text-xs text-muted-foreground">
             <div>Rhythm: {generationStatus.beatGrid}</div>
             <div>Song DNA: {generationStatus.songDna}</div>
             <div>Cinematic direction: {generationStatus.cinematicDirection}</div>
           </div>
-          {hasErrors && onRetry && (
+          {onRetry && (
             <button
               onClick={onRetry}
-              className="text-[11px] font-mono text-primary hover:text-primary/80 transition-colors"
+              className="text-[11px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
             >
-              Retry failed steps
+              <RefreshCw size={10} />
+              {hasErrors ? "Retry failed steps" : "Re-analyze"}
             </button>
           )}
         </div>
