@@ -382,16 +382,15 @@ function bakeFrame(
       exitScale,
     });
 
-    if (frameIndex === 200 && lineActive && visible) {
-      console.log('[ANIM] frame 200 active chunk:', {
-        id: `${idx}`,
+    if (frameIndex === 30 && lineActive && visible) {
+      console.log('[ANIM] frame 30 active chunk:', {
         entryStyle: storyboardEntry?.entryStyle,
-        exitStyle: storyboardEntry?.exitStyle,
         entryOffsetY,
         entryOffsetX,
         entryScale,
-        exitOffsetY,
+        exitScale,
         entryProgress: entryProgress?.toFixed(3),
+        ep: ep?.toFixed(3),
       });
     }
 
