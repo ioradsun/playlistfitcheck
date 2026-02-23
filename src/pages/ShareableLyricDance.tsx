@@ -1589,8 +1589,6 @@ export default function ShareableLyricDance() {
               ctx,
               directive.kineticClass,
               word.text,
-              0,
-              0,
               wordRenderWidth,
               fontSize,
               currentTime,
@@ -1615,8 +1613,6 @@ export default function ShareableLyricDance() {
             drawElementalWord(
               ctx,
               word.text,
-              0,
-              0,
               fontSize,
               wordRenderWidth,
               directive.elementalClass,
