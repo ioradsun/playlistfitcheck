@@ -1156,7 +1156,7 @@ export function LyricDisplay({
               confidence: beatGrid.confidence,
             } as any)
           : null,
-        song_signature: (initialSongSignature as any) ?? null,
+        song_signature: null,
         song_dna: (songDna as any) ?? null,
         updated_at: new Date().toISOString(),
       };
