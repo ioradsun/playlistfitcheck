@@ -811,12 +811,7 @@ export function LyricDisplay({
   const handleFieldOverride = useCallback((field: keyof FullSceneManifest | string, value: unknown) => {
     setSongDna((prev) => {
       if (!prev) return prev;
-      const current = safeManifest(prev.scene_manifest || deriveSceneManifestFromSpec({
-        spec: prev.physicsSpec as PhysicsSpec,
-        mood: prev.mood,
-        description: prev.description,
-        songTitle: data.title,
-      })).manifest;
+      const current = safeManifest(prev.scene_manifest || {}).manifest;
       const next = { ...current } as any;
       if (field.includes(".")) {
         const [parent, child] = field.split(".");
