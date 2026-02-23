@@ -264,6 +264,7 @@ export default function ShareableLyricDance() {
       destroyed = true;
       player.destroy();
       playerRef.current = null;
+      setPlayerInstance(null);
     };
   }, [data]);
 
