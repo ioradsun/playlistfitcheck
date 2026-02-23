@@ -547,6 +547,33 @@ export function LyricDisplay({
     if (profile?.fontFamily) void ensureTypographyProfileReady(profile);
   }, [initialSongDna]);
 
+  // Auto-generate cinematic direction if song DNA exists but direction is missing
+  const cinematicGenAttempted = useRef(false);
+  useEffect(() => {
+    if (cinematicGenAttempted.current) return;
+    if (!songDna || (songDna as any).cinematic_direction) return;
+    if (!data?.lines?.length || !data.title) return;
+    cinematicGenAttempted.current = true;
+
+    const lyricsForDirection = data.lines
+      .filter((l) => l.tag !== "adlib")
+      .map((l) => ({ text: l.text, start: l.start, end: l.end }));
+    console.log("[LyricDisplay] Auto-generating cinematic direction for existing project");
+    supabase.functions.invoke("cinematic-direction", {
+      body: {
+        title: data.title,
+        artist: data.artist,
+        lines: lyricsForDirection,
+        beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
+        lyricId: currentSavedId || undefined,
+      },
+    }).then(({ data: dirResult }) => {
+      if (dirResult?.cinematicDirection) {
+        setSongDna((prev: any) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+      }
+    }).catch((e) => console.warn("[LyricDisplay] cinematic direction auto-gen failed:", e));
+  }, [songDna, data, beatGrid, currentSavedId]);
+
   // Reset Song DNA when audio file changes (e.g. reupload)
   const audioFileRef = useRef(audioFile);
   useEffect(() => {
