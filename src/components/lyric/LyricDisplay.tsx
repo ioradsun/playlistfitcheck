@@ -506,12 +506,9 @@ export function LyricDisplay({
     } | null;
     scene_manifest?: FullSceneManifest | null;
   } | null>(normalizeSongDnaWithManifest(initialSongDna, data.title) ?? null);
-  const [dnaLoading, setDnaLoading] = useState(false);
-  const [dnaRequested, setDnaRequested] = useState(!!initialSongDna);
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(
+  const [backgroundImageUrl] = useState<string | null>(
     initialBackgroundImageUrl ?? null,
   );
-  const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
   const [manifest, setManifest] = useState<FullSceneManifest | null>(null);
 
   const beatIntensity = useBeatIntensity(beatAnalyserRef.current, hookDanceRunning && isPlaying);
