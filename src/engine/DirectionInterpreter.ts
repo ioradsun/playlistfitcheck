@@ -5,6 +5,101 @@ import type {
   WordDirective,
 } from "@/types/CinematicDirection";
 
+export interface WordHistory {
+  count: number;
+  firstSeen: number;
+  lastSeen: number;
+  positions: Array<{ x: number; y: number }>;
+}
+
+export function applyEvolutionRule(
+  ctx: CanvasRenderingContext2D,
+  rule: string,
+  history: WordHistory,
+  wordX: number,
+  wordY: number,
+  wordWidth: number,
+  fontSize: number,
+  beatIntensity: number,
+  palette: string[],
+): { scaleMultiplier: number; glowRadius: number; opacityMultiplier: number; yOffset: number } {
+  const count = history.count;
+  const r = rule.toLowerCase();
+
+  let scaleMultiplier = 1.0;
+  let glowRadius = 0;
+  let opacityMultiplier = 1.0;
+  let yOffset = 0;
+
+  if (r.includes("larger") || r.includes("prominent") || r.includes("bigger")) {
+    scaleMultiplier = Math.min(1.6, 1 + count * 0.06);
+  }
+
+  if (r.includes("luminous") || r.includes("brighter") || r.includes("glow")) {
+    glowRadius = Math.min(35, count * 4);
+  }
+
+  if (r.includes("heavier") || r.includes("sinking") || r.includes("deeper")) {
+    yOffset = Math.min(count * 2, 20);
+    scaleMultiplier = Math.max(scaleMultiplier, Math.min(1.2, 1 + count * 0.02));
+  }
+
+  if (r.includes("frantic") || r.includes("faster") || r.includes("intense")) {
+    glowRadius = Math.max(glowRadius, Math.min(20, count * 2 + beatIntensity * 4));
+  }
+
+  if (r.includes("fades") || r.includes("recedes") || r.includes("quieter")) {
+    opacityMultiplier = Math.max(0.3, 1 - count * 0.08);
+  }
+
+  if (r.includes("expands") || r.includes("aura") || r.includes("field")) {
+    const ringRadius = (wordWidth / 2) * (1.3 + count * 0.1);
+    ctx.beginPath();
+    ctx.ellipse(
+      wordX + wordWidth / 2,
+      wordY - fontSize / 2,
+      ringRadius,
+      ringRadius * 0.4,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.strokeStyle = `rgba(240,248,255,${Math.min(0.4, count * 0.05)})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    scaleMultiplier = Math.max(scaleMultiplier, Math.min(1.5, 1 + count * 0.05));
+  }
+
+  if (r.includes("consuming") && count > 8) {
+    const bigRadius = Math.max(wordWidth, ctx.canvas.width * 0.45);
+    ctx.beginPath();
+    ctx.ellipse(
+      wordX + wordWidth / 2,
+      wordY - fontSize / 2,
+      bigRadius,
+      Math.max(40, bigRadius * 0.35),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.strokeStyle = `rgba(240,248,255,${Math.min(0.3, 0.12 + count * 0.015)})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    scaleMultiplier = Math.max(scaleMultiplier, 1.5);
+    glowRadius = Math.max(glowRadius, 30);
+  }
+
+  if (r.includes("color") || r.includes("shifts")) {
+    ctx.fillStyle = palette[count % Math.max(1, palette.length)] ?? "#ffffff";
+  }
+
+  scaleMultiplier = Math.min(scaleMultiplier, 2.0);
+  glowRadius = Math.min(glowRadius, 40);
+  opacityMultiplier = Math.max(opacityMultiplier, 0.2);
+
+  return { scaleMultiplier, glowRadius, opacityMultiplier, yOffset };
+}
+
 export class DirectionInterpreter {
   constructor(
     public readonly direction: CinematicDirection,
@@ -52,28 +147,26 @@ export class DirectionInterpreter {
   }
 
   applyEvolutionRule(
-    rule: string,
-    appearance: number,
     ctx: CanvasRenderingContext2D,
+    rule: string,
+    history: WordHistory,
     wordX: number,
     wordY: number,
-    colorOverride?: string | null,
-  ): { yOffset: number } {
-    let yOffset = 0;
-    const normalizedRule = rule.toLowerCase();
-
-    if (normalizedRule.includes("larger")) {
-      const scale = Math.min(1.5, 1 + appearance * 0.05);
-      ctx.transform(scale, 0, 0, scale, wordX * (1 - scale), wordY * (1 - scale));
-    }
-    if (normalizedRule.includes("glow") || normalizedRule.includes("luminous")) {
-      ctx.shadowBlur = Math.min(30, appearance * 4);
-      ctx.shadowColor = colorOverride ?? "#ffffff";
-    }
-    if (normalizedRule.includes("heavier") || normalizedRule.includes("sinking")) {
-      yOffset += appearance * 2;
-    }
-
-    return { yOffset };
+    wordWidth: number,
+    fontSize: number,
+    beatIntensity: number,
+    palette: string[],
+  ): { scaleMultiplier: number; glowRadius: number; opacityMultiplier: number; yOffset: number } {
+    return applyEvolutionRule(
+      ctx,
+      rule,
+      history,
+      wordX,
+      wordY,
+      wordWidth,
+      fontSize,
+      beatIntensity,
+      palette,
+    );
   }
 }

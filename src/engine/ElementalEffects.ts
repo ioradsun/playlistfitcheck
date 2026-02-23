@@ -30,11 +30,12 @@ export function drawElementalWord(
 
       // Bubbles rising from word
       const bubbleCount = 3 + appearanceCount * 2;
-      const cappedBubbles = Math.min(bubbleCount, 12);
+      const bubbleSpeed = 1 + appearanceCount * 0.4;
+      const cappedBubbles = Math.min(bubbleCount, 18);
       for (let i = 0; i < cappedBubbles; i += 1) {
         const bx = (wordWidth * i / cappedBubbles) + Math.sin(currentTime * 3 + i) * 4;
         const byBase = -fontSize;
-        const byOffset = (currentTime * (15 + appearanceCount * 5) + i * 20) % 40;
+        const byOffset = (currentTime * (15 * bubbleSpeed) + i * 20) % 40;
         const by = byBase - byOffset;
         const opacity = Math.max(0, 0.6 - byOffset / 40);
 
