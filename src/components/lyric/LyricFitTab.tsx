@@ -411,6 +411,7 @@ export function LyricFitTab({
           setFmlyLines={setFmlyLines}
           versionMeta={versionMeta}
           setVersionMeta={setVersionMeta}
+          beatGrid={beatGrid}
           onProjectSaved={onProjectSaved}
           onNewProject={() => {
             setSongDna(null);

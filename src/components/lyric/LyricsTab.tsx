@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback } from "react";
+import type { BeatGridData } from "@/hooks/useBeatGrid";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
@@ -39,6 +40,7 @@ interface Props {
   setFmlyLines: (l: any[] | null) => void;
   versionMeta: any | null;
   setVersionMeta: (v: any | null) => void;
+  beatGrid?: BeatGridData | null;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;
@@ -61,6 +63,7 @@ export function LyricsTab({
   setFmlyLines,
   versionMeta,
   setVersionMeta,
+  beatGrid,
   onProjectSaved,
   onNewProject,
   onHeaderProject,
@@ -258,6 +261,7 @@ export function LyricsTab({
           audioFile={audioFile}
           hasRealAudio={hasRealAudio}
           savedId={savedId}
+          initialBeatGrid={beatGrid}
           fmlyLines={fmlyLines}
           versionMeta={versionMeta}
           debugData={debugData}
