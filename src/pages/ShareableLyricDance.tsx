@@ -530,8 +530,8 @@ export default function ShareableLyricDance() {
 
       {/* Debug */}
       <LiveDebugHUD player={playerRef.current} />
-      <DebugPanel player={playerRef.current} data={data} />
       <LyricDanceDebugPanel
+        player={playerRef.current}
         data={{
           songDna: {
             mood: (data.physics_spec as any)?.mood, description: (data.physics_spec as any)?.description,
