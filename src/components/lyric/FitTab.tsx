@@ -86,6 +86,45 @@ export function FitTab({
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
+
+  // Simple hash of lyrics to detect transcript changes
+  const computeLyricsHash = useCallback((lns: LyricLine[]) => {
+    const text = lns.filter(l => l.tag !== "adlib").map(l => `${l.text}|${l.start}|${l.end}`).join("\n");
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+    }
+    return String(hash);
+  }, []);
+
+  const currentLyricsHash = lyricData?.lines ? computeLyricsHash(lyricData.lines) : null;
+  const danceNeedsRegeneration = !publishedUrl || (publishedLyricsHash !== null && currentLyricsHash !== publishedLyricsHash);
+
+  // Check for existing published dance on load
+  useEffect(() => {
+    if (!user || !lyricData) return;
+    const artistSlug = slugify(lyricData.artist || "artist");
+    const songSlug = slugify(lyricData.title || "untitled");
+    if (!artistSlug || !songSlug) return;
+
+    supabase
+      .from("shareable_lyric_dances" as any)
+      .select("artist_slug, song_slug, lyrics")
+      .eq("user_id", user.id)
+      .eq("artist_slug", artistSlug)
+      .eq("song_slug", songSlug)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data) {
+          setPublishedUrl(`/${data.artist_slug}/${data.song_slug}/lyric-dance`);
+          // Hash the published lyrics to compare against current
+          const pubLines = Array.isArray(data.lyrics) ? data.lyrics : [];
+          setPublishedLyricsHash(computeLyricsHash(pubLines));
+        }
+      });
+  }, [user, lyricData, computeLyricsHash]);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
