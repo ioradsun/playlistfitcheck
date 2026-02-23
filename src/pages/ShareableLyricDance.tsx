@@ -29,13 +29,13 @@ const DIRECTION_COLUMNS = "cinematic_direction";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
 
-function ProgressBar({ player, data, onSeekStart, onSeekEnd, palette }: {
+const ProgressBar = React.forwardRef<HTMLDivElement, {
   player: LyricDancePlayer | null;
   data: LyricDanceData;
   onSeekStart: () => void;
   onSeekEnd: () => void;
   palette: string[];
-}) {
+}>(function ProgressBar({ player, data, onSeekStart, onSeekEnd, palette }, _ref) {
   const [progress, setProgress] = useState(0);
   const barRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
