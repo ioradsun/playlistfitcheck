@@ -15,22 +15,6 @@ import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
 
-function extractPeaks(buffer: AudioBuffer, samples: number): number[] {
-  const channel = buffer.getChannelData(0);
-  const blockSize = Math.floor(channel.length / samples);
-  const peaks: number[] = [];
-  for (let i = 0; i < samples; i++) {
-    let max = 0;
-    const start = i * blockSize;
-    for (let j = 0; j < blockSize; j++) {
-      const v = Math.abs(channel[start + j]);
-      if (v > max) max = v;
-    }
-    peaks.push(max);
-  }
-  const maxPeak = Math.max(...peaks, 0.01);
-  return peaks.map((p) => p / maxPeak);
-}
 
 interface Props {
   lyricData: LyricData;
