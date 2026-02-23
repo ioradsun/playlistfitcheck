@@ -142,14 +142,21 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
     return -1;
   });
 
+  const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
   const lineShotTypes = payload.lines.map((line) => {
+    // Try storyboard first
     for (let i = 0; i < storyboards.length; i += 1) {
       const s = storyboards[i];
       if ((line.start ?? 0) >= (s.startSec ?? 0) && (line.start ?? 0) < (s.endSec ?? 9999)) {
         return s.shotType ?? "Medium";
       }
     }
-    return "Medium";
+    // Fall back to chapter index — alternate shot types across chapters
+    const chapterIdx = chapters.findIndex(
+      (ch) => (line.start ?? 0) >= (ch.startSec ?? 0) && (line.start ?? 0) < (ch.endSec ?? 9999)
+    );
+    if (chapterIdx < 0) return 'Medium';
+    return shotCycle[chapterIdx % shotCycle.length];
   });
 
   const lineHeroWords = payload.lines.map((line) => {
