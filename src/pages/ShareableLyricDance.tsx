@@ -674,7 +674,7 @@ export default function ShareableLyricDance() {
 
         // Resolve animation mods via AnimationResolver
         const lineAnim = animationResolver.resolveLine(
-          activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity,
+          activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette,
         );
         frameActiveMod = lineAnim.activeMod;
         frameIsHook = lineAnim.isHookLine;
@@ -721,7 +721,7 @@ export default function ShareableLyricDance() {
           fs: fontSize, age,
           progress: lineProgress,
           rng,
-          palette: textPalette,
+          palette: [lineAnim.lineColor, textPalette[1], textPalette[2]],
           system: effectiveSystem,
           effectiveLetterSpacing,
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
