@@ -335,45 +335,31 @@ export class LyricDancePlayer {
   async init(): Promise<void> {
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
 
-    if (!globalTimelineCache && !globalBakeLock) {
+    if (!globalBakePromise) {
       // First instance — start the bake
       globalBakeLock = true;
       globalBakePromise = (async () => {
         const payload = this.buildScenePayload();
-        try {
-          const chunkSnapshot = await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
-          globalTimelineCache = [...this.timeline];
-          globalChunkCache = chunkSnapshot;
-          console.log('[PLAYER] bake done — frames:', globalTimelineCache.length, 'chunks:', globalChunkCache.size);
-        } catch (e) {
-          console.error('[PLAYER] bake failed:', e);
-        } finally {
-          globalBakeLock = false;
-        }
+        await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
+        globalTimelineCache = this.timeline.slice();
+        globalChunkCache = new Map(this.chunks);
+        globalBakeLock = false;
+        console.log('[PLAYER] bake done — frames:', globalTimelineCache.length, 'chunks:', globalChunkCache.size);
       })();
-      await globalBakePromise;
-    } else if (globalBakePromise && !globalTimelineCache) {
-      // Second instance — bake in progress, wait for it
-      console.log('[PLAYER] waiting for bake to complete');
-      await globalBakePromise;
-      console.log('[PLAYER] instance 2 after wait — cache exists:',
-        !!globalTimelineCache, 'frames:', globalTimelineCache?.length,
-        'chunks:', globalChunkCache?.size,
-        'this.timeline after copy:', this.timeline.length);
     }
 
-    if (globalTimelineCache?.length && globalChunkCache?.size) {
-      this.timeline = globalTimelineCache.slice();
-      this.chunks = new Map(globalChunkCache);
-      this.buildBgCache();
-      console.log('[PLAYER] instance 2 copy — this.timeline:', this.timeline.length, 'this.chunks:', this.chunks.size);
-    }
+    // ALL instances wait for the promise — including the first one
+    await globalBakePromise;
+
+    // Now cache is guaranteed to exist for every instance
+    this.timeline = globalTimelineCache!.slice();
+    this.chunks = new Map(globalChunkCache!);
+    this.buildBgCache();
+    console.log('[PLAYER] ready — frames:', this.timeline.length, 'chunks:', this.chunks.size);
 
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
     this.playing = true;
-    console.log('[PLAYER] starting RAF — timeline frames:', this.timeline.length,
-      'chunks:', this.chunks.size);
     this.rafHandle = requestAnimationFrame(this.tick);
   }
 
