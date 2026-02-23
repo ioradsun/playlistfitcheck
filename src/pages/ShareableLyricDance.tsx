@@ -831,6 +831,7 @@ export default function ShareableLyricDance() {
     const bgCtx = bgCanvas.getContext("2d", { alpha: false })!;
     const textCtx = textCanvas.getContext("2d", { alpha: true })!;
 
+    let activePixelRatio = 1;
     const spec = data.physics_spec;
     const lines = data.lyrics;
 
