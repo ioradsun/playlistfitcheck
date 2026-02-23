@@ -450,7 +450,8 @@ export class LyricDancePlayer {
     const tctx = this.textCanvas.getContext("2d", { alpha: true });
     if (tctx) tctx.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
 
-    this.chunks.clear();
+    // Only clear local reference, not the global cache
+    this.chunks = new Map();
     this.timeline = [];
     this.bgCache = null;
 
