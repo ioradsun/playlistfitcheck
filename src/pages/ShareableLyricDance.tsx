@@ -571,7 +571,7 @@ interface LyricDanceData {
   audio_url: string;
   lyrics: LyricLine[];
   physics_spec: PhysicsSpec;
-  beat_grid: { bpm: number; beats: number[]; confidence: number };
+  beat_grid: BeatGrid;
   palette: string[];
   system_type: string;
   artist_dna: ArtistDNA | null;
@@ -590,6 +590,45 @@ interface DanceComment {
   id: string;
   text: string;
   submitted_at: string;
+}
+
+interface BeatGrid {
+  bpm: number;
+  beats: number[];
+  confidence: number;
+}
+
+interface LineBeatMap {
+  lineIndex: number;
+  beats: number[];
+  strongBeats: number[];
+  beatCount: number;
+  beatsPerSecond: number;
+  firstBeat: number;
+  lastBeat: number;
+}
+
+function buildLineBeatMap(lines: LyricLine[], beatGrid: BeatGrid): LineBeatMap[] {
+  return lines.map((line, i) => {
+    const lineBeats = beatGrid.beats.filter(beat => beat >= line.start && beat <= line.end);
+    return {
+      lineIndex: i,
+      beats: lineBeats,
+      strongBeats: lineBeats.filter((_, beatIdx) => beatIdx % 2 === 0),
+      beatCount: lineBeats.length,
+      beatsPerSecond: lineBeats.length / Math.max(0.001, line.end - line.start),
+      firstBeat: lineBeats[0] ?? line.start,
+      lastBeat: lineBeats[lineBeats.length - 1] ?? line.end,
+    };
+  });
+}
+
+function snapToNearestBeat(timestamp: number, beats: number[], tolerance: number = 0.1): number {
+  if (beats.length === 0) return timestamp;
+  const nearest = beats.reduce((prev, curr) => (
+    Math.abs(curr - timestamp) < Math.abs(prev - timestamp) ? curr : prev
+  ));
+  return Math.abs(nearest - timestamp) < tolerance ? nearest : timestamp;
 }
 
 const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,cinematic_direction,background_url";
@@ -697,6 +736,9 @@ export default function ShareableLyricDance() {
   const yBaseRef = useRef(0);
   const wordCountRef = useRef<Map<string, number>>(new Map());
   const seenWordAppearancesRef = useRef<Set<string>>(new Set());
+  const beatScaleRef = useRef(1);
+  const lineBeatMapRef = useRef<LineBeatMap[]>([]);
+
 
   // Comments / constellation
   const constellationRef = useRef<ConstellationNode[]>([]);
@@ -714,6 +756,16 @@ export default function ShareableLyricDance() {
     }
     engineRef.current = new HookDanceEngine(physicsSpec);
   }, [physicsSpec]);
+
+  useEffect(() => {
+    const lines = data?.lyrics;
+    const beatGrid = data?.beat_grid;
+    if (lines && beatGrid) {
+      lineBeatMapRef.current = buildLineBeatMap(lines, beatGrid);
+    } else {
+      lineBeatMapRef.current = [];
+    }
+  }, [data?.lyrics, data?.beat_grid]);
 
   // ── Load data ─────────────────────────────────────────────────────────────
 
@@ -885,6 +937,15 @@ export default function ShareableLyricDance() {
       .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0, effectivePalette).isHookLine)
       .map(line => line.start)
       .sort((a, b) => a - b);
+    const lineBeatMap = lineBeatMapRef.current;
+    const climaxLine = lines.find(line => line.text.toLowerCase().includes("drown"));
+    const climaxBeat = sortedBeats.find(beat => (
+      beat >= (climaxLine?.start ?? 0) && beat <= (climaxLine?.start ?? 0) + 1.0
+    ));
+    const chapters = cinematicDirection?.chapters ?? [];
+    let chapterBeatIndex = 0;
+    let activeChapterIndex = 0;
+    let pendingChapterTransition: ((typeof chapters)[number]) | null = null;
 
     // Set up audio
     const audio = new Audio(data.audio_url);
@@ -911,6 +972,14 @@ export default function ShareableLyricDance() {
     let prevTime = songStart;
     let lastFrameTime = performance.now();
     let smoothBeatIntensity = 0; // exponential-decay beat intensity
+
+    const triggerChapterTransition = (nextChapter: (typeof chapters)[number]) => {
+      const nextIndex = chapters.indexOf(nextChapter);
+      if (nextIndex >= 0) {
+        activeChapterIndex = nextIndex;
+      }
+      pendingChapterTransition = null;
+    };
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -974,6 +1043,10 @@ export default function ShareableLyricDance() {
       };
       const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
+      const activeLineBeatMap = activeLineIndex >= 0 ? lineBeatMap[activeLineIndex] : undefined;
+      const isOnBeat = activeLineBeatMap?.beats.some(beat => Math.abs(currentTime - beat) < 0.05) ?? false;
+      const isOnStrongBeat = activeLineBeatMap?.strongBeats.some(beat => Math.abs(currentTime - beat) < 0.05) ?? false;
+      const beatDensity = activeLineBeatMap?.beatsPerSecond ?? 0;
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
       const baselineY = yBaseRef.current === 0 ? ch * 0.5 : yBaseRef.current;
       let activeWordPosition = {
@@ -1026,7 +1099,26 @@ export default function ShareableLyricDance() {
         ctx.globalAlpha = 1;
       }
 
-      const chapterDirective = interpreter?.getCurrentChapter(songProgress) ?? null;
+      const interpretedChapter = interpreter?.getCurrentChapter(songProgress) ?? null;
+      if (chapters.length > 0) {
+        const nextChapter = chapters[Math.min(activeChapterIndex + 1, chapters.length - 1)];
+        if (nextChapter && nextChapter.startRatio <= songProgress && !pendingChapterTransition) {
+          pendingChapterTransition = nextChapter;
+        }
+        if (pendingChapterTransition) {
+          while (chapterBeatIndex < sortedBeats.length && sortedBeats[chapterBeatIndex] < currentTime - 0.06) {
+            chapterBeatIndex += 1;
+          }
+          const chapterBoundaryStart = pendingChapterTransition.startRatio * totalDuration;
+          const chapterBoundaryBeat = sortedBeats.find(beat => (
+            beat >= chapterBoundaryStart && beat <= chapterBoundaryStart + 0.5
+          ));
+          if (chapterBoundaryBeat && Math.abs(currentTime - chapterBoundaryBeat) < 0.05) {
+            triggerChapterTransition(pendingChapterTransition);
+          }
+        }
+      }
+      const chapterDirective = chapters[activeChapterIndex] ?? interpretedChapter;
       const activeSystem = chapterDirective?.backgroundDirective || getBackgroundSystemForTime(
         timelineManifest,
         songProgress,
@@ -1083,6 +1175,9 @@ export default function ShareableLyricDance() {
         ctx.fillStyle = `rgba(255,140,0,${flickerAlpha})`;
         ctx.fillRect(0, 0, cw, ch);
       }
+
+      // Beat scale baseline decay.
+      beatScaleRef.current = Math.max(1, beatScaleRef.current * 0.9);
 
       // Near particles after overlays for cinematic depth.
       if (particleEngine) {
@@ -1234,6 +1329,48 @@ export default function ShareableLyricDance() {
         }
 
         const lineDirection = interpreter?.getLineDirection(activeLineIndex) ?? null;
+        const beatAlignment = (lineDirection?.beatAlignment ?? "").toLowerCase();
+        if (beatAlignment.includes("explosive") || beatAlignment.includes("heavy")) {
+          if (isOnStrongBeat) {
+            const shakeX = (Math.random() - 0.5) * 8;
+            const shakeY = (Math.random() - 0.5) * 3;
+            ctx.translate(shakeX, shakeY);
+            beatScaleRef.current = Math.max(beatScaleRef.current, 1.15);
+          }
+        }
+        if (beatAlignment.includes("gentle") || beatAlignment.includes("subtle")) {
+          if (isOnBeat) {
+            beatScaleRef.current = Math.max(beatScaleRef.current, 1.04);
+          }
+        }
+        if (beatAlignment.includes("accelerating")) {
+          const beatAtTime = activeLineBeatMap?.beats.findIndex(beat => Math.abs(currentTime - beat) < 0.05) ?? 0;
+          const acceleration = 1 + Math.max(0, beatAtTime) * 0.02;
+          beatScaleRef.current = Math.max(
+            beatScaleRef.current,
+            1.0 + (currentBeatIntensity * acceleration * 0.08),
+          );
+        }
+        if (beatAlignment.includes("sustained")) {
+          beatScaleRef.current = Math.max(
+            beatScaleRef.current - 0.01,
+            1.0 + currentBeatIntensity * 0.05,
+          );
+        }
+        if (beatAlignment.includes("rapid") || beatAlignment.includes("all-encompassing")) {
+          if (isOnBeat) {
+            ctx.fillStyle = `rgba(255,255,255,${currentBeatIntensity * 0.08})`;
+            ctx.fillRect(0, 0, cw, ch);
+          }
+        }
+
+        if (climaxBeat && Math.abs(currentTime - climaxBeat) < 0.05 && particleEngine) {
+          particleEngine.burst(50, activeWordPosition.x, activeWordPosition.y);
+          ctx.translate((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 4);
+          ctx.fillStyle = "rgba(255,255,255,0.2)";
+          ctx.fillRect(0, 0, cw, ch);
+        }
+
         const lineHeroDirective = lineDirection?.heroWord
           ? interpreter?.getWordDirective(lineDirection.heroWord) ?? null
           : null;
@@ -1360,7 +1497,7 @@ export default function ShareableLyricDance() {
         if (Math.abs(state.rotation) > 0.0001) {
           ctx.rotate(state.rotation);
         }
-        ctx.scale(activeLineAnim.scale * state.scale, activeLineAnim.scale * state.scale);
+        ctx.scale(activeLineAnim.scale * state.scale * beatScaleRef.current, activeLineAnim.scale * state.scale * beatScaleRef.current);
         ctx.translate(-lineX, -lineY);
 
         if (activeLineAnim.activeMod) {
@@ -1424,7 +1561,8 @@ export default function ShareableLyricDance() {
           const sourceWordIndex = displayMode === "single_word"
             ? Math.max(0, visibleWordCount - 1)
             : renderedIndex;
-          const resolvedWordStartTime = activeLine.start + Math.max(0, sourceWordIndex) * wordDelay;
+          const unsnappedWordStartTime = activeLine.start + Math.max(0, sourceWordIndex) * wordDelay;
+          const resolvedWordStartTime = snapToNearestBeat(unsnappedWordStartTime, sortedBeats);
           const appearanceKey = `${activeLine.start}:${Math.max(0, sourceWordIndex)}:${normalizedWord}`;
 
           if (!seenWordAppearancesRef.current.has(appearanceKey) && currentTime >= resolvedWordStartTime) {
@@ -1581,7 +1719,7 @@ export default function ShareableLyricDance() {
       dbg.particleDensity = particleEngine?.getConfig().density ?? 0;
       dbg.particleSpeed = particleEngine?.getConfig().speed ?? 0;
       dbg.particleCount = particleEngine?.getActiveCount() ?? 0;
-      dbg.songSection = frameSectionZone || getSongSection(songProgress);
+      dbg.songSection = `${frameSectionZone || getSongSection(songProgress)} · ${beatDensity.toFixed(1)}bps`;
       // Position
       dbg.xOffset = xOffsetRef.current;
       dbg.yBase = yBaseRef.current / ch;
