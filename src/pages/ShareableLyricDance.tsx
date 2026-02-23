@@ -1509,7 +1509,7 @@ export default function ShareableLyricDance() {
         getWordWidth,
         isMobile,
         hardwareConcurrency: navigator.hardwareConcurrency ?? 4,
-        devicePixelRatio: window.devicePixelRatio ?? 1,
+        devicePixelRatio: activePixelRatio,
         precomputedLine: activePlanLine,
       }, textStateRef.current);
       const t4 = performance.now();
