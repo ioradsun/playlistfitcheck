@@ -695,11 +695,6 @@ export default function ShareableLyricDance() {
             }
           });
 
-        Promise.resolve().then(() => {
-          if (d.song_dna?.cinematic_direction) {
-            setData(prev => prev ? { ...prev, cinematic_direction: d.song_dna?.cinematic_direction ?? null } : prev);
-          }
-        });
 
         // Non-critical: load profile + comments in parallel
         const [profileResult, commentsResult] = await Promise.all([
