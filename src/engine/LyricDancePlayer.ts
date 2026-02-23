@@ -362,10 +362,11 @@ export class LyricDancePlayer {
         'this.timeline after copy:', this.timeline.length);
     }
 
-    if (globalTimelineCache && globalChunkCache) {
+    if (globalTimelineCache && globalChunkCache && globalChunkCache.size > 0) {
       this.timeline = [...globalTimelineCache];
       this.chunks = new Map(globalChunkCache);
       this.buildBgCache();
+      console.log('[PLAYER] instance 2 reused — frames:', this.timeline.length, 'chunks:', this.chunks.size);
     }
 
     this.audio.currentTime = this.songStartSec;
