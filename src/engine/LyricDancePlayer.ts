@@ -628,8 +628,7 @@ export class LyricDancePlayer {
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
 
-      if (!this._hasLoggedDrawChunk) {
-        this._hasLoggedDrawChunk = true;
+      {
         const drawScale = (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
         const zoom = frame.cameraZoom ?? 1.0;
         const fontSize = chunk.fontSize ?? 36;
