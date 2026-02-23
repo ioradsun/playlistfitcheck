@@ -633,7 +633,7 @@ serve(async (req) => {
     }
 
     const editorMode = typeof referenceLyrics === "string" && referenceLyrics.trim().length > 0;
-    if (editorMode) console.log(`[editor-mode] Reference lyrics provided (${referenceLyrics.trim().split("\n").length} lines)`);
+    if (editorMode) console.log(`[editor-mode] Reference lyrics provided (${referenceLyrics!.trim().split("\n").length} lines)`);
     if (!audioBase64) throw new Error("No audio data provided");
 
     // Resolve transcription engine
@@ -649,13 +649,13 @@ serve(async (req) => {
       "google/gemini-3-pro-preview",
     ];
     const analysisDisabled = analysisModel === "disabled";
-    const resolvedAnalysisModel: string = VALID_ANALYSIS_MODELS.includes(analysisModel)
-      ? analysisModel
+    const resolvedAnalysisModel: string = VALID_ANALYSIS_MODELS.includes(analysisModel ?? "")
+      ? analysisModel!
       : "google/gemini-2.5-flash";
 
     // Gemini transcription model — use analysis model or default
-    const geminiTranscribeModel = VALID_ANALYSIS_MODELS.includes(transcriptionModel)
-      ? transcriptionModel
+    const geminiTranscribeModel = VALID_ANALYSIS_MODELS.includes(transcriptionModel ?? "")
+      ? transcriptionModel!
       : resolvedAnalysisModel;
 
     const estimatedBytes = audioBase64.length * 0.75;
@@ -683,7 +683,7 @@ serve(async (req) => {
 
     // ── Stage 1: Transcription only (Song DNA is now a separate on-demand call) ──
     const transcribePromise = useGeminiTranscription
-      ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics.trim() : undefined)
+      ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined)
       : runScribe(audioBase64, ext, mimeType, ELEVENLABS_API_KEY!);
 
     const [transcribeResult] = await Promise.allSettled([transcribePromise]);
@@ -701,7 +701,7 @@ serve(async (req) => {
 
     // ── Editor Mode: apply reference lyrics diff for Scribe path ────────────
     if (editorMode && !useGeminiTranscription) {
-      words = applyReferenceLyricsDiff(words, referenceLyrics.trim());
+      words = applyReferenceLyricsDiff(words, referenceLyrics!.trim());
       // Rebuild segments from corrected words
       const MAX_WORDS_PER_SEG = 6;
       segments = [];
