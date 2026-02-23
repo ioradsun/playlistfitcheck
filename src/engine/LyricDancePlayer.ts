@@ -552,6 +552,7 @@ export class LyricDancePlayer {
 
   private buildScenePayload(): ScenePayload {
     const lines = this.data.lyrics ?? [];
+    console.log('[PLAYER] buildScenePayload — lyrics count:', this.data.lyrics?.length, 'lines:', lines.length);
     const songStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
     const songEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
 
