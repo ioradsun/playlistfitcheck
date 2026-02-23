@@ -24,6 +24,7 @@ import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import { getSessionId } from "@/lib/sessionId";
+import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
 
 interface LyricDanceData {
   id: string;
@@ -860,6 +861,31 @@ export default function ShareableLyricDance() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Debug Panel */}
+      <LyricDanceDebugPanel
+        data={{
+          songDna: {
+            mood: (data.physics_spec as any)?.mood,
+            description: (data.physics_spec as any)?.description,
+            meaning: (data.physics_spec as any)?.meaning,
+            hook: (data.physics_spec as any)?.hook,
+            secondHook: (data.physics_spec as any)?.secondHook,
+            hookLabel: (data.physics_spec as any)?.hookLabel,
+            secondHookLabel: (data.physics_spec as any)?.secondHookLabel,
+            hookJustification: (data.physics_spec as any)?.hookJustification,
+            secondHookJustification: (data.physics_spec as any)?.secondHookJustification,
+            physicsSpec: data.physics_spec as any,
+            scene_manifest: data.scene_manifest,
+          },
+          beatGrid: data.beat_grid,
+          lines: data.lyrics,
+          title: data.song_name,
+          artist: data.artist_name,
+          overrides: {},
+          fingerprint: data.artist_dna,
+        }}
+      />
     </div>
   );
 }
