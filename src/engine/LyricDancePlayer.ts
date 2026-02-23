@@ -593,21 +593,6 @@ export class LyricDancePlayer {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
 
-    if (!this.hasLoggedFirstFrame && this.currentTimeMs > 100) {
-      this.hasLoggedFirstFrame = true;
-      console.log('[DRAW] first frame sample:', JSON.stringify({
-        cameraX: frame.cameraX,
-        cameraY: frame.cameraY,
-        cameraZoom: (frame as any).cameraZoom,
-        bgBlend: (frame as any).bgBlend,
-        visibleChunks: frame.chunks?.filter(c => c.visible).map(c => ({
-          id: c.id,
-          alpha: c.alpha,
-          glow: c.glow,
-          scale: c.scale,
-        })),
-      }));
-    }
 
     // 1. Background — drawn at identity transform, always fills canvas
     if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
