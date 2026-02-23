@@ -171,8 +171,10 @@ function bakeFrame(
     const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
 
     let x = linePositions[idx] + lineChapterOffsets[idx];
-    const estimatedWidth = line.text.length * 26;
-    x = Math.max(estimatedWidth / 2 + 40, Math.min(960 - estimatedWidth / 2 - 40, x));
+    const estimatedWidth = Math.min(880, line.text.length * 28);
+    const maxX = 960 - estimatedWidth / 2 - 60;
+    const minX = estimatedWidth / 2 + 60;
+    x = Math.max(minX, Math.min(maxX, x));
     const y = getShotY(payload.cinematic_direction, chapter);
 
     const priorPulse = state.linePulse.get(idx) ?? 0;

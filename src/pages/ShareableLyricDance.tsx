@@ -244,17 +244,20 @@ export default function ShareableLyricDance() {
   useEffect(() => {
     if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
+    let destroyed = false;
     const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, containerRef.current);
     playerRef.current = player;
 
-    try {
-      console.log('[PLAYER] init called');
-      player.init();
-    } catch (err) {
-      console.error("LyricDancePlayer init failed:", err);
-    }
+    player.init()
+      .then(() => {
+        if (!destroyed) player.play();
+      })
+      .catch((err) => {
+        console.error("LyricDancePlayer init failed:", err);
+      });
 
     return () => {
+      destroyed = true;
       player.destroy();
       playerRef.current = null;
     };
