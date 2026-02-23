@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,169 +7,49 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const MASTER_DIRECTOR_PROMPT = `
-You are an award-winning animated film director
-and visual storyteller. Your name is Director.
+const LOG = "[song-dna]";
 
-You will receive a complete song — every lyric line
-with timestamps, the beat grid, title, and artist.
+async function fetchPrompt(slug: string, fallback: string): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(url, key);
+    const { data } = await sb.from("ai_prompts").select("prompt").eq("slug", slug).single();
+    return data?.prompt || fallback;
+  } catch { return fallback; }
+}
 
-Your job: produce a CinematicDirection JSON document
-that turns this song into a narrative lyric film.
+const DEFAULT_PROMPT = `ROLE: Universal Music & Physics Orchestrator
 
-THE LAWS OF DIRECTION:
-1. THE WORDS ARE THE ACTORS.
-   Every visual decision must serve what the 
-   words literally and emotionally mean.
-   "drown" must look like drowning.
-   "run" must look like running.
-   "love" must feel like love — not just glow pink.
+TASK: Analyze the full audio track, beat grid, and timestamped lyrics to extract the Song DNA, define a deterministic Physics Spec, and describe a uniquely cinematic visual world.
 
-2. NO GENERIC EFFECTS.
-   Every effect must be justified by the specific
-   lyrics of THIS song. Not any song. THIS one.
+Your response MUST be complete, valid JSON. Do NOT truncate.
 
-3. REPETITION MUST EVOLVE.
-   The 5th time a word appears it must look 
-   different from the 1st. Decide how.
-   Does it get louder? More desperate? More resigned?
-   Trace the emotional arc of each repeated word.
-
-4. ONE THESIS DRIVES EVERYTHING.
-   State it in one sentence before any other decision.
-   Every color, every motion, every particle choice
-   must serve that thesis.
-
-5. SILENCE IS A SCENE.
-   Gaps between lyrics are directed moments.
-   The world continues to tell the story.
-   What does the camera do when no one is singing?
-
-6. BPM IS EMOTIONAL TEMPO NOT JUST SPEED.
-   A 150 BPM dance track about obsessive love
-   is not the same as a 150 BPM euphoric track.
-   The beat drives tension, not just motion.
-
-PRODUCE THIS EXACT JSON STRUCTURE:
-
+OUTPUT — valid JSON only:
 {
-  "thesis": "one sentence — what is this song really about",
-  
-  "visualWorld": {
+  "hottest_hooks": [
+    { "start_sec": 0.000, "duration_sec": 10.000, "confidence": 0.95, "justification": "...", "label": "The Drop" },
+    { "start_sec": 45.000, "duration_sec": 10.000, "confidence": 0.85, "justification": "...", "label": "The Confession" }
+  ],
+  "description": "One evocative sentence (max 15 words)",
+  "mood": "Single dominant emotional driver",
+  "world": "A concrete cinematic place sentence",
+  "meaning": { "theme": "2-4 words", "summary": "2-3 sentences", "imagery": ["scene1", "scene2"] },
+  "physics_spec": {
+    "system": "fracture|pressure|breath|combustion|orbit",
+    "params": { "mass": 1.2, "elasticity": 0.5, "damping": 0.6, "brittleness": 0.3, "heat": 0.2 },
     "palette": ["#hex", "#hex", "#hex"],
-    "backgroundSystem": "describe the environment",
-    "lightSource": "describe light behavior",
-    "particleSystem": "describe what fills the air",
-    "typographyProfile": {
-      "fontFamily": "font name",
-      "fontWeight": 400-900,
-      "personality": "describe the voice",
-      "letterSpacing": "normal/wide/tight",
-      "textTransform": "none/uppercase/lowercase"
-    },
-    "physicsProfile": {
-      "weight": "featherlight/light/normal/heavy/crushing",
-      "chaos": "still/restrained/building/chaotic/explosive",
-      "heat": 0.0-1.0,
-      "beatResponse": "breath/pulse/slam/drift/shatter"
+    "effect_pool": ["EFFECT1", "EFFECT2", "EFFECT3", "EFFECT4"],
+    "logic_seed": 12345,
+    "particleConfig": { "system": "none", "density": 0.3, "speed": 0.4, "opacity": 0.35, "color": "#hex", "beatReactive": false, "foreground": false },
+    "typographyProfile": { "fontFamily": "Inter", "fontWeight": 500, "letterSpacing": "0.04em", "textTransform": "none", "lineHeightMultiplier": 1.2, "hasSerif": false, "personality": "RAW TRANSCRIPT" },
+    "lexicon": {
+      "semantic_tags": [{ "tag": "LIGHT", "strength": 0.8 }],
+      "line_mods": [{ "t_lyric": 12, "mods": ["HEAT_SPIKE"] }],
+      "word_marks": [{ "t_lyric": 12, "wordIndex": 3, "mark": "GLITCH" }]
     }
-  },
-  
-  "chapters": [
-    {
-      "startRatio": 0.0,
-      "endRatio": 0.33,
-      "title": "act title",
-      "emotionalArc": "what happens emotionally",
-      "dominantColor": "#hex",
-      "lightBehavior": "specific light description",
-      "particleDirective": "specific particle behavior",
-      "backgroundDirective": "specific background behavior",
-      "emotionalIntensity": 0.0-1.0,
-      "typographyShift": null or "description"
-    }
-    // 3 chapters minimum
-  ],
-  
-  "wordDirectives": {
-    "wordtext": {
-      "word": "wordtext",
-      "kineticClass": "FALLING or RUNNING etc or null",
-      "elementalClass": "FIRE or RAIN etc or null",
-      "emphasisLevel": 0.0-1.0,
-      "colorOverride": "#hex or null",
-      "specialEffect": "description or null",
-      "evolutionRule": "how it changes across repetitions or null"
-    }
-  },
-  
-  "storyboard": [
-    {
-      "lineIndex": 0,
-      "text": "exact lyric text",
-      "emotionalIntent": "what this line does emotionally",
-      "heroWord": "the one word that carries this line",
-      "visualTreatment": "specific visual description",
-      "entryStyle": "fades/slams-in/rises/materializes/fractures-in/cuts",
-      "exitStyle": "fades/dissolves-upward/shatters/burns-out/drops/lingers",
-      "particleBehavior": "what particles do during this line",
-      "beatAlignment": "how this line relates to the beat",
-      "transitionToNext": "how we move to the next line"
-    }
-  ],
-  
-  "silenceDirective": {
-    "cameraMovement": "description",
-    "particleShift": "description", 
-    "lightShift": "description",
-    "tensionDirection": "building/releasing/holding"
-  },
-  
-  "climax": {
-    "timeRatio": 0.0-1.0,
-    "triggerLine": "exact lyric text of climax line",
-    "maxParticleDensity": 0.0-1.0,
-    "maxLightIntensity": 0.0-1.0,
-    "typographyBehavior": "description",
-    "worldTransformation": "description"
-  },
-  
-  "ending": {
-    "style": "linger/fade/snap/dissolve",
-    "emotionalAftertaste": "description",
-    "particleResolution": "description",
-    "lightResolution": "description"
   }
-}
-
-IMPORTANT:
-- Return ONLY valid JSON. No markdown. No explanation.
-- Every word directive must reference actual words 
-  from the lyrics — not generic words.
-- Chapter time ratios must cover 0.0 to 1.0 completely.
-- Storyboard must have one entry per lyric line.
-- The thesis must be specific to THIS song.
-  "A love song" is not a thesis.
-  "A person who knows they should leave but 
-   physically cannot stop loving someone" is a thesis.
-`;
-
-type LyricLine = { text: string; start?: number; end?: number };
-
-interface AnalyzeRequest {
-  title?: string;
-  artist?: string;
-  lines?: LyricLine[];
-  lyrics?: string;
-  beatGrid?: { bpm?: number; beats?: number[]; confidence?: number };
-  lyricId?: string;
-  id?: string;
-}
-
-function clamp(n: unknown, min: number, max: number, fallback: number): number {
-  if (typeof n !== "number" || Number.isNaN(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
-}
+}`;
 
 function extractJson(raw: string): Record<string, unknown> | null {
   const cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
@@ -182,75 +63,15 @@ function extractJson(raw: string): Record<string, unknown> | null {
   }
 }
 
-function isHex(value: unknown): value is string {
-  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
-}
-
-function validateCinematicDirection(value: Record<string, unknown>, linesCount: number): string[] {
-  const errors: string[] = [];
-  const vw = value.visualWorld as Record<string, unknown> | undefined;
-  const chapters = value.chapters as Record<string, unknown>[] | undefined;
-  const storyboard = value.storyboard as Record<string, unknown>[] | undefined;
-  const climax = value.climax as Record<string, unknown> | undefined;
-
-  if (typeof value.thesis !== "string" || !value.thesis.trim()) errors.push("thesis is required");
-  if (!vw) errors.push("visualWorld is required");
-
-  const palette = vw?.palette as unknown[] | undefined;
-  if (!Array.isArray(palette) || palette.length !== 3 || !palette.every(isHex)) {
-    errors.push("visualWorld.palette must be 3 valid hex colors");
-  }
-
-  if (!Array.isArray(chapters) || chapters.length < 3) errors.push("chapters must have at least 3 entries");
-  if (Array.isArray(chapters) && chapters.length > 0) {
-    const sorted = [...chapters].sort((a, b) => Number(a.startRatio ?? 0) - Number(b.startRatio ?? 0));
-    if (Math.abs(Number(sorted[0].startRatio ?? 0) - 0) > 0.001) errors.push("chapters must start at 0.0");
-    if (Math.abs(Number(sorted[sorted.length - 1].endRatio ?? 0) - 1) > 0.001) errors.push("chapters must end at 1.0");
-  }
-
-  if (!Array.isArray(storyboard)) {
-    errors.push("storyboard must be an array");
-  } else if (storyboard.length !== linesCount) {
-    errors.push(`storyboard length ${storyboard.length} must equal lines length ${linesCount}`);
-  }
-
-  if (!climax || typeof climax.timeRatio !== "number") errors.push("climax.timeRatio is required");
-  if (climax && typeof climax.timeRatio === "number" && (climax.timeRatio < 0 || climax.timeRatio > 1)) {
-    errors.push("climax.timeRatio must be 0-1");
-  }
-
-  return errors;
-}
-
-async function persistCinematicDirection(cinematicDirection: Record<string, unknown>, lyricId?: string): Promise<void> {
-  if (!lyricId) return;
-
-  const sbUrl = Deno.env.get("SUPABASE_URL");
-  const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!sbUrl || !sbKey) return;
-
-  const payload = { cinematic_direction: cinematicDirection };
-  const headers = {
-    apikey: sbKey,
-    Authorization: `Bearer ${sbKey}`,
-    "Content-Type": "application/json",
-    Prefer: "return=minimal",
-  };
-
-  const attempts = ["lyric_dance", "saved_lyrics"];
-  for (const table of attempts) {
-    const res = await fetch(`${sbUrl}/rest/v1/${table}?id=eq.${encodeURIComponent(lyricId)}`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      console.log(`[lyric-analyze] Stored cinematic_direction in ${table} for ${lyricId}`);
-      return;
-    }
-  }
-
-  console.warn(`[lyric-analyze] Could not store cinematic_direction for ${lyricId}`);
+interface AnalyzeRequest {
+  title?: string;
+  artist?: string;
+  lyrics?: string;
+  audioBase64?: string;
+  format?: string;
+  beatGrid?: { bpm?: number; confidence?: number };
+  includeHooks?: boolean;
+  userSceneDirection?: string;
 }
 
 serve(async (req) => {
@@ -258,105 +79,163 @@ serve(async (req) => {
 
   try {
     const body = (await req.json()) as AnalyzeRequest;
-    const lines = Array.isArray(body.lines)
-      ? body.lines
-      : typeof body.lyrics === "string"
-        ? body.lyrics.split(/\n+/).map((text, index) => ({ text: text.trim(), start: index, end: index + 1 })).filter((line) => line.text.length > 0)
-        : [];
     const title = String(body.title ?? "").trim();
     const artist = String(body.artist ?? "").trim();
-    const lyricId = typeof body.lyricId === "string" ? body.lyricId : typeof body.id === "string" ? body.id : undefined;
+    const lyrics = String(body.lyrics ?? "").trim();
 
-    if (!title || !artist || lines.length === 0) {
-      return new Response(JSON.stringify({ error: "title, artist, and lines are required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (!title || !artist || !lyrics) {
+      return new Response(JSON.stringify({ error: "title, artist, and lyrics are required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const songPayload = {
-      title,
-      artist,
-      lines,
-      beatGrid: body.beatGrid ?? null,
+    // Fetch prompt from DB
+    const systemPrompt = await fetchPrompt("lyric-hook", DEFAULT_PROMPT);
+    const promptSource = systemPrompt !== DEFAULT_PROMPT ? "db" : "v1-legacy";
+    console.log(`${LOG} Prompt source: ${promptSource}, length: ${systemPrompt.length}`);
+
+    // Build user message with optional audio
+    const userParts: unknown[] = [];
+    
+    if (body.audioBase64) {
+      const audioMB = (body.audioBase64.length * 0.75 / 1024 / 1024).toFixed(1);
+      const fmt = body.format || "mp3";
+      console.log(`${LOG} Audio mode: ~${audioMB} MB, format: ${fmt}, beatGrid: ${body.beatGrid?.bpm ?? "none"}bpm`);
+      userParts.push({
+        type: "input_audio",
+        input_audio: { data: body.audioBase64, format: fmt },
+      });
+    }
+
+    let userText = `Title: ${title}\nArtist: ${artist}\n\nLyrics:\n${lyrics}`;
+    if (body.beatGrid) {
+      userText += `\n\nBeat Grid: ${body.beatGrid.bpm ?? "?"} BPM (confidence: ${body.beatGrid.confidence ?? "?"})`;
+    }
+    if (body.includeHooks === false) {
+      userText += `\n\nSKIP HOOKS — set hottest_hooks to an empty array.`;
+    }
+    if (body.userSceneDirection) {
+      userText += `\n\nDIRECTOR'S NOTE: ${body.userSceneDirection}`;
+    }
+    userParts.push({ type: "text", text: userText });
+
+    const maxAttempts = 2;
+    let maxTokens = 4096;
+    let result: Record<string, unknown> | null = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      console.log(`${LOG} Attempt ${attempt}: model=google/gemini-2.5-flash, max_tokens=${maxTokens}`);
+      
+      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userParts },
+          ],
+          temperature: 0.3,
+          max_tokens: maxTokens,
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        const text = await aiResponse.text();
+        console.error(`${LOG} AI error`, aiResponse.status, text);
+        if (aiResponse.status === 429) {
+          return new Response(JSON.stringify({ error: "Rate limit exceeded, please try again later." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (aiResponse.status === 402) {
+          return new Response(JSON.stringify({ error: "Usage limit reached. Add credits." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`AI gateway error: ${aiResponse.status}`);
+      }
+
+      const completion = await aiResponse.json();
+      const raw = completion?.choices?.[0]?.message?.content ?? "";
+      const finishReason = completion?.choices?.[0]?.finish_reason ?? "unknown";
+      console.log(`${LOG} Response length: ${raw.length}, finish_reason: ${finishReason}`);
+
+      const parsed = extractJson(String(raw));
+      if (parsed) {
+        // Validate completeness
+        const mood = typeof parsed.mood === "string" ? parsed.mood : undefined;
+        const system = (parsed.physics_spec as Record<string, unknown>)?.system;
+        const hooks = Array.isArray(parsed.hottest_hooks) ? parsed.hottest_hooks : [];
+        
+        console.log(`${LOG} ✓ Complete on attempt ${attempt}: mood=${mood}, system=${system}, hook=${hooks[0]?.start_sec}, hooks=${hooks.length}`);
+        result = parsed;
+        break;
+      }
+
+      // Scale up on truncation
+      if (attempt < maxAttempts) {
+        maxTokens = Math.min(maxTokens * 2, 12000);
+        console.log(`${LOG} Retrying with max_tokens=${maxTokens}`);
+      }
+    }
+
+    if (!result) {
+      // Recovery: return minimal valid result
+      result = {
+        mood: "Unknown",
+        description: "Could not analyze",
+        physics_spec: {
+          system: "breath",
+          params: { mass: 1.0, elasticity: 0.5, damping: 0.6, brittleness: 0.2, heat: 0.3 },
+          palette: ["#0a0a1a", "#2c3e50", "#8a2be2"],
+          effect_pool: ["FADE_IN", "PULSE", "WAVE_SURGE", "GLITCH_FLASH"],
+          logic_seed: Math.floor(Math.random() * 100000),
+        },
+        hottest_hooks: [],
+      };
+      console.log(`${LOG} Using recovery defaults`);
+    }
+
+    // Extract and normalize result fields
+    const physicsSpec = result.physics_spec as Record<string, unknown> | undefined;
+    const hooks = (Array.isArray(result.hottest_hooks) ? result.hottest_hooks : []) as Record<string, unknown>[];
+    const worldDecision = result.world_decision as Record<string, unknown> | undefined;
+
+    // Merge world_decision into physics_spec if present
+    if (worldDecision && physicsSpec) {
+      if (worldDecision.backgroundSystem) {
+        (physicsSpec as Record<string, unknown>).backgroundSystem = worldDecision.backgroundSystem;
+      }
+      if (worldDecision.particleConfig) {
+        (physicsSpec as Record<string, unknown>).particleConfig = worldDecision.particleConfig;
+      }
+    }
+
+    const finalResult = {
+      mood: result.mood,
+      description: result.description,
+      meaning: result.meaning,
+      world: result.world,
+      physics_spec: physicsSpec,
+      scene_manifest: result.scene_manifest || result.sceneManifest || null,
+      hottest_hooks: hooks,
     };
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "anthropic/claude-sonnet-4",
-        messages: [
-          { role: "system", content: MASTER_DIRECTOR_PROMPT },
-          {
-            role: "user",
-            content: `Song Data:\n${JSON.stringify(songPayload)}`,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 6000,
-        response_format: { type: "json_object" },
-      }),
-    });
+    console.log(`${LOG} Final result: mood=${finalResult.mood}, hooks=${hooks.length}, system=${physicsSpec?.system}, params=${JSON.stringify(physicsSpec?.params)}`);
 
-    if (!aiResponse.ok) {
-      const text = await aiResponse.text();
-      console.error("lyric-analyze ai error", aiResponse.status, text);
-      return new Response(JSON.stringify({ error: "AI request failed" }), {
-        status: aiResponse.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const completion = await aiResponse.json();
-    const raw = completion?.choices?.[0]?.message?.content ?? "";
-    const parsed = extractJson(String(raw));
-
-    if (!parsed) {
-      return new Response(JSON.stringify({ error: "Invalid AI JSON response" }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Enforce numeric ranges on common keys before validation.
-    const visualWorld = (parsed.visualWorld ?? {}) as Record<string, unknown>;
-    const physicsProfile = (visualWorld.physicsProfile ?? {}) as Record<string, unknown>;
-    physicsProfile.heat = clamp(physicsProfile.heat, 0, 1, 0.5);
-    visualWorld.physicsProfile = physicsProfile;
-    parsed.visualWorld = visualWorld;
-
-    const climax = (parsed.climax ?? {}) as Record<string, unknown>;
-    climax.timeRatio = clamp(climax.timeRatio, 0, 1, 0.5);
-    climax.maxParticleDensity = clamp(climax.maxParticleDensity, 0, 1, 1);
-    climax.maxLightIntensity = clamp(climax.maxLightIntensity, 0, 1, 1);
-    parsed.climax = climax;
-
-    const validationErrors = validateCinematicDirection(parsed, lines.length);
-    if (validationErrors.length > 0) {
-      return new Response(JSON.stringify({ error: "CinematicDirection validation failed", details: validationErrors }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    await persistCinematicDirection(parsed, lyricId);
-
-    console.log(`[lyric-analyze] title="${title}" artist="${artist}" lines=${lines.length}`);
-    console.log("[lyric-analyze] cinematic_direction", JSON.stringify(parsed));
-
-    return new Response(JSON.stringify({ cinematicDirection: parsed }), {
+    return new Response(JSON.stringify(finalResult), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("lyric-analyze error:", error);
-    return new Response(JSON.stringify({ error: "Analysis failed" }), {
+    console.error(`${LOG} error:`, error);
+    return new Response(JSON.stringify({ error: "Song DNA analysis failed" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
