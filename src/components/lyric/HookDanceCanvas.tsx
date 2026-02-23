@@ -257,6 +257,9 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           alphaMultiplier: compositeAlpha,
         };
 
+        // ── HARDCODED DIAGNOSTIC — remove after test ──
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.5 + (editorBeatIntensity * 0.5);
         drawFn(ctx, effectState);
         ctx.restore();
 
