@@ -585,7 +585,7 @@ export default function ShareableLyricDance() {
   }, [data?.cinematic_direction]);
 
   useEffect(() => {
-    const cinematicDirection = data?.cinematic_direction ?? data?.song_dna?.cinematic_direction ?? null;
+    const cinematicDirection = data?.cinematic_direction ?? null;
     const fontFamily = cinematicDirection?.visualWorld?.typographyProfile?.fontFamily ?? "Montserrat";
     const trimmedFontFamily = fontFamily.trim();
     if (!trimmedFontFamily || loadedFontFamiliesRef.current.has(trimmedFontFamily)) {
