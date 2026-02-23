@@ -1,100 +1,25 @@
-
-# Performance Optimization Plan for ShareableLyricDance
-
-## Problem
-The render loop in `ShareableLyricDance.tsx` runs ~2,400 lines of logic every frame at 60fps. Heavy per-frame work includes: chapter lookups via `.find()`, particle config rebuilds, word measurement, constellation drift math, background redraws, and multiple canvas state saves/restores.
-
-## Optimization Strategy
-
-Seven targeted changes, ordered by expected impact:
+Here's the final Lovable prompt:
 
 ---
 
-### 1. Pre-compute chapter timeline lookup table (lines 1139, 1092-1098)
+Refactor LyricFit into a two-tab architecture using the same tab strip pattern as `BillboardToggle` in CrowdFit. Create a new `LyricFitToggle` component modeled directly on `BillboardToggle` with two buttons — **Lyrics** and **Fit** — where Fit renders at `opacity-30` with `pointer-events-none` until `lines` has entries.
 
-**Current**: Every frame calls `interpreterNow?.getCurrentChapter(songProgress)` and `getCurrentTensionStage()` which both use `.find()` over arrays.
+Rewrite `LyricFitTab` as a thin parent container that holds all shared state: `audioFile`, `audioUrl`, `lines`, `savedLyricId`, `songDna`, `beatGrid`, `songSignature`, `cinematicDirection`, `bgImageUrl`, `sceneManifest`. It renders the toggle strip and conditionally shows either the Lyrics or Fit content below it.
 
-**Fix**: On data load, build a sorted array of chapter/tension boundaries. At render time, use a cached index that only advances forward (since songProgress is monotonic within a playthrough). Binary search on seek.
+**Lyrics tab** — upload audio, check file size, if under 25MB send raw to `lyric-transcribe`, only run `compressAudioFile` if over 25MB. On response render lines and inline editor from `LyricDisplay` (editing only). Remove `useBeatGrid`, `songSignatureAnalyzer`, `lyric-analyze`, `cinematic-direction`, `lyric-video-bg` from this tab entirely.
 
-**File**: `src/pages/ShareableLyricDance.tsx` (setup block ~line 960, render block ~line 1092)
+**Fit tab** — on entry, first sync/refresh the final transcript from `saved_lyrics`, then auto-trigger in parallel: `beatAnalyzer.worker` and `lyric-analyze`. Show a combined progress bar. Once both complete, auto-call `cinematic-direction`, then unlock the Dance button. Dance button is disabled until `sceneManifest` exists — remove `deriveSceneManifestFromSpec` fallback entirely. Dance button sequence: `lyric-video-bg` → audio upload → upsert `shareable_lyric_dances` → redirect to share URL.
 
----
+In `LyricDisplay` remove: `fetchSongDna`, the Reveal Song DNA button, `useBeatGrid`, `songSignatureAnalyzer`, `generateBackgroundImage`, and `PublishLyricDanceButton`. Keep: inline editing, waveform, playback, FMLY filter, export.
 
-### 2. Move constellation/river drift to a 10fps timer instead of every rAF frame (lines 1262-1347)
+In `PublishLyricDanceButton` remove the `deriveSceneManifestFromSpec` fallback — `sceneManifest` must come from props or the button stays disabled.
 
-**Current**: Every frame iterates all constellation nodes, updates positions, measures text, and draws.
+**State flow:**
 
-**Fix**: Update constellation positions in a `setInterval(100ms)` into an offscreen canvas. In rAF, just `ctx.drawImage()` the pre-rendered constellation layer. Comments are subtle background elements; 10fps is imperceptible.
-
-**File**: `src/pages/ShareableLyricDance.tsx`
-
----
-
-### 3. Cache `getParticleConfigForTime` result (lines 1213-1218)
-
-**Current**: Rebuilds a particle config object every frame with spread operators.
-
-**Fix**: Cache the last result keyed on `Math.floor(songProgress * 20)` (5% buckets). Only recompute when the bucket changes. Avoids object allocation and spread on 95% of frames.
-
-**File**: `src/pages/ShareableLyricDance.tsx` (render block ~line 1213)
-
----
-
-### 4. Throttle background redraw with dirty flag (lines 1183-1197)
-
-**Current**: Already has a `bgNeedsRedraw` check but threshold is too aggressive (`Math.abs(beatIntensity change) > 0.1`), causing frequent redraws.
-
-**Fix**: Raise threshold to `0.2` and add a time-based minimum interval (redraw at most every 100ms unless chapter changes). Background changes are gradual; reducing from 60fps to 10fps background redraws saves significant fill-rect work.
-
-**File**: `src/pages/ShareableLyricDance.tsx` (~line 1184)
-
----
-
-### 5. Limit particle count based on device capability (lines 1211-1236)
-
-**Current**: `maxParticles` is 150 on high-DPR or 80 otherwise. ParticleEngine still processes all particles every frame.
-
-**Fix**: Add frame-time budget detection. If `deltaMs > 20` (below 50fps) for 10 consecutive frames, halve `maxParticles` dynamically. This auto-adapts to slower devices.
-
-**File**: `src/pages/ShareableLyricDance.tsx` (render block setup)
-
----
-
-### 6. Reduce word measurement overhead (lines 1030-1044)
-
-**Current**: `getWordWidth` creates a cache key string via template literal every call, even for cache hits. Font is set and restored per measurement.
-
-**Fix**: Batch all word measurements for a line in one pass after setting the font once. Pre-compute and store per-line word widths in `lineBeatMapRef` during setup instead of per-frame. Only recompute on resize.
-
-**File**: `src/pages/ShareableLyricDance.tsx` (render block and setup)
-
----
-
-### 7. Skip off-screen word rendering earlier (lines 1682-1684)
-
-**Current**: Bounds check happens after evolution lookup, directive resolution, history tracking, and multiple ctx operations.
-
-**Fix**: Move the bounds check to immediately after `finalX/finalY` are known (before evolution, before directive application). This eliminates all downstream work for clipped words.
-
-**File**: `src/pages/ShareableLyricDance.tsx` (~line 1676)
-
----
-
-## Technical Details
-
-### Files Modified
-- `src/pages/ShareableLyricDance.tsx` -- all 7 optimizations
-
-### No New Dependencies
-All changes are pure algorithmic/caching improvements within existing code.
-
-### Risk Assessment
-- **Low risk**: Changes 1, 3, 4, 6, 7 are pure caching with identical visual output
-- **Minimal visual impact**: Change 2 (constellation at 10fps) -- imperceptible for ambient background text
-- **Adaptive**: Change 5 auto-scales, no visual change on fast devices
-
-### Expected Impact
-- 30-50% reduction in per-frame CPU time on mid-range devices
-- Eliminates most object allocations per frame
-- Background rendering cost drops ~6x (60fps to ~10fps)
-- Constellation rendering drops ~6x
+1. User uploads audio in Lyrics tab
+2. Transcription runs → lines populate from ElevenLabs → Fit tab unlocks immediately
+3. User clicks Fit tab → sync/refresh final transcript from `saved_lyrics` before proceeding
+4. Beat analysis + Song DNA auto-trigger in parallel on tab entry
+5. Progress bar shows combined status
+6. When both complete, Dance button enables
+7. Dance button: bg image → upload → upsert → redirect
