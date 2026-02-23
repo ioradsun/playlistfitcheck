@@ -1,47 +1,19 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+/**
+ * LyricFitTab — Thin parent container with two-tab architecture.
+ * Holds all shared state. Renders LyricFitToggle + LyricsTab or FitTab.
+ */
+
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { useUsageQuota } from "@/hooks/useUsageQuota";
-import { compressAudioFile } from "@/lib/compressAudio";
 import { sessionAudio } from "@/lib/sessionAudioCache";
-import { toast } from "sonner";
-import { LyricUploader } from "./LyricUploader";
-import { LyricDisplay, type LyricData } from "./LyricDisplay";
-import { LyricProgressModal, type ProgressStage } from "./LyricProgressModal";
-import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
-import {
-  songSignatureAnalyzer,
-  type SongSignature,
-} from "@/lib/songSignatureAnalyzer";
-import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
-import { safeManifest } from "@/engine/validateManifest";
-import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
-
+import type { LyricData, LyricLine } from "./LyricDisplay";
+import type { BeatGridData } from "@/hooks/useBeatGrid";
+import type { SongSignature } from "@/lib/songSignatureAnalyzer";
+import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
+import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
+import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
+import { FitTab } from "./FitTab";
 import type { ReactNode } from "react";
-
-function normalizeSavedSongDna(songDna: any, title: string): any {
-  if (!songDna || typeof songDna !== "object") return songDna;
-  const rawManifest = songDna.scene_manifest || songDna.sceneManifest;
-  if (rawManifest)
-    return { ...songDna, scene_manifest: safeManifest(rawManifest).manifest };
-  if (songDna.physicsSpec) {
-    const derived = deriveSceneManifestFromSpec({
-      spec: songDna.physicsSpec as PhysicsSpec,
-      mood: songDna.mood,
-      description: songDna.description,
-      songTitle: title,
-    });
-    return { ...songDna, scene_manifest: safeManifest(derived).manifest };
-  }
-  return songDna;
-}
-export type HeaderProjectSetter = (
-  project: {
-    title: string;
-    onBack: () => void;
-    rightContent?: ReactNode;
-  } | null,
-) => void;
 
 interface Props {
   initialLyric?: any;
@@ -58,34 +30,32 @@ export function LyricFitTab({
   onHeaderProject,
   onSavedId,
 }: Props) {
-  const [loading, setLoading] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState("Syncing...");
-  const [progressStage, setProgressStage] =
-    useState<ProgressStage>("compressing");
-  const [progressOpen, setProgressOpen] = useState(false);
-  const [progressFileName, setProgressFileName] = useState<string>("");
+  // ── Shared state ──────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [lines, setLines] = useState<LyricLine[]>([]);
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
-  const [debugData, setDebugData] = useState<any | null>(null);
-  const [savedSongDna, setSavedSongDna] = useState<any | null>(null);
-  const [savedBackgroundImageUrl, setSavedBackgroundImageUrl] = useState<string | null>(null);
+
+  // Fit tab state
+  const [songDna, setSongDna] = useState<any | null>(null);
+  const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
+  const [songSignature, setSongSignature] = useState<SongSignature | null>(null);
+  const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
+  const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
+  const [sceneManifest, setSceneManifest] = useState<FullSceneManifest | null>(null);
+
+  // Pipeline model config
   const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
   const [transcriptionModel, setTranscriptionModel] = useState("scribe");
-  const { user } = useAuth();
-  const quota = useUsageQuota("lyric");
 
   const resolveProjectTitle = useCallback(
     (title: string | null | undefined, filename: string) => {
       const normalizedTitle = (title || "").trim();
-      if (
-        normalizedTitle &&
-        normalizedTitle.toLowerCase() !== "unknown" &&
-        normalizedTitle.toLowerCase() !== "untitled"
-      ) {
+      if (normalizedTitle && normalizedTitle.toLowerCase() !== "unknown" && normalizedTitle.toLowerCase() !== "untitled") {
         return normalizedTitle;
       }
       return filename.replace(/\.[^/.]+$/, "").trim() || "Untitled";
@@ -93,88 +63,63 @@ export function LyricFitTab({
     [],
   );
 
-  // Beat grid: decode audio early and run in parallel with transcription
-  const [earlyAudioBuffer, setEarlyAudioBuffer] = useState<AudioBuffer | null>(
-    null,
-  );
-  const [precomputedBeatGrid, setPrecomputedBeatGrid] =
-    useState<BeatGridData | null>(null);
-  const [precomputedSongSignature, setPrecomputedSongSignature] =
-    useState<SongSignature | null>(null);
-  const signaturePromiseRef = useRef<Promise<SongSignature | null> | null>(null);
-  const { beatGrid: detectedGrid } = useBeatGrid(earlyAudioBuffer);
-
-  // When beat grid detection finishes, store it
+  // Read pipeline model config from site_copy
   useEffect(() => {
-    if (detectedGrid) setPrecomputedBeatGrid(detectedGrid);
-  }, [detectedGrid]);
-
-  // Song signature analysis runs once we already have decoded audio + beat grid.
-  useEffect(() => {
-    if (!earlyAudioBuffer || !detectedGrid || precomputedSongSignature) return;
-
-    const analysisPromise = songSignatureAnalyzer
-      .analyze(earlyAudioBuffer, detectedGrid, undefined, earlyAudioBuffer.duration)
-      .then((signature) => {
-        setPrecomputedSongSignature(signature);
-        return signature;
-      })
-      .catch((err) => {
-        console.warn("[song-signature] analysis failed:", err);
-        return null;
+    supabase
+      .from("site_copy")
+      .select("copy_json")
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        const f = (data?.copy_json as any)?.features || {};
+        if (f.lyric_analysis_model) setAnalysisModel(f.lyric_analysis_model);
+        if (f.lyric_transcription_model) setTranscriptionModel(f.lyric_transcription_model);
       });
-
-    signaturePromiseRef.current = analysisPromise;
-  }, [earlyAudioBuffer, detectedGrid, precomputedSongSignature]);
+  }, []);
 
   // Load saved lyric from dashboard navigation
   useEffect(() => {
     if (initialLyric && !lyricData) {
       const filename = initialLyric.filename || "saved-lyrics.mp3";
-      setLyricData({
+      const newData: LyricData = {
         title: resolveProjectTitle(initialLyric.title, filename),
         artist: initialLyric.artist,
         lines: initialLyric.lines as any[],
-      });
+      };
+      setLyricData(newData);
+      setLines(initialLyric.lines as any[]);
       setSavedId(initialLyric.id);
       setFmlyLines((initialLyric as any).fmly_lines ?? null);
       setVersionMeta((initialLyric as any).version_meta ?? null);
-      const loadedSongDna = (initialLyric as any).song_dna ?? null;
-      setSavedSongDna(
-        normalizeSavedSongDna(
-          loadedSongDna,
-          resolveProjectTitle(initialLyric.title, filename),
-        ),
-      );
+
       // Restore saved beat grid
       const savedBg = (initialLyric as any).beat_grid;
-      if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
-      setSavedBackgroundImageUrl((initialLyric as any).background_image_url ?? null);
+      if (savedBg) setBeatGrid(savedBg as BeatGridData);
+
+      // Restore saved song DNA
+      const loadedSongDna = (initialLyric as any).song_dna ?? null;
+      if (loadedSongDna) setSongDna(loadedSongDna);
+
+      // Restore saved song signature
       const savedSignature = (initialLyric as any).song_signature;
-      if (savedSignature)
-        setPrecomputedSongSignature(savedSignature as SongSignature);
+      if (savedSignature) setSongSignature(savedSignature as SongSignature);
+
+      setBgImageUrl((initialLyric as any).background_image_url ?? null);
 
       // Check session cache for real audio first
-      const cachedAudio = initialLyric.id
-        ? sessionAudio.get("lyric", initialLyric.id)
-        : undefined;
+      const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
       if (cachedAudio) {
         setAudioFile(cachedAudio);
         setHasRealAudio(true);
       } else if ((initialLyric as any).audio_url) {
-        // Fetch audio from stored URL
         const audioUrl = (initialLyric as any).audio_url as string;
         fetch(audioUrl)
           .then((res) => res.blob())
           .then((blob) => {
-            const file = new File([blob], filename, {
-              type: blob.type || "audio/mpeg",
-            });
+            const file = new File([blob], filename, { type: blob.type || "audio/mpeg" });
             setAudioFile(file);
             setHasRealAudio(true);
-            // Cache for future navigations
-            if (initialLyric.id)
-              sessionAudio.set("lyric", initialLyric.id, file);
+            if (initialLyric.id) sessionAudio.set("lyric", initialLyric.id, file);
           })
           .catch(() => {
             const dummyFile = new File([], filename, { type: "audio/mpeg" });
@@ -189,350 +134,72 @@ export function LyricFitTab({
     }
   }, [initialLyric, lyricData, resolveProjectTitle]);
 
-  // Read pipeline model config from site_copy
-  useEffect(() => {
-    supabase
-      .from("site_copy")
-      .select("copy_json")
-      .limit(1)
-      .single()
-      .then(({ data }) => {
-        const f = (data?.copy_json as any)?.features || {};
-        if (f.lyric_analysis_model) setAnalysisModel(f.lyric_analysis_model);
-        if (f.lyric_transcription_model)
-          setTranscriptionModel(f.lyric_transcription_model);
-      });
-  }, []);
+  const fitDisabled = !lines || lines.length === 0;
 
-  const uploadAudioImmediately = useCallback(
-    async (
-      file: File,
-      userId: string,
-      projectId: string,
-    ): Promise<string | null> => {
-      const ext = file.name.split(".").pop() ?? "mp3";
-      const path = `${userId}/lyric/${projectId}.${ext}`;
+  return (
+    <div className="flex flex-col flex-1">
+      {/* Tab strip — only show when lyrics exist */}
+      {lyricData && (
+        <LyricFitToggle
+          view={activeTab}
+          onViewChange={setActiveTab}
+          fitDisabled={fitDisabled}
+        />
+      )}
 
-      const { error } = await supabase.storage
-        .from("audio-clips")
-        .upload(path, file, { upsert: true });
-
-      if (error) return null;
-
-      const { data } = supabase.storage.from("audio-clips").getPublicUrl(path);
-
-      return data.publicUrl;
-    },
-    [],
-  );
-
-  const handleTranscribe = useCallback(
-    async (file: File, referenceLyrics?: string) => {
-      if (!quota.canUse) {
-        toast.error(
-          quota.tier === "anonymous"
-            ? "Sign up for more uses"
-            : "Invite an artist to unlock unlimited",
-        );
-        return;
-      }
-      setLoading(true);
-      setProgressFileName(file.name);
-      setProgressStage("compressing");
-      setProgressOpen(true);
-
-      // Kick off beat grid detection in parallel (decode original file)
-      setPrecomputedBeatGrid(null);
-      setPrecomputedSongSignature(null);
-      setSavedBackgroundImageUrl(null);
-      setEarlyAudioBuffer(null);
-      signaturePromiseRef.current = null;
-      const audioCtx = new AudioContext();
-      void file
-        .arrayBuffer()
-        .then((ab) => audioCtx.decodeAudioData(ab))
-        .then((buf) => {
-          setEarlyAudioBuffer(buf);
-        })
-        .catch((err) => console.warn("[beat-grid] Early decode failed:", err))
-        .finally(() => audioCtx.close().catch(() => undefined));
-
-      try {
-        // Stage 1: Compress
-        setProgressStage("compressing");
-        let uploadFile: File;
-        try {
-          uploadFile = await compressAudioFile(file);
-        } catch (compErr) {
-          toast.error(
-            compErr instanceof Error ? compErr.message : "Compression failed",
-          );
-          setLoading(false);
-          setProgressOpen(false);
-          return;
-        }
-
-        // Stage 2: Upload
-        setProgressStage("uploading");
-        const uploadTimers: ReturnType<typeof setTimeout>[] = [];
-        uploadTimers.push(
-          setTimeout(() => setProgressStage("buffering"), 3000),
-        );
-        uploadTimers.push(
-          setTimeout(() => setProgressStage("transmitting"), 6000),
-        );
-        uploadTimers.push(
-          setTimeout(() => setProgressStage("handshaking"), 9000),
-        );
-
-        const formData = new FormData();
-        formData.append("audio", uploadFile, uploadFile.name);
-        formData.append("analysisModel", analysisModel);
-        formData.append("transcriptionModel", transcriptionModel);
-        if (referenceLyrics?.trim()) {
-          formData.append("referenceLyrics", referenceLyrics.trim());
-        }
-
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
-          {
-            method: "POST",
-            headers: {
-              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: formData,
-          },
-        );
-
-        uploadTimers.forEach(clearTimeout);
-
-        setProgressStage("receiving");
-        const timers: ReturnType<typeof setTimeout>[] = [];
-        timers.push(setTimeout(() => setProgressStage("transcribing"), 3000));
-        timers.push(setTimeout(() => setProgressStage("separating"), 7000));
-        timers.push(setTimeout(() => setProgressStage("analyzing"), 11000));
-        timers.push(
-          setTimeout(() => setProgressStage("detecting_hook"), 15000),
-        );
-        timers.push(setTimeout(() => setProgressStage("aligning"), 19000));
-        timers.push(setTimeout(() => setProgressStage("finalizing"), 23000));
-
-        if (!response.ok) {
-          timers.forEach(clearTimeout);
-          const err = await response
-            .json()
-            .catch(() => ({ error: "Transcription failed" }));
-          throw new Error(err.error || `Error ${response.status}`);
-        }
-
-        const data = await response.json();
-        timers.forEach(clearTimeout);
-
-        setProgressStage("finalizing");
-
-        if (data.error) throw new Error(data.error);
-        if (!data.lines) throw new Error("Invalid response format");
-
-        let projectId: string | null = null;
-        if (user) {
-          projectId = crypto.randomUUID();
-
-          const maybeSignature = await Promise.race([
-            signaturePromiseRef.current ?? Promise.resolve(precomputedSongSignature),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
-          ]);
-
-          const audioUrl = await uploadAudioImmediately(
-            file,
-            user.id,
-            projectId,
-          );
-          await supabase.from("saved_lyrics").upsert({
-            id: projectId,
-            user_id: user.id,
-            title: resolveProjectTitle(data.title, file.name),
-            artist: data.artist || "Unknown",
-            lines: data.lines,
-            filename: file.name,
-            beat_grid: precomputedBeatGrid
-              ? ({
-                  bpm: precomputedBeatGrid.bpm,
-                  beats: precomputedBeatGrid.beats,
-                  confidence: precomputedBeatGrid.confidence,
-                } as any)
-              : null,
-            song_signature:
-              (maybeSignature as any) ?? (precomputedSongSignature as any) ?? null,
-            ...(audioUrl ? { audio_url: audioUrl } : {}),
-            updated_at: new Date().toISOString(),
-          });
-        }
-
-        await new Promise((r) => setTimeout(r, 600));
-
-        setLyricData({
-          title: resolveProjectTitle(data.title, file.name),
-          artist: data.artist || "Unknown",
-          lines: data.lines,
-          hooks: data.hooks,
-          metadata: data.metadata,
-        } as LyricData);
-        setAudioFile(file);
-        setHasRealAudio(true);
-        setSavedId(projectId);
-        setDebugData(data._debug ?? null);
-        // Cache audio in session so it survives remounts
-        // Will be keyed to savedId once the project is saved
-        if (projectId) {
-          sessionAudio.set("lyric", projectId, file);
-          onSavedId?.(projectId);
-        } else {
-          sessionAudio.set("lyric", "__unsaved__", file);
-        }
-        await quota.increment();
-      } catch (e) {
-        console.error("Transcription error:", e);
-        toast.error(
-          e instanceof Error ? e.message : "Failed to transcribe lyrics",
-        );
-      } finally {
-        setLoading(false);
-        setProgressOpen(false);
-      }
-    },
-    [
-      analysisModel,
-      transcriptionModel,
-      quota,
-      uploadAudioImmediately,
-      user,
-      onSavedId,
-      resolveProjectTitle,
-    ],
-  );
-
-  const handleBack = useCallback(() => {
-    setLyricData(null);
-    setAudioFile(null);
-    setHasRealAudio(false);
-    setSavedId(null);
-    setFmlyLines(null);
-    setVersionMeta(null);
-    setDebugData(null);
-    setPrecomputedBeatGrid(null);
-    setPrecomputedSongSignature(null);
-      setSavedBackgroundImageUrl(null);
-    setEarlyAudioBuffer(null);
-    signaturePromiseRef.current = null;
-    onNewProject?.();
-  }, [onNewProject]);
-
-  if (lyricData && audioFile) {
-    return (
-      <div className="flex-1 px-4 py-6">
-        <LyricDisplay
-          data={lyricData}
+      {/* Tab content */}
+      {activeTab === "lyrics" ? (
+        <LyricsTab
+          lyricData={lyricData}
+          setLyricData={setLyricData}
+          audioFile={audioFile}
+          setAudioFile={setAudioFile}
+          hasRealAudio={hasRealAudio}
+          setHasRealAudio={setHasRealAudio}
+          savedId={savedId}
+          setSavedId={setSavedId}
+          setLines={setLines}
+          fmlyLines={fmlyLines}
+          setFmlyLines={setFmlyLines}
+          versionMeta={versionMeta}
+          setVersionMeta={setVersionMeta}
+          onProjectSaved={onProjectSaved}
+          onNewProject={() => {
+            // Reset all shared state
+            setSongDna(null);
+            setBeatGrid(null);
+            setSongSignature(null);
+            setCinematicDirection(null);
+            setBgImageUrl(null);
+            setSceneManifest(null);
+            setLines([]);
+            onNewProject?.();
+          }}
+          onHeaderProject={onHeaderProject}
+          onSavedId={onSavedId}
+          analysisModel={analysisModel}
+          transcriptionModel={transcriptionModel}
+        />
+      ) : lyricData && audioFile ? (
+        <FitTab
+          lyricData={lyricData}
           audioFile={audioFile}
           hasRealAudio={hasRealAudio}
           savedId={savedId}
-          fmlyLines={fmlyLines}
-          versionMeta={versionMeta}
-          debugData={debugData}
-          initialBeatGrid={precomputedBeatGrid}
-          initialSongSignature={precomputedSongSignature}
-          initialSongDna={savedSongDna}
-          initialBackgroundImageUrl={savedBackgroundImageUrl}
-          onBack={handleBack}
-          onSaved={(id) => {
-            setSavedId(id);
-            // Move cached audio to the saved project ID
-            if (audioFile && hasRealAudio)
-              sessionAudio.set("lyric", id, audioFile);
-            sessionAudio.remove("lyric", "__unsaved__");
-            onProjectSaved?.();
-            onSavedId?.(id);
-          }}
-          onReuploadAudio={(file) => {
-            setAudioFile(file);
-            setHasRealAudio(true);
-            // Cache re-uploaded audio
-            const cacheId = savedId || "__unsaved__";
-            sessionAudio.set("lyric", cacheId, file);
-          }}
-          onHeaderProject={onHeaderProject}
+          songDna={songDna}
+          setSongDna={setSongDna}
+          beatGrid={beatGrid}
+          setBeatGrid={setBeatGrid}
+          songSignature={songSignature}
+          setSongSignature={setSongSignature}
+          sceneManifest={sceneManifest}
+          setSceneManifest={setSceneManifest}
+          cinematicDirection={cinematicDirection}
+          setCinematicDirection={setCinematicDirection}
+          bgImageUrl={bgImageUrl}
+          setBgImageUrl={setBgImageUrl}
         />
-        <LyricProgressModal
-          open={progressOpen}
-          currentStage={progressStage}
-          fileName={progressFileName}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
-      <LyricUploader
-        onTranscribe={handleTranscribe}
-        onLoadSaved={(l: any) => {
-          const filename = l.filename || "saved-lyrics.mp3";
-          setLyricData({
-            title: resolveProjectTitle(l.title, filename),
-            artist: l.artist,
-            lines: l.lines as any[],
-          });
-          setSavedId(l.id);
-          setFmlyLines((l as any).fmly_lines ?? null);
-          setVersionMeta((l as any).version_meta ?? null);
-          setSavedBackgroundImageUrl((l as any).background_image_url ?? null);
-          const savedBg = (l as any).beat_grid;
-          if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
-          else setPrecomputedBeatGrid(null);
-          const savedSignature = (l as any).song_signature;
-          if (savedSignature)
-            setPrecomputedSongSignature(savedSignature as SongSignature);
-          else setPrecomputedSongSignature(null);
-          // Check session cache for audio
-          const cachedAudio = l.id
-            ? sessionAudio.get("lyric", l.id)
-            : undefined;
-          if (cachedAudio) {
-            setAudioFile(cachedAudio);
-            setHasRealAudio(true);
-          } else if (l.audio_url) {
-            // Fetch from stored URL
-            fetch(l.audio_url)
-              .then((res) => res.blob())
-              .then((blob) => {
-                const file = new File([blob], filename, {
-                  type: blob.type || "audio/mpeg",
-                });
-                setAudioFile(file);
-                setHasRealAudio(true);
-                if (l.id) sessionAudio.set("lyric", l.id, file);
-              })
-              .catch(() => {
-                const dummyFile = new File([], filename, {
-                  type: "audio/mpeg",
-                });
-                setAudioFile(dummyFile);
-                setHasRealAudio(false);
-              });
-          } else {
-            const dummyFile = new File([], filename, { type: "audio/mpeg" });
-            setAudioFile(dummyFile);
-            setHasRealAudio(false);
-          }
-        }}
-        loading={loading}
-        loadingMsg={loadingMsg}
-      />
-      <LyricProgressModal
-        open={progressOpen}
-        currentStage={progressStage}
-        fileName={progressFileName}
-      />
+      ) : null}
     </div>
   );
 }
