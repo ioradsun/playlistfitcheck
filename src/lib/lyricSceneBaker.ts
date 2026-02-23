@@ -348,7 +348,7 @@ function bakeFrame(
         entryScale = 0.85 + ep * 0.15;
       } else if (entryStyle === 'fractures-in') {
         entryOffsetX = (1 - ep) * -30;
-      } else if (entryStyle === 'hiding') {
+      } else if ((entryStyle as string) === 'hiding') {
         entryScale = 0.7 + ep * 0.3;
       }
 
