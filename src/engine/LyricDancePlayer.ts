@@ -1,9 +1,25 @@
-import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
+/**
+ * LyricDancePlayer — frame-budget-first canvas engine.
+ *
+ * IMPORTANT:
+ * - Fresh implementation. Do not copy logic from prior versions.
+ * - React never draws to canvas; React only calls public methods.
+ * - Draw loop is pure lookup from baked keyframes.
+ */
+
 import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
-import type { ConstellationNode } from "@/hooks/useHookCanvas";
-import type { SceneManifest } from "@/engine/SceneManifest";
-import { bakeSceneChunked, type BakedTimeline, type ScenePayload } from "@/lib/lyricSceneBaker";
+import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
+import {
+  bakeSceneChunked,
+  type BakedTimeline,
+  type Keyframe,
+  type ScenePayload,
+} from "@/lib/lyricSceneBaker";
+
+// ──────────────────────────────────────────────────────────────
+// Types expected by ShareableLyricDance.tsx
+// ──────────────────────────────────────────────────────────────
 
 export interface LyricDanceData {
   id: string;
@@ -18,377 +34,602 @@ export interface LyricDanceData {
   beat_grid: { bpm: number; beats: number[]; confidence: number };
   palette: string[];
   system_type: string;
-  artist_dna: unknown;
+  artist_dna: any;
   seed: string;
-  scene_manifest: SceneManifest | null;
+  scene_manifest: any;
   cinematic_direction: CinematicDirection | null;
 }
 
 export interface LiveDebugState {
-  beatIntensity: number; physGlow: number;
-  physicsActive: boolean; wordCount: number; heat: number; velocity: number; rotation: number; lastBeatForce: number;
-  effectKey: string; entryProgress: number; exitProgress: number; activeMod: string | null;
-  fontScale: number; scale: number; lineColor: string; isHookLine: boolean; repIndex: number; repTotal: number;
-  particleSystem: string; particleDensity: number; particleSpeed: number; particleCount: number; songSection: string;
-  xOffset: number; yBase: number; xNudge: number; shake: number;
-  backgroundSystem: string; imageLoaded: boolean; zoom: number; vignetteIntensity: number; songProgress: number;
-  dirThesis: string; dirChapter: string; dirChapterProgress: number; dirIntensity: number; dirBgDirective: string; dirLightBehavior: string;
-  symbolPrimary: string; symbolSecondary: string; symbolState: string;
-  cameraDistance: string; cameraMovement: string; tensionStage: string; tensionMotion: number; tensionParticles: number; tensionTypo: number;
-  wordDirectiveWord: string; wordDirectiveKinetic: string; wordDirectiveElemental: string; wordDirectiveEmphasis: number; wordDirectiveEvolution: string;
-  lineHeroWord: string; lineEntry: string; lineExit: string; lineIntent: string; shotType: string; shotDescription: string;
-  evolutionWord: string; evolutionCount: number; evolutionScale: number; evolutionGlow: number; evolutionBubbles: number; evolutionSinkPx: number;
-  fps: number; drawCalls: number; cacheHits: number;
-  perfBg: number; perfSymbol: number; perfParticlesFar: number; perfText: number; perfOverlays: number; perfNear: number; perfTotal: number;
+  beatIntensity: number;
+  physGlow: number;
+
+  physicsActive: boolean;
+  wordCount: number;
+  heat: number;
+  velocity: number;
+  rotation: number;
+  lastBeatForce: number;
+
+  effectKey: string;
+  entryProgress: number;
+  exitProgress: number;
+  activeMod: string | null;
+
+  fontScale: number;
+  scale: number;
+  lineColor: string;
+  isHookLine: boolean;
+  repIndex: number;
+  repTotal: number;
+
+  particleSystem: string;
+  particleDensity: number;
+  particleSpeed: number;
+  particleCount: number;
+  songSection: string;
+
+  xOffset: number;
+  yBase: number;
+  xNudge: number;
+  shake: number;
+
+  backgroundSystem: string;
+  imageLoaded: boolean;
+  zoom: number;
+  vignetteIntensity: number;
+  songProgress: number;
+
+  dirThesis: string;
+  dirChapter: string;
+  dirChapterProgress: number;
+  dirIntensity: number;
+  dirBgDirective: string;
+  dirLightBehavior: string;
+
+  symbolPrimary: string;
+  symbolSecondary: string;
+  symbolState: string;
+
+  cameraDistance: string;
+  cameraMovement: string;
+  tensionStage: string;
+  tensionMotion: number;
+  tensionParticles: number;
+  tensionTypo: number;
+
+  wordDirectiveWord: string;
+  wordDirectiveKinetic: string;
+  wordDirectiveElemental: string;
+  wordDirectiveEmphasis: number;
+  wordDirectiveEvolution: string;
+
+  lineHeroWord: string;
+  lineEntry: string;
+  lineExit: string;
+  lineIntent: string;
+  shotType: string;
+  shotDescription: string;
+
+  evolutionWord: string;
+  evolutionCount: number;
+  evolutionScale: number;
+  evolutionGlow: number;
+  evolutionBubbles: number;
+  evolutionSinkPx: number;
+
+  fps: number;
+  drawCalls: number;
+  cacheHits: number;
+
+  perfBg: number;
+  perfSymbol: number;
+  perfParticlesFar: number;
+  perfText: number;
+  perfOverlays: number;
+  perfNear: number;
+  perfTotal: number;
+
   time: number;
 }
 
 export const DEFAULT_DEBUG_STATE: LiveDebugState = {
-  time: 0, beatIntensity: 0, physGlow: 0,
-  physicsActive: false, wordCount: 0, heat: 0, velocity: 0, rotation: 0, lastBeatForce: 0,
-  effectKey: "—", entryProgress: 0, exitProgress: 0, activeMod: null,
-  fontScale: 1, scale: 1, lineColor: "#ffffff", isHookLine: false, repIndex: 0, repTotal: 0,
-  particleSystem: "none", particleDensity: 0, particleSpeed: 0, particleCount: 0, songSection: "intro",
-  xOffset: 0, yBase: 0.5, xNudge: 0, shake: 0,
-  backgroundSystem: "minimal", imageLoaded: false, zoom: 1, vignetteIntensity: 0.25, songProgress: 0,
-  dirThesis: "—", dirChapter: "—", dirChapterProgress: 0, dirIntensity: 0, dirBgDirective: "—", dirLightBehavior: "—",
-  symbolPrimary: "—", symbolSecondary: "—", symbolState: "—",
-  cameraDistance: "Medium", cameraMovement: "baked", tensionStage: "—", tensionMotion: 0, tensionParticles: 0, tensionTypo: 0,
-  wordDirectiveWord: "", wordDirectiveKinetic: "—", wordDirectiveElemental: "—", wordDirectiveEmphasis: 0, wordDirectiveEvolution: "—",
-  lineHeroWord: "", lineEntry: "show", lineExit: "hide", lineIntent: "—", shotType: "Static", shotDescription: "Baked timeline",
-  evolutionWord: "—", evolutionCount: 0, evolutionScale: 1, evolutionGlow: 0, evolutionBubbles: 0, evolutionSinkPx: 0,
-  fps: 60, drawCalls: 0, cacheHits: 0,
-  perfBg: 0, perfSymbol: 0, perfParticlesFar: 0, perfText: 0, perfOverlays: 0, perfNear: 0, perfTotal: 0,
+  time: 0,
+  beatIntensity: 0,
+  physGlow: 0,
+
+  physicsActive: false,
+  wordCount: 0,
+  heat: 0,
+  velocity: 0,
+  rotation: 0,
+  lastBeatForce: 0,
+
+  effectKey: "—",
+  entryProgress: 0,
+  exitProgress: 0,
+  activeMod: null,
+
+  fontScale: 1,
+  scale: 1,
+  lineColor: "#ffffff",
+  isHookLine: false,
+  repIndex: 0,
+  repTotal: 0,
+
+  particleSystem: "none",
+  particleDensity: 0,
+  particleSpeed: 0,
+  particleCount: 0,
+  songSection: "intro",
+
+  xOffset: 0,
+  yBase: 0.5,
+  xNudge: 0,
+  shake: 0,
+
+  backgroundSystem: "—",
+  imageLoaded: false,
+  zoom: 1,
+  vignetteIntensity: 0,
+  songProgress: 0,
+
+  dirThesis: "—",
+  dirChapter: "—",
+  dirChapterProgress: 0,
+  dirIntensity: 0,
+  dirBgDirective: "—",
+  dirLightBehavior: "—",
+
+  symbolPrimary: "—",
+  symbolSecondary: "—",
+  symbolState: "—",
+
+  cameraDistance: "Wide",
+  cameraMovement: "—",
+  tensionStage: "—",
+  tensionMotion: 0,
+  tensionParticles: 0,
+  tensionTypo: 0,
+
+  wordDirectiveWord: "",
+  wordDirectiveKinetic: "—",
+  wordDirectiveElemental: "—",
+  wordDirectiveEmphasis: 0,
+  wordDirectiveEvolution: "—",
+
+  lineHeroWord: "",
+  lineEntry: "fades",
+  lineExit: "fades",
+  lineIntent: "—",
+  shotType: "FloatingInWorld",
+  shotDescription: "—",
+
+  evolutionWord: "—",
+  evolutionCount: 0,
+  evolutionScale: 1,
+  evolutionGlow: 0,
+  evolutionBubbles: 0,
+  evolutionSinkPx: 0,
+
+  fps: 60,
+  drawCalls: 0,
+  cacheHits: 0,
+
+  perfBg: 0,
+  perfSymbol: 0,
+  perfParticlesFar: 0,
+  perfText: 0,
+  perfOverlays: 0,
+  perfNear: 0,
+  perfTotal: 0,
 };
 
-type MeasuredLine = { text: string; width: number; fontPx: number; lineHeight: number };
+// ──────────────────────────────────────────────────────────────
+// Internal types
+// ──────────────────────────────────────────────────────────────
+
+type ChunkState = {
+  id: string;
+  text: string;
+  font: string;
+  color: string;
+  width: number;
+};
+
+type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
+  cameraX: number;
+  cameraY: number;
+  chunks: Array<{
+    id: string;
+    x: number;
+    y: number;
+    alpha: number;
+    visible: boolean;
+  }>;
+};
+
+const BASE_W = 960;
+const BASE_H = 540;
+
+// ──────────────────────────────────────────────────────────────
+// Player
+// ──────────────────────────────────────────────────────────────
 
 export class LyricDancePlayer {
-  private readonly data: LyricDanceData;
-  private readonly bgCanvas: HTMLCanvasElement;
-  private readonly textCanvas: HTMLCanvasElement;
-  private readonly container: HTMLDivElement;
+  // DOM (React passes these in; engine owns them after construction)
+  private bgCanvas: HTMLCanvasElement;
+  private textCanvas: HTMLCanvasElement;
+  private container: HTMLDivElement;
 
-  private bgCtx!: CanvasRenderingContext2D;
-  private textCtx!: CanvasRenderingContext2D;
+  // Canvas core
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private dpr: number = window.devicePixelRatio || 1;
+  private width = 0; // logical px
+  private height = 0; // logical px
+
+  // Audio (React reads this)
+  public audio: HTMLAudioElement;
+
+  // Public debug surface (React reads this)
+  public debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
+
+  // Public writeable surface (React pushes comments here)
+  public constellationNodes: any[] = [];
+
+  // Data
+  private data: LyricDanceData;
+  private payload: ScenePayload | null = null;
+
+  // Baked
+  private timeline: ScaledKeyframe[] = [];
+  private chunks: Map<string, ChunkState> = new Map();
+
+  // Background cache
   private bgCache: HTMLCanvasElement | null = null;
 
-  private timeline: BakedTimeline = [];
-  private timelineReady = false;
-  private baking = false;
-
-  private measuredLines: MeasuredLine[] = [];
-  private resizeHandler: () => void;
-  private rafId = 0;
+  // Playback
+  private rafHandle = 0;
+  private lastTimestamp = 0;
+  private currentTimeMs = 0;
+  private songStartSec = 0;
+  private songEndSec = 0;
+  private playing = false;
   private destroyed = false;
 
-  private dpr = 1;
-  private width = 0;
-  private height = 0;
+  // Perf
+  private fpsAccum = { t: 0, frames: 0, fps: 60 };
 
-  private songStart = 0;
-  private songEnd = 0;
-  private songDuration = 1;
-
-  private lastFrameAt = 0;
-  private frameCount = 0;
-
-  audio: HTMLAudioElement;
-  constellationNodes: ConstellationNode[] = [];
-  debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
-
-  private cinematicDirection: CinematicDirection | null;
-
-  constructor(data: LyricDanceData, bgCanvas: HTMLCanvasElement, textCanvas: HTMLCanvasElement, container: HTMLDivElement) {
+  constructor(
+    data: LyricDanceData,
+    bgCanvas: HTMLCanvasElement,
+    textCanvas: HTMLCanvasElement,
+    container: HTMLDivElement,
+  ) {
     this.data = data;
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
     this.container = container;
-    this.cinematicDirection = data.cinematic_direction;
 
-    this.songStart = data.lyrics.length > 0 ? Math.max(0, data.lyrics[0].start - 0.5) : 0;
-    this.songEnd = data.lyrics.length > 0 ? data.lyrics[data.lyrics.length - 1].end + 1 : this.songStart + 1;
-    this.songDuration = Math.max(0.001, this.songEnd - this.songStart);
+    // Engine owns ONE canvas; we draw everything on bgCanvas.
+    this.canvas = bgCanvas;
+    this.ctx = bgCanvas.getContext("2d", { alpha: false })!;
+
+    // Keep text canvas blank (React shell still mounts it).
+    const tctx = textCanvas.getContext("2d", { alpha: true });
+    if (tctx) tctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
 
     this.audio = new Audio(data.audio_url);
     this.audio.loop = true;
-    this.audio.preload = "auto";
     this.audio.muted = true;
-    this.audio.currentTime = this.songStart;
-
-    this.resizeHandler = () => {
-      this.syncCanvasSize();
-      this.measureTextLayouts();
-      this.renderBackgroundCache();
-      this.renderFrame();
-    };
+    this.audio.preload = "auto";
   }
 
+  // Compatibility with existing React shell
   init(): void {
-    const bgCtx = this.bgCanvas.getContext("2d", { alpha: false });
-    const textCtx = this.textCanvas.getContext("2d", { alpha: true });
-    if (!bgCtx || !textCtx) throw new Error("Canvas context unavailable");
+    this.resize(this.canvas.offsetWidth || 0, this.canvas.offsetHeight || 0);
+    this.load(this.buildScenePayload(), () => {}).catch(() => {});
+    this.audio.currentTime = this.songStartSec;
+    this.audio.play().catch(() => {});
+    this.playing = true;
+    this.rafHandle = requestAnimationFrame(this.tick);
+  }
 
-    this.bgCtx = bgCtx;
-    this.textCtx = textCtx;
+  // ────────────────────────────────────────────────────────────
+  // Public API (React calls these)
+  // ────────────────────────────────────────────────────────────
 
-    this.syncCanvasSize();
-    this.measureTextLayouts();
-    this.renderBackgroundCache();
+  async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<void> {
+    this.payload = payload;
+    this.songStartSec = payload.songStart;
+    this.songEndSec = payload.songEnd;
 
-    window.addEventListener("resize", this.resizeHandler);
+    this.buildChunkCache(payload);
+    const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
 
-    this.bakeTimeline();
-    this.startLoop();
+    this.timeline = this.scaleTimeline(baked);
+    this.buildBgCache();
+    onProgress(100);
   }
 
   play(): void {
-    void this.audio.play().catch(() => undefined);
+    this.playing = true;
+    this.audio.play().catch(() => {});
   }
 
   pause(): void {
+    this.playing = false;
     this.audio.pause();
   }
 
   seek(timeSec: number): void {
-    const clamped = Math.max(this.songStart, Math.min(this.songEnd, timeSec));
-    this.audio.currentTime = clamped;
-    this.renderFrame();
+    this.audio.currentTime = timeSec;
+    const t = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
+    this.currentTimeMs = Math.max(0, (t - this.songStartSec) * 1000);
+  }
+
+  resize(logicalW: number, logicalH: number): void {
+    const w = Math.max(1, Math.floor(logicalW));
+    const h = Math.max(1, Math.floor(logicalH));
+    this.width = w;
+    this.height = h;
+
+    // Single source of truth for canvas dimensions.
+    this.canvas.width = Math.floor(w * this.dpr);
+    this.canvas.height = Math.floor(h * this.dpr);
+    this.canvas.style.width = `${w}px`;
+    this.canvas.style.height = `${h}px`;
+
+    // Keep the stacked canvas matched, but never draw to it.
+    this.textCanvas.width = this.canvas.width;
+    this.textCanvas.height = this.canvas.height;
+    this.textCanvas.style.width = `${w}px`;
+    this.textCanvas.style.height = `${h}px`;
+
+    this.buildBgCache();
+    if (this.timeline.length) this.timeline = this.scaleTimeline(this.unscaleTimeline());
   }
 
   setMuted(muted: boolean): void {
     this.audio.muted = muted;
+    if (!muted) this.audio.play().catch(() => {});
   }
 
   updateCinematicDirection(direction: CinematicDirection): void {
-    this.cinematicDirection = direction;
-    this.renderBackgroundCache();
+    this.data = { ...this.data, cinematic_direction: direction };
+    if (!this.payload) return;
+    this.payload = { ...this.payload, cinematic_direction: direction };
+    this.buildChunkCache(this.payload);
+    this.buildBgCache();
   }
 
   destroy(): void {
-    if (this.destroyed) return;
     this.destroyed = true;
+    cancelAnimationFrame(this.rafHandle);
 
-    if (this.rafId) cancelAnimationFrame(this.rafId);
-    window.removeEventListener("resize", this.resizeHandler);
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    const tctx = this.textCanvas.getContext("2d", { alpha: true });
+    if (tctx) tctx.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
+
+    this.chunks.clear();
+    this.timeline = [];
+    this.bgCache = null;
 
     this.audio.pause();
     this.audio.src = "";
-    this.timeline = [];
-    this.timelineReady = false;
   }
 
-  private buildPayload(): ScenePayload {
+  // ────────────────────────────────────────────────────────────
+  // RAF loop
+  // ────────────────────────────────────────────────────────────
+
+  private tick = (timestamp: number): void => {
+    if (this.destroyed) return;
+
+    const deltaMs = Math.min(timestamp - (this.lastTimestamp || timestamp), 100);
+    this.lastTimestamp = timestamp;
+
+    // ALWAYS start frame with this exact sequence
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.clearRect(0, 0, this.width, this.height);
+
+    this.update(deltaMs);
+    this.draw();
+
+    this.rafHandle = requestAnimationFrame(this.tick);
+  };
+
+  private update(deltaMs: number): void {
+    const t = this.audio.currentTime;
+    const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
+    this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
+
+    this.fpsAccum.t += deltaMs;
+    this.fpsAccum.frames += 1;
+    if (this.fpsAccum.t >= 500) {
+      this.fpsAccum.fps = (this.fpsAccum.frames * 1000) / this.fpsAccum.t;
+      this.fpsAccum.t = 0;
+      this.fpsAccum.frames = 0;
+    }
+
+    this.debugState = {
+      ...this.debugState,
+      time: clamped,
+      fps: Math.round(this.fpsAccum.fps),
+      wordCount: this.payload?.lines?.length ?? 0,
+      perfTotal: deltaMs,
+      perfBg: 0,
+      perfText: 0,
+      beatIntensity: 0,
+      physGlow: 0,
+      songProgress: this.songEndSec > this.songStartSec
+        ? Math.max(0, Math.min(1, (clamped - this.songStartSec) / (this.songEndSec - this.songStartSec)))
+        : 0,
+      dirChapter: this.payload?.cinematic_direction?.chapters?.[0]?.title ?? "—",
+      tensionStage: this.payload?.cinematic_direction?.tensionCurve?.[0]?.stage ?? "—",
+    };
+  }
+
+  private draw(): void {
+    const frame = this.getFrame(this.currentTimeMs);
+    if (!frame) return;
+
+    if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
+
+    this.ctx.translate(frame.cameraX, frame.cameraY);
+
+    let drawCalls = 0;
+    for (const chunk of frame.chunks) {
+      if (!chunk.visible) continue;
+      const obj = this.chunks.get(chunk.id);
+      if (!obj) continue;
+
+      this.ctx.globalAlpha = chunk.alpha;
+      this.ctx.font = obj.font;
+      this.ctx.fillStyle = obj.color;
+      this.ctx.fillText(obj.text, chunk.x, chunk.y);
+      drawCalls += 1;
+    }
+
+    this.ctx.globalAlpha = 1;
+    this.debugState = { ...this.debugState, drawCalls };
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Loading / caching helpers
+  // ────────────────────────────────────────────────────────────
+
+  private buildScenePayload(): ScenePayload {
+    const lines = this.data.lyrics ?? [];
+    const songStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
+    const songEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
+
     return {
-      lines: this.data.lyrics,
+      lines,
       beat_grid: this.data.beat_grid,
       physics_spec: this.data.physics_spec,
-      scene_manifest: this.data.scene_manifest,
-      cinematic_direction: this.cinematicDirection,
-      palette: this.data.palette,
+      scene_manifest: this.data.scene_manifest ?? null,
+      cinematic_direction: this.data.cinematic_direction ?? null,
+      palette: this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"],
       lineBeatMap: [],
-      songStart: this.songStart,
-      songEnd: this.songEnd,
+      songStart,
+      songEnd,
     };
   }
 
-  private bakeTimeline(): void {
-    if (this.baking) return;
-    this.baking = true;
-    this.timelineReady = false;
+  private buildChunkCache(payload: ScenePayload): void {
+    this.chunks.clear();
 
-    void bakeSceneChunked(this.buildPayload(), () => undefined)
-      .then((timeline) => {
-        if (this.destroyed) return;
-        this.timeline = timeline;
-        this.timelineReady = true;
-      })
-      .finally(() => {
-        this.baking = false;
+    const fontFamily =
+      payload.cinematic_direction?.visualWorld?.typographyProfile?.fontFamily?.trim() || "Montserrat";
+    const baseFontPx = 44;
+
+    // Measurement happens here only (never in draw loop)
+    const prevFont = this.ctx.font;
+    this.ctx.font = `${baseFontPx}px ${fontFamily}`;
+
+    for (let i = 0; i < payload.lines.length; i += 1) {
+      const id = String(i);
+      const text = payload.lines[i]?.text ?? "";
+      const color = payload.palette?.[2] ?? "#ffffff";
+      const width = this.ctx.measureText(text).width;
+
+      this.chunks.set(id, {
+        id,
+        text,
+        color,
+        font: `${baseFontPx}px ${fontFamily}`,
+        width,
       });
+    }
+
+    this.ctx.font = prevFont;
   }
 
-  private startLoop(): void {
-    if (this.rafId) return;
-    const tick = () => {
-      if (this.destroyed) return;
-      this.renderFrame();
-      this.rafId = requestAnimationFrame(tick);
-    };
-    this.rafId = requestAnimationFrame(tick);
-  }
+  private buildBgCache(): void {
+    const off = document.createElement("canvas");
+    off.width = this.canvas.width;
+    off.height = this.canvas.height;
 
-  private syncCanvasSize(): void {
-    const rect = this.container.getBoundingClientRect();
-    const width = Math.max(1, Math.floor(rect.width));
-    const height = Math.max(1, Math.floor(rect.height));
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-
-    if (width === this.width && height === this.height && dpr === this.dpr) return;
-
-    this.width = width;
-    this.height = height;
-    this.dpr = dpr;
-
-    this.bgCanvas.width = Math.floor(width * dpr);
-    this.bgCanvas.height = Math.floor(height * dpr);
-    this.bgCanvas.style.width = `${width}px`;
-    this.bgCanvas.style.height = `${height}px`;
-
-    this.textCanvas.width = Math.floor(width * dpr);
-    this.textCanvas.height = Math.floor(height * dpr);
-    this.textCanvas.style.width = `${width}px`;
-    this.textCanvas.style.height = `${height}px`;
-  }
-
-  private measureTextLayouts(): void {
-    const basePx = Math.max(24, Math.min(56, this.width * 0.06));
-    this.measuredLines = this.data.lyrics.map((line) => {
-      this.textCtx.font = `700 ${basePx}px Inter, system-ui, sans-serif`;
-      const width = this.textCtx.measureText(line.text).width;
-      return { text: line.text, width, fontPx: basePx, lineHeight: basePx * 1.1 };
-    });
-  }
-
-  private renderBackgroundCache(): void {
-    if (this.width <= 0 || this.height <= 0) return;
-
-    const cache = document.createElement("canvas");
-    cache.width = this.width;
-    cache.height = this.height;
-
-    const ctx = cache.getContext("2d", { alpha: false });
-    if (!ctx) {
+    const offCtx = off.getContext("2d", { alpha: false });
+    if (!offCtx) {
       this.bgCache = null;
       return;
     }
 
-    const p0 = this.data.palette[0] ?? "#0b0b0f";
-    const p1 = this.data.palette[1] ?? "#1f2937";
-    const p2 = this.data.palette[2] ?? "#111827";
+    const palette = this.payload?.palette ?? this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"];
+    offCtx.fillStyle = palette[0] || "#0a0a0a";
+    offCtx.fillRect(0, 0, off.width, off.height);
 
-    const gradient = ctx.createLinearGradient(0, 0, this.width, this.height);
-    gradient.addColorStop(0, p0);
-    gradient.addColorStop(0.5, p1);
-    gradient.addColorStop(1, p2);
+    // Optional subtle second tone band (still “draw once”)
+    if (palette[1]) {
+      offCtx.globalAlpha = 0.25;
+      offCtx.fillStyle = palette[1];
+      offCtx.fillRect(0, Math.floor(off.height * 0.55), off.width, Math.floor(off.height * 0.45));
+      offCtx.globalAlpha = 1;
+    }
 
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, this.width, this.height);
-
-    const overlayAlpha = this.cinematicDirection ? 0.12 : 0.06;
-    ctx.fillStyle = `rgba(0,0,0,${overlayAlpha})`;
-    ctx.fillRect(0, 0, this.width, this.height);
-
-    this.bgCache = cache;
+    this.bgCache = off;
   }
 
-  private frameForTime(timeSec: number) {
-    if (!this.timelineReady || this.timeline.length === 0) return null;
+  // ────────────────────────────────────────────────────────────
+  // Timeline helpers
+  // ────────────────────────────────────────────────────────────
 
-    const relMs = Math.max(0, (timeSec - this.songStart) * 1000);
-    const maxIndex = this.timeline.length - 1;
-    let lo = 0;
-    let hi = maxIndex;
+  private getFrame(currentTimeMs: number): ScaledKeyframe | null {
+    const t = this.timeline;
+    if (!t.length) return null;
 
-    while (lo < hi) {
-      const mid = Math.ceil((lo + hi) / 2);
-      if (this.timeline[mid].timeMs <= relMs) lo = mid;
-      else hi = mid - 1;
+    let low = 0;
+    let high = t.length - 1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (t[mid].timeMs < currentTimeMs) low = mid + 1;
+      else high = mid - 1;
     }
-
-    return this.timeline[lo] ?? null;
+    return t[Math.max(0, low - 1)] ?? t[0];
   }
 
-  private renderFrame(): void {
-    if (this.destroyed || !this.bgCtx || !this.textCtx) return;
+  private scaleTimeline(raw: BakedTimeline): ScaledKeyframe[] {
+    const sx = this.width / BASE_W;
+    const sy = this.height / BASE_H;
 
-    this.syncCanvasSize();
-
-    const frameStart = performance.now();
-
-    this.bgCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.bgCtx.clearRect(0, 0, this.width, this.height);
-    this.textCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.textCtx.clearRect(0, 0, this.width, this.height);
-
-    if (this.bgCache) {
-      this.bgCtx.globalAlpha = 1;
-      this.bgCtx.drawImage(this.bgCache, 0, 0, this.width, this.height);
-    }
-
-    if (!this.timelineReady || this.timeline.length === 0) {
-      this.updateDebug(frameStart, 0, 0, 0, this.audio.currentTime, null);
-      return;
-    }
-
-    const frame = this.frameForTime(this.audio.currentTime);
-    if (!frame) {
-      this.updateDebug(frameStart, 0, 0, 0, this.audio.currentTime, null);
-      return;
-    }
-
-    const textStart = performance.now();
-    let wordCount = 0;
-
-    for (const chunk of frame.chunks) {
-      if (!chunk.visible || chunk.alpha <= 0) continue;
-      const idx = Number.parseInt(chunk.id, 10);
-      if (!Number.isFinite(idx) || idx < 0 || idx >= this.measuredLines.length) continue;
-      const line = this.measuredLines[idx];
-      wordCount += line.text.trim().split(/\s+/).filter(Boolean).length;
-
-      const drawX = chunk.x - line.width * 0.5 + frame.cameraX;
-      const drawY = chunk.y + frame.cameraY;
-
-      this.textCtx.globalAlpha = chunk.alpha;
-      this.textCtx.font = `700 ${line.fontPx * chunk.scale}px Inter, system-ui, sans-serif`;
-      this.textCtx.fillStyle = "#ffffff";
-      this.textCtx.fillText(line.text, drawX, drawY);
-    }
-
-    this.textCtx.globalAlpha = 1;
-    const textPerf = performance.now() - textStart;
-
-    this.updateDebug(frameStart, textPerf, frame.beatIndex, wordCount, this.audio.currentTime, frame);
+    return raw.map((f) => ({
+      timeMs: f.timeMs,
+      beatIndex: f.beatIndex,
+      cameraX: f.cameraX * sx,
+      cameraY: f.cameraY * sy,
+      chunks: f.chunks.map((c) => ({
+        id: c.id,
+        x: c.x * sx,
+        y: c.y * sy,
+        alpha: c.alpha,
+        visible: c.visible,
+      })),
+    }));
   }
 
-  private updateDebug(
-    frameStart: number,
-    perfText: number,
-    beatIndex: number,
-    wordCount: number,
-    timeSec: number,
-    frame: BakedTimeline[number] | null,
-  ): void {
-    this.frameCount += 1;
-    const now = performance.now();
-    const dt = this.lastFrameAt > 0 ? now - this.lastFrameAt : 16;
-    this.lastFrameAt = now;
+  // Used only so resize can rescale without rebaking.
+  private unscaleTimeline(): BakedTimeline {
+    const sx = this.width / BASE_W;
+    const sy = this.height / BASE_H;
 
-    const fps = dt > 0 ? 1000 / dt : 60;
-    const progress = Math.max(0, Math.min(1, (timeSec - this.songStart) / this.songDuration));
-    const beatIntensity = this.data.beat_grid.beats.length > 0 ? (beatIndex % 4 === 0 ? 1 : 0.5) : 0;
-
-    this.debugState = {
-      ...this.debugState,
-      time: timeSec,
-      beatIntensity,
-      physGlow: beatIntensity,
-      wordCount,
-      lineColor: "#ffffff",
-      particleCount: this.constellationNodes.length,
-      songProgress: progress,
-      xOffset: frame?.cameraX ?? 0,
-      yBase: frame?.cameraY ?? 0,
-      dirChapter: this.cinematicDirection ? "active" : "none",
-      tensionStage: this.cinematicDirection ? "guided" : "neutral",
-      fps,
-      perfBg: 0,
-      perfText,
-      perfTotal: performance.now() - frameStart,
-      imageLoaded: this.bgCache !== null,
-      drawCalls: frame ? 1 : 0,
-      cacheHits: this.bgCache ? 1 : 0,
-    };
+    return this.timeline.map((f) => ({
+      timeMs: f.timeMs,
+      beatIndex: f.beatIndex,
+      cameraX: sx ? f.cameraX / sx : f.cameraX,
+      cameraY: sy ? f.cameraY / sy : f.cameraY,
+      chunks: f.chunks.map((c) => ({
+        id: c.id,
+        x: sx ? c.x / sx : c.x,
+        y: sy ? c.y / sy : c.y,
+        alpha: c.alpha,
+        scale: 1,
+        visible: c.visible,
+      })),
+    }));
   }
 }
