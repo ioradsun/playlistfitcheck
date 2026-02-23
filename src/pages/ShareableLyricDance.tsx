@@ -461,6 +461,7 @@ export default function ShareableLyricDance() {
     let beatIndex = 0;
     let prevTime = songStart;
     let lastFrameTime = performance.now();
+    let smoothBeatIntensity = 0; // exponential-decay beat intensity
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -491,19 +492,24 @@ export default function ShareableLyricDance() {
         audio.currentTime = songStart;
         beatIndex = 0;
         prevTime = songStart;
+        smoothBeatIntensity = 0;
         return;
       }
 
-      let currentBeatIntensity = 0;
+      // Decay beat intensity smoothly between beats (~85% per frame at 60fps)
+      const decayRate = Math.exp(-deltaMs / 120); // ~120ms half-life
+      smoothBeatIntensity *= decayRate;
+
       while (beatIndex < sortedBeats.length && sortedBeats[beatIndex] <= currentTime) {
         if (sortedBeats[beatIndex] > prevTime) {
           const isDownbeat = beatIndex % 4 === 0;
           const strength = isDownbeat ? 1 : 0.5;
           integrator.onBeat(strength, isDownbeat);
-          currentBeatIntensity = strength;
+          smoothBeatIntensity = Math.max(smoothBeatIntensity, strength); // spike on beat
         }
         beatIndex++;
       }
+      const currentBeatIntensity = smoothBeatIntensity;
 
       const state = integrator.tick();
       const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
