@@ -42,6 +42,38 @@ export function renderChapterBackground(
       ctx.fillStyle = `rgba(255,130,80,${symbolInfluence})`;
     } else if (lowerSymbolState.includes("void") || lowerSymbolState.includes("fog")) {
       ctx.fillStyle = `rgba(120,120,140,${symbolInfluence})`;
+    } else if (lowerSymbolState.includes("mountain") || lowerSymbolState.includes("peak") || lowerSymbolState.includes("summit")) {
+      ctx.fillStyle = `rgba(100,80,60,${symbolInfluence})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Draw mountain silhouette
+      const mtnH = canvas.height * (0.3 + symbolInfluence * 2);
+      const baseY = canvas.height;
+      ctx.fillStyle = `rgba(60,50,40,${symbolInfluence * 1.5})`;
+      ctx.beginPath();
+      ctx.moveTo(0, baseY);
+      ctx.lineTo(canvas.width * 0.15, baseY - mtnH * 0.6);
+      ctx.lineTo(canvas.width * 0.35, baseY - mtnH);
+      ctx.lineTo(canvas.width * 0.55, baseY - mtnH * 0.4);
+      ctx.lineTo(canvas.width * 0.7, baseY - mtnH * 0.85);
+      ctx.lineTo(canvas.width * 0.85, baseY - mtnH * 0.5);
+      ctx.lineTo(canvas.width, baseY);
+      ctx.closePath();
+      ctx.fill();
+      // Snow caps
+      ctx.fillStyle = `rgba(220,225,235,${symbolInfluence * 0.8})`;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width * 0.3, baseY - mtnH * 0.9);
+      ctx.lineTo(canvas.width * 0.35, baseY - mtnH);
+      ctx.lineTo(canvas.width * 0.4, baseY - mtnH * 0.9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(canvas.width * 0.65, baseY - mtnH * 0.75);
+      ctx.lineTo(canvas.width * 0.7, baseY - mtnH * 0.85);
+      ctx.lineTo(canvas.width * 0.75, baseY - mtnH * 0.75);
+      ctx.closePath();
+      ctx.fill();
+      return; // skip the generic fillRect below
     } else {
       ctx.fillStyle = `rgba(255,255,255,${symbolInfluence * 0.5})`;
     }
