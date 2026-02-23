@@ -547,29 +547,28 @@ export class LyricDancePlayer {
     // 1. Background — drawn at identity transform, always fills canvas
     if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
 
-    // 2. Apply zoom around canvas center
-    const zoom = frame.cameraZoom ?? 1.0;
-    const cx = this.width / 2;
-    const cy = this.height / 2;
-    this.ctx.translate(cx, cy);
-    this.ctx.scale(zoom, zoom);
-    this.ctx.translate(-cx, -cy);
-
-    // 3. Apply camera drift on top of zoom
+    // 2. Apply camera drift (no zoom transform — zoom is applied via font size)
     this.ctx.translate(frame.cameraX, frame.cameraY);
 
-    // 4. Draw text chunks with glow
+    // 3. Draw text chunks with glow + font-based zoom
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
+    const zoom = frame.cameraZoom ?? 1.0;
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
+      // Apply zoom to font size — this is what changes perceived camera distance
+      const zoomedFont = obj.font.replace(
+        /(\d+)px/,
+        (_, size) => `${Math.round(parseInt(size) * zoom)}px`
+      );
+
       this.ctx.globalAlpha = chunk.alpha;
-      this.ctx.font = obj.font;
+      this.ctx.font = zoomedFont;
       this.ctx.fillStyle = obj.color;
 
       if (chunk.glow > 0) {
@@ -577,7 +576,7 @@ export class LyricDancePlayer {
         this.ctx.shadowBlur = chunk.glow * 24;
       }
 
-      this.ctx.fillText(obj.text, cx, cy);
+      this.ctx.fillText(obj.text, this.width / 2, this.height / 2);
       this.ctx.shadowBlur = 0;
       drawCalls += 1;
     }
