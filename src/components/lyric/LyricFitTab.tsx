@@ -392,7 +392,7 @@ export function LyricFitTab({
     } catch {
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error" }));
     }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid]);
+  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna]);
 
   useEffect(() => {
     if (!lines?.length || !audioFile) return;
