@@ -24,6 +24,7 @@ import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
 import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
+import { classifyWord, getWordVisualProps } from "@/engine/WordClassifier";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -369,6 +370,8 @@ export default function ShareableLyricDance() {
   const rngRef = useRef<() => number>(() => 0);
   const xOffsetRef = useRef(0);
   const yBaseRef = useRef(0);
+  const wordCountRef = useRef<Map<string, number>>(new Map());
+  const seenWordAppearancesRef = useRef<Set<string>>(new Set());
 
   // Comments / constellation
   const constellationRef = useRef<ConstellationNode[]>([]);
@@ -991,22 +994,118 @@ export default function ShareableLyricDance() {
         if (activeLineAnim.activeMod) {
           applyModEffect(ctx, activeLineAnim.activeMod, currentTime, currentBeatIntensity);
         }
-        const effectState: EffectState = {
-          text: activeLine.text,
-          physState: state,
-          w: cw,
-          h: ch,
-          fs: fontSize,
-          age,
-          progress: lineProgress,
-          rng,
-          palette: [activeLineAnim.lineColor, textPalette[1], textPalette[2]],
-          system: effectiveSystem,
-          effectiveLetterSpacing,
-          stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
-          alphaMultiplier: compositeAlpha
-        };
-        drawFn(ctx, effectState);
+        const words = activeLine.text.split(/\s+/).filter(Boolean);
+        const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
+        const wordsPerSecond = words.length > 0 ? words.length / lineDuration : 1;
+        const wordDelay = wordsPerSecond > 0 ? 1 / wordsPerSecond : lineDuration;
+        const visibleWordCount = words.filter((_, i) => currentTime >= activeLine.start + i * wordDelay).length;
+        const drawWords = words.slice(0, visibleWordCount);
+
+        const measuredWordWidths = drawWords.map(word => ctx.measureText(word).width);
+        const baseSpaceWidth = ctx.measureText(" ").width;
+        const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, drawWords.length - 1) * baseSpaceWidth;
+        let cursorX = lineX - totalWidth / 2;
+
+        drawWords.forEach((word, wordIndex) => {
+          const normalizedWord = word.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
+          const resolvedWordStartTime = activeLine.start + wordIndex * wordDelay;
+          const appearanceKey = `${activeLine.start}:${wordIndex}:${normalizedWord}`;
+
+          if (!seenWordAppearancesRef.current.has(appearanceKey) && currentTime >= resolvedWordStartTime) {
+            const nextCount = (wordCountRef.current.get(normalizedWord) ?? 0) + 1;
+            wordCountRef.current.set(normalizedWord, nextCount);
+            seenWordAppearancesRef.current.add(appearanceKey);
+          }
+
+          const newCount = wordCountRef.current.get(normalizedWord) ?? 1;
+          const visualProps = getWordVisualProps(word, wordIndex, activeLineAnim, currentBeatIntensity, newCount);
+          if (currentTime < resolvedWordStartTime) {
+            return;
+          }
+
+          const className = classifyWord(word);
+          const wordAge = currentTime - resolvedWordStartTime;
+          let animScale = visualProps.scale;
+          let flashColor = visualProps.color;
+
+          if (className === "IMPACT") {
+            const impactPhase = Math.min(1, wordAge / 0.24);
+            const slamScale = impactPhase < 0.5
+              ? 1 + (1.35 - 1) * (impactPhase / 0.5)
+              : 1.35 - (1.35 - 1) * ((impactPhase - 0.5) / 0.5);
+            animScale *= slamScale;
+            if (wordAge < 0.08) flashColor = "#ffffff";
+          } else if (className === "TENDER") {
+            const breathe = 0.95 + Math.sin((wordAge + wordIndex * 0.2) * 2.2) * 0.1;
+            animScale *= breathe;
+          } else if (className === "QUESTION") {
+            const drift = Math.min(1, wordAge / 0.5);
+            animScale *= 1 - 0.05 * drift;
+          } else if (className === "TRANSCENDENT") {
+            const pulse = 1 + 0.2 * (0.5 + 0.5 * Math.sin(wordAge * 2));
+            animScale *= pulse;
+          }
+
+          const wordWidth = ctx.measureText(word).width;
+          const wordCenterX = cursorX + wordWidth / 2;
+          const drawX = className === "SELF" ? lineX : wordCenterX + visualProps.xOffset;
+          const drawY = lineY + visualProps.yOffset;
+
+          const prevAlpha = ctx.globalAlpha;
+          ctx.globalAlpha = compositeAlpha * visualProps.opacity;
+          ctx.fillStyle = flashColor;
+          ctx.shadowColor = flashColor;
+          ctx.shadowBlur = visualProps.glowRadius;
+
+          const shouldItalic = className === "OTHER";
+          const wordFontSize = fontSize * animScale;
+          ctx.font = `${shouldItalic ? "italic " : ""}${wordFontSize}px Inter, ui-sans-serif, system-ui`;
+          ctx.textAlign = "center";
+
+          if (visualProps.showTrail) {
+            for (let t = visualProps.trailCount; t >= 1; t -= 1) {
+              ctx.globalAlpha = compositeAlpha * visualProps.opacity * (0.12 * t);
+              ctx.fillText(word, drawX - t * 8, drawY + t * 2);
+            }
+            ctx.globalAlpha = compositeAlpha * visualProps.opacity;
+          }
+
+          ctx.fillText(word, drawX, drawY);
+
+          if (className === "NEGATION") {
+            const strikeY = drawY - wordFontSize * 0.1;
+            ctx.globalAlpha = compositeAlpha * 0.3;
+            ctx.strokeStyle = "#d1d5db";
+            ctx.lineWidth = Math.max(1, wordFontSize * 0.04);
+            ctx.beginPath();
+            ctx.moveTo(drawX - wordWidth / 2, strikeY);
+            ctx.lineTo(drawX + wordWidth / 2, strikeY);
+            ctx.stroke();
+          }
+
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = prevAlpha;
+          cursorX += wordWidth + baseSpaceWidth;
+        });
+
+        if (drawWords.length === 0) {
+          const effectState: EffectState = {
+            text: activeLine.text,
+            physState: state,
+            w: cw,
+            h: ch,
+            fs: fontSize,
+            age,
+            progress: lineProgress,
+            rng,
+            palette: [activeLineAnim.lineColor, textPalette[1], textPalette[2]],
+            system: effectiveSystem,
+            effectiveLetterSpacing,
+            stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
+            alphaMultiplier: compositeAlpha,
+          };
+          drawFn(ctx, effectState);
+        }
         ctx.restore();
       }
 
