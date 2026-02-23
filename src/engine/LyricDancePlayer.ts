@@ -247,6 +247,8 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     alpha: number;
     glow: number;
     scale: number;
+    fontSize?: number;
+    color?: string;
     visible: boolean;
   }>;
 };
@@ -298,6 +300,7 @@ export class LyricDancePlayer {
 
   // Background cache
   private bgCache: HTMLCanvasElement | null = null;
+  private bgCache2: HTMLCanvasElement | null = null;
 
   // Playback
   private rafHandle = 0;
@@ -489,6 +492,7 @@ export class LyricDancePlayer {
     this.chunks = new Map();
     this.timeline = [];
     this.bgCache = null;
+    this.bgCache2 = null;
 
     this.audio.pause();
     this.audio.src = "";
@@ -593,41 +597,67 @@ export class LyricDancePlayer {
     if (!frame) return;
 
 
-    // 1. Background — drawn at identity transform, always fills canvas
-    if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
+    if (this.bgCache) {
+      this.ctx.globalAlpha = 1;
+      this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
+    }
 
-    // 2. Apply camera drift (no zoom transform — zoom is applied via font size)
-    this.ctx.translate(frame.cameraX, frame.cameraY);
+    // Blend overlay toward next chapter color
+    if (frame.bgBlend > 0 && this.bgCache2) {
+      this.ctx.globalAlpha = (frame.bgBlend % 1);
+      this.ctx.drawImage(this.bgCache2, 0, 0, this.width, this.height);
+      this.ctx.globalAlpha = 1;
+    }
 
-    // 3. Draw text chunks with glow + font-based zoom
+    // Apply camera drift — subtle only, no zoom transform
+    this.ctx.translate(frame.cameraX ?? 0, frame.cameraY ?? 0);
+
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
-    const zoom = frame.cameraZoom ?? 1.0;
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
-      // Apply zoom to font size — this is what changes perceived camera distance
+      const zoom = frame.cameraZoom ?? 1.0;
+      const fontSize = chunk.fontSize ?? 36;
       const zoomedFont = obj.font.replace(
-        /(\d+)px/,
-        (_, size) => `${Math.round(parseInt(size) * zoom)}px`
+        /(\d+(\.\d+)?)px/,
+        `${Math.round(fontSize * zoom)}px`
       );
 
       this.ctx.globalAlpha = chunk.alpha;
+      this.ctx.fillStyle = chunk.color ?? obj.color;
       this.ctx.font = zoomedFont;
-      this.ctx.fillStyle = obj.color;
 
       if (chunk.glow > 0) {
-        this.ctx.shadowColor = '#ffffff';
-        this.ctx.shadowBlur = chunk.glow * 24;
+        this.ctx.shadowColor = chunk.color ?? '#ffffff';
+        this.ctx.shadowBlur = chunk.glow * 32;
       }
 
       this.ctx.fillText(obj.text, this.width / 2, this.height / 2);
       this.ctx.shadowBlur = 0;
       drawCalls += 1;
+    }
+
+    // Particle pass — drawn after text, before reset
+    if (frame.particles?.length) {
+      for (const p of frame.particles) {
+        this.ctx.globalAlpha = p.alpha;
+        this.ctx.fillStyle = this.payload?.cinematic_direction?.visualWorld?.palette?.[1] ?? '#ffffff';
+        this.ctx.beginPath();
+        this.ctx.arc(
+          p.x * this.width,
+          p.y * this.height,
+          p.size,
+          0,
+          Math.PI * 2
+        );
+        this.ctx.fill();
+      }
+      this.ctx.globalAlpha = 1;
     }
 
     this.ctx.globalAlpha = 1;
@@ -691,49 +721,52 @@ export class LyricDancePlayer {
   }
 
   private buildBgCache(): void {
-    const off = document.createElement("canvas");
-    off.width = this.canvas.width;
-    off.height = this.canvas.height;
+    const buildCanvas = (dominantColor: string): HTMLCanvasElement | null => {
+      const off = document.createElement("canvas");
+      off.width = this.canvas.width;
+      off.height = this.canvas.height;
 
-    const offCtx = off.getContext("2d", { alpha: false });
-    if (!offCtx) {
-      this.bgCache = null;
-      return;
-    }
+      const offCtx = off.getContext("2d", { alpha: false });
+      if (!offCtx) return null;
+
+      const palette = this.payload?.palette ?? this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"];
+      const sceneManifest = this.payload?.scene_manifest;
+
+      const grad = offCtx.createLinearGradient(0, 0, 0, off.height);
+      grad.addColorStop(0, dominantColor || "#0a0a0a");
+      grad.addColorStop(0.6, palette[1] || "#111827");
+      grad.addColorStop(1, palette[2] ? `${palette[2]}33` : "#0a0a0a");
+      offCtx.fillStyle = grad;
+      offCtx.fillRect(0, 0, off.width, off.height);
+
+      const env = ((sceneManifest as any)?.environment ?? "").toLowerCase();
+      if (env.includes("ocean") || env.includes("water") || env.includes("surf")) {
+        this.drawWaveBands(offCtx, off.width, off.height, palette);
+      } else if (env.includes("city") || env.includes("urban") || env.includes("street")) {
+        this.drawLightStreaks(offCtx, off.width, off.height, palette);
+      } else if (env.includes("space") || env.includes("cosmos") || env.includes("star")) {
+        this.drawStarField(offCtx, off.width, off.height, palette);
+      } else if (env.includes("forest") || env.includes("nature") || env.includes("wood")) {
+        this.drawOrganicShapes(offCtx, off.width, off.height, palette);
+      } else {
+        this.drawRadialGlow(offCtx, off.width, off.height, palette);
+      }
+
+      const vignette = offCtx.createRadialGradient(
+        off.width / 2, off.height / 2, off.height * 0.3,
+        off.width / 2, off.height / 2, off.height * 0.9,
+      );
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.65)");
+      offCtx.fillStyle = vignette;
+      offCtx.fillRect(0, 0, off.width, off.height);
+
+      return off;
+    };
 
     const palette = this.payload?.palette ?? this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"];
-    const sceneManifest = this.payload?.scene_manifest;
-
-    const grad = offCtx.createLinearGradient(0, 0, 0, off.height);
-    grad.addColorStop(0, palette[0] || "#0a0a0a");
-    grad.addColorStop(0.6, palette[1] || "#111827");
-    grad.addColorStop(1, palette[2] ? `${palette[2]}33` : "#0a0a0a");
-    offCtx.fillStyle = grad;
-    offCtx.fillRect(0, 0, off.width, off.height);
-
-    const env = ((sceneManifest as any)?.environment ?? "").toLowerCase();
-    if (env.includes("ocean") || env.includes("water") || env.includes("surf")) {
-      this.drawWaveBands(offCtx, off.width, off.height, palette);
-    } else if (env.includes("city") || env.includes("urban") || env.includes("street")) {
-      this.drawLightStreaks(offCtx, off.width, off.height, palette);
-    } else if (env.includes("space") || env.includes("cosmos") || env.includes("star")) {
-      this.drawStarField(offCtx, off.width, off.height, palette);
-    } else if (env.includes("forest") || env.includes("nature") || env.includes("wood")) {
-      this.drawOrganicShapes(offCtx, off.width, off.height, palette);
-    } else {
-      this.drawRadialGlow(offCtx, off.width, off.height, palette);
-    }
-
-    const vignette = offCtx.createRadialGradient(
-      off.width / 2, off.height / 2, off.height * 0.3,
-      off.width / 2, off.height / 2, off.height * 0.9,
-    );
-    vignette.addColorStop(0, "rgba(0,0,0,0)");
-    vignette.addColorStop(1, "rgba(0,0,0,0.65)");
-    offCtx.fillStyle = vignette;
-    offCtx.fillRect(0, 0, off.width, off.height);
-
-    this.bgCache = off;
+    this.bgCache = buildCanvas(palette[0] || "#0a0a0a");
+    this.bgCache2 = buildCanvas(palette[1] || "#111111");
   }
 
   private drawWaveBands(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
@@ -831,6 +864,8 @@ export class LyricDancePlayer {
         alpha: c.alpha,
         glow: c.glow,
         scale: c.scale,
+        fontSize: c.fontSize,
+        color: c.color,
         visible: c.visible,
       })),
     }));
@@ -857,8 +892,8 @@ export class LyricDancePlayer {
         glow: c.glow,
         scale: c.scale,
         visible: c.visible,
-        fontSize: 36,
-        color: "#ffffff",
+        fontSize: c.fontSize ?? 36,
+        color: c.color ?? "#ffffff",
       })),
     }));
   }
