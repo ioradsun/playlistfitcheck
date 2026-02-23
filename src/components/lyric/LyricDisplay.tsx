@@ -623,7 +623,7 @@ export function LyricDisplay({
       const afterManifest = safeManifest(merged.scene_manifest || beforeManifest).manifest;
       setManifestDiff(getManifestDiff(beforeManifest, afterManifest));
       setSongDna(merged);
-      void generateBackgroundImage(afterManifest, direction.trim());
+      // Background image generation now handled by FitTab
       if (audioRef.current) audioRef.current.currentTime = playhead;
     } catch (error) {
       console.error("Director's Cut regenerate failed", error);
