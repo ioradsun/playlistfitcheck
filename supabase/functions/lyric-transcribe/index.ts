@@ -649,8 +649,8 @@ serve(async (req) => {
       "google/gemini-3-pro-preview",
     ];
     const analysisDisabled = analysisModel === "disabled";
-    const resolvedAnalysisModel: string = VALID_ANALYSIS_MODELS.includes(analysisModel)
-      ? analysisModel
+    const resolvedAnalysisModel: string = VALID_ANALYSIS_MODELS.includes(analysisModel ?? "")
+      ? analysisModel!
       : "google/gemini-2.5-flash";
 
     // Gemini transcription model — use analysis model or default
