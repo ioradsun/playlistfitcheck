@@ -369,6 +369,50 @@ interface LineBeatMap {
   lastBeat: number;
 }
 
+interface CollisionBox {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface SpatialGrid {
+  cellSize: number;
+  buckets: Map<string, number[]>;
+}
+
+function intersectsAABB(a: CollisionBox, b: CollisionBox): boolean {
+  return !(
+    a.x + a.w <= b.x ||
+    b.x + b.w <= a.x ||
+    a.y + a.h <= b.y ||
+    b.y + b.h <= a.y
+  );
+}
+
+function resolveAABBCollision(a: CollisionBox, b: CollisionBox, strength: number): void {
+  const axCenter = a.x + a.w * 0.5;
+  const ayCenter = a.y + a.h * 0.5;
+  const bxCenter = b.x + b.w * 0.5;
+  const byCenter = b.y + b.h * 0.5;
+  const overlapX = (a.w + b.w) * 0.5 - Math.abs(axCenter - bxCenter);
+  const overlapY = (a.h + b.h) * 0.5 - Math.abs(ayCenter - byCenter);
+  if (overlapX <= 0 || overlapY <= 0) return;
+
+  if (overlapX < overlapY) {
+    const direction = axCenter < bxCenter ? -1 : 1;
+    a.x += direction * overlapX * strength;
+  } else {
+    const direction = ayCenter < byCenter ? -1 : 1;
+    a.y += direction * overlapY * strength;
+  }
+}
+
+function gridKey(gx: number, gy: number): string {
+  return `${gx}:${gy}`;
+}
+
 function buildLineBeatMap(lines: LyricLine[], beatGrid: BeatGrid): LineBeatMap[] {
   return lines.map((line, i) => {
     const lineBeats = beatGrid.beats.filter(beat => beat >= line.start && beat <= line.end);
@@ -406,12 +450,14 @@ function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const duration = songEnd - songStart;
 
+    let rafId = 0;
     const update = () => {
       const p = duration > 0 ? (audio.currentTime - songStart) / duration : 0;
       setProgress(Math.max(0, Math.min(1, p)));
+      rafId = requestAnimationFrame(update);
     };
-    const id = setInterval(update, 100);
-    return () => clearInterval(id);
+    rafId = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(rafId);
   }, [audioRef, data]);
 
   return (
@@ -602,6 +648,8 @@ export default function ShareableLyricDance() {
   // Comments / constellation
   const constellationRef = useRef<ConstellationNode[]>([]);
   const riverOffsetsRef = useRef<number[]>([0, 0, 0, 0]);
+  const constellationCollisionBoxesRef = useRef<CollisionBox[]>([]);
+  const constellationGridRef = useRef<SpatialGrid>({ cellSize: 96, buckets: new Map() });
 
   // Badge
   const [badgeVisible, setBadgeVisible] = useState(false);
@@ -775,7 +823,6 @@ export default function ShareableLyricDance() {
     if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
     
     let audio: HTMLAudioElement | null = null;
-    let constellationInterval: ReturnType<typeof setInterval> | null = null;
     let resizeHandler: (() => void) | null = null;
     try {
     const bgCanvas = bgCanvasRef.current;
@@ -867,7 +914,7 @@ export default function ShareableLyricDance() {
     const constellationCanvas = document.createElement("canvas");
     constellationCanvasRef.current = constellationCanvas;
     let constellationDirty = true;
-    constellationInterval = setInterval(() => { constellationDirty = true; }, 100); // 10fps
+    let constellationLastFrame = 0;
 
     // Set up audio
     audio = new Audio(data.audio_url);
@@ -902,11 +949,22 @@ export default function ShareableLyricDance() {
 
     // Perf: word width cache with fast integer key (avoids template literal allocation)
     const wordWidthIntCache = new Map<number, number>();
+    const commentTextCache = new Map<string, string>();
+    const commentWidthCache = new Map<string, number>();
+    const riverNodeBuckets: ConstellationNode[][] = Array.from({ length: RIVER_ROWS.length }, () => []);
     const hashWordKey = (word: string, fSize: number, fontFamily: string): number => {
       let h = fSize * 31;
       for (let i = 0; i < word.length; i++) h = (h * 31 + word.charCodeAt(i)) | 0;
       for (let i = 0; i < fontFamily.length; i++) h = (h * 31 + fontFamily.charCodeAt(i)) | 0;
       return h;
+    };
+
+    const getTruncatedComment = (node: ConstellationNode): string => {
+      const cached = commentTextCache.get(node.id);
+      if (cached) return cached;
+      const truncated = node.text.length > 40 ? `${node.text.slice(0, 40)}…` : node.text;
+      commentTextCache.set(node.id, truncated);
+      return truncated;
     };
 
     resizeHandler = () => {
@@ -954,11 +1012,11 @@ export default function ShareableLyricDance() {
       animRef.current = requestAnimationFrame(render);
       const frameStart = performance.now();
       const now = frameStart;
-      const deltaMs = now - lastFrameTime;
+      const deltaMs = Math.min(100, now - lastFrameTime);
       lastFrameTime = now;
 
-      const cw = textCanvas.clientWidth || textCanvas.width / (window.devicePixelRatio || 1);
-      const ch = textCanvas.clientHeight || textCanvas.height / (window.devicePixelRatio || 1);
+      const cw = textCanvas.width / (window.devicePixelRatio || 1);
+      const ch = textCanvas.height / (window.devicePixelRatio || 1);
       const ctx = textCtx;
       ctx.clearRect(0, 0, cw, ch);
       let drawCalls = 0;
@@ -1027,8 +1085,6 @@ export default function ShareableLyricDance() {
       const activeLine = activeLineIndex >= 0 ? lines[activeLineIndex] : null;
       const activePlanLine = activeLineIndex >= 0 ? plan?.lines[activeLineIndex] ?? null : null;
       const activeLineBeatMap = activeLineIndex >= 0 ? lineBeatMap[activeLineIndex] : undefined;
-      const isOnBeat = activeLineBeatMap?.beats.some(beat => Math.abs(currentTime - beat) < 0.05) ?? false;
-      const isOnStrongBeat = activeLineBeatMap?.strongBeats.some(beat => Math.abs(currentTime - beat) < 0.05) ?? false;
       const beatDensity = activeLineBeatMap?.beatsPerSecond ?? 0;
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
       const symbol = cinematicDirection?.symbolSystem;
@@ -1157,9 +1213,10 @@ export default function ShareableLyricDance() {
       const camOffY = cameraOffsetRef.current.y + silenceOffsetYRef.current + (currentBeatIntensity > 0.92
         ? Math.cos(currentTime * 37.7 * 1.3) * (currentBeatIntensity - 0.92) * 5
         : 0);
+      container.style.willChange = "transform";
       container.style.transform = camOffX !== 0 || camOffY !== 0
-        ? `translate(${camOffX}px, ${camOffY}px)`
-        : "";
+        ? `translate3d(${camOffX}px, ${camOffY}px, 0)`
+        : "translate3d(0, 0, 0)";
       container.style.transformOrigin = "center center";
 
       // Background — draw on bgCanvas only when dirty; text canvas stays transparent
@@ -1258,6 +1315,10 @@ export default function ShareableLyricDance() {
       // Perf opt 2: render constellation/river to offscreen canvas at 10fps, blit in rAF
       const nodes = constellationRef.current;
       const commentNow = Date.now();
+      if (now - constellationLastFrame >= 100) {
+        constellationDirty = true;
+        constellationLastFrame = now;
+      }
 
       if (constellationDirty && nodes.length > 0) {
         constellationDirty = false;
@@ -1284,17 +1345,29 @@ export default function ShareableLyricDance() {
           offCtx.font = "300 10px system-ui, -apple-system, sans-serif";
           offCtx.globalAlpha = node.baseOpacity;
           offCtx.fillStyle = "#ffffff";
-          const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
+          const truncated = getTruncatedComment(node);
           offCtx.fillText(truncated, node.x * cw, node.y * ch);
         }
 
-        // Pass 2: River rows
-        const riverNodes = nodes.filter(n => n.phase === "river");
+        // Pass 2: River rows (bucketed, cached widths, and AABB collision nudge)
+        for (let ri = 0; ri < riverNodeBuckets.length; ri++) riverNodeBuckets[ri].length = 0;
+        for (let ni = 0; ni < nodes.length; ni++) {
+          const node = nodes[ni];
+          if (node.phase === "river" && node.riverRowIndex >= 0 && node.riverRowIndex < riverNodeBuckets.length) {
+            riverNodeBuckets[node.riverRowIndex].push(node);
+          }
+        }
+
         const offsets = riverOffsetsRef.current;
+        const grid = constellationGridRef.current;
+        grid.buckets.clear();
+        const boxes = constellationCollisionBoxesRef.current;
+        boxes.length = 0;
+
         for (let ri = 0; ri < RIVER_ROWS.length; ri++) {
           const row = RIVER_ROWS[ri];
           offsets[ri] += row.speed * row.direction;
-          const rowComments = riverNodes.filter(n => n.riverRowIndex === ri);
+          const rowComments = riverNodeBuckets[ri];
           if (rowComments.length === 0) continue;
 
           offCtx.font = "300 11px system-ui, -apple-system, sans-serif";
@@ -1302,20 +1375,61 @@ export default function ShareableLyricDance() {
           offCtx.fillStyle = "#ffffff";
 
           const rowY = row.y * ch;
-          const textWidths = rowComments.map(n => {
-            const t = n.text.length > 40 ? n.text.slice(0, 40) + "…" : n.text;
-            return offCtx.measureText(t).width;
-          });
-          const totalWidth = textWidths.reduce((a, tw) => a + tw + 120, 0);
+          let totalWidth = 0;
+          for (let ci = 0; ci < rowComments.length; ci++) {
+            const node = rowComments[ci];
+            const truncated = getTruncatedComment(node);
+            const widthKey = `${node.id}:11`;
+            let textWidth = commentWidthCache.get(widthKey);
+            if (textWidth === undefined) {
+              textWidth = offCtx.measureText(truncated).width;
+              commentWidthCache.set(widthKey, textWidth);
+            }
+            totalWidth += textWidth + 120;
+          }
           const wrapWidth = Math.max(totalWidth, cw + 200);
 
           let xBase = offsets[ri];
           for (let ci = 0; ci < rowComments.length; ci++) {
-            const truncated = rowComments[ci].text.length > 40 ? rowComments[ci].text.slice(0, 40) + "…" : rowComments[ci].text;
+            const node = rowComments[ci];
+            const truncated = getTruncatedComment(node);
+            const widthKey = `${node.id}:11`;
+            const textWidth = commentWidthCache.get(widthKey) ?? 0;
             let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
             if (drawX > cw + 100) drawX -= wrapWidth;
-            offCtx.fillText(truncated, drawX, rowY);
-            xBase += textWidths[ci] + 120;
+
+            const box: CollisionBox = { id: node.id, x: drawX - textWidth * 0.5, y: rowY - 8, w: textWidth, h: 16 };
+            const minGX = Math.floor(box.x / grid.cellSize);
+            const maxGX = Math.floor((box.x + box.w) / grid.cellSize);
+            const minGY = Math.floor(box.y / grid.cellSize);
+            const maxGY = Math.floor((box.y + box.h) / grid.cellSize);
+            for (let gx = minGX; gx <= maxGX; gx++) {
+              for (let gy = minGY; gy <= maxGY; gy++) {
+                const bucket = grid.buckets.get(gridKey(gx, gy));
+                if (!bucket) continue;
+                for (let bi = 0; bi < bucket.length; bi++) {
+                  const other = boxes[bucket[bi]];
+                  if (other && intersectsAABB(box, other)) {
+                    resolveAABBCollision(box, other, 0.35);
+                  }
+                }
+              }
+            }
+            const boxIndex = boxes.length;
+            boxes.push(box);
+            for (let gx = minGX; gx <= maxGX; gx++) {
+              for (let gy = minGY; gy <= maxGY; gy++) {
+                const key = gridKey(gx, gy);
+                const bucket = grid.buckets.get(key);
+                if (bucket) bucket.push(boxIndex);
+                else grid.buckets.set(key, [boxIndex]);
+              }
+            }
+
+            offCtx.fillText(truncated, box.x + box.w * 0.5, box.y + box.h * 0.5);
+            node.x = (box.x + box.w * 0.5) / cw;
+            node.y = (box.y + box.h * 0.5) / ch;
+            xBase += textWidth + 120;
           }
         }
       }
@@ -1335,7 +1449,7 @@ export default function ShareableLyricDance() {
           ctx.globalAlpha = 0.45;
           ctx.fillStyle = "#ffffff";
           ctx.textAlign = "center";
-          const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
+          const truncated = getTruncatedComment(node);
           ctx.fillText(truncated, cw / 2, ch / 2);
           ctx.textAlign = "start";
           if (elapsed >= 800) { node.phase = "transitioning"; node.phaseStartTime = commentNow; }
@@ -1354,7 +1468,7 @@ export default function ShareableLyricDance() {
           ctx.font = `300 ${Math.round(size)}px system-ui, -apple-system, sans-serif`;
           ctx.globalAlpha = opacity;
           ctx.fillStyle = "#ffffff";
-          const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
+          const truncated = getTruncatedComment(node);
           ctx.fillText(truncated, curX * cw, curY * ch);
           node.x = curX; node.y = curY; node.currentSize = size;
           if (elapsed >= 4000) { node.phase = "river"; node.phaseStartTime = commentNow; }
@@ -1363,7 +1477,7 @@ export default function ShareableLyricDance() {
       ctx.globalAlpha = 1;
 
       // Active line — delegated to renderText engine
-      const visibleLines = lines.filter(l => currentTime >= l.start && currentTime < l.end);
+      const visibleLines = activeLine ? [activeLine] : [];
       const isMobile = window.innerWidth < 768;
       const textResult = renderText(ctx, {
         lines,
@@ -1580,13 +1694,14 @@ export default function ShareableLyricDance() {
 
     return () => {
       cancelAnimationFrame(animRef.current);
-      if (constellationInterval) clearInterval(constellationInterval);
       if (resizeHandler) window.removeEventListener("resize", resizeHandler);
       engineRef.current?.stop();
       if (audio) {
         audio.pause();
         audio.src = "";
       }
+      container.style.willChange = "auto";
+      container.style.transform = "translate3d(0, 0, 0)";
     };
   }, [data]);
 
@@ -1696,7 +1811,10 @@ export default function ShareableLyricDance() {
   }, [isDragging, seekToPosition]);
 
   // Badge timer
-  useEffect(() => { setTimeout(() => setBadgeVisible(true), 1000); }, []);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setBadgeVisible(true), 1000);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   // Hide Lovable widget
   useEffect(() => {
