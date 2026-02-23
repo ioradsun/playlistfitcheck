@@ -25,7 +25,8 @@ import { animationResolver } from "@/engine/AnimationResolver";
 import { deriveCanvasManifest } from "@/engine/deriveCanvasManifest";
 import BeatAnalyzerWorker from "@/workers/beatAnalyzer.worker?worker";
 import * as WordClassifier from "@/engine/WordClassifier";
-import { DirectionInterpreter, ensureFullTensionCurve, getActiveShot, getCurrentTensionStage } from "@/engine/DirectionInterpreter";
+import { DirectionInterpreter, ensureFullTensionCurve } from "@/engine/DirectionInterpreter";
+import { buildWordPlan, getActiveLineIndexMonotonic, getNextStartAfterMonotonic, type WordPlan } from "@/engine/precomputeWordPlan";
 import type { CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
@@ -536,6 +537,12 @@ export default function ShareableLyricDance() {
   const bgStateRef = useRef<BackgroundState>({ lastChapterTitle: "", lastBeatIntensity: 0, lastProgress: 0, lastDrawTime: 0 });
   // Perf: constellation offscreen canvas
   const constellationCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wordPlanRef = useRef<WordPlan | null>(null);
+  const lineIndexRef = useRef(-1);
+  const nextLinePtrRef = useRef(0);
+  const nextHookPtrRef = useRef(0);
+  const chapterIndexRef = useRef(0);
+  const tensionIndexRef = useRef(0);
 
   useEffect(() => {
     wordMeasureCache.current.clear();
@@ -856,16 +863,11 @@ export default function ShareableLyricDance() {
     const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const totalDuration = Math.max(0.001, songEnd - songStart);
-    const hookStartTimes = lines
-      .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0, effectivePalette).isHookLine)
-      .map(line => line.start)
-      .sort((a, b) => a - b);
     const lineBeatMap = lineBeatMapRef.current;
     const climaxLine = lines.find(line => line.text.toLowerCase().includes("drown"));
     const climaxBeat = sortedBeats.find(beat => (
       beat >= (climaxLine?.start ?? 0) && beat <= (climaxLine?.start ?? 0) + 1.0
     ));
-    const chapters = cinematicDirection?.chapters ?? [];
 
     // Perf: init adaptive max particles
     particleStateRef.current.adaptiveMaxParticles = window.devicePixelRatio > 1 ? 150 : 80;
@@ -900,6 +902,11 @@ export default function ShareableLyricDance() {
 
     let beatIndex = 0;
     let prevTime = songStart;
+    lineIndexRef.current = -1;
+    nextLinePtrRef.current = 0;
+    nextHookPtrRef.current = 0;
+    chapterIndexRef.current = 0;
+    tensionIndexRef.current = 0;
     let lastFrameTime = performance.now();
     let smoothBeatIntensity = 0; // exponential-decay beat intensity
 
@@ -933,6 +940,20 @@ export default function ShareableLyricDance() {
         particleEngine.setBounds({ x: 0, y: 0, w: rect.width, h: rect.height });
         particleEngine.init(resolvedManifest.particleConfig, resolvedManifest);
       }
+      wordPlanRef.current = buildWordPlan({
+        ctx: textCtx,
+        lines,
+        sortedBeats,
+        interpreter: loopInterpreter,
+        chapters: cinematicDirection?.chapters,
+        tensionCurve: cinematicDirection?.tensionCurve as TensionStage[] | undefined,
+        shotProgression: cinematicDirection?.shotProgression,
+        cameraDistanceByChapter: cinematicDirection?.cameraLanguage?.distanceByChapter,
+        effectiveSystem,
+        cw: rect.width,
+        ch: rect.height,
+        cinematicTextTransform: cinematicDirection?.visualWorld?.typographyProfile?.textTransform,
+      });
     };
     resizeHandler();
     window.addEventListener("resize", resizeHandler);
@@ -1008,8 +1029,13 @@ export default function ShareableLyricDance() {
         position: 0, velocity: 0, heat: 0, safeOffset: 0,
         offsetX: 0, offsetY: 0, rotation: 0, shatter: 0, wordOffsets: [],
       };
-      const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
-      const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
+      const plan = wordPlanRef.current;
+      const activeLineIndex = plan
+        ? getActiveLineIndexMonotonic(currentTime, plan.lineStarts, plan.lineEnds, lineIndexRef.current)
+        : lines.findIndex((l) => currentTime >= l.start && currentTime < l.end);
+      lineIndexRef.current = activeLineIndex;
+      const activeLine = activeLineIndex >= 0 ? lines[activeLineIndex] : null;
+      const activePlanLine = activeLineIndex >= 0 ? plan?.lines[activeLineIndex] ?? null : null;
       const activeLineBeatMap = activeLineIndex >= 0 ? lineBeatMap[activeLineIndex] : undefined;
       const isOnBeat = activeLineBeatMap?.beats.some(beat => Math.abs(currentTime - beat) < 0.05) ?? false;
       const isOnStrongBeat = activeLineBeatMap?.strongBeats.some(beat => Math.abs(currentTime - beat) < 0.05) ?? false;
@@ -1017,24 +1043,35 @@ export default function ShareableLyricDance() {
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
       const symbol = cinematicDirection?.symbolSystem;
       const camera = cinematicDirection?.cameraLanguage;
-      const chapterBoundaryKey = Math.floor(songProgress * 100 / 5);
-      if (chapterBoundaryRef.current.key !== chapterBoundaryKey) {
-        chapterBoundaryRef.current = { key: chapterBoundaryKey, chapter: interpreterNow?.getCurrentChapter(songProgress) ?? null };
-      }
-      const chapterDirective = chapterBoundaryRef.current.chapter;
 
-      const tensionBoundary = songProgress < 0.25 ? 0 : songProgress < 0.6 ? 1 : songProgress < 0.85 ? 2 : 3;
-      if (tensionBoundaryRef.current.key !== tensionBoundary) {
-        tensionBoundaryRef.current = { key: tensionBoundary, stage: getCurrentTensionStage(songProgress, cinematicDirection?.tensionCurve as TensionStage[] | undefined) ?? null };
+      let chapterDirective = chapterBoundaryRef.current.chapter;
+      if (plan?.chapterBoundaries?.length) {
+        let ci = chapterIndexRef.current;
+        while (ci + 1 < plan.chapterBoundaries.length && songProgress > plan.chapterBoundaries[ci].end) ci += 1;
+        while (ci > 0 && songProgress < plan.chapterBoundaries[ci].start) ci -= 1;
+        chapterIndexRef.current = ci;
+        chapterDirective = plan.chapterBoundaries[ci]?.chapter ?? null;
+      } else {
+        const chapterBoundaryKey = Math.floor(songProgress * 100 / 5);
+        if (chapterBoundaryRef.current.key !== chapterBoundaryKey) {
+          chapterBoundaryRef.current = { key: chapterBoundaryKey, chapter: interpreterNow?.getCurrentChapter(songProgress) ?? null };
+        }
+        chapterDirective = chapterBoundaryRef.current.chapter;
       }
-      const tensionStage = tensionBoundaryRef.current.stage;
+
+      let tensionStage = tensionBoundaryRef.current.stage;
+      if (plan?.tensionBoundaries?.length) {
+        let ti = tensionIndexRef.current;
+        while (ti + 1 < plan.tensionBoundaries.length && songProgress > plan.tensionBoundaries[ti].end) ti += 1;
+        while (ti > 0 && songProgress < plan.tensionBoundaries[ti].start) ti -= 1;
+        tensionIndexRef.current = ti;
+        tensionStage = plan.tensionBoundaries[ti]?.stage ?? null;
+      }
+
       const shot = activeLineIndex >= 0
-        ? getActiveShot(activeLineIndex, cinematicDirection?.shotProgression)
+        ? (plan?.shotsByLineIndex.get(activeLineIndex) ?? null)
         : null;
-      const chapterIndex = chapters.findIndex((ch) => songProgress >= ch.startRatio && songProgress <= ch.endRatio);
-      const resolvedChapterIndex = chapterIndex >= 0 ? chapterIndex : 0;
-      const chapterCamera = camera?.distanceByChapter
-        ?.find((d: any) => d.chapterIndex === resolvedChapterIndex) ?? null;
+      const chapterCamera = plan?.cameraByChapterIndex.get(chapterIndexRef.current) ?? null;
 
       const movement = String(chapterCamera?.movement ?? "").toLowerCase();
       let targetOffsetX = 0;
@@ -1063,7 +1100,9 @@ export default function ShareableLyricDance() {
       cameraZoomRef.current += (cameraTargetRef.current.zoom - cameraZoomRef.current) * cameraLerp;
       cameraOffsetRef.current.x += (cameraTargetRef.current.x - cameraOffsetRef.current.x) * cameraLerp;
       cameraOffsetRef.current.y += (cameraTargetRef.current.y - cameraOffsetRef.current.y) * cameraLerp;
-      const nextLine = lines.find(l => l.start > currentTime) ?? null;
+      const nextLineStart = plan ? getNextStartAfterMonotonic(currentTime, plan.lineStarts, nextLinePtrRef.current) : { value: (lines.find(l => l.start > currentTime)?.start ?? Number.POSITIVE_INFINITY), ptr: nextLinePtrRef.current };
+      nextLinePtrRef.current = nextLineStart.ptr;
+      const nextLine = Number.isFinite(nextLineStart.value) ? { start: nextLineStart.value } : null;
       const isInSilence = interpreterNow?.isInSilence(activeLine ?? null, nextLine ? { start: nextLine.start } : null, currentTime)
         ?? (!activeLine || Boolean(nextLine && currentTime < nextLine.start - 0.5));
       if (isInSilence && cinematicDirection?.silenceDirective) {
@@ -1098,7 +1137,13 @@ export default function ShareableLyricDance() {
       const hookOffsetX = 0; // No background oscillation — Ken Burns zoom only
       const hookOffsetY = 0;
 
-      const nextHookStart = hookStartTimes.find(t => t > currentTime) ?? Number.POSITIVE_INFINITY;
+      const hookStarts = plan?.hookStartTimes;
+      let nextHookStart = Number.POSITIVE_INFINITY;
+      if (hookStarts && hookStarts.length > 0) {
+        const next = getNextStartAfterMonotonic(currentTime, hookStarts, nextHookPtrRef.current);
+        nextHookPtrRef.current = next.ptr;
+        nextHookStart = next.value;
+      }
       const timeToNextHook = nextHookStart - currentTime;
       const isPreHook = Number.isFinite(nextHookStart) && timeToNextHook > 0 && timeToNextHook < 2.0;
 
@@ -1359,6 +1404,7 @@ export default function ShareableLyricDance() {
         isMobile,
         hardwareConcurrency: navigator.hardwareConcurrency ?? 4,
         devicePixelRatio: window.devicePixelRatio ?? 1,
+        precomputedLine: activePlanLine,
       }, textStateRef.current);
       const t4 = performance.now();
       activeWordPosition = textResult.activeWordPosition;
@@ -1377,6 +1423,7 @@ export default function ShareableLyricDance() {
       const frameRepTotal = textResult.repTotal;
       const frameXNudge = textResult.xNudge;
       const frameSectionZone = textResult.sectionZone;
+      const frameWordsProcessed = textResult.wordsProcessed;
 
       if (chapterTransitionRef.current.progress < 1 && chapterDirective) {
         const chapterTransitionProgress = chapterTransitionRef.current.progress;
@@ -1449,7 +1496,7 @@ export default function ShareableLyricDance() {
       dbg.physGlow = state.glow;
       // Physics Engine
       dbg.physicsActive = true;
-      dbg.wordCount = activeLine ? activeLine.text.split(/\s+/).length : 0;
+      dbg.wordCount = frameWordsProcessed;
       dbg.heat = state.heat;
       dbg.velocity = state.velocity;
       dbg.rotation = state.rotation;

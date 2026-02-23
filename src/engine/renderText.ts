@@ -113,6 +113,16 @@ export interface LyricLine {
   tag?: "main" | "adlib";
 }
 
+export interface PrecomputedLineMetrics {
+  words: string[];
+  wordsUpper: string[];
+  normalizedWords: string[];
+  snappedWordStartTimes: number[];
+  directives: (WordDirective | null)[];
+  appearanceCounts: number[];
+  hasImpactWord: boolean;
+}
+
 /** Mutable text-layer state — persisted across frames by the caller. */
 export interface TextState {
   xOffset: number;
@@ -172,6 +182,7 @@ export interface TextInput {
   isMobile: boolean;
   hardwareConcurrency: number;
   devicePixelRatio: number;
+  precomputedLine?: PrecomputedLineMetrics | null;
 }
 
 /** Result from renderText — values the caller reads back. */
@@ -193,6 +204,7 @@ export interface TextResult {
   repTotal: number;
   xNudge: number;
   sectionZone: string;
+  wordsProcessed: number;
 }
 
 // ─── Main function ──────────────────────────────────────────────────
@@ -207,7 +219,7 @@ export function renderText(
     currentTime, songProgress, beatIntensity, beatIndex, sortedBeats,
     cw, ch, effectivePalette, effectiveSystem, resolvedManifest, textPalette, spec,
     state, interpreter, shot, tensionStage, chapterDirective, cinematicDirection,
-    isClimax, particleEngine, rng, getWordWidth, isMobile, hardwareConcurrency, devicePixelRatio,
+    isClimax, particleEngine, rng, getWordWidth, isMobile, hardwareConcurrency, devicePixelRatio, precomputedLine,
   } = input;
   const baseTypoProfile = cinematicDirection?.visualWorld?.typographyProfile;
   const chapterTypoShift = chapterDirective?.typographyShift as { fontWeight?: number; letterSpacing?: string } | undefined;
@@ -261,6 +273,7 @@ export function renderText(
       repTotal: frameRepTotal,
       xNudge: frameXNudge,
       sectionZone: frameSectionZone,
+      wordsProcessed: 0,
     };
   }
 
@@ -441,17 +454,27 @@ export function renderText(
   }
 
   // ── Word splitting + display mode ─────────────────────────────────
-  const words = activeLine.text.split(/\s+/).filter(Boolean);
-  const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
-  const wordsPerSecond = words.length > 0 ? words.length / lineDuration : 1;
-  const wordDelay = wordsPerSecond > 0 ? 1 / wordsPerSecond : lineDuration;
-  const visibleWordCount = words.filter((_, i) => currentTime >= activeLine.start + i * wordDelay).length;
-  const drawWords = words.slice(0, visibleWordCount).map((text) => ({ text }));
+  const words = precomputedLine?.words ?? activeLine.text.split(/\s+/).filter(Boolean);
+  const wordsUpper = precomputedLine?.wordsUpper ?? words;
+  const normalizedWords = precomputedLine?.normalizedWords ?? words.map((word) => word.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, ""));
+  const directives = precomputedLine?.directives;
+  const precomputedAppearances = precomputedLine?.appearanceCounts;
+  const snappedStarts = precomputedLine?.snappedWordStartTimes;
+  let visibleWordCount = 0;
+  if (snappedStarts && snappedStarts.length > 0) {
+    while (visibleWordCount < snappedStarts.length && currentTime >= snappedStarts[visibleWordCount]) visibleWordCount += 1;
+  } else {
+    const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
+    const wordsPerSecond = words.length > 0 ? words.length / lineDuration : 1;
+    const wordDelay = wordsPerSecond > 0 ? 1 / wordsPerSecond : lineDuration;
+    while (visibleWordCount < words.length && currentTime >= activeLine.start + visibleWordCount * wordDelay) visibleWordCount += 1;
+  }
 
   const wordCount = words.length;
   const isShort = wordCount <= 3;
+  const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
   const isFast = lineDuration < 1.5;
-  const hasImpactWord = words.some(word => WordClassifier.classifyWord(word) === "IMPACT");
+  const hasImpactWord = precomputedLine?.hasImpactWord ?? words.some(word => WordClassifier.classifyWord(word) === "IMPACT");
   type DisplayMode = "single_word" | "phrase_stack" | "two_line_stack";
   const displayMode: DisplayMode = (activeLineAnim.isHookLine || isShort || hasImpactWord)
     ? "single_word"
@@ -477,12 +500,12 @@ export function renderText(
   );
 
   const renderedWords = displayMode === "single_word"
-    ? drawWords.slice(-1)
+    ? (visibleWordCount > 0 ? [displayMode === "single_word" ? words[Math.max(0, visibleWordCount - 1)] : ""] : [])
     : displayMode === "two_line_stack"
-      ? words.map((text) => ({ text }))
-      : drawWords;
+      ? words
+      : words.slice(0, visibleWordCount);
 
-  const measuredWordWidths = renderedWords.map((word) => getWordWidth(getDisplayWord(word.text), fontSize, resolvedWordFont));
+  const measuredWordWidths = renderedWords.map((word) => getWordWidth(getDisplayWord(word), fontSize, resolvedWordFont));
   const baseSpaceWidth = getWordWidth(" ", fontSize, resolvedWordFont);
   const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, renderedWords.length - 1) * baseSpaceWidth;
   let cursorX = displayMode === "single_word" ? lineX : lineX - totalWidth / 2;
@@ -499,7 +522,8 @@ export function renderText(
     };
   }
 
-  const getCachedDirective = (wordText: string): WordDirective | null => {
+  const getCachedDirective = (wordText: string, wordIndex: number): WordDirective | null => {
+    if (directives && directives[wordIndex] !== undefined) return directives[wordIndex] ?? null;
     const key = wordText.toLowerCase();
     if (!textState.directiveCache.has(key)) {
       textState.directiveCache.set(key, interpreter?.getWordDirective(wordText) ?? null);
@@ -508,14 +532,14 @@ export function renderText(
   };
 
   // ── Per-word rendering ────────────────────────────────────────────
-  renderedWords.forEach((word, renderedIndex) => {
-    const displayWord = getDisplayWord(word.text);
-    const normalizedWord = word.text.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
+  renderedWords.forEach((wordText, renderedIndex) => {
+    const displayWord = getDisplayWord(wordText);
+    const normalizedWord = normalizedWords[Math.max(0, displayMode === "single_word" ? visibleWordCount - 1 : renderedIndex)] ?? wordText.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
     const sourceWordIndex = displayMode === "single_word"
       ? Math.max(0, visibleWordCount - 1)
       : renderedIndex;
-    const unsnappedWordStartTime = activeLine.start + Math.max(0, sourceWordIndex) * wordDelay;
-    const resolvedWordStartTime = snapToNearestBeat(unsnappedWordStartTime, sortedBeats);
+    const resolvedWordStartTime = snappedStarts?.[Math.max(0, sourceWordIndex)]
+      ?? snapToNearestBeat(activeLine.start + (Math.max(0, sourceWordIndex) * Math.max(0.001, activeLine.end - activeLine.start)) / Math.max(1, words.length), sortedBeats);
     const appearanceKey = `${activeLine.start}:${Math.max(0, sourceWordIndex)}:${normalizedWord}`;
 
     if (!textState.seenAppearances.has(appearanceKey) && currentTime >= resolvedWordStartTime) {
@@ -525,15 +549,15 @@ export function renderText(
     }
 
     const props = WordClassifier.getWordVisualProps(
-      word.text,
+      wordText,
       Math.max(0, sourceWordIndex),
       Math.max(1, renderedWords.length),
       activeLineAnim,
       beatIntensity,
-      textState.wordCounts.get(word.text) ?? 0,
+      textState.wordCounts.get(normalizedWord) ?? 0,
     );
 
-    const directive = getCachedDirective(word.text);
+    const directive = getCachedDirective(wordText, Math.max(0, sourceWordIndex));
     if (directive?.colorOverride) {
       props.color = directive.colorOverride;
     }
@@ -570,7 +594,7 @@ export function renderText(
       wordY += Math.sin(currentTime * fallSpeed) * 3;
     }
 
-    const isHeroWord = Boolean(lineDirection?.heroWord && word.text.toLowerCase().includes(lineDirection.heroWord.toLowerCase()));
+    const isHeroWord = Boolean(lineDirection?.heroWord && wordText.toLowerCase().includes(lineDirection.heroWord.toLowerCase()));
     const modeOpacity = displayMode === "phrase_stack"
       ? (renderedIndex === renderedWords.length - 1 ? 1 : 0.4)
       : 1;
@@ -787,7 +811,7 @@ export function renderText(
   });
 
   // ── Fallback effect when no words visible ─────────────────────────
-  if (drawWords.length === 0) {
+  if (visibleWordCount === 0) {
     if (textShadow.blur > 0) {
       const fallbackGlow = ctx.createRadialGradient(cw * 0.5, ch * 0.5, 0, cw * 0.5, ch * 0.5, Math.max(cw, ch) * 0.4);
       fallbackGlow.addColorStop(0, textShadow.color);
@@ -843,5 +867,6 @@ export function renderText(
     repTotal: frameRepTotal,
     xNudge: frameXNudge,
     sectionZone: frameSectionZone,
+    wordsProcessed: renderedWords.length,
   };
 }
