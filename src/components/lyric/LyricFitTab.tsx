@@ -213,6 +213,7 @@ export function LyricFitTab({
 
     setFitProgress(25);
     setFitStageLabel("Generating Song DNA…");
+    setPipelineStages(prev => ({ ...prev, rhythm: "done", songDna: "running" }));
 
     // 3. lyric-analyze
     const lyricsText = freshLines
