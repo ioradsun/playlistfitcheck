@@ -660,7 +660,7 @@ export class LyricDancePlayer {
     offCtx.fillStyle = grad;
     offCtx.fillRect(0, 0, off.width, off.height);
 
-    const env = sceneManifest?.environment?.toLowerCase() ?? "";
+    const env = ((sceneManifest as any)?.environment ?? "").toLowerCase();
     if (env.includes("ocean") || env.includes("water") || env.includes("surf")) {
       this.drawWaveBands(offCtx, off.width, off.height, palette);
     } else if (env.includes("city") || env.includes("urban") || env.includes("street")) {
