@@ -148,6 +148,8 @@ const Index = () => {
 
   useEffect(() => {
     if (activeTab !== "lyric" || !projectId || !user) return;
+    // Skip re-fetch if we already have this project loaded
+    if (projectLoadedRef.current === projectId) return;
 
     (async () => {
       const { data, error } = await supabase
