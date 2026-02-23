@@ -1049,9 +1049,12 @@ export default function ShareableLyricDance() {
     resize();
     window.addEventListener("resize", resize);
 
+    const FRAME_BUDGET_MS = 14;
+
     const render = () => {
       animRef.current = requestAnimationFrame(render);
-      const now = performance.now();
+      const frameStart = performance.now();
+      const now = frameStart;
       const deltaMs = now - lastFrameTime;
       lastFrameTime = now;
 
@@ -1231,7 +1234,12 @@ export default function ShareableLyricDance() {
         (lastBgBeatRef.current <= 0.2 && currentBeatIntensity > 0.2) ||
         (lastBgBeatRef.current > 0.2 && currentBeatIntensity <= 0.2);
 
-      if (bgNeedsUpdate) {
+      const budgetElapsed = () => performance.now() - frameStart;
+      const canRenderBackground = budgetElapsed() < 8;
+      const canRenderParticles = budgetElapsed() < 11;
+      const canRenderEffects = budgetElapsed() < FRAME_BUDGET_MS - 1;
+
+      if (canRenderBackground && bgNeedsUpdate) {
         renderChapterBackground(
           bgCtx,
           bgCanvas,
@@ -1258,18 +1266,20 @@ export default function ShareableLyricDance() {
       }
       drawCalls += 2;
 
-      renderChapterLighting(
-        ctx,
-        canvas,
-        chapterForRender,
-        activeWordPosition,
-        songProgress,
-        currentBeatIntensity * lightIntensityRef.current,
-        currentTime,
-      );
+      if (canRenderEffects) {
+        renderChapterLighting(
+          ctx,
+          canvas,
+          chapterForRender,
+          activeWordPosition,
+          songProgress,
+          currentBeatIntensity * lightIntensityRef.current,
+          currentTime,
+        );
+      }
 
       // Particle engine: update then draw parallax split layers.
-      if (particleEngine) {
+      if (canRenderParticles && particleEngine) {
         const maxParticles = window.devicePixelRatio > 1 ? 150 : 80;
         const timedParticleConfig = getParticleConfigForTime(
           baseParticleConfig,
@@ -1301,14 +1311,14 @@ export default function ShareableLyricDance() {
       }
 
       // Pre-hook darkness build (skipped during hook itself).
-      if (isPreHook && !isInHook) {
+      if (canRenderEffects && isPreHook && !isInHook) {
         const buildIntensity = (1 - (timeToNextHook / 2.0)) * 0.3 * baseAtmosphere;
         ctx.fillStyle = `rgba(0,0,0,${Math.max(0, buildIntensity)})`;
         ctx.fillRect(0, 0, cw, ch);
       }
 
       // Fire-world warm flicker bloom on strong beats.
-      if (isFireWorld && currentBeatIntensity > 0.6) {
+      if (canRenderEffects && isFireWorld && currentBeatIntensity > 0.6) {
         const flickerAlpha = currentBeatIntensity * 0.06 * baseAtmosphere;
         ctx.fillStyle = `rgba(255,140,0,${flickerAlpha})`;
         ctx.fillRect(0, 0, cw, ch);
@@ -1481,7 +1491,6 @@ export default function ShareableLyricDance() {
 
         switch (shot?.shotType) {
           case 'SubmergedInSymbol':
-            ctx.filter = 'blur(0.5px)';
             ctx.fillStyle = 'rgba(100,150,220,0.08)';
             ctx.fillRect(0, 0, cw, ch);
             lineOpacity = 0.85;
@@ -1771,8 +1780,14 @@ export default function ShareableLyricDance() {
           }
 
           if (isHeroWord) {
-            ctx.shadowBlur = 12;
-            ctx.shadowColor = resolvedManifest.palette[2];
+            const heroGlow = ctx.createRadialGradient(0, -fontSize * 0.35, 0, 0, -fontSize * 0.35, fontSize * 1.8);
+            heroGlow.addColorStop(0, resolvedManifest.palette[2]);
+            heroGlow.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.save();
+            ctx.globalAlpha *= 0.14;
+            ctx.fillStyle = heroGlow;
+            ctx.fillRect(-wordRenderWidth * 0.35, -fontSize * 1.6, wordRenderWidth * 1.7, fontSize * 2.7);
+            ctx.restore();
             ctx.scale(1.2, 1.2);
           }
 
@@ -1849,8 +1864,16 @@ export default function ShareableLyricDance() {
           ctx.globalAlpha = props.opacity * compositeAlpha * modeOpacity * evolutionOpacity;
 
           if (props.glowRadius > 0 || evolutionGlow > 0) {
-            ctx.shadowBlur = Math.max(ctx.shadowBlur, props.glowRadius, evolutionGlow);
-            ctx.shadowColor = directive?.colorOverride ?? props.color;
+            const glowRadius = Math.max(props.glowRadius, evolutionGlow, 1);
+            const glowColor = directive?.colorOverride ?? props.color;
+            const glow = ctx.createRadialGradient(0, -fontSize * 0.3, 0, 0, -fontSize * 0.3, glowRadius * 2.4);
+            glow.addColorStop(0, glowColor);
+            glow.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.save();
+            ctx.globalAlpha *= 0.16;
+            ctx.fillStyle = glow;
+            ctx.fillRect(-wordRenderWidth * 0.3, -fontSize - glowRadius, wordRenderWidth * 1.6, fontSize + glowRadius * 2);
+            ctx.restore();
           }
 
           if (directive?.kineticClass) {
@@ -1869,8 +1892,6 @@ export default function ShareableLyricDance() {
           }
 
           if (directive?.evolutionRule && normalizedWord === "drown") {
-            const blurAmount = Math.min(2, appearanceCount * 0.3);
-            ctx.filter = `blur(${blurAmount}px)`;
             drawBubbles(
               ctx,
               0,
@@ -1904,6 +1925,10 @@ export default function ShareableLyricDance() {
                 useBlur: navigator.hardwareConcurrency > 4,
                 isHeroWord,
                 effectQuality,
+                wordX: finalX,
+                wordY: finalY,
+                canvasWidth: cw,
+                canvasHeight: ch,
               },
             );
           } else if (props.letterSpacing !== "0em") {
@@ -1913,8 +1938,6 @@ export default function ShareableLyricDance() {
           }
 
           // Reset glow
-          ctx.shadowBlur = 0;
-          ctx.filter = "none";
           ctx.restore();
 
           // Motion trail for MOTION class words
@@ -1944,10 +1967,16 @@ export default function ShareableLyricDance() {
         });
 
         if (drawWords.length === 0) {
-          ctx.shadowColor = textShadow.color;
-          ctx.shadowOffsetX = textShadow.offsetX;
-          ctx.shadowOffsetY = textShadow.offsetY;
-          ctx.shadowBlur = textShadow.blur;
+          if (textShadow.blur > 0) {
+            const fallbackGlow = ctx.createRadialGradient(cw * 0.5, ch * 0.5, 0, cw * 0.5, ch * 0.5, Math.max(cw, ch) * 0.4);
+            fallbackGlow.addColorStop(0, textShadow.color);
+            fallbackGlow.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.save();
+            ctx.globalAlpha *= 0.08;
+            ctx.fillStyle = fallbackGlow;
+            ctx.fillRect(0, 0, cw, ch);
+            ctx.restore();
+          }
           const effectState: EffectState = {
             text: activeLine.text,
             physState: state,
@@ -1964,9 +1993,6 @@ export default function ShareableLyricDance() {
             alphaMultiplier: compositeAlpha,
           };
           drawFn(ctx, effectState);
-          ctx.shadowBlur = 0;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 0;
         }
         if (drawSymbolOverText && symbol) {
           ctx.save();

@@ -1,3 +1,15 @@
+import { drawBubble, drawSmoke } from "./ElementalRenderers";
+
+function alphaColor(color: string, alpha: number): string {
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+    const r = Number.parseInt(color.slice(1, 3), 16);
+    const g = Number.parseInt(color.slice(3, 5), 16);
+    const b = Number.parseInt(color.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+  return `rgba(0,255,255,${alpha})`;
+}
+
 export function drawElementalWord(
   ctx: CanvasRenderingContext2D,
   word: string,
@@ -13,12 +25,30 @@ export function drawElementalWord(
     useBlur?: boolean;
     isHeroWord?: boolean;
     effectQuality?: "low" | "high";
+    wordX?: number;
+    wordY?: number;
+    canvasWidth?: number;
+    canvasHeight?: number;
   },
 ): void {
   const effectQuality = options?.effectQuality ?? "high";
-  const useBlur = Boolean(options?.useBlur && effectQuality === "high");
   const bubbleXPositions = options?.bubbleXPositions ?? [];
   const isHeroWord = Boolean(options?.isHeroWord);
+
+  const wordX = options?.wordX ?? 0;
+  const wordY = options?.wordY ?? 0;
+  const canvasWidth = options?.canvasWidth;
+  const canvasHeight = options?.canvasHeight;
+  if (
+    typeof canvasWidth === "number" &&
+    typeof canvasHeight === "number" &&
+    (wordX + wordWidth < 0 ||
+      wordX > canvasWidth ||
+      wordY < -fontSize * 2 ||
+      wordY > canvasHeight + fontSize)
+  ) {
+    return;
+  }
 
   switch (elementalClass) {
     case "WATER":
@@ -51,11 +81,7 @@ export function drawElementalWord(
         const by = byBase - byOffset;
         const opacity = Math.max(0, 0.6 - byOffset / 40);
 
-        ctx.beginPath();
-        ctx.arc(bx, by, 1.5 + i % 3, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(150,200,255,${opacity})`;
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
+        drawBubble(ctx, bx, by, 1.5 + (i % 3), opacity);
       }
 
       // Water drip from bottom
@@ -118,29 +144,19 @@ export function drawElementalWord(
     case "SMOKE": {
       // Base word at reduced opacity
       ctx.globalAlpha *= 0.65;
-      if (useBlur) {
-        ctx.filter = "blur(0.8px)";
-      }
       ctx.fillStyle = colorOverride ?? "#8a8a8a";
       ctx.fillText(word, 0, 0);
-      ctx.filter = "none";
       ctx.globalAlpha /= 0.65;
 
-      // Expanding smoke rings
+      // Expanding smoke sprite
       const smokeAge = (currentTime * 0.4) % 1;
-      ctx.beginPath();
-      ctx.ellipse(
+      drawSmoke(
+        ctx,
         wordWidth / 2,
         -fontSize / 2,
-        (wordWidth / 2) * (1 + smokeAge * 0.5),
-        (fontSize / 2) * (1 + smokeAge * 0.4),
-        0,
-        0,
-        Math.PI * 2,
+        Math.max(fontSize * 0.7, (fontSize * 0.9) * (1 + smokeAge * 0.45)),
+        Math.max(0, 0.2 - smokeAge * 0.2),
       );
-      ctx.strokeStyle = `rgba(140,130,120,${0.15 - smokeAge * 0.15})`;
-      ctx.lineWidth = 6;
-      ctx.stroke();
       break;
     }
 
@@ -148,11 +164,15 @@ export function drawElementalWord(
     case "NEON": {
       // Neon glow word
       const neonColor = colorOverride ?? "#00ffff";
-      ctx.shadowBlur = isHeroWord ? 15 + beatIntensity * 20 : 0;
-      ctx.shadowColor = neonColor;
+      const glowAlpha = isHeroWord ? 0.18 + beatIntensity * 0.22 : 0.08;
+      const glowRadius = isHeroWord ? fontSize * 1.35 : fontSize * 0.9;
+      const glow = ctx.createRadialGradient(wordWidth / 2, -fontSize * 0.45, 0, wordWidth / 2, -fontSize * 0.45, glowRadius);
+      glow.addColorStop(0, alphaColor(neonColor, glowAlpha));
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(-glowRadius * 0.4, -fontSize - glowRadius * 0.6, wordWidth + glowRadius * 0.8, glowRadius * 1.4);
       ctx.fillStyle = "#ffffff";
       ctx.fillText(word, 0, 0);
-      ctx.shadowBlur = 0;
 
       // Electric arc on strong beats
       if (beatIntensity > 0.55) {
