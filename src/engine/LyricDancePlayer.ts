@@ -257,6 +257,7 @@ let globalBakeLock = false;
 let globalBakePromise: Promise<void> | null = null;
 let globalTimelineCache: ScaledKeyframe[] | null = null;
 let globalChunkCache: Map<string, ChunkState> | null = null;
+let globalHasCinematicDirection = false;
 let globalSongStartSec = 0;
 let globalSongEndSec = 0;
 
@@ -339,6 +340,15 @@ export class LyricDancePlayer {
   async init(): Promise<void> {
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
 
+    // Cache exists but was baked without cinematic direction — invalidate before promise reuse
+    if (globalTimelineCache && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
+      console.log('[PLAYER] invalidating stale cache — cinematic_direction now available');
+      globalBakePromise = null;
+      globalTimelineCache = null;
+      globalChunkCache = null;
+      globalBakeLock = false;
+    }
+
     if (!globalBakePromise) {
       // First instance — start the bake
       globalBakeLock = true;
@@ -360,6 +370,7 @@ export class LyricDancePlayer {
         // Use the local snapshot not this.chunks (which destroy() may have wiped)
         globalTimelineCache = this.scaleTimeline(baked);
         globalChunkCache = localChunkSnapshot;
+        globalHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
         globalSongStartSec = payload.songStart;
         globalSongEndSec = payload.songEnd;
         globalBakeLock = false;
