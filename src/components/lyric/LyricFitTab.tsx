@@ -495,7 +495,7 @@ export function LyricFitTab({
   }, [fitUnlocked, fitReadiness]);
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
-    if (nextView === "fit" && !fitUnlocked && fitReadiness !== "ready") return;
+    if (nextView === "fit" && !fitUnlocked && fitReadiness !== "ready" && fitReadiness !== "not_started") return;
     setActiveTab(nextView);
   }, [fitUnlocked, fitReadiness]);
 
