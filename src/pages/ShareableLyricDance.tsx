@@ -433,7 +433,8 @@ export default function ShareableLyricDance() {
   // Audio
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [muted, setMuted] = useState(true);
-  
+  const engineRef = useRef<HookDanceEngine | null>(null);
+  const physicsSpec = data?.physics_spec;
 
   // Canvas
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -453,6 +454,14 @@ export default function ShareableLyricDance() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   // Cover overlay
   const [showCover, setShowCover] = useState(true);
+
+  useEffect(() => {
+    if (!physicsSpec) {
+      engineRef.current = null;
+      return;
+    }
+    engineRef.current = new HookDanceEngine(physicsSpec);
+  }, [physicsSpec]);
 
   // ── Load data ─────────────────────────────────────────────────────────────
 
@@ -628,7 +637,11 @@ export default function ShareableLyricDance() {
     audio.preload = "auto";
     audioRef.current = audio;
 
-    const physicsEngine = new HookDanceEngine(
+
+    audio.currentTime = songStart;
+    audio.play().catch(() => {});
+
+    engineRef.current = new HookDanceEngine(
       { ...spec, system: effectiveSystem },
       beats,
       songStart,
@@ -637,9 +650,6 @@ export default function ShareableLyricDance() {
       { onFrame: () => {}, onEnd: () => {} },
       `${data.seed || data.id}-shareable-dance`,
     );
-
-    audio.currentTime = songStart;
-    audio.play().catch(() => {});
 
     let beatIndex = 0;
     let prevTime = songStart;
@@ -678,7 +688,7 @@ export default function ShareableLyricDance() {
         beatIndex = 0;
         prevTime = songStart;
         smoothBeatIntensity = 0;
-        physicsEngine.resetPhysics();
+        engineRef.current?.resetPhysics();
         return;
       }
 
@@ -698,8 +708,14 @@ export default function ShareableLyricDance() {
       }
       const currentBeatIntensity = smoothBeatIntensity;
 
-      physicsEngine.setViewportBounds(cw, ch);
-      const state = physicsEngine.update(currentBeatIntensity, frameHadDownbeat);
+      engineRef.current?.setViewportBounds(cw, ch);
+      engineRef.current?.update(currentBeatIntensity, deltaMs / 1000, frameHadDownbeat);
+      const physicsState = engineRef.current?.getState();
+      const state = physicsState ?? {
+        scale: 1, blur: 0, glow: 0, shake: 0, isFractured: false,
+        position: 0, velocity: 0, heat: 0, safeOffset: 0,
+        offsetX: 0, offsetY: 0, rotation: 0, shatter: 0, wordOffsets: [],
+      };
       const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
