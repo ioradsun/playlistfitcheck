@@ -236,21 +236,15 @@ function bakeFrame(
 
 function getLinePositions(payload: ScenePayload): number[] {
   return payload.lines.map((_, idx) => {
-    const lineVariance = ((idx % 7) - 3) * 12;
-    return 960 * 0.5 + lineVariance;
+    const centerX = 960 * 0.5;
+    const lineVariance = ((idx % 3) - 1) * 20; // max ±20px only
+    return centerX + lineVariance;
   });
 }
 
 function getLineChapterOffsets(payload: ScenePayload): number[] {
-  return payload.lines.map((line) => {
-    const lineMidSec = (line.start + line.end) / 2;
-    const lineProgress =
-      payload.songEnd > payload.songStart
-        ? Math.min(1, Math.max(0, (lineMidSec - payload.songStart) / (payload.songEnd - payload.songStart)))
-        : 0;
-    const { chapterIndex } = getChapterIndexAndData(payload.cinematic_direction, lineProgress);
-    return ((Math.max(0, chapterIndex) % 3) - 1) * 60;
-  });
+  // No chapter offset for now — keep centered until basic layout is solid
+  return payload.lines.map(() => 0);
 }
 
 function createBakeState(payload: ScenePayload): BakeState {
