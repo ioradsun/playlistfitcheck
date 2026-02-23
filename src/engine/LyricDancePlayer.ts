@@ -250,6 +250,11 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     fontSize?: number;
     color?: string;
     visible: boolean;
+    entryOffsetY?: number;
+    entryOffsetX?: number;
+    entryScale?: number;
+    exitOffsetY?: number;
+    exitScale?: number;
   }>;
 };
 
@@ -615,17 +620,24 @@ export class LyricDancePlayer {
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
+      const drawX = cx + (chunk.entryOffsetX ?? 0);
+      const drawY = cy + (chunk.entryOffsetY ?? 0) + (chunk.exitOffsetY ?? 0);
+      const drawScale = (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
+
       const zoom = frame.cameraZoom ?? 1.0;
       const fontSize = chunk.fontSize ?? 36;
       const zoomedFont = obj.font.replace(
         /(\d+(\.\d+)?)px/,
-        `${Math.round(fontSize * zoom)}px`
+        `${Math.round(fontSize * zoom * drawScale)}px`
       );
 
       this.ctx.globalAlpha = chunk.alpha;
@@ -637,7 +649,7 @@ export class LyricDancePlayer {
         this.ctx.shadowBlur = chunk.glow * 32;
       }
 
-      this.ctx.fillText(obj.text, this.width / 2, this.height / 2);
+      this.ctx.fillText(obj.text, drawX, drawY);
       this.ctx.shadowBlur = 0;
       drawCalls += 1;
     }
