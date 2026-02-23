@@ -320,6 +320,7 @@ export function LyricFitTab({
     setPipelineStages(prev => ({ ...prev, songDna: "done", cinematic: "running" }));
 
     // 4. cinematic-direction (runs after DNA since we need the result first)
+    let resolvedCinematic: any = null;
     try {
       const lyricsForDirection = freshLines
         .filter((l: any) => l.tag !== "adlib")
@@ -336,7 +337,8 @@ export function LyricFitTab({
       });
 
       if (dirResult?.cinematicDirection) {
-        setCinematicDirection(dirResult.cinematicDirection);
+        resolvedCinematic = dirResult.cinematicDirection;
+        setCinematicDirection(resolvedCinematic);
       }
       setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
     } catch (e) {
@@ -353,7 +355,7 @@ export function LyricFitTab({
       try {
         await supabase
           .from("saved_lyrics")
-          .update({ song_dna: { ...nextSongDna, cinematicDirection: cinematicDirection ?? undefined } as any, updated_at: new Date().toISOString() })
+          .update({ song_dna: { ...nextSongDna, cinematicDirection: resolvedCinematic } as any, updated_at: new Date().toISOString() })
           .eq("id", savedId);
       } catch (e) {
         console.warn("[Pipeline] Failed to persist song_dna:", e);
