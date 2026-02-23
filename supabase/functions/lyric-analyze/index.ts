@@ -251,6 +251,12 @@ lightSource MUST match the physical world:
 - NEVER assign "golden hour" to cold or bleak worlds
 - golden hour = warm, alive, late afternoon sun only
 
+LIGHT SOURCE MUST MATCH PALETTE:
+- Dark palette (#080a12) = night/overcast/moonlight
+- Warm palette (#ff8c42) = fire/golden hour/flickering
+- Cold blue palette (#2a3b5c) = cold overcast/winter daylight
+- Never assign "golden hour" to a dark or cold palette
+
 If physics_spec and scene_manifest have different values
 for the same field, you have made an error.
 
