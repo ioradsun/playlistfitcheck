@@ -150,6 +150,7 @@ export class ParticleEngine {
   private lightning: LightningBolt[] = [];
   private densityMultiplier = 1;
   private speedMultiplier = 1;
+  private gravityMultiplier = 1;
   private behaviorHint: string | null = null;
 
   constructor(manifest: SceneManifest) {
@@ -176,6 +177,34 @@ export class ParticleEngine {
 
   setBehaviorHint(hint: string | null): void {
     this.behaviorHint = hint;
+  }
+
+  setChapterDirective(directive: string): void {
+    const d = directive.toLowerCase();
+    this.speedMultiplier = 1;
+    this.densityMultiplier = 1;
+
+    if (d.includes("drift") || d.includes("slow")) {
+      this.speedMultiplier = 0.4;
+      this.densityMultiplier = 0.5;
+    } else if (d.includes("swirl") || d.includes("vortex") || d.includes("faster")) {
+      this.speedMultiplier = 1.4;
+      this.densityMultiplier = 0.8;
+    } else if (d.includes("dense") || d.includes("consuming") || d.includes("absorb")) {
+      this.densityMultiplier = 1.4;
+      this.speedMultiplier = 0.6;
+    } else if (d.includes("sparse") || d.includes("barely")) {
+      this.densityMultiplier = 0.2;
+      this.speedMultiplier = 0.3;
+    }
+
+    if (d.includes("downward") || d.includes("drawn down")) {
+      this.gravityMultiplier = 1.5;
+    } else if (d.includes("upward") || d.includes("rising")) {
+      this.gravityMultiplier = -0.5;
+    } else {
+      this.gravityMultiplier = 1;
+    }
   }
 
   /** Public accessor: count of currently active particles */
@@ -244,6 +273,7 @@ export class ParticleEngine {
       if (!p.active) continue;
 
       this.updateParticleBySystem(p, dt, beatIntensity, onBeat);
+      p.vy += 0.02 * (this.gravityMultiplier - 1) * dt;
 
       p.x += p.vx * dt;
       p.y += p.vy * dt;
