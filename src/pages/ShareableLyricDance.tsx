@@ -532,6 +532,7 @@ export default function ShareableLyricDance() {
     const totalDuration = Math.max(0.001, songEnd - songStart);
 
     if (cinematicDirection) {
+      console.log('CINEMATIC DIRECTION FULL:', JSON.stringify(cinematicDirection, null, 2));
       interpreterRef.current = new DirectionInterpreter(
         cinematicDirection,
         totalDuration
@@ -869,6 +870,7 @@ export default function ShareableLyricDance() {
     window.addEventListener("resize", resize);
 
     const FRAME_BUDGET_MS = 14;
+    let runtimeFrameCount = 0;
 
     const render = () => {
       animRef.current = requestAnimationFrame(render);
@@ -1413,10 +1415,20 @@ export default function ShareableLyricDance() {
       dbg.drawCalls = drawCalls;
       dbg.cacheHits = cacheLookups > 0 ? cacheHits / cacheLookups : 1;
 
+      // Runtime diagnostic — once per second
+      runtimeFrameCount++;
+      if (runtimeFrameCount % 60 === 0) {
+        console.log('RUNTIME STATE:', {
+          songProgress,
+          currentChapter: chapterDirective?.title,
+          tensionStage: tensionStage?.stage,
+          beatIntensity: currentBeatIntensity,
+          particleCount: particleEngine?.getActiveCount(),
+        });
+      }
+
       prevTime = currentTime;
     };
-
-    animRef.current = requestAnimationFrame(render);
 
     return () => {
       cancelAnimationFrame(animRef.current);
