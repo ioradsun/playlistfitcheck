@@ -337,8 +337,8 @@ export class LyricDancePlayer {
     if (globalTimelineCache && globalChunkCache) {
       // Reuse cached bake from previous instance
       console.log('[PLAYER] reusing cached timeline — frames:', globalTimelineCache.length);
-      this.timeline = globalTimelineCache;
-      this.chunks = globalChunkCache;
+      this.timeline = [...globalTimelineCache];
+      this.chunks = new Map(globalChunkCache);
       this.buildBgCache();
     } else {
       while (globalBakeLock && !globalTimelineCache && !globalChunkCache) {
@@ -347,8 +347,8 @@ export class LyricDancePlayer {
 
       if (globalTimelineCache && globalChunkCache) {
         console.log('[PLAYER] reusing cached timeline — frames:', globalTimelineCache.length);
-        this.timeline = globalTimelineCache;
-        this.chunks = globalChunkCache;
+        this.timeline = [...globalTimelineCache];
+        this.chunks = new Map(globalChunkCache);
         this.buildBgCache();
       } else if (!globalBakeLock) {
         globalBakeLock = true;
@@ -450,7 +450,8 @@ export class LyricDancePlayer {
     const tctx = this.textCanvas.getContext("2d", { alpha: true });
     if (tctx) tctx.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
 
-    this.chunks.clear();
+    // Only clear local reference, not the global cache
+    this.chunks = new Map();
     this.timeline = [];
     this.bgCache = null;
 
