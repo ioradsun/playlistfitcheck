@@ -594,13 +594,15 @@ export class LyricDancePlayer {
   private buildScenePayload(): ScenePayload {
     const lines = this.data.lyrics ?? [];
     console.log('[PLAYER] buildScenePayload — lyrics count:', this.data.lyrics?.length, 'lines:', lines.length);
+    console.log('[PAYLOAD] cinematic_direction keys:', Object.keys(this.data.cinematic_direction ?? {}));
+    console.log('[PAYLOAD] chapters:', this.data.cinematic_direction?.chapters?.length);
     const songStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
     const songEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
 
     console.log('[PAYLOAD] songStart:', songStart, 'songEnd:', songEnd,
       'first line start:', lines[0]?.start, 'last line end:', lines[lines.length - 1]?.end);
 
-    return {
+    const payload = {
       lines,
       beat_grid: this.data.beat_grid,
       physics_spec: this.data.physics_spec,
@@ -611,6 +613,10 @@ export class LyricDancePlayer {
       songStart,
       songEnd,
     };
+
+    console.log('[PAYLOAD] payload being sent to baker — cinematic_direction:', !!payload.cinematic_direction);
+
+    return payload;
   }
 
   private buildChunkCache(payload: ScenePayload): void {
