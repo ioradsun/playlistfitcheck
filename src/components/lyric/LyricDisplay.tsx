@@ -11,8 +11,6 @@ import {
   AlertCircle,
   Video,
   Film,
-  Sparkles,
-  Loader2,
   RotateCcw,
   X,
 } from "lucide-react";
@@ -506,12 +504,9 @@ export function LyricDisplay({
     } | null;
     scene_manifest?: FullSceneManifest | null;
   } | null>(normalizeSongDnaWithManifest(initialSongDna, data.title) ?? null);
-  const [dnaLoading, setDnaLoading] = useState(false);
-  const [dnaRequested, setDnaRequested] = useState(!!initialSongDna);
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(
+  const [backgroundImageUrl] = useState<string | null>(
     initialBackgroundImageUrl ?? null,
   );
-  const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
   const [manifest, setManifest] = useState<FullSceneManifest | null>(null);
 
   const beatIntensity = useBeatIntensity(beatAnalyserRef.current, hookDanceRunning && isPlaying);
@@ -532,72 +527,14 @@ export function LyricDisplay({
     if (profile?.fontFamily) void ensureTypographyProfileReady(profile);
   }, [initialSongDna]);
 
-  // Auto-generate cinematic direction if song DNA exists but direction is missing
-  const cinematicGenAttempted = useRef(false);
-  useEffect(() => {
-    if (cinematicGenAttempted.current) return;
-    if (!songDna || (songDna as any).cinematic_direction) return;
-    if (!data?.lines?.length || !data.title) return;
-    cinematicGenAttempted.current = true;
-
-    const lyricsForDirection = data.lines
-      .filter((l) => l.tag !== "adlib")
-      .map((l) => ({ text: l.text, start: l.start, end: l.end }));
-    console.log("[LyricDisplay] Auto-generating cinematic direction for existing project");
-    supabase.functions.invoke("cinematic-direction", {
-      body: {
-        title: data.title,
-        artist: data.artist,
-        lines: lyricsForDirection,
-        beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
-        lyricId: currentSavedId || undefined,
-      },
-    }).then(({ data: dirResult }) => {
-      if (dirResult?.cinematicDirection) {
-        setSongDna((prev: any) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
-      }
-    }).catch((e) => console.warn("[LyricDisplay] cinematic direction auto-gen failed:", e));
-  }, [songDna, data, beatGrid, currentSavedId]);
-
   // Reset Song DNA when audio file changes (e.g. reupload)
   const audioFileRef = useRef(audioFile);
   useEffect(() => {
     if (audioFile !== audioFileRef.current) {
       audioFileRef.current = audioFile;
       setSongDna(null);
-      setDnaRequested(false);
-      setDnaLoading(false);
-      setBackgroundImageUrl(null);
-      setIsGeneratingBackground(false);
     }
   }, [audioFile]);
-
-  const generateBackgroundImage = useCallback(
-    async (manifest: FullSceneManifest, userDirection?: string) => {
-      setIsGeneratingBackground(true);
-      try {
-        const { data: bgResult, error: bgError } = await supabase.functions.invoke(
-          "lyric-video-bg",
-          {
-            body: {
-              manifest,
-              userDirection,
-            },
-          },
-        );
-        if (bgError) throw bgError;
-        const url = bgResult?.imageUrl ?? null;
-        setBackgroundImageUrl(url);
-      } catch (error) {
-        console.warn("[lyric-video-bg] background generation failed:", error);
-      } finally {
-        setIsGeneratingBackground(false);
-      }
-    },
-    [],
-  );
-
-
 
   useEffect(() => {
     if (!songDna) return;
@@ -610,177 +547,6 @@ export function LyricDisplay({
     animationResolver.loadFromDna(songDna as Record<string, unknown>);
 
   }, [songDna]);
-
-  useEffect(() => {
-    console.log("[LyricDisplay] backgroundImageUrl:",
-      backgroundImageUrl
-        ? backgroundImageUrl.slice(0, 80) + "..."
-        : "null — image not yet generated or failed"
-    );
-  }, [backgroundImageUrl]);
-  const fetchSongDna = useCallback(async () => {
-    if (dnaLoading || songDna) return;
-    setDnaLoading(true);
-    setDnaRequested(true);
-    try {
-      const lyricsText = data.lines
-        .filter((l) => l.tag !== "adlib")
-        .map((l) => l.text)
-        .join("\n");
-
-      // If we have real audio, encode it and send along for full audio+lyrics DNA
-      let audioBase64: string | undefined;
-      let format: string | undefined;
-      if (hasRealAudio && audioFile.size > 0) {
-        const arrayBuffer = await audioFile.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuffer);
-        let binary = "";
-        const chunkSize = 8192;
-        for (let i = 0; i < uint8.length; i += chunkSize) {
-          binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
-        }
-        audioBase64 = btoa(binary);
-        const name = audioFile.name.toLowerCase();
-        if (name.endsWith(".wav")) format = "wav";
-        else if (name.endsWith(".m4a")) format = "m4a";
-        else if (name.endsWith(".flac")) format = "flac";
-        else if (name.endsWith(".ogg")) format = "ogg";
-        else if (name.endsWith(".webm")) format = "webm";
-        else format = "mp3";
-      }
-
-      const { data: result, error } = await supabase.functions.invoke(
-        "lyric-analyze",
-        {
-          body: {
-            title: data.title,
-            artist: data.artist,
-            lyrics: lyricsText,
-            audioBase64,
-            format,
-            beatGrid: beatGrid
-              ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence }
-              : undefined,
-            includeHooks: hottestHooksEnabled,
-          },
-        },
-      );
-      if (error) throw error;
-
-      // Parse hooks from result — support both hottest_hooks (array) and legacy hottest_hook (object)
-      const rawHooks = Array.isArray(result?.hottest_hooks)
-        ? result.hottest_hooks
-        : result?.hottest_hook
-          ? [result.hottest_hook]
-          : [];
-
-      const parseHook = (
-        raw: any,
-      ): { hook: LyricHook; justification?: string; label?: string } | null => {
-        if (!raw?.start_sec) return null;
-        const startSec = Number(raw.start_sec);
-        const durationSec = Number(raw.duration_sec) || 10;
-        const conf = Number(raw.confidence) || 0;
-        if (conf < 0.5) return null;
-        const hookEnd = startSec + durationSec;
-        const hookWords: string[] = [];
-        for (const line of data.lines) {
-          if (line.end < startSec || line.start > hookEnd) continue;
-          const words = line.text.split(/\s+/).filter((w) => w.length > 0);
-          if (words.length === 0) continue;
-          const lineDur = line.end - line.start;
-          const totalChars = words.reduce((s, w) => s + w.length, 0);
-          let charsSoFar = 0;
-          for (const w of words) {
-            const wordStart = line.start + (charsSoFar / totalChars) * lineDur;
-            charsSoFar += w.length;
-            const wordEnd = line.start + (charsSoFar / totalChars) * lineDur;
-            if (wordEnd >= startSec && wordStart <= hookEnd) hookWords.push(w);
-          }
-        }
-        return {
-          hook: {
-            start: startSec,
-            end: startSec + durationSec,
-            score: Math.round(conf * 100),
-            reasonCodes: [],
-            previewText: hookWords.join(" ").trim(),
-            status: conf >= 0.75 ? "confirmed" : "candidate",
-          },
-          justification: raw.justification,
-          label: raw.label,
-        };
-      };
-
-      const parsedHooks = rawHooks.map(parseHook).filter(Boolean) as {
-        hook: LyricHook;
-        justification?: string;
-        label?: string;
-      }[];
-      const primary = parsedHooks[0] || null;
-      const secondary = parsedHooks[1] || null;
-
-      const nextSongDna = {
-        mood: result?.mood,
-        description: result?.description,
-        meaning: result?.meaning,
-        hook: primary?.hook || null,
-        secondHook: secondary?.hook || null,
-        hookJustification: primary?.justification,
-        secondHookJustification: secondary?.justification,
-        hookLabel: primary?.label,
-        secondHookLabel: secondary?.label,
-        physicsSpec: result?.physics_spec || null,
-        scene_manifest: result?.scene_manifest || result?.sceneManifest || null,
-        cinematic_direction: null,
-      };
-      const normalizedSongDna = normalizeSongDnaWithManifest(nextSongDna, data.title);
-      setSongDna(normalizedSongDna);
-
-      // Fire cinematic direction generation in parallel (non-blocking)
-      const lyricsForDirection = data.lines
-        .filter((l) => l.tag !== "adlib")
-        .map((l, i) => ({ text: l.text, start: l.start, end: l.end }));
-      supabase.functions.invoke("cinematic-direction", {
-        body: { title: data.title, artist: data.artist, lines: lyricsForDirection, beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined, lyricId: currentSavedId || undefined },
-      }).then(({ data: dirResult }) => {
-        if (dirResult?.cinematicDirection) {
-          setSongDna((prev: any) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
-        }
-      }).catch((e) => console.warn("[LyricDisplay] cinematic direction failed:", e));
-
-      const manifest = normalizedSongDna?.scene_manifest
-        ? safeManifest(normalizedSongDna.scene_manifest).manifest
-        : null;
-      if (manifest) {
-        void generateBackgroundImage(
-          manifest,
-          `Song: ${data.title} by ${data.artist}`,
-        );
-      }
-
-      const typographyProfile = result?.physics_spec?.typographyProfile as
-        | TypographyProfile
-        | undefined;
-      if (typographyProfile?.fontFamily) {
-        void ensureTypographyProfileReady(typographyProfile);
-      }
-    } catch (e) {
-      console.error("Song DNA error:", e);
-      toast.error("Couldn't generate Song DNA");
-    } finally {
-      setDnaLoading(false);
-    }
-  }, [
-    data,
-    audioFile,
-    hasRealAudio,
-    dnaLoading,
-    songDna,
-    beatGrid,
-    hottestHooksEnabled,
-    generateBackgroundImage,
-  ]);
 
 
   const getManifestDiff = useCallback((before: FullSceneManifest, after: FullSceneManifest) => {
@@ -855,7 +621,7 @@ export function LyricDisplay({
       const afterManifest = safeManifest(merged.scene_manifest || beforeManifest).manifest;
       setManifestDiff(getManifestDiff(beforeManifest, afterManifest));
       setSongDna(merged);
-      void generateBackgroundImage(afterManifest, direction.trim());
+      // Background image generation now handled by FitTab
       if (audioRef.current) audioRef.current.currentTime = playhead;
     } catch (error) {
       console.error("Director's Cut regenerate failed", error);
@@ -863,7 +629,7 @@ export function LyricDisplay({
     } finally {
       setDirectorsCutRegenerating(false);
     }
-  }, [songDna, directorsCutRegenerating, data.title, data.artist, data.lines, getManifestDiff, generateBackgroundImage]);
+  }, [songDna, directorsCutRegenerating, data.title, data.artist, data.lines, getManifestDiff]);
 
   const currentManifest = useMemo<FullSceneManifest | null>(() => {
     if (manifest) return manifest;
@@ -2028,101 +1794,7 @@ export function LyricDisplay({
             </div>
           </div>
 
-          {/* ── Song DNA — click Reveal to generate ── */}
-          <div className="glass-card rounded-xl p-4 border border-border/30">
-            {!dnaRequested ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={14} className="text-primary" />
-                  <span className="text-[11px] font-mono text-muted-foreground">
-                    Song DNA
-                  </span>
-                </div>
-                <button
-                  onClick={fetchSongDna}
-                  className="text-[11px] font-mono text-primary hover:text-primary/80 transition-colors"
-                >
-                  Reveal
-                </button>
-              </div>
-            ) : dnaLoading ? (
-              <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
-                <Loader2 size={14} className="animate-spin text-primary" />
-                Analyzing track…
-              </div>
-            ) : songDna ? (
-              <div className="space-y-4">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles size={12} className="text-primary" />
-                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                      Song DNA
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSongDna(null);
-                      setDnaRequested(false);
-                    }}
-                    className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    Reveal Again
-                  </button>
-                </div>
-
-                {/* Description */}
-                {songDna.description && (
-                  <p className="text-sm text-muted-foreground leading-relaxed italic">
-                    {songDna.description}
-                  </p>
-                )}
-
-                {/* Tags row: mood */}
-                {songDna.mood && (
-                  <div className="flex flex-wrap gap-2">
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                      {songDna.mood}
-                    </span>
-                  </div>
-                )}
-
-                {/* Song Meaning */}
-                {songDna.meaning &&
-                  (songDna.meaning.theme || songDna.meaning.summary) && (
-                    <div className="space-y-2 pt-2 border-t border-border/30">
-                      {songDna.meaning.theme && (
-                        <p className="text-sm font-semibold text-foreground">
-                          {songDna.meaning.theme}
-                        </p>
-                      )}
-                      {songDna.meaning.summary && (
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                          {songDna.meaning.summary}
-                        </p>
-                      )}
-                      {songDna.meaning.imagery &&
-                        songDna.meaning.imagery.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {songDna.meaning.imagery.map((img, idx) => (
-                              <span
-                                key={idx}
-                                className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
-                              >
-                                {img}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                    </div>
-                  )}
-              </div>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">
-                Couldn't analyze — try again later.
-              </p>
-            )}
-          </div>
+          {/* Song DNA card removed — DNA now auto-generates in Fit tab */}
         </div>
 
         {/* ── RIGHT: Controls panel ── */}
@@ -2560,11 +2232,6 @@ export function LyricDisplay({
           )}
       </AnimatePresence>
 
-      {isGeneratingBackground && (
-        <div className="fixed left-1/2 top-20 z-[99] -translate-x-1/2 rounded-full border border-white/20 bg-black/40 px-3 py-1 text-xs text-white/90 backdrop-blur">
-          Generating cinematic background...
-        </div>
-      )}
 
       {/* v2.2: Conflict Resolution Modal — keeps Whisper timestamps, lets artist swap text */}
       <Dialog
