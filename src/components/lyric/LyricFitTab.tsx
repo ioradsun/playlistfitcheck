@@ -215,8 +215,9 @@ export function LyricFitTab({
 
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
     if (!targetAudioFile || !hasRealAudio || targetAudioFile.size === 0) return;
+    // Data-existence guard: if we already have beatGrid (e.g. loaded from DB), skip
     if (beatGrid) {
-      setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
+      setGenerationStatus(prev => prev.beatGrid === "done" ? prev : ({ ...prev, beatGrid: "done" }));
       return;
     }
     if (generationStatus.beatGrid === "running" || generationStatus.beatGrid === "done") return;
