@@ -93,11 +93,12 @@ export function LyricDanceDebugPanel({ data }: Props) {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-4 left-[calc(var(--sidebar-width,240px)+16px)] z-[90] flex items-center gap-1.5 rounded-full bg-background/90 backdrop-blur border border-border/40 px-3 py-1.5 text-[10px] font-mono text-muted-foreground hover:text-foreground shadow-lg transition-colors"
+          style={{ position: "fixed", bottom: 16, right: 16, zIndex: 9999 }}
+          className="flex items-center gap-1.5 rounded-full bg-red-600 text-white px-4 py-2 text-xs font-mono font-bold shadow-xl hover:bg-red-500 transition-colors"
           title="Open debug panel"
         >
-          <Bug size={12} />
-          Debug
+          <Bug size={14} />
+          DEBUG
         </button>
       )}
 
