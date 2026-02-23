@@ -558,6 +558,9 @@ export class LyricDancePlayer {
 
     this.ctx.translate(frame.cameraX, frame.cameraY);
 
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
@@ -572,6 +575,8 @@ export class LyricDancePlayer {
     }
 
     this.ctx.globalAlpha = 1;
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'alphabetic';
     this.debugState = { ...this.debugState, drawCalls };
   }
 
