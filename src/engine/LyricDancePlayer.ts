@@ -317,17 +317,13 @@ export class LyricDancePlayer {
     textCanvas: HTMLCanvasElement,
     container: HTMLDivElement,
   ) {
-    globalInstanceCount++;
-    if (globalInstanceCount === 1) {
-      // First fresh mount — always clear cache to force rebake with current data
-      globalBakePromise = null;
-      globalTimelineCache = null;
-      globalChunkCache = null;
-      globalBakeLock = false;
-      globalHasCinematicDirection = false;
-      console.log('[PLAYER] fresh mount — cache cleared');
-    }
-    console.log('[PLAYER] constructor called', data?.lyrics?.length, 'instance:', globalInstanceCount);
+    // Always clear cache on construction — component gates on full data
+    globalBakePromise = null;
+    globalTimelineCache = null;
+    globalChunkCache = null;
+    globalBakeLock = false;
+    globalHasCinematicDirection = false;
+    console.log('[PLAYER] constructor — cache cleared, cinematic_direction:', !!data.cinematic_direction);
     this.data = data;
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
