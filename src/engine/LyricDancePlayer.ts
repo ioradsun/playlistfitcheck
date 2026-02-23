@@ -385,6 +385,7 @@ export class LyricDancePlayer {
     this.songStartSec = payload.songStart;
     this.songEndSec = payload.songEnd;
 
+    this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
     this.buildChunkCache(payload);
     const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
 
