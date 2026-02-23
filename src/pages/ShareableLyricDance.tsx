@@ -555,7 +555,6 @@ interface LyricDanceData {
   artist_dna: ArtistDNA | null;
   seed: string;
   scene_manifest: any | null;
-  cinematic_direction: CinematicDirection | null;
   background_url: string | null;
 }
 
@@ -570,7 +569,7 @@ interface DanceComment {
   submitted_at: string;
 }
 
-const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,cinematic_direction,background_url";
+const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,background_url";
 
 /** Draggable progress bar overlay at bottom of canvas */
 function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
@@ -814,7 +813,7 @@ export default function ShareableLyricDance() {
       systemType: data.system_type,
     });
     const effectivePalette = resolvedManifest.palette;
-    const effectiveSystem = data.cinematic_direction?.visualWorld?.backgroundSystem || resolvedManifest.backgroundSystem || spec.system;
+    const effectiveSystem = resolvedManifest.backgroundSystem || spec.system;
 
     // Initialise particle engine
     let particleEngine: ParticleEngine | null = null;
@@ -853,10 +852,7 @@ export default function ShareableLyricDance() {
     const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const totalDuration = Math.max(0.001, songEnd - songStart);
-    const cinematicDirection = data.cinematic_direction;
-    const interpreter = cinematicDirection
-      ? new DirectionInterpreter(cinematicDirection, totalDuration)
-      : null;
+    const interpreter: DirectionInterpreter | null = null;
     const hookStartTimes = lines
       .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0, effectivePalette).isHookLine)
       .map(line => line.start)
