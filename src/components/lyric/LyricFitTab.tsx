@@ -117,7 +117,11 @@ export function LyricFitTab({
       });
   }, []);
 
-  useEffect(() => { savedIdRef.current = savedId; }, [savedId]);
+  useEffect(() => {
+    savedIdRef.current = savedId;
+  }, [savedId]);
+
+  // (persist effect moved below persistSongDna definition)
 
   useEffect(() => {
     if (initialLyric && !lyricData) {
@@ -196,22 +200,33 @@ export function LyricFitTab({
         .select("id")
         .maybeSingle();
       if (error) {
+        console.warn("[persistSongDna] error attempt", attempt, error.message);
         if (attempt < 3) return persistSongDna(id, payload, attempt + 1);
         return false;
       }
       if (!updated) {
+        console.warn("[persistSongDna] no row matched attempt", attempt, id);
         if (attempt < 3) {
           await new Promise(r => setTimeout(r, 1000));
           return persistSongDna(id, payload, attempt + 1);
         }
         return false;
       }
+      console.log("[persistSongDna] success", id);
       return true;
-    } catch {
+    } catch (e) {
+      console.warn("[persistSongDna] exception attempt", attempt, e);
       if (attempt < 3) return persistSongDna(id, payload, attempt + 1);
       return false;
     }
   }, []);
+
+  // Persist song_dna whenever we have both a saved project and computed DNA
+  useEffect(() => {
+    if (savedIdRef.current && songDna) {
+      persistSongDna(savedIdRef.current, { ...songDna, cinematicDirection });
+    }
+  }, [savedId, songDna, cinematicDirection, persistSongDna]);
 
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
     if (!targetAudioFile || !hasRealAudio || targetAudioFile.size === 0) return;
