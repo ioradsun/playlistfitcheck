@@ -282,8 +282,8 @@ function bakeFrame(
     : glowProgress / 0.77;
 
   state.springOffset += state.springVelocity;
-  state.springVelocity *= 0.72;
-  state.springOffset *= 0.78;
+  state.springVelocity *= 0.82;
+  state.springOffset *= 0.88;
   const scale = 1.0 + Math.max(0, state.springOffset);
 
   const tensionMotion = pre.tensionMotionByFrame[frameIndex] ?? 0.5;
