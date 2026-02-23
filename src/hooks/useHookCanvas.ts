@@ -3,7 +3,7 @@
  * Extracted from ShareableHook so it can be reused in inline feed embeds.
  */
 
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSafeTextColor, getSystemStyle } from "@/engine/SystemStyles";
@@ -272,6 +272,7 @@ export function useHookCanvas(
   riverOffsetsRef: React.MutableRefObject<number[]>,
   active: boolean = true,
   onEnd?: () => void,
+  analyserNode?: AnalyserNode | null,
 ) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const engineRef = useRef<HookDanceEngine | null>(null);
@@ -283,10 +284,7 @@ export function useHookCanvas(
   const frameRef = useRef<{ physState: PhysicsState | null; time: number; beats: number }>({
     physState: null, time: 0, beats: 0,
   });
-  const beatAudioContextRef = useRef<AudioContext | null>(null);
-  const beatSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const [beatAnalyserNode, setBeatAnalyserNode] = useState<AnalyserNode | null>(null);
-  const beatIntensity = useBeatIntensity(beatAnalyserNode, active);
+  const beatIntensity = useBeatIntensity(analyserNode ?? null, active);
 
   // Keep onEnd ref current
   onEndRef.current = onEnd;
@@ -563,25 +561,6 @@ export function useHookCanvas(
     audioRef.current = audio;
     audio.src = hookData.audio_url;
 
-    let beatCtx: AudioContext | null = null;
-    let analyser: AnalyserNode | null = null;
-    try {
-      beatCtx = new AudioContext();
-      analyser = beatCtx.createAnalyser();
-      analyser.fftSize = 256;
-      const beatSource = beatCtx.createMediaElementSource(audio);
-      beatSource.connect(analyser);
-      analyser.connect(beatCtx.destination);
-      beatAudioContextRef.current = beatCtx;
-      beatSourceRef.current = beatSource;
-      setBeatAnalyserNode(analyser);
-    } catch (e) {
-      console.warn("[useHookCanvas] beat analyser init failed", e);
-      beatAudioContextRef.current = null;
-      beatSourceRef.current = null;
-      setBeatAnalyserNode(null);
-    }
-
     const spec = hookData.physics_spec as PhysicsSpec;
     const beats: BeatTick[] = hookData.beat_grid.beats.map((t: number, i: number) => ({
       time: t, isDownbeat: i % 4 === 0, strength: i % 4 === 0 ? 1 : 0.6,
@@ -625,14 +604,6 @@ export function useHookCanvas(
       cancelled = true;
       engineRef.current?.stop();
       audio.pause();
-      beatSourceRef.current?.disconnect();
-      beatSourceRef.current = null;
-      setBeatAnalyserNode(null);
-      const ctx = beatAudioContextRef.current;
-      beatAudioContextRef.current = null;
-      if (ctx) {
-        void ctx.close();
-      }
     };
   }, [hookData, drawCanvas, active]);
 
