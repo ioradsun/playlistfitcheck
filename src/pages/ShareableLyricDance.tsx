@@ -1006,15 +1006,19 @@ export default function ShareableLyricDance() {
         ?? (!activeLine || Boolean(nextLine && currentTime < nextLine.start - 0.5));
       if (isInSilence && cinematicDirection?.silenceDirective) {
         const silence = cinematicDirection.silenceDirective;
-        // Capped — never accumulate beyond limits
-        if (silence.cameraMovement.includes("downward")) silenceOffsetYRef.current = Math.min(15, silenceOffsetYRef.current + 0.3);
-        if (silence.cameraMovement.includes("push")) silenceZoomRef.current = Math.min(1.05, silenceZoomRef.current + 0.0002);
+        // Target-based — no accumulation, smooth lerp toward fixed target
+        const targetOffsetY = silence.cameraMovement.includes("downward") ? 12 : 0;
+        const targetZoom = silence.cameraMovement.includes("push") ? 1.03 : 1;
+        silenceOffsetYRef.current += (targetOffsetY - silenceOffsetYRef.current) * 0.02;
+        silenceZoomRef.current += (targetZoom - silenceZoomRef.current) * 0.02;
         if (silence.tensionDirection === "building") vignetteIntensityRef.current = Math.min(0.8, vignetteIntensityRef.current + 0.001);
         else if (silence.tensionDirection === "releasing") vignetteIntensityRef.current = Math.max(0.3, vignetteIntensityRef.current - 0.001);
       } else {
-        // Decay back to neutral when not in silence
-        silenceOffsetYRef.current *= 0.95;
-        silenceZoomRef.current = 1 + (silenceZoomRef.current - 1) * 0.95;
+        // Lerp back to neutral
+        silenceOffsetYRef.current += (0 - silenceOffsetYRef.current) * 0.05;
+        silenceZoomRef.current += (1 - silenceZoomRef.current) * 0.05;
+        if (Math.abs(silenceOffsetYRef.current) < 0.1) silenceOffsetYRef.current = 0;
+        if (Math.abs(silenceZoomRef.current - 1) < 0.001) silenceZoomRef.current = 1;
       }
       const baselineY = yBaseRef.current === 0 ? ch * 0.5 : yBaseRef.current;
       let activeWordPosition = {
