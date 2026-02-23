@@ -195,6 +195,7 @@ export default function ShareableLyricDance() {
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<LyricDancePlayer | null>(null);
+  const [playerInstance, setPlayerInstance] = useState<LyricDancePlayer | null>(null);
 
   // ── Data fetch ──────────────────────────────────────────────────────
 
