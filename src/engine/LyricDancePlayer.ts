@@ -252,6 +252,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
 const BASE_W = 960;
 const BASE_H = 540;
 let globalBakeLock = false;
+let globalBakePromise: Promise<void> | null = null;
 let globalTimelineCache: ScaledKeyframe[] | null = null;
 let globalChunkCache: Map<string, ChunkState> | null = null;
 
