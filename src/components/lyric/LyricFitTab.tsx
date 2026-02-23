@@ -141,12 +141,12 @@ export function LyricFitTab({
 
       // If we already have songDna + sceneManifest from a previous run, mark ready
       if (loadedSongDna) {
+        pipelineRanOnce.current = true;
         const m = buildManifestFromDna(loadedSongDna as Record<string, unknown>);
         if (m) {
           setSceneManifest(safeManifest(m).manifest);
-          setFitReadiness("ready");
-          pipelineRanOnce.current = true;
         }
+        setFitReadiness("ready");
       }
 
       const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
