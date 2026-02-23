@@ -499,6 +499,12 @@ export class LyricDancePlayer {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
+    if (this.currentTimeMs < 100) {
+      console.log('[UPDATE] audio.currentTime:', this.audio.currentTime,
+        'songStartSec:', this.songStartSec,
+        'currentTimeMs:', this.currentTimeMs);
+    }
+
     this.fpsAccum.t += deltaMs;
     this.fpsAccum.frames += 1;
     if (this.fpsAccum.t >= 500) {
@@ -527,6 +533,18 @@ export class LyricDancePlayer {
 
   private draw(): void {
     const frame = this.getFrame(this.currentTimeMs);
+
+    if (this.currentTimeMs < 3000) {
+      const visibleChunks = frame?.chunks.filter(c => c.visible) ?? [];
+      console.log('[DRAW] timeMs:', Math.round(this.currentTimeMs),
+        'frame:', !!frame,
+        'visible chunks:', visibleChunks.length,
+        'first chunk:', visibleChunks[0]
+          ? `id=${visibleChunks[0].id} x=${Math.round(visibleChunks[0].x)} y=${Math.round(visibleChunks[0].y)} alpha=${visibleChunks[0].alpha}`
+          : 'none',
+        'canvas size:', this.width, 'x', this.height);
+    }
+
     if (!frame) return;
 
     if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
