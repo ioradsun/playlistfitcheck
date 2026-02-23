@@ -75,7 +75,7 @@ type BakeState = {
   beats: number[];
   beatCursor: number;
   lastBeatIndex: number;
-  pulseBudget: number;
+  glowBudget: number;
   currentZoom: number;
 };
 
