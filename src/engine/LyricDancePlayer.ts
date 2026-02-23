@@ -543,21 +543,23 @@ export class LyricDancePlayer {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
 
-    // Background — no camera offset or zoom, always fills canvas
+    // 1. Background — drawn at identity transform, always fills canvas
     if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
 
-    // Apply camera zoom — scale around canvas center
+    // 2. Apply zoom around canvas center
     const zoom = frame.cameraZoom ?? 1.0;
     const cx = this.width / 2;
     const cy = this.height / 2;
-
-    this.ctx.save();
     this.ctx.translate(cx, cy);
     this.ctx.scale(zoom, zoom);
     this.ctx.translate(-cx, -cy);
 
-    // Camera drift on top of zoom
+    // 3. Apply camera drift on top of zoom
     this.ctx.translate(frame.cameraX, frame.cameraY);
+
+    // 4. Draw text chunks with glow
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
 
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
@@ -565,21 +567,19 @@ export class LyricDancePlayer {
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
-      this.ctx.save();
-      this.ctx.translate(cx, cy);
-      this.ctx.scale(chunk.scale ?? 1, chunk.scale ?? 1);
-      this.ctx.translate(-cx, -cy);
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.font = obj.font;
       this.ctx.fillStyle = obj.color;
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
+
+      if (chunk.glow > 0) {
+        this.ctx.shadowColor = '#ffffff';
+        this.ctx.shadowBlur = chunk.glow * 24;
+      }
+
       this.ctx.fillText(obj.text, cx, cy);
-      this.ctx.restore();
+      this.ctx.shadowBlur = 0;
       drawCalls += 1;
     }
-
-    this.ctx.restore(); // restore zoom + drift transform
 
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
