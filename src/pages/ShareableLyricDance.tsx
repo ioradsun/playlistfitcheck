@@ -22,6 +22,7 @@ import { ParticleEngine } from "@/engine/ParticleEngine";
 import { safeManifest } from "@/engine/validateManifest";
 import type { SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver } from "@/engine/AnimationResolver";
+import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -690,6 +691,28 @@ export default function ShareableLyricDance() {
         frameFontSize = fs;
 
         ctx.save();
+
+        // Apply entry/exit alpha from AnimationResolver
+        const lyricEntrance = resolvedManifest?.lyricEntrance ?? "fades";
+        const lyricExit = resolvedManifest?.lyricExit ?? "fades";
+        const entryAlpha = applyEntrance(ctx, lineAnim.entryProgress, lyricEntrance);
+        const exitAlpha = lineAnim.exitProgress > 0
+          ? applyExit(ctx, lineAnim.exitProgress, lyricExit)
+          : 1.0;
+        ctx.globalAlpha = Math.min(entryAlpha, exitAlpha);
+
+        // Apply scale from resolver (beat + hook awareness)
+        const lineX = cw / 2;
+        const lineY = ch / 2;
+        ctx.translate(lineX, lineY);
+        ctx.scale(lineAnim.scale, lineAnim.scale);
+        ctx.translate(-lineX, -lineY);
+
+        // Apply active mod effect (pulse, shimmer, glitch, etc.)
+        if (lineAnim.activeMod) {
+          applyModEffect(ctx, lineAnim.activeMod, currentTime, currentBeatIntensity);
+        }
+
         const effectState: EffectState = {
           text: activeLine.text,
           physState: state,
