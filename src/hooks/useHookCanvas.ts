@@ -464,11 +464,6 @@ export function useHookCanvas(
 
       const fs = layoutResult?.fontSize ?? baseFs;
 
-      console.log("[render] beatSource:", {
-        physGlow: physState.glow?.toFixed(3),
-        audioIntensity: beatIntensity.toFixed(3),
-      });
-      console.log("[render] beatIntensity:", beatIntensity.toFixed(3));
       const manifest = {
         lyricEntrance: "fades",
         lyricExit: "fades",
@@ -476,6 +471,7 @@ export function useHookCanvas(
         typographyProfile: spec.typographyProfile,
       } as SceneManifest;
 
+      console.log('[draw] resolver loaded:', animationResolver.isLoaded?.() ?? 'no isLoaded method');
       const anim = animationResolver.resolveLine(
         activeLine.start,
         activeLine.start,
@@ -483,14 +479,16 @@ export function useHookCanvas(
         ct,
         beatIntensity,
       );
-      console.log("[render] line anim:", {
-        text: activeLine.text.slice(0, 20),
-        entryProgress: anim.entryProgress.toFixed(2),
-        exitProgress: anim.exitProgress.toFixed(2),
-        activeMod: anim.activeMod,
-        scale: anim.scale.toFixed(3),
-        isHookLine: anim.isHookLine,
-      });
+      const isFirstLine = true;
+      if (isFirstLine) {
+        console.log('[draw] line anim:', {
+          text: activeLine.text.slice(0, 20),
+          entryProgress: anim.entryProgress,
+          exitProgress: anim.exitProgress,
+          activeMod: anim.activeMod,
+          scale: anim.scale,
+        });
+      }
 
       ctx.save();
       const lineX = w / 2;
