@@ -198,6 +198,7 @@ export function LyricFitTab({
 
     setFitProgress(10);
     setFitStageLabel("Analyzing rhythm…");
+    setPipelineStages(prev => ({ ...prev, transcript: "done", rhythm: "running" }));
 
     // 2. Decode audio for beat detection if needed
     if (!beatGrid && hasRealAudio && audioFile.size > 0) {
