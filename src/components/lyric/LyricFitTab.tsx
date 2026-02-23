@@ -119,11 +119,14 @@ export function LyricFitTab({
 
   useEffect(() => {
     savedIdRef.current = savedId;
-    // Persist song_dna if it was generated before the project was saved
-    if (savedId && songDna) {
-      persistSongDna(savedId, { ...songDna, cinematicDirection });
+  }, [savedId]);
+
+  // Persist song_dna whenever we have both a saved project and computed DNA
+  useEffect(() => {
+    if (savedIdRef.current && songDna) {
+      persistSongDna(savedIdRef.current, { ...songDna, cinematicDirection });
     }
-  }, [savedId]); // intentionally omit songDna/cinematicDirection to avoid re-persisting on every change
+  }, [savedId, songDna, cinematicDirection, persistSongDna]);
 
   useEffect(() => {
     if (initialLyric && !lyricData) {
