@@ -146,10 +146,6 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
   const chapterCount = Math.max(1, chapters.length || 4);
 
-  console.log('[BAKER] ratio-based setup — chapters:', chapters.length,
-    'first chapter ratio:', chapters[0]?.startRatio, '-', chapters[0]?.endRatio,
-    'tension stages:', tensionCurve.length,
-    'distanceByChapter:', payload.cinematic_direction?.cameraLanguage?.distanceByChapter?.length);
 
   const lineShotTypes = payload.lines.map((line, lineIndex) => {
     const storyboardEntry = storyboards[lineIndex] ?? null;
@@ -181,9 +177,6 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
     return Math.round(36 * weightScale);
   });
 
-  console.log('[BAKER] storyboard:', JSON.stringify(payload.cinematic_direction?.storyboard?.slice(0, 2)));
-  console.log('[BAKER] first 5 lineShotTypes:', lineShotTypes.slice(0, 5));
-  console.log('[BAKER] first 5 lineFontSizes:', lineFontSizes.slice(0, 5));
 
   const lineColors = payload.lines.map((_, idx) => {
     const line = payload.lines[idx];
@@ -297,17 +290,6 @@ function bakeFrame(
   state.currentZoom = state.currentZoom ?? 1.0;
   state.currentZoom += (targetZoom - state.currentZoom) * 0.015;
 
-  if (frameIndex === 500) {
-    console.log('[BAKER frame 500]', {
-      songProgress: songProgress.toFixed(3),
-      currentChapterIdx,
-      targetZoom,
-      currentZoom: state.currentZoom,
-      chapterCameraEntry,
-      tensionMotion: tensionMotion?.toFixed(3),
-      activeLineIndex,
-    });
-  }
 
   const chunks: Keyframe["chunks"] = [];
 
@@ -331,13 +313,6 @@ function bakeFrame(
     const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
     const chunkScale = lineActive && visible ? scale : 1.0;
 
-    if (frameIndex === 100) {
-      console.log('[BAKER frame 100] cameraZoom:', state.currentZoom,
-        'springOffset:', state.springOffset,
-        'springVelocity:', state.springVelocity,
-        'beatIndex:', beatIndex,
-        'active chunk scale:', chunkScale, 'lineActive:', lineActive);
-    }
 
     chunks.push({
       id: `${idx}`,

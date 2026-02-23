@@ -307,7 +307,7 @@ export class LyricDancePlayer {
   private songEndSec = 0;
   private playing = false;
   private destroyed = false;
-  private hasLoggedFirstFrame = false;
+  
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
@@ -324,7 +324,7 @@ export class LyricDancePlayer {
     globalChunkCache = null;
     globalBakeLock = false;
     globalHasCinematicDirection = false;
-    console.log('[PLAYER] constructor — cache cleared, cinematic_direction:', !!data.cinematic_direction);
+    this.data = data;
     this.data = data;
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
@@ -350,7 +350,6 @@ export class LyricDancePlayer {
 
     // Cache exists but was baked without cinematic direction — invalidate before promise reuse
     if (globalTimelineCache && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
-      console.log('[PLAYER] invalidating stale cache — cinematic_direction now available');
       globalBakePromise = null;
       globalTimelineCache = null;
       globalChunkCache = null;
@@ -370,10 +369,8 @@ export class LyricDancePlayer {
         // so Strict Mode destroy() can't wipe them
         this.buildChunkCache(payload);
         const localChunkSnapshot = new Map(this.chunks);
-        console.log('[PLAYER] chunk snapshot — size:', localChunkSnapshot.size);
 
-        const baked = await bakeSceneChunked(payload, (pct) =>
-          console.log('[PLAYER] bake pct:', pct));
+        const baked = await bakeSceneChunked(payload);
 
         // Use the local snapshot not this.chunks (which destroy() may have wiped)
         globalTimelineCache = this.scaleTimeline(baked);
@@ -382,7 +379,6 @@ export class LyricDancePlayer {
         globalSongStartSec = payload.songStart;
         globalSongEndSec = payload.songEnd;
         globalBakeLock = false;
-        console.log('[PLAYER] bake done — frames:', globalTimelineCache.length, 'chunks:', globalChunkCache.size);
       })();
     }
 
@@ -395,7 +391,6 @@ export class LyricDancePlayer {
     this.songStartSec = globalSongStartSec;
     this.songEndSec = globalSongEndSec;
     this.buildBgCache();
-    console.log('[PLAYER] ready — frames:', this.timeline.length, 'chunks:', this.chunks.size);
 
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
@@ -408,7 +403,6 @@ export class LyricDancePlayer {
   // ────────────────────────────────────────────────────────────
 
   async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<Map<string, ChunkState>> {
-    console.log('[PLAYER] load() called — lines:', payload.lines.length);
     try {
       this.payload = payload;
       this.songStartSec = payload.songStart;
@@ -418,7 +412,6 @@ export class LyricDancePlayer {
       this.buildChunkCache(payload);
       // Snapshot chunks NOW before the async yield — destroy() may replace this.chunks
       const chunkSnapshot = new Map(this.chunks);
-      console.log('[PLAYER] after buildChunkCache — chunks:', chunkSnapshot.size);
       const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
 
       this.timeline = this.scaleTimeline(baked);
@@ -526,12 +519,6 @@ export class LyricDancePlayer {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
-    if (this.currentTimeMs < 5000) {
-      console.log('[UPDATE] audio.currentTime:', t,
-        'songStartSec:', this.songStartSec,
-        'songEndSec:', this.songEndSec,
-        'currentTimeMs:', this.currentTimeMs);
-    }
 
     this.fpsAccum.t += deltaMs;
     this.fpsAccum.frames += 1;
@@ -605,21 +592,6 @@ export class LyricDancePlayer {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
 
-    if (!this.hasLoggedFirstFrame && this.currentTimeMs > 100) {
-      this.hasLoggedFirstFrame = true;
-      console.log('[DRAW] first frame sample:', JSON.stringify({
-        cameraX: frame.cameraX,
-        cameraY: frame.cameraY,
-        cameraZoom: (frame as any).cameraZoom,
-        bgBlend: (frame as any).bgBlend,
-        visibleChunks: frame.chunks?.filter(c => c.visible).map(c => ({
-          id: c.id,
-          alpha: c.alpha,
-          glow: c.glow,
-          scale: c.scale,
-        })),
-      }));
-    }
 
     // 1. Background — drawn at identity transform, always fills canvas
     if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
@@ -670,14 +642,8 @@ export class LyricDancePlayer {
 
   private buildScenePayload(): ScenePayload {
     const lines = this.data.lyrics ?? [];
-    console.log('[PLAYER] buildScenePayload — lyrics count:', this.data.lyrics?.length, 'lines:', lines.length);
-    console.log('[PAYLOAD] cinematic_direction keys:', Object.keys(this.data.cinematic_direction ?? {}));
-    console.log('[PAYLOAD] chapters:', this.data.cinematic_direction?.chapters?.length);
     const songStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
     const songEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
-
-    console.log('[PAYLOAD] songStart:', songStart, 'songEnd:', songEnd,
-      'first line start:', lines[0]?.start, 'last line end:', lines[lines.length - 1]?.end);
 
     const payload = {
       lines,
@@ -691,13 +657,10 @@ export class LyricDancePlayer {
       songEnd,
     };
 
-    console.log('[PAYLOAD] payload being sent to baker — cinematic_direction:', !!payload.cinematic_direction);
-
     return payload;
   }
 
   private buildChunkCache(payload: ScenePayload): void {
-    console.log('[PLAYER] buildChunkCache entered — lines:', payload.lines.length);
     this.chunks.clear();
 
     // Use a throwaway offscreen canvas for measurement
@@ -713,7 +676,6 @@ export class LyricDancePlayer {
     measureCtx.font = font;
 
     for (let i = 0; i < payload.lines.length; i++) {
-      if (i === 0) console.log('[PLAYER] first line text:', payload.lines[0]?.text);
       const text = payload.lines[i]?.text ?? '';
       const color = payload.palette?.[2] ?? '#ffffff';
       const width = measureCtx.measureText(text).width;
@@ -725,10 +687,7 @@ export class LyricDancePlayer {
         font,
         width,
       });
-      if (i === 0) console.log('[PLAYER] first chunk set — size now:', this.chunks.size);
     }
-
-    console.log('[PLAYER] buildChunkCache done — chunks:', this.chunks.size);
   }
 
   private buildBgCache(): void {
