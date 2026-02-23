@@ -246,6 +246,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     y: number;
     alpha: number;
     glow: number;
+    scale: number;
     visible: boolean;
   }>;
 };
