@@ -177,9 +177,6 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
     return Math.round(36 * weightScale);
   });
 
-  console.log('[BAKER] storyboard:', JSON.stringify(payload.cinematic_direction?.storyboard?.slice(0, 2)));
-  console.log('[BAKER] first 5 lineShotTypes:', lineShotTypes.slice(0, 5));
-  console.log('[BAKER] first 5 lineFontSizes:', lineFontSizes.slice(0, 5));
 
   const lineColors = payload.lines.map((_, idx) => {
     const line = payload.lines[idx];
