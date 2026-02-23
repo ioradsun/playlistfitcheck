@@ -143,6 +143,12 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
   });
 
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
+  const songDuration = Math.max(0.01, payload.songEnd - payload.songStart);
+  const chapterCount = Math.max(1, chapters.length || 4);
+
+  console.log('[BAKER] chapters count:', chapters.length,
+    'first chapter keys:', Object.keys(chapters[0] ?? {}));
+
   const lineShotTypes = payload.lines.map((line) => {
     // Try storyboard first
     for (let i = 0; i < storyboards.length; i += 1) {
@@ -151,11 +157,9 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
         return s.shotType ?? "Medium";
       }
     }
-    // Fall back to chapter index — alternate shot types across chapters
-    const chapterIdx = chapters.findIndex(
-      (ch) => (line.start ?? 0) >= (ch.startSec ?? 0) && (line.start ?? 0) < (ch.endSec ?? 9999)
-    );
-    if (chapterIdx < 0) return 'Medium';
+    // Fall back — divide song into equal segments by chapter count
+    const progress = ((line.start ?? 0) - payload.songStart) / songDuration;
+    const chapterIdx = Math.floor(progress * chapterCount);
     return shotCycle[chapterIdx % shotCycle.length];
   });
 
@@ -269,7 +273,7 @@ function bakeFrame(
   if (beatIndex !== state.lastBeatIndex) {
     state.lastBeatIndex = beatIndex;
     state.glowBudget = 13;
-    state.springVelocity = 0.6;
+    state.springVelocity = 1.2;
   }
   if (state.glowBudget > 0) state.glowBudget -= 1;
   const glowProgress = state.glowBudget / 13;
@@ -278,8 +282,8 @@ function bakeFrame(
     : glowProgress / 0.77;
 
   state.springOffset += state.springVelocity;
-  state.springVelocity *= 0.72;
-  state.springOffset *= 0.78;
+  state.springVelocity *= 0.82;
+  state.springOffset *= 0.88;
   const scale = 1.0 + Math.max(0, state.springOffset);
 
   const tensionMotion = pre.tensionMotionByFrame[frameIndex] ?? 0.5;
