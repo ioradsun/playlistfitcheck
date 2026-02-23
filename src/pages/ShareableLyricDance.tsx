@@ -547,6 +547,14 @@ export default function ShareableLyricDance() {
       const timeToNextHook = nextHookStart - currentTime;
       const isPreHook = Number.isFinite(nextHookStart) && timeToNextHook > 0 && timeToNextHook < 2.0;
 
+      // Camera shake on strong downbeats only (horizontal shake 3x vertical).
+      ctx.save();
+      if (currentBeatIntensity > 0.75) {
+        const shakeX = (Math.random() - 0.5) * currentBeatIntensity * 6;
+        const shakeY = (Math.random() - 0.5) * currentBeatIntensity * 2;
+        ctx.translate(shakeX, shakeY);
+      }
+
       // Background
       ctx.fillStyle = "#0a0a0a";
       ctx.fillRect(0, 0, cw, ch);
@@ -875,6 +883,8 @@ export default function ShareableLyricDance() {
         drawFn(ctx, effectState);
         ctx.restore();
       }
+
+      ctx.restore();
 
       // ── Update live debug ref (no React setState — zero GC pressure) ──
       const dbg = liveDebugRef.current;
