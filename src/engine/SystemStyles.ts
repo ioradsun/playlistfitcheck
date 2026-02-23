@@ -384,7 +384,8 @@ export function computeFitFontSize(
   const charCount = displayText.length;
   if (charCount === 0) return { fs: 12, effectiveLetterSpacing: st.letterSpacing };
 
-  const targetW = canvasW * 0.80;
+  const targetOccupancy = charCount <= 3 ? 0.55 : charCount <= 6 ? 0.70 : 0.80;
+  const targetW = canvasW * targetOccupancy;
   const minFs = Math.max(MIN_FONT_PX, Math.min(canvasW, canvasW * 0.03));
   const maxFs = fluidFontPx(canvasW, canvasW * 0.5625, typographyProfileRef.current?.personality);
 
