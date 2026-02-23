@@ -409,12 +409,21 @@ export function LyricFitTab({
     }
   }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna]);
 
+  const pipelineTriggeredRef = useRef(false);
   useEffect(() => {
     if (!lines?.length || !audioFile) return;
+    if (pipelineTriggeredRef.current) return;
+    // If all data already loaded from DB, skip pipeline entirely
+    if (songDna && beatGrid && cinematicDirection) {
+      setGenerationStatus({ beatGrid: "done", songDna: "done", cinematicDirection: "done" });
+      return;
+    }
+    pipelineTriggeredRef.current = true;
     startBeatAnalysis(audioFile);
     startLyricAnalyze(lines, audioFile);
     startCinematicDirection(lines);
-  }, [lines, audioFile, startBeatAnalysis, startLyricAnalyze, startCinematicDirection]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, audioFile]);
 
   useEffect(() => {
     const values = Object.values(generationStatus);
