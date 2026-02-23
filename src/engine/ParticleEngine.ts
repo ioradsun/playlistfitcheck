@@ -148,6 +148,9 @@ export class ParticleEngine {
   private time = 0;
   private lastBeatIntensity = 0;
   private lightning: LightningBolt[] = [];
+  private densityMultiplier = 1;
+  private speedMultiplier = 1;
+  private behaviorHint: string | null = null;
 
   constructor(manifest: SceneManifest) {
     this.manifest = manifest;
@@ -161,6 +164,18 @@ export class ParticleEngine {
 
   setConfig(config: ParticleConfig): void {
     this.config = config;
+  }
+
+  setDensityMultiplier(multiplier: number): void {
+    this.densityMultiplier = clamp(multiplier, 0.1, 4);
+  }
+
+  setSpeedMultiplier(multiplier: number): void {
+    this.speedMultiplier = clamp(multiplier, 0.1, 4);
+  }
+
+  setBehaviorHint(hint: string | null): void {
+    this.behaviorHint = hint;
   }
 
   /** Public accessor: count of currently active particles */
@@ -290,7 +305,7 @@ export class ParticleEngine {
   }
 
   private targetActiveCount(): number {
-    const d = clamp(this.config.density, 0, 1);
+    const d = clamp(this.config.density * this.densityMultiplier, 0, 1.5);
     return Math.floor(20 + d * 520);
   }
 
@@ -334,7 +349,7 @@ export class ParticleEngine {
 
   private spawnForSystem(p: Particle): void {
     const b = this.bounds;
-    const speed = 0.5 + this.config.speed;
+    const speed = (0.5 + this.config.speed) * this.speedMultiplier;
     p.life = 1;
     p.rotation = Math.random() * Math.PI * 2;
     p.rotationSpeed = (Math.random() - 0.5) * 0.08;
@@ -375,11 +390,13 @@ export class ParticleEngine {
         p.rotationSpeed = (Math.random() - 0.5) * 0.2;
         break;
       case "rain": {
+        const stormHint = (this.behaviorHint ?? "").toLowerCase().includes("storm");
         const isDrizzle = this.config.renderStyle === "rain-drizzle";
         p.x = b.x + Math.random() * b.w;
         p.y = b.y - 20;
         p.vx = (isDrizzle ? 1.2 : 2.1) * speed + Math.random() * (isDrizzle ? 0.4 : 0.9) * speed;
         p.vy = (isDrizzle ? 5.5 : 9.2) * speed + Math.random() * (isDrizzle ? 2.8 : 6.8) * speed;
+        if (stormHint) p.vy *= 1.25;
         p.size = isDrizzle ? 7 + Math.random() * 5 : 10 + Math.random() * 9;
         p.opacity = isDrizzle ? 0.5 : 0.72;
         p.decay = isDrizzle ? 0.024 : 0.035;
@@ -493,6 +510,9 @@ export class ParticleEngine {
     const beatPulse = this.config.beatReactive ? beatIntensity : 0;
     switch (this.config.system) {
       case "embers":
+        if ((this.behaviorHint ?? "").toLowerCase().includes("frantic")) {
+          p.vx += (Math.random() - 0.5) * 0.2;
+        }
         if (Math.random() < 0.02) p.vx += (Math.random() - 0.5) * 1.5;
         p.vx += (Math.random() - 0.5) * 0.08;
         p.vy -= 0.02;
