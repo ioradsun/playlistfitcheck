@@ -544,7 +544,7 @@ export default function ShareableLyricDance() {
     const totalDuration = Math.max(0.001, songEnd - songStart);
 
     if (cinematicDirection) {
-      console.log('CINEMATIC DIRECTION FULL:', JSON.stringify(cinematicDirection, null, 2));
+      // interpreter created in render loop useEffect
       interpreterRef.current = new DirectionInterpreter(
         cinematicDirection,
         totalDuration
@@ -734,7 +734,7 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
-    console.log('[RENDER LOOP] Starting setup, cinematic_direction:', !!data.cinematic_direction);
+    
     let audio: HTMLAudioElement | null = null;
     let constellationInterval: ReturnType<typeof setInterval> | null = null;
     let resizeHandler: (() => void) | null = null;
@@ -766,7 +766,13 @@ export default function ShareableLyricDance() {
         }
       : null;
 
-    // Initialise particle engine
+    // Create interpreter directly in render loop closure so it's always available
+    const loopInterpreter = cinematicDirection
+      ? new DirectionInterpreter(cinematicDirection, Math.max(0.001, (lines.length > 0 ? lines[lines.length - 1].end + 1 : 0) - (lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0)))
+      : null;
+    interpreterRef.current = loopInterpreter;
+    interpreterRefStable.current = loopInterpreter;
+
     let particleEngine: ParticleEngine | null = null;
     if (resolvedManifest.particleConfig?.system !== "none") {
       particleEngine = new ParticleEngine(resolvedManifest);
@@ -888,7 +894,6 @@ export default function ShareableLyricDance() {
     window.addEventListener("resize", resizeHandler);
 
     const FRAME_BUDGET_MS = 14;
-    let runtimeFrameCount = 0;
 
     const render = () => {
       animRef.current = requestAnimationFrame(render);
@@ -920,23 +925,8 @@ export default function ShareableLyricDance() {
         return width;
       };
       const currentTime = audio.currentTime;
-      const interpreterNow = interpreterRefStable.current;
+      const interpreterNow = loopInterpreter;
 
-      runtimeFrameCount++;
-      if (runtimeFrameCount % 120 === 1) {
-        const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
-        console.log('[RENDER DEBUG]', {
-          currentTime: currentTime.toFixed(2),
-          songStart: songStart.toFixed(2),
-          songEnd: songEnd.toFixed(2),
-          cw, ch,
-          linesCount: lines.length,
-          firstLineStart: lines[0]?.start,
-          activeLine: activeLine ? activeLine.text.slice(0, 30) : 'NONE',
-          audioMuted: audio.muted,
-          audioPaused: audio.paused,
-        });
-      }
 
       if (textStateRef.current.yBase === 0) textStateRef.current.yBase = ch * 0.5;
 
@@ -1481,17 +1471,6 @@ export default function ShareableLyricDance() {
       dbg.drawCalls = drawCalls;
       dbg.cacheHits = cacheLookups > 0 ? cacheHits / cacheLookups : 1;
 
-      // Runtime diagnostic — once per second
-      runtimeFrameCount++;
-      if (runtimeFrameCount % 60 === 0) {
-        console.log('RUNTIME STATE:', {
-          songProgress,
-          currentChapter: chapterDirective?.title,
-          tensionStage: tensionStage?.stage,
-          beatIntensity: currentBeatIntensity,
-          particleCount: particleEngine?.getActiveCount(),
-        });
-      }
 
       prevTime = currentTime;
     };
