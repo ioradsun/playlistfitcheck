@@ -111,34 +111,7 @@ export function PublishLyricDanceButton({
           songTitle,
         });
 
-      // ── Generate AI background ────────────────────────────────────
-      setStatus("Generating background…");
-      let backgroundUrl: string | null = null;
-      try {
-        const { data: bgData, error: bgError } = await supabase.functions.invoke(
-          "lyric-video-bg",
-          {
-            body: {
-              manifest: {
-                world: sceneManifest.world || songDna?.description || "",
-                backgroundSystem: sceneManifest.backgroundSystem || system,
-                lightSource: sceneManifest.lightSource || "moonlight",
-                tension: sceneManifest.tension ?? 0.5,
-                palette: sceneManifest.palette || palette.slice(0, 3),
-                coreEmotion: sceneManifest.coreEmotion || songDna?.mood || "brooding",
-              },
-              userDirection: songDna?.description || undefined,
-            },
-          }
-        );
-        if (!bgError && bgData?.imageUrl) {
-          backgroundUrl = bgData.imageUrl;
-        } else {
-          console.warn("Background generation skipped:", bgError || "no imageUrl");
-        }
-      } catch (bgErr) {
-        console.warn("Background generation failed (non-fatal):", bgErr);
-      }
+      const backgroundUrl: string | null = null;
 
       // ── Filter to main lines ──────────────────────────────────────
       const mainLines = lines.filter(l => l.tag !== "adlib");
