@@ -689,10 +689,7 @@ export class LyricDancePlayer {
         font,
         width,
       });
-      if (i === 0) console.log('[PLAYER] first chunk set — size now:', this.chunks.size);
     }
-
-    console.log('[PLAYER] buildChunkCache done — chunks:', this.chunks.size);
   }
 
   private buildBgCache(): void {

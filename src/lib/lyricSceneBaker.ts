@@ -313,13 +313,6 @@ function bakeFrame(
     const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
     const chunkScale = lineActive && visible ? scale : 1.0;
 
-    if (frameIndex === 100) {
-      console.log('[BAKER frame 100] cameraZoom:', state.currentZoom,
-        'springOffset:', state.springOffset,
-        'springVelocity:', state.springVelocity,
-        'beatIndex:', beatIndex,
-        'active chunk scale:', chunkScale, 'lineActive:', lineActive);
-    }
 
     chunks.push({
       id: `${idx}`,
