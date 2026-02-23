@@ -529,72 +529,14 @@ export function LyricDisplay({
     if (profile?.fontFamily) void ensureTypographyProfileReady(profile);
   }, [initialSongDna]);
 
-  // Auto-generate cinematic direction if song DNA exists but direction is missing
-  const cinematicGenAttempted = useRef(false);
-  useEffect(() => {
-    if (cinematicGenAttempted.current) return;
-    if (!songDna || (songDna as any).cinematic_direction) return;
-    if (!data?.lines?.length || !data.title) return;
-    cinematicGenAttempted.current = true;
-
-    const lyricsForDirection = data.lines
-      .filter((l) => l.tag !== "adlib")
-      .map((l) => ({ text: l.text, start: l.start, end: l.end }));
-    console.log("[LyricDisplay] Auto-generating cinematic direction for existing project");
-    supabase.functions.invoke("cinematic-direction", {
-      body: {
-        title: data.title,
-        artist: data.artist,
-        lines: lyricsForDirection,
-        beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
-        lyricId: currentSavedId || undefined,
-      },
-    }).then(({ data: dirResult }) => {
-      if (dirResult?.cinematicDirection) {
-        setSongDna((prev: any) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
-      }
-    }).catch((e) => console.warn("[LyricDisplay] cinematic direction auto-gen failed:", e));
-  }, [songDna, data, beatGrid, currentSavedId]);
-
   // Reset Song DNA when audio file changes (e.g. reupload)
   const audioFileRef = useRef(audioFile);
   useEffect(() => {
     if (audioFile !== audioFileRef.current) {
       audioFileRef.current = audioFile;
       setSongDna(null);
-      setDnaRequested(false);
-      setDnaLoading(false);
-      setBackgroundImageUrl(null);
-      setIsGeneratingBackground(false);
     }
   }, [audioFile]);
-
-  const generateBackgroundImage = useCallback(
-    async (manifest: FullSceneManifest, userDirection?: string) => {
-      setIsGeneratingBackground(true);
-      try {
-        const { data: bgResult, error: bgError } = await supabase.functions.invoke(
-          "lyric-video-bg",
-          {
-            body: {
-              manifest,
-              userDirection,
-            },
-          },
-        );
-        if (bgError) throw bgError;
-        const url = bgResult?.imageUrl ?? null;
-        setBackgroundImageUrl(url);
-      } catch (error) {
-        console.warn("[lyric-video-bg] background generation failed:", error);
-      } finally {
-        setIsGeneratingBackground(false);
-      }
-    },
-    [],
-  );
-
-
 
   useEffect(() => {
     if (!songDna) return;
@@ -607,14 +549,6 @@ export function LyricDisplay({
     animationResolver.loadFromDna(songDna as Record<string, unknown>);
 
   }, [songDna]);
-
-  useEffect(() => {
-    console.log("[LyricDisplay] backgroundImageUrl:",
-      backgroundImageUrl
-        ? backgroundImageUrl.slice(0, 80) + "..."
-        : "null — image not yet generated or failed"
-    );
-  }, [backgroundImageUrl]);
   const fetchSongDna = useCallback(async () => {
     if (dnaLoading || songDna) return;
     setDnaLoading(true);
