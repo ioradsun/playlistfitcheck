@@ -459,7 +459,7 @@ export default function ShareableLyricDance() {
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const totalDuration = Math.max(0.001, songEnd - songStart);
     const hookStartTimes = lines
-      .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0).isHookLine)
+      .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0, effectivePalette).isHookLine)
       .map(line => line.start)
       .sort((a, b) => a - b);
 
@@ -534,7 +534,7 @@ export default function ShareableLyricDance() {
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
 
       const lineAnim = activeLine
-        ? animationResolver.resolveLine(activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity)
+        ? animationResolver.resolveLine(activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette)
         : null;
       const isInHook = lineAnim?.isHookLine ?? false;
       const hookProgress = lineAnim
@@ -735,7 +735,8 @@ export default function ShareableLyricDance() {
         frameEffectKey = effectKey;
         const drawFn = getEffect(effectKey);
 
-        const activeLineAnim = lineAnim ?? animationResolver.resolveLine(
+        // Resolve animation mods via AnimationResolver
+        const activeLineAnim = animationResolver.resolveLine(
           activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette,
         );
         frameActiveMod = activeLineAnim.activeMod;

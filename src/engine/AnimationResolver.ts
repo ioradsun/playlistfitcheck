@@ -191,6 +191,8 @@ export class AnimationResolver {
     const repetitionScale = this.repetitionScales.get(lineIndex) ?? 1;
     const fontScale = baseFontScale * repetitionScale;
 
+    const fontScale = this.resolveFontScale(activeMod);
+
     return {
       entryProgress,
       exitProgress,
