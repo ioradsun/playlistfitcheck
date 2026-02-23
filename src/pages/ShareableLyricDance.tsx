@@ -520,7 +520,7 @@ function snapToNearestBeat(timestamp: number, beats: number[], tolerance: number
   return Math.abs(nearest - timestamp) < tolerance ? nearest : timestamp;
 }
 
-const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,song_dna,cinematic_direction,background_url";
+const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,cinematic_direction,background_url";
 
 /** Draggable progress bar overlay at bottom of canvas */
 function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
