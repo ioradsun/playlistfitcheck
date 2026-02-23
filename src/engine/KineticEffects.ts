@@ -2,8 +2,6 @@ export function applyKineticEffect(
   ctx: CanvasRenderingContext2D,
   kineticClass: string,
   word: string,
-  wordX: number,
-  wordY: number,
   wordWidth: number,
   fontSize: number,
   currentTime: number,
@@ -20,8 +18,8 @@ export function applyKineticEffect(
       ctx.translate(0, sinkDepth + sinkBob);
       // Shadow copies above — trail of where it was
       ctx.globalAlpha *= 0.2;
-      ctx.fillText(word, wordX, wordY - 10);
-      ctx.fillText(word, wordX, wordY - 20);
+      ctx.fillText(word, 0, -10);
+      ctx.fillText(word, 0, -20);
       ctx.globalAlpha /= 0.2;
       ctx.translate(0, -(sinkDepth + sinkBob));
       break;
@@ -30,13 +28,13 @@ export function applyKineticEffect(
     case "RUNNING": {
       // Horizontal stretch + motion blur trail
       ctx.save();
-      ctx.translate(wordX + wordWidth / 2, wordY);
+      ctx.translate(wordWidth / 2, 0);
       ctx.scale(1.12, 1.0);
-      ctx.translate(-(wordX + wordWidth / 2), -wordY);
+      ctx.translate(-wordWidth / 2, 0);
       // Trail copies behind
       for (let t = 1; t <= 3; t += 1) {
         ctx.globalAlpha = 0.25 / t;
-        ctx.fillText(word, wordX - (t * 8), wordY);
+        ctx.fillText(word, -(t * 8), 0);
       }
       ctx.globalAlpha = 1;
       ctx.restore();
@@ -68,14 +66,14 @@ export function applyKineticEffect(
       // Expands slightly, magnetic aura
       const envelope = 1 + Math.sin(currentTime * 1.5) * 0.04;
       ctx.save();
-      ctx.translate(wordX + wordWidth / 2, wordY);
+      ctx.translate(wordWidth / 2, 0);
       ctx.scale(envelope, envelope);
-      ctx.translate(-(wordX + wordWidth / 2), -wordY);
+      ctx.translate(-wordWidth / 2, 0);
       // Aura ring
       ctx.beginPath();
       ctx.ellipse(
-        wordX + wordWidth / 2,
-        wordY - fontSize / 2,
+        wordWidth / 2,
+        -fontSize / 2,
         (wordWidth / 2) * (1.2 + appearanceCount * 0.08),
         (fontSize / 2) * (1.2 + appearanceCount * 0.08),
         0,
@@ -96,10 +94,10 @@ export function applyKineticEffect(
       ctx.save();
       // Red channel offset
       ctx.fillStyle = "rgba(255,0,0,0.4)";
-      ctx.fillText(word, wordX + jx + 2, wordY + jy);
+      ctx.fillText(word, jx + 2, jy);
       // Blue channel offset
       ctx.fillStyle = "rgba(0,0,255,0.4)";
-      ctx.fillText(word, wordX + jx - 2, wordY + jy);
+      ctx.fillText(word, jx - 2, jy);
       ctx.restore();
       // Main word drawn after with normal color
       ctx.translate(jx * 0.3, jy * 0.3);
@@ -111,8 +109,8 @@ export function applyKineticEffect(
       const riseY = -(currentTime % 3) * 1.5;
       ctx.translate(0, riseY % (-fontSize * 0.3));
       ctx.globalAlpha *= 0.2;
-      ctx.fillText(word, wordX, wordY + 10);
-      ctx.fillText(word, wordX, wordY + 20);
+      ctx.fillText(word, 0, 10);
+      ctx.fillText(word, 0, 20);
       ctx.globalAlpha /= 0.2;
       break;
     }
