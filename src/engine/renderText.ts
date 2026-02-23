@@ -585,7 +585,7 @@ export function renderText(
       if (lastPos) {
         ctx.save();
         ctx.globalAlpha = 0.08;
-        ctx.fillStyle = directive.colorOverride ?? "#ffffff";
+        ctx.fillStyle = directive.colorOverride ?? effectivePalette[2] ?? "#ffffff";
         ctx.fillText(displayWord, lastPos.x, lastPos.y);
         ctx.restore();
       }
@@ -601,8 +601,10 @@ export function renderText(
     }
 
     if (isHeroWord) {
+      // Hero words use accent color from palette
+      props.color = effectivePalette[1] ?? props.color;
       const heroGlow = ctx.createRadialGradient(0, -fontSize * 0.35, 0, 0, -fontSize * 0.35, fontSize * 1.8);
-      heroGlow.addColorStop(0, resolvedManifest.palette[2]);
+      heroGlow.addColorStop(0, effectivePalette[1] ?? resolvedManifest.palette[2]);
       heroGlow.addColorStop(1, "rgba(0,0,0,0)");
       ctx.save();
       ctx.globalAlpha *= 0.14;

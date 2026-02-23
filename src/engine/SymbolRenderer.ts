@@ -28,7 +28,7 @@ function renderMountain(
     ? 1 - ((songProgress - 0.5) * 2)
     : 1;
   const mountainHeight = height * 0.6 * Math.max(0.05, decayFactor);
-  const opacity = Math.max(0, decayFactor * 0.15);
+  const opacity = Math.max(0, decayFactor * 0.06);
 
   ctx.save();
   ctx.globalAlpha = opacity;
