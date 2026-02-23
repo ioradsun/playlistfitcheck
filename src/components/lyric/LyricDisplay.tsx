@@ -162,7 +162,6 @@ interface Props {
   } | null;
   debugData?: any | null;
   initialBeatGrid?: BeatGridData | null;
-  initialSongSignature?: SongSignature | null;
   initialSongDna?: any | null;
   initialBackgroundImageUrl?: string | null;
   onBack: () => void;
