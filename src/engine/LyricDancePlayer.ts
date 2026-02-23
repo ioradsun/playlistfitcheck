@@ -678,7 +678,6 @@ export class LyricDancePlayer {
     measureCtx.font = font;
 
     for (let i = 0; i < payload.lines.length; i++) {
-      if (i === 0) console.log('[PLAYER] first line text:', payload.lines[0]?.text);
       const text = payload.lines[i]?.text ?? '';
       const color = payload.palette?.[2] ?? '#ffffff';
       const width = measureCtx.measureText(text).width;
