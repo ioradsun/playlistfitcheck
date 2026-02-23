@@ -578,7 +578,7 @@ export default function ShareableLyricDance() {
       interpreterRef.current = null;
     }
     WordClassifier.setCinematicDirection(cinematicDirection);
-  }, [data?.cinematic_direction, data?.song_dna?.cinematic_direction, data?.lyrics]);
+  }, [data?.cinematic_direction, data?.lyrics]);
 
   useEffect(() => {
     interpreterRefStable.current = interpreterRef.current;
