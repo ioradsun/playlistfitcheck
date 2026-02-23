@@ -801,7 +801,7 @@ export default function ShareableLyricDance() {
       : resolvedManifest.palette;
     const effectiveSystem = resolvedManifest.backgroundSystem || spec.system;
 
-    const rawCinematicDirection = data.cinematic_direction ?? data.song_dna?.cinematic_direction ?? null;
+    const rawCinematicDirection = data.cinematic_direction ?? null;
     const cinematicDirection = rawCinematicDirection
       ? {
           ...rawCinematicDirection,
