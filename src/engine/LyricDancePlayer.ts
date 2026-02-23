@@ -543,10 +543,20 @@ export class LyricDancePlayer {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
 
-    // Background — no camera offset
+    // Background — no camera offset or zoom, always fills canvas
     if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
 
-    // Camera applies to text layer only
+    // Apply camera zoom — scale around canvas center
+    const zoom = frame.cameraZoom ?? 1.0;
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+
+    this.ctx.save();
+    this.ctx.translate(cx, cy);
+    this.ctx.scale(zoom, zoom);
+    this.ctx.translate(-cx, -cy);
+
+    // Camera drift on top of zoom
     this.ctx.translate(frame.cameraX, frame.cameraY);
 
     let drawCalls = 0;
@@ -554,9 +564,6 @@ export class LyricDancePlayer {
       if (!chunk.visible) continue;
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
-
-      const cx = this.width / 2;
-      const cy = this.height / 2;
 
       this.ctx.save();
       this.ctx.translate(cx, cy);
@@ -571,6 +578,8 @@ export class LyricDancePlayer {
       this.ctx.restore();
       drawCalls += 1;
     }
+
+    this.ctx.restore(); // restore zoom + drift transform
 
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
@@ -770,6 +779,7 @@ export class LyricDancePlayer {
       beatIndex: f.beatIndex,
       cameraX: f.cameraX * sx,
       cameraY: f.cameraY * sy,
+      cameraZoom: f.cameraZoom,
       chunks: f.chunks.map((c) => ({
         id: c.id,
         x: c.x * sx,
@@ -791,6 +801,7 @@ export class LyricDancePlayer {
       beatIndex: f.beatIndex,
       cameraX: sx ? f.cameraX / sx : f.cameraX,
       cameraY: sy ? f.cameraY / sy : f.cameraY,
+      cameraZoom: f.cameraZoom,
       chunks: f.chunks.map((c) => ({
         id: c.id,
         x: sx ? c.x / sx : c.x,

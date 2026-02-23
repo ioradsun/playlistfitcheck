@@ -37,6 +37,7 @@ export type Keyframe = {
   }>;
   cameraX: number;
   cameraY: number;
+  cameraZoom: number;
   beatIndex: number;
 };
 
@@ -57,6 +58,12 @@ type TensionStageLike = {
   motionIntensity?: number;
 };
 
+type StoryboardEntryLike = {
+  startSec?: number;
+  endSec?: number;
+  shotType?: string;
+};
+
 type ChapterLike = {
   startRatio?: number;
   endRatio?: number;
@@ -69,6 +76,7 @@ type BakeState = {
   beatCursor: number;
   lastBeatIndex: number;
   pulseBudget: number;
+  currentZoom: number;
 };
 
 function getBeatIndex(tSec: number, state: BakeState): number {
@@ -139,6 +147,20 @@ function bakeFrame(
     (s) => tSec >= (s.startRatio ?? 0) && tSec < (s.endRatio ?? 9999),
   )?.motionIntensity ?? 0.5;
 
+  // Shot type → camera zoom
+  const shotZoomMap: Record<string, number> = {
+    'CloseUp': 1.25,
+    'Medium': 1.0,
+    'Wide': 0.82,
+    'FloatingInWorld': 0.95,
+  };
+  const storyboard = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
+  const currentShot = storyboard.find(
+    (s) => tSec >= (s.startSec ?? 0) && tSec < (s.endSec ?? 9999),
+  )?.shotType ?? 'Medium';
+  const targetZoom = shotZoomMap[currentShot] ?? 1.0;
+  state.currentZoom += (targetZoom - state.currentZoom) * 0.02;
+
   const chunks: Keyframe["chunks"] = [];
 
   for (let idx = 0; idx < payload.lines.length; idx += 1) {
@@ -204,6 +226,7 @@ function bakeFrame(
     chunks,
     cameraX: Math.sin(songProgress * Math.PI * 3.7) * 12 * tensionMotion,
     cameraY: Math.cos(songProgress * Math.PI * 2.3) * 7 * tensionMotion,
+    cameraZoom: state.currentZoom,
     beatIndex,
   };
 }
@@ -227,6 +250,7 @@ function createBakeState(payload: ScenePayload): BakeState {
     beatCursor: 0,
     lastBeatIndex: 0,
     pulseBudget: 0,
+    currentZoom: 1.0,
   };
 }
 
