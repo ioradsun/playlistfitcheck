@@ -11,6 +11,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
+import { Bug, ChevronDown, ChevronRight } from "lucide-react";
 
 import { mulberry32, hashSeed, PhysicsIntegrator } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
@@ -20,11 +21,140 @@ import { computeFitFontSize, computeStackedLayout, applyTypographyProfile } from
 import { ParticleEngine } from "@/engine/ParticleEngine";
 import { safeManifest } from "@/engine/validateManifest";
 import type { SceneManifest } from "@/engine/SceneManifest";
+import { animationResolver } from "@/engine/AnimationResolver";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import { getSessionId } from "@/lib/sessionId";
 import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
+
+/** Live debug state updated every frame from the render loop */
+interface LiveDebugState {
+  time: number;
+  beatIntensity: number;
+  beatIndex: number;
+  totalBeats: number;
+  bpm: number;
+  physHeat: number;
+  physDrift: number;
+  physGlow: number;
+  activeLine: string | null;
+  activeLineIndex: number;
+  effectKey: string;
+  effectSystem: string;
+  particleSystem: string;
+  palette: string[];
+  activeMod: string | null;
+  isHookLine: boolean;
+  beatMultiplier: number;
+  entryProgress: number;
+  exitProgress: number;
+  fontFamily: string;
+  fontSize: number;
+}
+
+/** Tiny live HUD overlay — polls a ref at 10 fps */
+function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebugState> }) {
+  const [open, setOpen] = useState(false);
+  const [snap, setSnap] = useState<LiveDebugState>(stateRef.current);
+  const [sections, setSections] = useState<Record<string, boolean>>({
+    beat: true, physics: true, line: true, engine: true, manifest: false,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    const id = setInterval(() => setSnap({ ...stateRef.current }), 100);
+    return () => clearInterval(id);
+  }, [open, stateRef]);
+
+  const toggle = (key: string) => setSections(s => ({ ...s, [key]: !s[key] }));
+
+  const Row = ({ label, value, highlight }: { label: string; value: string | number | null; highlight?: boolean }) => (
+    <div className="flex justify-between gap-3 text-[10px] font-mono leading-relaxed">
+      <span className="text-white/40 shrink-0">{label}</span>
+      <span className={highlight ? "text-amber-400" : "text-white/80"}>{value ?? "—"}</span>
+    </div>
+  );
+
+  const Section = ({ id, title, children }: { id: string; title: string; children: React.ReactNode }) => (
+    <div className="border-t border-white/10 first:border-t-0">
+      <button onClick={() => toggle(id)} className="w-full flex items-center gap-1 py-1.5 text-[9px] font-mono uppercase tracking-wider text-white/30 hover:text-white/60">
+        {sections[id] ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        {title}
+      </button>
+      {sections[id] && <div className="pb-2 space-y-0.5">{children}</div>}
+    </div>
+  );
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(!open)}
+        className="fixed top-4 right-4 z-[100] flex items-center gap-1.5 rounded-full bg-black/80 backdrop-blur border border-white/10 px-3 py-1.5 text-[10px] font-mono text-white/50 hover:text-white/80 shadow-lg transition-colors"
+      >
+        <Bug size={12} />
+        Live
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="fixed top-14 right-4 z-[100] w-[280px] max-h-[70vh] overflow-y-auto rounded-lg bg-black/90 backdrop-blur-md border border-white/10 shadow-2xl p-3 space-y-0"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/60">Live Engine State</span>
+              <span className="text-[9px] font-mono text-white/30">{snap.time.toFixed(2)}s</span>
+            </div>
+
+            <Section id="beat" title="Beat Grid">
+              <Row label="beatIntensity" value={snap.beatIntensity.toFixed(2)} highlight={snap.beatIntensity > 0} />
+              <Row label="beatIndex" value={`${snap.beatIndex} / ${snap.totalBeats}`} />
+              <Row label="BPM" value={snap.bpm.toFixed(1)} />
+            </Section>
+
+            <Section id="physics" title="Physics State">
+              <Row label="heat" value={snap.physHeat.toFixed(3)} highlight={snap.physHeat > 0.5} />
+              <Row label="drift" value={snap.physDrift.toFixed(3)} />
+              <Row label="glow" value={snap.physGlow.toFixed(3)} highlight={snap.physGlow > 0.3} />
+            </Section>
+
+            <Section id="line" title="Active Line">
+              <Row label="index" value={snap.activeLineIndex >= 0 ? snap.activeLineIndex : "none"} />
+              <Row label="text" value={snap.activeLine ? (snap.activeLine.length > 30 ? snap.activeLine.slice(0, 30) + "…" : snap.activeLine) : "—"} />
+              <Row label="activeMod" value={snap.activeMod} highlight={snap.activeMod !== null} />
+              <Row label="isHookLine" value={snap.isHookLine ? "YES" : "no"} highlight={snap.isHookLine} />
+              <Row label="beatMultiplier" value={snap.beatMultiplier.toFixed(2)} />
+              <Row label="entry" value={snap.entryProgress.toFixed(2)} />
+              <Row label="exit" value={snap.exitProgress.toFixed(2)} />
+            </Section>
+
+            <Section id="engine" title="Engine Config">
+              <Row label="effectKey" value={snap.effectKey} />
+              <Row label="effectSystem" value={snap.effectSystem} />
+              <Row label="particleSystem" value={snap.particleSystem} highlight={snap.particleSystem !== "none"} />
+              <Row label="fontFamily" value={snap.fontFamily} />
+              <Row label="fontSize" value={`${snap.fontSize}px`} />
+            </Section>
+
+            <Section id="manifest" title="Palette">
+              <div className="flex gap-1">
+                {snap.palette.map((c, i) => (
+                  <div key={i} className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-sm border border-white/20" style={{ background: c }} />
+                    <span className="text-[9px] font-mono text-white/50">{c}</span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
 
 interface LyricDanceData {
   id: string;
@@ -123,6 +253,15 @@ export default function ShareableLyricDance() {
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [fireCount, setFireCount] = useState(0);
 
+  // Live debug ref — written by render loop, read by HUD
+  const liveDebugRef = useRef<LiveDebugState>({
+    time: 0, beatIntensity: 0, beatIndex: 0, totalBeats: 0, bpm: 0,
+    physHeat: 0, physDrift: 0, physGlow: 0,
+    activeLine: null, activeLineIndex: -1,
+    effectKey: "—", effectSystem: "—", particleSystem: "none",
+    palette: [], activeMod: null, isHookLine: false, beatMultiplier: 1,
+    entryProgress: 0, exitProgress: 0, fontFamily: "—", fontSize: 0,
+  });
   // Comment input (ShareableHook-style)
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -286,6 +425,20 @@ export default function ShareableLyricDance() {
     if (resolvedManifest && resolvedManifest.particleConfig?.system !== "none") {
       particleEngine = new ParticleEngine(resolvedManifest);
     }
+
+    // Load AnimationResolver with song DNA
+    animationResolver.loadFromDna(
+      { physics_spec: spec, physicsSpec: spec } as any,
+      lines.map(l => ({ text: l.text, start: l.start })),
+    );
+
+    const particleSystemName = resolvedManifest?.particleConfig?.system
+      ?? (spec as any)?.particleConfig?.system
+      ?? "none";
+
+    const typeFontFamily = resolvedManifest?.typographyProfile?.fontFamily
+      ?? (spec as any)?.typographyProfile?.fontFamily
+      ?? "system-ui";
 
     const integrator = new PhysicsIntegrator(spec);
     const rng = mulberry32(hashSeed(data.seed || data.id));
@@ -494,13 +647,32 @@ export default function ShareableLyricDance() {
       ctx.globalAlpha = 1;
 
       // Active line
+      let frameEffectKey = "—";
+      let frameFontSize = 0;
+      let frameActiveMod: string | null = null;
+      let frameIsHook = false;
+      let frameBeatMult = 1;
+      let frameEntry = 0;
+      let frameExit = 0;
+
       if (activeLine) {
         let effectKey = "STATIC_RESOLVE";
         if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
           const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
           effectKey = spec.effect_pool[poolIdx];
         }
+        frameEffectKey = effectKey;
         const drawFn = getEffect(effectKey);
+
+        // Resolve animation mods via AnimationResolver
+        const lineAnim = animationResolver.resolveLine(
+          activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity,
+        );
+        frameActiveMod = lineAnim.activeMod;
+        frameIsHook = lineAnim.isHookLine;
+        frameBeatMult = lineAnim.beatMultiplier;
+        frameEntry = lineAnim.entryProgress;
+        frameExit = lineAnim.exitProgress;
 
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
@@ -509,6 +681,7 @@ export default function ShareableLyricDance() {
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
           ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
           : computeFitFontSize(ctx, activeLine.text, cw, effectiveSystem);
+        frameFontSize = fs;
 
         ctx.save();
         const effectState: EffectState = {
@@ -532,7 +705,29 @@ export default function ShareableLyricDance() {
         particleEngine.draw(ctx);
       }
 
-      // Progress bar — rendered via HTML overlay now, skip canvas bar
+      // ── Update live debug ref (no React setState — zero GC pressure) ──
+      const dbg = liveDebugRef.current;
+      dbg.time = currentTime;
+      dbg.beatIntensity = currentBeatIntensity;
+      dbg.beatIndex = beatIndex;
+      dbg.totalBeats = sortedBeats.length;
+      dbg.bpm = data.beat_grid.bpm;
+      dbg.physHeat = state.heat;
+      dbg.physDrift = state.position;
+      dbg.physGlow = state.glow;
+      dbg.activeLine = activeLine?.text ?? null;
+      dbg.activeLineIndex = activeLineIndex;
+      dbg.effectKey = frameEffectKey;
+      dbg.effectSystem = effectiveSystem;
+      dbg.particleSystem = particleSystemName;
+      dbg.palette = effectivePalette as string[];
+      dbg.activeMod = frameActiveMod;
+      dbg.isHookLine = frameIsHook;
+      dbg.beatMultiplier = frameBeatMult;
+      dbg.entryProgress = frameEntry;
+      dbg.exitProgress = frameExit;
+      dbg.fontFamily = typeFontFamily;
+      dbg.fontSize = frameFontSize;
 
       prevTime = currentTime;
     };
@@ -862,7 +1057,10 @@ export default function ShareableLyricDance() {
         </div>
       </div>
 
-      {/* Debug Panel */}
+      {/* Live Debug HUD — real-time engine values */}
+      <LiveDebugHUD stateRef={liveDebugRef} />
+
+      {/* Static Debug Panel — song DNA, beat grid, manifest */}
       <LyricDanceDebugPanel
         data={{
           songDna: {
