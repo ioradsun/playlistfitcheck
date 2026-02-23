@@ -22,12 +22,14 @@ export class AnimationResolver {
   private wordMarks = new Map<string, string>();
   private hookRanges: Array<{ start: number; end: number }> = [];
   private repetitionByLineIndex = new Map<number, { repetitionIndex: number; repetitionTotal: number }>();
+  private repetitionScales = new Map<number, number>();
 
   loadFromDna(dna: Record<string, unknown>, lines?: Array<{ text: string; start: number }>): void {
     this.lineMods.clear();
     this.wordMarks.clear();
     this.hookRanges = [];
     this.repetitionByLineIndex.clear();
+    this.repetitionScales.clear();
 
     const lexicon = (dna?.physics_spec as any)?.lexicon ?? (dna?.physicsSpec as any)?.lexicon;
 
@@ -185,6 +187,9 @@ export class AnimationResolver {
     const scale = isHookLine
       ? 1.0 + beatIntensity * 0.12
       : 1.0 + beatIntensity * 0.04;
+    const baseFontScale = this.resolveFontScale(activeMod);
+    const repetitionScale = this.repetitionScales.get(lineIndex) ?? 1;
+    const fontScale = baseFontScale * repetitionScale;
 
     return {
       entryProgress,
