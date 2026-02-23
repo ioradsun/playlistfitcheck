@@ -683,7 +683,7 @@ serve(async (req) => {
 
     // ── Stage 1: Transcription only (Song DNA is now a separate on-demand call) ──
     const transcribePromise = useGeminiTranscription
-      ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics.trim() : undefined)
+      ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined)
       : runScribe(audioBase64, ext, mimeType, ELEVENLABS_API_KEY!);
 
     const [transcribeResult] = await Promise.allSettled([transcribePromise]);
