@@ -202,18 +202,22 @@ export function LyricFitTab({
         .select("id")
         .maybeSingle();
       if (error) {
+        console.warn("[persistSongDna] error attempt", attempt, error.message);
         if (attempt < 3) return persistSongDna(id, payload, attempt + 1);
         return false;
       }
       if (!updated) {
+        console.warn("[persistSongDna] no row matched attempt", attempt, id);
         if (attempt < 3) {
           await new Promise(r => setTimeout(r, 1000));
           return persistSongDna(id, payload, attempt + 1);
         }
         return false;
       }
+      console.log("[persistSongDna] success", id);
       return true;
-    } catch {
+    } catch (e) {
+      console.warn("[persistSongDna] exception attempt", attempt, e);
       if (attempt < 3) return persistSongDna(id, payload, attempt + 1);
       return false;
     }
