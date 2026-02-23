@@ -1053,13 +1053,14 @@ export default function ShareableLyricDance() {
       const isClimax = interpreterNow?.isClimaxMoment(songProgress) ?? false;
       climaxActiveRef.current = isClimax;
 
-      // Camera shake on strong downbeats only (horizontal shake 3x vertical).
+      // Camera shake — only on very strong downbeats, subtle and deterministic
       ctx.save();
       ctx.translate(0, silenceOffsetYRef.current);
       ctx.scale(silenceZoomRef.current, silenceZoomRef.current);
-      if (currentBeatIntensity > 0.75) {
-        const shakeX = (Math.random() - 0.5) * currentBeatIntensity * 6;
-        const shakeY = (Math.random() - 0.5) * currentBeatIntensity * 2;
+      if (currentBeatIntensity > 0.92) {
+        const shakePhase = currentTime * 37.7;
+        const shakeX = Math.sin(shakePhase) * (currentBeatIntensity - 0.92) * 15;
+        const shakeY = Math.cos(shakePhase * 1.3) * (currentBeatIntensity - 0.92) * 5;
         ctx.translate(shakeX, shakeY);
       }
 
