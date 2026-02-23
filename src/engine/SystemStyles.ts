@@ -215,41 +215,34 @@ export function getRelativeLuminance(hex: string): number {
   return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
 }
 
-export function getSafeTextColor(palette: [string, string, string]): string {
+export function getSafeTextColor(palette: [string, string, string] | string[]): string {
   const bg = palette?.[0] ?? "#111111";
   const candidate = palette?.[2] ?? "#ffffff";
+  const mid = palette?.[1] ?? "#888888";
   const bgLum = getRelativeLuminance(bg);
   const candLum = getRelativeLuminance(candidate);
   const ratio = (Math.max(candLum, bgLum) + 0.05) / (Math.min(candLum, bgLum) + 0.05);
 
-  if (ratio >= 5.0) {
-    console.log("[getSafeTextColor]", {
-      input: normalizeHex(candidate),
-      luminance: Number(candLum.toFixed(3)),
-      ratio: Number(ratio.toFixed(2)),
-      output: normalizeHex(candidate),
-    });
+  // Candidate passes contrast check
+  if (ratio >= 4.5) {
     return normalizeHex(candidate);
   }
 
+  // Try mid-tone color
+  const midLum = getRelativeLuminance(mid);
+  const midRatio = (Math.max(midLum, bgLum) + 0.05) / (Math.min(midLum, bgLum) + 0.05);
+  if (midRatio >= 4.5) {
+    return normalizeHex(mid);
+  }
+
+  // On dark backgrounds (lum < 0.2), ALWAYS prefer white — never return near-black
   const whiteRatio = (1.0 + 0.05) / (bgLum + 0.05);
-  if (whiteRatio >= 5.0) {
-    console.log("[getSafeTextColor]", {
-      input: normalizeHex(candidate),
-      luminance: Number(candLum.toFixed(3)),
-      ratio: Number(ratio.toFixed(2)),
-      output: "#ffffff",
-    });
+  if (bgLum < 0.2 || whiteRatio >= 3.0) {
     return "#ffffff";
   }
 
-  console.log("[getSafeTextColor]", {
-    input: normalizeHex(candidate),
-    luminance: Number(candLum.toFixed(3)),
-    ratio: Number(ratio.toFixed(2)),
-    output: "#0a0a0a",
-  });
-  return "#0a0a0a";
+  // On light backgrounds, use dark text
+  return "#111111";
 }
 
 export function getTypographyScale(personality: string | undefined): number {

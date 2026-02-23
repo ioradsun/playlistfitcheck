@@ -17,13 +17,12 @@ import { mulberry32, hashSeed, PhysicsIntegrator } from "@/engine/PhysicsIntegra
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
-import { computeFitFontSize, computeStackedLayout, applyTypographyProfile } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { ParticleEngine } from "@/engine/ParticleEngine";
-import { safeManifest } from "@/engine/validateManifest";
 import type { SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
-import { getSafeTextColor } from "@/engine/SystemStyles";
+import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -53,6 +52,10 @@ interface LiveDebugState {
   exitProgress: number;
   fontFamily: string;
   fontSize: number;
+  textColor: string;
+  contrastRatio: number;
+  lyricEntrance: string;
+  lyricExit: string;
 }
 
 /** Tiny live HUD overlay — polls a ref at 10 fps */
@@ -139,10 +142,14 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
               <Row label="particleSystem" value={snap.particleSystem} highlight={snap.particleSystem !== "none"} />
               <Row label="fontFamily" value={snap.fontFamily} />
               <Row label="fontSize" value={`${snap.fontSize}px`} />
+              <Row label="entrance" value={snap.lyricEntrance} />
+              <Row label="exit" value={snap.lyricExit} />
             </Section>
 
-            <Section id="manifest" title="Palette">
-              <div className="flex gap-1">
+            <Section id="manifest" title="Palette & Contrast">
+              <Row label="textColor" value={snap.textColor} highlight />
+              <Row label="contrast" value={`${snap.contrastRatio.toFixed(1)}:1`} highlight={snap.contrastRatio < 4.5} />
+              <div className="flex gap-1 mt-1">
                 {snap.palette.map((c, i) => (
                   <div key={i} className="flex items-center gap-1">
                     <div className="w-3 h-3 rounded-sm border border-white/20" style={{ background: c }} />
@@ -263,6 +270,7 @@ export default function ShareableLyricDance() {
     effectKey: "—", effectSystem: "—", particleSystem: "none",
     palette: [], activeMod: null, isHookLine: false, beatMultiplier: 1,
     entryProgress: 0, exitProgress: 0, fontFamily: "—", fontSize: 0,
+    textColor: "#ffffff", contrastRatio: 0, lyricEntrance: "fades", lyricExit: "fades",
   });
   // Comment input (ShareableHook-style)
   const [inputText, setInputText] = useState("");
@@ -408,28 +416,19 @@ export default function ShareableLyricDance() {
     const spec = data.physics_spec;
     const lines = data.lyrics;
 
-    // ── Derive SceneManifest from stored data ──────────────────────────────
-    const rawManifest = data.scene_manifest as Record<string, unknown> | null;
-    const { manifest, valid: manifestValid } = rawManifest ? safeManifest(rawManifest) : { manifest: null as any, valid: false };
-    const resolvedManifest: SceneManifest | null = manifestValid ? manifest : null;
-    const effectivePalette = resolvedManifest?.palette || data.palette || ["#ffffff", "#a855f7", "#ec4899"];
-    const effectiveSystem = resolvedManifest?.backgroundSystem || spec.system;
+    // ── Derive SceneManifest via shared pipeline ─────────────────────────────
+    const { manifest: resolvedManifest, textPalette, textColor, contrastRatio } = deriveCanvasManifest({
+      physicsSpec: spec,
+      storedManifest: data.scene_manifest as Record<string, unknown> | null,
+      fallbackPalette: data.palette,
+      systemType: data.system_type,
+    });
+    const effectivePalette = resolvedManifest.palette;
+    const effectiveSystem = resolvedManifest.backgroundSystem || spec.system;
 
-    // Construct text-safe palette for effects: palette[0] must be a readable text color,
-    // NOT the background color. SceneManifest palette is [bg, mid, accent].
-    const safeTextColor = getSafeTextColor(effectivePalette as [string, string, string]);
-    const textPalette = [safeTextColor, effectivePalette[1] || "#a855f7", effectivePalette[2] || "#ec4899"];
-
-    // Apply typography profile from manifest so SystemStyles uses correct font
-    if (resolvedManifest?.typographyProfile) {
-      applyTypographyProfile(resolvedManifest.typographyProfile);
-    } else if (spec.typographyProfile) {
-      applyTypographyProfile(spec.typographyProfile as any);
-    }
-
-    // Initialise particle engine if manifest defines particles
+    // Initialise particle engine
     let particleEngine: ParticleEngine | null = null;
-    if (resolvedManifest && resolvedManifest.particleConfig?.system !== "none") {
+    if (resolvedManifest.particleConfig?.system !== "none") {
       particleEngine = new ParticleEngine(resolvedManifest);
     }
 
@@ -439,13 +438,8 @@ export default function ShareableLyricDance() {
       lines.map(l => ({ text: l.text, start: l.start })),
     );
 
-    const particleSystemName = resolvedManifest?.particleConfig?.system
-      ?? (spec as any)?.particleConfig?.system
-      ?? "none";
-
-    const typeFontFamily = resolvedManifest?.typographyProfile?.fontFamily
-      ?? (spec as any)?.typographyProfile?.fontFamily
-      ?? "system-ui";
+    const particleSystemName = resolvedManifest.particleConfig?.system ?? "none";
+    const typeFontFamily = resolvedManifest.typographyProfile?.fontFamily ?? "system-ui";
 
     const integrator = new PhysicsIntegrator(spec);
     const rng = mulberry32(hashSeed(data.seed || data.id));
@@ -778,6 +772,24 @@ export default function ShareableLyricDance() {
       dbg.exitProgress = frameExit;
       dbg.fontFamily = typeFontFamily;
       dbg.fontSize = frameFontSize;
+      dbg.textColor = textColor;
+      dbg.contrastRatio = contrastRatio;
+      dbg.lyricEntrance = resolvedManifest.lyricEntrance ?? "fades";
+      dbg.lyricExit = resolvedManifest.lyricExit ?? "fades";
+
+      // 1Hz diagnostic log
+      logManifestDiagnostics("LyricDance", {
+        palette: effectivePalette as string[],
+        fontFamily: typeFontFamily,
+        particleSystem: particleSystemName,
+        beatIntensity: currentBeatIntensity,
+        activeMod: frameActiveMod,
+        entryProgress: frameEntry,
+        exitProgress: frameExit,
+        textColor,
+        contrastRatio,
+        effectKey: frameEffectKey,
+      });
 
       prevTime = currentTime;
     };

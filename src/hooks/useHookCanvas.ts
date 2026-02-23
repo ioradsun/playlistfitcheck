@@ -6,12 +6,13 @@
 import { useRef, useCallback, useEffect } from "react";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
-import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSafeTextColor, getSystemStyle } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSystemStyle } from "@/engine/SystemStyles";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver, type WordAnimation } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect, applyWordMark, getWordMarkColor } from "@/engine/LyricAnimations";
+import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import { useBeatIntensity } from "@/hooks/useBeatIntensity";
@@ -181,7 +182,11 @@ export function useHookCanvas(
     const safeW = Math.max(1, w - safePad * 2);
     const safeH = Math.max(1, h - safePad * 2);
     const palette = hd.palette || ["#ffffff", "#a855f7", "#ec4899"];
-    const textColor = getSafeTextColor([palette[0] ?? "#111111", palette[1] ?? "#666666", palette[2] ?? "#ffffff"]);
+    const { manifest, textColor, contrastRatio, textPalette } = deriveCanvasManifest({
+      physicsSpec: hd.physics_spec as PhysicsSpec,
+      fallbackPalette: palette,
+      systemType: hd.system_type,
+    });
 
     // Keep physics motion budgets tied to real lyric container dimensions.
     engineRef.current?.setViewportBounds(w, h);
@@ -329,12 +334,8 @@ export function useHookCanvas(
 
       const fs = layoutResult?.fontSize ?? baseFs;
 
-      const manifest = {
-        lyricEntrance: "fades",
-        lyricExit: "fades",
-        palette: [palette[0] ?? "#111111", palette[1] ?? "#666666", palette[2] ?? "#ffffff"],
-        typographyProfile: spec.typographyProfile,
-      } as SceneManifest;
+      // Use shared manifest derived at the top of drawCanvas
+      // (manifest variable is already available from deriveCanvasManifest)
 
       // AnimationResolver is a singleton — always available after loadFromDna()
       const anim = animationResolver.resolveLine(
@@ -344,16 +345,19 @@ export function useHookCanvas(
         ct,
         beatIntensityRef.current,
       );
-      const isFirstLine = true;
-      if (isFirstLine) {
-        console.log('[draw] line anim:', {
-          text: activeLine.text.slice(0, 20),
-          entryProgress: anim.entryProgress,
-          exitProgress: anim.exitProgress,
-          activeMod: anim.activeMod,
-          scale: anim.scale,
-        });
-      }
+      // 1Hz diagnostic log
+      logManifestDiagnostics("HookDance", {
+        palette: manifest.palette as string[],
+        fontFamily: manifest.typographyProfile?.fontFamily ?? "—",
+        particleSystem: manifest.particleConfig?.system ?? "none",
+        beatIntensity: beatIntensityRef.current,
+        activeMod: anim.activeMod,
+        entryProgress: anim.entryProgress,
+        exitProgress: anim.exitProgress,
+        textColor,
+        contrastRatio,
+        effectKey: currentEffectKey,
+      });
 
       ctx.save();
       const lineX = w / 2;
@@ -384,7 +388,7 @@ export function useHookCanvas(
         }
         ctx.fillStyle = wordAnim
           ? getWordMarkColor(wordAnim.mark, manifest)
-          : getSafeTextColor(manifest.palette);
+          : textColor;
         ctx.fillText(word, wordX, lineY);
         ctx.restore();
         wordX += ctx.measureText(`${word} `).width;
