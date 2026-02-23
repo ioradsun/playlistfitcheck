@@ -1238,9 +1238,9 @@ export default function ShareableLyricDance() {
         ctx.translate(shakeX, shakeY);
       }
 
-      // Background
-      ctx.fillStyle = "#0a0a0a";
-      ctx.fillRect(0, 0, cw, ch);
+      // Background — draw on bgCanvas only; text canvas stays transparent
+      bgCtx.fillStyle = "#0a0a0a";
+      bgCtx.fillRect(0, 0, cw, ch);
 
       const chapterForRender = chapterDirective ?? {
         startRatio: 0,
@@ -1355,11 +1355,9 @@ export default function ShareableLyricDance() {
         timedParticleConfig.density = Math.min(timedParticleConfig.density, maxParticles / 300);
         particleEngine.update(deltaMs, currentBeatIntensity, timedParticleConfig);
         particleFrameRef.current += 1;
-        if (particleFrameRef.current % 2 === 0) {
-          particleCtx.clearRect(0, 0, cw, ch);
-          particleEngine.draw(particleCtx, "all");
-          drawCalls += 1;
-        }
+        particleCtx.clearRect(0, 0, cw, ch);
+        particleEngine.draw(particleCtx, "all");
+        drawCalls += 1;
       }
 
       // Pre-hook darkness build (skipped during hook itself).
