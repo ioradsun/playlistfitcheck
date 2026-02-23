@@ -1177,7 +1177,7 @@ export default function ShareableLyricDance() {
         ? getActiveShot(activeLineIndex, cinematicDirection?.shotProgression)
         : null;
       const chapterCamera = camera?.distanceByChapter
-        .find((d) => d.chapterIndex === activeChapterIndex);
+        ?.find((d: any) => d.chapterIndex === activeChapterIndex) ?? null;
       const targetZoom = distanceToZoom[chapterCamera?.distance ?? 'Wide'] ?? 1.0;
       cameraZoomRef.current += (targetZoom - cameraZoomRef.current) * 0.005;
       const nextLine = lines.find(l => l.start > currentTime) ?? null;
