@@ -16,23 +16,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
-import { getTextShadow } from "@/engine/LightingSystem";
 import { getSymbolStateForProgress } from "@/engine/BackgroundDirector";
 import { renderBackground, renderParticles, type BackgroundState, type ParticleState } from "@/engine/renderFrame";
-import { renderText, type TextState, type TextResult } from "@/engine/renderText";
-import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
-import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
+import { renderText, type TextState } from "@/engine/renderText";
 import { ParticleEngine } from "@/engine/ParticleEngine";
 import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver } from "@/engine/AnimationResolver";
-import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
 import { deriveCanvasManifest } from "@/engine/deriveCanvasManifest";
-import { applyKineticEffect } from "../engine/KineticEffects";
-import { drawElementalWord } from "../engine/ElementalEffects";
 import BeatAnalyzerWorker from "@/workers/beatAnalyzer.worker?worker";
 import * as WordClassifier from "@/engine/WordClassifier";
 import { DirectionInterpreter, getActiveShot, getCurrentTensionStage } from "@/engine/DirectionInterpreter";
-import type { WordHistory } from "@/engine/DirectionInterpreter";
 import type { CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
@@ -300,115 +293,6 @@ function hexToRgbString(hex: string): string {
   return `${r},${g},${b}`;
 }
 
-function ensureContrast(color: string, bg: string): string {
-  const normalizeHex = (value: string): string => {
-    if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
-    return "#ffffff";
-  };
-  const c = normalizeHex(color);
-  const b = normalizeHex(bg);
-  const toRgb = (v: string) => [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)] as const;
-  const luminance = ([r, g, bb]: readonly number[]) => (0.2126 * r + 0.7152 * g + 0.0722 * bb) / 255;
-  const cr = toRgb(c);
-  const br = toRgb(b);
-  if (Math.abs(luminance(cr) - luminance(br)) > 0.2) return c;
-  return luminance(br) > 0.5 ? "#111111" : "#f8fafc";
-}
-
-function drawBubbles(
-  ctx: CanvasRenderingContext2D,
-  wordX: number,
-  wordY: number,
-  wordWidth: number,
-  fontSize: number,
-  bubbleCount: number,
-  bubbleSpeed: number,
-  currentTime: number,
-): void {
-  for (let i = 0; i < bubbleCount; i += 1) {
-    const bx = wordX - wordWidth / 2 + (i / Math.max(1, bubbleCount - 1)) * wordWidth;
-    const rise = (currentTime * 18 * bubbleSpeed + i * 8) % (fontSize * 1.8);
-    const by = wordY - rise;
-    const alpha = Math.max(0.1, 0.8 - rise / (fontSize * 2));
-    ctx.beginPath();
-    ctx.arc(bx, by, 1.6 + (i % 3), 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(180,220,255,${alpha})`;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-}
-
-
-function drawWithLetterSpacing(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  letterSpacing: string,
-): void {
-  const parsedSpacing = Number.parseFloat(letterSpacing);
-  const spacingPx = Number.isFinite(parsedSpacing)
-    ? parsedSpacing * Number.parseFloat(ctx.font) * 0.5
-    : 0;
-
-  if (spacingPx === 0 || text.length <= 1) {
-    ctx.fillText(text, x, y);
-    return;
-  }
-
-  const glyphWidths = Array.from(text).map((char) => ctx.measureText(char).width);
-  const totalWidth = glyphWidths.reduce((sum, width) => sum + width, 0) + spacingPx * (text.length - 1);
-  const originalAlign = ctx.textAlign;
-  const startX = originalAlign === "center"
-    ? x - totalWidth / 2
-    : originalAlign === "right" || originalAlign === "end"
-      ? x - totalWidth
-      : x;
-
-  ctx.textAlign = "left";
-  let cursorX = startX;
-  Array.from(text).forEach((char, index) => {
-    ctx.fillText(char, cursorX, y);
-    cursorX += glyphWidths[index] + spacingPx;
-  });
-  ctx.textAlign = originalAlign;
-}
-function getBackgroundSystemForTime(
-  manifest: SceneManifest,
-  songProgress: number,
-  beatIntensity: number,
-): string {
-  const base = manifest.backgroundSystem as string;
-  const progress = clamp01(songProgress);
-  const beat = clamp01(beatIntensity);
-
-  // FIRE worlds — smoke → burn → ash arc
-  if (base === "burn") {
-    if (progress < 0.15) return "haze";
-    if (progress < 0.35) return "burn";
-    if (progress < 0.55) return beat > 0.85 ? "ember" : "burn";
-    if (progress < 0.75) return "haze";
-    return "ember";
-  }
-
-  // RAIN worlds — drizzle → downpour → clearing
-  if (base === "rain" || base === "breath") {
-    if (progress < 0.20) return "mist";
-    if (progress < 0.50) return "rain";
-    if (progress < 0.70) return "downpour";
-    return "mist";
-  }
-
-  // COLD worlds — frost → storm → frost
-  if (base === "frost" || base === "winter") {
-    if (progress < 0.30) return "frost";
-    if (progress < 0.60) return "blizzard";
-    return "frost";
-  }
-
-  // Default — return base system unchanged
-  return base;
-}
 
 function getSongSection(progress: number): string {
   if (progress < 0.08) return "intro";
@@ -480,14 +364,6 @@ function buildLineBeatMap(lines: LyricLine[], beatGrid: BeatGrid): LineBeatMap[]
       lastBeat: lineBeats[lineBeats.length - 1] ?? line.end,
     };
   });
-}
-
-function snapToNearestBeat(timestamp: number, beats: number[], tolerance: number = 0.1): number {
-  if (beats.length === 0) return timestamp;
-  const nearest = beats.reduce((prev, curr) => (
-    Math.abs(curr - timestamp) < Math.abs(prev - timestamp) ? curr : prev
-  ));
-  return Math.abs(nearest - timestamp) < tolerance ? nearest : timestamp;
 }
 
 const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,cinematic_direction";
@@ -588,7 +464,16 @@ export default function ShareableLyricDance() {
     current: null,
     progress: 1,
   });
-  const wordHistoryRef = useRef<Map<string, WordHistory>>(new Map());
+  const textStateRef = useRef<TextState>({
+    xOffset: 0,
+    yBase: 0,
+    beatScale: 1,
+    wordCounts: new Map(),
+    seenAppearances: new Set(),
+    wordHistory: new Map(),
+    directiveCache: new Map(),
+    evolutionCache: new Map(),
+  });
   const climaxActiveRef = useRef(false);
   const silenceOffsetYRef = useRef(0);
   const silenceZoomRef = useRef(1);
@@ -617,16 +502,9 @@ export default function ShareableLyricDance() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
   const rngRef = useRef<() => number>(() => 0);
-  const xOffsetRef = useRef(0);
-  const yBaseRef = useRef(0);
-  const wordCountRef = useRef<Map<string, number>>(new Map());
-  const seenWordAppearancesRef = useRef<Set<string>>(new Set());
-  const beatScaleRef = useRef(1);
   const lineBeatMapRef = useRef<LineBeatMap[]>([]);
   const wordMeasureCache = useRef<Map<string, number>>(new Map());
-  const evolutionCacheRef = useRef<Map<string, { count: number; scale: number; glow: number; opacity: number; yOffset: number }>>(new Map());
   const particleStateRef = useRef<ParticleState>({ configCache: { bucket: -1, config: null }, slowFrameCount: 0, adaptiveMaxParticles: 0, frameCount: 0 });
-  const directiveCacheRef = useRef<Map<string, WordDirective | null>>(new Map());
   const chapterBoundaryRef = useRef<{ key: number; chapter: ReturnType<DirectionInterpreter["getCurrentChapter"]> | null }>({ key: -1, chapter: null });
   const tensionBoundaryRef = useRef<{ key: number; stage: TensionStage | null }>({ key: -1, stage: null });
   const bgStateRef = useRef<BackgroundState>({ lastChapterTitle: "", lastBeatIntensity: 0, lastProgress: 0, lastDrawTime: 0 });
@@ -635,10 +513,10 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     wordMeasureCache.current.clear();
-    evolutionCacheRef.current.clear();
+    textStateRef.current.evolutionCache.clear();
+    textStateRef.current.directiveCache.clear();
     interpreterRef.current?.invalidateEvolutionCache();
     interpreterRefStable.current?.invalidateEvolutionCache();
-    directiveCacheRef.current.clear();
   }, [data?.lyrics?.length]);
 
 
@@ -966,7 +844,7 @@ export default function ShareableLyricDance() {
       textCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       wordMeasureCache.current.clear();
       wordWidthIntCache.clear();
-      evolutionCacheRef.current.clear();
+      textStateRef.current.evolutionCache.clear();
       interpreterRef.current?.invalidateEvolutionCache();
       constellationDirty = true;
       if (particleEngine) {
@@ -1011,7 +889,7 @@ export default function ShareableLyricDance() {
       const currentTime = audio.currentTime;
       const interpreterNow = interpreterRefStable.current;
 
-      if (yBaseRef.current === 0) yBaseRef.current = ch * 0.5;
+      if (textStateRef.current.yBase === 0) textStateRef.current.yBase = ch * 0.5;
 
       if (currentTime >= songEnd) {
         audio.currentTime = songStart;
@@ -1092,9 +970,9 @@ export default function ShareableLyricDance() {
         if (Math.abs(silenceOffsetYRef.current) < 0.1) silenceOffsetYRef.current = 0;
         if (Math.abs(silenceZoomRef.current - 1) < 0.001) silenceZoomRef.current = 1;
       }
-      const baselineY = yBaseRef.current === 0 ? ch * 0.5 : yBaseRef.current;
+      const baselineY = textStateRef.current.yBase === 0 ? ch * 0.5 : textStateRef.current.yBase;
       let activeWordPosition = {
-        x: cw / 2 + xOffsetRef.current + state.offsetX,
+        x: cw / 2 + textStateRef.current.xOffset + state.offsetX,
         y: baselineY + state.offsetY,
       };
 
@@ -1214,8 +1092,7 @@ export default function ShareableLyricDance() {
         ctx.fillRect(0, 0, cw, ch);
       }
 
-      // Beat scale baseline decay.
-      beatScaleRef.current = Math.max(1, beatScaleRef.current * 0.9);
+      // Beat scale baseline decay — now handled inside renderText via textState.beatScale
 
       // ── Comment rendering (constellation + river + center) ──
       // Perf opt 2: render constellation/river to offscreen canvas at 10fps, blit in rAF
@@ -1325,592 +1202,55 @@ export default function ShareableLyricDance() {
       }
       ctx.globalAlpha = 1;
 
-      // Active line
-      let frameEffectKey = "—";
-      let frameFontSize = 0;
-      let frameActiveMod: string | null = null;
-      let frameIsHook = false;
-      let frameBeatMult = 1;
-      let frameEntry = 0;
-      let frameExit = 0;
-      let frameFontScale = 1;
-      let frameScale = 1;
-      let frameLineColor = "#ffffff";
-      let frameRepIndex = 0;
-      let frameRepTotal = 0;
-      let frameXNudge = 0;
-      let frameSectionZone = "chorus";
-
-      const getDirectiveEffectKey = (directive: WordDirective | null): string | null => {
-        if (!directive) return null;
-        if (directive.kineticClass === "NEGATION" || directive.kineticClass === "BREAKING") return "SHATTER_IN";
-        if (directive.kineticClass === "RUNNING" || directive.kineticClass === "RISING") return "WAVE_SURGE";
-        if (directive.kineticClass === "SHAKING" || directive.kineticClass === "SCREAMING") return "GLITCH_FLASH";
-        if (directive.kineticClass === "WHISPERING" || directive.kineticClass === "TENDER") return "SOFT_BLOOM";
-        if (directive.elementalClass === "FIRE") return "HEAT_WARP";
-        if (directive.elementalClass === "RAIN") return "RAIN_VEIL";
-        if (directive.elementalClass === "ELECTRIC" || directive.elementalClass === "NEON") return "GLITCH_FLASH";
-        return null;
-      };
-
+      // Active line — delegated to renderText engine
       const visibleLines = lines.filter(l => currentTime >= l.start && currentTime < l.end);
-
-      if (activeLine) {
-        // Map mod-style keys to actual effect registry keys for variety
-        let effectKey = "STATIC_RESOLVE";
-        if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
-          const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
-          effectKey = resolveEffectKey(spec.effect_pool[poolIdx]);
-        }
-
-        const lineDirection = interpreterNow?.getLineDirection(activeLineIndex) ?? null;
-        const lineHeroDirective = lineDirection?.heroWord
-          ? interpreterNow?.getWordDirective(lineDirection.heroWord) ?? null
-          : null;
-        const directiveEffect = getDirectiveEffectKey(lineHeroDirective);
-        if (directiveEffect) {
-          effectKey = directiveEffect;
-        }
-        frameEffectKey = effectKey;
-        const drawFn = getEffect(effectKey);
-
-        // Resolve animation mods via AnimationResolver
-        const activeLineAnim = animationResolver.resolveLine(
-          activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette,
-        );
-        frameActiveMod = activeLineAnim.activeMod;
-        frameIsHook = activeLineAnim.isHookLine;
-        frameBeatMult = activeLineAnim.beatMultiplier;
-        frameEntry = activeLineAnim.entryProgress;
-        frameExit = activeLineAnim.exitProgress;
-        frameFontScale = activeLineAnim.fontScale;
-        frameScale = activeLineAnim.scale;
-        frameLineColor = activeLineAnim.lineColor;
-        frameRepIndex = 0;
-        frameRepTotal = 0;
-
-        const age = (currentTime - activeLine.start) * 1000;
-        const lineDur = activeLine.end - activeLine.start;
-        const lineProgress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-        let lineOpacity = 1;
-        let entryOverride: string | null = null;
-        let exitOverride: string | null = null;
-        let useLetterFragmentation = false;
-        let drawSymbolOverText = false;
-
-        switch (shot?.shotType) {
-          case 'SubmergedInSymbol':
-            ctx.fillStyle = 'rgba(100,150,220,0.08)';
-            ctx.fillRect(0, 0, cw, ch);
-            lineOpacity = 0.85;
-            break;
-          case 'EmergingFromSymbol':
-            entryOverride = 'materializes';
-            break;
-          case 'ConsumedBySymbol':
-            exitOverride = 'dissolves-upward';
-            drawSymbolOverText = true;
-            break;
-          case 'FragmentedBySymbol':
-            useLetterFragmentation = true;
-            break;
-          case 'AloneInVoid':
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            ctx.fillRect(0, 0, cw, ch);
-            particleEngine?.setDensityMultiplier(0.05);
-            break;
-          case 'FloatingInWorld':
-          case 'ReflectedInSymbol':
-          default:
-            break;
-        }
-        const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, effectiveSystem);
-        const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
-          ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
-          : computeFitFontSize(ctx, activeLine.text, cw, effectiveSystem);
-        const typoAggression = tensionStage?.typographyAggression ?? 0.5;
-        const baseWordScale = 0.9 + typoAggression * 0.4;
-        const fontSize = fs * activeLineAnim.fontScale * baseWordScale;
-        frameFontSize = fontSize;
-
-        const targetXOffset = 0;
-        const sectionProgress = songProgress;
-        let sectionZone: "verse" | "chorus" | "bridge" | "hook" | "outro" = "chorus";
-        if (sectionProgress < 0.33) sectionZone = "verse";
-        else if (sectionProgress < 0.6) sectionZone = "chorus";
-        else if (sectionProgress < 0.75) sectionZone = "bridge";
-        else sectionZone = "outro";
-        if (activeLineAnim.isHookLine) sectionZone = "hook";
-        frameSectionZone = sectionZone;
-
-        const strongMods = new Set(["PULSE_STRONG", "HEAT_SPIKE", "ERUPT", "FLAME_BURST", "EXPLODE"]);
-        const softMods = new Set(["BLUR_OUT", "ECHO_FADE", "DISSOLVE", "FADE_OUT", "FADE_OUT_FAST"]);
-        let targetYBase = ch * 0.5;
-        if (activeLineAnim.isHookLine) {
-          targetYBase = ch * 0.44;
-        } else if (activeLineAnim.activeMod && strongMods.has(activeLineAnim.activeMod)) {
-          targetYBase = ch * 0.46;
-        } else if (activeLineAnim.activeMod && softMods.has(activeLineAnim.activeMod)) {
-          targetYBase = ch * 0.54;
-        }
-
-        const lineSpacing = visibleLines.length <= 1
-          ? ch * 0.12
-          : visibleLines.length <= 2
-            ? ch * 0.09
-            : ch * 0.07;
-
-        const visibleIndex = Math.max(0, visibleLines.findIndex(l => l.start === activeLine.start && l.end === activeLine.end && l.text === activeLine.text));
-        const yLineOffset = (visibleIndex - (visibleLines.length - 1) / 2) * lineSpacing;
-        targetYBase += yLineOffset;
-
-        if (activeLineAnim.isHookLine) {
-          targetYBase -= ch * 0.03;
-        }
-
-        xOffsetRef.current += (targetXOffset - xOffsetRef.current) * 0.05;
-        yBaseRef.current += (targetYBase - yBaseRef.current) * 0.05;
-
-        const nudge = currentBeatIntensity * 3;
-        let xNudge = 0;
-        let yNudge = 0;
-        switch (resolvedManifest.lightSource) {
-          case "flickering left":
-          case "left":
-            xNudge = -nudge;
-            break;
-          case "right":
-          case "flickering right":
-            xNudge = nudge;
-            break;
-          case "golden hour":
-          case "warm overhead":
-            yNudge = -nudge * 0.5;
-            break;
-          case "winter daylight":
-          case "dead of night":
-            yNudge = nudge * 0.3;
-            break;
-          default:
-            xNudge = 0;
-            yNudge = 0;
-            break;
-        }
-
-        frameXNudge = xNudge;
-        // Physics-driven shake: deterministic angle from beat index + time
-        const physShakeAngle = (beatIndex * 2.3 + currentTime * 7.1) % (Math.PI * 2);
-        const physShakeX = Math.cos(physShakeAngle) * state.shake;
-        const physShakeY = Math.sin(physShakeAngle) * state.shake;
-        const lineX = cw / 2 + xOffsetRef.current + xNudge + state.offsetX + physShakeX;
-        const lineY = yBaseRef.current + yNudge + state.offsetY + physShakeY;
-        activeWordPosition = { x: lineX, y: lineY };
-
-        const textShadow = getTextShadow(timelineManifest, currentBeatIntensity);
-
-        ctx.save();
-
-        // Compute entrance/exit alpha (these also apply ctx transforms for entrance/exit motion)
-        const lyricEntrance = (entryOverride as any) ?? lineDirection?.entryStyle ?? resolvedManifest?.lyricEntrance ?? "fades";
-        const lyricExit = (exitOverride as any) ?? lineDirection?.exitStyle ?? resolvedManifest?.lyricExit ?? "fades";
-        const entryAlpha = applyEntrance(ctx, activeLineAnim.entryProgress, lyricEntrance, { spatialZone: sectionZone });
-        const exitAlpha = activeLineAnim.exitProgress > 0
-          ? applyExit(ctx, activeLineAnim.exitProgress, lyricExit)
-          : 1.0;
-        const compositeAlpha = Math.min(entryAlpha, exitAlpha) * lineOpacity;
-
-        ctx.translate(lineX, lineY);
-        // Keep lyrics horizontal by default; only apply transient beat-impact rotation.
-        if (Math.abs(state.rotation) > 0.0001) {
-          ctx.rotate(state.rotation);
-        }
-        ctx.scale(activeLineAnim.scale * state.scale * beatScaleRef.current, activeLineAnim.scale * state.scale * beatScaleRef.current);
-        ctx.translate(-lineX, -lineY);
-
-        if (activeLineAnim.activeMod) {
-          applyModEffect(ctx, activeLineAnim.activeMod, currentTime, currentBeatIntensity);
-        }
-        const words = activeLine.text.split(/\s+/).filter(Boolean);
-        const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
-        const wordsPerSecond = words.length > 0 ? words.length / lineDuration : 1;
-        const wordDelay = wordsPerSecond > 0 ? 1 / wordsPerSecond : lineDuration;
-        const visibleWordCount = words.filter((_, i) => currentTime >= activeLine.start + i * wordDelay).length;
-        const drawWords = words.slice(0, visibleWordCount).map((text) => ({ text }));
-
-        const wordCount = words.length;
-        const isShort = wordCount <= 3;
-        const isFast = lineDuration < 1.5;
-        const hasImpactWord = words.some(word => WordClassifier.classifyWord(word) === "IMPACT");
-        type DisplayMode = "single_word" | "phrase_stack" | "two_line_stack";
-        const displayMode: DisplayMode = (activeLineAnim.isHookLine || isShort || hasImpactWord)
-          ? "single_word"
-          : isFast
-            ? "two_line_stack"
-            : "phrase_stack";
-
-        const previousLine = activeLineIndex > 0 ? lines[activeLineIndex - 1] : null;
-        if (displayMode === "two_line_stack" && previousLine) {
-          ctx.save();
-          ctx.font = `${Math.max(14, fontSize * 0.86)}px Inter, ui-sans-serif, system-ui`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "alphabetic";
-          ctx.fillStyle = activeLineAnim.lineColor;
-          ctx.globalAlpha = 0.25 * compositeAlpha;
-          ctx.fillText(previousLine.text, lineX, lineY - Math.max(40, fontSize * 1.5));
-          ctx.restore();
-        }
-
-        const renderedWords = displayMode === "single_word"
-          ? drawWords.slice(-1)
-          : displayMode === "two_line_stack"
-            ? words.map((text) => ({ text }))
-            : drawWords;
-
-        const measuredWordWidths = renderedWords.map(word => getWordWidth(word.text, fontSize, "Inter, ui-sans-serif, system-ui"));
-        const baseSpaceWidth = getWordWidth(" ", fontSize, "Inter, ui-sans-serif, system-ui");
-        const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, renderedWords.length - 1) * baseSpaceWidth;
-        let cursorX = displayMode === "single_word" ? lineX : lineX - totalWidth / 2;
-
-        if (renderedWords.length > 0) {
-          const activeWordIndex = Math.max(0, renderedWords.length - 1);
-          const priorWidth = measuredWordWidths
-            .slice(0, activeWordIndex)
-            .reduce((sum, width) => sum + width, 0) + activeWordIndex * baseSpaceWidth;
-          const activeWidth = measuredWordWidths[activeWordIndex] ?? 0;
-          activeWordPosition = {
-            x: (displayMode === "single_word" ? lineX : lineX - totalWidth / 2) + priorWidth + activeWidth / 2,
-            y: lineY,
-          };
-        }
-
-        const getCachedDirective = (wordText: string): WordDirective | null => {
-          const key = wordText.toLowerCase();
-          if (!directiveCacheRef.current.has(key)) {
-            directiveCacheRef.current.set(key, interpreterNow?.getWordDirective(wordText) ?? null);
-          }
-          return directiveCacheRef.current.get(key) ?? null;
-        };
-
-        renderedWords.forEach((word, renderedIndex) => {
-          const normalizedWord = word.text.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
-          const sourceWordIndex = displayMode === "single_word"
-            ? Math.max(0, visibleWordCount - 1)
-            : renderedIndex;
-          const unsnappedWordStartTime = activeLine.start + Math.max(0, sourceWordIndex) * wordDelay;
-          const resolvedWordStartTime = snapToNearestBeat(unsnappedWordStartTime, sortedBeats);
-          const appearanceKey = `${activeLine.start}:${Math.max(0, sourceWordIndex)}:${normalizedWord}`;
-
-          if (!seenWordAppearancesRef.current.has(appearanceKey) && currentTime >= resolvedWordStartTime) {
-            const nextCount = (wordCountRef.current.get(normalizedWord) ?? 0) + 1;
-            wordCountRef.current.set(normalizedWord, nextCount);
-            seenWordAppearancesRef.current.add(appearanceKey);
-          }
-
-          const props = WordClassifier.getWordVisualProps(
-            word.text,
-            Math.max(0, sourceWordIndex),
-            Math.max(1, renderedWords.length),
-            activeLineAnim,
-            currentBeatIntensity,
-            wordCountRef.current.get(word.text) ?? 0,
-          );
-
-          const directive = getCachedDirective(word.text);
-          if (directive?.colorOverride) {
-            props.color = directive.colorOverride;
-          }
-          if (typeof directive?.emphasisLevel === "number") {
-            props.scale = props.scale * (1 + directive.emphasisLevel * 0.2);
-            props.opacity = Math.max(props.opacity, 0.75 + directive.emphasisLevel * 0.2);
-          }
-
-          if (currentTime < resolvedWordStartTime) {
-            return;
-          }
-
-          const wordWidth = getWordWidth(word.text, fontSize, "Inter, ui-sans-serif, system-ui");
-          const wordCenterX = displayMode === "single_word"
-            ? lineX
-            : cursorX + wordWidth / 2;
-          const wordX = wordCenterX;
-          let wordY = lineY;
-
-          ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "alphabetic";
-          const wordRenderWidth = getWordWidth(word.text, fontSize, "Inter, ui-sans-serif, system-ui");
-          const existingHistory = wordHistoryRef.current.get(normalizedWord);
-          const appearance = existingHistory?.count ?? 0;
-          const appearanceCount = appearance + 1;
-          const historyForRule: WordHistory = {
-            count: appearanceCount,
-            firstSeen: existingHistory?.firstSeen ?? currentTime,
-            lastSeen: currentTime,
-            positions: [...(existingHistory?.positions ?? []), { x: wordX, y: wordY }],
-          };
-
-          if (directive?.evolutionRule && normalizedWord === "down") {
-            const fallSpeed = 1 + appearanceCount * 0.3;
-            wordY += Math.sin(currentTime * fallSpeed) * 3;
-          }
-
-          const isHeroWord = Boolean(lineDirection?.heroWord && word.text.toLowerCase().includes(lineDirection.heroWord.toLowerCase()));
-          const modeOpacity = displayMode === "phrase_stack"
-            ? (renderedIndex === renderedWords.length - 1 ? 1 : 0.4)
-            : 1;
-
-          const fragmentationX = useLetterFragmentation ? (rng() - 0.5) * 6 : 0;
-          const fragmentationY = useLetterFragmentation ? (rng() - 0.5) * 4 : 0;
-          const finalX = wordX + props.xOffset + fragmentationX;
-          const finalY = wordY + props.yOffset + fragmentationY;
-
-          if (finalX < -wordRenderWidth || finalX > cw + wordRenderWidth || finalY < -fontSize || finalY > ch + fontSize) {
-            return;
-          }
-
-          if (historyForRule.positions.length > 1 && directive?.evolutionRule) {
-            const lastPos = historyForRule.positions[historyForRule.positions.length - 2];
-            if (lastPos) {
-              ctx.save();
-              ctx.globalAlpha = 0.08;
-              ctx.fillStyle = directive.colorOverride ?? "#ffffff";
-              ctx.fillText(word.text, lastPos.x, lastPos.y);
-              ctx.restore();
-            }
-          }
-
-          ctx.save();
-          ctx.translate(finalX, finalY);
-          ctx.scale(props.scale, props.scale);
-
-          if (directive?.emphasisLevel) {
-            const emphasisScale = 0.8 + directive.emphasisLevel * 0.5;
-            ctx.scale(emphasisScale, emphasisScale);
-          }
-
-          if (isHeroWord) {
-            const heroGlow = ctx.createRadialGradient(0, -fontSize * 0.35, 0, 0, -fontSize * 0.35, fontSize * 1.8);
-            heroGlow.addColorStop(0, resolvedManifest.palette[2]);
-            heroGlow.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.save();
-            ctx.globalAlpha *= 0.14;
-            ctx.fillStyle = heroGlow;
-            ctx.fillRect(-wordRenderWidth * 0.35, -fontSize * 1.6, wordRenderWidth * 1.7, fontSize * 2.7);
-            ctx.restore();
-            ctx.scale(1.2, 1.2);
-          }
-
-          let evolutionScale = 1;
-          let evolutionGlow = 0;
-          let evolutionOpacity = 1;
-          let evolutionYOffset = 0;
-
-          if (directive?.evolutionRule) {
-            const evolutionKey = `${normalizedWord}:${directive.evolutionRule}`;
-            const cachedEvolution = evolutionCacheRef.current.get(evolutionKey);
-            if (cachedEvolution && cachedEvolution.count === appearanceCount) {
-              cacheLookups += 1;
-              cacheHits += 1;
-              evolutionScale = cachedEvolution.scale;
-              evolutionGlow = cachedEvolution.glow;
-              evolutionOpacity = cachedEvolution.opacity;
-              evolutionYOffset = cachedEvolution.yOffset;
-            } else {
-              const evolution = interpreterNow?.applyEvolutionRule(
-                ctx,
-                directive.evolutionRule,
-                historyForRule,
-                0,
-                0,
-                wordRenderWidth,
-                fontSize,
-                currentBeatIntensity,
-                resolvedManifest.palette,
-              );
-              evolutionScale = evolution?.scaleMultiplier ?? 1;
-              evolutionGlow = evolution?.glowRadius ?? 0;
-              evolutionOpacity = evolution?.opacityMultiplier ?? 1;
-              evolutionYOffset = evolution?.yOffset ?? 0;
-              evolutionCacheRef.current.set(evolutionKey, {
-                count: appearanceCount,
-                scale: evolutionScale,
-                glow: evolutionGlow,
-                opacity: evolutionOpacity,
-                yOffset: evolutionYOffset,
-              });
-            }
-          }
-
-          if (normalizedWord === "love" && directive?.evolutionRule) {
-            evolutionGlow = Math.max(evolutionGlow, Math.min(appearanceCount * 3, 15));
-            evolutionScale = Math.max(evolutionScale, 1 + Math.min(appearanceCount * 0.03, 0.15));
-            evolutionYOffset = Math.min(evolutionYOffset + Math.min(appearanceCount, 5), 10);
-          }
-
-          if (climaxActiveRef.current) {
-            evolutionScale = Math.max(evolutionScale, 1.08);
-            if (normalizedWord === "you") {
-              evolutionScale = Math.max(evolutionScale, 1.5);
-              evolutionGlow = Math.max(evolutionGlow, 30);
-            }
-          }
-
-          const climaxTimeRatio = cinematicDirection?.climax?.timeRatio ?? 0.65;
-          if (songProgress > climaxTimeRatio) {
-            const postClimaxDecay = Math.max(0, 1 - (songProgress - climaxTimeRatio) * 3);
-            evolutionScale = 1 + (evolutionScale - 1) * postClimaxDecay;
-            evolutionGlow *= postClimaxDecay;
-          }
-
-          if (evolutionScale !== 1) {
-            ctx.scale(evolutionScale, evolutionScale);
-          }
-          if (evolutionYOffset !== 0) {
-            ctx.translate(0, evolutionYOffset);
-          }
-
-          ctx.fillStyle = directive?.colorOverride ?? props.color;
-          ctx.globalAlpha = props.opacity * compositeAlpha * modeOpacity * evolutionOpacity;
-
-          if (props.glowRadius > 0 || evolutionGlow > 0) {
-            const glowRadius = Math.max(props.glowRadius, evolutionGlow, 1);
-            const glowColor = directive?.colorOverride ?? props.color;
-            const glow = ctx.createRadialGradient(0, -fontSize * 0.3, 0, 0, -fontSize * 0.3, glowRadius * 2.4);
-            glow.addColorStop(0, glowColor);
-            glow.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.save();
-            ctx.globalAlpha *= 0.16;
-            ctx.fillStyle = glow;
-            ctx.fillRect(-wordRenderWidth * 0.3, -fontSize - glowRadius, wordRenderWidth * 1.6, fontSize + glowRadius * 2);
-            ctx.restore();
-          }
-
-          if (directive?.kineticClass) {
-            applyKineticEffect(
-              ctx,
-              directive.kineticClass,
-              word.text,
-              wordRenderWidth,
-              fontSize,
-              currentTime,
-              currentBeatIntensity,
-              renderedIndex,
-              appearanceCount,
-              1 + appearanceCount * 0.3,
-            );
-          }
-
-          if (directive?.evolutionRule && normalizedWord === "drown") {
-            drawBubbles(
-              ctx,
-              0,
-              0,
-              wordRenderWidth,
-              fontSize,
-              Math.min(20, 3 + appearanceCount * 2),
-              1 + appearanceCount * 0.4,
-              currentTime,
-            );
-          }
-
-          if (directive?.elementalClass) {
-            const isMobile = window.innerWidth < 768;
-            const effectQuality = isMobile ? "low" : "high";
-            const maxBubbles = window.devicePixelRatio > 1 ? 8 : 4;
-            const bubbleCount = Math.min(maxBubbles, Math.max(3, appearanceCount + 2));
-            const bubbleXPositions = Array.from({ length: bubbleCount }, (_, i) => wordRenderWidth * (i / Math.max(1, bubbleCount)));
-            drawElementalWord(
-              ctx,
-              word.text,
-              fontSize,
-              wordRenderWidth,
-              directive.elementalClass,
-              currentTime,
-              currentBeatIntensity,
-              appearanceCount,
-              directive.colorOverride ?? null,
-              {
-                bubbleXPositions,
-                useBlur: navigator.hardwareConcurrency > 4,
-                isHeroWord,
-                effectQuality,
-                wordX: finalX,
-                wordY: finalY,
-                canvasWidth: cw,
-                canvasHeight: ch,
-              },
-            );
-          } else if (props.letterSpacing !== "0em") {
-            drawWithLetterSpacing(ctx, word.text, 0, 0, props.letterSpacing);
-          } else {
-            ctx.fillText(word.text, 0, 0);
-          }
-
-          // Reset glow
-          ctx.restore();
-
-          // Motion trail for MOTION class words
-          if (props.showTrail) {
-            for (let t = 1; t <= props.trailCount; t += 1) {
-              ctx.globalAlpha = (props.opacity * 0.3) / t;
-              ctx.fillText(word.text, finalX - (t * 4), finalY);
-            drawCalls += 1;
-            }
-          }
-
-          // Track word history for evolution
-          wordHistoryRef.current.set(normalizedWord, {
-            count: appearanceCount,
-            firstSeen: existingHistory?.firstSeen ?? currentTime,
-            lastSeen: currentTime,
-            positions: [
-              ...(existingHistory?.positions ?? []).slice(-4),
-              { x: wordX, y: wordY },
-            ],
-          });
-
-          ctx.globalAlpha = 1;
-          if (displayMode !== "single_word") {
-            cursorX += wordWidth + baseSpaceWidth;
-          }
-        });
-
-        if (drawWords.length === 0) {
-          if (textShadow.blur > 0) {
-            const fallbackGlow = ctx.createRadialGradient(cw * 0.5, ch * 0.5, 0, cw * 0.5, ch * 0.5, Math.max(cw, ch) * 0.4);
-            fallbackGlow.addColorStop(0, textShadow.color);
-            fallbackGlow.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.save();
-            ctx.globalAlpha *= 0.08;
-            ctx.fillStyle = fallbackGlow;
-            ctx.fillRect(0, 0, cw, ch);
-            ctx.restore();
-          }
-          const effectState: EffectState = {
-            text: activeLine.text,
-            physState: state,
-            w: cw,
-            h: ch,
-            fs: fontSize,
-            age,
-            progress: lineProgress,
-            rng,
-            palette: [activeLineAnim.lineColor, textPalette[1], textPalette[2]],
-            system: effectiveSystem,
-            effectiveLetterSpacing,
-            stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
-            alphaMultiplier: compositeAlpha,
-          };
-          drawFn(ctx, effectState);
-        }
-        if (drawSymbolOverText && symbol) {
-          ctx.save();
-          ctx.fillStyle = "rgba(180, 210, 255, 0.12)";
-          ctx.fillRect(0, 0, cw, ch);
-          ctx.restore();
-        }
-        ctx.restore();
-      }
+      const isMobile = window.innerWidth < 768;
+      const textResult = renderText(ctx, {
+        lines,
+        activeLine: activeLine ?? null,
+        activeLineIndex,
+        visibleLines,
+        currentTime,
+        songProgress,
+        beatIntensity: currentBeatIntensity,
+        beatIndex,
+        sortedBeats,
+        cw, ch,
+        effectivePalette,
+        effectiveSystem,
+        resolvedManifest,
+        textPalette,
+        spec,
+        state,
+        interpreter: interpreterNow ?? null,
+        shot,
+        tensionStage,
+        chapterDirective: chapterDirective ?? null,
+        cinematicDirection: cinematicDirection ?? null,
+        isClimax,
+        particleEngine,
+        rng,
+        getWordWidth,
+        isMobile,
+        hardwareConcurrency: navigator.hardwareConcurrency ?? 4,
+        devicePixelRatio: window.devicePixelRatio ?? 1,
+      }, textStateRef.current);
+      activeWordPosition = textResult.activeWordPosition;
+      drawCalls += textResult.drawCalls;
+      const frameEffectKey = textResult.effectKey;
+      const frameFontSize = textResult.fontSize;
+      const frameActiveMod = textResult.activeMod;
+      const frameIsHook = textResult.isHook;
+      const frameBeatMult = textResult.beatMult;
+      const frameEntry = textResult.entry;
+      const frameExit = textResult.exit;
+      const frameFontScale = textResult.fontScale;
+      const frameScale = textResult.scale;
+      const frameLineColor = textResult.lineColor;
+      const frameRepIndex = textResult.repIndex;
+      const frameRepTotal = textResult.repTotal;
+      const frameXNudge = textResult.xNudge;
+      const frameSectionZone = textResult.sectionZone;
 
       if (chapterTransitionRef.current.progress < 1 && chapterDirective) {
         const chapterTransitionProgress = chapterTransitionRef.current.progress;
@@ -1990,8 +1330,8 @@ export default function ShareableLyricDance() {
       dbg.particleCount = particleEngine?.getActiveCount() ?? 0;
       dbg.songSection = `${frameSectionZone || getSongSection(songProgress)} · ${beatDensity.toFixed(1)}bps`;
       // Position
-      dbg.xOffset = xOffsetRef.current;
-      dbg.yBase = yBaseRef.current / ch;
+      dbg.xOffset = textStateRef.current.xOffset;
+      dbg.yBase = textStateRef.current.yBase / ch;
       dbg.xNudge = frameXNudge;
       dbg.shake = state.shake;
       // Background
@@ -2036,7 +1376,7 @@ export default function ShareableLyricDance() {
       dbg.shotType = shot?.shotType ?? 'FloatingInWorld';
       dbg.shotDescription = shot?.description ?? '—';
       const normalizedHeroWord = (dbgHeroWord || "").toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
-      const trackedEvolution = dbgWordDir?.evolutionRule ? wordHistoryRef.current.get(normalizedHeroWord) : null;
+      const trackedEvolution = dbgWordDir?.evolutionRule ? textStateRef.current.wordHistory.get(normalizedHeroWord) : null;
       const evolutionCount = trackedEvolution?.count ?? 0;
       dbg.evolutionWord = dbgHeroWord || "—";
       dbg.evolutionCount = evolutionCount;
