@@ -20,9 +20,21 @@ export function useLyricDanceRenderer({
 }) {
   const workerRef = useRef<Worker | null>(null);
   const initializedRef = useRef(false);
+  const transferredRef = useRef(false);
 
   useEffect(() => {
     if (!payload || !canvasRef.current || workerRef.current) return;
+    if (transferredRef.current) return;
+
+    const canvas = canvasRef.current;
+    let offscreen: OffscreenCanvas;
+    try {
+      offscreen = canvas.transferControlToOffscreen();
+      transferredRef.current = true;
+    } catch {
+      // Canvas was already transferred (e.g. strict mode double-fire)
+      return;
+    }
 
     const worker = new LyricDanceRendererWorker();
     workerRef.current = worker;
@@ -31,9 +43,6 @@ export function useLyricDanceRenderer({
         onBakingProgress?.(event.data.progress);
       }
     };
-
-    const canvas = canvasRef.current;
-    const offscreen = canvas.transferControlToOffscreen();
 
     worker.postMessage(
       {
