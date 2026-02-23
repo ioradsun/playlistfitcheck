@@ -68,13 +68,13 @@ export function DirectorsCutPanel({
 
   const panelClasses = useMemo(
     () =>
-      `fixed z-[95] bg-background/95 backdrop-blur-md border-border/50 shadow-2xl transition-transform duration-300 ease-out ${
-        isOpen
-          ? "translate-x-0 md:translate-y-0"
-          : "translate-x-full md:translate-y-0"
-      } md:top-0 md:right-0 md:h-full md:w-[440px] md:border-l bottom-0 left-0 right-0 h-[85vh] border-t rounded-t-2xl md:rounded-none md:translate-x-0 ${
-        isOpen ? "translate-y-0" : "translate-y-full md:translate-y-0"
-      }`,
+      `fixed z-[95] bg-background/95 backdrop-blur-md border-border/50 shadow-2xl transition-transform duration-300 ease-out
+       bottom-0 left-0 right-0 h-[85vh] border-t rounded-t-2xl
+       md:top-0 md:right-0 md:left-auto md:bottom-0 md:h-full md:w-[440px] md:border-l md:rounded-none md:border-t-0
+       ${isOpen
+         ? "translate-y-0 md:translate-y-0 md:translate-x-0"
+         : "translate-y-full md:translate-y-0 md:translate-x-full pointer-events-none"
+       }`,
     [isOpen],
   );
 
