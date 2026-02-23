@@ -340,9 +340,22 @@ export class LyricDancePlayer {
       globalBakeLock = true;
       globalBakePromise = (async () => {
         const payload = this.buildScenePayload();
-        await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
-        globalTimelineCache = this.timeline.slice();
-        globalChunkCache = new Map(this.chunks);
+        this.payload = payload;
+        this.songStartSec = payload.songStart;
+        this.songEndSec = payload.songEnd;
+
+        // Build and capture chunks BEFORE the async bake
+        // so Strict Mode destroy() can't wipe them
+        this.buildChunkCache(payload);
+        const localChunkSnapshot = new Map(this.chunks);
+        console.log('[PLAYER] chunk snapshot — size:', localChunkSnapshot.size);
+
+        const baked = await bakeSceneChunked(payload, (pct) =>
+          console.log('[PLAYER] bake pct:', pct));
+
+        // Use the local snapshot not this.chunks (which destroy() may have wiped)
+        globalTimelineCache = this.scaleTimeline(baked);
+        globalChunkCache = localChunkSnapshot;
         globalBakeLock = false;
         console.log('[PLAYER] bake done — frames:', globalTimelineCache.length, 'chunks:', globalChunkCache.size);
       })();
