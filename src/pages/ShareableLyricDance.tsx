@@ -541,8 +541,9 @@ export default function ShareableLyricDance() {
             hookJustification: (data.physics_spec as any)?.hookJustification,
             secondHookJustification: (data.physics_spec as any)?.secondHookJustification,
             physicsSpec: data.physics_spec as any, scene_manifest: data.scene_manifest,
+            cinematic_direction: data.cinematic_direction as any,
           },
-          beatGrid: data.beat_grid, lines: data.lyrics,
+          beatGrid: data.beat_grid as any, lines: data.lyrics,
           title: data.song_name, artist: data.artist_name,
           overrides: {}, fingerprint: data.artist_dna,
         }}
