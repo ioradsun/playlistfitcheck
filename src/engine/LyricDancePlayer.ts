@@ -255,6 +255,8 @@ let globalBakeLock = false;
 let globalBakePromise: Promise<void> | null = null;
 let globalTimelineCache: ScaledKeyframe[] | null = null;
 let globalChunkCache: Map<string, ChunkState> | null = null;
+let globalSongStartSec = 0;
+let globalSongEndSec = 0;
 
 // ──────────────────────────────────────────────────────────────
 // Player
