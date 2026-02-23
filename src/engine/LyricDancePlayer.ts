@@ -404,7 +404,6 @@ export class LyricDancePlayer {
   // ────────────────────────────────────────────────────────────
 
   async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<Map<string, ChunkState>> {
-    console.log('[PLAYER] load() called — lines:', payload.lines.length);
     try {
       this.payload = payload;
       this.songStartSec = payload.songStart;
