@@ -82,6 +82,7 @@ export function getPhoneticClass(word: string): PhoneticClass {
 export function getWordVisualProps(
   word: string,
   wordIndex: number,
+  totalWords: number,
   lineAnim: LineAnimation,
   beatIntensity: number,
   appearanceCount: number,
@@ -89,6 +90,7 @@ export function getWordVisualProps(
   const wordClass = classifyWord(word);
   const phoneticClass = getPhoneticClass(word);
   const normalized = normalizeWord(word);
+  const linePosition = totalWords > 1 ? wordIndex / (totalWords - 1) : 0;
 
   const repetitionLevel = Math.max(0, appearanceCount - 1);
   const repetitionBoost = Math.min(0.3, repetitionLevel * 0.1);
@@ -102,7 +104,7 @@ export function getWordVisualProps(
     xOffset: 0,
     yOffset: 0,
     glowRadius: 0,
-    delay: wordIndex * 0.22,
+    delay: wordIndex * 0.22 + linePosition * 0.03,
     letterSpacing: "0em",
     showTrail: false,
     trailCount: 0,
