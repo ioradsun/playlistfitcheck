@@ -540,24 +540,12 @@ export class LyricDancePlayer {
 
   private draw(): void {
     const frame = this.getFrame(this.currentTimeMs);
-
-    if (this.currentTimeMs < 3000) {
-      const visibleChunks = frame?.chunks.filter(c => c.visible) ?? [];
-      console.log('[DRAW] timeMs:', Math.round(this.currentTimeMs),
-        'frame:', !!frame,
-        'visible chunks:', visibleChunks.length,
-        'first chunk:', visibleChunks[0]
-          ? `id=${visibleChunks[0].id} x=${Math.round(visibleChunks[0].x)} y=${Math.round(visibleChunks[0].y)} alpha=${visibleChunks[0].alpha}`
-          : 'none',
-        'canvas size:', this.width, 'x', this.height);
-    }
-
     if (!frame) return;
 
+    // Background — no camera offset
     if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
 
-    this.ctx.translate(frame.cameraX, frame.cameraY);
-
+    // Text drawn at true canvas center — no camera translate
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
@@ -570,7 +558,7 @@ export class LyricDancePlayer {
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.font = obj.font;
       this.ctx.fillStyle = obj.color;
-      this.ctx.fillText(obj.text, chunk.x, chunk.y);
+      this.ctx.fillText(obj.text, this.width / 2, this.height / 2);
       drawCalls += 1;
     }
 
