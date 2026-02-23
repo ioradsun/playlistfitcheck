@@ -126,7 +126,13 @@ export function LyricFitTab({
       if (savedBg) setBeatGrid(savedBg as BeatGridData);
 
       const loadedSongDna = (initialLyric as any).song_dna ?? null;
-      if (loadedSongDna) setSongDna(loadedSongDna);
+      if (loadedSongDna) {
+        setSongDna(loadedSongDna);
+        // Restore cinematicDirection if persisted inside song_dna
+        if ((loadedSongDna as any).cinematicDirection) {
+          setCinematicDirection((loadedSongDna as any).cinematicDirection);
+        }
+      }
 
       const savedSignature = (initialLyric as any).song_signature;
       if (savedSignature) setSongSignature(savedSignature as SongSignature);
@@ -314,6 +320,7 @@ export function LyricFitTab({
     setPipelineStages(prev => ({ ...prev, songDna: "done", cinematic: "running" }));
 
     // 4. cinematic-direction (runs after DNA since we need the result first)
+    let resolvedCinematic: any = null;
     try {
       const lyricsForDirection = freshLines
         .filter((l: any) => l.tag !== "adlib")
@@ -330,7 +337,8 @@ export function LyricFitTab({
       });
 
       if (dirResult?.cinematicDirection) {
-        setCinematicDirection(dirResult.cinematicDirection);
+        resolvedCinematic = dirResult.cinematicDirection;
+        setCinematicDirection(resolvedCinematic);
       }
       setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
     } catch (e) {
@@ -342,7 +350,18 @@ export function LyricFitTab({
     setFitStageLabel("Final transcript sync…");
     setPipelineStages(prev => ({ ...prev, cinematic: "done", transcript: "running" }));
 
-    // 5. Final transcript sync — placeholder for publish-time alignment
+    // 5. Persist songDna + cinematicDirection to saved_lyrics
+    if (savedId) {
+      try {
+        await supabase
+          .from("saved_lyrics")
+          .update({ song_dna: { ...nextSongDna, cinematicDirection: resolvedCinematic } as any, updated_at: new Date().toISOString() })
+          .eq("id", savedId);
+      } catch (e) {
+        console.warn("[Pipeline] Failed to persist song_dna:", e);
+      }
+    }
+
     setPipelineStages(prev => ({ ...prev, transcript: "done" }));
 
     setFitProgress(100);
