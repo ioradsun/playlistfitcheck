@@ -281,7 +281,6 @@ export function FitTab({
       setPublishedUrl(url);
       setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
-      window.location.href = url;
     } catch (e: any) {
       console.error("Dance publish error:", e);
       toast.error(e.message || "Failed to publish lyric dance");
