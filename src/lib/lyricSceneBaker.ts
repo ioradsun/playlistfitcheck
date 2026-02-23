@@ -58,6 +58,12 @@ type TensionStageLike = {
   motionIntensity?: number;
 };
 
+type StoryboardEntryLike = {
+  startSec?: number;
+  endSec?: number;
+  shotType?: string;
+};
+
 type ChapterLike = {
   startRatio?: number;
   endRatio?: number;
