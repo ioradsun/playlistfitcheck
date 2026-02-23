@@ -20,7 +20,7 @@ import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { ParticleEngine } from "@/engine/ParticleEngine";
-import type { SceneManifest } from "@/engine/SceneManifest";
+import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
 import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
@@ -31,6 +31,105 @@ import { getSessionId } from "@/lib/sessionId";
 import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
 
 /** Live debug state updated every frame from the render loop */
+
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function lerp(start: number, end: number, progress: number): number {
+  return start + (end - start) * progress;
+}
+
+function getParticleConfigForTime(
+  baseConfig: ParticleConfig,
+  manifest: SceneManifest,
+  physicsSpec: PhysicsSpec | undefined,
+  songProgress: number,
+  beatIntensity: number,
+): ParticleConfig {
+  const progress = clamp01(songProgress);
+  const beat = clamp01(beatIntensity);
+  const heat = Number(physicsSpec?.params?.heat ?? 0);
+  const isBurnWorld = manifest.backgroundSystem === "burn" || heat > 0.7;
+
+  if (isBurnWorld) {
+    if (progress < 0.15) {
+      return {
+        ...baseConfig,
+        system: "smoke",
+        density: 0.2,
+        speed: 0.2,
+        opacity: 0.4,
+        color: "#4a3a2a",
+      };
+    }
+
+    if (progress < 0.35) {
+      const mix = clamp01((progress - 0.15) / 0.2);
+      return {
+        ...baseConfig,
+        system: mix > 0.7 ? "embers" : "smoke",
+        density: lerp(0.35, 0.5, mix),
+        speed: lerp(0.35, 0.5, mix),
+        opacity: lerp(0.45, 0.7, mix),
+        color: mix > 0.5 ? baseConfig.color : "#4a3a2a",
+      };
+    }
+
+    if (progress < 0.55) {
+      return {
+        ...baseConfig,
+        system: "embers",
+        density: Math.min(0.9, 0.8 + beat * 0.2),
+        speed: Math.min(1, 0.7 + beat * 0.3),
+        opacity: 0.9,
+      };
+    }
+
+    if (progress < 0.7) {
+      const mix = clamp01((progress - 0.55) / 0.15);
+      return {
+        ...baseConfig,
+        system: mix > 0.6 ? "smoke" : "embers",
+        density: lerp(0.4, 0.3, mix),
+        speed: lerp(0.4, 0.3, mix),
+        opacity: lerp(0.75, 0.55, mix),
+        color: mix > 0.6 ? "#4a3a2a" : baseConfig.color,
+      };
+    }
+
+    if (progress < 0.85) {
+      return {
+        ...baseConfig,
+        system: "ash",
+        density: 0.5,
+        speed: 0.15,
+        opacity: 0.6,
+        color: "#7f7f7f",
+      };
+    }
+
+    return {
+      ...baseConfig,
+      system: "embers",
+      density: 0.2,
+      speed: 0.2,
+      opacity: 0.4,
+    };
+  }
+
+  if (baseConfig.system === "rain") {
+    const intensity = progress < 0.5 ? progress * 2 : 2 - progress * 2;
+    return {
+      ...baseConfig,
+      density: 0.4 + intensity * 0.4,
+      speed: 0.5 + intensity * 0.3,
+    };
+  }
+
+  return baseConfig;
+}
 interface LiveDebugState {
   time: number;
   beatIntensity: number;
@@ -442,6 +541,8 @@ export default function ShareableLyricDance() {
     );
 
     const particleSystemName = resolvedManifest.particleConfig?.system ?? "none";
+    const baseParticleConfig = resolvedManifest.particleConfig;
+    const timelineManifest = resolvedManifest;
     const typeFontFamily = resolvedManifest.typographyProfile?.fontFamily ?? "system-ui";
     const baseAtmosphere = Math.max(0, Math.min(1, resolvedManifest.backgroundIntensity ?? 1));
     const warmLightSource = (resolvedManifest.lightSource || "").toLowerCase();
@@ -611,6 +712,14 @@ export default function ShareableLyricDance() {
 
       // Particle engine: update then draw parallax split layers.
       if (particleEngine) {
+        const timedParticleConfig = getParticleConfigForTime(
+          baseParticleConfig,
+          timelineManifest,
+          spec,
+          songProgress,
+          currentBeatIntensity,
+        );
+        particleEngine.setConfig(timedParticleConfig);
         particleEngine.update(deltaMs, currentBeatIntensity);
         particleEngine.draw(ctx, "far");
       }

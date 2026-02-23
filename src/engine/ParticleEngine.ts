@@ -82,6 +82,10 @@ export class ParticleEngine {
     this.config = manifest.particleConfig;
   }
 
+  setConfig(config: ParticleConfig): void {
+    this.config = config;
+  }
+
 
   init(config: ParticleConfig, manifest: SceneManifest): void {
     this.config = config;
