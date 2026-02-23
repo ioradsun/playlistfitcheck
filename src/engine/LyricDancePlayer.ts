@@ -369,10 +369,8 @@ export class LyricDancePlayer {
         // so Strict Mode destroy() can't wipe them
         this.buildChunkCache(payload);
         const localChunkSnapshot = new Map(this.chunks);
-        console.log('[PLAYER] chunk snapshot — size:', localChunkSnapshot.size);
 
-        const baked = await bakeSceneChunked(payload, (pct) =>
-          console.log('[PLAYER] bake pct:', pct));
+        const baked = await bakeSceneChunked(payload);
 
         // Use the local snapshot not this.chunks (which destroy() may have wiped)
         globalTimelineCache = this.scaleTimeline(baked);
