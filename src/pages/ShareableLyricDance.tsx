@@ -231,6 +231,43 @@ function getParticleConfigForTime(
   };
 }
 
+function getBackgroundSystemForTime(
+  manifest: SceneManifest,
+  songProgress: number,
+  beatIntensity: number,
+): string {
+  const base = manifest.backgroundSystem as string;
+  const progress = clamp01(songProgress);
+  const beat = clamp01(beatIntensity);
+
+  // FIRE worlds — smoke → burn → ash arc
+  if (base === "burn") {
+    if (progress < 0.15) return "haze";
+    if (progress < 0.35) return "burn";
+    if (progress < 0.55) return beat > 0.85 ? "ember" : "burn";
+    if (progress < 0.75) return "haze";
+    return "ember";
+  }
+
+  // RAIN worlds — drizzle → downpour → clearing
+  if (base === "rain" || base === "breath") {
+    if (progress < 0.20) return "mist";
+    if (progress < 0.50) return "rain";
+    if (progress < 0.70) return "downpour";
+    return "mist";
+  }
+
+  // COLD worlds — frost → storm → frost
+  if (base === "frost" || base === "winter") {
+    if (progress < 0.30) return "frost";
+    if (progress < 0.60) return "blizzard";
+    return "frost";
+  }
+
+  // Default — return base system unchanged
+  return base;
+}
+
 function getSongSection(progress: number): string {
   if (progress < 0.08) return "intro";
   if (progress < 0.33) return "verse";
@@ -674,9 +711,15 @@ export default function ShareableLyricDance() {
         ctx.globalAlpha = 1;
       }
 
-      // Procedural background system — uses manifest's backgroundSystem
+      const activeSystem = getBackgroundSystemForTime(
+        timelineManifest,
+        songProgress,
+        currentBeatIntensity,
+      );
+
+      // Procedural background system — timeline-aware system switching
       drawSystemBackground(ctx, {
-        system: effectiveSystem,
+        system: activeSystem,
         physState: state,
         w: cw, h: ch,
         time: currentTime,
@@ -1048,7 +1091,7 @@ export default function ShareableLyricDance() {
       dbg.xNudge = frameXNudge;
       dbg.shake = state.shake;
       // Background
-      dbg.backgroundSystem = effectiveSystem;
+      dbg.backgroundSystem = activeSystem;
       dbg.imageLoaded = bgImageRef.current !== null && bgImageRef.current.complete;
       dbg.zoom = 1.0 + songProgress * (0.08 * baseAtmosphere);
       dbg.vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
