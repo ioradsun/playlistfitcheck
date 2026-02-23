@@ -1430,8 +1430,10 @@ export function LyricDisplay({
   // ── Render ────────────────────────────────────────────────────────────────
   const hookDirection = useMemo(() => {
     const cinematicDirection = (songDna as any)?.cinematic_direction as CinematicDirection | undefined;
-    const hookStartRatio = (songDna?.hook?.start && data?.duration)
-      ? songDna.hook.start / Math.max(0.001, data.duration)
+    const lines = data?.lines ?? [];
+    const songDuration = lines.length > 0 ? lines[lines.length - 1].end - lines[0].start : 1;
+    const hookStartRatio = (songDna?.hook?.start && songDuration > 0)
+      ? songDna.hook.start / Math.max(0.001, songDuration)
       : 0;
     if (!cinematicDirection) return null;
     return {
@@ -1443,7 +1445,7 @@ export function LyricDisplay({
         hookStartRatio >= c.startRatio && hookStartRatio <= c.endRatio
       )),
     };
-  }, [songDna, data?.duration]);
+  }, [songDna, data?.lines]);
 
   return (
     <motion.div

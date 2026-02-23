@@ -23,7 +23,7 @@ import {
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { classifyWord, getElementalClass } from "@/engine/WordClassifier";
 import { DirectionInterpreter } from "@/engine/DirectionInterpreter";
-import type { Chapter, ClimaxDirective, VisualWorld, WordDirective } from "@/types/CinematicDirection";
+import type { CinematicDirection, Chapter, ClimaxDirective, VisualWorld, WordDirective } from "@/types/CinematicDirection";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
 import { ArtistFingerprintButton } from "./ArtistFingerprintButton";
@@ -194,7 +194,11 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
       ending: { style: "fade", emotionalAftertaste: "neutral", particleResolution: "settle", lightResolution: "dim" },
       silenceDirective: { cameraMovement: "still", particleShift: "none", lightShift: "none", tensionDirection: "holding" },
       storyboard: [],
-    }, Math.max(0.001, hookEnd - hookStart));
+      symbolSystem: { primary: "", secondary: "", beginningState: "", middleMutation: "", climaxOverwhelm: "", endingDecay: "", interactionRules: [] },
+      cameraLanguage: { openingDistance: "Wide", closingDistance: "Close", movementType: "Drift", climaxBehavior: "shake", distanceByChapter: [] },
+      tensionCurve: [],
+      shotProgression: [],
+    } as CinematicDirection, Math.max(0.001, hookEnd - hookStart));
   }, [hookDirection, hookEnd, hookStart]);
 
   // Resize canvas to fill container
