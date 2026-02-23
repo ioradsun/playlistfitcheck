@@ -498,24 +498,34 @@ export function FitTab({
         </div>
       )}
 
-      {/* Dance button */}
-      <button
-        onClick={handleDance}
-        disabled={danceDisabled}
-        className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-      >
-        {publishing ? (
-          <span className="flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin" />
-            <span>{publishStatus || "Publishing…"}</span>
-          </span>
-        ) : (
-          <>
-            <Film size={14} />
-            Dance
-          </>
-        )}
-      </button>
+      {/* Dance button — reuse existing link until transcript changes */}
+      {publishedUrl && !danceNeedsRegeneration ? (
+        <a
+          href={publishedUrl}
+          className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+        >
+          <Film size={14} />
+          View Dance
+        </a>
+      ) : (
+        <button
+          onClick={handleDance}
+          disabled={danceDisabled}
+          className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+        >
+          {publishing ? (
+            <span className="flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>{publishStatus || "Publishing…"}</span>
+            </span>
+          ) : (
+            <>
+              <Film size={14} />
+              {publishedUrl ? "Regenerate Dance" : "Dance"}
+            </>
+          )}
+        </button>
+      )}
 
     </div>
   );
