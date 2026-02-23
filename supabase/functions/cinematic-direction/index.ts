@@ -178,19 +178,52 @@ CAMERA LANGUAGE
 }
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TENSION CURVE (exactly 4 stages)
+TENSION CURVE (REQUIRED — EXACTLY 4 stages)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You MUST include ALL four stages. Do NOT
+omit any stage. Do NOT return fewer than 4.
 
 [
   {
     "stage": "Setup",
     "startRatio": 0,
     "endRatio": 0.25,
-    "motionIntensity": 0.3,
-    "particleDensity": 0.4,
-    "lightBrightness": 0.5,
+    "motionIntensity": 0.2-0.4,
+    "particleDensity": 0.2-0.4,
+    "lightBrightness": 0.3-0.5,
     "cameraMovement": "slow drift",
-    "typographyAggression": 0.2
+    "typographyAggression": 0.1-0.3
+  },
+  {
+    "stage": "Build",
+    "startRatio": 0.25,
+    "endRatio": 0.60,
+    "motionIntensity": 0.4-0.7,
+    "particleDensity": 0.4-0.7,
+    "lightBrightness": 0.5-0.7,
+    "cameraMovement": "tracking forward",
+    "typographyAggression": 0.3-0.6
+  },
+  {
+    "stage": "Peak",
+    "startRatio": 0.60,
+    "endRatio": 0.85,
+    "motionIntensity": 0.8-1.0,
+    "particleDensity": 0.7-1.0,
+    "lightBrightness": 0.8-1.0,
+    "cameraMovement": "rapid push / shake",
+    "typographyAggression": 0.7-1.0
+  },
+  {
+    "stage": "Release",
+    "startRatio": 0.85,
+    "endRatio": 1.0,
+    "motionIntensity": 0.2-0.4,
+    "particleDensity": 0.3-0.5,
+    "lightBrightness": 0.3-0.5,
+    "cameraMovement": "slow pull back",
+    "typographyAggression": 0.1-0.3
   }
 ]
 
@@ -392,55 +425,84 @@ serve(async (req) => {
 
     console.log(`[cinematic-direction] title="${title}" artist="${artist}" lines=${lines.length}`);
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: MASTER_DIRECTOR_PROMPT_V2 },
-          {
-            role: "user",
-            content: `Song Data:\n${JSON.stringify(songPayload)}`,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 12000,
-        response_format: { type: "json_object" },
-      }),
-    });
+    async function callAI(extraInstruction?: string): Promise<Record<string, unknown> | null> {
+      const messages: { role: string; content: string }[] = [
+        { role: "system", content: MASTER_DIRECTOR_PROMPT_V2 },
+        { role: "user", content: `Song Data:\n${JSON.stringify(songPayload)}` },
+      ];
+      if (extraInstruction) {
+        messages.push({ role: "user", content: extraInstruction });
+      }
 
-    if (!aiResponse.ok) {
-      const text = await aiResponse.text();
-      console.error("[cinematic-direction] AI error", aiResponse.status, text);
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded, please try again later." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages,
+          temperature: 0.2,
+          max_tokens: 12000,
+          response_format: { type: "json_object" },
+        }),
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        console.error("[cinematic-direction] AI error", resp.status, text);
+        if (resp.status === 429) {
+          throw { status: 429, message: "Rate limit exceeded, please try again later." };
+        }
+        if (resp.status === 402) {
+          throw { status: 402, message: "Usage limit reached. Add credits in Settings → Workspace → Usage." };
+        }
+        throw { status: 500, message: "AI request failed" };
       }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "Usage limit reached. Add credits in Settings → Workspace → Usage." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "AI request failed" }), {
-        status: 500,
+
+      const completion = await resp.json();
+      const rawContent = completion?.choices?.[0]?.message?.content ?? "";
+      return extractJson(String(rawContent));
+    }
+
+    let parsed: Record<string, unknown> | null = null;
+
+    try {
+      parsed = await callAI();
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: e.message ?? "AI request failed" }), {
+        status: e.status ?? 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const completion = await aiResponse.json();
-    const raw = completion?.choices?.[0]?.message?.content ?? "";
-    const parsed = extractJson(String(raw));
 
     if (!parsed) {
       return new Response(JSON.stringify({ error: "Invalid AI JSON response" }), {
         status: 422,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Retry once if tensionCurve has fewer than 4 stages
+    const initialTension = Array.isArray(parsed.tensionCurve) ? parsed.tensionCurve : [];
+    if (initialTension.length < 4) {
+      console.warn(`[cinematic-direction] tensionCurve has ${initialTension.length} stages, retrying...`);
+      try {
+        const retryParsed = await callAI(
+          "Your previous response had only " + initialTension.length + " tension curve stages. " +
+          "You MUST include ALL 4 tension stages: Setup (0-0.25), Build (0.25-0.60), Peak (0.60-0.85), Release (0.85-1.0). " +
+          "Return the complete JSON again with exactly 4 tensionCurve entries."
+        );
+        if (retryParsed && Array.isArray(retryParsed.tensionCurve) && retryParsed.tensionCurve.length >= 4) {
+          parsed = retryParsed;
+          console.log("[cinematic-direction] Retry succeeded with", retryParsed.tensionCurve.length, "tension stages");
+        } else {
+          console.warn("[cinematic-direction] Retry still insufficient, using original + synthesis");
+        }
+      } catch (e) {
+        console.warn("[cinematic-direction] Retry failed, using original response");
+      }
     }
 
     // Enforce numeric ranges
