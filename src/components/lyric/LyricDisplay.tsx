@@ -631,7 +631,7 @@ export function LyricDisplay({
     } finally {
       setDirectorsCutRegenerating(false);
     }
-  }, [songDna, directorsCutRegenerating, data.title, data.artist, data.lines, getManifestDiff, generateBackgroundImage]);
+  }, [songDna, directorsCutRegenerating, data.title, data.artist, data.lines, getManifestDiff]);
 
   const currentManifest = useMemo<FullSceneManifest | null>(() => {
     if (manifest) return manifest;
