@@ -482,7 +482,7 @@ serve(async (req) => {
       parsed.wordDirectives = {};
     }
 
-    // storyboard from shotProgression or lines
+    // storyboard from shotProgression or lines — also pad if truncated short
     if (!Array.isArray(parsed.storyboard) || parsed.storyboard.length === 0) {
       const shots = Array.isArray(parsed.shotProgression) ? parsed.shotProgression : [];
       parsed.storyboard = lines.map((line: any, i: number) => {
@@ -500,6 +500,52 @@ serve(async (req) => {
           transitionToNext: "crossfade",
         };
       });
+    } else if (parsed.storyboard.length < lines.length) {
+      // Pad truncated storyboard to match lines count
+      for (let i = parsed.storyboard.length; i < lines.length; i++) {
+        parsed.storyboard.push({
+          lineIndex: i,
+          text: lines[i]?.text ?? "",
+          emotionalIntent: "neutral",
+          heroWord: (lines[i]?.text ?? "").split(/\s+/)[0] ?? "",
+          visualTreatment: "FloatingInWorld",
+          entryStyle: "fades",
+          exitStyle: "fades",
+          particleBehavior: "ambient",
+          beatAlignment: "on-beat",
+          transitionToNext: "crossfade",
+        });
+      }
+    }
+
+    // tensionCurve — default to empty array if missing (truncation)
+    if (!Array.isArray(parsed.tensionCurve)) {
+      parsed.tensionCurve = [];
+    }
+
+    // shotProgression — default to empty array if missing
+    if (!Array.isArray(parsed.shotProgression)) {
+      parsed.shotProgression = [];
+    }
+
+    // silenceDirective — default if missing
+    if (!parsed.silenceDirective || typeof parsed.silenceDirective !== "object") {
+      parsed.silenceDirective = { cameraMovement: "still", particleShift: "none", lightShift: "none", tensionDirection: "holding" };
+    }
+
+    // ending — default if missing
+    if (!parsed.ending || typeof parsed.ending !== "object") {
+      parsed.ending = { style: "fade", emotionalAftertaste: "settling", particleResolution: "settle", lightResolution: "dim" };
+    }
+
+    // symbolSystem — default if missing
+    if (!parsed.symbolSystem || typeof parsed.symbolSystem !== "object") {
+      parsed.symbolSystem = { primary: "", secondary: "", beginningState: "", middleMutation: "", climaxOverwhelm: "", endingDecay: "", interactionRules: [] };
+    }
+
+    // cameraLanguage — default if missing
+    if (!parsed.cameraLanguage || typeof parsed.cameraLanguage !== "object") {
+      parsed.cameraLanguage = { openingDistance: "Wide", closingDistance: "Close", movementType: "Drift", climaxBehavior: "shake", distanceByChapter: [] };
     }
 
     const validationErrors = validateCinematicDirection(parsed, lines.length);
