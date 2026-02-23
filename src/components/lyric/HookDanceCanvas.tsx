@@ -3,6 +3,7 @@
  *
  * Receives PhysicsState + active lyric text each frame from HookDanceEngine,
  * looks up the AI-assigned effect for the current line, and draws it.
+ * Applies AnimationResolver outputs (entry/exit, scale, mod effects) to canvas.
  */
 
 import { useRef, useEffect, useState, useCallback, forwardRef } from "react";
@@ -11,6 +12,9 @@ import { X, Download } from "lucide-react";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
+import { animationResolver } from "@/engine/AnimationResolver";
+import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
+import { deriveCanvasManifest } from "@/engine/deriveCanvasManifest";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
@@ -172,6 +176,44 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
         : computeFitFontSize(ctx, activeLine.text, w, activeSystem);
 
+      // ── AnimationResolver: entry/exit, scale, mod ──────────────────────
+      // Compute a rough beat intensity from physics heat (no analyser in editor)
+      const editorBeatIntensity = physicsState ? physicsState.heat * 0.8 : 0;
+
+      const lineAnim = animationResolver.resolveLine(
+        activeLineIndex, activeLine.start, activeLine.end, currentTime, editorBeatIntensity,
+      );
+
+      // Derive manifest for entrance/exit type strings
+      const { manifest: editorManifest } = deriveCanvasManifest({
+        physicsSpec: spec,
+        fallbackPalette: activePalette,
+        systemType: activeSystem,
+      });
+      const lyricEntrance = editorManifest.lyricEntrance ?? "fades";
+      const lyricExit = editorManifest.lyricExit ?? "fades";
+
+      ctx.save();
+
+      // Apply entrance/exit alpha
+      const entryAlpha = applyEntrance(ctx, lineAnim.entryProgress, lyricEntrance);
+      const exitAlpha = lineAnim.exitProgress > 0
+        ? applyExit(ctx, lineAnim.exitProgress, lyricExit)
+        : 1.0;
+      const compositeAlpha = Math.min(entryAlpha, exitAlpha);
+
+      // Apply beat-reactive scale
+      const cx = w / 2;
+      const cy = h / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(lineAnim.scale, lineAnim.scale);
+      ctx.translate(-cx, -cy);
+
+      // Apply mod effect (pulse, shimmer, glitch, etc.)
+      if (lineAnim.activeMod) {
+        applyModEffect(ctx, lineAnim.activeMod, currentTime, editorBeatIntensity);
+      }
+
       const effectState: EffectState = {
         text: activeLine.text,
         physState: physicsState,
@@ -185,9 +227,11 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         system: activeSystem,
         effectiveLetterSpacing,
         stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
+        alphaMultiplier: compositeAlpha,
       };
 
       drawFn(ctx, effectState);
+      ctx.restore();
 
       // Micro-surprise overlay
       if (
