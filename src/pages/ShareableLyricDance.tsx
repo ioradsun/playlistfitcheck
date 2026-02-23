@@ -1824,7 +1824,7 @@ export default function ShareableLyricDance() {
       dbg.xNudge = frameXNudge;
       dbg.shake = state.shake;
       // Background
-      dbg.backgroundSystem = activeSystem;
+      dbg.backgroundSystem = data?.system_type ?? "unknown";
       dbg.imageLoaded = bgImageRef.current !== null && bgImageRef.current.complete;
       dbg.zoom = 1.0 + songProgress * (0.08 * baseAtmosphere);
       dbg.vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;

@@ -13,17 +13,14 @@ export function applyKineticEffect(
   switch (kineticClass) {
     case "FALLING":
     case "SINKING": {
-      // Fresh calculation each frame — never accumulated
-      const sinkDepth = Math.min(appearanceCount * 3, 30);
-      const sinkBob = Math.sin(currentTime * (2 * evolutionSpeedMultiplier)) * 3;
-      const totalSink = sinkDepth + sinkBob;
-      ctx.translate(0, totalSink);
-      // Shadow copies above — trail of where it was
+      // Pure oscillation — no growth over time
+      const sinkBase = 8;
+      const sinkBob = Math.sin(currentTime * 2 + wordIndex * 0.5) * 6;
+      ctx.translate(0, sinkBase + sinkBob);
+      // Shadow copies above
       ctx.globalAlpha *= 0.2;
-      const trailLength = Math.min(8, Math.max(2, appearanceCount));
-      for (let t = 1; t <= trailLength; t += 1) {
-        ctx.fillText(word, 0, -(t * 10));
-      }
+      ctx.fillText(word, 0, -10);
+      ctx.fillText(word, 0, -20);
       ctx.globalAlpha /= 0.2;
       break;
     }
