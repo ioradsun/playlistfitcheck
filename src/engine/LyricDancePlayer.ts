@@ -307,6 +307,7 @@ export class LyricDancePlayer {
     textCanvas: HTMLCanvasElement,
     container: HTMLDivElement,
   ) {
+    console.log('[PLAYER] constructor called', data?.lyrics?.length);
     this.data = data;
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
@@ -327,9 +328,12 @@ export class LyricDancePlayer {
   }
 
   // Compatibility with existing React shell
-  init(): void {
+  async init(): Promise<void> {
     this.resize(this.canvas.offsetWidth || 0, this.canvas.offsetHeight || 0);
-    this.load(this.buildScenePayload(), () => {}).catch(() => {});
+    const payload = this.buildScenePayload();
+    console.log('[PLAYER] baking start — lines:', payload.lines.length);
+    await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
+    console.log('[PLAYER] bake done — frames:', this.timeline.length);
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
     this.playing = true;

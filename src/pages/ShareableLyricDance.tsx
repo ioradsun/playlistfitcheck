@@ -248,6 +248,7 @@ export default function ShareableLyricDance() {
     playerRef.current = player;
 
     try {
+      console.log('[PLAYER] init called');
       player.init();
     } catch (err) {
       console.error("LyricDancePlayer init failed:", err);
