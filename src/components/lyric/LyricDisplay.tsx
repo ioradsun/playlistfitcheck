@@ -2852,6 +2852,8 @@ export function LyricDisplay({
           seed={`${data.title}-lyric-dance`}
           mood={songDna.mood}
           description={songDna.description}
+          cinematicDirection={(songDna as any)?.cinematic_direction ?? null}
+          sceneManifest={(songDna as any)?.scene_manifest ?? null}
         />
       )}
 
