@@ -17,8 +17,8 @@ import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { getTextShadow } from "@/engine/LightingSystem";
-import { getSymbolStateForProgress, renderChapterBackground } from "@/engine/BackgroundDirector";
-import { renderChapterLighting } from "@/engine/LightingDirector";
+import { getSymbolStateForProgress } from "@/engine/BackgroundDirector";
+import { renderBackground, type BackgroundState } from "@/engine/renderFrame";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { ParticleEngine } from "@/engine/ParticleEngine";
@@ -728,10 +728,7 @@ export default function ShareableLyricDance() {
   const directiveCacheRef = useRef<Map<string, WordDirective | null>>(new Map());
   const chapterBoundaryRef = useRef<{ key: number; chapter: ReturnType<DirectionInterpreter["getCurrentChapter"]> | null }>({ key: -1, chapter: null });
   const tensionBoundaryRef = useRef<{ key: number; stage: TensionStage | null }>({ key: -1, stage: null });
-  const lastBgChapterRef = useRef("");
-  const lastBgBeatRef = useRef(0);
-  const lastBgProgressRef = useRef(0);
-  const lastBgTimeRef = useRef(0);
+  const bgStateRef = useRef<BackgroundState>({ lastChapterTitle: "", lastBeatIntensity: 0, lastProgress: 0, lastDrawTime: 0 });
   // Perf: constellation offscreen canvas
   const constellationCanvasRef = useRef<HTMLCanvasElement | null>(null);
   // Perf: particle config cache
@@ -1259,61 +1256,24 @@ export default function ShareableLyricDance() {
         typographyShift: null,
       };
 
-      // Perf opt 4: throttle background — raise threshold + min 100ms interval
-      const bgTimeSinceLastDraw = now - lastBgTimeRef.current;
-      const bgNeedsUpdate =
-        chapterForRender.title !== lastBgChapterRef.current ||
-        (bgTimeSinceLastDraw > 100 && (
-          Math.abs(currentBeatIntensity - lastBgBeatRef.current) > 0.2 ||
-          Math.abs(songProgress - lastBgProgressRef.current) > 0.05
-        )) ||
-        (lastBgBeatRef.current <= 0.2 && currentBeatIntensity > 0.2) ||
-        (lastBgBeatRef.current > 0.2 && currentBeatIntensity <= 0.2);
-
       const budgetElapsed = () => performance.now() - frameStart;
       const canRenderBackground = budgetElapsed() < 8;
       const canRenderParticles = budgetElapsed() < 11;
       const canRenderEffects = budgetElapsed() < FRAME_BUDGET_MS - 1;
 
-      if (bgNeedsUpdate) {
-        bgCtx.fillStyle = "#0a0a0a";
-        bgCtx.fillRect(0, 0, cw, ch);
-        renderChapterBackground(
-          bgCtx,
-          bgCanvas,
-          chapterForRender,
+      drawCalls += renderBackground(
+        bgCtx, bgCanvas, ctx, textCanvas,
+        {
+          chapter: chapterForRender,
           songProgress,
-          currentBeatIntensity,
+          beatIntensity: currentBeatIntensity,
           currentTime,
-          symbol,
-        );
-
-        renderChapterLighting(
-          bgCtx,
-          bgCanvas,
-          chapterForRender,
+          now,
+          lightIntensity: lightIntensityRef.current,
           activeWordPosition,
-          songProgress,
-          currentBeatIntensity * lightIntensityRef.current,
-          currentTime,
-        );
-
-        lastBgChapterRef.current = chapterForRender.title;
-        lastBgBeatRef.current = currentBeatIntensity;
-        lastBgProgressRef.current = songProgress;
-        lastBgTimeRef.current = now;
-      }
-      drawCalls += 2;
-
-      // Always render lighting on text canvas (no budget gate — lighting is cheap)
-      renderChapterLighting(
-        ctx,
-        textCanvas,
-        chapterForRender,
-        activeWordPosition,
-        songProgress,
-        currentBeatIntensity * lightIntensityRef.current,
-        currentTime,
+          symbol,
+        },
+        bgStateRef.current,
       );
 
       // Particle engine: update then draw parallax split layers.
