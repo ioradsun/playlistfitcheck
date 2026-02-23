@@ -215,8 +215,9 @@ export function LyricFitTab({
 
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
     if (!targetAudioFile || !hasRealAudio || targetAudioFile.size === 0) return;
+    // Data-existence guard: if we already have beatGrid (e.g. loaded from DB), skip
     if (beatGrid) {
-      setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
+      setGenerationStatus(prev => prev.beatGrid === "done" ? prev : ({ ...prev, beatGrid: "done" }));
       return;
     }
     if (generationStatus.beatGrid === "running" || generationStatus.beatGrid === "done") return;
@@ -237,6 +238,11 @@ export function LyricFitTab({
 
   const startLyricAnalyze = useCallback(async (sourceLines: LyricLine[], targetAudioFile: File) => {
     if (!lyricData || !sourceLines.length || !targetAudioFile) return;
+    // Data-existence guard: if we already have songDna (e.g. loaded from DB), skip
+    if (songDna) {
+      setGenerationStatus(prev => prev.songDna === "done" ? prev : ({ ...prev, songDna: "done" }));
+      return;
+    }
     if (generationStatus.songDna === "running" || generationStatus.songDna === "done") return;
 
     setGenerationStatus(prev => ({ ...prev, songDna: "running" }));
@@ -338,10 +344,15 @@ export function LyricFitTab({
     if (savedIdRef.current) {
       await persistSongDna(savedIdRef.current, { ...nextSongDna, cinematicDirection });
     }
-  }, [lyricData, generationStatus.songDna, hasRealAudio, beatGrid, cinematicDirection, persistSongDna]);
+  }, [lyricData, generationStatus.songDna, hasRealAudio, beatGrid, cinematicDirection, persistSongDna, songDna]);
 
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[]) => {
     if (!lyricData || !sourceLines.length) return;
+    // Data-existence guard: if we already have cinematicDirection (e.g. loaded from DB), skip
+    if (cinematicDirection) {
+      setGenerationStatus(prev => prev.cinematicDirection === "done" ? prev : ({ ...prev, cinematicDirection: "done" }));
+      return;
+    }
     if (generationStatus.cinematicDirection === "running" || generationStatus.cinematicDirection === "done") return;
 
     setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running" }));
@@ -367,6 +378,12 @@ export function LyricFitTab({
           ? { ...dirResult.cinematicDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
           : dirResult.cinematicDirection;
         setCinematicDirection(enrichedDirection);
+
+        // Persist cinematic direction back to song_dna in DB
+        if (savedIdRef.current) {
+          const existingSongDna = songDna || {};
+          persistSongDna(savedIdRef.current, { ...existingSongDna, cinematicDirection: enrichedDirection });
+        }
       }
 
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
@@ -375,7 +392,7 @@ export function LyricFitTab({
     } catch {
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error" }));
     }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid]);
+  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna]);
 
   useEffect(() => {
     if (!lines?.length || !audioFile) return;
