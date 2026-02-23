@@ -338,10 +338,16 @@ export function LyricFitTab({
       setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
     }
 
+    setFitProgress(90);
+    setFitStageLabel("Final transcript sync…");
+    setPipelineStages(prev => ({ ...prev, cinematic: "done", transcript: "running" }));
+
+    // 5. Final transcript sync — placeholder for publish-time alignment
+    setPipelineStages(prev => ({ ...prev, transcript: "done" }));
+
     setFitProgress(100);
     setFitReadiness("ready");
     setFitStageLabel("Ready");
-    setPipelineStages({ transcript: "done", rhythm: "done", songDna: "done", cinematic: "done" });
     toast.success("Your Fit is ready! 🎬", { description: "Switch to the Fit tab to explore your song's DNA." });
   }, [lyricData, audioFile, lines, savedId, hasRealAudio, beatGrid]);
 
