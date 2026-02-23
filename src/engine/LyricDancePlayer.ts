@@ -606,7 +606,7 @@ export class LyricDancePlayer {
       tensionStage: currentTension?.stage ?? "—",
       tensionMotion: currentTension?.motionIntensity ?? 0,
       tensionParticles: currentTension?.particleDensity ?? 0,
-      tensionTypo: currentTension?.typographyScale ?? 1,
+      tensionTypo: (currentTension as any)?.typographyScale ?? 1,
 
       // Symbols
       symbolPrimary: cd?.symbolSystem?.primary ?? "—",
