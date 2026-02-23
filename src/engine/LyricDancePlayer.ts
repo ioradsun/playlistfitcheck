@@ -662,7 +662,7 @@ export class LyricDancePlayer {
   }
 
   private buildChunkCache(payload: ScenePayload): void {
-    console.log('[PLAYER] buildChunkCache entered — lines:', payload.lines.length);
+    this.chunks.clear();
     this.chunks.clear();
 
     // Use a throwaway offscreen canvas for measurement
