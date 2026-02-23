@@ -218,7 +218,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
 
         // AnimationResolver: entry/exit, scale, mod
         const lineAnim = animationResolver.resolveLine(
-          activeLineIndex, activeLine.start, activeLine.end, ct, editorBeatIntensity,
+          activeLineIndex, activeLine.start, activeLine.end, ct, editorBeatIntensity, manifest.palette,
         );
 
         const lyricEntrance = manifest.lyricEntrance ?? "fades";
@@ -250,7 +250,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           physState: ps,
           w, h, fs, age, progress, rng,
           // KEY FIX: use textPalette (text-safe) instead of raw palette
-          palette: textPalette as string[],
+          palette: [lineAnim.lineColor, textPalette[1], textPalette[2]],
           system,
           effectiveLetterSpacing,
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,

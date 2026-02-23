@@ -345,6 +345,7 @@ export function useHookCanvas(
         activeLine.end,
         ct,
         beatIntensityRef.current,
+        manifest.palette,
       );
       // 1Hz diagnostic log
       logManifestDiagnostics("HookDance", {
@@ -389,7 +390,7 @@ export function useHookCanvas(
         }
         ctx.fillStyle = wordAnim
           ? getWordMarkColor(wordAnim.mark, manifest)
-          : textColor;
+          : anim.lineColor;
         ctx.fillText(word, wordX, lineY);
         ctx.restore();
         wordX += ctx.measureText(`${word} `).width;
