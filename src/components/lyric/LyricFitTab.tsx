@@ -117,7 +117,13 @@ export function LyricFitTab({
       });
   }, []);
 
-  useEffect(() => { savedIdRef.current = savedId; }, [savedId]);
+  useEffect(() => {
+    savedIdRef.current = savedId;
+    // Persist song_dna if it was generated before the project was saved
+    if (savedId && songDna) {
+      persistSongDna(savedId, { ...songDna, cinematicDirection });
+    }
+  }, [savedId]); // intentionally omit songDna/cinematicDirection to avoid re-persisting on every change
 
   useEffect(() => {
     if (initialLyric && !lyricData) {
