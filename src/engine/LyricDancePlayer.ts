@@ -618,7 +618,7 @@ export class LyricDancePlayer {
       lineEntry: currentChapter?.typographyShift ?? "—",
       lineExit: "—",
       lineIntent: currentChapter?.emotionalArc ?? "—",
-      shotType: currentChapter?.cameraDistance ?? "—",
+      shotType: (currentChapter as any)?.cameraDistance ?? "—",
 
       // Background
       backgroundSystem: this.payload?.scene_manifest?.backgroundSystem ?? "—",
