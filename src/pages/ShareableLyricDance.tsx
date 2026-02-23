@@ -676,7 +676,7 @@ export default function ShareableLyricDance() {
             console.warn("[ShareableLyricDance] direction fetch failed:", directionError);
           })
           .finally(() => {
-            if (d.cinematic_direction || d.song_dna?.cinematic_direction) {
+            if (d.cinematic_direction) {
               return;
             }
 
