@@ -413,7 +413,6 @@ export class LyricDancePlayer {
       this.buildChunkCache(payload);
       // Snapshot chunks NOW before the async yield — destroy() may replace this.chunks
       const chunkSnapshot = new Map(this.chunks);
-      console.log('[PLAYER] after buildChunkCache — chunks:', chunkSnapshot.size);
       const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
 
       this.timeline = this.scaleTimeline(baked);
