@@ -643,14 +643,8 @@ export class LyricDancePlayer {
 
   private buildScenePayload(): ScenePayload {
     const lines = this.data.lyrics ?? [];
-    console.log('[PLAYER] buildScenePayload — lyrics count:', this.data.lyrics?.length, 'lines:', lines.length);
-    console.log('[PAYLOAD] cinematic_direction keys:', Object.keys(this.data.cinematic_direction ?? {}));
-    console.log('[PAYLOAD] chapters:', this.data.cinematic_direction?.chapters?.length);
     const songStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
     const songEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
-
-    console.log('[PAYLOAD] songStart:', songStart, 'songEnd:', songEnd,
-      'first line start:', lines[0]?.start, 'last line end:', lines[lines.length - 1]?.end);
 
     const payload = {
       lines,
