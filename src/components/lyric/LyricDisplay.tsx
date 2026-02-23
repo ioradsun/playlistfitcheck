@@ -1468,9 +1468,9 @@ export function LyricDisplay({
       visualWorld: cinematicDirection.visualWorld,
       wordDirectives: cinematicDirection.wordDirectives,
       climax: cinematicDirection.climax,
-      activeChapter: cinematicDirection.chapters.find(c => (
+      activeChapter: cinematicDirection.chapters?.find(c => (
         hookStartRatio >= c.startRatio && hookStartRatio <= c.endRatio
-      )),
+      )) ?? null,
     };
   }, [songDna, data?.lines]);
 
