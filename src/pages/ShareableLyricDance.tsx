@@ -689,7 +689,8 @@ export default function ShareableLyricDance() {
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
           ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
           : computeFitFontSize(ctx, activeLine.text, cw, effectiveSystem);
-        frameFontSize = fs;
+        const fontSize = fs * lineAnim.fontScale;
+        frameFontSize = fontSize;
 
         ctx.save();
 
@@ -717,7 +718,7 @@ export default function ShareableLyricDance() {
           text: activeLine.text,
           physState: state,
           w: cw, h: ch,
-          fs, age,
+          fs: fontSize, age,
           progress: lineProgress,
           rng,
           palette: [lineAnim.lineColor, textPalette[1], textPalette[2]],

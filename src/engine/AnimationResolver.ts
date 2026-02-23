@@ -6,6 +6,7 @@ export interface LineAnimation {
   activeMod: string | null;
   lineColor: string;
   scale: number;
+  fontScale: number;
   opacityOverride: number | null;
   isHookLine: boolean;
   beatMultiplier: number;
@@ -80,6 +81,25 @@ export class AnimationResolver {
 
       if (this.hookRanges.length > 0) {
         console.log("[AnimationResolver] synthetic hooks from repetition:", this.hookRanges);
+      }
+    }
+
+    if (lines && lines.length > 0) {
+      const textCount = new Map<string, number[]>();
+      lines.forEach((line, i) => {
+        const key = line.text.trim().toLowerCase().slice(0, 25);
+        if (!key) return;
+        if (!textCount.has(key)) textCount.set(key, []);
+        textCount.get(key)!.push(i);
+      });
+
+      for (const [, indices] of textCount) {
+        if (indices.length < 2) continue;
+        const total = indices.length;
+        indices.forEach((lineIndex, repetitionIndex) => {
+          const repetitionScale = 1.0 + ((repetitionIndex + 1) / total) * 0.25;
+          this.repetitionScales.set(lineIndex, repetitionScale);
+        });
       }
     }
 
@@ -172,10 +192,39 @@ export class AnimationResolver {
       activeMod,
       lineColor,
       scale,
+      fontScale,
       opacityOverride: null,
       isHookLine,
       beatMultiplier: isHookLine ? 1.8 : 1.0,
     };
+  }
+
+  private resolveFontScale(activeMod: string | null): number {
+    if (!activeMod) return 1.0;
+
+    if (
+      [
+        "PULSE_STRONG",
+        "HEAT_SPIKE",
+        "ERUPT",
+        "EXPLODE",
+        "FLAME_BURST",
+        "SHATTER",
+        "HOOK_FRACTURE",
+      ].includes(activeMod)
+    ) {
+      return 1.2;
+    }
+
+    if (
+      ["PULSE_SOFT", "FADE_OUT", "BLUR_OUT", "ECHO_FADE", "DISSOLVE"].includes(
+        activeMod,
+      )
+    ) {
+      return 0.85;
+    }
+
+    return 1.0;
   }
 
   resolveWord(
