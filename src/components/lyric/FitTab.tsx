@@ -1,7 +1,7 @@
 /**
  * FitTab — Auto-triggers beat analysis + lyric-analyze on entry.
- * Shows combined progress. Unlocks Dance button when sceneManifest exists.
- * Dance: cinematic-direction → lyric-video-bg → audio upload → upsert → redirect.
+ * Shows waveform with lazy beat markers at top.
+ * Unlocks Dance button when sceneManifest exists.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -15,8 +15,29 @@ import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import { songSignatureAnalyzer, type SongSignature } from "@/lib/songSignatureAnalyzer";
 import { safeManifest } from "@/engine/validateManifest";
 import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
+import { LyricWaveform } from "./LyricWaveform";
+import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
+
+const PEAK_SAMPLES = 200;
+
+function extractPeaks(buffer: AudioBuffer, samples: number): number[] {
+  const channel = buffer.getChannelData(0);
+  const blockSize = Math.floor(channel.length / samples);
+  const peaks: number[] = [];
+  for (let i = 0; i < samples; i++) {
+    let max = 0;
+    const start = i * blockSize;
+    for (let j = 0; j < blockSize; j++) {
+      const v = Math.abs(channel[start + j]);
+      if (v > max) max = v;
+    }
+    peaks.push(max);
+  }
+  const maxPeak = Math.max(...peaks, 0.01);
+  return peaks.map((p) => p / maxPeak);
+}
 
 interface Props {
   lyricData: LyricData;
@@ -64,7 +85,15 @@ export function FitTab({
   const [publishStatus, setPublishStatus] = useState("");
   const triggered = useRef(false);
 
-  // Beat grid from decoded audio
+  // ── Audio playback + waveform ─────────────────────────────────────────
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const [waveform, setWaveform] = useState<WaveformData | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const rafRef = useRef<number | null>(null);
+
+  // Decode audio → waveform + buffer for beat detection
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
 
@@ -74,6 +103,78 @@ export function FitTab({
       setBeatGrid(detectedGrid);
     }
   }, [detectedGrid, beatGrid, setBeatGrid]);
+
+  // Setup audio element + decode waveform
+  useEffect(() => {
+    if (!audioFile || audioFile.size === 0) return;
+
+    const url = URL.createObjectURL(audioFile);
+    audioUrlRef.current = url;
+
+    const audio = new Audio(url);
+    audio.preload = "auto";
+    audioRef.current = audio;
+
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => { setIsPlaying(false); setCurrentTime(0); };
+
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    audio.addEventListener("ended", onEnded);
+
+    // Decode for waveform peaks
+    const ctx = new AudioContext();
+    audioFile.arrayBuffer().then((ab) => {
+      ctx.decodeAudioData(ab).then((buf) => {
+        setAudioBuffer(buf);
+        setWaveform({ peaks: extractPeaks(buf, PEAK_SAMPLES), duration: buf.duration });
+        ctx.close();
+      });
+    }).catch(() => {});
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("ended", onEnded);
+      URL.revokeObjectURL(url);
+      audioRef.current = null;
+    };
+  }, [audioFile]);
+
+  // Playback RAF for smooth playhead
+  useEffect(() => {
+    if (!isPlaying) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      return;
+    }
+    const tick = () => {
+      if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [isPlaying]);
+
+  const handleSeek = useCallback((time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
+  }, []);
+
+  const handleTogglePlay = useCallback(() => {
+    if (!audioRef.current) return;
+    if (audioRef.current.paused) {
+      audioRef.current.play().catch(() => {});
+    } else {
+      audioRef.current.pause();
+    }
+  }, []);
 
   // Auto-trigger analysis on tab entry
   useEffect(() => {
@@ -111,18 +212,10 @@ export function FitTab({
       if (beatGrid) return beatGrid;
       if (!hasRealAudio || audioFile.size === 0) return null;
       try {
-        const audioCtx = new AudioContext();
-        const ab = await audioFile.arrayBuffer();
-        const buf = await audioCtx.decodeAudioData(ab);
-        setAudioBuffer(buf);
-        await audioCtx.close();
+        // audioBuffer is already being decoded in the effect above
         // Wait for useBeatGrid to detect — poll
         return new Promise<BeatGridData | null>((resolve) => {
-          const check = () => {
-            // detectedGrid will update via the hook
-            setTimeout(() => resolve(null), 8000);
-          };
-          check();
+          setTimeout(() => resolve(null), 8000);
         });
       } catch (e) {
         console.warn("[FitTab] Beat analysis failed:", e);
@@ -370,6 +463,17 @@ export function FitTab({
 
   return (
     <div className="flex-1 px-4 py-6 space-y-6">
+      {/* ── Waveform with lazy beat markers ── */}
+      <LyricWaveform
+        waveform={waveform}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        onSeek={handleSeek}
+        onTogglePlay={handleTogglePlay}
+        beats={beatGrid?.beats ?? null}
+        beatGridLoading={!beatGrid && stage !== "ready" && stage !== "idle"}
+      />
+
       {/* Progress section */}
       {stage !== "ready" && stage !== "idle" && !publishing && (
         <div className="glass-card rounded-xl p-4 space-y-3">
