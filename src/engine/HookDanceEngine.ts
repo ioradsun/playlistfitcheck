@@ -33,6 +33,7 @@ import {
   type PhysicsSpec,
   type PhysicsState,
 } from "./PhysicsIntegrator";
+import type { SceneManifest } from "./SceneManifest";
 
 export interface BeatTick {
   time: number;       // seconds
@@ -85,6 +86,7 @@ export class HookDanceEngine {
   private syntheticStart = 0; // performance.now() when engine started
   private boundTimeUpdate: (() => void) | null = null;
   private boundEnded: (() => void) | null = null;
+  private activeManifest: SceneManifest | null = null;
 
   constructor(
     spec: PhysicsSpec,
@@ -167,6 +169,18 @@ export class HookDanceEngine {
       fits: width <= input.safeWidth && height <= input.safeHeight,
       steps,
     };
+  }
+
+
+
+  loadManifest(manifest: SceneManifest): void {
+    this.activeManifest = manifest;
+
+    console.log("[HookDanceEngine] loadManifest:", {
+      system: manifest.backgroundSystem,
+      particles: manifest.particleConfig?.system,
+      density: manifest.particleConfig?.density,
+    });
   }
 
   /** Start the engine — seeks audio to hookStart and begins ticking */

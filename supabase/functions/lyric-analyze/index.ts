@@ -238,6 +238,24 @@ Then set particleConfig with:
 PARTICLE + BACKGROUND COHERENCE:
 Avoid incoherent pairings. Could this particle physically exist in the world? If not, use none.
 
+
+SCHEMA CONSISTENCY — MANDATORY BEFORE RETURNING:
+
+Generate particleConfig ONCE in world_decision.
+Copy it IDENTICALLY to physics_spec.particleConfig
+and scene_manifest.particleConfig.
+
+Generate typographyProfile ONCE in scene_manifest.
+Copy it IDENTICALLY to physics_spec.typographyProfile.
+
+lightSource MUST match the physical world:
+- cold/winter/mountain/night/icy worlds → "winter daylight" or "dead of night"
+- NEVER assign "golden hour" to cold or bleak worlds
+- golden hour = warm, alive, late afternoon sun only
+
+If physics_spec and scene_manifest have different values
+for the same field, you have made an error.
+
 OUTPUT — valid JSON only:
 {
   "hottest_hooks": [
@@ -404,6 +422,100 @@ function normalizeParticleConfig(raw: unknown, manifest: SceneManifest): Particl
     beatReactive: typeof p.beatReactive === "boolean" ? p.beatReactive : false,
     foreground: typeof p.foreground === "boolean" ? p.foreground : false,
   };
+}
+
+
+function normalizeSongDna(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
+  const dna = { ...raw };
+  const worldDecision = (dna.world_decision ?? {}) as Record<string, unknown>;
+  const physicsSpec = (dna.physics_spec ?? {}) as Record<string, unknown>;
+  const sceneManifest = (dna.scene_manifest ?? {}) as Record<string, unknown>;
+
+  const wdP = worldDecision.particleConfig as Record<string, unknown> | undefined;
+  const psP = physicsSpec.particleConfig as Record<string, unknown> | undefined;
+  const smP = sceneManifest.particleConfig as Record<string, unknown> | undefined;
+
+  const authParticle =
+    wdP?.system && wdP.system !== "none"
+      ? wdP
+      : psP?.system && psP.system !== "none"
+        ? psP
+        : smP?.system && smP.system !== "none"
+          ? smP
+          : (wdP ??
+            psP ??
+            smP ?? {
+              system: "none",
+              density: 0.3,
+              speed: 0.4,
+              opacity: 0.35,
+              color: "#ffffff",
+              beatReactive: false,
+              foreground: false,
+            });
+
+  worldDecision.particleConfig = authParticle;
+  physicsSpec.particleConfig = authParticle;
+  sceneManifest.particleConfig = authParticle;
+
+  const psT = physicsSpec.typographyProfile as Record<string, unknown> | undefined;
+  const smT = sceneManifest.typographyProfile as Record<string, unknown> | undefined;
+
+  const authTypo =
+    psT?.fontFamily && psT.fontFamily !== "Inter"
+      ? psT
+      : smT?.fontFamily && smT.fontFamily !== "Inter"
+        ? smT
+        : (psT ??
+          smT ?? {
+            fontFamily: "Inter",
+            fontWeight: 400,
+            letterSpacing: "normal",
+            textTransform: "none",
+            lineHeightMultiplier: 1.4,
+            hasSerif: false,
+            personality: "RAW TRANSCRIPT",
+          });
+
+  physicsSpec.typographyProfile = authTypo;
+  sceneManifest.typographyProfile = authTypo;
+
+  if (worldDecision.backgroundSystem) {
+    sceneManifest.backgroundSystem = worldDecision.backgroundSystem;
+    physicsSpec.system = worldDecision.backgroundSystem;
+  }
+
+  if (physicsSpec.palette) {
+    sceneManifest.palette = physicsSpec.palette;
+  }
+
+  const world = String(sceneManifest.world ?? "").toLowerCase();
+  const coldKeywords = [
+    "cold",
+    "winter",
+    "snow",
+    "mountain",
+    "icy",
+    "blizzard",
+    "frozen",
+    "night",
+    "dark",
+    "grey",
+  ];
+  const isColWorld = coldKeywords.some((k) => world.includes(k));
+
+  if (isColWorld && sceneManifest.lightSource === "golden hour") {
+    sceneManifest.lightSource = "winter daylight";
+    console.warn("[normalizeSongDna] corrected golden hour → winter daylight");
+  }
+
+  dna.world_decision = worldDecision;
+  dna.physics_spec = physicsSpec;
+  dna.scene_manifest = sceneManifest;
+
+  return dna;
 }
 
 function colorDistance(hex1: string, hex2: string): number {
@@ -770,6 +882,7 @@ serve(async (req) => {
     }
 
     if (parsed) {
+      parsed = normalizeSongDna(parsed as Record<string, unknown>);
       parsed.particleConfig = normalizeParticleConfig(parsed.particleConfig, parsed as SceneManifest);
     }
 
