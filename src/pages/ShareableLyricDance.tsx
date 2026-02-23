@@ -1072,16 +1072,16 @@ export default function ShareableLyricDance() {
       const isClimax = interpreterNow?.isClimaxMoment(songProgress) ?? false;
       climaxActiveRef.current = isClimax;
 
-      // Camera transform — applied via CSS on container so both canvases zoom together
-      const zoom = cameraZoomRef.current * silenceZoomRef.current;
+      // Camera transform — zoom disabled to prevent picture-in-picture; pan only
+      // const zoom = cameraZoomRef.current * silenceZoomRef.current; // TODO: re-enable once transform math is confirmed
       const camOffX = cameraOffsetRef.current.x + (currentBeatIntensity > 0.92
         ? Math.sin(currentTime * 37.7) * (currentBeatIntensity - 0.92) * 15
         : 0);
       const camOffY = cameraOffsetRef.current.y + silenceOffsetYRef.current + (currentBeatIntensity > 0.92
         ? Math.cos(currentTime * 37.7 * 1.3) * (currentBeatIntensity - 0.92) * 5
         : 0);
-      container.style.transform = zoom !== 1 || camOffX !== 0 || camOffY !== 0
-        ? `scale(${zoom}) translate(${camOffX}px, ${camOffY}px)`
+      container.style.transform = camOffX !== 0 || camOffY !== 0
+        ? `translate(${camOffX}px, ${camOffY}px)`
         : "";
       container.style.transformOrigin = "center center";
 
