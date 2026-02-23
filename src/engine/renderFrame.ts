@@ -1,19 +1,8 @@
 /**
- * renderFrame.ts — Pure render function extracted from ShareableLyricDance.
+ * renderFrame.ts — Pure render functions extracted from ShareableLyricDance.
  *
- * STATUS: SCAFFOLDING — This file defines the RendererState interface
- * and a stub renderFrame function. The actual 1100-line render loop
- * in ShareableLyricDance.tsx needs to be migrated here incrementally.
- *
- * The render loop is deeply coupled to:
- *   - 3 canvas contexts (bgCtx, particleCtx, textCtx)
- *   - HookDanceEngine (physics state)
- *   - ParticleEngine (particle simulation)
- *   - DirectionInterpreter (cinematic direction)
- *   - AnimationResolver (line animation)
- *   - WordClassifier (word visual props)
- *   - 20+ mutable ref-like state variables
- *   - Browser APIs (window.innerWidth, navigator.hardwareConcurrency)
+ * STATUS: INCREMENTAL MIGRATION
+ *   Section 1 ✅ — Background layer (renderBackground)
  *
  * Migration strategy:
  *   1. Replace browser API calls with state-passed values
@@ -22,11 +11,15 @@
  *   4. Extract one section at a time (background → particles → text → overlays)
  */
 
-import type { CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
+import type { Chapter, CinematicDirection, SymbolSystem, TensionStage, WordDirective } from "@/types/CinematicDirection";
 import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
 import type { ParticleEngine } from "@/engine/ParticleEngine";
 import type { DirectionInterpreter, WordHistory } from "@/engine/DirectionInterpreter";
 import type { HookDanceEngine } from "@/engine/HookDanceEngine";
+import { renderChapterBackground, getSymbolStateForProgress } from "@/engine/BackgroundDirector";
+import { renderChapterLighting } from "@/engine/LightingDirector";
+
+// ─── Types ──────────────────────────────────────────────────────────
 
 export interface LyricLine {
   start: number;
@@ -61,6 +54,110 @@ export interface ConstellationNode {
   currentSize: number;
   baseOpacity: number;
 }
+
+/** Mutable background-layer state — persisted across frames by the caller. */
+export interface BackgroundState {
+  lastChapterTitle: string;
+  lastBeatIntensity: number;
+  lastProgress: number;
+  lastDrawTime: number;
+}
+
+/** Input for a single renderBackground call. */
+export interface BackgroundInput {
+  /** The chapter to render (already resolved with fallback by caller). */
+  chapter: Chapter;
+  songProgress: number;
+  beatIntensity: number;
+  currentTime: number;
+  /** Timestamp from performance.now() */
+  now: number;
+  lightIntensity: number;
+  activeWordPosition: { x: number; y: number };
+  symbol: SymbolSystem | undefined | null;
+}
+
+// ─── Section 1: Background layer ────────────────────────────────────
+
+/**
+ * Renders the background layer (bgCanvas) and text-canvas lighting overlay.
+ *
+ * Handles dirty-checking internally — skips expensive bgCanvas redraws
+ * when nothing meaningful changed (chapter, beat, progress).
+ *
+ * Returns the number of draw calls performed.
+ */
+export function renderBackground(
+  bgCtx: CanvasRenderingContext2D,
+  bgCanvas: HTMLCanvasElement,
+  textCtx: CanvasRenderingContext2D,
+  textCanvas: HTMLCanvasElement,
+  input: BackgroundInput,
+  bgState: BackgroundState,
+): number {
+  const {
+    chapter, songProgress, beatIntensity, currentTime,
+    now, lightIntensity, activeWordPosition, symbol,
+  } = input;
+
+  // Dirty check — same logic as the original rAF loop
+  const timeSinceLastDraw = now - bgState.lastDrawTime;
+  const needsUpdate =
+    chapter.title !== bgState.lastChapterTitle ||
+    (timeSinceLastDraw > 100 && (
+      Math.abs(beatIntensity - bgState.lastBeatIntensity) > 0.2 ||
+      Math.abs(songProgress - bgState.lastProgress) > 0.05
+    )) ||
+    (bgState.lastBeatIntensity <= 0.2 && beatIntensity > 0.2) ||
+    (bgState.lastBeatIntensity > 0.2 && beatIntensity <= 0.2);
+
+  if (needsUpdate) {
+    const cw = bgCanvas.width;
+    const ch = bgCanvas.height;
+    bgCtx.fillStyle = "#0a0a0a";
+    bgCtx.fillRect(0, 0, cw, ch);
+
+    renderChapterBackground(
+      bgCtx,
+      bgCanvas,
+      chapter,
+      songProgress,
+      beatIntensity,
+      currentTime,
+      symbol,
+    );
+
+    renderChapterLighting(
+      bgCtx,
+      bgCanvas,
+      chapter,
+      activeWordPosition,
+      songProgress,
+      beatIntensity * lightIntensity,
+      currentTime,
+    );
+
+    bgState.lastChapterTitle = chapter.title;
+    bgState.lastBeatIntensity = beatIntensity;
+    bgState.lastProgress = songProgress;
+    bgState.lastDrawTime = now;
+  }
+
+  // Always render lighting on the text canvas (cheap — no budget gate)
+  renderChapterLighting(
+    textCtx,
+    textCanvas,
+    chapter,
+    activeWordPosition,
+    songProgress,
+    beatIntensity * lightIntensity,
+    currentTime,
+  );
+
+  return 2; // draw-call accounting (bg + text lighting)
+}
+
+// ─── Full-frame stub (future) ───────────────────────────────────────
 
 /** Complete state needed by the render loop — no React, no DOM */
 export interface RendererState {
