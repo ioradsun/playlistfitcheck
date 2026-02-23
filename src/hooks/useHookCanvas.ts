@@ -192,6 +192,14 @@ function getWordMarkColor(mark: string, manifest: SceneManifest): string {
   }
 }
 
+
+
+type AudioElementWithAnalyser = HTMLAudioElement & {
+  __analyserNode?: AnalyserNode;
+  __audioContext?: AudioContext;
+  __mediaElementSource?: MediaElementAudioSourceNode;
+};
+
 export const HOOK_CANVAS_COMPOSITING_HINTS = {
   maskUsesPaletteShadow: true,
   kenBurnsFollowsLightSource: true,
@@ -284,7 +292,8 @@ export function useHookCanvas(
   const frameRef = useRef<{ physState: PhysicsState | null; time: number; beats: number }>({
     physState: null, time: 0, beats: 0,
   });
-  const beatIntensity = useBeatIntensity(analyserNode ?? null, active);
+  const localAnalyserRef = useRef<AnalyserNode | null>(null);
+  const beatIntensity = useBeatIntensity(analyserNode ?? localAnalyserRef.current, active);
 
   // Keep onEnd ref current
   onEndRef.current = onEnd;
@@ -551,13 +560,38 @@ export function useHookCanvas(
   useEffect(() => {
     if (!hookData) return;
 
-    const audio = new Audio();
+    const audio = new Audio() as AudioElementWithAnalyser;
     audio.muted = true;
     audio.preload = "auto";
     audio.crossOrigin = "anonymous";
     audio.loop = true;
     audioRef.current = audio;
     audio.src = hookData.audio_url;
+
+    let beatCtx: AudioContext | null = null;
+    let beatSource: MediaElementAudioSourceNode | null = null;
+    if (!analyserNode) {
+      try {
+        if (audio.__analyserNode) {
+          localAnalyserRef.current = audio.__analyserNode;
+          beatCtx = audio.__audioContext ?? null;
+          beatSource = audio.__mediaElementSource ?? null;
+        } else {
+          beatCtx = new AudioContext();
+          const analyser = beatCtx.createAnalyser();
+          beatSource = beatCtx.createMediaElementSource(audio);
+          beatSource.connect(analyser);
+          analyser.connect(beatCtx.destination);
+          void beatCtx.resume().catch(() => {});
+          audio.__analyserNode = analyser;
+          audio.__audioContext = beatCtx;
+          audio.__mediaElementSource = beatSource;
+          localAnalyserRef.current = analyser;
+        }
+      } catch {
+        localAnalyserRef.current = null;
+      }
+    }
 
     const spec = hookData.physics_spec as PhysicsSpec;
     const beats: BeatTick[] = hookData.beat_grid.beats.map((t: number, i: number) => ({
@@ -602,8 +636,20 @@ export function useHookCanvas(
       cancelled = true;
       engineRef.current?.stop();
       audio.pause();
+      if (!analyserNode) {
+        if (beatSource) {
+          try { beatSource.disconnect(); } catch {}
+        }
+        if (beatCtx) {
+          beatCtx.close().catch(() => {});
+        }
+        delete audio.__analyserNode;
+        delete audio.__audioContext;
+        delete audio.__mediaElementSource;
+        localAnalyserRef.current = null;
+      }
     };
-  }, [hookData, drawCanvas, active]);
+  }, [hookData, drawCanvas, active, analyserNode]);
 
   useEffect(() => {
     if (!hookData) return;

@@ -128,6 +128,12 @@ interface VersionMeta {
   lastEdited?: string;
 }
 
+type AudioElementWithAnalyser = HTMLAudioElement & {
+  __analyserNode?: AnalyserNode;
+  __audioContext?: AudioContext;
+  __mediaElementSource?: MediaElementAudioSourceNode;
+};
+
 function normalizeSongDnaWithManifest(
   songDna: any,
   fallbackTitle: string,
@@ -893,20 +899,31 @@ export function LyricDisplay({
   useEffect(() => {
     const url = URL.createObjectURL(audioFile);
     audioUrlRef.current = url;
-    const audio = new Audio(url);
+    const audio = new Audio(url) as AudioElementWithAnalyser;
     audioRef.current = audio;
 
     // Shared analyser for cinematic bloom intensity (same media element as HookDance playback)
     let beatCtx: AudioContext | null = null;
     let beatSource: MediaElementAudioSourceNode | null = null;
     try {
-      beatCtx = new AudioContext();
-      const analyser = beatCtx.createAnalyser();
-      beatSource = beatCtx.createMediaElementSource(audio);
-      beatSource.connect(analyser);
-      analyser.connect(beatCtx.destination);
-      beatAudioContextRef.current = beatCtx;
-      beatAnalyserRef.current = analyser;
+      if (audio.__analyserNode) {
+        beatCtx = audio.__audioContext ?? null;
+        beatSource = audio.__mediaElementSource ?? null;
+        beatAnalyserRef.current = audio.__analyserNode;
+        beatAudioContextRef.current = beatCtx;
+      } else {
+        beatCtx = new AudioContext();
+        const analyser = beatCtx.createAnalyser();
+        beatSource = beatCtx.createMediaElementSource(audio);
+        beatSource.connect(analyser);
+        analyser.connect(beatCtx.destination);
+        void beatCtx.resume().catch(() => {});
+        audio.__analyserNode = analyser;
+        audio.__audioContext = beatCtx;
+        audio.__mediaElementSource = beatSource;
+        beatAudioContextRef.current = beatCtx;
+        beatAnalyserRef.current = analyser;
+      }
     } catch {
       beatAnalyserRef.current = null;
       beatAudioContextRef.current = null;
@@ -957,6 +974,9 @@ export function LyricDisplay({
       if (beatCtx) {
         beatCtx.close().catch(() => {});
       }
+      delete audio.__analyserNode;
+      delete audio.__audioContext;
+      delete audio.__mediaElementSource;
       beatAudioContextRef.current = null;
       URL.revokeObjectURL(url);
     };
