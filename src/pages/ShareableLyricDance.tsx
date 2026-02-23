@@ -111,7 +111,7 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
       <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity" style={{ left: `calc(${progress * 100}% - 6px)` }} />
     </div>
   );
-}
+});
 
 // ─── Live Debug HUD ─────────────────────────────────────────────────
 
