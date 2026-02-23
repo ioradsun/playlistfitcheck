@@ -215,7 +215,7 @@ function getParticleConfigForTime(
       return { ...baseConfig, system: "embers", density: lerp(0.3, 0.7, t), speed: lerp(0.4, 0.7, t), opacity: lerp(0.4, 0.7, t) };
     } else if (progress < 0.8) {
       const t = (progress - 0.5) / 0.3;
-      return { ...baseConfig, system: "flames", density: lerp(0.5, 0.9, t) + beat * 0.15, speed: lerp(0.5, 0.9, t), opacity: lerp(0.6, 0.9, t) };
+      return { ...baseConfig, system: "embers", density: lerp(0.5, 0.9, t) + beat * 0.15, speed: lerp(0.5, 0.9, t), opacity: lerp(0.6, 0.9, t) };
     } else {
       const t = (progress - 0.8) / 0.2;
       return { ...baseConfig, system: "ash", density: lerp(0.8, 0.4, t), speed: lerp(0.6, 0.3, t), opacity: lerp(0.7, 0.3, t) };

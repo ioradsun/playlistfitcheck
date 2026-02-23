@@ -6,7 +6,7 @@
  * Uses refs for all rapidly-changing values to avoid stale closures in rAF.
  */
 
-import { useRef, useEffect, useState, useCallback, forwardRef } from "react";
+import { useRef, useEffect, useState, useCallback, forwardRef, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download } from "lucide-react";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
@@ -69,6 +69,47 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
   const [overrides, setOverrides] = useState<HookDanceOverrides>({});
   const startTimeRef = useRef(Date.now());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // ── Debug HUD state ──
+  interface EditorDebugState {
+    beatIntensity: number; physGlow: number;
+    heat: number; offsetX: number; offsetY: number; rotation: number; scale: number; shake: number;
+    effectKey: string; entryProgress: number; exitProgress: number;
+    activeMod: string | null; fontScale: number; finalScale: number;
+    lineColor: string; isHookLine: boolean; repIndex: number; repTotal: number;
+    system: string; songProgress: number; palette: string[];
+    entrance: string; time: number;
+  }
+  const debugRef = useRef<EditorDebugState>({
+    beatIntensity: 0, physGlow: 0,
+    heat: 0, offsetX: 0, offsetY: 0, rotation: 0, scale: 1, shake: 0,
+    effectKey: "—", entryProgress: 0, exitProgress: 0,
+    activeMod: null, fontScale: 1, finalScale: 1,
+    lineColor: "#fff", isHookLine: false, repIndex: 0, repTotal: 0,
+    system: "—", songProgress: 0, palette: [],
+    entrance: "fades", time: 0,
+  });
+  const [showHud, setShowHud] = useState(false);
+  const [hudSnap, setHudSnap] = useState<EditorDebugState>(debugRef.current);
+
+  // D-key toggle
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "d" || e.key === "D") {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        setShowHud(prev => !prev);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Poll debug ref at 100ms
+  useEffect(() => {
+    if (!showHud) return;
+    const id = setInterval(() => setHudSnap({ ...debugRef.current }), 100);
+    return () => clearInterval(id);
+  }, [showHud]);
 
   // ── Refs for all rapidly-changing values (prevents stale closures in rAF) ──
   const physicsStateRef = useRef(physicsState);
@@ -319,6 +360,33 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           effectKey,
         });
 
+        // Write debug state for HUD
+        debugRef.current = {
+          beatIntensity: editorBeatIntensity,
+          physGlow: ps.heat * 0.6,
+          heat: sp.params?.heat ?? 0,
+          offsetX: ps.offsetX,
+          offsetY: ps.offsetY,
+          rotation: ps.rotation,
+          scale: ps.scale,
+          shake: ps.shake,
+          effectKey,
+          entryProgress: lineAnim.entryProgress,
+          exitProgress: lineAnim.exitProgress,
+          activeMod: lineAnim.activeMod ?? null,
+          fontScale: lineAnim.fontScale ?? 1,
+          finalScale: lineAnim.scale * ps.scale,
+          lineColor: correctedLineColor,
+          isHookLine: lineAnim.isHookLine,
+          repIndex: 0,
+          repTotal: 0,
+          system: system ?? "—",
+          songProgress,
+          palette: palette,
+          entrance: lyricEntrance,
+          time: ct,
+        };
+
         // Micro-surprise overlay
         if (
           sp.micro_surprise &&
@@ -432,6 +500,9 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           />
         )}
       </AnimatePresence>
+
+      {/* Debug HUD — press D to toggle */}
+      {showHud && <EditorDebugHUD snap={hudSnap} />}
     </motion.div>
   );
 });
@@ -480,4 +551,75 @@ function drawMicroSurprise(
     }
   }
   ctx.restore();
+}
+
+// ── Editor Debug HUD ────────────────────────────────────────────────────────
+
+function EditorDebugHUD({ snap }: { snap: {
+  beatIntensity: number; physGlow: number;
+  heat: number; offsetX: number; offsetY: number; rotation: number; scale: number; shake: number;
+  effectKey: string; entryProgress: number; exitProgress: number;
+  activeMod: string | null; fontScale: number; finalScale: number;
+  lineColor: string; isHookLine: boolean; repIndex: number; repTotal: number;
+  system: string; songProgress: number; palette: string[];
+  entrance: string; time: number;
+} }) {
+  const f = (v: number, d = 2) => v.toFixed(d);
+  const rowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 8 };
+  const labelStyle: CSSProperties = { color: "#4ade80" };
+  const valStyle: CSSProperties = { color: "#d1fae5" };
+  const sectionStyle: CSSProperties = { marginBottom: 6 };
+  const titleStyle: CSSProperties = { color: "#22c55e", fontWeight: 700, marginBottom: 2, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" };
+
+  const Row = ({ l, v }: { l: string; v: string }) => (
+    <div style={rowStyle}><span style={labelStyle}>{l}:</span><span style={valStyle}>{v}</span></div>
+  );
+  const Sec = ({ t, children }: { t: string; children: React.ReactNode }) => (
+    <div style={sectionStyle}><div style={titleStyle}>{t}</div>{children}</div>
+  );
+
+  return (
+    <div style={{
+      position: "fixed", top: 12, left: 12, zIndex: 200,
+      background: "rgba(0,0,0,0.88)", backdropFilter: "blur(4px)",
+      border: "1px solid rgba(74,222,128,0.15)", borderRadius: 6,
+      padding: 12, maxWidth: 280, minWidth: 240,
+      fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
+      fontSize: 11, lineHeight: "1.55", color: "#4ade80",
+      pointerEvents: "auto", overflowY: "auto", maxHeight: "90vh",
+    }}>
+      <Sec t="BEAT">
+        <Row l="intensity" v={f(snap.beatIntensity)} />
+        <Row l="physGlow" v={f(snap.physGlow)} />
+      </Sec>
+      <Sec t="PHYSICS ENGINE">
+        <Row l="heat" v={f(snap.heat)} />
+        <Row l="offsetX" v={`${f(snap.offsetX, 1)}px`} />
+        <Row l="offsetY" v={`${f(snap.offsetY, 1)}px`} />
+        <Row l="rotation" v={f(snap.rotation, 3)} />
+        <Row l="scale" v={f(snap.scale)} />
+        <Row l="shake" v={f(snap.shake)} />
+      </Sec>
+      <Sec t="ANIMATION">
+        <Row l="effect" v={snap.effectKey} />
+        <Row l="entryProgress" v={f(snap.entryProgress)} />
+        <Row l="exitProgress" v={f(snap.exitProgress)} />
+        <Row l="activeMod" v={snap.activeMod ?? "none"} />
+        <Row l="fontScale" v={f(snap.fontScale)} />
+        <Row l="finalScale" v={f(snap.finalScale)} />
+        <Row l="lineColor" v={snap.lineColor} />
+        <Row l="isHookLine" v={snap.isHookLine ? "true" : "false"} />
+        <Row l="repIndex" v={`${snap.repIndex}/${snap.repTotal}`} />
+      </Sec>
+      <Sec t="BACKGROUND">
+        <Row l="system" v={snap.system} />
+        <Row l="songProgress" v={f(snap.songProgress)} />
+        <Row l="palette" v={`[${snap.palette.join(", ")}]`} />
+        <Row l="entrance" v={snap.entrance} />
+      </Sec>
+      <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" }}>
+        {f(snap.time, 2)}s · press D to close
+      </div>
+    </div>
+  );
 }
