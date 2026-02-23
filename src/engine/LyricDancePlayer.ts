@@ -340,6 +340,9 @@ export class LyricDancePlayer {
       globalBakeLock = true;
       globalBakePromise = (async () => {
         const payload = this.buildScenePayload();
+        this.payload = payload;
+        this.songStartSec = payload.songStart;
+        this.songEndSec = payload.songEnd;
 
         // Build and capture chunks BEFORE the async bake
         // so Strict Mode destroy() can't wipe them
