@@ -254,6 +254,8 @@ export function LyricDanceExporter({
     let particleEngine: ParticleEngine | null = null;
     if (baseManifest.particleConfig?.system !== "none") {
       particleEngine = new ParticleEngine(baseManifest);
+      particleEngine.setBounds({ x: 0, y: 0, w: cw, h: ch });
+      particleEngine.init(baseManifest.particleConfig, baseManifest);
     }
 
     // ── Cinematic direction interpreter ──────────────────────────────
@@ -455,9 +457,7 @@ export function LyricDanceExporter({
           particleState,
         );
         lightIntensity = particleResult.lightIntensity;
-
-        // Composite particle canvas onto main
-        ctx.drawImage(particleCanvas, 0, 0);
+        // renderParticles already draws to ctx (textCtx param), no extra composite needed
       }
 
       // ── Text + word effects ─────────────────────────────────────
