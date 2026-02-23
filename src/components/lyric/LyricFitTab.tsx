@@ -154,6 +154,14 @@ export function LyricFitTab({
         }
       }
 
+      // If all three analysis results exist, lock the pipeline gate immediately
+      if (savedBg && loadedSongDna && (loadedSongDna as any).cinematicDirection) {
+        pipelineTriggeredRef.current = true;
+        setFitReadiness("ready");
+        setFitProgress(100);
+        setFitUnlocked(true);
+      }
+
       const savedSignature = (initialLyric as any).song_signature;
       if (savedSignature) setSongSignature(savedSignature as SongSignature);
 
@@ -415,6 +423,7 @@ export function LyricFitTab({
     if (pipelineTriggeredRef.current) return;
     // If all data already loaded from DB, skip pipeline entirely
     if (songDna && beatGrid && cinematicDirection) {
+      pipelineTriggeredRef.current = true;
       setGenerationStatus({ beatGrid: "done", songDna: "done", cinematicDirection: "done" });
       return;
     }
