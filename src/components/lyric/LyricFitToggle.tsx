@@ -50,7 +50,7 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitReadiness =
           >
             {isRunning && <Loader2 size={12} className="animate-spin text-primary" />}
             {isLocked && !isRunning && !isError && <Lock size={10} />}
-            {isReady && <CheckCircle2 size={12} className="text-green-500" />}
+            {isReady && <CheckCircle2 size={12} className="text-primary" />}
             Fit
           </button>
           {/* Progress bar under Fit tab */}
