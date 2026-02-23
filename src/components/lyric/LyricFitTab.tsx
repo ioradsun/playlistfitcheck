@@ -49,6 +49,7 @@ export function LyricFitTab({
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const savedIdRef = useRef<string | null>(null);
   const [lines, setLines] = useState<LyricLine[]>([]);
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
