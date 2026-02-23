@@ -15,6 +15,10 @@ import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles"
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
 import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
+import {
+  resolveWordColors, applyContrastRhythm, applyBeatFlash,
+  drawTemperatureTint, perceivedBrightness, mixTowardWhite,
+} from "@/engine/ColorEnhancer";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
@@ -147,7 +151,9 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
     if (!ctx) return;
 
     let animId = 0;
-
+    // Contrast-rhythm: track last 2 line brightness values
+    const recentBrightness: number[] = [];
+    let lastTrackedLineIndex = -1;
     const draw = () => {
       animId = requestAnimationFrame(draw);
 
@@ -181,6 +187,10 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         system, physState: ps, w, h, time: ct, beatCount: bc,
         rng, palette, hookStart: hs, hookEnd: he,
       });
+
+      // ── 4. Color temperature tint (background only) ──
+      const songProgress = (ct - hs) / Math.max(0.001, he - hs);
+      drawTemperatureTint(ctx, w, h, songProgress);
 
       // Find current lyric line
       const activeLine = ln.find(l => ct >= l.start && ct < l.end);
@@ -218,8 +228,31 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
 
         // AnimationResolver: entry/exit, scale, mod
         const lineAnim = animationResolver.resolveLine(
-          activeLineIndex, activeLine.start, activeLine.end, ct, editorBeatIntensity, manifest.palette,
+          activeLineIndex, activeLine.start, activeLine.end, ct, editorBeatIntensity, manifest.palette as [string, string, string],
         );
+
+        // ── 2. Contrast rhythm — force mid-tone if last 2 were bright ──
+        let correctedLineColor = lineAnim.lineColor;
+        if (activeLineIndex !== lastTrackedLineIndex) {
+          correctedLineColor = applyContrastRhythm(lineAnim.lineColor, recentBrightness, textPalette as string[]);
+          recentBrightness.push(perceivedBrightness(correctedLineColor));
+          if (recentBrightness.length > 2) recentBrightness.shift();
+          lastTrackedLineIndex = activeLineIndex;
+        } else {
+          correctedLineColor = applyContrastRhythm(lineAnim.lineColor, recentBrightness, textPalette as string[]);
+        }
+
+        // ── 1. Word-level color ──
+        let wordColors = resolveWordColors(
+          activeLine.text, correctedLineColor, textPalette as string[],
+          lineAnim.isHookLine, lineAnim.activeMod,
+        );
+
+        // ── 3. Beat brightness flash ──
+        wordColors = applyBeatFlash(wordColors, editorBeatIntensity);
+        const flashedLineColor = editorBeatIntensity > 0.7
+          ? mixTowardWhite(correctedLineColor, editorBeatIntensity * 0.3)
+          : correctedLineColor;
 
         const lyricEntrance = manifest.lyricEntrance ?? "fades";
         const lyricExit = manifest.lyricExit ?? "fades";
@@ -249,12 +282,12 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           text: activeLine.text,
           physState: ps,
           w, h, fs, age, progress, rng,
-          // KEY FIX: use textPalette (text-safe) instead of raw palette
-          palette: [lineAnim.lineColor, textPalette[1], textPalette[2]],
+          palette: [flashedLineColor, textPalette[1] as string, textPalette[2] as string],
           system,
           effectiveLetterSpacing,
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
           alphaMultiplier: compositeAlpha,
+          wordColors,
         };
 
         drawFn(ctx, effectState);

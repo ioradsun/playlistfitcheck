@@ -457,7 +457,7 @@ export default function ShareableLyricDance() {
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const totalDuration = Math.max(0.001, songEnd - songStart);
     const hookStartTimes = lines
-      .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0).isHookLine)
+      .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0, effectivePalette).isHookLine)
       .map(line => line.start)
       .sort((a, b) => a - b);
 
@@ -530,7 +530,7 @@ export default function ShareableLyricDance() {
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
 
       const lineAnim = activeLine
-        ? animationResolver.resolveLine(activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity)
+        ? animationResolver.resolveLine(activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette)
         : null;
       const isInHook = lineAnim?.isHookLine ?? false;
       const hookProgress = lineAnim
@@ -730,9 +730,7 @@ export default function ShareableLyricDance() {
         const drawFn = getEffect(effectKey);
 
         // Resolve animation mods via AnimationResolver
-        const activeLineAnim = lineAnim ?? animationResolver.resolveLine(
-          activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity,
-        const lineAnim = animationResolver.resolveLine(
+        const activeLineAnim = animationResolver.resolveLine(
           activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette,
         );
         frameActiveMod = activeLineAnim.activeMod;
@@ -748,7 +746,7 @@ export default function ShareableLyricDance() {
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
           ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
           : computeFitFontSize(ctx, activeLine.text, cw, effectiveSystem);
-        const fontSize = fs * lineAnim.fontScale;
+        const fontSize = fs * activeLineAnim.fontScale;
         frameFontSize = fontSize;
 
         ctx.save();

@@ -75,6 +75,8 @@ export interface EffectState {
   stackedLayout?: StackedLayout;
   /** Multiplier applied to all alpha values (entrance/exit animations) */
   alphaMultiplier?: number;
+  /** Per-word color overrides (same length as text.split(/\s+/)) */
+  wordColors?: string[];
 }
 
 type EffectFn = (ctx: CanvasRenderingContext2D, s: EffectState) => void;
