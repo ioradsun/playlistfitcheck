@@ -275,11 +275,7 @@ export default function ShareableLyricDance() {
     };
   }, [data]);
 
-  // Update cinematic direction on late arrival
-  useEffect(() => {
-    if (!data?.cinematic_direction || !playerRef.current) return;
-    playerRef.current.updateCinematicDirection(data.cinematic_direction);
-  }, [data?.cinematic_direction]);
+  // cinematic_direction gate ensures player always has it at construction — no late update needed
 
   // ── Mute toggle ─────────────────────────────────────────────────────
 
@@ -361,6 +357,19 @@ export default function ShareableLyricDance() {
       <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 z-50">
         <p className="text-white/40 text-lg font-mono">Lyric Dance not found.</p>
         <button onClick={() => navigate("/")} className="text-white/30 text-sm hover:text-white/60 transition-colors">tools.fm</button>
+      </div>
+    );
+  }
+
+  // Gate: don't render player until cinematic_direction is a real object (not null, not [])
+  if (!data.cinematic_direction || Array.isArray(data.cinematic_direction)) {
+    return (
+      <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center z-50">
+        <div className="text-center space-y-3">
+          <div className="h-4 w-48 rounded bg-white/[0.06] animate-pulse mx-auto" />
+          <div className="h-3 w-32 rounded bg-white/[0.04] animate-pulse mx-auto" />
+          <p className="text-white/20 text-xs font-mono mt-4">loading cinematic direction…</p>
+        </div>
       </div>
     );
   }
