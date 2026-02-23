@@ -168,6 +168,10 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
     return 36;
   });
 
+  console.log('[BAKER] storyboard:', JSON.stringify(payload.cinematic_direction?.storyboard?.slice(0, 2)));
+  console.log('[BAKER] first 5 lineShotTypes:', lineShotTypes.slice(0, 5));
+  console.log('[BAKER] first 5 lineFontSizes:', lineFontSizes.slice(0, 5));
+
   const lineColors = payload.lines.map((_, idx) => {
     const ci = lineChapterIndex[idx];
     if (ci < 0 || !payload.palette?.length) return "#ffffff";
@@ -302,6 +306,14 @@ function bakeFrame(
     const visible = alpha > 0.001;
     const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
     const chunkScale = lineActive && visible ? scale : 1.0;
+
+    if (frameIndex === 100) {
+      console.log('[BAKER frame 100] cameraZoom:', state.currentZoom,
+        'springOffset:', state.springOffset,
+        'springVelocity:', state.springVelocity,
+        'beatIndex:', beatIndex,
+        'active chunk scale:', chunkScale, 'lineActive:', lineActive);
+    }
 
     chunks.push({
       id: `${idx}`,
