@@ -40,6 +40,7 @@ interface Props {
   setFmlyLines: (l: any[] | null) => void;
   versionMeta: any | null;
   setVersionMeta: (v: any | null) => void;
+  beatGrid?: BeatGridData | null;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;
