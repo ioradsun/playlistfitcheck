@@ -19,6 +19,7 @@ import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { getTextShadow } from "@/engine/LightingSystem";
 import { getSymbolStateForProgress } from "@/engine/BackgroundDirector";
 import { renderBackground, renderParticles, type BackgroundState, type ParticleState } from "@/engine/renderFrame";
+import { renderText, type TextState, type TextResult } from "@/engine/renderText";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { ParticleEngine } from "@/engine/ParticleEngine";
