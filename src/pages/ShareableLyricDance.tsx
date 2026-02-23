@@ -173,6 +173,56 @@ function LiveDebugHUD({ player }: { player: LyricDancePlayer | null }) {
   );
 }
 
+// ─── Debug Panel (toggle via button) ────────────────────────────────
+
+function DebugPanel({ player, data }: { player: LyricDancePlayer | null; data: LyricDanceData }) {
+  const [open, setOpen] = useState(false);
+  const [snap, setSnap] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    if (!open || !player) return;
+    const id = setInterval(() => setSnap({ ...player.debugState }), 200);
+    return () => clearInterval(id);
+  }, [open, player]);
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="fixed bottom-4 left-4 z-[80] px-3 py-1.5 rounded bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 text-[10px] font-mono text-white/50 hover:text-white/80 transition-all"
+      >
+        {open ? "Close Debug" : "Debug"}
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "fixed", bottom: 48, left: 12, zIndex: 200,
+            background: "rgba(0,0,0,0.92)", backdropFilter: "blur(4px)",
+            border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6,
+            padding: 12, maxWidth: 420, minWidth: 300,
+            fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
+            fontSize: 10, lineHeight: "1.5", color: "#e2e8f0",
+            pointerEvents: "auto", overflowY: "auto", maxHeight: "70vh",
+          }}
+        >
+          <div style={{ color: "#60a5fa", fontWeight: 700, marginBottom: 6, fontSize: 11, letterSpacing: "0.08em" }}>
+            PLAYER DEBUG STATE
+          </div>
+          <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", color: "#94a3b8", marginBottom: 12 }}>
+            {JSON.stringify(snap, null, 2)}
+          </pre>
+          <div style={{ color: "#f59e0b", fontWeight: 700, marginBottom: 6, fontSize: 11, letterSpacing: "0.08em" }}>
+            CINEMATIC DIRECTION
+          </div>
+          <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all", color: "#94a3b8" }}>
+            {JSON.stringify(data.cinematic_direction, null, 2) || "null"}
+          </pre>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── Main Component ─────────────────────────────────────────────────
 
 export default function ShareableLyricDance() {
@@ -480,6 +530,7 @@ export default function ShareableLyricDance() {
 
       {/* Debug */}
       <LiveDebugHUD player={playerRef.current} />
+      <DebugPanel player={playerRef.current} data={data} />
       <LyricDanceDebugPanel
         data={{
           songDna: {
