@@ -641,6 +641,12 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     const cinematicDirection = data?.cinematic_direction ?? null;
+    console.log('cinematic_direction loaded:', 
+      cinematicDirection ? 'YES' : 'NO',
+      cinematicDirection?.wordDirectives 
+        ? Object.keys(cinematicDirection.wordDirectives) 
+        : 'NO WORD DIRECTIVES'
+    );
     const lines = data?.lyrics ?? [];
     const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
@@ -1472,6 +1478,7 @@ export default function ShareableLyricDance() {
             wordCountRef.current.get(word.text) ?? 0,
           );
 
+          console.log('interpreter:', interpreterNow ? 'exists' : 'NULL');
           const directive = interpreterNow?.getWordDirective(word.text) ?? null;
           console.log('word directive:', word.text, directive);
           if (directive?.colorOverride) {

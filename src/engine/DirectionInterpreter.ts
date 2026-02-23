@@ -19,7 +19,8 @@ export class DirectionInterpreter {
 
   getWordDirective(word: string): WordDirective | null {
     const key = word.toLowerCase().replace(/[^a-z]/g, "");
-    return this.direction.wordDirectives[key] ?? null;
+    console.log('looking up:', key, 'available keys:', Object.keys(this.direction.wordDirectives ?? {}));
+    return this.direction.wordDirectives?.[key] ?? null;
   }
 
   getLineDirection(lineIndex: number): LineDirection | null {
