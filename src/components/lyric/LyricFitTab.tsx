@@ -57,6 +57,9 @@ export function LyricFitTab({
   const [fitReadiness, setFitReadiness] = useState<FitReadiness>("not_started");
   const [fitProgress, setFitProgress] = useState(0);
   const [fitStageLabel, setFitStageLabel] = useState("");
+  const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
+    transcript: "pending", rhythm: "pending", songDna: "pending", cinematic: "pending",
+  });
   const pipelineRanOnce = useRef(false);
 
   // Beat grid detection from decoded audio
