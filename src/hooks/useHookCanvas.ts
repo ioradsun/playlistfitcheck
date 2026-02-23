@@ -3,7 +3,7 @@
  * Extracted from ShareableHook so it can be reused in inline feed embeds.
  */
 
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSafeTextColor, getSystemStyle } from "@/engine/SystemStyles";
@@ -13,6 +13,7 @@ import type { SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver, type WordAnimation } from "@/engine/AnimationResolver";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
+import { useBeatIntensity } from "@/hooks/useBeatIntensity";
 
 
 function applyLyricShadow(
@@ -125,6 +126,7 @@ function applyModEffect(
       ctx.globalAlpha *= 0.82 + Math.sin(time * 20) * 0.18;
       break;
     case "WAVE_DISTORT":
+    case "DISTORT_WAVE":
       ctx.translate(Math.sin(time * 6) * 3, 0);
       break;
     case "STATIC_GLITCH":
@@ -217,6 +219,7 @@ export interface HookData {
   fire_count: number;
   vote_count: number;
   system_type: string;
+  hottest_hooks?: Array<{ start_sec?: number; start?: number; duration_sec?: number; duration?: number }>;
   /** Override: use this system's font/typography instead of system_type's */
   font_system?: string;
   palette: string[];
@@ -280,6 +283,10 @@ export function useHookCanvas(
   const frameRef = useRef<{ physState: PhysicsState | null; time: number; beats: number }>({
     physState: null, time: 0, beats: 0,
   });
+  const beatAudioContextRef = useRef<AudioContext | null>(null);
+  const beatSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const [beatAnalyserNode, setBeatAnalyserNode] = useState<AnalyserNode | null>(null);
+  const beatIntensity = useBeatIntensity(beatAnalyserNode, active);
 
   // Keep onEnd ref current
   onEndRef.current = onEnd;
@@ -459,8 +466,11 @@ export function useHookCanvas(
 
       const fs = layoutResult?.fontSize ?? baseFs;
 
-      const lineIndex = lines.indexOf(activeLine);
-      const beatIntensity = Math.min(1, Math.max(0, physState.glow ?? 0));
+      console.log("[render] beatSource:", {
+        physGlow: physState.glow?.toFixed(3),
+        audioIntensity: beatIntensity.toFixed(3),
+      });
+      console.log("[render] beatIntensity:", beatIntensity.toFixed(3));
       const manifest = {
         lyricEntrance: "fades",
         lyricExit: "fades",
@@ -469,12 +479,20 @@ export function useHookCanvas(
       } as SceneManifest;
 
       const anim = animationResolver.resolveLine(
-        lineIndex,
+        activeLine.start,
         activeLine.start,
         activeLine.end,
         ct,
         beatIntensity,
       );
+      console.log("[render] line anim:", {
+        text: activeLine.text.slice(0, 20),
+        entryProgress: anim.entryProgress.toFixed(2),
+        exitProgress: anim.exitProgress.toFixed(2),
+        activeMod: anim.activeMod,
+        scale: anim.scale.toFixed(3),
+        isHookLine: anim.isHookLine,
+      });
 
       ctx.save();
       const lineX = w / 2;
@@ -531,7 +549,7 @@ export function useHookCanvas(
     }
 
     ctx.restore();
-  }, [hookData, canvasRef, containerRef, constellationRef, riverOffsetsRef]);
+  }, [hookData, canvasRef, containerRef, constellationRef, riverOffsetsRef, beatIntensity]);
 
   // Setup audio + engine
   useEffect(() => {
@@ -544,6 +562,25 @@ export function useHookCanvas(
     audio.loop = true;
     audioRef.current = audio;
     audio.src = hookData.audio_url;
+
+    let beatCtx: AudioContext | null = null;
+    let analyser: AnalyserNode | null = null;
+    try {
+      beatCtx = new AudioContext();
+      analyser = beatCtx.createAnalyser();
+      analyser.fftSize = 256;
+      const beatSource = beatCtx.createMediaElementSource(audio);
+      beatSource.connect(analyser);
+      analyser.connect(beatCtx.destination);
+      beatAudioContextRef.current = beatCtx;
+      beatSourceRef.current = beatSource;
+      setBeatAnalyserNode(analyser);
+    } catch (e) {
+      console.warn("[useHookCanvas] beat analyser init failed", e);
+      beatAudioContextRef.current = null;
+      beatSourceRef.current = null;
+      setBeatAnalyserNode(null);
+    }
 
     const spec = hookData.physics_spec as PhysicsSpec;
     const beats: BeatTick[] = hookData.beat_grid.beats.map((t: number, i: number) => ({
@@ -588,20 +625,26 @@ export function useHookCanvas(
       cancelled = true;
       engineRef.current?.stop();
       audio.pause();
+      beatSourceRef.current?.disconnect();
+      beatSourceRef.current = null;
+      setBeatAnalyserNode(null);
+      const ctx = beatAudioContextRef.current;
+      beatAudioContextRef.current = null;
+      if (ctx) {
+        void ctx.close();
+      }
     };
   }, [hookData, drawCanvas, active]);
 
   useEffect(() => {
     if (!hookData) return;
-    animationResolver.loadFromDna({
-      physics_spec: hookData.physics_spec,
-      hottest_hooks: [
-        {
-          start_sec: hookData.hook_start,
-          duration_sec: hookData.hook_end - hookData.hook_start,
-        },
-      ],
-    });
+    animationResolver.loadFromDna(
+      {
+        physics_spec: hookData.physics_spec,
+        hottest_hooks: hookData.hottest_hooks ?? [],
+      },
+      hookData.lyrics,
+    );
   }, [hookData]);
 
   // Track active prop — pause/resume engine
