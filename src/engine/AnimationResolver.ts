@@ -187,9 +187,6 @@ export class AnimationResolver {
     const scale = isHookLine
       ? 1.0 + beatIntensity * 0.12
       : 1.0 + beatIntensity * 0.04;
-    const baseFontScale = this.resolveFontScale(activeMod);
-    const repetitionScale = this.repetitionScales.get(lineIndex) ?? 1;
-    const fontScale = baseFontScale * repetitionScale;
 
     const fontScale = this.resolveFontScale(activeMod);
 
