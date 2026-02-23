@@ -1299,17 +1299,16 @@ export default function ShareableLyricDance() {
       }
       drawCalls += 2;
 
-      if (canRenderEffects) {
-        renderChapterLighting(
-          ctx,
-          textCanvas,
-          chapterForRender,
-          activeWordPosition,
-          songProgress,
-          currentBeatIntensity * lightIntensityRef.current,
-          currentTime,
-        );
-      }
+      // Always render lighting on text canvas (no budget gate — lighting is cheap)
+      renderChapterLighting(
+        ctx,
+        textCanvas,
+        chapterForRender,
+        activeWordPosition,
+        songProgress,
+        currentBeatIntensity * lightIntensityRef.current,
+        currentTime,
+      );
 
       // Particle engine: update then draw parallax split layers.
       // Perf opt 5: adaptive particle count based on frame budget
@@ -1323,7 +1322,7 @@ export default function ShareableLyricDance() {
         slowFrameCountRef.current = Math.max(0, slowFrameCountRef.current - 1);
       }
 
-      if (canRenderParticles && particleEngine) {
+      if (particleEngine) {
         const maxParticles = adaptiveMaxParticlesRef.current;
         // Perf opt 3: cache particle config by progress bucket
         const progressBucket = Math.floor(songProgress * 20);
@@ -1355,9 +1354,12 @@ export default function ShareableLyricDance() {
         timedParticleConfig.density = Math.min(timedParticleConfig.density, maxParticles / 300);
         particleEngine.update(deltaMs, currentBeatIntensity, timedParticleConfig);
         particleFrameRef.current += 1;
+        // Draw particles to both particle canvas and text canvas for guaranteed visibility
         particleCtx.clearRect(0, 0, cw, ch);
         particleEngine.draw(particleCtx, "all");
-        drawCalls += 1;
+        // Also draw background (far) particles behind text on main ctx
+        particleEngine.draw(ctx, "all");
+        drawCalls += 2;
       }
 
       // Pre-hook darkness build (skipped during hook itself).
