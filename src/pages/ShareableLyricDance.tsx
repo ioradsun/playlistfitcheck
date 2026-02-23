@@ -82,8 +82,9 @@ function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart
   return (
     <div
       ref={progressBarRef}
-      onMouseDown={onMouseDown}
-      onTouchStart={onTouchStart}
+      onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e); }}
+      onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e); }}
+      onClick={(e) => e.stopPropagation()}
       className="absolute bottom-0 left-0 right-0 z-10 h-3 cursor-pointer group"
       style={{ touchAction: "none" }}
     >
