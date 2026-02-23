@@ -379,7 +379,7 @@ export class LyricDancePlayer {
         globalSongStartSec = payload.songStart;
         globalSongEndSec = payload.songEnd;
         globalBakeLock = false;
-        console.log('[PLAYER] bake done — frames:', globalTimelineCache.length, 'chunks:', globalChunkCache.size);
+      })();
       })();
     }
 
