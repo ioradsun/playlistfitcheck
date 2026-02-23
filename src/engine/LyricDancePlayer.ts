@@ -601,8 +601,8 @@ export class LyricDancePlayer {
       dirLightBehavior: currentChapter?.lightBehavior ?? "—",
 
       // Camera & Tension
-      cameraDistance: currentChapter?.cameraDistance ?? "—",
-      cameraMovement: currentChapter?.cameraMovement ?? "—",
+      cameraDistance: (currentChapter as any)?.cameraDistance ?? "—",
+      cameraMovement: (currentChapter as any)?.cameraMovement ?? "—",
       tensionStage: currentTension?.stage ?? "—",
       tensionMotion: currentTension?.motionIntensity ?? 0,
       tensionParticles: currentTension?.particleDensity ?? 0,
