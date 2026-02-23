@@ -1856,6 +1856,17 @@ export default function ShareableLyricDance() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
+      {/* Close / back button — outside canvas, always clickable */}
+      <button
+        onClick={() => navigate(-1)}
+        className="fixed top-4 right-4 z-[70] w-8 h-8 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/70 transition-all text-white/60 hover:text-white/90"
+        aria-label="Close"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <line x1="2" y1="2" x2="12" y2="12" />
+          <line x1="12" y1="2" x2="2" y2="12" />
+        </svg>
+      </button>
       {/* Fit by toolsFM badge */}
       <AnimatePresence>
         {badgeVisible && (
@@ -1880,8 +1891,8 @@ export default function ShareableLyricDance() {
         className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer overflow-hidden"
         onClick={() => { if (!showCover) handleMuteToggle(); }}
       >
-        <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full" />
-        <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full" />
+        <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+        <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
         {/* Dark cover overlay */}
         <AnimatePresence>
@@ -1939,17 +1950,7 @@ export default function ShareableLyricDance() {
           )}
         </AnimatePresence>
 
-        {/* Close / back button — top-right */}
-        <button
-          onClick={() => navigate(-1)}
-          className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/70 transition-all text-white/60 hover:text-white/90"
-          aria-label="Close"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <line x1="2" y1="2" x2="12" y2="12" />
-            <line x1="12" y1="2" x2="2" y2="12" />
-          </svg>
-        </button>
+        {/* canvases get pointer-events:none so overlays stay clickable */}
 
         {/* Top-left identity label (visible after cover dismissed) */}
         {!showCover && data && (
