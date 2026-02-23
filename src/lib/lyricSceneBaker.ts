@@ -57,31 +57,37 @@ const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
 
-type StoryboardLike = {
-  startSec?: number;
-  endSec?: number;
-  shotType?: string;
-};
-
 type WordDirectiveLike = {
   word?: string;
 };
 
 type TensionStageLike = {
-  startSec?: number;
-  endSec?: number;
+  startRatio?: number;
+  endRatio?: number;
   motion?: number;
+  motionIntensity?: number;
 };
 
 type StoryboardEntryLike = {
-  startSec?: number;
-  endSec?: number;
+  lineIndex?: number;
+  entryStyle?: string;
+  exitStyle?: string;
+  heroWord?: string;
   shotType?: string;
 };
 
 type ChapterLike = {
-  startSec?: number;
-  endSec?: number;
+  startRatio?: number;
+  endRatio?: number;
+  dominantColor?: string;
+  typographyShift?: {
+    fontWeight?: number;
+  };
+};
+
+type CameraDistanceLike = {
+  chapterIndex?: number;
+  distance?: string;
 };
 
 type BakeState = {
@@ -106,12 +112,14 @@ type PrebakedData = {
   density: number;
 };
 
-function normalizeWordDirectives(source: CinematicDirection | null): WordDirectiveLike[] {
-  const raw = source?.wordDirectives;
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw as WordDirectiveLike[];
-  return Object.values(raw as Record<string, WordDirectiveLike>);
-}
+const findByRatio = <T extends { startRatio?: number; endRatio?: number }>(
+  arr: T[],
+  progress: number,
+): T | null =>
+  arr?.find((item) =>
+    progress >= (item.startRatio ?? 0) &&
+    progress < (item.endRatio ?? 1),
+  ) ?? arr?.[arr.length - 1] ?? null;
 
 export function blendWithWhite(hex: string, whiteFraction: number): string {
   const clean = (hex ?? "").replace("#", "");
@@ -127,56 +135,50 @@ export function blendWithWhite(hex: string, whiteFraction: number): string {
 
 function createPrebakedData(payload: ScenePayload, totalFrames: number): PrebakedData {
   const chapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
-  const wordDirectives = normalizeWordDirectives(payload.cinematic_direction);
+  const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
   const tensionCurve = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
   const physSpec = payload.physics_spec as unknown as Record<string, unknown> | null;
   const energy = Number(physSpec?.energy ?? 0.5);
   const density = Number(physSpec?.density ?? 0.5);
   const storyboards = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
-
-  const lineChapterIndex = payload.lines.map((line) => {
-    for (let i = 0; i < chapters.length; i += 1) {
-      const ch = chapters[i];
-      if ((line.start ?? 0) >= (ch.startSec ?? 0) && (line.start ?? 0) < (ch.endSec ?? 9999)) return i;
-    }
-    return -1;
-  });
+  const songDuration = Math.max(0.01, payload.songEnd - payload.songStart);
 
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
-  const songDuration = Math.max(0.01, payload.songEnd - payload.songStart);
   const chapterCount = Math.max(1, chapters.length || 4);
 
-  console.log('[BAKER] chapters count:', chapters.length,
-    'first chapter keys:', Object.keys(chapters[0] ?? {}));
+  console.log('[BAKER] ratio-based setup — chapters:', chapters.length,
+    'first chapter ratio:', chapters[0]?.startRatio, '-', chapters[0]?.endRatio,
+    'tension stages:', tensionCurve.length,
+    'distanceByChapter:', payload.cinematic_direction?.cameraLanguage?.distanceByChapter?.length);
 
-  const lineShotTypes = payload.lines.map((line) => {
-    // Try storyboard first
-    for (let i = 0; i < storyboards.length; i += 1) {
-      const s = storyboards[i];
-      if ((line.start ?? 0) >= (s.startSec ?? 0) && (line.start ?? 0) < (s.endSec ?? 9999)) {
-        return s.shotType ?? "Medium";
-      }
-    }
+  const lineShotTypes = payload.lines.map((line, lineIndex) => {
+    const storyboardEntry = storyboards[lineIndex] ?? null;
+    if (storyboardEntry?.shotType) return storyboardEntry.shotType;
     // Fall back — divide song into equal segments by chapter count
     const progress = ((line.start ?? 0) - payload.songStart) / songDuration;
     const chapterIdx = Math.floor(progress * chapterCount);
     return shotCycle[chapterIdx % shotCycle.length];
   });
 
-  const lineHeroWords = payload.lines.map((line) => {
-    const text = line.text?.toLowerCase() ?? "";
-    for (let i = 0; i < wordDirectives.length; i += 1) {
-      const word = wordDirectives[i]?.word?.toLowerCase();
-      if (word && text.includes(word)) return wordDirectives[i]?.word ?? null;
-    }
-    return null;
+  const lineHeroWords = payload.lines.map((_, lineIndex) => {
+    const storyboardEntry = storyboards[lineIndex] ?? null;
+    const heroWord = storyboardEntry?.heroWord ?? null;
+    return heroWord ? wordDirectivesMap[heroWord]?.word ?? heroWord : null;
   });
 
-  const lineFontSizes = payload.lines.map((_, idx) => {
+  const lineFontSizes = payload.lines.map((line, idx) => {
     const shot = lineShotTypes[idx];
-    if (shot === "CloseUp") return 48;
-    if (shot === "Wide") return 24;
-    return 36;
+    const lineProgress = ((line.start ?? 0) - payload.songStart) / songDuration;
+    const currentChapter = findByRatio(chapters, lineProgress);
+    const typoShift = currentChapter?.typographyShift;
+    const fontWeight = typoShift?.fontWeight
+      ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
+      ?? 700;
+    const weightScale = fontWeight >= 800 ? 1.06 : 1;
+
+    if (shot === "CloseUp") return Math.round(48 * weightScale);
+    if (shot === "Wide") return Math.round(24 * weightScale);
+    return Math.round(36 * weightScale);
   });
 
   console.log('[BAKER] storyboard:', JSON.stringify(payload.cinematic_direction?.storyboard?.slice(0, 2)));
@@ -184,42 +186,30 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
   console.log('[BAKER] first 5 lineFontSizes:', lineFontSizes.slice(0, 5));
 
   const lineColors = payload.lines.map((_, idx) => {
-    const ci = lineChapterIndex[idx];
-    if (ci < 0 || !payload.palette?.length) return "#ffffff";
-    return blendWithWhite(payload.palette[ci % payload.palette.length] ?? "#ffffff", 0.45);
+    const line = payload.lines[idx];
+    const lineProgress = songDuration > 0
+      ? ((line.start ?? 0) - (payload.songStart ?? 0)) / songDuration
+      : 0;
+    const chapter = chapters.find((ch) =>
+      lineProgress >= (ch.startRatio ?? 0) && lineProgress < (ch.endRatio ?? 1),
+    );
+    const color = chapter?.dominantColor ?? payload.palette?.[0] ?? '#ffffff';
+    return blendWithWhite(color, 0.55);
   });
 
   const chapterIndexByFrame = new Array<number>(totalFrames + 1).fill(-1);
   const tensionMotionByFrame = new Array<number>(totalFrames + 1).fill(0.5);
   const activeLineByFrame = new Array<number>(totalFrames + 1).fill(-1);
 
-  let chapterCursor = 0;
-  let tensionCursor = 0;
-
   for (let frameIndex = 0; frameIndex <= totalFrames; frameIndex += 1) {
     const tSec = payload.songStart + (frameIndex * FRAME_STEP_MS) / 1000;
+    const progress = Math.min(1, (tSec - payload.songStart) / songDuration);
 
-    while (chapterCursor < chapters.length && tSec >= (chapters[chapterCursor].endSec ?? 9999)) {
-      chapterCursor += 1;
-    }
-    if (
-      chapterCursor < chapters.length &&
-      tSec >= (chapters[chapterCursor].startSec ?? 0) &&
-      tSec < (chapters[chapterCursor].endSec ?? 9999)
-    ) {
-      chapterIndexByFrame[frameIndex] = chapterCursor;
-    }
+    const chapter = findByRatio(chapters, progress);
+    chapterIndexByFrame[frameIndex] = chapter ? chapters.indexOf(chapter) : -1;
 
-    while (tensionCursor < tensionCurve.length && tSec >= (tensionCurve[tensionCursor].endSec ?? 9999)) {
-      tensionCursor += 1;
-    }
-    if (
-      tensionCursor < tensionCurve.length &&
-      tSec >= (tensionCurve[tensionCursor].startSec ?? 0) &&
-      tSec < (tensionCurve[tensionCursor].endSec ?? 9999)
-    ) {
-      tensionMotionByFrame[frameIndex] = tensionCurve[tensionCursor].motion ?? 0.5;
-    }
+    const tension = findByRatio(tensionCurve, progress);
+    tensionMotionByFrame[frameIndex] = tension?.motionIntensity ?? tension?.motion ?? 0.5;
 
     for (let idx = 0; idx < payload.lines.length; idx += 1) {
       const line = payload.lines[idx];
@@ -288,18 +278,24 @@ function bakeFrame(
 
   const tensionMotion = pre.tensionMotionByFrame[frameIndex] ?? 0.5;
 
-  const shotZoomMap: Record<string, number> = {
-    'CloseUp': 1.25,
-    'Medium': 1.0,
+  const chapters = pre.chapters;
+  const distanceToZoom: Record<string, number> = {
     'Wide': 0.82,
+    'Medium': 1.0,
+    'Close': 1.15,
+    'CloseUp': 1.2,
+    'ExtremeClose': 1.35,
     'FloatingInWorld': 0.95,
   };
-  const storyboard = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
-  const currentShot = storyboard.find(
-    (s) => tSec >= (s.startSec ?? 0) && tSec < (s.endSec ?? 9999),
-  )?.shotType ?? 'Medium';
-  const targetZoom = shotZoomMap[currentShot] ?? 1.0;
-  state.currentZoom += (targetZoom - state.currentZoom) * 0.02;
+  const currentChapterIdx = chapters.findIndex((ch) =>
+    songProgress >= (ch.startRatio ?? 0) && songProgress < (ch.endRatio ?? 1),
+  );
+  const chapterCameraEntry = (payload.cinematic_direction?.cameraLanguage?.distanceByChapter ?? [])
+    .find((d) => (d as CameraDistanceLike).chapterIndex === currentChapterIdx) as CameraDistanceLike | undefined;
+  const targetZoom = distanceToZoom[chapterCameraEntry?.distance ?? 'Medium'] ?? 1.0;
+
+  state.currentZoom = state.currentZoom ?? 1.0;
+  state.currentZoom += (targetZoom - state.currentZoom) * 0.015;
 
   const chunks: Keyframe["chunks"] = [];
 
@@ -315,6 +311,11 @@ function bakeFrame(
     const y = BASE_Y_CENTER;
 
     const visible = alpha > 0.001;
+    const storyboardEntry = payload.cinematic_direction?.storyboard?.[idx] ?? null;
+    const entryStyle = storyboardEntry?.entryStyle ?? 'fades';
+    const exitStyle = storyboardEntry?.exitStyle ?? 'fades';
+    const heroWord = storyboardEntry?.heroWord ?? pre.lineHeroWords[idx] ?? null;
+
     const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
     const chunkScale = lineActive && visible ? scale : 1.0;
 
@@ -338,31 +339,30 @@ function bakeFrame(
       color: pre.lineColors[idx] ?? "#ffffff",
     });
 
-    if (lineActive && payload.cinematic_direction?.wordDirectives) {
-      const directives = Object.values(payload.cinematic_direction.wordDirectives as Record<string, WordDirectiveLike>);
+    if (lineActive) {
+      const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
+      const lineHeroWord = heroWord
+        ? wordDirectivesMap[heroWord] ?? null
+        : null;
       const normalizedText = (line.text ?? "").toLowerCase();
-      const heroDirective = directives.find((directive) => {
-        const word = (directive.word ?? "").trim().toLowerCase();
-        return word.length > 0 && normalizedText.includes(word);
-      });
+      const directiveWord = (lineHeroWord?.word ?? heroWord ?? "").trim();
 
-      if (heroDirective?.word) {
-        const heroWord = heroDirective.word.trim();
-        const lowerHero = heroWord.toLowerCase();
+      if (directiveWord) {
+        const lowerHero = directiveWord.toLowerCase();
         const heroStart = normalizedText.indexOf(lowerHero);
         if (heroStart >= 0) {
           const preText = line.text.slice(0, heroStart);
           const approxCharW = 12;
           const preOffset = (preText.length * approxCharW) / 2;
-          const heroOffset = (heroWord.length * approxCharW) / 2;
+          const heroOffset = (directiveWord.length * approxCharW) / 2;
 
           chunks.push({
             id: `${idx}-hero`,
             x: x + preOffset + heroOffset,
             y,
-            alpha: Math.min(1, alpha + 0.15),
+            alpha: Math.min(1, alpha + (entryStyle === 'punch' ? 0.2 : 0.15)),
             glow: Math.min(1, chunkGlow + 0.2),
-            scale: Math.min(chunkScale * 1.15, 1.25),
+            scale: Math.min(chunkScale * (exitStyle === 'snap' ? 1.2 : 1.15), 1.25),
             visible,
             fontSize: pre.lineFontSizes[idx] ?? 36,
             color: pre.lineColors[idx] ?? "#ffffff",
@@ -389,8 +389,8 @@ function bakeFrame(
   return {
     timeMs,
     chunks,
-    cameraX: Math.sin(songProgress * Math.PI * 3.7) * 12 * tensionMotion,
-    cameraY: Math.cos(songProgress * Math.PI * 2.3) * 7 * tensionMotion,
+    cameraX: Math.sin(songProgress * Math.PI * 3.7) * 14 * tensionMotion,
+    cameraY: Math.cos(songProgress * Math.PI * 2.3) * 8 * tensionMotion,
     cameraZoom: state.currentZoom,
     beatIndex,
     bgBlend,
