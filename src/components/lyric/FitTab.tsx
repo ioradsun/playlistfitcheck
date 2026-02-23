@@ -98,7 +98,7 @@ export function FitTab({
           .eq("id", savedId)
           .single();
         if (saved?.lines && Array.isArray(saved.lines)) {
-          freshLines = saved.lines as LyricLine[];
+          freshLines = saved.lines as unknown as LyricLine[];
         }
       } catch {}
     }
