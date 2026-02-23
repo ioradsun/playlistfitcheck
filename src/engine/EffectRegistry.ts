@@ -669,6 +669,24 @@ const AI_KEY_TO_EFFECT: Record<string, string> = {
   DISSOLVE: "STATIC_RESOLVE",
   TREMOR: "RIPPLE_OUT",
   FRACTURE: "HOOK_FRACTURE",
+  // Additional fire / heat family
+  FLAME_BURST: "EMBER_RISE",
+  SMOKE_PLUME: "WAVE_SURGE",
+  EMBER_TRAIL: "EMBER_RISE",
+  HEAT_SHIMMER: "WAVE_SURGE",
+  SMOKE_TRAIL: "WAVE_SURGE",
+  EMBER_GLOW: "PULSE_BLOOM",
+  ASH_CLOUD: "GRAVITY_DROP",
+  // Additional transition / generic
+  RIPPLE_OUT: "RIPPLE_OUT",
+  FADE_OUT: "STATIC_RESOLVE",
+  FADE_IN: "TUNNEL_RUSH",
+  PULSE_SOFT: "PULSE_BLOOM",
+  WAVE_SURGE: "WAVE_SURGE",
+  IGNITE: "EMBER_RISE",
+  EXPLODE: "SHATTER_IN",
+  SMOLDER: "PULSE_BLOOM",
+  ERUPT: "HOOK_FRACTURE",
 };
 
 /** Resolve an AI-generated effect key to a registered effect function */
