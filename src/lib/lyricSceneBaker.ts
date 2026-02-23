@@ -226,6 +226,7 @@ function bakeFrame(
     chunks,
     cameraX: Math.sin(songProgress * Math.PI * 3.7) * 12 * tensionMotion,
     cameraY: Math.cos(songProgress * Math.PI * 2.3) * 7 * tensionMotion,
+    cameraZoom: state.currentZoom,
     beatIndex,
   };
 }
