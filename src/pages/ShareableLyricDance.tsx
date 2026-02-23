@@ -597,7 +597,7 @@ export default function ShareableLyricDance() {
     link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(trimmedFontFamily.replace(/ /g, "+"))}:wght@300;400;500;600;700&display=swap`;
     document.head.appendChild(link);
     loadedFontFamiliesRef.current.add(trimmedFontFamily);
-  }, [data?.cinematic_direction, data?.song_dna?.cinematic_direction]);
+  }, [data?.cinematic_direction]);
 
   // Comments / constellation
   const constellationRef = useRef<ConstellationNode[]>([]);
