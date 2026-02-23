@@ -18,7 +18,7 @@ import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { getTextShadow } from "@/engine/LightingSystem";
 import { getSymbolStateForProgress } from "@/engine/BackgroundDirector";
-import { renderBackground, type BackgroundState } from "@/engine/renderFrame";
+import { renderBackground, renderParticles, type BackgroundState, type ParticleState } from "@/engine/renderFrame";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { ParticleEngine } from "@/engine/ParticleEngine";
@@ -372,106 +372,6 @@ function drawWithLetterSpacing(
   });
   ctx.textAlign = originalAlign;
 }
-
-function getParticleConfigForTime(
-  baseConfig: ParticleConfig,
-  manifest: SceneManifest,
-  physicsSpec: PhysicsSpec | undefined,
-  songProgress: number,
-): ParticleConfig {
-  const progress = clamp01(songProgress);
-  const heat = Number(physicsSpec?.params?.heat ?? 0);
-  const isBurnWorld = manifest.backgroundSystem === "burn" || heat > 0.7;
-  const isRainWorld = manifest.backgroundSystem === "breath" || heat < 0.25;
-
-  if (isBurnWorld) {
-    if (progress < 0.15) {
-      return {
-        ...baseConfig,
-        system: "smoke",
-        renderStyle: "burn-smoke",
-        density: 0.35,
-        speed: 0.2,
-        opacity: 0.55,
-        color: "#4a3a2a",
-      };
-    }
-    if (progress < 0.55) {
-      return {
-        ...baseConfig,
-        system: "embers",
-        renderStyle: "burn-embers",
-        density: 0.8,
-        speed: 0.7,
-        opacity: 0.78,
-        color: "#ff8c42",
-      };
-    }
-    if (progress < 0.75) {
-      return {
-        ...baseConfig,
-        system: "embers",
-        renderStyle: "burn-embers",
-        density: 0.4,
-        speed: 0.55,
-        opacity: 0.52,
-        color: "#ff8c42",
-      };
-    }
-    return {
-      ...baseConfig,
-      system: "ash",
-      renderStyle: "burn-ash",
-      density: 0.3,
-      speed: 0.35,
-      opacity: 0.55,
-      color: "#aaaaaa",
-    };
-  }
-
-  if ((manifest.backgroundSystem as string) === "rain" || isRainWorld) {
-    if (progress < 0.20) {
-      return {
-        ...baseConfig,
-        system: "smoke",
-        renderStyle: "rain-mist",
-        density: 0.35,
-        speed: 0.2,
-        opacity: 0.5,
-        color: "#a7b4c8",
-      };
-    }
-    if (progress < 0.70) {
-      return {
-        ...baseConfig,
-        system: "rain",
-        renderStyle: "rain",
-        density: 0.7,
-        speed: 0.75,
-        opacity: 0.85,
-        color: "#b9c8de",
-      };
-    }
-    return {
-      ...baseConfig,
-      system: "rain",
-      renderStyle: "rain-drizzle",
-      density: 0.4,
-      speed: 0.4,
-      opacity: 0.6,
-      color: "#c5cfdf",
-    };
-  }
-
-  return {
-    ...baseConfig,
-    renderStyle: "default",
-    density: clamp01(baseConfig.density * (0.6 + progress * 0.4)),
-    speed: clamp01(baseConfig.speed),
-    opacity: clamp01(baseConfig.opacity * (0.7 + progress * 0.3)),
-  };
-}
-
 function getBackgroundSystemForTime(
   manifest: SceneManifest,
   songProgress: number,
@@ -724,18 +624,13 @@ export default function ShareableLyricDance() {
   const lineBeatMapRef = useRef<LineBeatMap[]>([]);
   const wordMeasureCache = useRef<Map<string, number>>(new Map());
   const evolutionCacheRef = useRef<Map<string, { count: number; scale: number; glow: number; opacity: number; yOffset: number }>>(new Map());
-  const particleFrameRef = useRef(0);
+  const particleStateRef = useRef<ParticleState>({ configCache: { bucket: -1, config: null }, slowFrameCount: 0, adaptiveMaxParticles: 0, frameCount: 0 });
   const directiveCacheRef = useRef<Map<string, WordDirective | null>>(new Map());
   const chapterBoundaryRef = useRef<{ key: number; chapter: ReturnType<DirectionInterpreter["getCurrentChapter"]> | null }>({ key: -1, chapter: null });
   const tensionBoundaryRef = useRef<{ key: number; stage: TensionStage | null }>({ key: -1, stage: null });
   const bgStateRef = useRef<BackgroundState>({ lastChapterTitle: "", lastBeatIntensity: 0, lastProgress: 0, lastDrawTime: 0 });
   // Perf: constellation offscreen canvas
   const constellationCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  // Perf: particle config cache
-  const particleConfigCacheRef = useRef<{ bucket: number; config: ParticleConfig | null }>({ bucket: -1, config: null });
-  // Perf: adaptive particle limit
-  const slowFrameCountRef = useRef(0);
-  const adaptiveMaxParticlesRef = useRef(0);
 
   useEffect(() => {
     wordMeasureCache.current.clear();
@@ -1004,8 +899,8 @@ export default function ShareableLyricDance() {
     let pendingChapterTransition: ((typeof chapters)[number]) | null = null;
 
     // Perf: init adaptive max particles
-    adaptiveMaxParticlesRef.current = window.devicePixelRatio > 1 ? 150 : 80;
-    slowFrameCountRef.current = 0;
+    particleStateRef.current.adaptiveMaxParticles = window.devicePixelRatio > 1 ? 150 : 80;
+    particleStateRef.current.slowFrameCount = 0;
 
     // Perf: create offscreen canvas for constellation rendering
     const constellationCanvas = document.createElement("canvas");
@@ -1276,63 +1171,33 @@ export default function ShareableLyricDance() {
         bgStateRef.current,
       );
 
-      // Particle engine: update then draw parallax split layers.
-      // Perf opt 5: adaptive particle count based on frame budget
-      if (deltaMs > 20) {
-        slowFrameCountRef.current += 1;
-        if (slowFrameCountRef.current >= 10) {
-          adaptiveMaxParticlesRef.current = Math.max(20, Math.floor(adaptiveMaxParticlesRef.current * 0.5));
-          slowFrameCountRef.current = 0;
-        }
-      } else {
-        slowFrameCountRef.current = Math.max(0, slowFrameCountRef.current - 1);
-      }
-
-      if (particleEngine) {
-        // Perf opt 3: cache particle config by progress bucket (clone to avoid mutation)
-        const progressBucket = Math.floor(songProgress * 20);
-        let timedParticleConfig: ParticleConfig;
-        if (particleConfigCacheRef.current.bucket === progressBucket && particleConfigCacheRef.current.config) {
-          timedParticleConfig = { ...particleConfigCacheRef.current.config };
-        } else {
-          const freshConfig = getParticleConfigForTime(
-            baseParticleConfig,
-            timelineManifest,
-            spec,
-            songProgress,
-          );
-          particleConfigCacheRef.current = { bucket: progressBucket, config: freshConfig };
-          timedParticleConfig = { ...freshConfig };
-        }
-        // Use timed system from getParticleConfigForTime (rain/embers/smoke based on progress),
-        // only fallback to chapter directive if the timed config didn't change the system
-        if (timedParticleConfig.system === baseParticleConfig.system) {
-          const particleDirective = chapterDirective?.particleDirective ?? timelineManifest.particleConfig.system;
-          timedParticleConfig.system = particleDirective as any;
-          particleEngine.setChapterDirective(particleDirective);
-        } else {
-          particleEngine.setChapterDirective(timedParticleConfig.system);
-        }
-        if (lineAnim) {
-          const lineDir = interpreterNow?.getLineDirection(activeLineIndex) ?? null;
-          particleEngine.setBehaviorHint(lineDir?.particleBehavior ?? null);
-        }
-        if (isClimax && cinematicDirection?.climax) {
-          particleEngine.setDensityMultiplier(cinematicDirection.climax.maxParticleDensity);
-        } else {
-          particleEngine.setDensityMultiplier(tensionStage?.particleDensity ?? 1.0);
-        }
-        lightIntensityRef.current = tensionStage?.lightBrightness ?? 0.5;
-        // Don't cap density too aggressively — keep at least 0.15 for visibility
-        timedParticleConfig.density = Math.max(0.15, timedParticleConfig.density);
-        particleEngine.update(deltaMs, currentBeatIntensity, timedParticleConfig);
-        particleFrameRef.current += 1;
-        // Draw particles to both particle canvas and text canvas for guaranteed visibility
-        particleCtx.clearRect(0, 0, cw, ch);
-        particleEngine.draw(particleCtx, "all");
-        particleEngine.draw(ctx, "all");
-        drawCalls += 2;
-      }
+      // Particle engine: update + draw via extracted function
+      const lineDir = lineAnim ? (interpreterNow?.getLineDirection(activeLineIndex) ?? null) : null;
+      const particleResult = renderParticles(
+        particleCtx, ctx,
+        {
+          particleEngine,
+          baseParticleConfig,
+          timelineManifest,
+          physicsSpec: spec,
+          songProgress,
+          beatIntensity: currentBeatIntensity,
+          deltaMs,
+          cw, ch,
+          chapterDirective: chapterDirective ?? null,
+          isClimax,
+          climaxMaxParticleDensity: cinematicDirection?.climax?.maxParticleDensity ?? null,
+          tensionParticleDensity: tensionStage?.particleDensity ?? null,
+          tensionLightBrightness: tensionStage?.lightBrightness ?? null,
+          hasLineAnim: !!lineAnim,
+          particleBehavior: lineDir?.particleBehavior ?? null,
+          interpreter: interpreterNow ?? null,
+          activeLineIndex,
+        },
+        particleStateRef.current,
+      );
+      lightIntensityRef.current = particleResult.lightIntensity;
+      drawCalls += particleResult.drawCalls;
 
       // Pre-hook darkness build (skipped during hook itself).
       if (canRenderEffects && isPreHook && !isInHook) {
