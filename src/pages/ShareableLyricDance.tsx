@@ -1006,10 +1006,15 @@ export default function ShareableLyricDance() {
         ?? (!activeLine || Boolean(nextLine && currentTime < nextLine.start - 0.5));
       if (isInSilence && cinematicDirection?.silenceDirective) {
         const silence = cinematicDirection.silenceDirective;
-        if (silence.cameraMovement.includes("downward")) silenceOffsetYRef.current += 0.3;
-        if (silence.cameraMovement.includes("push")) silenceZoomRef.current += 0.0002;
+        // Capped — never accumulate beyond limits
+        if (silence.cameraMovement.includes("downward")) silenceOffsetYRef.current = Math.min(15, silenceOffsetYRef.current + 0.3);
+        if (silence.cameraMovement.includes("push")) silenceZoomRef.current = Math.min(1.05, silenceZoomRef.current + 0.0002);
         if (silence.tensionDirection === "building") vignetteIntensityRef.current = Math.min(0.8, vignetteIntensityRef.current + 0.001);
         else if (silence.tensionDirection === "releasing") vignetteIntensityRef.current = Math.max(0.3, vignetteIntensityRef.current - 0.001);
+      } else {
+        // Decay back to neutral when not in silence
+        silenceOffsetYRef.current *= 0.95;
+        silenceZoomRef.current = 1 + (silenceZoomRef.current - 1) * 0.95;
       }
       const baselineY = yBaseRef.current === 0 ? ch * 0.5 : yBaseRef.current;
       let activeWordPosition = {
@@ -1593,9 +1598,9 @@ export default function ShareableLyricDance() {
           }
 
           if (normalizedWord === "love" && directive?.evolutionRule) {
-            evolutionGlow = Math.max(evolutionGlow, appearanceCount * 3);
-            evolutionScale = Math.max(evolutionScale, 1 + appearanceCount * 0.03);
-            evolutionYOffset += appearanceCount;
+            evolutionGlow = Math.max(evolutionGlow, Math.min(appearanceCount * 3, 15));
+            evolutionScale = Math.max(evolutionScale, 1 + Math.min(appearanceCount * 0.03, 0.15));
+            evolutionYOffset = Math.min(evolutionYOffset + Math.min(appearanceCount, 5), 10);
           }
 
           if (climaxActiveRef.current) {
