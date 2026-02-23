@@ -773,13 +773,11 @@ export default function ShareableLyricDance() {
     interpreterRef.current = loopInterpreter;
     interpreterRefStable.current = loopInterpreter;
 
-    let particleEngine: ParticleEngine | null = null;
-    if (resolvedManifest.particleConfig?.system !== "none") {
-      particleEngine = new ParticleEngine(resolvedManifest);
-    }
+    // Always create particle engine — cinematic direction may override the system
+    let particleEngine: ParticleEngine | null = new ParticleEngine(resolvedManifest);
     particleEngineRef.current = particleEngine;
     if (cinematicDirection?.visualWorld?.particleSystem) {
-      particleEngine?.setSystem(cinematicDirection.visualWorld.particleSystem);
+      particleEngine.setSystem(cinematicDirection.visualWorld.particleSystem);
     }
 
     // Load AnimationResolver with song DNA

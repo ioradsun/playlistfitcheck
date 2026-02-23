@@ -182,6 +182,12 @@ export class ParticleEngine {
 
   setSystem(system: string): void {
     this.config = { ...this.config, system: system as ParticleConfig["system"] };
+    this.clear();
+    // Warm-spawn initial particles for the new system
+    const warmCount = Math.floor(this.maxParticles * this.config.density * 0.3);
+    for (let i = 0; i < warmCount; i++) {
+      this.spawnParticles(0);
+    }
   }
 
   setDensityMultiplier(multiplier: number): void {
