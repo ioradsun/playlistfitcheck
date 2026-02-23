@@ -1086,7 +1086,6 @@ export function LyricDisplay({
           : null,
         song_signature: (initialSongSignature as any) ?? null,
         song_dna: (songDna as any) ?? null,
-        background_image_url: backgroundImageUrl,
         updated_at: new Date().toISOString(),
       };
 
