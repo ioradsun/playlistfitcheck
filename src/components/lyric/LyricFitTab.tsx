@@ -348,6 +348,11 @@ export function LyricFitTab({
 
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[]) => {
     if (!lyricData || !sourceLines.length) return;
+    // Data-existence guard: if we already have cinematicDirection (e.g. loaded from DB), skip
+    if (cinematicDirection) {
+      setGenerationStatus(prev => prev.cinematicDirection === "done" ? prev : ({ ...prev, cinematicDirection: "done" }));
+      return;
+    }
     if (generationStatus.cinematicDirection === "running" || generationStatus.cinematicDirection === "done") return;
 
     setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running" }));
