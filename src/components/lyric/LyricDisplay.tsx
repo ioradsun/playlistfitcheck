@@ -905,7 +905,7 @@ export function LyricDisplay({
             } as any)
           : null,
         song_signature: null,
-        song_dna: (songDna as any) ?? null,
+        ...(songDna ? { song_dna: songDna as any } : {}),
         updated_at: new Date().toISOString(),
       };
 
