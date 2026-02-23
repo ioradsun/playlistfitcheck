@@ -494,7 +494,7 @@ function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart
  * When true, the render loop runs on an OffscreenCanvas in a Web Worker.
  * When false (current), the existing rAF loop runs on the main thread.
  */
-const USE_WORKER = true;
+const USE_WORKER = false;
 
 export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
