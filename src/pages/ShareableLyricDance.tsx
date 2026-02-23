@@ -950,7 +950,6 @@ export default function ShareableLyricDance() {
     let particleEngine: ParticleEngine | null = null;
     if (resolvedManifest.particleConfig?.system !== "none") {
       particleEngine = new ParticleEngine(resolvedManifest);
-      particleEngine.setUpdateFrameSkip(2);
     }
     particleEngineRef.current = particleEngine;
 
@@ -1072,6 +1071,7 @@ export default function ShareableLyricDance() {
       constellationDirty = true;
       if (particleEngine) {
         particleEngine.setBounds({ x: 0, y: 0, w: rect.width, h: rect.height });
+        particleEngine.init(resolvedManifest.particleConfig, resolvedManifest);
       }
     };
     resize();
@@ -1238,10 +1238,7 @@ export default function ShareableLyricDance() {
         ctx.translate(shakeX, shakeY);
       }
 
-      // Background — draw on bgCanvas only; text canvas stays transparent
-      bgCtx.fillStyle = "#0a0a0a";
-      bgCtx.fillRect(0, 0, cw, ch);
-
+      // Background — draw on bgCanvas only when dirty; text canvas stays transparent
       const chapterForRender = chapterDirective ?? {
         startRatio: 0,
         endRatio: 1,
@@ -1271,7 +1268,9 @@ export default function ShareableLyricDance() {
       const canRenderParticles = budgetElapsed() < 11;
       const canRenderEffects = budgetElapsed() < FRAME_BUDGET_MS - 1;
 
-      if (canRenderBackground && bgNeedsUpdate) {
+      if (bgNeedsUpdate) {
+        bgCtx.fillStyle = "#0a0a0a";
+        bgCtx.fillRect(0, 0, cw, ch);
         renderChapterBackground(
           bgCtx,
           bgCanvas,
