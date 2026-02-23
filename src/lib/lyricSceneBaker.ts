@@ -188,7 +188,7 @@ function bakeFrame(
       x,
       y,
       alpha,
-      scale,
+      glow: chunkGlow,
       visible,
     });
 
