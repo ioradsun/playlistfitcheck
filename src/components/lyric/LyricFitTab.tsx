@@ -20,6 +20,14 @@ import { FitTab } from "./FitTab";
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 
+export type PipelineStageStatus = "pending" | "running" | "done";
+export interface PipelineStages {
+  transcript: PipelineStageStatus;
+  rhythm: PipelineStageStatus;
+  songDna: PipelineStageStatus;
+  cinematic: PipelineStageStatus;
+}
+
 interface Props {
   initialLyric?: any;
   onProjectSaved?: () => void;
@@ -57,6 +65,9 @@ export function LyricFitTab({
   const [fitReadiness, setFitReadiness] = useState<FitReadiness>("not_started");
   const [fitProgress, setFitProgress] = useState(0);
   const [fitStageLabel, setFitStageLabel] = useState("");
+  const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
+    transcript: "pending", rhythm: "pending", songDna: "pending", cinematic: "pending",
+  });
   const pipelineRanOnce = useRef(false);
 
   // Beat grid detection from decoded audio
@@ -168,6 +179,7 @@ export function LyricFitTab({
     setFitReadiness("running");
     setFitProgress(5);
     setFitStageLabel("Syncing transcript…");
+    setPipelineStages({ transcript: "running", rhythm: "pending", songDna: "pending", cinematic: "pending" });
 
     // 1. Sync latest transcript
     let freshLines = lines;
@@ -186,6 +198,7 @@ export function LyricFitTab({
 
     setFitProgress(10);
     setFitStageLabel("Analyzing rhythm…");
+    setPipelineStages(prev => ({ ...prev, transcript: "done", rhythm: "running" }));
 
     // 2. Decode audio for beat detection if needed
     if (!beatGrid && hasRealAudio && audioFile.size > 0) {
@@ -200,6 +213,7 @@ export function LyricFitTab({
 
     setFitProgress(25);
     setFitStageLabel("Generating Song DNA…");
+    setPipelineStages(prev => ({ ...prev, rhythm: "done", songDna: "running" }));
 
     // 3. lyric-analyze
     const lyricsText = freshLines
@@ -296,10 +310,11 @@ export function LyricFitTab({
       setSceneManifest(safeManifest(nextSongDna.scene_manifest).manifest);
     }
 
-    setFitProgress(70);
+    setFitProgress(60);
     setFitStageLabel("Creating cinematic direction…");
+    setPipelineStages(prev => ({ ...prev, songDna: "done", cinematic: "running" }));
 
-    // 4. cinematic-direction
+    // 4. cinematic-direction (runs after DNA since we need the result first)
     try {
       const lyricsForDirection = freshLines
         .filter((l: any) => l.tag !== "adlib")
@@ -318,13 +333,16 @@ export function LyricFitTab({
       if (dirResult?.cinematicDirection) {
         setCinematicDirection(dirResult.cinematicDirection);
       }
+      setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
     } catch (e) {
       console.warn("[Pipeline] cinematic direction failed:", e);
+      setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
     }
 
     setFitProgress(100);
     setFitReadiness("ready");
     setFitStageLabel("Ready");
+    setPipelineStages({ transcript: "done", rhythm: "done", songDna: "done", cinematic: "done" });
     toast.success("Your Fit is ready! 🎬", { description: "Switch to the Fit tab to explore your song's DNA." });
   }, [lyricData, audioFile, lines, savedId, hasRealAudio, beatGrid]);
 
@@ -350,6 +368,7 @@ export function LyricFitTab({
           fitReadiness={fitReadiness}
           fitProgress={fitProgress}
           fitStageLabel={fitStageLabel}
+          pipelineStages={pipelineStages}
         />
       )}
 
