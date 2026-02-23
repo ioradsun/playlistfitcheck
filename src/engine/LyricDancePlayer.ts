@@ -337,8 +337,8 @@ export class LyricDancePlayer {
     if (globalTimelineCache && globalChunkCache) {
       // Reuse cached bake from previous instance
       console.log('[PLAYER] reusing cached timeline — frames:', globalTimelineCache.length);
-      this.timeline = globalTimelineCache;
-      this.chunks = globalChunkCache;
+      this.timeline = [...globalTimelineCache];
+      this.chunks = new Map(globalChunkCache);
       this.buildBgCache();
     } else {
       while (globalBakeLock && !globalTimelineCache && !globalChunkCache) {
