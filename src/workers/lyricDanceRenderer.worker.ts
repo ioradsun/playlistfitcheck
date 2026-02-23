@@ -53,7 +53,7 @@ const tick = (timestamp: number) => {
       if (!text) continue;
       text.position.set(chunk.x, chunk.y);
       text.alpha = chunk.alpha;
-      text.scale.set(chunk.scale, chunk.scale);
+      text.scale.set(1, 1);
       text.visible = chunk.visible;
     }
 

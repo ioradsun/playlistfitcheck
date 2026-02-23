@@ -807,7 +807,7 @@ export class LyricDancePlayer {
         x: sx ? c.x / sx : c.x,
         y: sy ? c.y / sy : c.y,
         alpha: c.alpha,
-        scale: c.scale,
+        glow: c.glow,
         visible: c.visible,
       })),
     }));
