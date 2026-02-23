@@ -428,6 +428,52 @@ serve(async (req) => {
     climax.maxLightIntensity = clamp(climax.maxLightIntensity, 0, 1, 1);
     parsed.climax = climax;
 
+    // ── Synthesize missing fields from what AI did return ──
+    // chapters from tensionCurve
+    if (!Array.isArray(parsed.chapters) || parsed.chapters.length === 0) {
+      const tc = Array.isArray(parsed.tensionCurve) ? parsed.tensionCurve : [];
+      const palette = Array.isArray((parsed.visualWorld as any)?.palette) ? (parsed.visualWorld as any).palette : ["#111111","#333333","#555555"];
+      parsed.chapters = tc.length > 0
+        ? tc.map((t: any, i: number) => ({
+            startRatio: t.startRatio ?? i / Math.max(tc.length, 1),
+            endRatio: t.endRatio ?? (i + 1) / Math.max(tc.length, 1),
+            title: t.stage ?? `Chapter ${i + 1}`,
+            emotionalArc: t.cameraMovement ?? "neutral",
+            dominantColor: palette[i % palette.length],
+            lightBehavior: `brightness ${t.lightBrightness ?? 0.5}`,
+            particleDirective: `density ${t.particleDensity ?? 0.5}`,
+            backgroundDirective: "hold",
+            emotionalIntensity: t.motionIntensity ?? 0.5,
+            typographyShift: null,
+          }))
+        : [{ startRatio: 0, endRatio: 1, title: "Full Song", emotionalArc: "neutral", dominantColor: "#333333", lightBehavior: "steady", particleDirective: "ambient", backgroundDirective: "hold", emotionalIntensity: 0.5, typographyShift: null }];
+    }
+
+    // wordDirectives — AI rarely returns these; seed empty if missing
+    if (!parsed.wordDirectives || typeof parsed.wordDirectives !== "object" || Array.isArray(parsed.wordDirectives)) {
+      parsed.wordDirectives = {};
+    }
+
+    // storyboard from shotProgression or lines
+    if (!Array.isArray(parsed.storyboard) || parsed.storyboard.length === 0) {
+      const shots = Array.isArray(parsed.shotProgression) ? parsed.shotProgression : [];
+      parsed.storyboard = lines.map((line: any, i: number) => {
+        const shot = shots.find((s: any) => s.lineIndex === i);
+        return {
+          lineIndex: i,
+          text: line.text ?? "",
+          emotionalIntent: shot?.description ?? "neutral",
+          heroWord: (line.text ?? "").split(/\s+/)[0] ?? "",
+          visualTreatment: shot?.shotType ?? "FloatingInWorld",
+          entryStyle: "fades",
+          exitStyle: "fades",
+          particleBehavior: "ambient",
+          beatAlignment: "on-beat",
+          transitionToNext: "crossfade",
+        };
+      });
+    }
+
     const validationErrors = validateCinematicDirection(parsed, lines.length);
     if (validationErrors.length > 0) {
       console.warn("[cinematic-direction] Validation errors:", validationErrors);
