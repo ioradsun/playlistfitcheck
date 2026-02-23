@@ -16,8 +16,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
-import { drawSystemBackground } from "@/engine/SystemBackgrounds";
-import { drawLighting, getTextShadow } from "@/engine/LightingSystem";
+import { getTextShadow } from "@/engine/LightingSystem";
+import { renderChapterBackground } from "@/engine/BackgroundDirector";
+import { renderChapterLighting } from "@/engine/LightingDirector";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { ParticleEngine } from "@/engine/ParticleEngine";
@@ -1056,6 +1057,28 @@ export default function ShareableLyricDance() {
       ctx.fillStyle = "#0a0a0a";
       ctx.fillRect(0, 0, cw, ch);
 
+      const chapterForRender = chapterDirective ?? {
+        startRatio: 0,
+        endRatio: 1,
+        title: "default",
+        emotionalArc: "ambient",
+        dominantColor: timelineManifest.palette[1] ?? "#0a0a0a",
+        lightBehavior: timelineManifest.lightSource,
+        particleDirective: timelineManifest.particleConfig.system,
+        backgroundDirective: timelineManifest.backgroundSystem,
+        emotionalIntensity: 0.5,
+        typographyShift: null,
+      };
+
+      renderChapterBackground(
+        ctx,
+        canvas,
+        chapterForRender,
+        songProgress,
+        currentBeatIntensity,
+        currentTime,
+      );
+
       // AI-generated background image with slow cinematic push and hook reframe.
       const bgImg = bgImageRef.current;
       if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
@@ -1075,35 +1098,14 @@ export default function ShareableLyricDance() {
         ctx.globalAlpha = 1;
       }
 
-      const backgroundDirective = chapterDirective?.backgroundDirective ?? timelineManifest.backgroundSystem;
-      const activeSystem = backgroundDirective || getBackgroundSystemForTime(
-        timelineManifest,
-        songProgress,
-        currentBeatIntensity,
-      );
-      const dominantColor = chapterDirective?.dominantColor ?? timelineManifest.palette[1];
-
-      // Procedural background system — timeline-aware system switching
-      drawSystemBackground(ctx, {
-        system: activeSystem,
-        physState: state,
-        w: cw, h: ch,
-        time: currentTime,
-        beatCount: beatIndex,
-        rng,
-        palette: effectivePalette,
-        hookStart: songStart,
-        hookEnd: songEnd,
-      });
-
-      const lightDirective = chapterDirective?.lightBehavior ?? timelineManifest.lightSource;
-      drawLighting(
+      renderChapterLighting(
         ctx,
         canvas,
-        { ...timelineManifest, lightSource: lightDirective },
+        chapterForRender,
+        activeWordPosition,
         songProgress,
         currentBeatIntensity * lightIntensityRef.current,
-        activeWordPosition,
+        currentTime,
       );
 
       // Particle engine: update then draw parallax split layers.
@@ -1116,6 +1118,7 @@ export default function ShareableLyricDance() {
         );
         const particleDirective = chapterDirective?.particleDirective ?? timelineManifest.particleConfig.system;
         timedParticleConfig.system = particleDirective as any;
+        particleEngine.setChapterDirective(particleDirective);
         if (lineAnim) {
           const lineDir = interpreterNow?.getLineDirection(activeLineIndex) ?? null;
           particleEngine.setBehaviorHint(lineDir?.particleBehavior ?? null);
@@ -1241,23 +1244,6 @@ export default function ShareableLyricDance() {
         }
       }
       ctx.globalAlpha = 1;
-
-      // Breathing vignette pulse
-      const vignetteIntensity = (vignetteIntensityRef.current + currentBeatIntensity * 0.15) * baseAtmosphere;
-      const vignetteCx = cw / 2;
-      const vignetteCy = ch / 2;
-      const vignette = ctx.createRadialGradient(
-        vignetteCx,
-        vignetteCy,
-        ch * 0.3,
-        vignetteCx,
-        vignetteCy,
-        ch * 0.85,
-      );
-      vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(1, `rgba(0,0,0,${Math.max(0, Math.min(1, vignetteIntensity))})`);
-      ctx.fillStyle = vignette;
-      ctx.fillRect(0, 0, cw, ch);
 
       // Active line
       let frameEffectKey = "—";
@@ -1676,11 +1662,29 @@ export default function ShareableLyricDance() {
         ctx.restore();
       }
 
-      if (chapterTransitionRef.current.progress < 1) {
-        const blend = 1 - chapterTransitionRef.current.progress;
-        ctx.fillStyle = `rgba(0,0,0,${0.22 * blend})`;
+      if (chapterTransitionRef.current.progress < 1 && chapterDirective) {
+        const chapterTransitionProgress = chapterTransitionRef.current.progress;
+        const transitionRgb = hexToRgbString(chapterDirective.dominantColor);
+        ctx.fillStyle = `rgba(${transitionRgb}, ${(1 - chapterTransitionProgress) * 0.3})`;
         ctx.fillRect(0, 0, cw, ch);
       }
+
+      // Breathing vignette pulse
+      const vignetteIntensity = (vignetteIntensityRef.current + currentBeatIntensity * 0.15) * baseAtmosphere;
+      const vignetteCx = cw / 2;
+      const vignetteCy = ch / 2;
+      const vignette = ctx.createRadialGradient(
+        vignetteCx,
+        vignetteCy,
+        ch * 0.3,
+        vignetteCx,
+        vignetteCy,
+        ch * 0.85,
+      );
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, `rgba(0,0,0,${Math.max(0, Math.min(1, vignetteIntensity))})`);
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, cw, ch);
 
       if (songProgress > 0.95 && cinematicDirection) {
         const ending = cinematicDirection.ending;
