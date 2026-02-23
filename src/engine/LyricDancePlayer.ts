@@ -388,9 +388,11 @@ export class LyricDancePlayer {
     this.songEndSec = payload.songEnd;
 
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
-    console.log('[PLAYER] calling buildChunkCache now');
     this.buildChunkCache(payload);
-    console.log('[PLAYER] after buildChunkCache — chunks:', this.chunks.size);
+    // Cache chunks immediately BEFORE the async yield — destroy() can clear
+    // this.chunks during the await, so save to global cache now.
+    globalChunkCache = new Map(this.chunks);
+    console.log('[PLAYER] after buildChunkCache — chunks:', this.chunks.size, 'global cached:', globalChunkCache.size);
     const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
 
     this.timeline = this.scaleTimeline(baked);
