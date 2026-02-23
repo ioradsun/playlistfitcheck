@@ -61,7 +61,6 @@ export function LyricStage({ manifest, backgroundImageUrl, isPlaying, beatIntens
   const bloomScale = (isMobile ? 0.75 : 1) * (1 + beatIntensity * 0.15);
   const bloomOpacity = contrast.bloomIntensity + beatIntensity * 0.12;
   const vignetteInner = isMobile ? 60 : 75;
-  const maskBlendMode: "multiply" | "normal" = isMobile ? "normal" : "multiply";
 
   return (
     <div style={{ position: "fixed", inset: 0, overflow: "hidden", zIndex: 90 }}>
@@ -105,10 +104,8 @@ export function LyricStage({ manifest, backgroundImageUrl, isPlaying, beatIntens
         style={{
           position: "absolute",
           inset: 0,
-          background: `radial-gradient(ellipse 80% 40% at 50% ${currentLyricZone === "upper" ? "25%" : currentLyricZone === "middle" ? "50%" : "75%"}, ${(manifest.palette[0] ?? "#0b0b0f")}cc, ${(manifest.palette[0] ?? "#0b0b0f")}00 100%)`,
-          opacity: maskOpacity,
+          background: `radial-gradient(ellipse 80% 45% at 50% ${currentLyricZone === "upper" ? "25%" : currentLyricZone === "middle" ? "50%" : "72%"}, rgba(0,0,0,${maskOpacity * 0.75}), rgba(0,0,0,${maskOpacity * 0.3}) 65%, transparent 100%)`,
           transition: "background 0.8s ease",
-          mixBlendMode: maskBlendMode,
           pointerEvents: "none",
         }}
       />
@@ -124,7 +121,12 @@ export function LyricStage({ manifest, backgroundImageUrl, isPlaying, beatIntens
         }}
       />
 
-      <div style={{ position: "absolute", inset: 0 }}>{children}</div>
+      <div
+        className="lyric-stage__canvas-layer"
+        style={{ position: "absolute", inset: 0, isolation: "isolate" }}
+      >
+        {children}
+      </div>
 
       <div
         style={{

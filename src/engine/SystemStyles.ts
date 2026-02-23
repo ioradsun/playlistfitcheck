@@ -196,9 +196,64 @@ const STACK_THRESHOLD = 600;
 const MAX_STACK_LINES = 3;
 const MIN_FONT_PX = 14;
 
-function fluidFontPx(canvasW: number, canvasH: number, minPx = MIN_FONT_PX, maxPx = 120): number {
+function normalizeHex(hex: string): string {
+  const raw = (hex || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+    return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
+  }
+  return "#000000";
+}
+
+function getRelativeLuminance(hex: string): number {
+  const normalized = normalizeHex(hex);
+  const r = parseInt(normalized.slice(1, 3), 16) / 255;
+  const g = parseInt(normalized.slice(3, 5), 16) / 255;
+  const b = parseInt(normalized.slice(5, 7), 16) / 255;
+  const toLinear = (v: number) =>
+    v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+export function getSafeTextColor(palette: [string, string, string]): string {
+  const bg = palette?.[0] ?? "#111111";
+  const candidate = palette?.[2] ?? "#ffffff";
+  const bgLum = getRelativeLuminance(bg);
+  const textLum = getRelativeLuminance(candidate);
+  const ratio = (Math.max(textLum, bgLum) + 0.05) / (Math.min(textLum, bgLum) + 0.05);
+
+  if (ratio >= 5.0) return normalizeHex(candidate);
+
+  const whiteRatio = (1.0 + 0.05) / (bgLum + 0.05);
+  if (whiteRatio >= 5.0) return "#ffffff";
+
+  return "#0a0a0a";
+}
+
+export function getTypographyScale(personality: string | undefined): number {
+  switch (personality) {
+    case "MONUMENTAL":
+      return 0.72;
+    case "SHATTERED DISPLAY":
+      return 0.78;
+    case "ELEGANT DECAY":
+      return 0.95;
+    case "RAW TRANSCRIPT":
+      return 0.9;
+    case "HANDWRITTEN MEMORY":
+      return 0.92;
+    case "INVISIBLE INK":
+      return 1.05;
+    default:
+      return 1.0;
+  }
+}
+
+function fluidFontPx(canvasW: number, canvasH: number, personality?: string, minPx = MIN_FONT_PX, maxPx = 120): number {
   const preferred = Math.min(canvasW, canvasH) * 0.12;
-  return Math.max(minPx, Math.min(maxPx, preferred));
+  const baseFluidSize = Math.max(minPx, Math.min(maxPx, preferred));
+  const scale = getTypographyScale(personality);
+  return Math.max(minPx, Math.min(maxPx, baseFluidSize * scale));
 }
 
 /**
@@ -276,7 +331,7 @@ export function computeStackedLayout(
 
   const responsiveMin = Math.max(MIN_FONT_PX, Math.min(canvasW, canvasH) * 0.035);
   fs = Math.max(fs, responsiveMin);
-  fs = Math.min(fs, fluidFontPx(canvasW, canvasH));
+  fs = Math.min(fs, fluidFontPx(canvasW, canvasH, typographyProfileRef.current?.personality));
 
   // Dynamic line-height normalization as line count grows.
   const normalizedLineHeight = Math.max(1.02, Math.min(st.lineHeight, 1.28 - stackedLines.length * 0.06));
@@ -316,7 +371,7 @@ export function computeFitFontSize(
 
   const targetW = canvasW * 0.80;
   const minFs = Math.max(MIN_FONT_PX, Math.min(canvasW, canvasW * 0.03));
-  const maxFs = fluidFontPx(canvasW, canvasW * 0.5625);
+  const maxFs = fluidFontPx(canvasW, canvasW * 0.5625, typographyProfileRef.current?.personality);
 
   // Measure glyph widths at reference size
   const REF = 100;

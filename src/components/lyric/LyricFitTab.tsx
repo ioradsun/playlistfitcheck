@@ -72,6 +72,7 @@ export function LyricFitTab({
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
   const [debugData, setDebugData] = useState<any | null>(null);
   const [savedSongDna, setSavedSongDna] = useState<any | null>(null);
+  const [savedBackgroundImageUrl, setSavedBackgroundImageUrl] = useState<string | null>(null);
   const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
   const [transcriptionModel, setTranscriptionModel] = useState("scribe");
   const { user } = useAuth();
@@ -148,6 +149,7 @@ export function LyricFitTab({
       // Restore saved beat grid
       const savedBg = (initialLyric as any).beat_grid;
       if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
+      setSavedBackgroundImageUrl((initialLyric as any).background_image_url ?? null);
       const savedSignature = (initialLyric as any).song_signature;
       if (savedSignature)
         setPrecomputedSongSignature(savedSignature as SongSignature);
@@ -242,6 +244,7 @@ export function LyricFitTab({
       // Kick off beat grid detection in parallel (decode original file)
       setPrecomputedBeatGrid(null);
       setPrecomputedSongSignature(null);
+      setSavedBackgroundImageUrl(null);
       setEarlyAudioBuffer(null);
       signaturePromiseRef.current = null;
       const audioCtx = new AudioContext();
@@ -446,6 +449,7 @@ export function LyricFitTab({
     setDebugData(null);
     setPrecomputedBeatGrid(null);
     setPrecomputedSongSignature(null);
+      setSavedBackgroundImageUrl(null);
     setEarlyAudioBuffer(null);
     signaturePromiseRef.current = null;
     onNewProject?.();
@@ -465,6 +469,7 @@ export function LyricFitTab({
           initialBeatGrid={precomputedBeatGrid}
           initialSongSignature={precomputedSongSignature}
           initialSongDna={savedSongDna}
+          initialBackgroundImageUrl={savedBackgroundImageUrl}
           onBack={handleBack}
           onSaved={(id) => {
             setSavedId(id);
@@ -507,6 +512,7 @@ export function LyricFitTab({
           setSavedId(l.id);
           setFmlyLines((l as any).fmly_lines ?? null);
           setVersionMeta((l as any).version_meta ?? null);
+          setSavedBackgroundImageUrl((l as any).background_image_url ?? null);
           const savedBg = (l as any).beat_grid;
           if (savedBg) setPrecomputedBeatGrid(savedBg as BeatGridData);
           else setPrecomputedBeatGrid(null);
