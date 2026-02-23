@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Coins, Rocket, Wrench, GripVertical, Target, Mic, Video, Zap } from "lucide-react";
+import { Loader2, Coins, Rocket, Wrench, GripVertical, Target, Mic, Video, Zap, Film } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Reorder, useDragControls } from "framer-motion";
@@ -39,6 +39,7 @@ interface FeaturesState {
   lyric_analysis_model: AnalysisModel;
   lyric_video: boolean;
   hookfit_hottest_hooks: boolean;
+  export_video: boolean;
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -52,6 +53,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   lyric_analysis_model: "google/gemini-3-flash-preview",
   lyric_video: false,
   hookfit_hottest_hooks: true,
+  export_video: false,
 };
 
 async function patchFeatures(patch: Partial<FeaturesState & Record<string, any>>) {
@@ -179,6 +181,7 @@ export function ToolsEditor() {
           lyric_analysis_model: f.lyric_analysis_model ?? f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
           lyric_video: f.lyric_video ?? false,
           hookfit_hottest_hooks: f.hookfit_hottest_hooks ?? true,
+          export_video: f.export_video ?? false,
         });
         setOrderedKeys(merged);
         setGuestQuota(f.growth_quotas?.guest ?? 5);
@@ -465,6 +468,38 @@ export function ToolsEditor() {
               }
             }}
             disabled={savingKey === "lyric_video"}
+          />
+        </div>
+      </div>
+
+      {/* ── Export Video ── */}
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Film size={14} className="text-primary" />
+          <span className="text-sm font-mono font-medium">Export Video</span>
+        </div>
+        <div className="px-4 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Export Video button</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Full-song lyric dance export + publish in LyricFit</p>
+          </div>
+          <Switch
+            checked={features.export_video}
+            onCheckedChange={async (enabled) => {
+              const prev = features.export_video;
+              setFeatures(f => ({ ...f, export_video: enabled }));
+              setSavingKey("export_video");
+              try {
+                await patchFeatures({ export_video: enabled });
+                toast.success(enabled ? "Export Video enabled" : "Export Video disabled");
+              } catch {
+                setFeatures(f => ({ ...f, export_video: prev }));
+                toast.error("Failed to update");
+              } finally {
+                setSavingKey(null);
+              }
+            }}
+            disabled={savingKey === "export_video"}
           />
         </div>
       </div>
