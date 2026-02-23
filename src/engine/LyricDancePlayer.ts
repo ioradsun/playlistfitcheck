@@ -362,7 +362,7 @@ export class LyricDancePlayer {
         'this.timeline after copy:', this.timeline.length);
     }
 
-    if (globalTimelineCache && globalChunkCache && globalChunkCache.size > 0) {
+    if (globalTimelineCache?.length && globalChunkCache) {
       this.timeline = [...globalTimelineCache];
       this.chunks = new Map(globalChunkCache);
       this.buildBgCache();
