@@ -294,6 +294,8 @@ export function useHookCanvas(
   });
   const localAnalyserRef = useRef<AnalyserNode | null>(null);
   const beatIntensity = useBeatIntensity(analyserNode ?? localAnalyserRef.current, active);
+  const beatIntensityRef = useRef(beatIntensity);
+  beatIntensityRef.current = beatIntensity;
 
   // Keep onEnd ref current
   onEndRef.current = onEnd;
@@ -486,7 +488,7 @@ export function useHookCanvas(
         activeLine.start,
         activeLine.end,
         ct,
-        beatIntensity,
+        beatIntensityRef.current,
       );
       const isFirstLine = true;
       if (isFirstLine) {
@@ -514,14 +516,14 @@ export function useHookCanvas(
       ctx.globalAlpha = Math.min(entryAlpha, exitAlpha);
 
       if (anim.activeMod) {
-        applyModEffect(ctx, anim.activeMod, ct, beatIntensity);
+        applyModEffect(ctx, anim.activeMod, ct, beatIntensityRef.current);
       }
 
       applyLyricShadow(ctx, manifest.palette, manifest.typographyProfile?.personality);
       const words = activeLine.text.split(" ");
       let wordX = lineX - ctx.measureText(activeLine.text).width / 2;
       words.forEach((word, wi) => {
-        const wordAnim = animationResolver.resolveWord(activeLine.start, wi, beatIntensity);
+        const wordAnim = animationResolver.resolveWord(activeLine.start, wi, beatIntensityRef.current);
         ctx.save();
         if (wordAnim) {
           applyWordMark(ctx, wordAnim, ct, manifest);
@@ -554,7 +556,7 @@ export function useHookCanvas(
     }
 
     ctx.restore();
-  }, [hookData, canvasRef, containerRef, constellationRef, riverOffsetsRef, beatIntensity]);
+  }, [hookData, canvasRef, containerRef, constellationRef, riverOffsetsRef]);
 
   // Setup audio + engine
   useEffect(() => {
