@@ -178,8 +178,8 @@ export function LyricFitTab({
     pipelineRanOnce.current = true;
     setFitReadiness("running");
     setFitProgress(5);
-    setFitStageLabel("Syncing transcript…");
-    setPipelineStages({ transcript: "running", rhythm: "pending", songDna: "pending", cinematic: "pending" });
+    setFitStageLabel("Analyzing rhythm…");
+    setPipelineStages({ rhythm: "running", songDna: "pending", cinematic: "pending", transcript: "pending" });
 
     // 1. Sync latest transcript
     let freshLines = lines;
