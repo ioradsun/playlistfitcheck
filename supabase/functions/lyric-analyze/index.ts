@@ -385,6 +385,14 @@ function normalizeHexColor(color: string): string | null {
   return full ? `#${full[1]}` : null;
 }
 
+function getLuminance(color: string): number {
+  const hex = normalizeHexColor(color);
+  if (!hex) return 1;
+  const channels = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+}
+
 
 const VALID_PARTICLE_SYSTEMS: ParticleSystemType[] = [
   "embers","smoke","ash","rain","snow","lightning","fireflies","stars","petals","dust","bubbles","glitch","confetti","crystals","moths","none",
@@ -487,6 +495,29 @@ function normalizeSongDna(
 
   if (physicsSpec.palette) {
     sceneManifest.palette = physicsSpec.palette;
+  }
+
+  const palette = Array.isArray(sceneManifest.palette)
+    ? sceneManifest.palette
+    : Array.isArray(physicsSpec.palette)
+      ? physicsSpec.palette
+      : [];
+
+  const bg = typeof palette[0] === "string" ? palette[0] : "";
+  const bgLuminance = getLuminance(bg);
+  const emotion = String(
+    dna.coreEmotion ?? dna.emotion ?? dna.mood ?? sceneManifest.mood ?? "",
+  ).toLowerCase();
+
+  if (bgLuminance < 0.05 && sceneManifest.lightSource === "golden hour") {
+    if (["melancholy", "sad", "cold"].includes(emotion)) {
+      sceneManifest.lightSource = "cold overcast";
+    } else if (["manic", "angry"].includes(emotion)) {
+      sceneManifest.lightSource = "flickering left";
+    } else {
+      sceneManifest.lightSource = "moonlight";
+    }
+    console.warn("[normalizeSongDna] corrected dark palette + golden hour contradiction");
   }
 
   const world = String(sceneManifest.world ?? "").toLowerCase();
