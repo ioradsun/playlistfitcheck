@@ -147,6 +147,20 @@ function bakeFrame(
     (s) => tSec >= (s.startRatio ?? 0) && tSec < (s.endRatio ?? 9999),
   )?.motionIntensity ?? 0.5;
 
+  // Shot type → camera zoom
+  const shotZoomMap: Record<string, number> = {
+    'CloseUp': 1.25,
+    'Medium': 1.0,
+    'Wide': 0.82,
+    'FloatingInWorld': 0.95,
+  };
+  const storyboard = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
+  const currentShot = storyboard.find(
+    (s) => tSec >= (s.startSec ?? 0) && tSec < (s.endSec ?? 9999),
+  )?.shotType ?? 'Medium';
+  const targetZoom = shotZoomMap[currentShot] ?? 1.0;
+  state.currentZoom += (targetZoom - state.currentZoom) * 0.02;
+
   const chunks: Keyframe["chunks"] = [];
 
   for (let idx = 0; idx < payload.lines.length; idx += 1) {
