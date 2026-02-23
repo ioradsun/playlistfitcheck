@@ -352,6 +352,13 @@ export function LyricDanceDebugPanel({ data }: Props) {
                 </div>
               </CollapsibleSection>
 
+              {/* Raw Cinematic Direction */}
+              <CollapsibleSection title="Raw Cinematic Direction">
+                {direction ? (
+                  <JsonBlock value={direction} />
+                ) : <p className="text-[10px] text-muted-foreground">No cinematic direction data</p>}
+              </CollapsibleSection>
+
               {/* Raw JSON dump */}
               <CollapsibleSection title="Raw Song DNA">
                 <JsonBlock value={songDna} />
