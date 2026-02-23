@@ -337,7 +337,7 @@ export function LyricFitTab({
           artist: lyricData.artist,
           lines: lyricsForDirection,
           beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
-          lyricId: savedId || undefined,
+          lyricId: currentSavedId || undefined,
         },
       });
 
