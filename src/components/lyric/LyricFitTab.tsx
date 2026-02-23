@@ -248,13 +248,14 @@ export function LyricFitTab({
       setEarlyAudioBuffer(null);
       signaturePromiseRef.current = null;
       const audioCtx = new AudioContext();
-      file
+      void file
         .arrayBuffer()
         .then((ab) => audioCtx.decodeAudioData(ab))
         .then((buf) => {
           setEarlyAudioBuffer(buf);
         })
-        .catch((err) => console.warn("[beat-grid] Early decode failed:", err));
+        .catch((err) => console.warn("[beat-grid] Early decode failed:", err))
+        .finally(() => audioCtx.close().catch(() => undefined));
 
       try {
         // Stage 1: Compress
@@ -271,36 +272,7 @@ export function LyricFitTab({
           return;
         }
 
-        // Stage 2: Encode
-        setProgressStage("encoding");
-        const arrayBuffer = await uploadFile.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuffer);
-        let binary = "";
-        const chunkSize = 8192;
-        for (let i = 0; i < uint8.length; i += chunkSize) {
-          binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
-        }
-        const audioBase64 = btoa(binary);
-
-        const name = uploadFile.name.toLowerCase();
-        const mime = (uploadFile.type || "").toLowerCase();
-        let format: string;
-        if (name.endsWith(".wav") || mime.includes("wav")) format = "wav";
-        else if (
-          name.endsWith(".m4a") ||
-          mime.includes("m4a") ||
-          (mime.includes("mp4") && !name.endsWith(".mp4"))
-        )
-          format = "m4a";
-        else if (name.endsWith(".mp4") || mime.includes("mp4")) format = "mp4";
-        else if (name.endsWith(".flac") || mime.includes("flac"))
-          format = "flac";
-        else if (name.endsWith(".ogg") || mime.includes("ogg")) format = "ogg";
-        else if (name.endsWith(".webm") || mime.includes("webm"))
-          format = "webm";
-        else format = "mp3";
-
-        // Stage 3: Upload
+        // Stage 2: Upload
         setProgressStage("uploading");
         const uploadTimers: ReturnType<typeof setTimeout>[] = [];
         uploadTimers.push(
@@ -313,6 +285,14 @@ export function LyricFitTab({
           setTimeout(() => setProgressStage("handshaking"), 9000),
         );
 
+        const formData = new FormData();
+        formData.append("audio", uploadFile, uploadFile.name);
+        formData.append("analysisModel", analysisModel);
+        formData.append("transcriptionModel", transcriptionModel);
+        if (referenceLyrics?.trim()) {
+          formData.append("referenceLyrics", referenceLyrics.trim());
+        }
+
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
           {
@@ -320,15 +300,8 @@ export function LyricFitTab({
             headers: {
               apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
               Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-              "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              audioBase64,
-              format,
-              analysisModel,
-              transcriptionModel,
-              referenceLyrics,
-            }),
+            body: formData,
           },
         );
 
