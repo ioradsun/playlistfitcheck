@@ -193,12 +193,13 @@ export function LyricFitTab({
 
     // 1. Fetch latest lines (internal, no stage label)
     let freshLines = lines;
-    if (savedId) {
+    const currentSavedId = savedIdRef.current;
+    if (currentSavedId) {
       try {
         const { data: saved } = await supabase
           .from("saved_lyrics")
           .select("lines")
-          .eq("id", savedId)
+          .eq("id", currentSavedId)
           .single();
         if (saved?.lines && Array.isArray(saved.lines)) {
           freshLines = saved.lines as unknown as LyricLine[];
