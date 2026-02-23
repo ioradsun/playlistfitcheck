@@ -215,7 +215,7 @@ function bakeFrame(
             x: x + preOffset + heroOffset,
             y,
             alpha: Math.min(1, alpha + 0.15),
-            scale: scale * 1.15,
+            glow: Math.min(1, chunkGlow + 0.2),
             visible,
           });
         }
