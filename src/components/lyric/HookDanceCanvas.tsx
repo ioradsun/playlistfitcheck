@@ -6,7 +6,7 @@
  * Uses refs for all rapidly-changing values to avoid stale closures in rAF.
  */
 
-import { useRef, useEffect, useState, useCallback, forwardRef, type CSSProperties } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo, forwardRef, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download } from "lucide-react";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
@@ -14,7 +14,7 @@ import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
-import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
+import { deriveCanvasManifest } from "@/engine/deriveCanvasManifest";
 import { getBackgroundSystemForTime } from "@/engine/getBackgroundSystemForTime";
 import {
   resolveWordColors, applyContrastRhythm, applyBeatFlash,
@@ -23,6 +23,7 @@ import {
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { classifyWord, getElementalClass } from "@/engine/WordClassifier";
 import { DirectionInterpreter } from "@/engine/DirectionInterpreter";
+import type { Chapter, ClimaxDirective, VisualWorld, WordDirective } from "@/types/CinematicDirection";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
 import { ArtistFingerprintButton } from "./ArtistFingerprintButton";
@@ -49,8 +50,14 @@ interface Props {
   onFingerprintChange?: (dna: ArtistDNA | null) => void;
   /** Song context for fingerprint generation */
   songContext?: FingerprintSongContext;
-  /** Optional cinematic direction interpreter for debug HUD */
-  directionInterpreter?: DirectionInterpreter | null;
+  /** Optional cinematic direction subset for hook timeframe */
+  hookDirection?: {
+    thesis: string;
+    visualWorld: VisualWorld;
+    wordDirectives: Record<string, WordDirective>;
+    climax: ClimaxDirective;
+    activeChapter?: Chapter;
+  } | null;
 }
 
 export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDanceCanvas({
@@ -68,7 +75,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
   fingerprint,
   onFingerprintChange,
   songContext,
-  directionInterpreter,
+  hookDirection,
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -175,6 +182,20 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
   const activeSystemRef = useRef(activeSystem);
   activePaletteRef.current = activePalette;
   activeSystemRef.current = activeSystem;
+
+  const directionInterpreter = useMemo(() => {
+    if (!hookDirection || !hookDirection.activeChapter) return null;
+    return new DirectionInterpreter({
+      thesis: hookDirection.thesis,
+      visualWorld: hookDirection.visualWorld,
+      chapters: [hookDirection.activeChapter],
+      wordDirectives: hookDirection.wordDirectives,
+      climax: hookDirection.climax,
+      ending: { style: "fade", emotionalAftertaste: "neutral", particleResolution: "settle", lightResolution: "dim" },
+      silenceDirective: { cameraMovement: "still", particleShift: "none", lightShift: "none", tensionDirection: "holding" },
+      storyboard: [],
+    }, Math.max(0.001, hookEnd - hookStart));
+  }, [hookDirection, hookEnd, hookStart]);
 
   // Resize canvas to fill container
   useEffect(() => {
@@ -368,20 +389,6 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
 
         drawFn(ctx, effectState);
         ctx.restore();
-
-        // 1Hz diagnostic log
-        logManifestDiagnostics("EditorCanvas", {
-          palette: manifest.palette as string[],
-          fontFamily: manifest.typographyProfile?.fontFamily ?? "—",
-          particleSystem: manifest.particleConfig?.system ?? "none",
-          beatIntensity: editorBeatIntensity,
-          activeMod: lineAnim.activeMod,
-          entryProgress: lineAnim.entryProgress,
-          exitProgress: lineAnim.exitProgress,
-          textColor,
-          contrastRatio,
-          effectKey,
-        });
 
         // Write debug state for HUD
         const di = directionInterpreter;

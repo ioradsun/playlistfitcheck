@@ -232,12 +232,6 @@ export class HookDanceEngine {
 
   loadManifest(manifest: SceneManifest): void {
     this.activeManifest = manifest;
-
-    console.log("[HookDanceEngine] loadManifest:", {
-      system: manifest.backgroundSystem,
-      particles: manifest.particleConfig?.system,
-      density: manifest.particleConfig?.density,
-    });
   }
 
   resetPhysics() {
@@ -285,7 +279,6 @@ export class HookDanceEngine {
         .then(() => {
           this.audioPlaying = true;
           this.syntheticStart = performance.now() - (this.audioRef.currentTime - this.hookStart) * 1000;
-          console.log("[HookDanceEngine] audio playing at", this.audioRef.currentTime.toFixed(2), "hook:", this.hookStart.toFixed(2), "-", this.hookEnd.toFixed(2));
         })
         .catch((e) => {
           this.audioPlaying = false;
