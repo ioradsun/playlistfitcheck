@@ -331,10 +331,9 @@ export function renderParticles(
   particleEngine.update(deltaMs, beatIntensity, timedParticleConfig);
   pState.frameCount += 1;
 
-  void particleCtx;
-  void textCtx;
-  void cw;
-  void ch;
+  // Note: actual particle drawing happens in the caller via
+  // particleEngine.draw(ctx, "far") and particleEngine.draw(ctx, "near")
+  // on the textCtx — no separate particle canvas.
 
   return { drawCalls: 0, lightIntensity };
 }

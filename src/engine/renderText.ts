@@ -206,7 +206,7 @@ export function renderText(
     state, interpreter, shot, tensionStage, chapterDirective, cinematicDirection,
     isClimax, particleEngine, rng, getWordWidth, isMobile, hardwareConcurrency, devicePixelRatio,
   } = input;
-  const cinematicFontFamily = cinematicDirection?.visualWorld?.typography?.fontFamily ?? "Montserrat";
+  const cinematicFontFamily = cinematicDirection?.visualWorld?.typographyProfile?.fontFamily ?? "Montserrat";
   const resolvedWordFont = `"${cinematicFontFamily}", Inter, ui-sans-serif, system-ui`;
 
   let drawCalls = 0;
