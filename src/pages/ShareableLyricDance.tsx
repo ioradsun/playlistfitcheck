@@ -1472,10 +1472,10 @@ export default function ShareableLyricDance() {
             wordCountRef.current.get(word.text) ?? 0,
           );
 
-          const wordText = word.text.toLowerCase().replace(/[^a-z]/g, "");
-          const directive = interpreterNow?.getWordDirective(wordText) ?? null;
+          const directive = interpreterNow?.getWordDirective(word.text) ?? null;
+          console.log('word directive:', word.text, directive);
           if (directive?.colorOverride) {
-            props.color = ensureContrast(directive.colorOverride, resolvedManifest.palette[0]);
+            props.color = directive.colorOverride;
           }
           if (typeof directive?.emphasisLevel === "number") {
             props.scale = props.scale * (1 + directive.emphasisLevel * 0.2);
@@ -1497,14 +1497,14 @@ export default function ShareableLyricDance() {
           ctx.textAlign = "center";
           ctx.textBaseline = "alphabetic";
           const wordRenderWidth = ctx.measureText(word.text).width;
-          const appearance = wordAppearanceRef.current.get(wordText) ?? 0;
+          const appearance = wordAppearanceRef.current.get(normalizedWord) ?? 0;
           if (directive?.evolutionRule) {
-            if (wordText === "drown") {
+            if (normalizedWord === "drown") {
               const bubbleSpeed = 1 + appearance * 0.5;
               const bubbleCount = 3 + appearance * 2;
               drawBubbles(ctx, wordX, wordY, wordRenderWidth, fontSize, bubbleCount, bubbleSpeed, currentTime);
             }
-            if (wordText === "down") {
+            if (normalizedWord === "down") {
               const fallSpeed = 1 + appearance * 0.3;
               wordY += Math.sin(currentTime * fallSpeed) * 3;
             }
@@ -1535,7 +1535,7 @@ export default function ShareableLyricDance() {
 
           if (climaxActiveRef.current) {
             ctx.scale(1.08, 1.08);
-            if (wordText === "you") {
+            if (normalizedWord === "you") {
               ctx.scale(1.22, 1.22);
             }
           }
@@ -1608,7 +1608,7 @@ export default function ShareableLyricDance() {
           }
 
           // Track word appearances for escalation
-          wordAppearanceRef.current.set(wordText, appearance + 1);
+          wordAppearanceRef.current.set(normalizedWord, appearance + 1);
 
           ctx.globalAlpha = 1;
           if (displayMode !== "single_word") {
