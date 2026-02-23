@@ -1091,8 +1091,8 @@ export default function ShareableLyricDance() {
         targetZoom = 0.8;
       }
 
-      if (cameraChapterRef.current !== resolvedChapterIndex) {
-        cameraChapterRef.current = resolvedChapterIndex;
+      if (cameraChapterRef.current !== chapterIndexRef.current) {
+        cameraChapterRef.current = chapterIndexRef.current;
         cameraTargetRef.current = { zoom: targetZoom, x: targetOffsetX, y: targetOffsetY };
       }
 

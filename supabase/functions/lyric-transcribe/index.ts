@@ -701,7 +701,7 @@ serve(async (req) => {
 
     // ── Editor Mode: apply reference lyrics diff for Scribe path ────────────
     if (editorMode && !useGeminiTranscription) {
-      words = applyReferenceLyricsDiff(words, referenceLyrics.trim());
+      words = applyReferenceLyricsDiff(words, referenceLyrics!.trim());
       // Rebuild segments from corrected words
       const MAX_WORDS_PER_SEG = 6;
       segments = [];

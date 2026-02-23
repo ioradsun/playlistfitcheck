@@ -143,7 +143,7 @@ export function buildWordPlan(opts: {
 
   const hookStartTimes = new Float64Array(
     planLines
-      .filter((line) => (interpreter?.getLineDirection(line.lineIndex)?.intent ?? "").toLowerCase().includes("hook"))
+      .filter((line) => (interpreter?.getLineDirection(line.lineIndex)?.emotionalIntent ?? "").toLowerCase().includes("hook"))
       .map((line) => line.start)
       .sort((a, b) => a - b),
   );
