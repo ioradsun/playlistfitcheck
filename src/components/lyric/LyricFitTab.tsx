@@ -357,17 +357,40 @@ export function LyricFitTab({
     setPipelineStages(prev => ({ ...prev, cinematic: "done", transcript: "running" }));
 
     // 5. Persist songDna + cinematicDirection to saved_lyrics
+    const persistSongDna = async (id: string, payload: Record<string, unknown>, attempt = 1): Promise<boolean> => {
+      try {
+        const { data: updated, error } = await supabase
+          .from("saved_lyrics")
+          .update({ song_dna: payload as any, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .select("id")
+          .maybeSingle();
+        if (error) {
+          console.error(`[Pipeline] persist attempt ${attempt} error:`, error);
+          if (attempt < 3) return persistSongDna(id, payload, attempt + 1);
+          return false;
+        }
+        if (!updated) {
+          console.warn(`[Pipeline] persist attempt ${attempt}: update matched 0 rows for id=${id}`);
+          if (attempt < 3) {
+            await new Promise(r => setTimeout(r, 1000));
+            return persistSongDna(id, payload, attempt + 1);
+          }
+          return false;
+        }
+        console.log("[Pipeline] song_dna persisted to", id);
+        return true;
+      } catch (e) {
+        console.error(`[Pipeline] persist attempt ${attempt} exception:`, e);
+        if (attempt < 3) return persistSongDna(id, payload, attempt + 1);
+        return false;
+      }
+    };
+
     if (currentSavedId) {
       const songDnaPayload = { ...nextSongDna, cinematicDirection: resolvedCinematic };
-      const { error: persistError } = await supabase
-        .from("saved_lyrics")
-        .update({ song_dna: songDnaPayload as any, updated_at: new Date().toISOString() })
-        .eq("id", currentSavedId);
-      if (persistError) {
-        console.error("[Pipeline] Failed to persist song_dna:", persistError);
-      } else {
-        console.log("[Pipeline] song_dna persisted to", currentSavedId);
-      }
+      const ok = await persistSongDna(currentSavedId, songDnaPayload);
+      if (!ok) console.error("[Pipeline] All persist attempts failed for", currentSavedId);
     } else {
       console.warn("[Pipeline] No savedId — song_dna not persisted");
     }
