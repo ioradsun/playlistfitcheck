@@ -135,6 +135,8 @@ function bakeFrame(
   payload: ScenePayload,
   durationMs: number,
   state: BakeState,
+  linePositions: number[],
+  lineChapterOffsets: number[],
 ): Keyframe {
   const timeMs = frameIndex * FRAME_STEP_MS;
   const tSec = payload.songStart + timeMs / 1000;
@@ -168,9 +170,7 @@ function bakeFrame(
     const fadeOut = Math.min(1, Math.max(0, (line.end - tSec) / 0.3));
     const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
 
-    const chapterOffset = ((Math.max(0, chapterIndex) % 3) - 1) * 60;
-    const lineVariance = ((idx % 7) - 3) * 12;
-    const x = BASE_X + chapterOffset + lineVariance;
+    const x = linePositions[idx] + lineChapterOffsets[idx];
     const y = getShotY(payload.cinematic_direction, chapter);
 
     const priorPulse = state.linePulse.get(idx) ?? 0;
@@ -224,10 +224,29 @@ function bakeFrame(
   return {
     timeMs,
     chunks,
-    cameraX: Math.sin(songProgress * Math.PI * 2) * 4 * tensionMotion,
-    cameraY: Math.cos(songProgress * Math.PI * 2) * 3 * tensionMotion,
+    cameraX: Math.sin(songProgress * Math.PI * 2) * 18 * tensionMotion,
+    cameraY: Math.cos(songProgress * Math.PI * 3) * 10 * tensionMotion,
     beatIndex,
   };
+}
+
+function getLinePositions(payload: ScenePayload): number[] {
+  return payload.lines.map((_, idx) => {
+    const lineVariance = ((idx % 7) - 3) * 12;
+    return 960 * 0.5 + lineVariance;
+  });
+}
+
+function getLineChapterOffsets(payload: ScenePayload): number[] {
+  return payload.lines.map((line) => {
+    const lineMidSec = (line.start + line.end) / 2;
+    const lineProgress =
+      payload.songEnd > payload.songStart
+        ? Math.min(1, Math.max(0, (lineMidSec - payload.songStart) / (payload.songEnd - payload.songStart)))
+        : 0;
+    const { chapterIndex } = getChapterIndexAndData(payload.cinematic_direction, lineProgress);
+    return ((Math.max(0, chapterIndex) % 3) - 1) * 60;
+  });
 }
 
 function createBakeState(payload: ScenePayload): BakeState {
@@ -243,13 +262,18 @@ export function bakeScene(
   payload: ScenePayload,
   onProgress?: (progress: number) => void,
 ): BakedTimeline {
+  const linePositions = getLinePositions(payload);
+  const lineChapterOffsets = getLineChapterOffsets(payload);
+
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const frames: BakedTimeline = [];
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
   const state = createBakeState(payload);
 
+  console.log("[lyricSceneBaker] tensionCurveLength", payload.cinematic_direction?.tensionCurve?.length);
+
   for (let frameIndex = 0; frameIndex <= totalFrames; frameIndex += 1) {
-    frames.push(bakeFrame(frameIndex, payload, durationMs, state));
+    frames.push(bakeFrame(frameIndex, payload, durationMs, state, linePositions, lineChapterOffsets));
 
     if (onProgress && frameIndex % 20 === 0) {
       onProgress(Math.min(1, frameIndex / totalFrames));
@@ -265,6 +289,8 @@ export function bakeSceneChunked(
   onProgress?: (progress: number) => void,
   framesPerChunk = 120,
 ): Promise<BakedTimeline> {
+  const linePositions = getLinePositions(payload);
+  const lineChapterOffsets = getLineChapterOffsets(payload);
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
   const state = createBakeState(payload);
@@ -277,7 +303,7 @@ export function bakeSceneChunked(
       const end = Math.min(totalFrames, frameIndex + Math.max(1, framesPerChunk));
 
       for (; frameIndex <= end; frameIndex += 1) {
-        frames.push(bakeFrame(frameIndex, payload, durationMs, state));
+        frames.push(bakeFrame(frameIndex, payload, durationMs, state, linePositions, lineChapterOffsets));
 
         if (frameIndex === totalFrames) break;
       }
