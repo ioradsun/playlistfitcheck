@@ -108,6 +108,9 @@ export function LyricFitTab({
       });
   }, []);
 
+  // Keep ref in sync with savedId state
+  useEffect(() => { savedIdRef.current = savedId; }, [savedId]);
+
   // Load saved lyric from dashboard navigation
   useEffect(() => {
     if (initialLyric && !lyricData) {
