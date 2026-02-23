@@ -252,6 +252,8 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
 const BASE_W = 960;
 const BASE_H = 540;
 let globalBakeLock = false;
+let globalTimelineCache: ScaledKeyframe[] | null = null;
+let globalChunkCache: Map<string, ChunkState> | null = null;
 
 // ──────────────────────────────────────────────────────────────
 // Player
@@ -330,23 +332,38 @@ export class LyricDancePlayer {
 
   // Compatibility with existing React shell
   async init(): Promise<void> {
-    if (globalBakeLock) {
-      console.log('[PLAYER] bake already running, skipping');
-      this.rafHandle = requestAnimationFrame(this.tick);
-      return;
-    }
-
-    globalBakeLock = true;
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
-    const payload = this.buildScenePayload();
 
-    try {
-      await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
-      console.log('[PLAYER] bake done — frames:', this.timeline.length);
-    } catch (e) {
-      console.error('[PLAYER] bake failed:', e);
-    } finally {
-      globalBakeLock = false;
+    if (globalTimelineCache && globalChunkCache) {
+      // Reuse cached bake from previous instance
+      console.log('[PLAYER] reusing cached timeline — frames:', globalTimelineCache.length);
+      this.timeline = globalTimelineCache;
+      this.chunks = globalChunkCache;
+      this.buildBgCache();
+    } else {
+      while (globalBakeLock && !globalTimelineCache && !globalChunkCache) {
+        await new Promise((resolve) => setTimeout(resolve, 16));
+      }
+
+      if (globalTimelineCache && globalChunkCache) {
+        console.log('[PLAYER] reusing cached timeline — frames:', globalTimelineCache.length);
+        this.timeline = globalTimelineCache;
+        this.chunks = globalChunkCache;
+        this.buildBgCache();
+      } else if (!globalBakeLock) {
+        globalBakeLock = true;
+        const payload = this.buildScenePayload();
+        try {
+          await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
+          globalTimelineCache = this.timeline;
+          globalChunkCache = this.chunks;
+          console.log('[PLAYER] bake done — frames:', this.timeline.length);
+        } catch (e) {
+          console.error('[PLAYER] bake failed:', e);
+        } finally {
+          globalBakeLock = false;
+        }
+      }
     }
 
     this.audio.currentTime = this.songStartSec;
