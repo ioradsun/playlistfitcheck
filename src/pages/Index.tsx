@@ -167,9 +167,14 @@ const Index = () => {
     if (!projectId || projectLoadedRef.current === projectId || !user) return;
     const tab = activeTab;
     
+    // Lyric projects are handled by the dedicated effect above
+    if (tab === "lyric") {
+      projectLoadedRef.current = projectId;
+      return;
+    }
+    
     // If already loaded via sidebar, just mark as loaded
     const alreadyLoaded = 
-      (tab === "lyric" && loadedLyric?.id === projectId) ||
       (tab === "mix" && loadedMixProject?.id === projectId) ||
       (tab === "profit" && profitSavedReport?.reportId === projectId);
     if (alreadyLoaded) {
@@ -183,10 +188,7 @@ const Index = () => {
     (async () => {
       let data: any = null;
       let error: any = null;
-      if (tab === "lyric") {
-        const r = await supabase.from("saved_lyrics").select("*").eq("id", projectId).maybeSingle();
-        data = r.data; error = r.error;
-      } else if (tab === "mix") {
+      if (tab === "mix") {
         const r = await supabase.from("mix_projects").select("*").eq("id", projectId).maybeSingle();
         data = r.data; error = r.error;
       } else if (tab === "hitfit") {
