@@ -339,9 +339,6 @@ interface LyricDanceData {
   artist_dna: ArtistDNA | null;
   seed: string;
   scene_manifest: any | null;
-  song_dna: {
-    cinematic_direction?: CinematicDirection | null;
-  } | null;
   cinematic_direction: CinematicDirection | null;
 }
 
