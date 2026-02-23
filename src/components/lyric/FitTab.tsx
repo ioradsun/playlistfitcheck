@@ -150,6 +150,20 @@ export function FitTab({
 
   return (
     <div className="flex-1 px-4 py-6 space-y-4">
+      {/* Waveform */}
+      {hasRealAudio && (
+        <div className="glass-card rounded-xl p-3">
+          <LyricWaveform
+            waveform={waveform}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            onSeek={handleSeek}
+            onTogglePlay={handleTogglePlay}
+            beats={beatGrid?.beats ?? null}
+            beatGridLoading={false}
+          />
+        </div>
+      )}
 
       {/* Song DNA results */}
       {songDna && (
