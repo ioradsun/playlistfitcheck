@@ -596,7 +596,7 @@ export class LyricDancePlayer {
       dirThesis: cd?.thesis ?? "—",
       dirChapter: currentChapter?.title ?? "—",
       dirChapterProgress: chapterProgress,
-      dirIntensity: currentChapter?.emotionalIntensity ? parseFloat(currentChapter.emotionalIntensity) || simulatedBeat : simulatedBeat,
+      dirIntensity: currentChapter?.emotionalIntensity ? (typeof currentChapter.emotionalIntensity === 'number' ? currentChapter.emotionalIntensity : simulatedBeat) : simulatedBeat,
       dirBgDirective: currentChapter?.backgroundDirective ?? "—",
       dirLightBehavior: currentChapter?.lightBehavior ?? "—",
 
