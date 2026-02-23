@@ -21,6 +21,8 @@ import {
   drawTemperatureTint, perceivedBrightness, mixTowardWhite,
 } from "@/engine/ColorEnhancer";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
+import { classifyWord, getElementalClass } from "@/engine/WordClassifier";
+import { DirectionInterpreter } from "@/engine/DirectionInterpreter";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
 import { ArtistFingerprintButton } from "./ArtistFingerprintButton";
@@ -47,6 +49,8 @@ interface Props {
   onFingerprintChange?: (dna: ArtistDNA | null) => void;
   /** Song context for fingerprint generation */
   songContext?: FingerprintSongContext;
+  /** Optional cinematic direction interpreter for debug HUD */
+  directionInterpreter?: DirectionInterpreter | null;
 }
 
 export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDanceCanvas({
@@ -64,6 +68,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
   fingerprint,
   onFingerprintChange,
   songContext,
+  directionInterpreter,
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,6 +85,11 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
     lineColor: string; isHookLine: boolean; repIndex: number; repTotal: number;
     system: string; songProgress: number; palette: string[];
     entrance: string; time: number;
+    // Direction HUD
+    dirThesis: string; dirChapter: string; dirChapterProgress: number; dirIntensity: number;
+    wordDirectiveWord: string; wordDirectiveKinetic: string; wordDirectiveElemental: string;
+    wordDirectiveEmphasis: number; wordDirectiveEvolution: string;
+    lineHeroWord: string; lineEntry: string; lineExit: string; lineIntent: string;
   }
   const debugRef = useRef<EditorDebugState>({
     beatIntensity: 0, physGlow: 0,
@@ -89,6 +99,10 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
     lineColor: "#fff", isHookLine: false, repIndex: 0, repTotal: 0,
     system: "—", songProgress: 0, palette: [],
     entrance: "fades", time: 0,
+    dirThesis: "—", dirChapter: "—", dirChapterProgress: 0, dirIntensity: 0,
+    wordDirectiveWord: "—", wordDirectiveKinetic: "—", wordDirectiveElemental: "—",
+    wordDirectiveEmphasis: 0, wordDirectiveEvolution: "—",
+    lineHeroWord: "—", lineEntry: "—", lineExit: "—", lineIntent: "—",
   });
   const [showHud, setShowHud] = useState(false);
   const [hudSnap, setHudSnap] = useState<EditorDebugState>(debugRef.current);
@@ -370,6 +384,17 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         });
 
         // Write debug state for HUD
+        const di = directionInterpreter;
+        const songProg01 = Math.max(0, Math.min(1, songProgress));
+        const currentChapter = di?.getCurrentChapter(songProg01);
+        const chapterProgress = currentChapter
+          ? (songProg01 - currentChapter.startRatio) / Math.max(0.001, currentChapter.endRatio - currentChapter.startRatio)
+          : 0;
+        const lineDir = di?.getLineDirection(activeLineIndex);
+        const wordsInLine = activeLine.text.split(/\s+/);
+        const heroWordText = lineDir?.heroWord ?? wordsInLine.find(w => classifyWord(w) !== "FILLER" && classifyWord(w) !== "NEUTRAL") ?? wordsInLine[0] ?? "—";
+        const wordDir = di?.getWordDirective(heroWordText);
+
         debugRef.current = {
           beatIntensity: editorBeatIntensity,
           physGlow: ps.heat * 0.6,
@@ -394,6 +419,19 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           palette: palette,
           entrance: lyricEntrance,
           time: ct,
+          dirThesis: di?.["direction"]?.thesis?.slice(0, 30) ?? "—",
+          dirChapter: currentChapter?.title ?? "—",
+          dirChapterProgress: chapterProgress,
+          dirIntensity: currentChapter?.emotionalIntensity ?? 0,
+          wordDirectiveWord: heroWordText,
+          wordDirectiveKinetic: wordDir?.kineticClass ?? classifyWord(heroWordText),
+          wordDirectiveElemental: wordDir?.elementalClass ?? getElementalClass(heroWordText),
+          wordDirectiveEmphasis: wordDir?.emphasisLevel ?? 0,
+          wordDirectiveEvolution: wordDir?.evolutionRule ?? "—",
+          lineHeroWord: lineDir?.heroWord ?? "—",
+          lineEntry: lineDir?.entryStyle ?? lyricEntrance,
+          lineExit: lineDir?.exitStyle ?? "fades",
+          lineIntent: lineDir?.emotionalIntent ?? "—",
         };
 
         // Micro-surprise overlay
@@ -572,6 +610,10 @@ function EditorDebugHUD({ snap }: { snap: {
   lineColor: string; isHookLine: boolean; repIndex: number; repTotal: number;
   system: string; songProgress: number; palette: string[];
   entrance: string; time: number;
+  dirThesis: string; dirChapter: string; dirChapterProgress: number; dirIntensity: number;
+  wordDirectiveWord: string; wordDirectiveKinetic: string; wordDirectiveElemental: string;
+  wordDirectiveEmphasis: number; wordDirectiveEvolution: string;
+  lineHeroWord: string; lineEntry: string; lineExit: string; lineIntent: string;
 } }) {
   const f = (v: number, d = 2) => v.toFixed(d);
   const rowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 8 };
@@ -620,11 +662,24 @@ function EditorDebugHUD({ snap }: { snap: {
         <Row l="isHookLine" v={snap.isHookLine ? "true" : "false"} />
         <Row l="repIndex" v={`${snap.repIndex}/${snap.repTotal}`} />
       </Sec>
-      <Sec t="BACKGROUND">
-        <Row l="system" v={snap.system} />
-        <Row l="songProgress" v={f(snap.songProgress)} />
-        <Row l="palette" v={`[${snap.palette.join(", ")}]`} />
-        <Row l="entrance" v={snap.entrance} />
+      <Sec t="DIRECTION">
+        <Row l="thesis" v={`"${snap.dirThesis}"`} />
+        <Row l="chapter" v={snap.dirChapter} />
+        <Row l="chapterProgress" v={f(snap.dirChapterProgress)} />
+        <Row l="intensity" v={f(snap.dirIntensity)} />
+      </Sec>
+      <Sec t="WORD DIRECTIVE">
+        <Row l="word" v={`"${snap.wordDirectiveWord}"`} />
+        <Row l="kinetic" v={snap.wordDirectiveKinetic} />
+        <Row l="elemental" v={snap.wordDirectiveElemental} />
+        <Row l="emphasis" v={f(snap.wordDirectiveEmphasis, 1)} />
+        <Row l="evolution" v={`"${snap.wordDirectiveEvolution}"`} />
+      </Sec>
+      <Sec t="LINE DIRECTION">
+        <Row l="heroWord" v={`"${snap.lineHeroWord}"`} />
+        <Row l="entry" v={snap.lineEntry} />
+        <Row l="exit" v={snap.lineExit} />
+        <Row l="intent" v={`"${snap.lineIntent}"`} />
       </Sec>
       <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" }}>
         {f(snap.time, 2)}s · press D to close
