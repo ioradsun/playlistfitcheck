@@ -189,6 +189,170 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
   );
 }
 
+
+
+function drawElementalWordTexture(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    word: string;
+    wordIndex: number;
+    wordX: number;
+    wordY: number;
+    wordWidth: number;
+    fontSize: number;
+    currentTime: number;
+    beatIntensity: number;
+    elementalClass: "FIRE" | "COLD" | "RAIN";
+  },
+): void {
+  const { word, wordIndex, wordX, wordY, wordWidth, fontSize, currentTime, beatIntensity, elementalClass } = params;
+
+  if (elementalClass === "FIRE") {
+    ctx.fillStyle = "#1a0a00";
+    ctx.fillText(word, wordX, wordY);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.textBaseline = "alphabetic";
+    ctx.rect(wordX - wordWidth / 2, wordY - fontSize, wordWidth, fontSize * 1.3);
+    ctx.clip();
+
+    const flicker = Math.sin(currentTime * 8 + wordIndex) * 0.15;
+    const fireGrad = ctx.createLinearGradient(wordX, wordY + fontSize * flicker, wordX, wordY - fontSize + fontSize * flicker);
+    fireGrad.addColorStop(0, "#ff2200");
+    fireGrad.addColorStop(Math.max(0, Math.min(1, 0.4 + flicker * 0.2)), "#ff8c00");
+    fireGrad.addColorStop(Math.max(0, Math.min(1, 0.8 + flicker * 0.15)), "#ffee00");
+    fireGrad.addColorStop(1, "#ffffff");
+
+    ctx.fillStyle = fireGrad;
+    ctx.fillRect(wordX - wordWidth / 2, wordY - fontSize, wordWidth, fontSize * 1.35);
+
+    ctx.restore();
+
+    for (let i = 0; i < 4; i += 1) {
+      const px = wordX - wordWidth / 2 + (wordWidth * i) / 4 + Math.sin(currentTime * 6 + i + wordIndex) * 3;
+      const rise = (currentTime * 20 + i * 5) % 20;
+      const py = wordY - fontSize - rise;
+      const alpha = Math.max(0, 0.85 - rise / 20);
+      ctx.beginPath();
+      ctx.arc(px, py, 2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,140,0,${alpha})`;
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = "rgba(255,180,0,0.3)";
+    ctx.lineWidth = Math.max(1, fontSize * 0.04);
+    ctx.beginPath();
+    for (let x = wordX - wordWidth / 2; x <= wordX + wordWidth / 2; x += 2) {
+      const wave = Math.sin(x * 0.3 + currentTime * 5) * 2;
+      if (x === wordX - wordWidth / 2) {
+        ctx.moveTo(x, wordY + wave);
+      } else {
+        ctx.lineTo(x, wordY + wave);
+      }
+    }
+    ctx.stroke();
+    return;
+  }
+
+  if (elementalClass === "COLD") {
+    ctx.fillStyle = "#a8d8ea";
+    ctx.fillText(word, wordX, wordY);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.textBaseline = "alphabetic";
+    ctx.rect(wordX - wordWidth / 2, wordY - fontSize, wordWidth, fontSize * 1.3);
+    ctx.clip();
+
+    ctx.fillStyle = "#c8e8f8";
+    ctx.fillText(word, wordX, wordY);
+
+    const crystalPoints = Math.max(2, Math.floor(wordWidth / 12));
+    for (let i = 0; i < crystalPoints; i += 1) {
+      const cx = wordX - wordWidth / 2 + (i / crystalPoints) * wordWidth;
+      const cy = wordY - fontSize * (0.35 + (i % 3) * 0.12);
+      for (let arm = 0; arm < 6; arm += 1) {
+        const angle = (arm / 6) * Math.PI * 2;
+        const length = 4 + ((i + arm + wordIndex) % 6);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(angle) * length, cy + Math.sin(angle) * length);
+        ctx.strokeStyle = "rgba(200,240,255,0.6)";
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+
+    if (beatIntensity > 0.6) {
+      const glintX = wordX - wordWidth / 2 + wordWidth * 0.3;
+      const glintY = wordY - fontSize * 0.7;
+      const glintGrad = ctx.createRadialGradient(glintX, glintY, 0, glintX, glintY, 8);
+      glintGrad.addColorStop(0, "rgba(255,255,255,0.9)");
+      glintGrad.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = glintGrad;
+      ctx.fillRect(glintX - 8, glintY - 8, 16, 16);
+    }
+
+    ctx.restore();
+
+    for (let i = 0; i < 3; i += 1) {
+      const sx = wordX - wordWidth / 2 + wordWidth * (i / 3);
+      const drop = (currentTime * 15 + i * 20) % 40;
+      const sy = wordY + drop;
+      const alpha = Math.max(0, 0.7 - drop / 40);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(200,230,255,${alpha})`;
+      ctx.fill();
+    }
+    return;
+  }
+
+  // RAIN
+  ctx.fillStyle = "#7ab0cc";
+  ctx.fillText(word, wordX, wordY);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.textBaseline = "alphabetic";
+  ctx.rect(wordX - wordWidth / 2, wordY - fontSize, wordWidth, fontSize * 1.3);
+  ctx.clip();
+
+  const rainGrad = ctx.createLinearGradient(wordX, wordY - fontSize, wordX, wordY + fontSize * 0.3);
+  rainGrad.addColorStop(0, "rgba(180,220,240,0.95)");
+  rainGrad.addColorStop(0.45, "rgba(122,176,204,0.85)");
+  rainGrad.addColorStop(1, "rgba(70,110,145,0.95)");
+  ctx.fillStyle = rainGrad;
+  ctx.fillRect(wordX - wordWidth / 2, wordY - fontSize, wordWidth, fontSize * 1.4);
+
+  const dripCount = Math.max(3, Math.floor(wordWidth / 18));
+  for (let i = 0; i < dripCount; i += 1) {
+    const dx = wordX - wordWidth / 2 + (i / dripCount) * wordWidth;
+    const phase = (currentTime * 22 + i * 9 + wordIndex * 3) % 18;
+    const dripLen = 3 + (phase / 18) * (fontSize * 0.5);
+    ctx.strokeStyle = "rgba(176,215,236,0.55)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(dx, wordY - fontSize * 0.15);
+    ctx.lineTo(dx + Math.sin(currentTime * 3 + i) * 0.6, wordY - fontSize * 0.15 + dripLen);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  for (let i = 0; i < 3; i += 1) {
+    const rx = wordX - wordWidth / 2 + wordWidth * ((i + 0.5) / 3);
+    const fall = (currentTime * 24 + i * 15) % 32;
+    const ry = wordY + fall;
+    const alpha = Math.max(0, 0.75 - fall / 40);
+    ctx.beginPath();
+    ctx.ellipse(rx, ry, 1.6, 2.6, 0, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(154,205,230,${alpha})`;
+    ctx.fill();
+  }
+}
+
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
@@ -1202,6 +1366,9 @@ export default function ShareableLyricDance() {
 
           ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui`;
           ctx.textAlign = "center";
+          ctx.textBaseline = "alphabetic";
+          const wordRenderWidth = ctx.measureText(word).width;
+          const elementalClass = getElementalClass(word);
 
           // Scale
           ctx.save();

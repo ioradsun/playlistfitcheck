@@ -12,6 +12,8 @@ export type WordClass =
   | "FILLER"
   | "NEUTRAL";
 
+export type ElementalClass = "FIRE" | "COLD" | "RAIN" | "NONE";
+
 export type PhoneticClass = "HARD" | "SOFT" | "NEUTRAL";
 
 export interface WordVisualProps {
@@ -77,6 +79,25 @@ export function getPhoneticClass(word: string): PhoneticClass {
   const hard = /[bdgkpt]/i.test(word[0]);
   const soft = /[flmnrsvw]/i.test(word[0]);
   return hard ? "HARD" : soft ? "SOFT" : "NEUTRAL";
+}
+
+export function getElementalClass(word: string): ElementalClass {
+  const normalized = normalizeWord(word);
+  if (!normalized) return "NONE";
+
+  if (["flames", "fire", "burn", "heat", "wild"].includes(normalized)) {
+    return "FIRE";
+  }
+
+  if (["cold", "freeze", "ice", "winter", "snow"].includes(normalized)) {
+    return "COLD";
+  }
+
+  if (["rain", "tears", "cry", "drip", "fall", "flood"].includes(normalized)) {
+    return "RAIN";
+  }
+
+  return "NONE";
 }
 
 export function getWordVisualProps(
