@@ -121,12 +121,7 @@ export function LyricFitTab({
     savedIdRef.current = savedId;
   }, [savedId]);
 
-  // Persist song_dna whenever we have both a saved project and computed DNA
-  useEffect(() => {
-    if (savedIdRef.current && songDna) {
-      persistSongDna(savedIdRef.current, { ...songDna, cinematicDirection });
-    }
-  }, [savedId, songDna, cinematicDirection, persistSongDna]);
+  // (persist effect moved below persistSongDna definition)
 
   useEffect(() => {
     if (initialLyric && !lyricData) {
