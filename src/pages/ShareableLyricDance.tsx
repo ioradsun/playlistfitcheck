@@ -74,12 +74,22 @@ interface LiveDebugState {
   zoom: number;
   vignetteIntensity: number;
   songProgress: number;
-  // Manifest
-  world: string;
-  palette: string[];
-  entrance: string;
-  lightSource: string;
-  tension: number;
+  // Direction
+  dirThesis: string;
+  dirChapter: string;
+  dirChapterProgress: number;
+  dirIntensity: number;
+  // Word Directive
+  wordDirectiveWord: string;
+  wordDirectiveKinetic: string;
+  wordDirectiveElemental: string;
+  wordDirectiveEmphasis: number;
+  wordDirectiveEvolution: string;
+  // Line Direction
+  lineHeroWord: string;
+  lineEntry: string;
+  lineExit: string;
+  lineIntent: string;
   // Meta
   time: number;
 }
@@ -177,12 +187,24 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
         <Row label="vignetteIntensity" value={f(snap.vignetteIntensity)} />
         <Row label="songProgress" value={f(snap.songProgress)} />
       </Section>
-      <Section title="MANIFEST">
-        <Row label="world" value={snap.world.slice(0, 20) + (snap.world.length > 20 ? "…" : "")} />
-        <Row label="palette" value={`[${snap.palette.join(", ")}]`} />
-        <Row label="entrance" value={snap.entrance} />
-        <Row label="lightSource" value={snap.lightSource} />
-        <Row label="tension" value={f(snap.tension)} />
+      <Section title="DIRECTION">
+        <Row label="thesis" value={snap.dirThesis.slice(0, 30) + (snap.dirThesis.length > 30 ? "…" : "")} />
+        <Row label="chapter" value={snap.dirChapter} />
+        <Row label="chapterProgress" value={f(snap.dirChapterProgress)} />
+        <Row label="intensity" value={f(snap.dirIntensity)} />
+      </Section>
+      <Section title="WORD DIRECTIVE">
+        <Row label="word" value={snap.wordDirectiveWord || "—"} />
+        <Row label="kinetic" value={snap.wordDirectiveKinetic || "—"} />
+        <Row label="elemental" value={snap.wordDirectiveElemental || "—"} />
+        <Row label="emphasis" value={f(snap.wordDirectiveEmphasis)} />
+        <Row label="evolution" value={snap.wordDirectiveEvolution || "—"} />
+      </Section>
+      <Section title="LINE DIRECTION">
+        <Row label="heroWord" value={snap.lineHeroWord || "—"} />
+        <Row label="entry" value={snap.lineEntry} />
+        <Row label="exit" value={snap.lineExit} />
+        <Row label="intent" value={snap.lineIntent || "—"} />
       </Section>
       <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" as const }}>
         {f(snap.time, 2)}s · press D to close
@@ -555,6 +577,7 @@ interface LyricDanceData {
   artist_dna: ArtistDNA | null;
   seed: string;
   scene_manifest: any | null;
+  cinematic_direction: CinematicDirection | null;
   background_url: string | null;
 }
 
@@ -569,7 +592,7 @@ interface DanceComment {
   submitted_at: string;
 }
 
-const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,background_url";
+const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,cinematic_direction,background_url";
 
 /** Draggable progress bar overlay at bottom of canvas */
 function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
@@ -645,7 +668,9 @@ export default function ShareableLyricDance() {
     particleSystem: "none", particleDensity: 0, particleSpeed: 0, particleCount: 0, songSection: "intro",
     xOffset: 0, yBase: 0.5, xNudge: 0, shake: 0,
     backgroundSystem: "—", imageLoaded: false, zoom: 1, vignetteIntensity: 0, songProgress: 0,
-    world: "", palette: [], entrance: "fades", lightSource: "—", tension: 0,
+    dirThesis: "—", dirChapter: "—", dirChapterProgress: 0, dirIntensity: 0,
+    wordDirectiveWord: "", wordDirectiveKinetic: "—", wordDirectiveElemental: "—", wordDirectiveEmphasis: 0, wordDirectiveEvolution: "—",
+    lineHeroWord: "", lineEntry: "fades", lineExit: "fades", lineIntent: "—",
   });
   const particleEngineRef = useRef<ParticleEngine | null>(null);
   // Comment input (ShareableHook-style)
@@ -852,7 +877,10 @@ export default function ShareableLyricDance() {
     const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const totalDuration = Math.max(0.001, songEnd - songStart);
-    const interpreter: DirectionInterpreter | null = null;
+    const cinematicDirection = data.cinematic_direction;
+    const interpreter = cinematicDirection
+      ? new DirectionInterpreter(cinematicDirection, totalDuration)
+      : null;
     const hookStartTimes = lines
       .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0, effectivePalette).isHookLine)
       .map(line => line.start)
@@ -1565,12 +1593,27 @@ export default function ShareableLyricDance() {
       dbg.zoom = 1.0 + songProgress * (0.08 * baseAtmosphere);
       dbg.vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
       dbg.songProgress = songProgress;
-      // Manifest
-      dbg.world = resolvedManifest.world ?? "";
-      dbg.palette = effectivePalette as string[];
-      dbg.entrance = resolvedManifest.lyricEntrance ?? "fades";
-      dbg.lightSource = resolvedManifest.lightSource ?? "—";
-      dbg.tension = resolvedManifest.tension ?? 0;
+      // Direction
+      const chapter = interpreter?.getCurrentChapter(songProgress);
+      dbg.dirThesis = interpreter?.direction?.thesis ?? "—";
+      dbg.dirChapter = chapter?.title ?? "—";
+      dbg.dirChapterProgress = chapter ? Math.max(0, Math.min(1, (songProgress - chapter.startRatio) / Math.max(0.001, chapter.endRatio - chapter.startRatio))) : 0;
+      dbg.dirIntensity = chapter?.emotionalIntensity ?? 0;
+      // Word Directive (current hero word)
+      const dbgLineDir = interpreter?.getLineDirection(activeLineIndex) ?? null;
+      const dbgWords = activeLine ? activeLine.text.split(/\s+/) : [];
+      const dbgHeroWord = dbgLineDir?.heroWord ?? dbgWords.find(w => WordClassifier.classifyWord(w) !== "FILLER") ?? dbgWords[0] ?? "";
+      const dbgWordDir = interpreter?.getWordDirective(dbgHeroWord) ?? null;
+      dbg.wordDirectiveWord = dbgHeroWord;
+      dbg.wordDirectiveKinetic = dbgWordDir?.kineticClass ?? WordClassifier.classifyWord(dbgHeroWord);
+      dbg.wordDirectiveElemental = dbgWordDir?.elementalClass ?? WordClassifier.getElementalClass(dbgHeroWord);
+      dbg.wordDirectiveEmphasis = dbgWordDir?.emphasisLevel ?? 0;
+      dbg.wordDirectiveEvolution = dbgWordDir?.evolutionRule ?? "—";
+      // Line Direction
+      dbg.lineHeroWord = dbgLineDir?.heroWord ?? dbgHeroWord;
+      dbg.lineEntry = dbgLineDir?.entryStyle ?? resolvedManifest.lyricEntrance ?? "fades";
+      dbg.lineExit = dbgLineDir?.exitStyle ?? "fades";
+      dbg.lineIntent = dbgLineDir?.emotionalIntent ?? "—";
 
       // 1Hz diagnostic log
       logManifestDiagnostics("LyricDance", {
