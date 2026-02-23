@@ -99,17 +99,12 @@ export function PublishLyricDanceButton({
 
       const audioUrl = urlData.publicUrl;
 
-      // ── Derive SceneManifest ──────────────────────────────────────
+      // ── Scene manifest from props (no fallback derivation) ────────
       setStatus("Building scene…");
       const sceneManifest =
         songDna?.scene_manifest ||
         songDna?.sceneManifest ||
-        deriveSceneManifestFromSpec({
-          spec: physicsSpec,
-          mood: songDna?.mood,
-          description: songDna?.description,
-          songTitle,
-        });
+        null;
 
       const backgroundUrl: string | null = null;
 
