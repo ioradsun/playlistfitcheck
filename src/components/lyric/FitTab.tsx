@@ -1,23 +1,19 @@
 /**
- * FitTab — Displays analysis results with waveform.
+ * FitTab — Displays analysis results (no waveform — shared waveform lives in Lyrics tab).
  * No auto-triggering; pipeline runs in LyricFitTab parent.
  * "Test Again" button to re-run analysis.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { Loader2, Film, RefreshCw, Music, Sparkles, Eye, Palette, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
-import { LyricWaveform } from "./LyricWaveform";
-import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
-
-const PEAK_SAMPLES = 200;
 
 function extractPeaks(buffer: AudioBuffer, samples: number): number[] {
   const channel = buffer.getChannelData(0);
