@@ -250,8 +250,8 @@ function createBakeState(payload: ScenePayload): BakeState {
   return {
     beats: payload.beat_grid?.beats ?? [],
     beatCursor: 0,
-    lastBeatIndex: 0,
-    pulseBudget: 0,
+    lastBeatIndex: -1,
+    glowBudget: 0,
     currentZoom: 1.0,
   };
 }
