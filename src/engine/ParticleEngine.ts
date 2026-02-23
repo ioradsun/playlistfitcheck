@@ -325,6 +325,84 @@ export class ParticleEngine {
     if (this.config.system === "none") return;
     ctx.save();
 
+    const system = this.config.system;
+    const canBatch = system === "rain" || system === "stars" || system === "dust";
+
+    if (canBatch) {
+      const groups = new Map<string, Path2D>();
+
+      const pushToGroup = (key: string, build: (p: Path2D) => void) => {
+        let path = groups.get(key);
+        if (!path) {
+          path = new Path2D();
+          groups.set(key, path);
+        }
+        build(path);
+      };
+
+      for (let i = 0; i < this.pool.length; i++) {
+        const p = this.pool[i];
+        if (!p.active) continue;
+        if (layer === "far" && p.depth >= 0.5) continue;
+        if (layer === "near" && p.depth < 0.5) continue;
+
+        let alpha = p.opacity * p.life * this.config.opacity * (0.7 + p.depth * 0.3);
+        const inSafe =
+          p.x >= this.safeZone.x &&
+          p.x <= this.safeZone.x + this.safeZone.w &&
+          p.y >= this.safeZone.y &&
+          p.y <= this.safeZone.y + this.safeZone.h;
+        if (inSafe) alpha *= 0.3;
+        if (alpha < 0.004) continue;
+
+        const alphaBucket = Math.round(alpha * 10) / 10;
+        if (alphaBucket <= 0) continue;
+
+        const depthScale = 0.8 + p.depth * 0.2;
+        const s = p.size * depthScale;
+
+        if (system === "rain") {
+          const key = `rain_${alphaBucket}`;
+          pushToGroup(key, (path) => {
+            path.moveTo(p.x, p.y);
+            path.lineTo(p.x + p.vy * 0.3, p.y + s * 4);
+          });
+        } else if (system === "stars") {
+          const key = `stars_${alphaBucket}`;
+          pushToGroup(key, (path) => {
+            path.moveTo(p.x + s, p.y);
+            path.arc(p.x, p.y, s, 0, Math.PI * 2);
+          });
+        } else if (system === "dust") {
+          const key = `dust_${alphaBucket}`;
+          pushToGroup(key, (path) => {
+            path.moveTo(p.x + s, p.y);
+            path.arc(p.x, p.y, s, 0, Math.PI * 2);
+          });
+        }
+      }
+
+      groups.forEach((path, key) => {
+        const [kind, alphaStr] = key.split("_");
+        ctx.globalAlpha = Number(alphaStr);
+        if (kind === "rain") {
+          ctx.strokeStyle = "rgba(168,196,232,1)";
+          ctx.lineWidth = 1;
+          ctx.stroke(path);
+        } else if (kind === "stars") {
+          ctx.fillStyle = "#ffffff";
+          ctx.fill(path);
+        } else if (kind === "dust") {
+          ctx.fillStyle = "rgba(200,180,140,0.8)";
+          ctx.fill(path);
+        }
+      });
+
+      ctx.restore();
+      return;
+    }
+
+    // Fallback for all other particle systems
     for (let i = 0; i < this.pool.length; i++) {
       const p = this.pool[i];
       if (!p.active) continue;
