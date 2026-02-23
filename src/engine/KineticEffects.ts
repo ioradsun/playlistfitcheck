@@ -88,9 +88,9 @@ export function applyKineticEffect(
     }
 
     case "SHAKING": {
-      // Random jitter + RGB split
-      const jx = (Math.random() - 0.5) * beatIntensity * 6;
-      const jy = (Math.random() - 0.5) * beatIntensity * 2;
+      // Reduced jitter + RGB split
+      const jx = (Math.random() - 0.5) * beatIntensity * 3;
+      const jy = (Math.random() - 0.5) * beatIntensity * 1;
       ctx.save();
       // Red channel offset
       ctx.fillStyle = "rgba(255,0,0,0.4)";
