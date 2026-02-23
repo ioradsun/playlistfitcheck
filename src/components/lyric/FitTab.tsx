@@ -102,28 +102,39 @@ export function FitTab({
   const currentLyricsHash = lyricData?.lines ? computeLyricsHash(lyricData.lines) : null;
   const danceNeedsRegeneration = !publishedUrl || (publishedLyricsHash !== null && currentLyricsHash !== publishedLyricsHash);
 
-  // Check for existing published dance on load
+  // Check for existing published dance on load — use profile display_name
+  // to match the slug used during publish
   useEffect(() => {
     if (!user || !lyricData) return;
-    const artistSlug = slugify(lyricData.artist || "artist");
     const songSlug = slugify(lyricData.title || "untitled");
-    if (!artistSlug || !songSlug) return;
+    if (!songSlug) return;
 
-    supabase
-      .from("shareable_lyric_dances" as any)
-      .select("artist_slug, song_slug, lyrics")
-      .eq("user_id", user.id)
-      .eq("artist_slug", artistSlug)
-      .eq("song_slug", songSlug)
-      .maybeSingle()
-      .then(({ data }: any) => {
-        if (data) {
-          setPublishedUrl(`/${data.artist_slug}/${data.song_slug}/lyric-dance`);
-          // Hash the published lyrics to compare against current
-          const pubLines = Array.isArray(data.lyrics) ? data.lyrics : [];
-          setPublishedLyricsHash(computeLyricsHash(pubLines));
-        }
-      });
+    (async () => {
+      // Fetch display_name to build the same slug used at publish time
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .single();
+
+      const displayName = profile?.display_name || lyricData.artist || "artist";
+      const artistSlug = slugify(displayName);
+      if (!artistSlug) return;
+
+      const { data } = await supabase
+        .from("shareable_lyric_dances" as any)
+        .select("artist_slug, song_slug, lyrics")
+        .eq("user_id", user.id)
+        .eq("artist_slug", artistSlug)
+        .eq("song_slug", songSlug)
+        .maybeSingle() as any;
+
+      if (data) {
+        setPublishedUrl(`/${data.artist_slug}/${data.song_slug}/lyric-dance`);
+        const pubLines = Array.isArray(data.lyrics) ? data.lyrics : [];
+        setPublishedLyricsHash(computeLyricsHash(pubLines));
+      }
+    })();
   }, [user, lyricData, computeLyricsHash]);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
