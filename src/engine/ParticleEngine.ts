@@ -1,4 +1,4 @@
-import { drawBubble, drawEmber, drawSmoke, getSprite } from "./ElementalRenderers";
+// removed duplicate import line
 import type { ParticleConfig, SceneManifest } from "./SceneManifest";
 import {
   drawAsh,
@@ -697,7 +697,6 @@ export class ParticleEngine {
       case "bubbles":
         drawBubble(ctx, p.x + Math.sin(this.time * 0.002 + p.phase) * 2, p.y, s, 0.7);
         break;
-      }
       case "glitch": {
         const palette = ["#ff3b30", "#34c759", "#0a84ff", "#ffd60a", "#bf5af2"];
         const color = palette[Math.floor(Math.random() * palette.length)];

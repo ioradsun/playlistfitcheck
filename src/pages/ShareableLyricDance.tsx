@@ -724,6 +724,14 @@ export default function ShareableLyricDance() {
   const lastBgChapterRef = useRef("");
   const lastBgBeatRef = useRef(0);
   const lastBgProgressRef = useRef(0);
+  const lastBgTimeRef = useRef(0);
+  // Perf: constellation offscreen canvas
+  const constellationCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Perf: particle config cache
+  const particleConfigCacheRef = useRef<{ bucket: number; config: ParticleConfig | null }>({ bucket: -1, config: null });
+  // Perf: adaptive particle limit
+  const slowFrameCountRef = useRef(0);
+  const adaptiveMaxParticlesRef = useRef(0);
 
   useEffect(() => {
     wordMeasureCache.current.clear();
@@ -992,6 +1000,16 @@ export default function ShareableLyricDance() {
     let activeChapterIndex = 0;
     let pendingChapterTransition: ((typeof chapters)[number]) | null = null;
 
+    // Perf: init adaptive max particles
+    adaptiveMaxParticlesRef.current = window.devicePixelRatio > 1 ? 150 : 80;
+    slowFrameCountRef.current = 0;
+
+    // Perf: create offscreen canvas for constellation rendering
+    const constellationCanvas = document.createElement("canvas");
+    constellationCanvasRef.current = constellationCanvas;
+    let constellationDirty = true;
+    const constellationInterval = setInterval(() => { constellationDirty = true; }, 100); // 10fps
+
     // Set up audio
     const audio = new Audio(data.audio_url);
     audio.loop = true;
@@ -1026,6 +1044,14 @@ export default function ShareableLyricDance() {
       pendingChapterTransition = null;
     };
 
+    // Perf: word width cache with fast integer key (avoids template literal allocation)
+    const wordWidthIntCache = new Map<number, number>();
+    const hashWordKey = (word: string, fSize: number): number => {
+      let h = fSize * 31;
+      for (let i = 0; i < word.length; i++) h = (h * 31 + word.charCodeAt(i)) | 0;
+      return h;
+    };
+
     const resize = () => {
       const isMobile = window.innerWidth < 768;
       const pixelRatio = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
@@ -1040,8 +1066,10 @@ export default function ShareableLyricDance() {
       particleCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       textCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       wordMeasureCache.current.clear();
+      wordWidthIntCache.clear();
       evolutionCacheRef.current.clear();
       interpreterRef.current?.invalidateEvolutionCache();
+      constellationDirty = true;
       if (particleEngine) {
         particleEngine.setBounds({ x: 0, y: 0, w: rect.width, h: rect.height });
       }
@@ -1065,19 +1093,19 @@ export default function ShareableLyricDance() {
       let drawCalls = 0;
       let cacheHits = 0;
       let cacheLookups = 0;
-      const getWordWidth = (word: string, fSize: number, fontFamily: string): number => {
-        const key = `${word}_${fSize}_${fontFamily}`;
+      const getWordWidth = (word: string, fSize: number, _fontFamily: string): number => {
+        const intKey = hashWordKey(word, fSize);
         cacheLookups += 1;
-        const cached = wordMeasureCache.current.get(key);
-        if (typeof cached === "number") {
+        const cached = wordWidthIntCache.get(intKey);
+        if (cached !== undefined) {
           cacheHits += 1;
           return cached;
         }
         const previousFont = textCtx.font;
-        textCtx.font = `${fSize}px ${fontFamily}`;
+        textCtx.font = `${fSize}px Inter, ui-sans-serif, system-ui`;
         const width = textCtx.measureText(word).width;
         textCtx.font = previousFont;
-        wordMeasureCache.current.set(key, width);
+        wordWidthIntCache.set(intKey, width);
         return width;
       };
       const currentTime = audio.currentTime;
@@ -1227,10 +1255,14 @@ export default function ShareableLyricDance() {
         typographyShift: null,
       };
 
+      // Perf opt 4: throttle background — raise threshold + min 100ms interval
+      const bgTimeSinceLastDraw = now - lastBgTimeRef.current;
       const bgNeedsUpdate =
         chapterForRender.title !== lastBgChapterRef.current ||
-        Math.abs(currentBeatIntensity - lastBgBeatRef.current) > 0.15 ||
-        Math.abs(songProgress - lastBgProgressRef.current) > 0.05 ||
+        (bgTimeSinceLastDraw > 100 && (
+          Math.abs(currentBeatIntensity - lastBgBeatRef.current) > 0.2 ||
+          Math.abs(songProgress - lastBgProgressRef.current) > 0.05
+        )) ||
         (lastBgBeatRef.current <= 0.2 && currentBeatIntensity > 0.2) ||
         (lastBgBeatRef.current > 0.2 && currentBeatIntensity <= 0.2);
 
@@ -1263,13 +1295,14 @@ export default function ShareableLyricDance() {
         lastBgChapterRef.current = chapterForRender.title;
         lastBgBeatRef.current = currentBeatIntensity;
         lastBgProgressRef.current = songProgress;
+        lastBgTimeRef.current = now;
       }
       drawCalls += 2;
 
       if (canRenderEffects) {
         renderChapterLighting(
           ctx,
-          canvas,
+          textCanvas,
           chapterForRender,
           activeWordPosition,
           songProgress,
@@ -1279,14 +1312,33 @@ export default function ShareableLyricDance() {
       }
 
       // Particle engine: update then draw parallax split layers.
+      // Perf opt 5: adaptive particle count based on frame budget
+      if (deltaMs > 20) {
+        slowFrameCountRef.current += 1;
+        if (slowFrameCountRef.current >= 10) {
+          adaptiveMaxParticlesRef.current = Math.max(20, Math.floor(adaptiveMaxParticlesRef.current * 0.5));
+          slowFrameCountRef.current = 0;
+        }
+      } else {
+        slowFrameCountRef.current = Math.max(0, slowFrameCountRef.current - 1);
+      }
+
       if (canRenderParticles && particleEngine) {
-        const maxParticles = window.devicePixelRatio > 1 ? 150 : 80;
-        const timedParticleConfig = getParticleConfigForTime(
-          baseParticleConfig,
-          timelineManifest,
-          spec,
-          songProgress,
-        );
+        const maxParticles = adaptiveMaxParticlesRef.current;
+        // Perf opt 3: cache particle config by progress bucket
+        const progressBucket = Math.floor(songProgress * 20);
+        let timedParticleConfig: ParticleConfig;
+        if (particleConfigCacheRef.current.bucket === progressBucket && particleConfigCacheRef.current.config) {
+          timedParticleConfig = particleConfigCacheRef.current.config;
+        } else {
+          timedParticleConfig = getParticleConfigForTime(
+            baseParticleConfig,
+            timelineManifest,
+            spec,
+            songProgress,
+          );
+          particleConfigCacheRef.current = { bucket: progressBucket, config: timedParticleConfig };
+        }
         const particleDirective = chapterDirective?.particleDirective ?? timelineManifest.particleConfig.system;
         timedParticleConfig.system = particleDirective as any;
         particleEngine.setChapterDirective(particleDirective);
@@ -1328,60 +1380,79 @@ export default function ShareableLyricDance() {
       beatScaleRef.current = Math.max(1, beatScaleRef.current * 0.9);
 
       // ── Comment rendering (constellation + river + center) ──
+      // Perf opt 2: render constellation/river to offscreen canvas at 10fps, blit in rAF
       const nodes = constellationRef.current;
       const commentNow = Date.now();
-      ctx.textBaseline = "middle";
-      ctx.textAlign = "center";
 
-      // Pass 1: Constellation nodes
-      for (const node of nodes) {
-        if (node.phase !== "constellation") continue;
-        node.x += Math.cos(node.driftAngle) * node.driftSpeed / cw;
-        node.y += Math.sin(node.driftAngle) * node.driftSpeed / ch;
-        if (node.x < -0.1) node.x = 1.1;
-        if (node.x > 1.1) node.x = -0.1;
-        if (node.y < -0.1) node.y = 1.1;
-        if (node.y > 1.1) node.y = -0.1;
+      if (constellationDirty && nodes.length > 0) {
+        constellationDirty = false;
+        const offCanvas = constellationCanvasRef.current!;
+        if (offCanvas.width !== cw || offCanvas.height !== ch) {
+          offCanvas.width = cw;
+          offCanvas.height = ch;
+        }
+        const offCtx = offCanvas.getContext("2d")!;
+        offCtx.clearRect(0, 0, cw, ch);
+        offCtx.textBaseline = "middle";
+        offCtx.textAlign = "center";
 
-        ctx.font = "300 10px system-ui, -apple-system, sans-serif";
-        ctx.globalAlpha = node.baseOpacity;
-        ctx.fillStyle = "#ffffff";
-        const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
-        ctx.fillText(truncated, node.x * cw, node.y * ch);
-      }
+        // Pass 1: Constellation nodes
+        for (const node of nodes) {
+          if (node.phase !== "constellation") continue;
+          node.x += Math.cos(node.driftAngle) * node.driftSpeed / cw;
+          node.y += Math.sin(node.driftAngle) * node.driftSpeed / ch;
+          if (node.x < -0.1) node.x = 1.1;
+          if (node.x > 1.1) node.x = -0.1;
+          if (node.y < -0.1) node.y = 1.1;
+          if (node.y > 1.1) node.y = -0.1;
 
-      // Pass 2: River rows
-      const riverNodes = nodes.filter(n => n.phase === "river");
-      const offsets = riverOffsetsRef.current;
-      for (let ri = 0; ri < RIVER_ROWS.length; ri++) {
-        const row = RIVER_ROWS[ri];
-        offsets[ri] += row.speed * row.direction;
-        const rowComments = riverNodes.filter(n => n.riverRowIndex === ri);
-        if (rowComments.length === 0) continue;
+          offCtx.font = "300 10px system-ui, -apple-system, sans-serif";
+          offCtx.globalAlpha = node.baseOpacity;
+          offCtx.fillStyle = "#ffffff";
+          const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
+          offCtx.fillText(truncated, node.x * cw, node.y * ch);
+        }
 
-        ctx.font = "300 11px system-ui, -apple-system, sans-serif";
-        ctx.globalAlpha = row.opacity;
-        ctx.fillStyle = "#ffffff";
+        // Pass 2: River rows
+        const riverNodes = nodes.filter(n => n.phase === "river");
+        const offsets = riverOffsetsRef.current;
+        for (let ri = 0; ri < RIVER_ROWS.length; ri++) {
+          const row = RIVER_ROWS[ri];
+          offsets[ri] += row.speed * row.direction;
+          const rowComments = riverNodes.filter(n => n.riverRowIndex === ri);
+          if (rowComments.length === 0) continue;
 
-        const rowY = row.y * ch;
-        const textWidths = rowComments.map(n => {
-          const t = n.text.length > 40 ? n.text.slice(0, 40) + "…" : n.text;
-          return ctx.measureText(t).width;
-        });
-        const totalWidth = textWidths.reduce((a, tw) => a + tw + 120, 0);
-        const wrapWidth = Math.max(totalWidth, cw + 200);
+          offCtx.font = "300 11px system-ui, -apple-system, sans-serif";
+          offCtx.globalAlpha = row.opacity;
+          offCtx.fillStyle = "#ffffff";
 
-        let xBase = offsets[ri];
-        for (let ci = 0; ci < rowComments.length; ci++) {
-          const truncated = rowComments[ci].text.length > 40 ? rowComments[ci].text.slice(0, 40) + "…" : rowComments[ci].text;
-          let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
-          if (drawX > cw + 100) drawX -= wrapWidth;
-          ctx.fillText(truncated, drawX, rowY);
-          xBase += textWidths[ci] + 120;
+          const rowY = row.y * ch;
+          const textWidths = rowComments.map(n => {
+            const t = n.text.length > 40 ? n.text.slice(0, 40) + "…" : n.text;
+            return offCtx.measureText(t).width;
+          });
+          const totalWidth = textWidths.reduce((a, tw) => a + tw + 120, 0);
+          const wrapWidth = Math.max(totalWidth, cw + 200);
+
+          let xBase = offsets[ri];
+          for (let ci = 0; ci < rowComments.length; ci++) {
+            const truncated = rowComments[ci].text.length > 40 ? rowComments[ci].text.slice(0, 40) + "…" : rowComments[ci].text;
+            let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
+            if (drawX > cw + 100) drawX -= wrapWidth;
+            offCtx.fillText(truncated, drawX, rowY);
+            xBase += textWidths[ci] + 120;
+          }
         }
       }
 
-      // Pass 3: New submissions (center → transitioning → river)
+      // Blit offscreen constellation layer
+      if (nodes.length > 0 && constellationCanvasRef.current) {
+        ctx.drawImage(constellationCanvasRef.current, 0, 0);
+      }
+
+      // Pass 3: New submissions (center → transitioning → river) — always drawn live
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
       for (const node of nodes) {
         if (node.phase === "center") {
           const elapsed = commentNow - node.phaseStartTime;
@@ -1398,9 +1469,9 @@ export default function ShareableLyricDance() {
           const t = Math.min(1, elapsed / 4000);
           const targetRow = RIVER_ROWS[node.riverRowIndex];
           const targetY = targetRow ? targetRow.y : node.seedY;
-          const cx = 0.5, cy = 0.5;
-          const curX = cx + (node.seedX - cx) * t * 0.3;
-          const curY = cy + (targetY - cy) * t;
+          const cx2 = 0.5, cy2 = 0.5;
+          const curX = cx2 + (node.seedX - cx2) * t * 0.3;
+          const curY = cy2 + (targetY - cy2) * t;
           const size = 14 - (14 - 11) * t;
           const targetOpacity = targetRow?.opacity || 0.09;
           const opacity = 0.45 - (0.45 - targetOpacity) * t;
@@ -2146,6 +2217,7 @@ export default function ShareableLyricDance() {
 
     return () => {
       cancelAnimationFrame(animRef.current);
+      clearInterval(constellationInterval);
       window.removeEventListener("resize", resize);
       engineRef.current?.stop();
       audio.pause();
