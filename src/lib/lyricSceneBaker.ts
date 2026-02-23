@@ -33,6 +33,7 @@ export type Keyframe = {
     y: number;
     alpha: number;
     glow: number;
+    scale: number;
     visible: boolean;
     fontSize: number;
     color: string;
@@ -88,6 +89,8 @@ type BakeState = {
   beatCursor: number;
   lastBeatIndex: number;
   glowBudget: number;
+  springOffset: number;
+  springVelocity: number;
   currentZoom: number;
 };
 
@@ -254,6 +257,7 @@ function bakeFrame(
   if (beatIndex !== state.lastBeatIndex) {
     state.lastBeatIndex = beatIndex;
     state.glowBudget = 13;
+    state.springVelocity = 0.06;
   }
   if (state.glowBudget > 0) state.glowBudget -= 1;
   const glowProgress = state.glowBudget / 13;
@@ -261,13 +265,13 @@ function bakeFrame(
     ? (glowProgress - 0.77) / 0.23
     : glowProgress / 0.77;
 
-  const { chapter } = getChapterIndexAndData(payload.cinematic_direction, songProgress);
-  const tensionStages = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
-  const tensionMotion = tensionStages.find(
-    (s) => tSec >= (s.startRatio ?? 0) && tSec < (s.endRatio ?? 9999),
-  )?.motionIntensity ?? 0.5;
+  state.springOffset += state.springVelocity;
+  state.springVelocity *= 0.72;
+  state.springOffset *= 0.78;
+  const scale = 1.0 + Math.max(0, state.springOffset);
 
-  // Shot type → camera zoom
+  const tensionMotion = pre.tensionMotionByFrame[frameIndex] ?? 0.5;
+
   const shotZoomMap: Record<string, number> = {
     'CloseUp': 1.25,
     'Medium': 1.0,
@@ -291,15 +295,12 @@ function bakeFrame(
     const fadeOut = Math.min(1, Math.max(0, (line.end - tSec) / 0.3));
     const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
 
-    let x = linePositions[idx] + lineChapterOffsets[idx];
-    const estimatedWidth = Math.min(880, line.text.length * 28);
-    const maxX = 960 - estimatedWidth / 2 - 60;
-    const minX = estimatedWidth / 2 + 60;
-    x = Math.max(minX, Math.min(maxX, x));
-    const y = getShotY(payload.cinematic_direction, chapter);
+    const x = BASE_X;
+    const y = BASE_Y_CENTER;
 
     const visible = alpha > 0.001;
     const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
+    const chunkScale = lineActive && visible ? scale : 1.0;
 
     chunks.push({
       id: `${idx}`,
@@ -307,7 +308,10 @@ function bakeFrame(
       y,
       alpha,
       glow: chunkGlow,
+      scale: chunkScale,
       visible,
+      fontSize: pre.lineFontSizes[idx] ?? 36,
+      color: pre.lineColors[idx] ?? "#ffffff",
     });
 
     if (lineActive && payload.cinematic_direction?.wordDirectives) {
@@ -334,11 +338,28 @@ function bakeFrame(
             y,
             alpha: Math.min(1, alpha + 0.15),
             glow: Math.min(1, chunkGlow + 0.2),
+            scale: Math.min(chunkScale * 1.15, 1.25),
             visible,
+            fontSize: pre.lineFontSizes[idx] ?? 36,
+            color: pre.lineColors[idx] ?? "#ffffff",
           });
         }
       }
     }
+  }
+
+  const chapterIdx = pre.chapterIndexByFrame[frameIndex] ?? -1;
+  const bgBlend = chapterIdx >= 0 ? (chapterIdx / Math.max(1, pre.chapters.length - 1)) : 0;
+
+  const particles: Keyframe["particles"] = [];
+  const particleCount = Math.floor(pre.energy * 4);
+  for (let p = 0; p < particleCount; p += 1) {
+    particles.push({
+      x: Math.sin(songProgress * Math.PI * (p + 1) * 2.3) * 400 + 480,
+      y: Math.cos(songProgress * Math.PI * (p + 1) * 1.7) * 250 + 270,
+      size: 2 + pre.energy * 3,
+      alpha: 0.15 + glow * 0.3,
+    });
   }
 
   return {
@@ -359,6 +380,8 @@ function createBakeState(payload: ScenePayload): BakeState {
     beatCursor: 0,
     lastBeatIndex: -1,
     glowBudget: 0,
+    springOffset: 0,
+    springVelocity: 0,
     currentZoom: 1.0,
   };
 }
