@@ -380,21 +380,99 @@ export function useHookCanvas(
       }
 
       applyLyricShadow(ctx, manifest.palette, manifest.typographyProfile?.personality);
-      const words = activeLine.text.split(" ");
-      let wordX = lineX - ctx.measureText(activeLine.text).width / 2;
-      words.forEach((word, wi) => {
-        const wordAnim = animationResolver.resolveWord(activeLine.start, wi, beatIntensityRef.current);
-        ctx.save();
-        if (wordAnim) {
-          applyWordMark(ctx, wordAnim, ct, manifest);
-        }
-        ctx.fillStyle = wordAnim
-          ? getWordMarkColor(wordAnim.mark, manifest)
-          : anim.lineColor;
-        ctx.fillText(word, wordX, lineY);
-        ctx.restore();
-        wordX += ctx.measureText(`${word} `).width;
+
+      const tokenWords = activeLine.text.split(/\s+/).filter(Boolean);
+      const timedWordsFromLine = ((activeLine as unknown as {
+        words?: Array<{ word?: string; text?: string; start?: number; end?: number }>;
+      }).words ?? [])
+        .filter((word) => typeof word.start === "number")
+        .map((word) => ({
+          word: (word.word ?? word.text ?? "").trim(),
+          start: Number(word.start ?? activeLine.start),
+          end: typeof word.end === "number" ? Number(word.end) : undefined,
+        }))
+        .filter((word) => word.word.length > 0);
+
+      const hasRealWordTiming = timedWordsFromLine.length === tokenWords.length;
+      const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
+      const wordDuration = lineDuration / Math.max(1, tokenWords.length);
+      const activeLineWords = tokenWords.map((word, wi) => {
+        const timed = hasRealWordTiming ? timedWordsFromLine[wi] : undefined;
+        const fallbackStart = activeLine.start + wi * wordDuration;
+        return {
+          word,
+          index: wi,
+          start: timed?.start ?? fallbackStart,
+          end: timed?.end,
+        };
       });
+
+      const visibleWords = activeLineWords.filter((word) => ct >= word.start);
+      if (visibleWords.length > 0) {
+        const activeWordIndex = visibleWords[visibleWords.length - 1].index;
+
+        if (st.layout === "arc") {
+          const orbitRadius = Math.min(safeW, safeH) * 0.28;
+          const orbitCount = Math.max(visibleWords.length, 1);
+          visibleWords.forEach((word, visibleIdx) => {
+            const orbitT = orbitCount <= 1 ? 0.5 : visibleIdx / (orbitCount - 1);
+            const targetAngle = -Math.PI / 2 + orbitT * Math.PI * 1.6;
+            const targetX = lineX + Math.cos(targetAngle) * orbitRadius;
+            const targetY = lineY + Math.sin(targetAngle) * orbitRadius;
+            const enterProgress = Math.max(0, Math.min(1, (ct - word.start) / 0.3));
+            const eased = 1 - Math.pow(1 - enterProgress, 3);
+            const startAngle = targetAngle - Math.PI * 1.8;
+            const startRadius = orbitRadius + Math.min(safeW, safeH) * 0.38;
+            const currentAngle = startAngle + (targetAngle - startAngle) * eased;
+            const currentRadius = startRadius + (orbitRadius - startRadius) * eased;
+            const drawX = lineX + Math.cos(currentAngle) * currentRadius;
+            const drawY = lineY + Math.sin(currentAngle) * currentRadius;
+            const isActiveWord = word.index === activeWordIndex;
+            const wordAnim = animationResolver.resolveWord(activeLine.start, word.index, beatIntensityRef.current);
+
+            ctx.save();
+            if (wordAnim) {
+              applyWordMark(ctx, wordAnim, ct, manifest);
+            }
+            ctx.globalAlpha *= isActiveWord ? 1 : 0.35;
+            const wordScale = isActiveWord ? 1 : 0.9;
+            ctx.translate(drawX, drawY);
+            ctx.scale(wordScale, wordScale);
+            ctx.translate(-drawX, -drawY);
+            ctx.fillStyle = wordAnim
+              ? getWordMarkColor(wordAnim.mark, manifest)
+              : anim.lineColor;
+            ctx.fillText(word.word, drawX, drawY);
+            ctx.restore();
+          });
+        } else {
+          const visibleText = visibleWords.map((word) => word.word).join(" ");
+          let wordX = lineX - ctx.measureText(visibleText).width / 2;
+          visibleWords.forEach((word) => {
+            const isActiveWord = word.index === activeWordIndex;
+            const wordAnim = animationResolver.resolveWord(activeLine.start, word.index, beatIntensityRef.current);
+            const wordWidth = ctx.measureText(`${word.word} `).width;
+
+            ctx.save();
+            if (wordAnim) {
+              applyWordMark(ctx, wordAnim, ct, manifest);
+            }
+            ctx.globalAlpha *= isActiveWord ? 1 : 0.35;
+            const wordScale = isActiveWord ? 1 : 0.9;
+            const wx = wordX + wordWidth / 2;
+            ctx.translate(wx, lineY);
+            ctx.scale(wordScale, wordScale);
+            ctx.translate(-wx, -lineY);
+            ctx.fillStyle = wordAnim
+              ? getWordMarkColor(wordAnim.mark, manifest)
+              : anim.lineColor;
+            ctx.fillText(word.word, wordX, lineY);
+            ctx.restore();
+
+            wordX += wordWidth;
+          });
+        }
+      }
       clearLyricShadow(ctx);
       ctx.restore();
 
