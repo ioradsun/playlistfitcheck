@@ -362,10 +362,11 @@ export class LyricDancePlayer {
         'this.timeline after copy:', this.timeline.length);
     }
 
-    if (globalTimelineCache && globalChunkCache) {
+    if (globalTimelineCache && globalChunkCache && globalChunkCache.size > 0) {
       this.timeline = [...globalTimelineCache];
       this.chunks = new Map(globalChunkCache);
       this.buildBgCache();
+      console.log('[PLAYER] instance 2 reused — frames:', this.timeline.length, 'chunks:', this.chunks.size);
     }
 
     this.audio.currentTime = this.songStartSec;
@@ -385,6 +386,7 @@ export class LyricDancePlayer {
     this.songStartSec = payload.songStart;
     this.songEndSec = payload.songEnd;
 
+    this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
     this.buildChunkCache(payload);
     const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
 
@@ -563,6 +565,12 @@ export class LyricDancePlayer {
 
   private buildChunkCache(payload: ScenePayload): void {
     this.chunks.clear();
+    console.log('[PLAYER] buildChunkCache — canvas size:', this.width, this.height, 'ctx:', !!this.ctx);
+
+    if (!this.ctx || this.width === 0) {
+      console.warn('[PLAYER] buildChunkCache skipped — canvas not ready');
+      return;
+    }
 
     const fontFamily =
       payload.cinematic_direction?.visualWorld?.typographyProfile?.fontFamily?.trim() || "Montserrat";
