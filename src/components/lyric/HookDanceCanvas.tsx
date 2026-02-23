@@ -15,6 +15,7 @@ import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles"
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
 import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
+import { getBackgroundSystemForTime } from "@/engine/getBackgroundSystemForTime";
 import {
   resolveWordColors, applyContrastRhythm, applyBeatFlash,
   drawTemperatureTint, perceivedBrightness, mixTowardWhite,
@@ -224,13 +225,24 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
 
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const songProgress = (ct - hs) / Math.max(0.001, he - hs);
+      const editorBeatIntensity = ps.heat * 0.8;
+      const activeBackgroundSystem = getBackgroundSystemForTime(manifest, songProgress, editorBeatIntensity);
+
       drawSystemBackground(ctx, {
-        system, physState: ps, w, h, time: ct, beatCount: bc,
-        rng, palette, hookStart: hs, hookEnd: he,
+        system: activeBackgroundSystem,
+        physState: ps,
+        w,
+        h,
+        time: ct,
+        beatCount: bc,
+        rng,
+        palette,
+        hookStart: hs,
+        hookEnd: he,
       });
 
       // ── 4. Color temperature tint (background only) ──
-      const songProgress = (ct - hs) / Math.max(0.001, he - hs);
       drawTemperatureTint(ctx, w, h, songProgress);
 
       // Find current lyric line
@@ -259,13 +271,10 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         const lineDur = activeLine.end - activeLine.start;
         const progress = Math.min(1, (ct - activeLine.start) / lineDur);
 
-        const stackedLayout = computeStackedLayout(ctx, activeLine.text, w, h, system);
+        const stackedLayout = computeStackedLayout(ctx, activeLine.text, w, h, activeBackgroundSystem);
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
           ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
-          : computeFitFontSize(ctx, activeLine.text, w, system);
-
-        // Beat intensity from physics heat (no analyser in editor)
-        const editorBeatIntensity = ps.heat * 0.8;
+          : computeFitFontSize(ctx, activeLine.text, w, activeBackgroundSystem);
 
         // AnimationResolver: entry/exit, scale, mod
         const lineAnim = animationResolver.resolveLine(
@@ -336,7 +345,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           physState: ps,
           w, h, fs, age, progress, rng,
           palette: [flashedLineColor, textPalette[1] as string, textPalette[2] as string],
-          system,
+          system: activeBackgroundSystem,
           effectiveLetterSpacing,
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
           alphaMultiplier: compositeAlpha,
@@ -380,7 +389,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           isHookLine: lineAnim.isHookLine,
           repIndex: 0,
           repTotal: 0,
-          system: system ?? "—",
+          system: activeBackgroundSystem ?? "—",
           songProgress,
           palette: palette,
           entrance: lyricEntrance,
