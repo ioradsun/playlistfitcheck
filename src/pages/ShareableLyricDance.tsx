@@ -17,6 +17,7 @@ import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
+import { drawLighting, getTextShadow } from "@/engine/LightingSystem";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { ParticleEngine } from "@/engine/ParticleEngine";
@@ -668,6 +669,11 @@ export default function ShareableLyricDance() {
       const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
+      const baselineY = yBaseRef.current === 0 ? ch * 0.5 : yBaseRef.current;
+      let activeWordPosition = {
+        x: cw / 2 + xOffsetRef.current + state.offsetX,
+        y: baselineY + state.offsetY,
+      };
 
       const lineAnim = activeLine
         ? animationResolver.resolveLine(activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette)
@@ -732,6 +738,15 @@ export default function ShareableLyricDance() {
         hookStart: songStart,
         hookEnd: songEnd,
       });
+
+      drawLighting(
+        ctx,
+        canvas,
+        timelineManifest,
+        songProgress,
+        currentBeatIntensity,
+        activeWordPosition,
+      );
 
       // Particle engine: update then draw parallax split layers.
       if (particleEngine) {
@@ -996,6 +1011,9 @@ export default function ShareableLyricDance() {
         const physShakeY = Math.sin(physShakeAngle) * state.shake;
         const lineX = cw / 2 + xOffsetRef.current + xNudge + state.offsetX + physShakeX;
         const lineY = yBaseRef.current + yNudge + state.offsetY + physShakeY;
+        activeWordPosition = { x: lineX, y: lineY };
+
+        const textShadow = getTextShadow(timelineManifest, currentBeatIntensity);
 
         ctx.save();
 
@@ -1030,6 +1048,18 @@ export default function ShareableLyricDance() {
         const baseSpaceWidth = ctx.measureText(" ").width;
         const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, drawWords.length - 1) * baseSpaceWidth;
         let cursorX = lineX - totalWidth / 2;
+
+        if (drawWords.length > 0) {
+          const activeWordIndex = Math.max(0, drawWords.length - 1);
+          const priorWidth = measuredWordWidths
+            .slice(0, activeWordIndex)
+            .reduce((sum, width) => sum + width, 0) + activeWordIndex * baseSpaceWidth;
+          const activeWidth = measuredWordWidths[activeWordIndex] ?? 0;
+          activeWordPosition = {
+            x: lineX - totalWidth / 2 + priorWidth + activeWidth / 2,
+            y: lineY,
+          };
+        }
 
         drawWords.forEach((word, wordIndex) => {
           const normalizedWord = word.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
@@ -1079,8 +1109,10 @@ export default function ShareableLyricDance() {
           const prevAlpha = ctx.globalAlpha;
           ctx.globalAlpha = compositeAlpha * visualProps.opacity;
           ctx.fillStyle = flashColor;
-          ctx.shadowColor = flashColor;
-          ctx.shadowBlur = visualProps.glowRadius;
+          ctx.shadowColor = textShadow.color;
+          ctx.shadowOffsetX = textShadow.offsetX;
+          ctx.shadowOffsetY = textShadow.offsetY;
+          ctx.shadowBlur = Math.max(textShadow.blur, visualProps.glowRadius);
 
           const shouldItalic = className === "OTHER";
           const wordFontSize = fontSize * animScale;
@@ -1109,11 +1141,17 @@ export default function ShareableLyricDance() {
           }
 
           ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
           ctx.globalAlpha = prevAlpha;
           cursorX += wordWidth + baseSpaceWidth;
         });
 
         if (drawWords.length === 0) {
+          ctx.shadowColor = textShadow.color;
+          ctx.shadowOffsetX = textShadow.offsetX;
+          ctx.shadowOffsetY = textShadow.offsetY;
+          ctx.shadowBlur = textShadow.blur;
           const effectState: EffectState = {
             text: activeLine.text,
             physState: state,
@@ -1130,6 +1168,9 @@ export default function ShareableLyricDance() {
             alphaMultiplier: compositeAlpha,
           };
           drawFn(ctx, effectState);
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
         }
         ctx.restore();
       }
