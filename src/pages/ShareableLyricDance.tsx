@@ -250,6 +250,7 @@ export default function ShareableLyricDance() {
     let destroyed = false;
     const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, containerRef.current);
     playerRef.current = player;
+    setPlayerInstance(player);
 
     player.init()
       .then(() => {
