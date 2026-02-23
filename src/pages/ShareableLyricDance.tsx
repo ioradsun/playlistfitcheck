@@ -195,6 +195,7 @@ export default function ShareableLyricDance() {
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<LyricDancePlayer | null>(null);
+  const [playerInstance, setPlayerInstance] = useState<LyricDancePlayer | null>(null);
 
   // ── Data fetch ──────────────────────────────────────────────────────
 
@@ -249,6 +250,7 @@ export default function ShareableLyricDance() {
     let destroyed = false;
     const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, containerRef.current);
     playerRef.current = player;
+    setPlayerInstance(player);
 
     player.init()
       .then(() => {
@@ -262,6 +264,7 @@ export default function ShareableLyricDance() {
       destroyed = true;
       player.destroy();
       playerRef.current = null;
+      setPlayerInstance(null);
     };
   }, [data]);
 
@@ -481,9 +484,9 @@ export default function ShareableLyricDance() {
       </div>
 
       {/* Debug */}
-      <LiveDebugHUD player={playerRef.current} />
+      <LiveDebugHUD player={playerInstance} />
       <LyricDanceDebugPanel
-        player={playerRef.current}
+        player={playerInstance}
         data={{
           songDna: {
             mood: (data.physics_spec as any)?.mood, description: (data.physics_spec as any)?.description,
