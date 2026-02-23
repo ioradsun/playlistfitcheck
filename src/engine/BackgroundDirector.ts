@@ -1,4 +1,15 @@
-import type { Chapter } from "@/types/CinematicDirection";
+import type { Chapter, SymbolSystem } from "@/types/CinematicDirection";
+
+export function getSymbolStateForProgress(
+  songProgress: number,
+  symbol?: SymbolSystem | null,
+): string | null {
+  if (!symbol) return null;
+  if (songProgress < 0.25) return symbol.beginningState;
+  if (songProgress < 0.60) return symbol.middleMutation;
+  if (songProgress < 0.85) return symbol.climaxOverwhelm;
+  return symbol.endingDecay;
+}
 
 export function renderChapterBackground(
   ctx: CanvasRenderingContext2D,
@@ -7,6 +18,7 @@ export function renderChapterBackground(
   songProgress: number,
   beatIntensity: number,
   currentTime: number,
+  symbol?: SymbolSystem | null,
 ): void {
   const intensity = chapter.emotionalIntensity;
   const color = chapter.dominantColor;
@@ -19,6 +31,22 @@ export function renderChapterBackground(
   depthGrad.addColorStop(1, `rgba(0,0,0,${0.3 + intensity * 0.4})`);
   ctx.fillStyle = depthGrad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const symbolState = getSymbolStateForProgress(songProgress, symbol);
+  if (symbolState) {
+    const symbolInfluence = 0.06 + intensity * 0.06;
+    const lowerSymbolState = symbolState.toLowerCase();
+    if (lowerSymbolState.includes("water") || lowerSymbolState.includes("submerg")) {
+      ctx.fillStyle = `rgba(90,140,200,${symbolInfluence})`;
+    } else if (lowerSymbolState.includes("fire") || lowerSymbolState.includes("burn")) {
+      ctx.fillStyle = `rgba(255,130,80,${symbolInfluence})`;
+    } else if (lowerSymbolState.includes("void") || lowerSymbolState.includes("fog")) {
+      ctx.fillStyle = `rgba(120,120,140,${symbolInfluence})`;
+    } else {
+      ctx.fillStyle = `rgba(255,255,255,${symbolInfluence * 0.5})`;
+    }
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
   const directive = chapter.backgroundDirective.toLowerCase();
   if (directive.includes("ocean") || directive.includes("water") || directive.includes("deep")) {

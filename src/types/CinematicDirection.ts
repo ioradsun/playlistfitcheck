@@ -7,6 +7,56 @@ export interface CinematicDirection {
   silenceDirective: SilenceDirective;
   climax: ClimaxDirective;
   ending: EndingDirective;
+  symbolSystem: SymbolSystem;
+  cameraLanguage: CameraLanguage;
+  tensionCurve: TensionStage[];
+  shotProgression: ShotType[];
+}
+
+export interface SymbolSystem {
+  primary: string;
+  secondary: string;
+  beginningState: string;
+  middleMutation: string;
+  climaxOverwhelm: string;
+  endingDecay: string;
+  interactionRules: string[];
+}
+
+export interface CameraLanguage {
+  openingDistance: 'ExtremeWide' | 'Wide' | 'Medium' | 'Close' | 'ExtremeClose';
+  closingDistance: 'ExtremeWide' | 'Wide' | 'Medium' | 'Close' | 'ExtremeClose';
+  movementType: 'Drift' | 'PushIn' | 'Orbit' | 'Descent' | 'Rise' | 'Shake' | 'Freeze';
+  climaxBehavior: string;
+  distanceByChapter: {
+    chapterIndex: number;
+    distance: string;
+    movement: string;
+  }[];
+}
+
+export interface TensionStage {
+  stage: 'Setup' | 'Build' | 'Peak' | 'Release';
+  startRatio: number;
+  endRatio: number;
+  motionIntensity: number;
+  particleDensity: number;
+  lightBrightness: number;
+  cameraMovement: string;
+  typographyAggression: number;
+}
+
+export interface ShotType {
+  lineIndex: number;
+  shotType:
+    | 'FloatingInWorld'
+    | 'EmergingFromSymbol'
+    | 'SubmergedInSymbol'
+    | 'FragmentedBySymbol'
+    | 'ReflectedInSymbol'
+    | 'ConsumedBySymbol'
+    | 'AloneInVoid';
+  description: string;
 }
 
 export interface VisualWorld {

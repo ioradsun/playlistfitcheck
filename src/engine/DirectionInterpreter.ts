@@ -2,6 +2,8 @@ import type {
   Chapter,
   CinematicDirection,
   LineDirection,
+  ShotType,
+  TensionStage,
   WordDirective,
 } from "@/types/CinematicDirection";
 
@@ -105,6 +107,25 @@ export function applyEvolutionRule(
   opacityMultiplier = Math.max(opacityMultiplier, 0.2);
 
   return { scaleMultiplier, glowRadius, opacityMultiplier, yOffset };
+}
+
+
+export function getCurrentTensionStage(
+  songProgress: number,
+  tensionCurve: TensionStage[] | undefined,
+): TensionStage | null {
+  if (!tensionCurve) return null;
+  return tensionCurve.find((stage) => (
+    songProgress >= stage.startRatio && songProgress <= stage.endRatio
+  )) ?? null;
+}
+
+export function getActiveShot(
+  lineIndex: number,
+  shotProgression: ShotType[] | undefined,
+): ShotType | null {
+  if (!shotProgression) return null;
+  return shotProgression.find((shot) => shot.lineIndex === lineIndex) ?? null;
 }
 
 export class DirectionInterpreter {
