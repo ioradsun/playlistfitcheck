@@ -1181,7 +1181,7 @@ export function LyricDisplay({
     hasRealAudio,
     onSaved,
     beatGrid,
-    initialSongSignature,
+    songDna,
     songDna,
     backgroundImageUrl,
   ]);
