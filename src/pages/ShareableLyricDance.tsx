@@ -114,6 +114,14 @@ interface LiveDebugState {
   fps: number;
   drawCalls: number;
   cacheHits: number;
+  // Frame timing (ms)
+  perfBg: number;
+  perfSymbol: number;
+  perfParticlesFar: number;
+  perfText: number;
+  perfOverlays: number;
+  perfNear: number;
+  perfTotal: number;
   // Meta
   time: number;
 }
