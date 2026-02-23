@@ -273,7 +273,7 @@ function bakeFrame(
   if (beatIndex !== state.lastBeatIndex) {
     state.lastBeatIndex = beatIndex;
     state.glowBudget = 13;
-    state.springVelocity = 0.6;
+    state.springVelocity = 1.2;
   }
   if (state.glowBudget > 0) state.glowBudget -= 1;
   const glowProgress = state.glowBudget / 13;
