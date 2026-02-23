@@ -219,7 +219,11 @@ export default function ShareableLyricDance() {
         Promise.resolve(
           supabase.from("shareable_lyric_dances" as any).select(DIRECTION_COLUMNS).eq("id", d.id).maybeSingle()
         ).then(({ data: dirRow }) => {
-          const dir = (dirRow as any)?.cinematic_direction ?? null;
+          const rawDir = (dirRow as any)?.cinematic_direction;
+          console.log('[DATA] cinematic_direction raw:', rawDir,
+            'type:', typeof rawDir,
+            'is array:', Array.isArray(rawDir));
+          const dir = rawDir && !Array.isArray(rawDir) ? rawDir : null;
           if (dir) setData(prev => prev ? { ...prev, cinematic_direction: dir } : prev);
         }).catch(() => {}).finally(() => {
           if (d.cinematic_direction) return;
