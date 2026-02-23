@@ -272,6 +272,15 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
         <Row label="particleCount" value={String(snap.particleCount)} />
         <Row label="cacheHits" value={`${Math.round(snap.cacheHits * 100)}%`} />
       </Section>
+      <Section title="FRAME TIMING (ms)">
+        <Row label="background" value={snap.perfBg.toFixed(2)} />
+        <Row label="symbol" value={snap.perfSymbol.toFixed(2)} />
+        <Row label="particlesFar" value={snap.perfParticlesFar.toFixed(2)} />
+        <Row label="text" value={snap.perfText.toFixed(2)} />
+        <Row label="overlays" value={snap.perfOverlays.toFixed(2)} />
+        <Row label="nearPass" value={snap.perfNear.toFixed(2)} />
+        <Row label="total" value={snap.perfTotal.toFixed(2)} />
+      </Section>
       <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" as const }}>
         {f(snap.time, 2)}s · press D to close
       </div>
@@ -466,6 +475,7 @@ export default function ShareableLyricDance() {
     lineHeroWord: "", lineEntry: "fades", lineExit: "fades", lineIntent: "—", shotType: "FloatingInWorld", shotDescription: "—",
     evolutionWord: "—", evolutionCount: 0, evolutionScale: 1, evolutionGlow: 0, evolutionBubbles: 0, evolutionSinkPx: 0,
     fps: 60, drawCalls: 0, cacheHits: 0,
+    perfBg: 0, perfSymbol: 0, perfParticlesFar: 0, perfText: 0, perfOverlays: 0, perfNear: 0, perfTotal: 0,
   });
   const particleEngineRef = useRef<ParticleEngine | null>(null);
   const interpreterRef = useRef<DirectionInterpreter | null>(null);
@@ -1396,23 +1406,19 @@ export default function ShareableLyricDance() {
       }
       const t6 = performance.now();
 
-      const frameCount = particleStateRef.current.frameCount;
-      if (frameCount % 60 === 0) {
-        console.log("FRAME TIMING (ms):", {
-          background: (t1 - t0).toFixed(2),
-          symbol: (t2 - t1).toFixed(2),
-          particles: (t3 - t2).toFixed(2),
-          text: (t4 - t3).toFixed(2),
-          overlays: (t5 - t4).toFixed(2),
-          nearPass: (t6 - t5).toFixed(2),
-          total: (t6 - t0).toFixed(2),
-        });
-      }
 
       // Camera transform reset handled by CSS — no ctx.restore needed
 
       // ── Update live debug ref (no React setState — zero GC pressure) ──
       const dbg = liveDebugRef.current;
+      // Frame timing
+      dbg.perfBg = t1 - t0;
+      dbg.perfSymbol = t2 - t1;
+      dbg.perfParticlesFar = t3 - t2;
+      dbg.perfText = t4 - t3;
+      dbg.perfOverlays = t5 - t4;
+      dbg.perfNear = t6 - t5;
+      dbg.perfTotal = t6 - t0;
       dbg.time = currentTime;
       // Beat
       dbg.beatIntensity = beatIntensityRef.current;
