@@ -422,8 +422,10 @@ export function renderText(
   const lyricEntrance = (entryOverride as any) ?? lineDirection?.entryStyle ?? resolvedManifest?.lyricEntrance ?? "fades";
   const lyricExit = (exitOverride as any) ?? lineDirection?.exitStyle ?? resolvedManifest?.lyricExit ?? "fades";
   const entryAlpha = applyEntrance(ctx, activeLineAnim.entryProgress, lyricEntrance, { spatialZone: sectionZone });
+  // Tighten exit progression to reduce line linger overlap during transitions.
+  const tightenedExitProgress = Math.min(1, activeLineAnim.exitProgress * 1.8);
   const exitAlpha = activeLineAnim.exitProgress > 0
-    ? applyExit(ctx, activeLineAnim.exitProgress, lyricExit)
+    ? applyExit(ctx, tightenedExitProgress, lyricExit)
     : 1.0;
   const compositeAlpha = Math.min(entryAlpha, exitAlpha) * lineOpacity;
 
@@ -465,10 +467,14 @@ export function renderText(
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = activeLineAnim.lineColor;
-    ctx.globalAlpha = 0.25 * compositeAlpha;
+    ctx.globalAlpha = 0.12 * compositeAlpha * Math.max(0.2, 1 - tightenedExitProgress);
     ctx.fillText(previousLine.text, lineX, lineY - Math.max(40, fontSize * 1.5));
     ctx.restore();
   }
+
+  const getDisplayWord = (text: string) => (
+    cinematicTextTransform === "uppercase" ? text.toUpperCase() : text
+  );
 
   const renderedWords = displayMode === "single_word"
     ? drawWords.slice(-1)
@@ -476,7 +482,7 @@ export function renderText(
       ? words.map((text) => ({ text }))
       : drawWords;
 
-  const measuredWordWidths = renderedWords.map(word => getWordWidth(word.text, fontSize, resolvedWordFont));
+  const measuredWordWidths = renderedWords.map((word) => getWordWidth(getDisplayWord(word.text), fontSize, resolvedWordFont));
   const baseSpaceWidth = getWordWidth(" ", fontSize, resolvedWordFont);
   const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, renderedWords.length - 1) * baseSpaceWidth;
   let cursorX = displayMode === "single_word" ? lineX : lineX - totalWidth / 2;
@@ -503,7 +509,7 @@ export function renderText(
 
   // ── Per-word rendering ────────────────────────────────────────────
   renderedWords.forEach((word, renderedIndex) => {
-    const displayWord = cinematicTextTransform === "uppercase" ? word.text.toUpperCase() : word.text;
+    const displayWord = getDisplayWord(word.text);
     const normalizedWord = word.text.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
     const sourceWordIndex = displayMode === "single_word"
       ? Math.max(0, visibleWordCount - 1)
