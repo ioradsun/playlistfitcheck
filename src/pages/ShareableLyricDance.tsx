@@ -971,6 +971,7 @@ export default function ShareableLyricDance() {
     resizeHandler = () => {
       const isMobile = window.innerWidth < 768;
       const pixelRatio = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+      activePixelRatio = pixelRatio;
       const rect = container.getBoundingClientRect();
       [bgCanvas, textCanvas].forEach((layerCanvas) => {
         layerCanvas.width = rect.width * pixelRatio;
