@@ -537,7 +537,6 @@ interface LyricDanceData {
     cinematic_direction?: CinematicDirection | null;
   } | null;
   cinematic_direction: CinematicDirection | null;
-  background_url: string | null;
 }
 
 interface ProfileInfo {
@@ -590,7 +589,7 @@ function snapToNearestBeat(timestamp: number, beats: number[], tolerance: number
   return Math.abs(nearest - timestamp) < tolerance ? nearest : timestamp;
 }
 
-const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,cinematic_direction,background_url";
+const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,cinematic_direction";
 
 /** Draggable progress bar overlay at bottom of canvas */
 function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
@@ -651,7 +650,6 @@ export default function ShareableLyricDance() {
   const navigate = useNavigate();
 
   const [data, setData] = useState<LyricDanceData | null>(null);
-  const bgImageRef = useRef<HTMLImageElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
@@ -839,14 +837,6 @@ export default function ShareableLyricDance() {
               setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
             }
           }).catch(e => console.warn('[ShareableLyricDance] cinematic direction generation failed:', e));
-        }
-
-        // Preload AI background image if available
-        if (d.background_url) {
-          const img = new Image();
-          img.crossOrigin = "anonymous";
-          img.src = d.background_url;
-          img.onload = () => { bgImageRef.current = img; };
         }
 
         // Non-critical: load profile + comments in parallel
@@ -1268,24 +1258,15 @@ export default function ShareableLyricDance() {
       }
       drawCalls += 2;
 
-      // AI-generated background image with slow cinematic push and hook reframe.
-      const bgImg = bgImageRef.current;
-      if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
-        const zoom = 1.0 + songProgress * (0.08 * baseAtmosphere);
-        const offsetX = (cw * (zoom - 1)) / 2;
-        const offsetY = (ch * (zoom - 1)) / 2;
-        const reframeX = hookOffsetX * cw;
-        const reframeY = hookOffsetY * ch;
-        bgCtx.globalAlpha = 0.55;
-        bgCtx.drawImage(
-          bgImg,
-          -offsetX + reframeX,
-          -offsetY + reframeY,
-          cw * zoom,
-          ch * zoom,
-        );
-        bgCtx.globalAlpha = 1;
-      }
+      renderChapterLighting(
+        ctx,
+        canvas,
+        chapterForRender,
+        activeWordPosition,
+        songProgress,
+        currentBeatIntensity * lightIntensityRef.current,
+        currentTime,
+      );
 
       // Particle engine: update then draw parallax split layers.
       if (particleEngine) {
@@ -2080,8 +2061,8 @@ export default function ShareableLyricDance() {
       dbg.shake = state.shake;
       // Background
       dbg.backgroundSystem = data?.system_type ?? "unknown";
-      dbg.imageLoaded = bgImageRef.current !== null && bgImageRef.current.complete;
-      dbg.zoom = cameraZoomRef.current;
+      dbg.imageLoaded = false;
+      dbg.zoom = 1;
       dbg.vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
       dbg.songProgress = songProgress;
       // Direction
