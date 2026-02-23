@@ -969,6 +969,7 @@ export type Database = {
         Row: {
           artist: string
           audio_url: string | null
+          background_image_url: string | null
           beat_grid: Json | null
           created_at: string
           filename: string | null
@@ -976,6 +977,7 @@ export type Database = {
           id: string
           lines: Json
           song_dna: Json | null
+          song_signature: Json | null
           title: string
           updated_at: string
           user_id: string
@@ -984,6 +986,7 @@ export type Database = {
         Insert: {
           artist?: string
           audio_url?: string | null
+          background_image_url?: string | null
           beat_grid?: Json | null
           created_at?: string
           filename?: string | null
@@ -991,6 +994,7 @@ export type Database = {
           id?: string
           lines?: Json
           song_dna?: Json | null
+          song_signature?: Json | null
           title?: string
           updated_at?: string
           user_id: string
@@ -999,6 +1003,7 @@ export type Database = {
         Update: {
           artist?: string
           audio_url?: string | null
+          background_image_url?: string | null
           beat_grid?: Json | null
           created_at?: string
           filename?: string | null
@@ -1006,6 +1011,7 @@ export type Database = {
           id?: string
           lines?: Json
           song_dna?: Json | null
+          song_signature?: Json | null
           title?: string
           updated_at?: string
           user_id?: string
