@@ -275,11 +275,7 @@ export default function ShareableLyricDance() {
     };
   }, [data]);
 
-  // Update cinematic direction on late arrival
-  useEffect(() => {
-    if (!data?.cinematic_direction || !playerRef.current) return;
-    playerRef.current.updateCinematicDirection(data.cinematic_direction);
-  }, [data?.cinematic_direction]);
+  // cinematic_direction gate ensures player always has it at construction — no late update needed
 
   // ── Mute toggle ─────────────────────────────────────────────────────
 
