@@ -1,6 +1,10 @@
 /**
  * PublishLyricDanceButton — Publishes a full-song lyric dance to a shareable page.
  * Route: /:artistSlug/:songSlug/lyric-dance
+ *
+ * Now also derives a SceneManifest from Song DNA + PhysicsSpec,
+ * calls lyric-video-bg to generate an AI cinematic background,
+ * and persists both alongside the lyric dance record.
  */
 
 import { useState, useCallback } from "react";
@@ -9,9 +13,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
+import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import type { ArtistDNA } from "./ArtistFingerprintTypes";
+
+interface SongDna {
+  mood?: string;
+  description?: string;
+  meaning?: { theme?: string; summary?: string; imagery?: string[] };
+  scene_manifest?: any;
+  sceneManifest?: any;
+  [key: string]: any;
+}
 
 interface Props {
   physicsSpec: PhysicsSpec;
@@ -24,6 +38,7 @@ interface Props {
   palette: string[];
   fingerprint?: ArtistDNA | null;
   seed: string;
+  songDna?: SongDna | null;
 }
 
 export function PublishLyricDanceButton({
@@ -37,14 +52,17 @@ export function PublishLyricDanceButton({
   palette,
   fingerprint,
   seed,
+  songDna,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
 
   const handlePublish = useCallback(async () => {
     if (!user || publishing) return;
     setPublishing(true);
+    setStatus("Preparing…");
 
     try {
       const { data: profile } = await supabase
@@ -60,10 +78,12 @@ export function PublishLyricDanceButton({
       if (!artistSlug || !songSlug) {
         toast.error("Couldn't generate a valid URL — check song/artist name");
         setPublishing(false);
+        setStatus("");
         return;
       }
 
-      // Upload audio
+      // ── Upload audio ──────────────────────────────────────────────
+      setStatus("Uploading audio…");
       const fileExt = audioFile.name.split(".").pop() || "webm";
       const storagePath = `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${fileExt}`;
 
@@ -79,10 +99,52 @@ export function PublishLyricDanceButton({
 
       const audioUrl = urlData.publicUrl;
 
-      // Filter to main lines only
+      // ── Derive SceneManifest ──────────────────────────────────────
+      setStatus("Building scene…");
+      const sceneManifest =
+        songDna?.scene_manifest ||
+        songDna?.sceneManifest ||
+        deriveSceneManifestFromSpec({
+          spec: physicsSpec,
+          mood: songDna?.mood,
+          description: songDna?.description,
+          songTitle,
+        });
+
+      // ── Generate AI background ────────────────────────────────────
+      setStatus("Generating background…");
+      let backgroundUrl: string | null = null;
+      try {
+        const { data: bgData, error: bgError } = await supabase.functions.invoke(
+          "lyric-video-bg",
+          {
+            body: {
+              manifest: {
+                world: sceneManifest.world || songDna?.description || "",
+                backgroundSystem: sceneManifest.backgroundSystem || system,
+                lightSource: sceneManifest.lightSource || "moonlight",
+                tension: sceneManifest.tension ?? 0.5,
+                palette: sceneManifest.palette || palette.slice(0, 3),
+                coreEmotion: sceneManifest.coreEmotion || songDna?.mood || "brooding",
+              },
+              userDirection: songDna?.description || undefined,
+            },
+          }
+        );
+        if (!bgError && bgData?.imageUrl) {
+          backgroundUrl = bgData.imageUrl;
+        } else {
+          console.warn("Background generation skipped:", bgError || "no imageUrl");
+        }
+      } catch (bgErr) {
+        console.warn("Background generation failed (non-fatal):", bgErr);
+      }
+
+      // ── Filter to main lines ──────────────────────────────────────
       const mainLines = lines.filter(l => l.tag !== "adlib");
 
-      // Upsert lyric dance
+      // ── Upsert lyric dance ────────────────────────────────────────
+      setStatus("Publishing…");
       const { error: insertError } = await supabase
         .from("shareable_lyric_dances" as any)
         .upsert({
@@ -99,6 +161,8 @@ export function PublishLyricDanceButton({
           system_type: system,
           artist_dna: fingerprint || null,
           seed,
+          scene_manifest: sceneManifest,
+          background_url: backgroundUrl,
         }, { onConflict: "artist_slug,song_slug" });
 
       if (insertError) throw insertError;
@@ -111,8 +175,9 @@ export function PublishLyricDanceButton({
       toast.error(e.message || "Failed to publish lyric dance");
     } finally {
       setPublishing(false);
+      setStatus("");
     }
-  }, [user, physicsSpec, lines, beatGrid, audioFile, songTitle, artistName, system, palette, fingerprint, seed, publishing]);
+  }, [user, physicsSpec, lines, beatGrid, audioFile, songTitle, artistName, system, palette, fingerprint, seed, publishing, songDna]);
 
   if (!user) return null;
 
@@ -138,10 +203,10 @@ export function PublishLyricDanceButton({
       className={buttonClass}
     >
       {publishing ? (
-        <>
+        <span className="flex items-center gap-1.5">
           <Loader2 size={10} className="animate-spin" />
-          PUBLISHING…
-        </>
+          <span>{status || "PUBLISHING…"}</span>
+        </span>
       ) : (
         <>
           <Film size={10} />

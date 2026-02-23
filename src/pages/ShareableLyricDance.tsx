@@ -37,6 +37,8 @@ interface LyricDanceData {
   system_type: string;
   artist_dna: ArtistDNA | null;
   seed: string;
+  scene_manifest: any | null;
+  background_url: string | null;
 }
 
 interface ProfileInfo {
@@ -50,7 +52,7 @@ interface DanceComment {
   submitted_at: string;
 }
 
-const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed";
+const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,background_url";
 
 /** Draggable progress bar overlay at bottom of canvas */
 function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
@@ -111,6 +113,7 @@ export default function ShareableLyricDance() {
   const navigate = useNavigate();
 
   const [data, setData] = useState<LyricDanceData | null>(null);
+  const bgImageRef = useRef<HTMLImageElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
@@ -166,6 +169,14 @@ export default function ShareableLyricDance() {
         const d = row as any as LyricDanceData;
         setData(d);
         setLoading(false);
+
+        // Preload AI background image if available
+        if (d.background_url) {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = d.background_url;
+          img.onload = () => { bgImageRef.current = img; };
+        }
 
         // Non-critical: load profile + comments in parallel
         const [profileResult, commentsResult] = await Promise.all([
@@ -314,6 +325,29 @@ export default function ShareableLyricDance() {
       // Background
       ctx.fillStyle = "#0a0a0a";
       ctx.fillRect(0, 0, cw, ch);
+
+      // AI-generated background image (Ken Burns subtle drift)
+      const bgImg = bgImageRef.current;
+      if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
+        const scale = 1.05; // slight zoom for Ken Burns
+        const driftX = Math.sin(currentTime * 0.02) * cw * 0.015;
+        const driftY = Math.cos(currentTime * 0.015) * ch * 0.01;
+        const imgAspect = bgImg.naturalWidth / bgImg.naturalHeight;
+        const canvasAspect = cw / ch;
+        let drawW: number, drawH: number;
+        if (imgAspect > canvasAspect) {
+          drawH = ch * scale;
+          drawW = drawH * imgAspect;
+        } else {
+          drawW = cw * scale;
+          drawH = drawW / imgAspect;
+        }
+        const dx = (cw - drawW) / 2 + driftX;
+        const dy = (ch - drawH) / 2 + driftY;
+        ctx.globalAlpha = 0.55;
+        ctx.drawImage(bgImg, dx, dy, drawW, drawH);
+        ctx.globalAlpha = 1;
+      }
 
       drawSystemBackground(ctx, {
         system: spec.system,
