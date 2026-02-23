@@ -296,10 +296,11 @@ export function LyricFitTab({
       setSceneManifest(safeManifest(nextSongDna.scene_manifest).manifest);
     }
 
-    setFitProgress(70);
+    setFitProgress(60);
     setFitStageLabel("Creating cinematic direction…");
+    setPipelineStages(prev => ({ ...prev, songDna: "done", cinematic: "running" }));
 
-    // 4. cinematic-direction
+    // 4. cinematic-direction (runs after DNA since we need the result first)
     try {
       const lyricsForDirection = freshLines
         .filter((l: any) => l.tag !== "adlib")
@@ -318,13 +319,16 @@ export function LyricFitTab({
       if (dirResult?.cinematicDirection) {
         setCinematicDirection(dirResult.cinematicDirection);
       }
+      setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
     } catch (e) {
       console.warn("[Pipeline] cinematic direction failed:", e);
+      setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
     }
 
     setFitProgress(100);
     setFitReadiness("ready");
     setFitStageLabel("Ready");
+    setPipelineStages({ transcript: "done", rhythm: "done", songDna: "done", cinematic: "done" });
     toast.success("Your Fit is ready! 🎬", { description: "Switch to the Fit tab to explore your song's DNA." });
   }, [lyricData, audioFile, lines, savedId, hasRealAudio, beatGrid]);
 
