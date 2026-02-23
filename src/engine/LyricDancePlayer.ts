@@ -473,7 +473,14 @@ export class LyricDancePlayer {
     const cw = this.textCanvas.width / this.activePixelRatio;
     const ch = this.textCanvas.height / this.activePixelRatio;
     const ctx = this.textCtx;
-    ctx.clearRect(0, 0, cw, ch);
+    const dpr = this.activePixelRatio;
+
+    // Reset frame transforms so any translate/rotate performed by downstream renderers
+    // never accumulates across rAF ticks.
+    this.bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.bgCtx.clearRect(0, 0, this.bgCanvas.width, this.bgCanvas.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
 
     let drawCalls = 0;
     let cacheHits = 0;
@@ -640,10 +647,8 @@ export class LyricDancePlayer {
     // Camera transform
     const camOffX = this.cameraOffset.x + (currentBeatIntensity > 0.92 ? Math.sin(currentTime * 37.7) * (currentBeatIntensity - 0.92) * 15 : 0);
     const camOffY = this.cameraOffset.y + this.silenceOffsetY + (currentBeatIntensity > 0.92 ? Math.cos(currentTime * 37.7 * 1.3) * (currentBeatIntensity - 0.92) * 5 : 0);
-    this.container.style.willChange = "transform";
-    this.container.style.transform = camOffX !== 0 || camOffY !== 0
-      ? `translate3d(${camOffX}px, ${camOffY}px, 0)` : "translate3d(0, 0, 0)";
-    this.container.style.transformOrigin = "center center";
+    this.bgCtx.translate(camOffX, camOffY);
+    ctx.translate(camOffX, camOffY);
 
     // Background chapter
     const chapterForRender = chapterDirective ?? {
