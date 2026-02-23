@@ -350,7 +350,6 @@ export class LyricDancePlayer {
 
     // Cache exists but was baked without cinematic direction — invalidate before promise reuse
     if (globalTimelineCache && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
-      console.log('[PLAYER] invalidating stale cache — cinematic_direction now available');
       globalBakePromise = null;
       globalTimelineCache = null;
       globalChunkCache = null;
