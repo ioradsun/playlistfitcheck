@@ -221,7 +221,12 @@ export class PhysicsIntegrator {
         -maxSafeOffset,
         Math.min(maxSafeOffset, this.position * (maxSafeOffset * 0.4) - this.heat * (maxSafeOffset * 0.8)),
       ),
-      rotation: Math.max(-0.32, Math.min(0.32, this.velocity * 0.12 + this.position * 0.08)),
+      // Keep text horizontal by default. Rotation is only a short beat-impact wobble
+      // that decays rapidly via impulseNow (≈500ms window at 60fps).
+      rotation: Math.max(
+        -0.14,
+        Math.min(0.14, this.velocity * 0.12 * Math.min(1, this.impulseNow))
+      ),
       shatter: this.shatterPulse,
     };
   }
