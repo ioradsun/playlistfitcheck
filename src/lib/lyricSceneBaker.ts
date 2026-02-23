@@ -135,11 +135,13 @@ function bakeFrame(
 
   if (beatIndex !== state.lastBeatIndex) {
     state.lastBeatIndex = beatIndex;
-    state.pulseBudget = 12;
+    state.glowBudget = 13;
   }
-  if (state.pulseBudget > 0) state.pulseBudget -= 1;
-  const pulseProgress = state.pulseBudget / 12;
-  const beatPulse = pulseProgress * pulseProgress * 0.08;
+  if (state.glowBudget > 0) state.glowBudget -= 1;
+  const glowProgress = state.glowBudget / 13;
+  const glow = glowProgress > 0.77
+    ? (glowProgress - 0.77) / 0.23
+    : glowProgress / 0.77;
 
   const { chapter } = getChapterIndexAndData(payload.cinematic_direction, songProgress);
   const tensionStages = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
