@@ -331,7 +331,7 @@ export class ParticleEngine {
       if (layer === "far" && p.depth >= 0.5) continue;
       if (layer === "near" && p.depth < 0.5) continue;
 
-      let alpha = p.opacity * p.life * this.config.opacity * (0.55 + p.depth * 0.45);
+      let alpha = p.opacity * p.life * this.config.opacity * (0.7 + p.depth * 0.3);
       const inSafe =
         p.x >= this.safeZone.x &&
         p.x <= this.safeZone.x + this.safeZone.w &&
