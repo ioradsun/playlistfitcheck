@@ -76,6 +76,7 @@ type BakeState = {
   beatCursor: number;
   lastBeatIndex: number;
   pulseBudget: number;
+  currentZoom: number;
 };
 
 function getBeatIndex(tSec: number, state: BakeState): number {
