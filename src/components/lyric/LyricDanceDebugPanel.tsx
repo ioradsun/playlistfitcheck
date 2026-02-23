@@ -4,6 +4,7 @@ import { Bug, ChevronDown, ChevronRight, Copy, X } from "lucide-react";
 import { toast } from "sonner";
 
 import type { SceneManifest } from "@/engine/SceneManifest";
+import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "./LyricDisplay";
 
 interface DebugData {
@@ -19,6 +20,7 @@ interface DebugData {
     secondHookJustification?: string;
     physicsSpec?: Record<string, unknown> | null;
     scene_manifest?: SceneManifest | null;
+    cinematic_direction?: CinematicDirection | null;
   } | null;
   beatGrid: { bpm: number; beats: number[]; confidence: number } | null;
   lines: LyricLine[];
@@ -78,6 +80,7 @@ export function LyricDanceDebugPanel({ data }: Props) {
   const { songDna, beatGrid, lines, title, artist, overrides, fingerprint } = data;
   const spec = songDna?.physicsSpec;
   const manifest = songDna?.scene_manifest;
+  const direction = songDna?.cinematic_direction;
 
   const copyAll = () => {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
@@ -222,6 +225,105 @@ export function LyricDanceDebugPanel({ data }: Props) {
                     {manifest.particleConfig && <JsonBlock value={manifest.particleConfig} label="Particle Config" />}
                   </div>
                 ) : <p className="text-[10px] text-muted-foreground">No scene manifest</p>}
+              </CollapsibleSection>
+
+              {/* Cinematic Direction */}
+              <CollapsibleSection title="Cinematic Direction">
+                {direction ? (
+                  <div className="space-y-2">
+                    <KV label="Thesis" value={direction.thesis} />
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-mono font-semibold text-muted-foreground/60">Visual World</p>
+                      <KV label="BG System" value={direction.visualWorld?.backgroundSystem} />
+                      <KV label="Light" value={direction.visualWorld?.lightSource} />
+                      <KV label="Particles" value={direction.visualWorld?.particleSystem} />
+                      <KV label="Palette" value={direction.visualWorld?.palette?.join(", ")} />
+                      {direction.visualWorld?.typographyProfile && (
+                        <KV label="Font" value={`${direction.visualWorld.typographyProfile.fontFamily} ${direction.visualWorld.typographyProfile.fontWeight} (${direction.visualWorld.typographyProfile.personality})`} />
+                      )}
+                      {direction.visualWorld?.physicsProfile && (
+                        <div className="space-y-0.5">
+                          <KV label="Weight" value={direction.visualWorld.physicsProfile.weight} />
+                          <KV label="Chaos" value={direction.visualWorld.physicsProfile.chaos} />
+                          <KV label="Heat" value={direction.visualWorld.physicsProfile.heat} />
+                          <KV label="Beat" value={direction.visualWorld.physicsProfile.beatResponse} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-mono font-semibold text-muted-foreground/60">Climax</p>
+                      <KV label="Time" value={`${((direction.climax?.timeRatio ?? 0) * 100).toFixed(0)}%`} />
+                      <KV label="Trigger" value={direction.climax?.triggerLine} />
+                      <KV label="Transform" value={direction.climax?.worldTransformation} />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-mono font-semibold text-muted-foreground/60">Ending</p>
+                      <KV label="Style" value={direction.ending?.style} />
+                      <KV label="Aftertaste" value={direction.ending?.emotionalAftertaste} />
+                    </div>
+                  </div>
+                ) : <p className="text-[10px] text-muted-foreground">No cinematic direction</p>}
+              </CollapsibleSection>
+
+              {/* Chapters */}
+              <CollapsibleSection title={`Chapters (${direction?.chapters?.length ?? 0})`}>
+                {direction?.chapters && direction.chapters.length > 0 ? (
+                  <div className="space-y-2">
+                    {direction.chapters.map((ch, i) => (
+                      <div key={i} className="rounded bg-background/50 p-2 space-y-0.5">
+                        <p className="text-[10px] font-mono font-semibold text-primary">{ch.title}</p>
+                        <KV label="Range" value={`${(ch.startRatio * 100).toFixed(0)}% → ${(ch.endRatio * 100).toFixed(0)}%`} />
+                        <KV label="Arc" value={ch.emotionalArc} />
+                        <KV label="Intensity" value={ch.emotionalIntensity} />
+                        <KV label="Color" value={ch.dominantColor} />
+                        <KV label="Light" value={ch.lightBehavior} />
+                        <KV label="Particles" value={ch.particleDirective} />
+                        <KV label="Background" value={ch.backgroundDirective} />
+                        <KV label="Typography" value={ch.typographyShift} />
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-[10px] text-muted-foreground">No chapters</p>}
+              </CollapsibleSection>
+
+              {/* Word Directives */}
+              <CollapsibleSection title={`Word Directives (${Object.keys(direction?.wordDirectives ?? {}).length})`}>
+                {direction?.wordDirectives && Object.keys(direction.wordDirectives).length > 0 ? (
+                  <div className="max-h-[400px] overflow-auto space-y-1">
+                    {Object.entries(direction.wordDirectives).map(([key, wd]) => (
+                      <div key={key} className="flex flex-wrap gap-x-2 text-[10px] font-mono border-b border-border/10 pb-1">
+                        <span className="text-primary font-semibold">{wd.word}</span>
+                        {wd.kineticClass && <span className="text-foreground/70">K:{wd.kineticClass}</span>}
+                        {wd.elementalClass && <span className="text-foreground/70">E:{wd.elementalClass}</span>}
+                        <span className="text-muted-foreground/60">emp:{wd.emphasisLevel}</span>
+                        {wd.colorOverride && <span className="text-muted-foreground/60">clr:{wd.colorOverride}</span>}
+                        {wd.specialEffect && <span className="text-muted-foreground/60">fx:{wd.specialEffect}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-[10px] text-muted-foreground">No word directives</p>}
+              </CollapsibleSection>
+
+              {/* Storyboard (Line Directions) */}
+              <CollapsibleSection title={`Storyboard (${direction?.storyboard?.length ?? 0})`}>
+                {direction?.storyboard && direction.storyboard.length > 0 ? (
+                  <div className="max-h-[400px] overflow-auto space-y-1.5">
+                    {direction.storyboard.map((ld, i) => (
+                      <div key={i} className="rounded bg-background/50 p-1.5 space-y-0.5 text-[10px] font-mono">
+                        <div className="flex gap-2">
+                          <span className="text-muted-foreground/50 shrink-0">L{ld.lineIndex}</span>
+                          <span className="text-foreground/80 truncate">{ld.text}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-2 text-muted-foreground/60">
+                          <span>hero:{ld.heroWord}</span>
+                          <span>in:{ld.entryStyle}</span>
+                          <span>out:{ld.exitStyle}</span>
+                          <span>intent:{ld.emotionalIntent}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-[10px] text-muted-foreground">No storyboard</p>}
               </CollapsibleSection>
 
               {/* Active Overrides */}

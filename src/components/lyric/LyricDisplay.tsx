@@ -720,6 +720,7 @@ export function LyricDisplay({
         secondHookLabel: secondary?.label,
         physicsSpec: result?.physics_spec || null,
         scene_manifest: result?.scene_manifest || result?.sceneManifest || null,
+        cinematic_direction: result?.cinematicDirection || null,
       };
       const normalizedSongDna = normalizeSongDnaWithManifest(nextSongDna, data.title);
       setSongDna(normalizedSongDna);
@@ -834,6 +835,7 @@ export function LyricDisplay({
         meaning: result?.meaning ?? songDna.meaning,
         physicsSpec: result?.physics_spec ?? songDna.physicsSpec,
         scene_manifest: result?.scene_manifest || result?.sceneManifest || songDna.scene_manifest,
+        cinematic_direction: result?.cinematicDirection ?? (songDna as any).cinematic_direction,
       }, data.title);
 
       const afterManifest = safeManifest(merged.scene_manifest || beforeManifest).manifest;
