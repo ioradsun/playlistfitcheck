@@ -207,8 +207,9 @@ export class ParticleEngine {
     this.safeZone.h = h;
   }
 
-  update(deltaMs: number, beatIntensity: number): void {
+  update(deltaMs: number, beatIntensity: number, nextConfig?: ParticleConfig): void {
     this.time += deltaMs;
+    if (nextConfig) this.config = nextConfig;
     if (this.config.system === "none") return;
 
     const dt = deltaMs / 16.67;
@@ -353,33 +354,37 @@ export class ParticleEngine {
         p.opacity = 0.75 + Math.random() * 0.25;
         p.decay = 0.015;
         break;
-      case "smoke":
-        p.x = b.x + b.w * (0.2 + Math.random() * 0.6);
-        p.y = b.y + b.h + 10;
-        p.vx = (Math.random() - 0.5) * 0.9;
-        p.vy = -(0.3 + Math.random() * 0.8 * speed);
-        p.size = 8 + Math.random() * 12;
-        p.opacity = 0.35;
-        p.decay = 0.005;
+      case "smoke": {
+        const isRainMist = this.config.renderStyle === "rain-mist";
+        p.x = b.x + b.w * (0.1 + Math.random() * 0.8);
+        p.y = isRainMist ? b.y + b.h * (0.2 + Math.random() * 0.6) : b.y + b.h + 10;
+        p.vx = (Math.random() - 0.5) * (isRainMist ? 0.45 : 0.9);
+        p.vy = isRainMist ? (Math.random() - 0.5) * 0.16 : -(0.3 + Math.random() * 0.8 * speed);
+        p.size = isRainMist ? 6 + Math.random() * 8 : 12 + Math.random() * 16;
+        p.opacity = isRainMist ? 0.2 : 0.35;
+        p.decay = isRainMist ? 0.0035 : 0.005;
         break;
+      }
       case "ash":
         p.x = b.x + Math.random() * b.w;
         p.y = b.y - 16;
         p.vx = (Math.random() - 0.5) * 1.4;
         p.vy = 1 + Math.random() * 2.4 * speed;
-        p.size = 3 + Math.random() * 5;
+        p.size = 2 + Math.random() * 3;
         p.decay = 0.007;
         p.rotationSpeed = (Math.random() - 0.5) * 0.2;
         break;
-      case "rain":
+      case "rain": {
+        const isDrizzle = this.config.renderStyle === "rain-drizzle";
         p.x = b.x + Math.random() * b.w;
         p.y = b.y - 20;
-        p.vx = (1.8 + Math.random() * 0.8) * speed;
-        p.vy = (8 + Math.random() * 7) * speed;
-        p.size = 8 + Math.random() * 7;
-        p.opacity = 0.7;
-        p.decay = 0.03;
+        p.vx = (isDrizzle ? 1.2 : 2.1) * speed + Math.random() * (isDrizzle ? 0.4 : 0.9) * speed;
+        p.vy = (isDrizzle ? 5.5 : 9.2) * speed + Math.random() * (isDrizzle ? 2.8 : 6.8) * speed;
+        p.size = isDrizzle ? 7 + Math.random() * 5 : 10 + Math.random() * 9;
+        p.opacity = isDrizzle ? 0.5 : 0.72;
+        p.decay = isDrizzle ? 0.024 : 0.035;
         break;
+      }
       case "snow":
         p.x = b.x + Math.random() * b.w;
         p.y = b.y - 10;
@@ -494,15 +499,16 @@ export class ParticleEngine {
         if (beatIntensity > 0.7) p.opacity = Math.min(1.35, p.opacity + beatIntensity * 0.08);
         break;
       case "smoke":
-        p.size += 0.03 * dt;
-        p.vx += (Math.random() - 0.5) * 0.03;
-        p.opacity *= 0.996;
+        p.size += this.config.renderStyle === "burn-smoke" ? 0.05 * dt : 0.02 * dt;
+        p.vx += (Math.random() - 0.5) * (this.config.renderStyle === "rain-mist" ? 0.02 : 0.03);
+        p.opacity *= this.config.renderStyle === "rain-mist" ? 0.998 : 0.996;
         break;
       case "ash":
         p.vx += (Math.random() - 0.5) * 0.04;
+        p.vy = Math.max(0.4, p.vy + 0.006);
         break;
       case "rain":
-        p.vx += (Math.random() - 0.5) * 0.03;
+        p.vx += (Math.random() - 0.5) * (this.config.renderStyle === "rain-drizzle" ? 0.015 : 0.03);
         break;
       case "snow":
         if (p.aux > 0) {
@@ -574,42 +580,45 @@ export class ParticleEngine {
     switch (this.config.system) {
       case "embers": {
         const flicker = (Math.sin(this.time * 0.02 + p.phase * 5) + 1) * 0.5;
-        ctx.fillStyle = lerpColor([255, 140, 66], [255, 255, 255], flicker);
+        const emberCore = parseHex(this.config.color);
+        ctx.fillStyle = lerpColor(emberCore, [255, 250, 220], flicker);
+        ctx.shadowColor = this.config.color;
+        ctx.shadowBlur = 3;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, Math.max(0.8, s * 0.65), 0, Math.PI * 2);
         ctx.fill();
+        ctx.shadowBlur = 0;
         break;
       }
-      case "smoke":
-        ctx.fillStyle = "rgba(60,50,40,0.75)";
-        ctx.filter = `blur(${3 + p.depth * 3}px)`;
+      case "smoke": {
+        const [r, g, b] = parseHex(this.config.color);
+        ctx.fillStyle = `rgba(${r},${g},${b},0.75)`;
+        const blur = this.config.renderStyle === "burn-smoke" ? 4 : 2;
+        ctx.filter = `blur(${blur}px)`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
         ctx.fill();
         ctx.filter = "none";
         break;
-      case "ash":
-        ctx.fillStyle = "rgba(180,170,160,0.9)";
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.rotation);
+      }
+      case "ash": {
+        const [r, g, b] = parseHex(this.config.color);
+        ctx.fillStyle = `rgba(${r},${g},${b},0.9)`;
         ctx.beginPath();
-        ctx.moveTo(-s * 0.7, -s * 0.3);
-        ctx.lineTo(s * 0.4, -s * 0.6);
-        ctx.lineTo(s * 0.8, s * 0.2);
-        ctx.lineTo(-s * 0.1, s * 0.7);
-        ctx.closePath();
+        ctx.arc(p.x, p.y, Math.max(1, s * 0.7), 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
         break;
-      case "rain":
-        ctx.strokeStyle = "rgba(168,196,232,0.9)";
-        ctx.lineWidth = Math.max(1, s * 0.15);
+      }
+      case "rain": {
+        const [r, g, b] = parseHex(this.config.color);
+        ctx.strokeStyle = `rgba(${r},${g},${b},0.9)`;
+        ctx.lineWidth = Math.max(1, s * 0.13);
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + p.vx * 0.55, p.y + s);
+        ctx.lineTo(p.x + p.vx * 0.65, p.y + p.vy * 0.55);
         ctx.stroke();
         break;
+      }
       case "snow":
         ctx.fillStyle = "rgba(220,235,255,0.85)";
         ctx.beginPath();

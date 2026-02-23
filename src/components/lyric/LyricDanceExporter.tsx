@@ -34,6 +34,7 @@ import {
 import type { BeatTick } from "@/engine/HookDanceEngine";
 import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
 import { safeManifest } from "@/engine/validateManifest";
+import { getBackgroundSystemForTime } from "@/engine/getBackgroundSystemForTime";
 import type { LyricLine } from "./LyricDisplay";
 
 // ── Aspect ratio → canvas dimensions ────────────────────────────────────────
@@ -146,6 +147,14 @@ export function LyricDanceExporter({
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const duration = songEnd - songStart;
     const totalFrames = Math.ceil(duration * FPS);
+    const baseManifest = safeManifest(
+      deriveSceneManifestFromSpec({
+        spec,
+        mood,
+        description,
+        songTitle: title,
+      }),
+    ).manifest;
 
     if (totalFrames <= 0) {
       toast.error("No lines to render");
@@ -266,6 +275,8 @@ export function LyricDanceExporter({
       }
 
       const state = integrator.tick();
+      const songProgress = (currentTime - songStart) / Math.max(0.001, songEnd - songStart);
+      const activeSystem = getBackgroundSystemForTime(baseManifest, songProgress, state.heat * 0.8);
       const activeLine = lines.find(
         (l) => currentTime >= l.start && currentTime < l.end,
       );
@@ -295,7 +306,7 @@ export function LyricDanceExporter({
         // System background
         const bgPalette = spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
         drawSystemBackground(ctx, {
-          system: spec.system,
+          system: activeSystem,
           physState: state,
           w: cw,
           h: ch,
@@ -333,7 +344,7 @@ export function LyricDanceExporter({
           activeLine.text,
           cw,
           ch,
-          spec.system,
+          activeSystem,
           aspectRatio,
         );
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
@@ -341,7 +352,7 @@ export function LyricDanceExporter({
               fs: stackedLayout.fs,
               effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing,
             }
-          : computeFitFontSize(ctx, activeLine.text, cw, spec.system);
+          : computeFitFontSize(ctx, activeLine.text, cw, activeSystem);
 
         ctx.save();
         const effectState: EffectState = {
@@ -358,7 +369,7 @@ export function LyricDanceExporter({
           progress: lineProgress,
           rng,
           palette: spec.palette || ["#ffffff", "#a855f7", "#ec4899"],
-          system: spec.system,
+          system: activeSystem,
           effectiveLetterSpacing,
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
         };

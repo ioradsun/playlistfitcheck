@@ -17,6 +17,7 @@ import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
+import { drawLighting, getTextShadow } from "@/engine/LightingSystem";
 import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { ParticleEngine } from "@/engine/ParticleEngine";
@@ -24,7 +25,7 @@ import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
 import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
-import { classifyWord, getElementalClass, getWordVisualProps } from "@/engine/WordClassifier";
+import * as WordClassifier from "@/engine/WordClassifier";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -356,8 +357,40 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function lerp(start: number, end: number, progress: number): number {
-  return start + (end - start) * progress;
+
+function drawWithLetterSpacing(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  letterSpacing: string,
+): void {
+  const parsedSpacing = Number.parseFloat(letterSpacing);
+  const spacingPx = Number.isFinite(parsedSpacing)
+    ? parsedSpacing * Number.parseFloat(ctx.font) * 0.5
+    : 0;
+
+  if (spacingPx === 0 || text.length <= 1) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+
+  const glyphWidths = Array.from(text).map((char) => ctx.measureText(char).width);
+  const totalWidth = glyphWidths.reduce((sum, width) => sum + width, 0) + spacingPx * (text.length - 1);
+  const originalAlign = ctx.textAlign;
+  const startX = originalAlign === "center"
+    ? x - totalWidth / 2
+    : originalAlign === "right" || originalAlign === "end"
+      ? x - totalWidth
+      : x;
+
+  ctx.textAlign = "left";
+  let cursorX = startX;
+  Array.from(text).forEach((char, index) => {
+    ctx.fillText(char, cursorX, y);
+    cursorX += glyphWidths[index] + spacingPx;
+  });
+  ctx.textAlign = originalAlign;
 }
 
 function getParticleConfigForTime(
@@ -365,33 +398,96 @@ function getParticleConfigForTime(
   manifest: SceneManifest,
   physicsSpec: PhysicsSpec | undefined,
   songProgress: number,
-  beatIntensity: number,
 ): ParticleConfig {
   const progress = clamp01(songProgress);
-  const beat = clamp01(beatIntensity);
   const heat = Number(physicsSpec?.params?.heat ?? 0);
   const isBurnWorld = manifest.backgroundSystem === "burn" || heat > 0.7;
+  const isRainWorld = manifest.backgroundSystem === "breath" || heat < 0.25;
 
   if (isBurnWorld) {
     if (progress < 0.15) {
-      return { ...baseConfig, system: "smoke", density: lerp(0.2, 0.4, progress / 0.15), speed: 0.3, opacity: 0.3 };
-    } else if (progress < 0.5) {
-      const t = (progress - 0.15) / 0.35;
-      return { ...baseConfig, system: "embers", density: lerp(0.3, 0.7, t), speed: lerp(0.4, 0.7, t), opacity: lerp(0.4, 0.7, t) };
-    } else if (progress < 0.8) {
-      const t = (progress - 0.5) / 0.3;
-      return { ...baseConfig, system: "embers", density: lerp(0.5, 0.9, t) + beat * 0.15, speed: lerp(0.5, 0.9, t), opacity: lerp(0.6, 0.9, t) };
-    } else {
-      const t = (progress - 0.8) / 0.2;
-      return { ...baseConfig, system: "ash", density: lerp(0.8, 0.4, t), speed: lerp(0.6, 0.3, t), opacity: lerp(0.7, 0.3, t) };
+      return {
+        ...baseConfig,
+        system: "smoke",
+        renderStyle: "burn-smoke",
+        density: 0.2,
+        speed: 0.2,
+        opacity: 0.35,
+        color: "#4a3a2a",
+      };
     }
+    if (progress < 0.55) {
+      return {
+        ...baseConfig,
+        system: "embers",
+        renderStyle: "burn-embers",
+        density: 0.8,
+        speed: 0.7,
+        opacity: 0.78,
+        color: "#ff8c42",
+      };
+    }
+    if (progress < 0.75) {
+      return {
+        ...baseConfig,
+        system: "embers",
+        renderStyle: "burn-embers",
+        density: 0.4,
+        speed: 0.55,
+        opacity: 0.52,
+        color: "#ff8c42",
+      };
+    }
+    return {
+      ...baseConfig,
+      system: "ash",
+      renderStyle: "burn-ash",
+      density: 0.3,
+      speed: 0.35,
+      opacity: 0.55,
+      color: "#aaaaaa",
+    };
   }
 
-  // Non-burn worlds: gentle density ramp
+  if (manifest.backgroundSystem === "rain" || isRainWorld) {
+    if (progress < 0.20) {
+      return {
+        ...baseConfig,
+        system: "smoke",
+        renderStyle: "rain-mist",
+        density: 0.2,
+        speed: 0.2,
+        opacity: 0.25,
+        color: "#a7b4c8",
+      };
+    }
+    if (progress < 0.70) {
+      return {
+        ...baseConfig,
+        system: "rain",
+        renderStyle: "rain",
+        density: 0.6,
+        speed: 0.75,
+        opacity: 0.7,
+        color: "#b9c8de",
+      };
+    }
+    return {
+      ...baseConfig,
+      system: "rain",
+      renderStyle: "rain-drizzle",
+      density: 0.3,
+      speed: 0.4,
+      opacity: 0.45,
+      color: "#c5cfdf",
+    };
+  }
+
   return {
     ...baseConfig,
-    density: clamp01(baseConfig.density * (0.6 + progress * 0.4 + beat * 0.15)),
-    speed: clamp01(baseConfig.speed * (0.8 + beat * 0.3)),
+    renderStyle: "default",
+    density: clamp01(baseConfig.density * (0.6 + progress * 0.4)),
+    speed: clamp01(baseConfig.speed),
     opacity: clamp01(baseConfig.opacity * (0.7 + progress * 0.3)),
   };
 }
@@ -562,7 +658,8 @@ export default function ShareableLyricDance() {
   // Audio
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [muted, setMuted] = useState(true);
-  
+  const engineRef = useRef<HookDanceEngine | null>(null);
+  const physicsSpec = data?.physics_spec;
 
   // Canvas
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -582,6 +679,14 @@ export default function ShareableLyricDance() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   // Cover overlay
   const [showCover, setShowCover] = useState(true);
+
+  useEffect(() => {
+    if (!physicsSpec) {
+      engineRef.current = null;
+      return;
+    }
+    engineRef.current = new HookDanceEngine(physicsSpec);
+  }, [physicsSpec]);
 
   // ── Load data ─────────────────────────────────────────────────────────────
 
@@ -757,7 +862,11 @@ export default function ShareableLyricDance() {
     audio.preload = "auto";
     audioRef.current = audio;
 
-    const physicsEngine = new HookDanceEngine(
+
+    audio.currentTime = songStart;
+    audio.play().catch(() => {});
+
+    engineRef.current = new HookDanceEngine(
       { ...spec, system: effectiveSystem },
       beats,
       songStart,
@@ -766,9 +875,6 @@ export default function ShareableLyricDance() {
       { onFrame: () => {}, onEnd: () => {} },
       `${data.seed || data.id}-shareable-dance`,
     );
-
-    audio.currentTime = songStart;
-    audio.play().catch(() => {});
 
     let beatIndex = 0;
     let prevTime = songStart;
@@ -807,7 +913,7 @@ export default function ShareableLyricDance() {
         beatIndex = 0;
         prevTime = songStart;
         smoothBeatIntensity = 0;
-        physicsEngine.resetPhysics();
+        engineRef.current?.resetPhysics();
         return;
       }
 
@@ -827,11 +933,22 @@ export default function ShareableLyricDance() {
       }
       const currentBeatIntensity = smoothBeatIntensity;
 
-      physicsEngine.setViewportBounds(cw, ch);
-      const state = physicsEngine.update(currentBeatIntensity, frameHadDownbeat);
+      engineRef.current?.setViewportBounds(cw, ch);
+      engineRef.current?.update(currentBeatIntensity, deltaMs / 1000, frameHadDownbeat);
+      const physicsState = engineRef.current?.getState();
+      const state = physicsState ?? {
+        scale: 1, blur: 0, glow: 0, shake: 0, isFractured: false,
+        position: 0, velocity: 0, heat: 0, safeOffset: 0,
+        offsetX: 0, offsetY: 0, rotation: 0, shatter: 0, wordOffsets: [],
+      };
       const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
+      const baselineY = yBaseRef.current === 0 ? ch * 0.5 : yBaseRef.current;
+      let activeWordPosition = {
+        x: cw / 2 + xOffsetRef.current + state.offsetX,
+        y: baselineY + state.offsetY,
+      };
 
       const lineAnim = activeLine
         ? animationResolver.resolveLine(activeLineIndex, activeLine.start, activeLine.end, currentTime, currentBeatIntensity, effectivePalette)
@@ -897,6 +1014,15 @@ export default function ShareableLyricDance() {
         hookEnd: songEnd,
       });
 
+      drawLighting(
+        ctx,
+        canvas,
+        timelineManifest,
+        songProgress,
+        currentBeatIntensity,
+        activeWordPosition,
+      );
+
       // Particle engine: update then draw parallax split layers.
       if (particleEngine) {
         const timedParticleConfig = getParticleConfigForTime(
@@ -904,10 +1030,8 @@ export default function ShareableLyricDance() {
           timelineManifest,
           spec,
           songProgress,
-          currentBeatIntensity,
         );
-        particleEngine.setConfig(timedParticleConfig);
-        particleEngine.update(deltaMs, currentBeatIntensity);
+        particleEngine.update(deltaMs, currentBeatIntensity, timedParticleConfig);
         particleEngine.draw(ctx, "far");
       }
 
@@ -1160,6 +1284,9 @@ export default function ShareableLyricDance() {
         const physShakeY = Math.sin(physShakeAngle) * state.shake;
         const lineX = cw / 2 + xOffsetRef.current + xNudge + state.offsetX + physShakeX;
         const lineY = yBaseRef.current + yNudge + state.offsetY + physShakeY;
+        activeWordPosition = { x: lineX, y: lineY };
+
+        const textShadow = getTextShadow(timelineManifest, currentBeatIntensity);
 
         ctx.save();
 
@@ -1188,15 +1315,28 @@ export default function ShareableLyricDance() {
         const wordsPerSecond = words.length > 0 ? words.length / lineDuration : 1;
         const wordDelay = wordsPerSecond > 0 ? 1 / wordsPerSecond : lineDuration;
         const visibleWordCount = words.filter((_, i) => currentTime >= activeLine.start + i * wordDelay).length;
-        const drawWords = words.slice(0, visibleWordCount);
+        const drawWords = words.slice(0, visibleWordCount).map((text) => ({ text }));
+        const totalWords = drawWords.length;
 
-        const measuredWordWidths = drawWords.map(word => ctx.measureText(word).width);
+        const measuredWordWidths = drawWords.map(word => ctx.measureText(word.text).width);
         const baseSpaceWidth = ctx.measureText(" ").width;
         const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, drawWords.length - 1) * baseSpaceWidth;
         let cursorX = lineX - totalWidth / 2;
 
+        if (drawWords.length > 0) {
+          const activeWordIndex = Math.max(0, drawWords.length - 1);
+          const priorWidth = measuredWordWidths
+            .slice(0, activeWordIndex)
+            .reduce((sum, width) => sum + width, 0) + activeWordIndex * baseSpaceWidth;
+          const activeWidth = measuredWordWidths[activeWordIndex] ?? 0;
+          activeWordPosition = {
+            x: lineX - totalWidth / 2 + priorWidth + activeWidth / 2,
+            y: lineY,
+          };
+        }
+
         drawWords.forEach((word, wordIndex) => {
-          const normalizedWord = word.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
+          const normalizedWord = word.text.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
           const resolvedWordStartTime = activeLine.start + wordIndex * wordDelay;
           const appearanceKey = `${activeLine.start}:${wordIndex}:${normalizedWord}`;
 
@@ -1206,95 +1346,84 @@ export default function ShareableLyricDance() {
             seenWordAppearancesRef.current.add(appearanceKey);
           }
 
-          const newCount = wordCountRef.current.get(normalizedWord) ?? 1;
-          const visualProps = getWordVisualProps(word, wordIndex, activeLineAnim, currentBeatIntensity, newCount);
+          const props = WordClassifier.getWordVisualProps(
+            word.text,
+            wordIndex,
+            totalWords,
+            activeLineAnim,
+            currentBeatIntensity,
+            wordCountRef.current.get(word.text) ?? 0,
+          );
+
           if (currentTime < resolvedWordStartTime) {
             return;
           }
 
-          const className = classifyWord(word);
-          const wordAge = currentTime - resolvedWordStartTime;
-          let animScale = visualProps.scale;
-          let flashColor = visualProps.color;
-
-          if (className === "IMPACT") {
-            const impactPhase = Math.min(1, wordAge / 0.24);
-            const slamScale = impactPhase < 0.5
-              ? 1 + (1.35 - 1) * (impactPhase / 0.5)
-              : 1.35 - (1.35 - 1) * ((impactPhase - 0.5) / 0.5);
-            animScale *= slamScale;
-            if (wordAge < 0.08) flashColor = "#ffffff";
-          } else if (className === "TENDER") {
-            const breathe = 0.95 + Math.sin((wordAge + wordIndex * 0.2) * 2.2) * 0.1;
-            animScale *= breathe;
-          } else if (className === "QUESTION") {
-            const drift = Math.min(1, wordAge / 0.5);
-            animScale *= 1 - 0.05 * drift;
-          } else if (className === "TRANSCENDENT") {
-            const pulse = 1 + 0.2 * (0.5 + 0.5 * Math.sin(wordAge * 2));
-            animScale *= pulse;
-          }
-
-          const wordWidth = ctx.measureText(word).width;
+          const wordWidth = ctx.measureText(word.text).width;
           const wordCenterX = cursorX + wordWidth / 2;
-          const drawX = className === "SELF" ? lineX : wordCenterX + visualProps.xOffset;
-          const drawY = lineY + visualProps.yOffset;
+          const wordX = wordCenterX;
+          const wordY = lineY;
 
-          const prevAlpha = ctx.globalAlpha;
-          ctx.globalAlpha = compositeAlpha * visualProps.opacity;
-          ctx.fillStyle = flashColor;
-          ctx.shadowColor = flashColor;
-          ctx.shadowBlur = visualProps.glowRadius;
-
-          const shouldItalic = className === "OTHER";
-          const wordFontSize = fontSize * animScale;
-          ctx.font = `${shouldItalic ? "italic " : ""}${wordFontSize}px Inter, ui-sans-serif, system-ui`;
+          ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui`;
           ctx.textAlign = "center";
           ctx.textBaseline = "alphabetic";
           const wordRenderWidth = ctx.measureText(word).width;
           const elementalClass = getElementalClass(word);
 
-          if (visualProps.showTrail) {
-            for (let t = visualProps.trailCount; t >= 1; t -= 1) {
-              ctx.globalAlpha = compositeAlpha * visualProps.opacity * (0.12 * t);
-              ctx.fillText(word, drawX - t * 8, drawY + t * 2);
-            }
-            ctx.globalAlpha = compositeAlpha * visualProps.opacity;
+          // Scale
+          ctx.save();
+          ctx.translate(wordX, wordY);
+          ctx.scale(props.scale, props.scale);
+          ctx.translate(-wordX, -wordY);
+
+          // Color
+          ctx.fillStyle = props.color;
+
+          // Opacity
+          ctx.globalAlpha = props.opacity * compositeAlpha;
+
+          // Glow
+          if (props.glowRadius > 0) {
+            ctx.shadowBlur = props.glowRadius;
+            ctx.shadowColor = props.color;
           }
 
-          if (elementalClass === "NONE") {
-            ctx.fillText(word, drawX, drawY);
+          // Position offset
+          const finalX = wordX + props.xOffset;
+          const finalY = wordY + props.yOffset;
+
+          // Letter spacing (draw char by char if non-default)
+          if (props.letterSpacing !== "0em") {
+            drawWithLetterSpacing(ctx, word.text, finalX, finalY, props.letterSpacing);
           } else {
-            drawElementalWordTexture(ctx, {
-              word,
-              wordIndex,
-              wordX: drawX,
-              wordY: drawY,
-              wordWidth: wordRenderWidth,
-              fontSize: wordFontSize,
-              currentTime,
-              beatIntensity: currentBeatIntensity,
-              elementalClass,
-            });
+            ctx.fillText(word.text, finalX, finalY);
           }
 
-          if (className === "NEGATION") {
-            const strikeY = drawY - wordFontSize * 0.1;
-            ctx.globalAlpha = compositeAlpha * 0.3;
-            ctx.strokeStyle = "#d1d5db";
-            ctx.lineWidth = Math.max(1, wordFontSize * 0.04);
-            ctx.beginPath();
-            ctx.moveTo(drawX - wordRenderWidth / 2, strikeY);
-            ctx.lineTo(drawX + wordRenderWidth / 2, strikeY);
-            ctx.stroke();
-          }
-
+          // Reset glow
           ctx.shadowBlur = 0;
-          ctx.globalAlpha = prevAlpha;
+          ctx.restore();
+
+          // Motion trail for MOTION class words
+          if (props.showTrail) {
+            for (let t = 1; t <= props.trailCount; t += 1) {
+              ctx.globalAlpha = (props.opacity * 0.3) / t;
+              ctx.fillText(word.text, finalX - (t * 4), finalY);
+            }
+          }
+
+          // Track word appearances for escalation
+          const count = wordCountRef.current.get(word.text) ?? 0;
+          wordCountRef.current.set(word.text, count + 1);
+
+          ctx.globalAlpha = 1;
           cursorX += wordWidth + baseSpaceWidth;
         });
 
         if (drawWords.length === 0) {
+          ctx.shadowColor = textShadow.color;
+          ctx.shadowOffsetX = textShadow.offsetX;
+          ctx.shadowOffsetY = textShadow.offsetY;
+          ctx.shadowBlur = textShadow.blur;
           const effectState: EffectState = {
             text: activeLine.text,
             physState: state,
@@ -1311,6 +1440,9 @@ export default function ShareableLyricDance() {
             alphaMultiplier: compositeAlpha,
           };
           drawFn(ctx, effectState);
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
         }
         ctx.restore();
       }

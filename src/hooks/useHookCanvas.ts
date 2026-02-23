@@ -145,6 +145,7 @@ export function useHookCanvas(
   const progressRef = useRef(0);
   const onEndRef = useRef(onEnd);
   const firedEndRef = useRef(false);
+  const orbitalWordPositionsRef = useRef<Record<string, Array<{ x: number; y: number }>>>({});
   const frameRef = useRef<{ physState: PhysicsState | null; time: number; beats: number }>({
     physState: null, time: 0, beats: 0,
   });
@@ -367,7 +368,25 @@ export function useHookCanvas(
       ctx.translate(lineX, lineY);
       ctx.scale(anim.scale, anim.scale);
       ctx.translate(-lineX, -lineY);
-      ctx.font = `${st.weight} ${fs}px ${st.font}`;
+      let workingFontSize = fs;
+      const words = activeLine.text.split(/\s+/).filter(Boolean);
+      const wordSpacingRatio = 0.25;
+      const maxTextWidth = w * 0.85;
+      const measureLineWidth = (fontSize: number) => {
+        ctx.font = `${st.weight} ${fontSize}px ${st.font}`;
+        const widths = words.map((word) => ctx.measureText(word).width);
+        const spacing = fontSize * wordSpacingRatio;
+        const total = widths.reduce((sum, width) => sum + width, 0) + Math.max(0, widths.length - 1) * spacing;
+        return { widths, spacing, total };
+      };
+
+      let measuredLayout = measureLineWidth(workingFontSize);
+      while (measuredLayout.total > maxTextWidth && workingFontSize > 12) {
+        workingFontSize -= 1;
+        measuredLayout = measureLineWidth(workingFontSize);
+      }
+
+      ctx.font = `${st.weight} ${workingFontSize}px ${st.font}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
@@ -380,8 +399,62 @@ export function useHookCanvas(
       }
 
       applyLyricShadow(ctx, manifest.palette, manifest.typographyProfile?.personality);
-      const words = activeLine.text.split(" ");
-      let wordX = lineX - ctx.measureText(activeLine.text).width / 2;
+      const isOrbitalLayout = (hd.font_system || hd.system_type) === "orbit";
+      const wordPadding = 24;
+      const orbitRadius = Math.min(w, h) * 0.2;
+      const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
+      const activeWordIndex = Math.max(0, Math.min(words.length - 1, Math.floor(((ct - activeLine.start) / lineDuration) * words.length)));
+
+      const positions: Array<{ x: number; y: number }> = [];
+      if (isOrbitalLayout) {
+        let angleAccumulator = -Math.PI / 2;
+        measuredLayout.widths.forEach((width) => {
+          const angleForWord = (width + wordPadding) / Math.max(1, orbitRadius);
+          positions.push({
+            x: lineX + Math.cos(angleAccumulator) * orbitRadius,
+            y: lineY + Math.sin(angleAccumulator) * orbitRadius,
+          });
+          angleAccumulator += angleForWord;
+        });
+
+        for (let i = 0; i < positions.length - 1; i += 1) {
+          const minDist = (measuredLayout.widths[i] + measuredLayout.widths[i + 1]) / 2 + wordPadding;
+          const actualDist = Math.abs(positions[i + 1].x - positions[i].x);
+          if (actualDist < minDist) {
+            const push = (minDist - actualDist) / 2;
+            positions[i].x -= push;
+            positions[i + 1].x += push;
+          }
+        }
+
+        if (positions[activeWordIndex]) {
+          const activeTarget = positions[activeWordIndex];
+          const shiftX = lineX - activeTarget.x;
+          const shiftY = lineY - activeTarget.y;
+          for (let i = 0; i < positions.length; i += 1) {
+            positions[i].x += shiftX;
+            positions[i].y += shiftY;
+          }
+        }
+
+        const lineKey = `${activeLine.start}:${activeLine.end}:${activeLine.text}`;
+        const previousPositions = orbitalWordPositionsRef.current[lineKey] ?? positions;
+        const smoothed = positions.map((target, idx) => {
+          const current = previousPositions[idx] ?? target;
+          return {
+            x: current.x + (target.x - current.x) * 0.08,
+            y: current.y + (target.y - current.y) * 0.08,
+          };
+        });
+        orbitalWordPositionsRef.current = { [lineKey]: smoothed };
+      } else {
+        let currentX = lineX - measuredLayout.total / 2;
+        measuredLayout.widths.forEach((width) => {
+          positions.push({ x: currentX + width / 2, y: lineY });
+          currentX += width + measuredLayout.spacing;
+        });
+      }
+
       words.forEach((word, wi) => {
         const wordAnim = animationResolver.resolveWord(activeLine.start, wi, beatIntensityRef.current);
         ctx.save();
@@ -391,10 +464,77 @@ export function useHookCanvas(
         ctx.fillStyle = wordAnim
           ? getWordMarkColor(wordAnim.mark, manifest)
           : anim.lineColor;
-        ctx.fillText(word, wordX, lineY);
+        const p = positions[wi] ?? { x: lineX, y: lineY };
+        ctx.fillText(word, p.x, p.y);
         ctx.restore();
-        wordX += ctx.measureText(`${word} `).width;
       });
+
+      const visibleWords = activeLineWords.filter((word) => ct >= word.start);
+      if (visibleWords.length > 0) {
+        const activeWordIndex = visibleWords[visibleWords.length - 1].index;
+
+        if (st.layout === "arc") {
+          const orbitRadius = Math.min(safeW, safeH) * 0.28;
+          const orbitCount = Math.max(visibleWords.length, 1);
+          visibleWords.forEach((word, visibleIdx) => {
+            const orbitT = orbitCount <= 1 ? 0.5 : visibleIdx / (orbitCount - 1);
+            const targetAngle = -Math.PI / 2 + orbitT * Math.PI * 1.6;
+            const targetX = lineX + Math.cos(targetAngle) * orbitRadius;
+            const targetY = lineY + Math.sin(targetAngle) * orbitRadius;
+            const enterProgress = Math.max(0, Math.min(1, (ct - word.start) / 0.3));
+            const eased = 1 - Math.pow(1 - enterProgress, 3);
+            const startAngle = targetAngle - Math.PI * 1.8;
+            const startRadius = orbitRadius + Math.min(safeW, safeH) * 0.38;
+            const currentAngle = startAngle + (targetAngle - startAngle) * eased;
+            const currentRadius = startRadius + (orbitRadius - startRadius) * eased;
+            const drawX = lineX + Math.cos(currentAngle) * currentRadius;
+            const drawY = lineY + Math.sin(currentAngle) * currentRadius;
+            const isActiveWord = word.index === activeWordIndex;
+            const wordAnim = animationResolver.resolveWord(activeLine.start, word.index, beatIntensityRef.current);
+
+            ctx.save();
+            if (wordAnim) {
+              applyWordMark(ctx, wordAnim, ct, manifest);
+            }
+            ctx.globalAlpha *= isActiveWord ? 1 : 0.35;
+            const wordScale = isActiveWord ? 1 : 0.9;
+            ctx.translate(drawX, drawY);
+            ctx.scale(wordScale, wordScale);
+            ctx.translate(-drawX, -drawY);
+            ctx.fillStyle = wordAnim
+              ? getWordMarkColor(wordAnim.mark, manifest)
+              : anim.lineColor;
+            ctx.fillText(word.word, drawX, drawY);
+            ctx.restore();
+          });
+        } else {
+          const visibleText = visibleWords.map((word) => word.word).join(" ");
+          let wordX = lineX - ctx.measureText(visibleText).width / 2;
+          visibleWords.forEach((word) => {
+            const isActiveWord = word.index === activeWordIndex;
+            const wordAnim = animationResolver.resolveWord(activeLine.start, word.index, beatIntensityRef.current);
+            const wordWidth = ctx.measureText(`${word.word} `).width;
+
+            ctx.save();
+            if (wordAnim) {
+              applyWordMark(ctx, wordAnim, ct, manifest);
+            }
+            ctx.globalAlpha *= isActiveWord ? 1 : 0.35;
+            const wordScale = isActiveWord ? 1 : 0.9;
+            const wx = wordX + wordWidth / 2;
+            ctx.translate(wx, lineY);
+            ctx.scale(wordScale, wordScale);
+            ctx.translate(-wx, -lineY);
+            ctx.fillStyle = wordAnim
+              ? getWordMarkColor(wordAnim.mark, manifest)
+              : anim.lineColor;
+            ctx.fillText(word.word, wordX, lineY);
+            ctx.restore();
+
+            wordX += wordWidth;
+          });
+        }
+      }
       clearLyricShadow(ctx);
       ctx.restore();
 

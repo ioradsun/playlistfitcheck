@@ -88,14 +88,15 @@ export class HookDanceEngine {
   private boundEnded: (() => void) | null = null;
   private activeManifest: SceneManifest | null = null;
   private lastExternalBeatIntensity = 0;
+  private lastState: PhysicsState;
 
   constructor(
     spec: PhysicsSpec,
-    beats: BeatTick[],
-    hookStart: number,
-    hookEnd: number,
-    audio: HTMLAudioElement,
-    callbacks: HookDanceCallbacks,
+    beats: BeatTick[] = [],
+    hookStart: number = 0,
+    hookEnd: number = 0,
+    audio?: HTMLAudioElement,
+    callbacks?: HookDanceCallbacks,
     seed?: string,
   ) {
     this.integrator = new PhysicsIntegrator(spec);
@@ -105,13 +106,14 @@ export class HookDanceEngine {
       .sort((a, b) => a.time - b.time);
     this.hookStart = hookStart;
     this.hookEnd = hookEnd;
-    this.audioRef = audio;
-    this.callbacks = callbacks;
+    this.audioRef = audio ?? new Audio();
+    this.callbacks = callbacks ?? { onFrame: () => {}, onEnd: () => {} };
     this.prevTime = hookStart;
 
     // Deterministic PRNG seeded from song slug + hook start
     const seedStr = seed ?? `hook-${hookStart.toFixed(3)}`;
     this.rand = mulberry32(hashSeed(seedStr));
+    this.lastState = this.integrator.tick(0);
   }
 
   /** Get the integrator's hydrated spec (with material/response) */
@@ -132,14 +134,54 @@ export class HookDanceEngine {
    * External frame-driven update path used by full-song canvas rendering.
    * Allows callers to feed live beat intensity while preserving the spring world.
    */
-  update(beatIntensity: number, isDownbeat = false): PhysicsState {
+  update(beatIntensity: number, deltaTime = 1 / 60, isDownbeat = false): PhysicsState {
     const clamped = Math.max(0, Math.min(1, beatIntensity));
     const delta = Math.max(0, clamped - this.lastExternalBeatIntensity);
     if (delta > 0.01) {
       this.integrator.onBeat(Math.max(clamped, delta), isDownbeat);
     }
     this.lastExternalBeatIntensity = clamped;
-    return this.integrator.tick();
+
+    const baseState = this.integrator.tick(deltaTime);
+    this.lastState = {
+      ...baseState,
+      wordOffsets: this.buildWordOffsets(clamped, deltaTime),
+    };
+    return this.lastState;
+  }
+
+  getState(): PhysicsState {
+    return this.lastState;
+  }
+
+  private buildWordOffsets(beatIntensity: number, deltaTime: number): Array<{ x: number; y: number; rotation: number }> {
+    const params = this.spec.params ?? {};
+    const heat = Math.max(0, Math.min(1, Number(params.heat ?? this.spec.material.heat ?? 0)));
+    const elasticity = Math.max(0, Number(params.elasticity ?? this.spec.material.elasticity ?? 0));
+    const damping = Math.max(0, Number(params.damping ?? this.spec.material.damping ?? 0));
+    const brittleness = Math.max(0, Number(params.brittleness ?? this.spec.material.brittleness ?? 0));
+    const mass = Math.max(0.1, Number(params.mass ?? this.spec.material.mass ?? 1));
+
+    const resistance = 1 / mass;
+    const settle = Math.max(0.05, 1 - damping * 0.12);
+    const bounce = elasticity * beatIntensity * 0.45 * resistance;
+    const upwardFloat = -heat * 22; // WILDFIRE: 0.9 ~= strong float
+    const dt = Math.max(1 / 120, deltaTime || 1 / 60);
+    const shouldShatter = beatIntensity > 0.8 && this.rand() < Math.min(1, brittleness * 0.3);
+
+    return Array.from({ length: 96 }, (_, wordIndex) => {
+      const phase = (performance.now() / 1000) * (1.4 + elasticity * 0.03) + wordIndex * 0.41;
+      const micro = Math.sin(phase) * bounce * settle;
+      const shatterJitter = shouldShatter
+        ? (this.rand() - 0.5) * 18 * Math.min(1, brittleness)
+        : 0;
+
+      return {
+        x: micro * 1.4 + shatterJitter * 0.35,
+        y: upwardFloat * resistance * dt * 60 + Math.cos(phase) * bounce * 0.8 + shatterJitter,
+        rotation: micro * 0.01 + shatterJitter * 0.004,
+      };
+    });
   }
 
   /**
@@ -201,6 +243,7 @@ export class HookDanceEngine {
   resetPhysics() {
     this.integrator.reset();
     this.lastExternalBeatIntensity = 0;
+    this.lastState = this.integrator.tick(0);
   }
 
   /** Start the engine — seeks audio to hookStart and begins ticking */
