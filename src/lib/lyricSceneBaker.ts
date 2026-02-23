@@ -143,6 +143,12 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
   });
 
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
+  const songDuration = Math.max(0.01, payload.songEnd - payload.songStart);
+  const chapterCount = Math.max(1, chapters.length || 4);
+
+  console.log('[BAKER] chapters count:', chapters.length,
+    'first chapter keys:', Object.keys(chapters[0] ?? {}));
+
   const lineShotTypes = payload.lines.map((line) => {
     // Try storyboard first
     for (let i = 0; i < storyboards.length; i += 1) {
@@ -151,11 +157,9 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
         return s.shotType ?? "Medium";
       }
     }
-    // Fall back to chapter index — alternate shot types across chapters
-    const chapterIdx = chapters.findIndex(
-      (ch) => (line.start ?? 0) >= (ch.startSec ?? 0) && (line.start ?? 0) < (ch.endSec ?? 9999)
-    );
-    if (chapterIdx < 0) return 'Medium';
+    // Fall back — divide song into equal segments by chapter count
+    const progress = ((line.start ?? 0) - payload.songStart) / songDuration;
+    const chapterIdx = Math.floor(progress * chapterCount);
     return shotCycle[chapterIdx % shotCycle.length];
   });
 
