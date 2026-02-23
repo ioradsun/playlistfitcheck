@@ -255,19 +255,7 @@ export function FitTab({
 
   return (
     <div className="flex-1 px-4 py-6 space-y-4">
-      {/* Song overview hero */}
-      {songDna?.description && (
-        <div className="glass-card rounded-xl p-4 space-y-2">
-          <p className="text-sm text-muted-foreground italic leading-relaxed">{songDna.description}</p>
-          {songDna.mood && (
-            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-              {songDna.mood}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Waveform */}
+      {/* Waveform — always at top, matching Lyrics tab */}
       {hasRealAudio && (
         <div className="glass-card rounded-xl p-3">
           <LyricWaveform
@@ -279,6 +267,18 @@ export function FitTab({
             beats={beatGrid?.beats ?? null}
             beatGridLoading={false}
           />
+        </div>
+      )}
+
+      {/* Song overview hero */}
+      {songDna?.description && (
+        <div className="glass-card rounded-xl p-4 space-y-2">
+          <p className="text-sm text-muted-foreground italic leading-relaxed">{songDna.description}</p>
+          {songDna.mood && (
+            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+              {songDna.mood}
+            </span>
+          )}
         </div>
       )}
 
