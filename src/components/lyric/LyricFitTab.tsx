@@ -356,16 +356,16 @@ export function LyricFitTab({
     setPipelineStages(prev => ({ ...prev, cinematic: "done", transcript: "running" }));
 
     // 5. Persist songDna + cinematicDirection to saved_lyrics
-    if (savedId) {
+    if (currentSavedId) {
       const songDnaPayload = { ...nextSongDna, cinematicDirection: resolvedCinematic };
       const { error: persistError } = await supabase
         .from("saved_lyrics")
         .update({ song_dna: songDnaPayload as any, updated_at: new Date().toISOString() })
-        .eq("id", savedId);
+        .eq("id", currentSavedId);
       if (persistError) {
         console.error("[Pipeline] Failed to persist song_dna:", persistError);
       } else {
-        console.log("[Pipeline] song_dna persisted to", savedId);
+        console.log("[Pipeline] song_dna persisted to", currentSavedId);
       }
     } else {
       console.warn("[Pipeline] No savedId — song_dna not persisted");
