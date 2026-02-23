@@ -220,4 +220,4 @@ export const LyricWaveform = forwardRef<HTMLDivElement, LyricWaveformProps>(func
       </div>
     </div>
   );
-}
+});
