@@ -1,5 +1,16 @@
 import { drawBubble, drawEmber, drawSmoke, getSprite } from "./ElementalRenderers";
 import type { ParticleConfig, SceneManifest } from "./SceneManifest";
+import {
+  drawAsh,
+  drawBubble,
+  drawCrystal,
+  drawEmber,
+  drawFirefly,
+  drawNeonOrb,
+  drawRainDrop,
+  drawSmoke,
+  drawSnowflake,
+} from "./ElementalRenderers";
 
 export interface Rect {
   x: number;
@@ -118,24 +129,6 @@ const FOREGROUND_ALLOWED = new Set(["snow", "petals", "ash", "confetti", "crysta
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function parseHex(hex: string): [number, number, number] {
-  const safe = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : "#ffffff";
-  return [
-    parseInt(safe.slice(1, 3), 16),
-    parseInt(safe.slice(3, 5), 16),
-    parseInt(safe.slice(5, 7), 16),
-  ];
-}
-
-function lerpColor(a: [number, number, number], b: [number, number, number], t: number): string {
-  const c = [
-    Math.round(a[0] + (b[0] - a[0]) * t),
-    Math.round(a[1] + (b[1] - a[1]) * t),
-    Math.round(a[2] + (b[2] - a[2]) * t),
-  ];
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
 export class ParticleEngine {
@@ -656,46 +649,27 @@ export class ParticleEngine {
   private drawParticleBySystem(ctx: CanvasRenderingContext2D, p: Particle, depthScale: number): void {
     const s = p.size * depthScale;
     switch (this.config.system) {
-      case "embers": {
-        drawEmber(ctx, p.x, p.y, Math.max(0.8, s * 0.65), 0.9, this.time * 0.001, p.phase * 100);
+      case "embers":
+        drawEmber(ctx, p.x, p.y, s * 0.7, 1, this.time, p.phase);
         break;
-      }
-      case "smoke": {
-        const smokeOpacity = this.config.renderStyle === "burn-smoke" ? 0.9 : 0.7;
-        drawSmoke(ctx, p.x, p.y, Math.max(2, s), smokeOpacity);
+      case "smoke":
+        drawSmoke(ctx, p.x, p.y, s, 1, this.time, p.phase);
         break;
-      }
-      case "ash": {
-        const [r, g, b] = parseHex(this.config.color);
-        ctx.fillStyle = `rgba(${r},${g},${b},0.9)`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, Math.max(1, s * 0.7), 0, Math.PI * 2);
-        ctx.fill();
+      case "ash":
+        drawAsh(ctx, p.x, p.y, s, 1, this.time, p.phase);
         break;
-      }
-      case "rain": {
-        const [r, g, b] = parseHex(this.config.color);
-        ctx.strokeStyle = `rgba(${r},${g},${b},0.9)`;
-        ctx.lineWidth = Math.max(1, s * 0.13);
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + p.vx * 0.65, p.y + p.vy * 0.55);
-        ctx.stroke();
+      case "rain":
+        drawRainDrop(ctx, p.x, p.y, s, 1, p.vy);
         break;
-      }
       case "snow":
-        ctx.fillStyle = "rgba(220,235,255,0.85)";
-        ctx.beginPath();
-        ctx.arc(p.x + Math.sin(this.time * 0.0015 + p.phase) * 2.5, p.y, s, 0, Math.PI * 2);
-        ctx.fill();
+        drawSnowflake(ctx, p.x + Math.sin(this.time * 0.0015 + p.phase) * 2.5, p.y, s * 0.8, 1, this.time, p.phase);
         break;
       case "lightning":
         break;
       case "fireflies": {
         const fx = p.x + Math.sin(this.time * 0.002 + p.phase) * 4;
         const fy = p.y + Math.cos(this.time * 0.0018 + p.phase) * 3;
-        const sprite = getSprite("firefly", Math.ceil(Math.max(2, s)), "firefly");
-        ctx.drawImage(sprite, fx - s * 2, fy - s * 2, s * 4, s * 4);
+        drawFirefly(ctx, fx, fy, s, 1, this.time, p.phase);
         break;
       }
       case "stars":
@@ -720,9 +694,8 @@ export class ParticleEngine {
         ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
         ctx.fill();
         break;
-      case "bubbles": {
-        const bx = p.x + Math.sin(this.time * 0.002 + p.phase) * 2;
-        drawBubble(ctx, bx, p.y, Math.max(1, s), 0.55);
+      case "bubbles":
+        drawBubble(ctx, p.x + Math.sin(this.time * 0.002 + p.phase) * 2, p.y, s, 0.7);
         break;
       }
       case "glitch": {
@@ -748,13 +721,8 @@ export class ParticleEngine {
         break;
       }
       case "crystals": {
-        const flicker = this.beatBoostFrames > 0 ? 0.8 : 0.35;
-        ctx.fillStyle = lerpColor([168, 216, 234], [255, 255, 255], flicker);
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate((Math.PI / 4) + p.rotation);
-        ctx.fillRect(-s * 0.5, -s * 0.5, s, s);
-        ctx.restore();
+        const beat = this.beatBoostFrames > 0 ? 1 : 0;
+        drawCrystal(ctx, p.x, p.y, s, 1, this.time + p.rotation * 1000, beat);
         break;
       }
       case "moths":
@@ -769,11 +737,7 @@ export class ParticleEngine {
         ctx.restore();
         break;
       default: {
-        const [r, g, b] = parseHex(this.config.color);
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
-        ctx.fill();
+        drawNeonOrb(ctx, p.x, p.y, s, 1, this.time, this.config.color);
       }
     }
   }

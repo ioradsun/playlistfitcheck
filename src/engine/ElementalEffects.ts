@@ -1,14 +1,4 @@
-import { drawBubble, drawSmoke } from "./ElementalRenderers";
-
-function alphaColor(color: string, alpha: number): string {
-  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
-    const r = Number.parseInt(color.slice(1, 3), 16);
-    const g = Number.parseInt(color.slice(3, 5), 16);
-    const b = Number.parseInt(color.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${alpha})`;
-  }
-  return `rgba(0,255,255,${alpha})`;
-}
+import { drawBubble, drawEmber, drawNeonOrb, drawSmoke } from "./ElementalRenderers";
 
 export function drawElementalWord(
   ctx: CanvasRenderingContext2D,
@@ -81,7 +71,7 @@ export function drawElementalWord(
         const by = byBase - byOffset;
         const opacity = Math.max(0, 0.6 - byOffset / 40);
 
-        drawBubble(ctx, bx, by, 1.5 + (i % 3), opacity);
+        drawBubble(ctx, bx, by, 1.5 + i % 3, opacity);
       }
 
       // Water drip from bottom
@@ -132,11 +122,7 @@ export function drawElementalWord(
         const eyOffset = (currentTime * 25 + i * 15) % 35;
         const ey = -fontSize - eyOffset;
         const eOpacity = Math.max(0, 0.8 - eyOffset / 35);
-
-        ctx.beginPath();
-        ctx.arc(ex, ey, 1.5 + Math.random(), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,${100 + Math.floor(Math.random() * 100)},0,${eOpacity})`;
-        ctx.fill();
+        drawEmber(ctx, ex, ey, 1.4 + (i % 2), eOpacity, currentTime * 1000, i);
       }
       break;
     }
@@ -154,8 +140,10 @@ export function drawElementalWord(
         ctx,
         wordWidth / 2,
         -fontSize / 2,
-        Math.max(fontSize * 0.7, (fontSize * 0.9) * (1 + smokeAge * 0.45)),
-        Math.max(0, 0.2 - smokeAge * 0.2),
+        (wordWidth / 2) * (1 + smokeAge * 0.5),
+        Math.max(0, 0.3 - smokeAge * 0.25),
+        currentTime * 1000,
+        appearanceCount,
       );
       break;
     }
@@ -173,6 +161,14 @@ export function drawElementalWord(
       ctx.fillRect(-glowRadius * 0.4, -fontSize - glowRadius * 0.6, wordWidth + glowRadius * 0.8, glowRadius * 1.4);
       ctx.fillStyle = "#ffffff";
       ctx.fillText(word, 0, 0);
+
+      // Neon orb glow accents
+      const orbCount = isHeroWord ? 3 : 2;
+      for (let i = 0; i < orbCount; i += 1) {
+        const ox = (wordWidth * (i + 1)) / (orbCount + 1);
+        const oy = -fontSize * (0.55 + i * 0.18);
+        drawNeonOrb(ctx, ox, oy, 2.8 + beatIntensity * 2, 0.35 + beatIntensity * 0.45, currentTime * 1000, neonColor);
+      }
 
       // Electric arc on strong beats
       if (beatIntensity > 0.55) {
