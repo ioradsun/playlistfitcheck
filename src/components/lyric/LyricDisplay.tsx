@@ -2362,6 +2362,7 @@ export function LyricDisplay({
                 }
                 fingerprint={artistFingerprint}
                 seed={`${data.title}-lyric-dance`}
+                songDna={songDna}
               />
             </div>
           )}

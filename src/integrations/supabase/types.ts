@@ -1227,6 +1227,7 @@ export type Database = {
           artist_name: string
           artist_slug: string
           audio_url: string
+          background_url: string | null
           beat_grid: Json
           created_at: string
           fire_count: number
@@ -1234,6 +1235,7 @@ export type Database = {
           lyrics: Json
           palette: Json
           physics_spec: Json
+          scene_manifest: Json | null
           seed: string
           song_name: string
           song_slug: string
@@ -1246,6 +1248,7 @@ export type Database = {
           artist_name: string
           artist_slug: string
           audio_url: string
+          background_url?: string | null
           beat_grid: Json
           created_at?: string
           fire_count?: number
@@ -1253,6 +1256,7 @@ export type Database = {
           lyrics: Json
           palette?: Json
           physics_spec: Json
+          scene_manifest?: Json | null
           seed?: string
           song_name: string
           song_slug: string
@@ -1265,6 +1269,7 @@ export type Database = {
           artist_name?: string
           artist_slug?: string
           audio_url?: string
+          background_url?: string | null
           beat_grid?: Json
           created_at?: string
           fire_count?: number
@@ -1272,6 +1277,7 @@ export type Database = {
           lyrics?: Json
           palette?: Json
           physics_spec?: Json
+          scene_manifest?: Json | null
           seed?: string
           song_name?: string
           song_slug?: string
