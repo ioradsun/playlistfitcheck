@@ -7,7 +7,7 @@
  * Social features: artist header, canvas comments, signal buttons.
  */
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
@@ -34,6 +34,8 @@ import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import { getSessionId } from "@/lib/sessionId";
 import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
 import { renderSymbol } from "@/engine/SymbolRenderer";
+import { useLyricDanceRenderer } from "@/hooks/useLyricDanceRenderer";
+import type { ScenePayload } from "@/lib/lyricSceneBaker";
 
 /** Live debug state updated every frame from the render loop */
 interface LiveDebugState {
@@ -492,7 +494,7 @@ function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart
  * When true, the render loop runs on an OffscreenCanvas in a Web Worker.
  * When false (current), the existing rAF loop runs on the main thread.
  */
-const USE_WORKER = false;
+const USE_WORKER = true;
 
 export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
@@ -501,6 +503,7 @@ export default function ShareableLyricDance() {
   const [data, setData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [bakingProgress, setBakingProgress] = useState(0);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [fireCount, setFireCount] = useState(0);
 
@@ -564,6 +567,25 @@ export default function ShareableLyricDance() {
   const [muted, setMuted] = useState(true);
   const engineRef = useRef<HookDanceEngine | null>(null);
   const physicsSpec = data?.physics_spec;
+  const lineBeatMapRef = useRef<LineBeatMap[]>([]);
+
+  const workerScenePayload = useMemo<ScenePayload | null>(() => {
+    if (!data) return null;
+    const lines = data.lyrics ?? [];
+    const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
+    const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
+    return {
+      lines,
+      beat_grid: data.beat_grid,
+      physics_spec: data.physics_spec,
+      scene_manifest: (data.scene_manifest ?? null) as any,
+      cinematic_direction: data.cinematic_direction ?? null,
+      palette: data.palette ?? [],
+      lineBeatMap: lineBeatMapRef.current,
+      songStart,
+      songEnd,
+    };
+  }, [data]);
 
   // Canvas
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -572,7 +594,14 @@ export default function ShareableLyricDance() {
   const animRef = useRef<number>(0);
   const loadedFontFamiliesRef = useRef<Set<string>>(new Set());
   const rngRef = useRef<() => number>(() => 0);
-  const lineBeatMapRef = useRef<LineBeatMap[]>([]);
+
+  useLyricDanceRenderer({
+    canvasRef: textCanvasRef,
+    payload: USE_WORKER ? workerScenePayload : null,
+    currentTime: audioRef.current?.currentTime ?? 0,
+    isPlaying: !!audioRef.current && !audioRef.current.paused && !isDragging,
+    onBakingProgress: setBakingProgress,
+  });
   const wordMeasureCache = useRef<Map<string, number>>(new Map());
   const particleStateRef = useRef<ParticleState>({ configCache: { bucket: -1, config: null }, slowFrameCount: 0, adaptiveMaxParticles: 0, frameCount: 0 });
   const chapterBoundaryRef = useRef<{ key: number; chapter: ReturnType<DirectionInterpreter["getCurrentChapter"]> | null }>({ key: -1, chapter: null });
@@ -820,6 +849,7 @@ export default function ShareableLyricDance() {
   // ── Canvas render loop ────────────────────────────────────────────────────
 
   useEffect(() => {
+    if (USE_WORKER) return;
     if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
     
     let audio: HTMLAudioElement | null = null;
@@ -1893,8 +1923,22 @@ export default function ShareableLyricDance() {
         className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer overflow-hidden"
         onClick={() => { if (!showCover) handleMuteToggle(); }}
       >
-        <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+        {!USE_WORKER && (
+          <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+        )}
         <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+
+        {USE_WORKER && bakingProgress < 1 && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-[260px] rounded-lg border border-white/10 bg-black/60 p-4">
+              <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/70 mb-2">Pre-baking Scene</p>
+              <div className="h-2 w-full rounded bg-white/10 overflow-hidden">
+                <div className="h-full bg-white/70" style={{ width: `${Math.round(bakingProgress * 100)}%` }} />
+              </div>
+              <p className="mt-2 text-[10px] font-mono text-white/50">{Math.round(bakingProgress * 100)}%</p>
+            </div>
+          </div>
+        )}
 
         {/* Dark cover overlay */}
         <AnimatePresence>
