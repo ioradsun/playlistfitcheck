@@ -257,10 +257,10 @@ export interface ParticleResult {
 }
 
 /**
- * Updates and renders the particle layer.
+ * Updates particle simulation state for the current frame.
  *
- * Handles adaptive frame-skip, config caching, chapter/tension directives,
- * and draws to both the particle canvas and the text canvas.
+ * Handles adaptive frame-skip, config caching, and chapter/tension directives.
+ * Draw order is handled by the caller.
  */
 export function renderParticles(
   particleCtx: CanvasRenderingContext2D,
@@ -331,12 +331,12 @@ export function renderParticles(
   particleEngine.update(deltaMs, beatIntensity, timedParticleConfig);
   pState.frameCount += 1;
 
-  // Draw to both canvases
-  particleCtx.clearRect(0, 0, cw, ch);
-  particleEngine.draw(particleCtx, "all");
-  particleEngine.draw(textCtx, "all");
+  void particleCtx;
+  void textCtx;
+  void cw;
+  void ch;
 
-  return { drawCalls: 2, lightIntensity };
+  return { drawCalls: 0, lightIntensity };
 }
 
 // ─── Full-frame stub (future) ───────────────────────────────────────
