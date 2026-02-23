@@ -299,21 +299,6 @@ export function FitTab({
             )}
           </div>
 
-          {/* Overview */}
-          {songDna.description && (
-            <div className="glass-card rounded-xl p-3 space-y-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                <Music size={10} />
-                Overview
-              </div>
-              <p className="text-sm text-muted-foreground italic leading-relaxed">{songDna.description}</p>
-              {songDna.mood && (
-                <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                  {songDna.mood}
-                </span>
-              )}
-            </div>
-          )}
 
           {/* Meaning & Theme */}
           {meaning && (
