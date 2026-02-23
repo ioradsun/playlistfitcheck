@@ -40,6 +40,7 @@ export interface ParticleConfig {
   color: string;
   beatReactive: boolean;
   foreground: boolean;
+  renderStyle?: "default" | "burn-smoke" | "burn-embers" | "burn-ash" | "rain-mist" | "rain" | "rain-drizzle";
 }
 
 export interface SceneManifest {
