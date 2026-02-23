@@ -362,7 +362,7 @@ export class LyricDancePlayer {
         'this.timeline after copy:', this.timeline.length);
     }
 
-    if (globalTimelineCache && globalChunkCache && globalChunkCache.size > 0) {
+    if (globalTimelineCache?.length && globalChunkCache) {
       this.timeline = [...globalTimelineCache];
       this.chunks = new Map(globalChunkCache);
       this.buildBgCache();
@@ -565,37 +565,34 @@ export class LyricDancePlayer {
 
   private buildChunkCache(payload: ScenePayload): void {
     this.chunks.clear();
-    console.log('[PLAYER] buildChunkCache — canvas size:', this.width, this.height, 'ctx:', !!this.ctx);
 
-    if (!this.ctx || this.width === 0) {
-      console.warn('[PLAYER] buildChunkCache skipped — canvas not ready');
-      return;
-    }
+    // Use a throwaway offscreen canvas for measurement
+    // so we never depend on the main canvas being sized
+    const measureCanvas = document.createElement('canvas');
+    measureCanvas.width = 960;
+    measureCanvas.height = 540;
+    const measureCtx = measureCanvas.getContext('2d')!;
 
-    const fontFamily =
-      payload.cinematic_direction?.visualWorld?.typographyProfile?.fontFamily?.trim() || "Montserrat";
+    const fontFamily = payload.cinematic_direction?.visualWorld?.typographyProfile?.fontFamily?.trim() || 'Montserrat';
     const baseFontPx = 36;
+    const font = `${baseFontPx}px ${fontFamily}`;
+    measureCtx.font = font;
 
-    // Measurement happens here only (never in draw loop)
-    const prevFont = this.ctx.font;
-    this.ctx.font = `${baseFontPx}px ${fontFamily}`;
+    for (let i = 0; i < payload.lines.length; i++) {
+      const text = payload.lines[i]?.text ?? '';
+      const color = payload.palette?.[2] ?? '#ffffff';
+      const width = measureCtx.measureText(text).width;
 
-    for (let i = 0; i < payload.lines.length; i += 1) {
-      const id = String(i);
-      const text = payload.lines[i]?.text ?? "";
-      const color = payload.palette?.[2] ?? "#ffffff";
-      const width = this.ctx.measureText(text).width;
-
-      this.chunks.set(id, {
-        id,
+      this.chunks.set(String(i), {
+        id: String(i),
         text,
         color,
-        font: `${baseFontPx}px ${fontFamily}`,
+        font,
         width,
       });
     }
 
-    this.ctx.font = prevFont;
+    console.log('[PLAYER] buildChunkCache done — chunks:', this.chunks.size);
   }
 
   private buildBgCache(): void {
