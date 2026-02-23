@@ -385,14 +385,17 @@ export function FitTab({
                 <Eye size={10} />
                 Cinematic Direction
               </div>
-              {cinematicDirection.tension_curve && Array.isArray(cinematicDirection.tension_curve) && (
+              {cinematicDirection.thesis && (
+                <p className="text-xs text-muted-foreground italic leading-relaxed">{cinematicDirection.thesis}</p>
+              )}
+              {cinematicDirection.tensionCurve && Array.isArray(cinematicDirection.tensionCurve) && (
                 <div className="flex items-end gap-px h-8">
-                  {cinematicDirection.tension_curve.map((t: any, i: number) => (
+                  {cinematicDirection.tensionCurve.map((t: any, i: number) => (
                     <div
                       key={i}
                       className="flex-1 bg-primary/40 rounded-t-sm"
-                      style={{ height: `${(t.tension ?? t.value ?? 0.5) * 100}%` }}
-                      title={t.label || `${i}`}
+                      style={{ height: `${(t.motionIntensity ?? t.tension ?? t.value ?? 0.5) * 100}%` }}
+                      title={t.stage || `${i}`}
                     />
                   ))}
                 </div>
@@ -401,8 +404,8 @@ export function FitTab({
                 <div className="space-y-1">
                   {cinematicDirection.chapters.slice(0, 4).map((ch: any, i: number) => (
                     <div key={i} className="flex items-start gap-2">
-                      <span className="text-[9px] font-mono text-primary/70 mt-0.5">{ch.stage || `Ch ${i + 1}`}</span>
-                      <p className="text-[10px] text-muted-foreground leading-tight">{ch.description || ch.mood || ""}</p>
+                      <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap">{ch.title || `Ch ${i + 1}`}</span>
+                      <p className="text-[10px] text-muted-foreground leading-tight">{ch.emotionalArc || ch.description || ch.mood || ""}</p>
                     </div>
                   ))}
                 </div>
