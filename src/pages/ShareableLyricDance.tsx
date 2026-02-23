@@ -497,7 +497,6 @@ export default function ShareableLyricDance() {
 
   // Canvas
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
-  const particleCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
@@ -548,7 +547,7 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     const cinematicDirection = data?.cinematic_direction ?? data?.song_dna?.cinematic_direction ?? null;
-    const fontFamily = cinematicDirection?.visualWorld?.typography?.fontFamily ?? "Montserrat";
+    const fontFamily = cinematicDirection?.visualWorld?.typographyProfile?.fontFamily ?? "Montserrat";
     const trimmedFontFamily = fontFamily.trim();
     if (!trimmedFontFamily || loadedFontFamiliesRef.current.has(trimmedFontFamily)) {
       return;
@@ -717,14 +716,12 @@ export default function ShareableLyricDance() {
   // ── Canvas render loop ────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!data || !bgCanvasRef.current || !particleCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
+    if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
     const bgCanvas = bgCanvasRef.current;
-    const particleCanvas = particleCanvasRef.current;
     const textCanvas = textCanvasRef.current;
     const container = containerRef.current;
     const bgCtx = bgCanvas.getContext("2d", { alpha: false })!;
-    const particleCtx = particleCanvas.getContext("2d", { alpha: true })!;
     const textCtx = textCanvas.getContext("2d", { alpha: true })!;
 
     const spec = data.physics_spec;
@@ -849,14 +846,13 @@ export default function ShareableLyricDance() {
       const isMobile = window.innerWidth < 768;
       const pixelRatio = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       const rect = container.getBoundingClientRect();
-      [bgCanvas, particleCanvas, textCanvas].forEach((layerCanvas) => {
+      [bgCanvas, textCanvas].forEach((layerCanvas) => {
         layerCanvas.width = rect.width * pixelRatio;
         layerCanvas.height = rect.height * pixelRatio;
         layerCanvas.style.width = `${rect.width}px`;
         layerCanvas.style.height = `${rect.height}px`;
       });
       bgCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      particleCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       textCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       wordMeasureCache.current.clear();
       wordWidthIntCache.clear();
@@ -884,7 +880,6 @@ export default function ShareableLyricDance() {
       const ch = textCanvas.clientHeight || textCanvas.height / (window.devicePixelRatio || 1);
       const ctx = textCtx;
       ctx.clearRect(0, 0, cw, ch);
-      particleCtx.clearRect(0, 0, cw, ch);
       let drawCalls = 0;
       let cacheHits = 0;
       let cacheLookups = 0;
@@ -1067,10 +1062,10 @@ export default function ShareableLyricDance() {
         bgStateRef.current,
       );
 
-      // Particle engine: update + draw via extracted function
+      // Particle engine: update via extracted function, then draw far layer on textCtx
       const lineDir = lineAnim ? (interpreterNow?.getLineDirection(activeLineIndex) ?? null) : null;
       const particleResult = renderParticles(
-        particleCtx, ctx,
+        ctx, ctx,
         {
           particleEngine,
           baseParticleConfig,
@@ -1095,6 +1090,7 @@ export default function ShareableLyricDance() {
       lightIntensityRef.current = particleResult.lightIntensity;
       drawCalls += particleResult.drawCalls;
 
+      // PASS 1 — Far-layer particles (behind text, atmospheric)
       if (particleEngine) {
         particleEngine.draw(ctx, "far");
         drawCalls += 1;
@@ -1601,7 +1597,6 @@ export default function ShareableLyricDance() {
         onClick={() => { if (!showCover) handleMuteToggle(); }}
       >
         <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full" />
-        <canvas id="particle-canvas" ref={particleCanvasRef} className="absolute inset-0 w-full h-full" />
         <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full" />
 
         {/* Dark cover overlay */}
