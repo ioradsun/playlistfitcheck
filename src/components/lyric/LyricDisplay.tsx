@@ -146,16 +146,6 @@ function normalizeSongDnaWithManifest(
     return { ...songDna, scene_manifest: checked.manifest };
   }
 
-  if (songDna.physicsSpec) {
-    const derived = deriveSceneManifestFromSpec({
-      spec: songDna.physicsSpec as PhysicsSpec,
-      mood: songDna.mood,
-      description: songDna.description,
-      songTitle: fallbackTitle,
-    });
-    return { ...songDna, scene_manifest: safeManifest(derived).manifest };
-  }
-
   return songDna;
 }
 
