@@ -612,7 +612,19 @@ serve(async (req) => {
       }
       audioBase64 = btoa(binary);
     } else {
-      const payload = await req.json();
+      let payload: any;
+      try {
+        const rawBody = await req.text();
+        if (!rawBody || rawBody.trim().length === 0) {
+          throw new Error("Empty request body");
+        }
+        payload = JSON.parse(rawBody);
+      } catch (parseErr) {
+        return new Response(
+          JSON.stringify({ error: "Invalid request body. Expected multipart/form-data with an audio file, or valid JSON." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : undefined;
       format = typeof payload.format === "string" ? payload.format : undefined;
       analysisModel = typeof payload.analysisModel === "string" ? payload.analysisModel : undefined;
