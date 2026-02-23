@@ -364,6 +364,7 @@ export function LyricDisplay({
   const [activeHookIndex, setActiveHookIndex] = useState<number | null>(null);
   const [clipProgress, setClipProgress] = useState(0); // 0-1 for the progress ring
   const clipProgressRafRef = useRef<number | null>(null);
+  const seekResumeTokenRef = useRef(0);
   const loopRegionRef = useRef<{ start: number; end: number } | null>(null);
 
   // Version state
@@ -924,19 +925,34 @@ export function LyricDisplay({
   const seekTo = useCallback(
     (time: number) => {
       if (!audioRef.current) return;
+      const audio = audioRef.current;
+      const wasPlaying = !audio.paused;
+      const resumeToken = ++seekResumeTokenRef.current;
+
       loopRegionRef.current = null;
       setActiveHookIndex(null);
       if (clipProgressRafRef.current)
         cancelAnimationFrame(clipProgressRafRef.current);
-      audioRef.current.currentTime = time;
+
+      audio.currentTime = time;
       setCurrentTime(time);
-      // Always re-trigger play after seek to prevent browser from stalling
-      audioRef.current.play().catch(() => {});
-      if (!isPlaying) {
-        setIsPlaying(true);
+
+      if (wasPlaying) {
+        const resumeIfLatestSeek = () => {
+          if (seekResumeTokenRef.current !== resumeToken) return;
+          audio.play().catch(() => {});
+        };
+
+        if (audio.seeking) {
+          audio.addEventListener("seeked", resumeIfLatestSeek, { once: true });
+        } else {
+          resumeIfLatestSeek();
+        }
       }
+
+      setIsPlaying(wasPlaying);
     },
-    [isPlaying],
+    [],
   );
 
   // ── Clip loop: play a hook region on repeat ───────────────────────────────
