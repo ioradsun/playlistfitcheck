@@ -382,12 +382,15 @@ export class LyricDancePlayer {
   // ────────────────────────────────────────────────────────────
 
   async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<void> {
+    console.log('[PLAYER] load() called — lines:', payload.lines.length);
     this.payload = payload;
     this.songStartSec = payload.songStart;
     this.songEndSec = payload.songEnd;
 
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
+    console.log('[PLAYER] calling buildChunkCache now');
     this.buildChunkCache(payload);
+    console.log('[PLAYER] after buildChunkCache — chunks:', this.chunks.size);
     const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
 
     this.timeline = this.scaleTimeline(baked);
@@ -564,6 +567,7 @@ export class LyricDancePlayer {
   }
 
   private buildChunkCache(payload: ScenePayload): void {
+    console.log('[PLAYER] buildChunkCache entered — lines:', payload.lines.length);
     this.chunks.clear();
 
     // Use a throwaway offscreen canvas for measurement
