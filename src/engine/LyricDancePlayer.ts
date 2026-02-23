@@ -662,7 +662,6 @@ export class LyricDancePlayer {
 
   private buildChunkCache(payload: ScenePayload): void {
     this.chunks.clear();
-    this.chunks.clear();
 
     // Use a throwaway offscreen canvas for measurement
     // so we never depend on the main canvas being sized
