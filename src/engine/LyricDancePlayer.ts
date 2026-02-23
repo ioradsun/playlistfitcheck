@@ -658,8 +658,6 @@ export class LyricDancePlayer {
       songEnd,
     };
 
-    console.log('[PAYLOAD] payload being sent to baker — cinematic_direction:', !!payload.cinematic_direction);
-
     return payload;
   }
 
