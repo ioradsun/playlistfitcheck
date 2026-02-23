@@ -423,6 +423,7 @@ export function LyricFitTab({
     if (pipelineTriggeredRef.current) return;
     // If all data already loaded from DB, skip pipeline entirely
     if (songDna && beatGrid && cinematicDirection) {
+      pipelineTriggeredRef.current = true;
       setGenerationStatus({ beatGrid: "done", songDna: "done", cinematicDirection: "done" });
       return;
     }
