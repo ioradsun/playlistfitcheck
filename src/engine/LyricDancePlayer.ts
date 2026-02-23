@@ -358,6 +358,8 @@ export class LyricDancePlayer {
         // Use the local snapshot not this.chunks (which destroy() may have wiped)
         globalTimelineCache = this.scaleTimeline(baked);
         globalChunkCache = localChunkSnapshot;
+        globalSongStartSec = payload.songStart;
+        globalSongEndSec = payload.songEnd;
         globalBakeLock = false;
         console.log('[PLAYER] bake done — frames:', globalTimelineCache.length, 'chunks:', globalChunkCache.size);
       })();
@@ -369,6 +371,8 @@ export class LyricDancePlayer {
     // Now cache is guaranteed to exist for every instance
     this.timeline = globalTimelineCache!.slice();
     this.chunks = new Map(globalChunkCache!);
+    this.songStartSec = globalSongStartSec;
+    this.songEndSec = globalSongEndSec;
     this.buildBgCache();
     console.log('[PLAYER] ready — frames:', this.timeline.length, 'chunks:', this.chunks.size);
 
