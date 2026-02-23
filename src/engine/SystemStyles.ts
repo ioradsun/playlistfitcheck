@@ -205,7 +205,7 @@ function normalizeHex(hex: string): string {
   return "#000000";
 }
 
-function getRelativeLuminance(hex: string): number {
+export function getRelativeLuminance(hex: string): number {
   const normalized = normalizeHex(hex);
   const r = parseInt(normalized.slice(1, 3), 16) / 255;
   const g = parseInt(normalized.slice(3, 5), 16) / 255;
@@ -219,14 +219,36 @@ export function getSafeTextColor(palette: [string, string, string]): string {
   const bg = palette?.[0] ?? "#111111";
   const candidate = palette?.[2] ?? "#ffffff";
   const bgLum = getRelativeLuminance(bg);
-  const textLum = getRelativeLuminance(candidate);
-  const ratio = (Math.max(textLum, bgLum) + 0.05) / (Math.min(textLum, bgLum) + 0.05);
+  const candLum = getRelativeLuminance(candidate);
+  const ratio = (Math.max(candLum, bgLum) + 0.05) / (Math.min(candLum, bgLum) + 0.05);
 
-  if (ratio >= 5.0) return normalizeHex(candidate);
+  if (ratio >= 5.0) {
+    console.log("[getSafeTextColor]", {
+      input: normalizeHex(candidate),
+      luminance: Number(candLum.toFixed(3)),
+      ratio: Number(ratio.toFixed(2)),
+      output: normalizeHex(candidate),
+    });
+    return normalizeHex(candidate);
+  }
 
   const whiteRatio = (1.0 + 0.05) / (bgLum + 0.05);
-  if (whiteRatio >= 5.0) return "#ffffff";
+  if (whiteRatio >= 5.0) {
+    console.log("[getSafeTextColor]", {
+      input: normalizeHex(candidate),
+      luminance: Number(candLum.toFixed(3)),
+      ratio: Number(ratio.toFixed(2)),
+      output: "#ffffff",
+    });
+    return "#ffffff";
+  }
 
+  console.log("[getSafeTextColor]", {
+    input: normalizeHex(candidate),
+    luminance: Number(candLum.toFixed(3)),
+    ratio: Number(ratio.toFixed(2)),
+    output: "#0a0a0a",
+  });
   return "#0a0a0a";
 }
 

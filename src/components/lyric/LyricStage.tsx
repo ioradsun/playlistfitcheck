@@ -115,7 +115,7 @@ export function LyricStage({ manifest, backgroundImageUrl, isPlaying, beatIntens
           position: "absolute",
           inset: 0,
           background: `radial-gradient(ellipse ${60 * bloomScale}% ${35 * bloomScale}% at 50% 50%, ${(manifest.palette[2] ?? "#ffffff")}${Math.round(Math.min(0.9, bloomOpacity) * 255).toString(16).padStart(2, "0")}, transparent 70%)`,
-          mixBlendMode: "screen",
+          opacity: 0.4,
           transition: "all 0.1s ease",
           pointerEvents: "none",
         }}

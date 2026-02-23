@@ -18,7 +18,7 @@ export class AnimationResolver {
   private wordMarks = new Map<string, string>();
   private hookRanges: Array<{ start: number; end: number }> = [];
 
-  loadFromDna(dna: Record<string, unknown>): void {
+  loadFromDna(dna: Record<string, unknown>, lines?: Array<{ text: string; start: number }>): void {
     this.lineMods.clear();
     this.wordMarks.clear();
     this.hookRanges = [];
@@ -37,6 +37,28 @@ export class AnimationResolver {
       start: h.start_sec ?? h.start ?? 0,
       end: (h.start_sec ?? h.start ?? 0) + (h.duration_sec ?? 10),
     }));
+
+    if (this.hookRanges.length === 0 && lines && lines.length > 0) {
+      const textCounts = new Map<string, number[]>();
+      lines.forEach((line) => {
+        const key = line.text.trim().toLowerCase().slice(0, 30);
+        if (!key) return;
+        const positions = textCounts.get(key) ?? [];
+        positions.push(line.start);
+        textCounts.set(key, positions);
+      });
+
+      for (const [, positions] of textCounts) {
+        if (positions.length >= 3) {
+          this.hookRanges.push({ start: positions[0], end: positions[0] + 8 });
+          if (this.hookRanges.length >= 2) break;
+        }
+      }
+
+      if (this.hookRanges.length > 0) {
+        console.log("[AnimationResolver] synthetic hooks from repetition:", this.hookRanges);
+      }
+    }
 
     console.log("[AnimationResolver] loaded:", {
       lineMods: this.lineMods.size,
@@ -64,7 +86,11 @@ export class AnimationResolver {
 
     // line_mods are keyed by t_lyric (seconds), not lineIndex
     const tKey = Math.round(lineStartSec);
-    const activeMod = this.lineMods.get(tKey)?.[0] ?? null;
+    const activeMod =
+      this.lineMods.get(tKey)?.[0] ??
+      this.lineMods.get(tKey - 1)?.[0] ??
+      this.lineMods.get(tKey + 1)?.[0] ??
+      null;
     const isHookLine = this.hookRanges.some(
       (h) => lineStartSec >= h.start && lineStartSec < h.end,
     );
@@ -90,7 +116,10 @@ export class AnimationResolver {
   ): WordAnimation | null {
     // word_marks are also keyed by t_lyric (seconds), not lineIndex
     const tKey = Math.round(lineStartSec);
-    const mark = this.wordMarks.get(`${tKey}:${wordIndex}`);
+    const mark =
+      this.wordMarks.get(`${tKey}:${wordIndex}`) ??
+      this.wordMarks.get(`${tKey - 1}:${wordIndex}`) ??
+      this.wordMarks.get(`${tKey + 1}:${wordIndex}`);
     if (!mark) return null;
     return { mark, intensity: 0.5 + beatIntensity * 0.5 };
   }
