@@ -1,3 +1,4 @@
+import { drawBubble, drawEmber, drawSmoke, getSprite } from "./ElementalRenderers";
 import type { ParticleConfig, SceneManifest } from "./SceneManifest";
 import {
   drawAsh,
@@ -106,8 +107,24 @@ export const PARTICLE_SYSTEM_MAP = {
   frost: "CRYSTALS",
 } as const;
 
-const MAX_PARTICLES =
-  typeof window !== "undefined" && window.devicePixelRatio > 2 ? 300 : 600;
+const PARTICLE_LIMITS = {
+  mobile: 30,
+  tablet: 60,
+  desktop: 100,
+  highEnd: 150,
+} as const;
+
+function getMaxParticles(): number {
+  if (typeof window === "undefined") return PARTICLE_LIMITS.desktop;
+  const cores = navigator.hardwareConcurrency ?? 4;
+  const mobile = window.innerWidth < 768;
+  if (mobile) return PARTICLE_LIMITS.mobile;
+  if (cores <= 4) return PARTICLE_LIMITS.tablet;
+  if (cores <= 8) return PARTICLE_LIMITS.desktop;
+  return PARTICLE_LIMITS.highEnd;
+}
+
+const MAX_PARTICLES = Math.max(PARTICLE_LIMITS.highEnd, 200);
 const FOREGROUND_ALLOWED = new Set(["snow", "petals", "ash", "confetti", "crystals"]);
 
 function clamp(value: number, min: number, max: number): number {
@@ -115,7 +132,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export class ParticleEngine {
-  private readonly maxParticles = MAX_PARTICLES;
+  private maxParticles = getMaxParticles();
   private readonly pool: Particle[] = Array.from({ length: MAX_PARTICLES }, () => ({
     x: 0,
     y: 0,
@@ -222,6 +239,7 @@ export class ParticleEngine {
   init(config: ParticleConfig, manifest: SceneManifest): void {
     this.config = config;
     this.manifest = manifest;
+    this.maxParticles = getMaxParticles();
     this.clear();
 
     const warmCount = Math.floor(this.maxParticles * config.density * 0.3);
@@ -251,6 +269,8 @@ export class ParticleEngine {
   }
 
   update(deltaMs: number, beatIntensity: number, nextConfig?: ParticleConfig): void {
+    this.maxParticles = getMaxParticles();
+    this.enforceParticleLimit();
     this.time += deltaMs;
     this.updateFrameCounter += 1;
     if (this.updateFrameCounter % this.updateFrameSkip !== 0) return;
@@ -341,7 +361,7 @@ export class ParticleEngine {
   }
 
   private spawnParticles(beatIntensity: number): void {
-    const target = Math.min(MAX_PARTICLES, this.targetActiveCount());
+    const target = Math.min(this.maxParticles, this.targetActiveCount());
     let active = 0;
     for (let i = 0; i < this.pool.length; i++) if (this.pool[i].active) active++;
     let needed = target - active;
@@ -677,6 +697,7 @@ export class ParticleEngine {
       case "bubbles":
         drawBubble(ctx, p.x + Math.sin(this.time * 0.002 + p.phase) * 2, p.y, s, 0.7);
         break;
+      }
       case "glitch": {
         const palette = ["#ff3b30", "#34c759", "#0a84ff", "#ffd60a", "#bf5af2"];
         const color = palette[Math.floor(Math.random() * palette.length)];
@@ -718,6 +739,22 @@ export class ParticleEngine {
       default: {
         drawNeonOrb(ctx, p.x, p.y, s, 1, this.time, this.config.color);
       }
+    }
+  }
+
+
+  private enforceParticleLimit(): void {
+    let active = 0;
+    for (let i = 0; i < this.pool.length; i += 1) {
+      if (this.pool[i].active) active += 1;
+    }
+    if (active <= this.maxParticles) return;
+
+    for (let i = 0; i < this.pool.length && active > this.maxParticles; i += 1) {
+      if (!this.pool[i].active) continue;
+      this.pool[i].active = false;
+      this.pool[i].life = 0;
+      active -= 1;
     }
   }
 

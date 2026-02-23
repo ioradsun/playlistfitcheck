@@ -15,12 +15,30 @@ export function drawElementalWord(
     useBlur?: boolean;
     isHeroWord?: boolean;
     effectQuality?: "low" | "high";
+    wordX?: number;
+    wordY?: number;
+    canvasWidth?: number;
+    canvasHeight?: number;
   },
 ): void {
   const effectQuality = options?.effectQuality ?? "high";
-  const useBlur = Boolean(options?.useBlur && effectQuality === "high");
   const bubbleXPositions = options?.bubbleXPositions ?? [];
   const isHeroWord = Boolean(options?.isHeroWord);
+
+  const wordX = options?.wordX ?? 0;
+  const wordY = options?.wordY ?? 0;
+  const canvasWidth = options?.canvasWidth;
+  const canvasHeight = options?.canvasHeight;
+  if (
+    typeof canvasWidth === "number" &&
+    typeof canvasHeight === "number" &&
+    (wordX + wordWidth < 0 ||
+      wordX > canvasWidth ||
+      wordY < -fontSize * 2 ||
+      wordY > canvasHeight + fontSize)
+  ) {
+    return;
+  }
 
   switch (elementalClass) {
     case "WATER":
@@ -112,15 +130,11 @@ export function drawElementalWord(
     case "SMOKE": {
       // Base word at reduced opacity
       ctx.globalAlpha *= 0.65;
-      if (useBlur) {
-        ctx.filter = "blur(0.8px)";
-      }
       ctx.fillStyle = colorOverride ?? "#8a8a8a";
       ctx.fillText(word, 0, 0);
-      ctx.filter = "none";
       ctx.globalAlpha /= 0.65;
 
-      // Expanding smoke rings
+      // Expanding smoke sprite
       const smokeAge = (currentTime * 0.4) % 1;
       drawSmoke(
         ctx,
@@ -138,11 +152,15 @@ export function drawElementalWord(
     case "NEON": {
       // Neon glow word
       const neonColor = colorOverride ?? "#00ffff";
-      ctx.shadowBlur = isHeroWord ? 15 + beatIntensity * 20 : 0;
-      ctx.shadowColor = neonColor;
+      const glowAlpha = isHeroWord ? 0.18 + beatIntensity * 0.22 : 0.08;
+      const glowRadius = isHeroWord ? fontSize * 1.35 : fontSize * 0.9;
+      const glow = ctx.createRadialGradient(wordWidth / 2, -fontSize * 0.45, 0, wordWidth / 2, -fontSize * 0.45, glowRadius);
+      glow.addColorStop(0, alphaColor(neonColor, glowAlpha));
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(-glowRadius * 0.4, -fontSize - glowRadius * 0.6, wordWidth + glowRadius * 0.8, glowRadius * 1.4);
       ctx.fillStyle = "#ffffff";
       ctx.fillText(word, 0, 0);
-      ctx.shadowBlur = 0;
 
       // Neon orb glow accents
       const orbCount = isHeroWord ? 3 : 2;
