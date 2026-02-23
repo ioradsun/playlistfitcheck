@@ -816,6 +816,8 @@ export class LyricDancePlayer {
         glow: c.glow,
         scale: c.scale,
         visible: c.visible,
+        fontSize: 36,
+        color: "#ffffff",
       })),
     }));
   }
