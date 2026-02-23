@@ -255,6 +255,8 @@ let globalBakeLock = false;
 let globalBakePromise: Promise<void> | null = null;
 let globalTimelineCache: ScaledKeyframe[] | null = null;
 let globalChunkCache: Map<string, ChunkState> | null = null;
+let globalSongStartSec = 0;
+let globalSongEndSec = 0;
 
 // ──────────────────────────────────────────────────────────────
 // Player
@@ -356,6 +358,8 @@ export class LyricDancePlayer {
         // Use the local snapshot not this.chunks (which destroy() may have wiped)
         globalTimelineCache = this.scaleTimeline(baked);
         globalChunkCache = localChunkSnapshot;
+        globalSongStartSec = payload.songStart;
+        globalSongEndSec = payload.songEnd;
         globalBakeLock = false;
         console.log('[PLAYER] bake done — frames:', globalTimelineCache.length, 'chunks:', globalChunkCache.size);
       })();
@@ -367,6 +371,8 @@ export class LyricDancePlayer {
     // Now cache is guaranteed to exist for every instance
     this.timeline = globalTimelineCache!.slice();
     this.chunks = new Map(globalChunkCache!);
+    this.songStartSec = globalSongStartSec;
+    this.songEndSec = globalSongEndSec;
     this.buildBgCache();
     console.log('[PLAYER] ready — frames:', this.timeline.length, 'chunks:', this.chunks.size);
 
@@ -499,9 +505,10 @@ export class LyricDancePlayer {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
-    if (this.currentTimeMs < 100) {
-      console.log('[UPDATE] audio.currentTime:', this.audio.currentTime,
+    if (this.currentTimeMs < 5000) {
+      console.log('[UPDATE] audio.currentTime:', t,
         'songStartSec:', this.songStartSec,
+        'songEndSec:', this.songEndSec,
         'currentTimeMs:', this.currentTimeMs);
     }
 
@@ -577,6 +584,9 @@ export class LyricDancePlayer {
     console.log('[PLAYER] buildScenePayload — lyrics count:', this.data.lyrics?.length, 'lines:', lines.length);
     const songStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
     const songEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
+
+    console.log('[PAYLOAD] songStart:', songStart, 'songEnd:', songEnd,
+      'first line start:', lines[0]?.start, 'last line end:', lines[lines.length - 1]?.end);
 
     return {
       lines,
