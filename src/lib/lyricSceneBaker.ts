@@ -32,7 +32,7 @@ export type Keyframe = {
     x: number;
     y: number;
     alpha: number;
-    scale: number;
+    glow: number;
     visible: boolean;
   }>;
   cameraX: number;
@@ -75,7 +75,7 @@ type BakeState = {
   beats: number[];
   beatCursor: number;
   lastBeatIndex: number;
-  pulseBudget: number;
+  glowBudget: number;
   currentZoom: number;
 };
 
@@ -135,11 +135,13 @@ function bakeFrame(
 
   if (beatIndex !== state.lastBeatIndex) {
     state.lastBeatIndex = beatIndex;
-    state.pulseBudget = 12;
+    state.glowBudget = 13;
   }
-  if (state.pulseBudget > 0) state.pulseBudget -= 1;
-  const pulseProgress = state.pulseBudget / 12;
-  const beatPulse = pulseProgress * pulseProgress * 0.08;
+  if (state.glowBudget > 0) state.glowBudget -= 1;
+  const glowProgress = state.glowBudget / 13;
+  const glow = glowProgress > 0.77
+    ? (glowProgress - 0.77) / 0.23
+    : glowProgress / 0.77;
 
   const { chapter } = getChapterIndexAndData(payload.cinematic_direction, songProgress);
   const tensionStages = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
@@ -179,14 +181,14 @@ function bakeFrame(
     const y = getShotY(payload.cinematic_direction, chapter);
 
     const visible = alpha > 0.001;
-    const scale = lineActive && visible ? 1.0 + beatPulse : 1.0;
+    const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
 
     chunks.push({
       id: `${idx}`,
       x,
       y,
       alpha,
-      scale,
+      glow: chunkGlow,
       visible,
     });
 
@@ -213,7 +215,7 @@ function bakeFrame(
             x: x + preOffset + heroOffset,
             y,
             alpha: Math.min(1, alpha + 0.15),
-            scale: scale * 1.15,
+            glow: Math.min(1, chunkGlow + 0.2),
             visible,
           });
         }
@@ -248,8 +250,8 @@ function createBakeState(payload: ScenePayload): BakeState {
   return {
     beats: payload.beat_grid?.beats ?? [],
     beatCursor: 0,
-    lastBeatIndex: 0,
-    pulseBudget: 0,
+    lastBeatIndex: -1,
+    glowBudget: 0,
     currentZoom: 1.0,
   };
 }
