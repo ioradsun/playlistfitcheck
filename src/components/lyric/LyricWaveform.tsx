@@ -1,5 +1,5 @@
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, forwardRef } from "react";
 import { Play, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -113,7 +113,7 @@ function drawWaveform(
   }
 }
 
-export function LyricWaveform({
+export const LyricWaveform = forwardRef<HTMLDivElement, LyricWaveformProps>(function LyricWaveform({
   waveform,
   isPlaying,
   currentTime,
@@ -122,7 +122,7 @@ export function LyricWaveform({
   loopRegion,
   beats,
   beatGridLoading,
-}: LyricWaveformProps) {
+}, _ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -220,4 +220,4 @@ export function LyricWaveform({
       </div>
     </div>
   );
-}
+});
