@@ -308,7 +308,7 @@ function bakeFrame(
 
     const lineStart = line.start ?? 0;
     const lineEnd = line.end ?? 0;
-    const isCutStyle = entryStyle === 'cuts' || exitStyle === 'cuts';
+    const isCutStyle = (entryStyle as string) === 'cuts' || (exitStyle as string) === 'cuts';
     const fadeIn = isCutStyle
       ? (tSec >= lineStart ? 1 : 0)
       : Math.min(1, Math.max(0, (tSec - lineStart) / 0.2));
@@ -348,7 +348,7 @@ function bakeFrame(
         entryScale = 0.85 + ep * 0.15;
       } else if (entryStyle === 'fractures-in') {
         entryOffsetX = (1 - ep) * -30;
-      } else if (entryStyle === 'hiding') {
+      } else if ((entryStyle as string) === 'hiding') {
         entryScale = 0.7 + ep * 0.3;
       }
 
@@ -381,6 +381,19 @@ function bakeFrame(
       exitOffsetY,
       exitScale,
     });
+
+    if (frameIndex === 200 && lineActive && visible) {
+      console.log('[ANIM] frame 200 active chunk:', {
+        id: `${idx}`,
+        entryStyle: storyboardEntry?.entryStyle,
+        exitStyle: storyboardEntry?.exitStyle,
+        entryOffsetY,
+        entryOffsetX,
+        entryScale,
+        exitOffsetY,
+        entryProgress: entryProgress?.toFixed(3),
+      });
+    }
 
     if (lineActive) {
       const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
