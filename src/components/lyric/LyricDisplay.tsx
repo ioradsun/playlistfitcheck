@@ -828,12 +828,7 @@ export function LyricDisplay({
     if (!songDna || directorsCutRegenerating || !direction.trim()) return;
     setDirectorsCutRegenerating(true);
     try {
-      const beforeManifest = safeManifest(songDna.scene_manifest || deriveSceneManifestFromSpec({
-        spec: songDna.physicsSpec as PhysicsSpec,
-        mood: songDna.mood,
-        description: songDna.description,
-        songTitle: data.title,
-      })).manifest;
+      const beforeManifest = safeManifest(songDna.scene_manifest || {}).manifest;
       const playhead = audioRef.current?.currentTime ?? 0;
       const lyricsText = data.lines.filter((l) => l.tag !== "adlib").map((l) => l.text).join("\n");
       const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
