@@ -324,7 +324,7 @@ export class LyricDancePlayer {
     globalChunkCache = null;
     globalBakeLock = false;
     globalHasCinematicDirection = false;
-    console.log('[PLAYER] constructor — cache cleared, cinematic_direction:', !!data.cinematic_direction);
+    this.data = data;
     this.data = data;
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
