@@ -400,8 +400,7 @@ function resolveAABBCollision(a: CollisionBox, b: CollisionBox, strength: number
   const overlapY = (a.h + b.h) * 0.5 - Math.abs(ayCenter - byCenter);
   if (overlapX <= 0 || overlapY <= 0) return;
 
-  // Prefer horizontal separation when horizontal overlap dominates.
-  if (overlapX > overlapY) {
+  if (overlapX < overlapY) {
     const direction = axCenter < bxCenter ? -1 : 1;
     a.x += direction * overlapX * strength;
   } else {
@@ -952,7 +951,6 @@ export default function ShareableLyricDance() {
     const wordWidthIntCache = new Map<number, number>();
     const commentTextCache = new Map<string, string>();
     const commentWidthCache = new Map<string, number>();
-    const commentMeasureCache = new Map<string, { width: number; text: string; fontSize: number; fontWeight: number; fontFamily: string }>();
     const riverNodeBuckets: ConstellationNode[][] = Array.from({ length: RIVER_ROWS.length }, () => []);
     const hashWordKey = (word: string, fSize: number, fontFamily: string): number => {
       let h = fSize * 31;
@@ -1366,17 +1364,13 @@ export default function ShareableLyricDance() {
         const boxes = constellationCollisionBoxesRef.current;
         boxes.length = 0;
 
-        const clampBoxToCanvas = (box: CollisionBox, width: number, height: number): void => {
-          box.x = Math.max(0, Math.min(width - box.w, box.x));
-          box.y = Math.max(0, Math.min(height - box.h, box.y));
-        };
-
         for (let ri = 0; ri < RIVER_ROWS.length; ri++) {
           const row = RIVER_ROWS[ri];
           offsets[ri] += row.speed * row.direction;
           const rowComments = riverNodeBuckets[ri];
           if (rowComments.length === 0) continue;
 
+          offCtx.font = "300 11px system-ui, -apple-system, sans-serif";
           offCtx.globalAlpha = row.opacity;
           offCtx.fillStyle = "#ffffff";
 
@@ -1385,26 +1379,10 @@ export default function ShareableLyricDance() {
           for (let ci = 0; ci < rowComments.length; ci++) {
             const node = rowComments[ci];
             const truncated = getTruncatedComment(node);
-            const fontSize = Math.max(11, Math.round(node.currentSize || 11));
-            const fontWeight = 300;
-            const fontFamily = "system-ui, -apple-system, sans-serif";
-            const widthKey = `${node.id}`;
+            const widthKey = `${node.id}:11`;
             let textWidth = commentWidthCache.get(widthKey);
             if (textWidth === undefined) {
-              const cachedMeasure = commentMeasureCache.get(widthKey);
-              if (
-                cachedMeasure
-                && cachedMeasure.text === truncated
-                && cachedMeasure.fontSize === fontSize
-                && cachedMeasure.fontWeight === fontWeight
-                && cachedMeasure.fontFamily === fontFamily
-              ) {
-                textWidth = cachedMeasure.width;
-              } else {
-                offCtx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
-                textWidth = offCtx.measureText(truncated).width;
-                commentMeasureCache.set(widthKey, { width: textWidth, text: truncated, fontSize, fontWeight, fontFamily });
-              }
+              textWidth = offCtx.measureText(truncated).width;
               commentWidthCache.set(widthKey, textWidth);
             }
             totalWidth += textWidth + 120;
@@ -1412,35 +1390,15 @@ export default function ShareableLyricDance() {
           const wrapWidth = Math.max(totalWidth, cw + 200);
 
           let xBase = offsets[ri];
-          let previousBox: CollisionBox | null = null;
           for (let ci = 0; ci < rowComments.length; ci++) {
             const node = rowComments[ci];
             const truncated = getTruncatedComment(node);
-            const widthKey = `${node.id}`;
+            const widthKey = `${node.id}:11`;
             const textWidth = commentWidthCache.get(widthKey) ?? 0;
-            const fontSize = Math.max(11, Math.round(node.currentSize || 11));
-            const fontWeight = 300;
-            const fontFamily = "system-ui, -apple-system, sans-serif";
             let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
             if (drawX > cw + 100) drawX -= wrapWidth;
 
-            const horizontalPadding = fontSize * 0.15;
-            const minHorizontalGap = fontSize * 0.2;
-            const lineHeight = 1.2;
-            const boxHeight = fontSize * lineHeight;
-            const box: CollisionBox = {
-              id: node.id,
-              x: drawX - textWidth * 0.5 - horizontalPadding,
-              y: rowY - boxHeight * 0.5,
-              w: textWidth + horizontalPadding * 2,
-              h: boxHeight,
-            };
-
-            if (previousBox) {
-              const minX = previousBox.x + previousBox.w + minHorizontalGap;
-              if (box.x < minX) box.x = minX;
-            }
-
+            const box: CollisionBox = { id: node.id, x: drawX - textWidth * 0.5, y: rowY - 8, w: textWidth, h: 16 };
             const minGX = Math.floor(box.x / grid.cellSize);
             const maxGX = Math.floor((box.x + box.w) / grid.cellSize);
             const minGY = Math.floor(box.y / grid.cellSize);
@@ -1457,21 +1415,10 @@ export default function ShareableLyricDance() {
                 }
               }
             }
-
-            if (previousBox) {
-              const minX = previousBox.x + previousBox.w + minHorizontalGap;
-              if (box.x < minX) box.x = minX;
-            }
-            clampBoxToCanvas(box, cw, ch);
-
-            const finalMinGX = Math.floor(box.x / grid.cellSize);
-            const finalMaxGX = Math.floor((box.x + box.w) / grid.cellSize);
-            const finalMinGY = Math.floor(box.y / grid.cellSize);
-            const finalMaxGY = Math.floor((box.y + box.h) / grid.cellSize);
             const boxIndex = boxes.length;
             boxes.push(box);
-            for (let gx = finalMinGX; gx <= finalMaxGX; gx++) {
-              for (let gy = finalMinGY; gy <= finalMaxGY; gy++) {
+            for (let gx = minGX; gx <= maxGX; gx++) {
+              for (let gy = minGY; gy <= maxGY; gy++) {
                 const key = gridKey(gx, gy);
                 const bucket = grid.buckets.get(key);
                 if (bucket) bucket.push(boxIndex);
@@ -1479,11 +1426,9 @@ export default function ShareableLyricDance() {
               }
             }
 
-            offCtx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
             offCtx.fillText(truncated, box.x + box.w * 0.5, box.y + box.h * 0.5);
             node.x = (box.x + box.w * 0.5) / cw;
             node.y = (box.y + box.h * 0.5) / ch;
-            previousBox = box;
             xBase += textWidth + 120;
           }
         }
@@ -1993,6 +1938,18 @@ export default function ShareableLyricDance() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Close / back button — top-right */}
+        <button
+          onClick={() => navigate(-1)}
+          className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/70 transition-all text-white/60 hover:text-white/90"
+          aria-label="Close"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="2" y1="2" x2="12" y2="12" />
+            <line x1="12" y1="2" x2="2" y2="12" />
+          </svg>
+        </button>
 
         {/* Top-left identity label (visible after cover dismissed) */}
         {!showCover && data && (

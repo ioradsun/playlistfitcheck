@@ -352,7 +352,9 @@ export function renderText(
     : computeFitFontSize(ctx, activeLine.text, cw, effectiveSystem);
   const typoAggression = tensionStage?.typographyAggression ?? 0.5;
   const baseWordScale = 0.9 + typoAggression * 0.4;
-  const fontSize = fs * activeLineAnim.fontScale * baseWordScale;
+  // Hard cap: font should never exceed ~30% of canvas height to prevent single letters dominating the viewport
+  const maxFontPx = Math.min(ch * 0.28, cw * 0.25);
+  const fontSize = Math.min(fs * activeLineAnim.fontScale * baseWordScale, maxFontPx);
   frameFontSize = fontSize;
 
   // ── Position ──────────────────────────────────────────────────────
