@@ -183,6 +183,7 @@ export class ParticleEngine {
   setSystem(system: string): void {
     this.config = { ...this.config, system: system as ParticleConfig["system"] };
     this.clear();
+    if (!this.hasValidBounds()) return;
     // Warm-spawn initial particles for the new system
     const warmCount = Math.floor(this.maxParticles * this.config.density * 0.3);
     for (let i = 0; i < warmCount; i++) {
@@ -253,10 +254,12 @@ export class ParticleEngine {
     this.maxParticles = getMaxParticles();
     this.clear();
 
-    const warmCount = Math.floor(this.maxParticles * config.density * 0.3);
-    for (let i = 0; i < warmCount; i++) {
-      const slot = this.getFreeSlot();
-      if (slot) this.spawnParticle(slot);
+    if (this.hasValidBounds()) {
+      const warmCount = Math.floor(this.maxParticles * config.density * 0.3);
+      for (let i = 0; i < warmCount; i++) {
+        const slot = this.getFreeSlot();
+        if (slot) this.spawnParticle(slot);
+      }
     }
   }
 
@@ -450,6 +453,7 @@ export class ParticleEngine {
   }
 
   private spawnParticles(beatIntensity: number): void {
+    if (!this.hasValidBounds()) return;
     const target = Math.min(this.maxParticles, this.targetActiveCount());
     let active = 0;
     for (let i = 0; i < this.pool.length; i++) if (this.pool[i].active) active++;
@@ -463,6 +467,10 @@ export class ParticleEngine {
       this.spawnParticle(this.pool[i]);
       needed -= 1;
     }
+  }
+
+  private hasValidBounds(): boolean {
+    return this.bounds.w > 1 && this.bounds.h > 1;
   }
 
   private getFreeSlot(): Particle | null {
