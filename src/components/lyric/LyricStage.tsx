@@ -104,8 +104,7 @@ export function LyricStage({ manifest, backgroundImageUrl, isPlaying, beatIntens
         style={{
           position: "absolute",
           inset: 0,
-          background: `radial-gradient(ellipse 80% 45% at 50% ${currentLyricZone === "upper" ? "25%" : currentLyricZone === "middle" ? "50%" : "72%"}, rgba(0,0,0,${maskOpacity * 0.75}), rgba(0,0,0,${maskOpacity * 0.3}) 65%, transparent 100%)`,
-          transition: "background 0.8s ease",
+          background: `radial-gradient(ellipse 80% 45% at 50% 50%, rgba(0,0,0,0.2), rgba(0,0,0,0.1) 65%, transparent 100%)`,
           pointerEvents: "none",
         }}
       />
