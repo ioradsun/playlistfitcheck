@@ -181,7 +181,7 @@ function bakeFrame(
     const y = getShotY(payload.cinematic_direction, chapter);
 
     const visible = alpha > 0.001;
-    const scale = lineActive && visible ? 1.0 + beatPulse : 1.0;
+    const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
 
     chunks.push({
       id: `${idx}`,
