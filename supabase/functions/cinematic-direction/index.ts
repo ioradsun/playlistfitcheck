@@ -477,9 +477,34 @@ serve(async (req) => {
         : [{ startRatio: 0, endRatio: 1, title: "Full Song", emotionalArc: "neutral", dominantColor: "#333333", lightBehavior: "steady", particleDirective: "ambient", backgroundDirective: "hold", emotionalIntensity: 0.5, typographyShift: null }];
     }
 
-    // wordDirectives — AI rarely returns these; seed empty if missing
-    if (!parsed.wordDirectives || typeof parsed.wordDirectives !== "object" || Array.isArray(parsed.wordDirectives)) {
-      parsed.wordDirectives = {};
+    // wordDirectives — normalize: AI may return array or object
+    if (Array.isArray(parsed.wordDirectives)) {
+      // Convert array of {word: "fire", ...} to object keyed by word
+      const obj: Record<string, unknown> = {};
+      for (const entry of parsed.wordDirectives as Record<string, unknown>[]) {
+        const w = String(entry.word ?? "").toLowerCase().trim();
+        if (w) obj[w] = entry;
+      }
+      parsed.wordDirectives = obj;
+    } else if (!parsed.wordDirectives || typeof parsed.wordDirectives !== "object") {
+      // Last resort: extract hero words from storyboard if available
+      const storyboard = Array.isArray(parsed.storyboard) ? parsed.storyboard as Record<string, unknown>[] : [];
+      const heroWords: Record<string, unknown> = {};
+      for (const entry of storyboard) {
+        const hw = String(entry.heroWord ?? "").toLowerCase().trim();
+        if (hw && !heroWords[hw]) {
+          heroWords[hw] = {
+            word: hw,
+            kineticClass: null,
+            elementalClass: null,
+            emphasisLevel: 3,
+            colorOverride: null,
+            specialEffect: null,
+            evolutionRule: null,
+          };
+        }
+      }
+      parsed.wordDirectives = Object.keys(heroWords).length > 0 ? heroWords : {};
     }
 
     // storyboard from shotProgression or lines — also pad if truncated short
