@@ -341,10 +341,10 @@ export class LyricDancePlayer {
       globalBakePromise = (async () => {
         const payload = this.buildScenePayload();
         try {
-          await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
+          const chunkSnapshot = await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
           globalTimelineCache = [...this.timeline];
-          globalChunkCache = new Map(this.chunks);
-          console.log('[PLAYER] bake done — frames:', this.timeline.length);
+          globalChunkCache = chunkSnapshot;
+          console.log('[PLAYER] bake done — frames:', globalTimelineCache.length, 'chunks:', globalChunkCache.size);
         } catch (e) {
           console.error('[PLAYER] bake failed:', e);
         } finally {
@@ -381,7 +381,7 @@ export class LyricDancePlayer {
   // Public API (React calls these)
   // ────────────────────────────────────────────────────────────
 
-  async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<void> {
+  async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<Map<string, ChunkState>> {
     console.log('[PLAYER] load() called — lines:', payload.lines.length);
     try {
       this.payload = payload;
@@ -390,15 +390,15 @@ export class LyricDancePlayer {
 
       this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
       this.buildChunkCache(payload);
-      // Cache chunks immediately BEFORE the async yield — destroy() can clear
-      // this.chunks during the await, so save to global cache now.
-      globalChunkCache = new Map(this.chunks);
-      console.log('[PLAYER] after buildChunkCache — chunks:', this.chunks.size, 'global cached:', globalChunkCache.size);
+      // Snapshot chunks NOW before the async yield — destroy() may replace this.chunks
+      const chunkSnapshot = new Map(this.chunks);
+      console.log('[PLAYER] after buildChunkCache — chunks:', chunkSnapshot.size);
       const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
 
       this.timeline = this.scaleTimeline(baked);
       this.buildBgCache();
       onProgress(100);
+      return chunkSnapshot;
     } catch (err) {
       console.error('[PLAYER] load() error:', err);
       throw err;
