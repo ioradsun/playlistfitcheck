@@ -102,13 +102,9 @@ function getChapterIndexAndData(
   return { chapterIndex: chapters.length - 1, chapter: chapters[chapters.length - 1] };
 }
 
-function getShotY(cinematicDirection: CinematicDirection | null, chapter: ChapterLike | null): number {
-  if (!cinematicDirection || !chapter) return 540 * 0.52;
-
-  const distance = (chapter.cameraDistance ?? "Medium").toLowerCase();
-  if (distance.includes("wide")) return 540 * 0.65;
-  if (distance.includes("close")) return 540 * 0.35;
-  return BASE_Y_CENTER;
+function getShotY(_cinematicDirection: CinematicDirection | null, _chapter: ChapterLike | null): number {
+  // True vertical center — no chapter-based y positioning until basic layout is solid
+  return 540 * 0.48;
 }
 
 function getTensionMotion(
