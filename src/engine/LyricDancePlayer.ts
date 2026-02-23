@@ -641,13 +641,96 @@ export class LyricDancePlayer {
     }
 
     const palette = this.payload?.palette ?? this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"];
+    const sceneManifest = this.payload?.scene_manifest;
+
     const grad = offCtx.createLinearGradient(0, 0, 0, off.height);
     grad.addColorStop(0, palette[0] || "#0a0a0a");
-    grad.addColorStop(1, palette[1] || "#111111");
+    grad.addColorStop(0.6, palette[1] || "#111827");
+    grad.addColorStop(1, palette[2] ? `${palette[2]}33` : "#0a0a0a");
     offCtx.fillStyle = grad;
     offCtx.fillRect(0, 0, off.width, off.height);
 
+    const env = sceneManifest?.environment?.toLowerCase() ?? "";
+    if (env.includes("ocean") || env.includes("water") || env.includes("surf")) {
+      this.drawWaveBands(offCtx, off.width, off.height, palette);
+    } else if (env.includes("city") || env.includes("urban") || env.includes("street")) {
+      this.drawLightStreaks(offCtx, off.width, off.height, palette);
+    } else if (env.includes("space") || env.includes("cosmos") || env.includes("star")) {
+      this.drawStarField(offCtx, off.width, off.height, palette);
+    } else if (env.includes("forest") || env.includes("nature") || env.includes("wood")) {
+      this.drawOrganicShapes(offCtx, off.width, off.height, palette);
+    } else {
+      this.drawRadialGlow(offCtx, off.width, off.height, palette);
+    }
+
+    const vignette = offCtx.createRadialGradient(
+      off.width / 2, off.height / 2, off.height * 0.3,
+      off.width / 2, off.height / 2, off.height * 0.9,
+    );
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.65)");
+    offCtx.fillStyle = vignette;
+    offCtx.fillRect(0, 0, off.width, off.height);
+
     this.bgCache = off;
+  }
+
+  private drawWaveBands(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
+    ctx.save();
+    for (let i = 0; i < 6; i += 1) {
+      const y = (height / 6) * i + height * 0.08;
+      ctx.globalAlpha = 0.08 + i * 0.01;
+      ctx.fillStyle = palette[i % palette.length] || palette[1] || "#1f2937";
+      ctx.fillRect(-width * 0.1, y, width * 1.2, height * 0.07);
+    }
+    ctx.restore();
+  }
+
+  private drawLightStreaks(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
+    ctx.save();
+    for (let i = 0; i < 16; i += 1) {
+      const x = (width / 16) * i + ((i % 3) - 1) * 8;
+      ctx.globalAlpha = 0.08 + (i % 4) * 0.02;
+      ctx.fillStyle = palette[(i + 1) % palette.length] || "#9ca3af";
+      ctx.fillRect(x, 0, Math.max(2, width * 0.005), height);
+    }
+    ctx.restore();
+  }
+
+  private drawStarField(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
+    ctx.save();
+    for (let i = 0; i < 90; i += 1) {
+      const x = (width * ((i * 37) % 100)) / 100;
+      const y = (height * ((i * 53) % 100)) / 100;
+      const size = (i % 3) + 1;
+      ctx.globalAlpha = 0.08 + (i % 5) * 0.02;
+      ctx.fillStyle = palette[(i + 2) % palette.length] || "#f3f4f6";
+      ctx.fillRect(x, y, size, size);
+    }
+    ctx.restore();
+  }
+
+  private drawOrganicShapes(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
+    ctx.save();
+    ctx.translate(width * 0.5, height * 0.5);
+    for (let i = 0; i < 7; i += 1) {
+      ctx.rotate(0.35);
+      ctx.globalAlpha = 0.1 + i * 0.01;
+      ctx.fillStyle = palette[(i + 1) % palette.length] || "#065f46";
+      ctx.fillRect(-width * 0.45, -height * 0.06, width * 0.9, height * 0.12);
+    }
+    ctx.restore();
+  }
+
+  private drawRadialGlow(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
+    const glow = ctx.createRadialGradient(width / 2, height / 2, height * 0.08, width / 2, height / 2, height * 0.7);
+    glow.addColorStop(0, palette[2] || "rgba(255,255,255,0.2)");
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
   }
 
   // ────────────────────────────────────────────────────────────
