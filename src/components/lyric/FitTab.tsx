@@ -1,23 +1,20 @@
 /**
- * FitTab — Auto-triggers beat analysis + lyric-analyze on entry.
- * Shows waveform with lazy beat markers at top.
- * Unlocks Dance button when sceneManifest exists.
+ * FitTab — Displays analysis results with waveform.
+ * No auto-triggering; pipeline runs in LyricFitTab parent.
+ * "Test Again" button to re-run analysis.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, Film } from "lucide-react";
+import { Loader2, Film, RefreshCw, Music, Sparkles, Eye, Palette, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
-import { Progress } from "@/components/ui/progress";
-import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
-import { songSignatureAnalyzer, type SongSignature } from "@/lib/songSignatureAnalyzer";
-import { safeManifest } from "@/engine/validateManifest";
-import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
 import { LyricWaveform } from "./LyricWaveform";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
+import type { BeatGridData } from "@/hooks/useBeatGrid";
+import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
 
 const PEAK_SAMPLES = 200;
@@ -56,9 +53,8 @@ interface Props {
   setCinematicDirection: (d: any) => void;
   bgImageUrl: string | null;
   setBgImageUrl: (u: string | null) => void;
+  onRetry?: () => void;
 }
-
-type FitStage = "idle" | "syncing" | "analyzing_beats" | "analyzing_dna" | "generating_direction" | "ready" | "publishing";
 
 export function FitTab({
   lyricData,
@@ -77,40 +73,23 @@ export function FitTab({
   setCinematicDirection,
   bgImageUrl,
   setBgImageUrl,
+  onRetry,
 }: Props) {
   const { user } = useAuth();
-  const [stage, setStage] = useState<FitStage>("idle");
-  const [progress, setProgress] = useState(0);
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
-  const triggered = useRef(false);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioUrlRef = useRef<string | null>(null);
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const rafRef = useRef<number | null>(null);
 
-  // Decode audio → waveform + buffer for beat detection
-  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
-  const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
-
-  // Store detected beat grid
-  useEffect(() => {
-    if (detectedGrid && !beatGrid) {
-      setBeatGrid(detectedGrid);
-    }
-  }, [detectedGrid, beatGrid, setBeatGrid]);
-
-  // Setup audio element + decode waveform
   useEffect(() => {
     if (!audioFile || audioFile.size === 0) return;
 
     const url = URL.createObjectURL(audioFile);
-    audioUrlRef.current = url;
-
     const audio = new Audio(url);
     audio.preload = "auto";
     audioRef.current = audio;
@@ -125,11 +104,9 @@ export function FitTab({
     audio.addEventListener("pause", onPause);
     audio.addEventListener("ended", onEnded);
 
-    // Decode for waveform peaks
     const ctx = new AudioContext();
     audioFile.arrayBuffer().then((ab) => {
       ctx.decodeAudioData(ab).then((buf) => {
-        setAudioBuffer(buf);
         setWaveform({ peaks: extractPeaks(buf, PEAK_SAMPLES), duration: buf.duration });
         ctx.close();
       });
@@ -146,7 +123,6 @@ export function FitTab({
     };
   }, [audioFile]);
 
-  // Playback RAF for smooth playhead
   useEffect(() => {
     if (!isPlaying) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -169,203 +145,14 @@ export function FitTab({
 
   const handleTogglePlay = useCallback(() => {
     if (!audioRef.current) return;
-    if (audioRef.current.paused) {
-      audioRef.current.play().catch(() => {});
-    } else {
-      audioRef.current.pause();
-    }
+    if (audioRef.current.paused) audioRef.current.play().catch(() => {});
+    else audioRef.current.pause();
   }, []);
 
-  // Auto-trigger analysis on tab entry
-  useEffect(() => {
-    if (triggered.current) return;
-    if (!lyricData?.lines?.length || !audioFile) return;
-    triggered.current = true;
-
-    void runAnalysis();
-  }, [lyricData, audioFile]);
-
-  const runAnalysis = async () => {
-    setStage("syncing");
-    setProgress(5);
-
-    // 1. Sync/refresh transcript from saved_lyrics if we have a saved ID
-    let freshLines = lyricData.lines;
-    if (savedId && user) {
-      try {
-        const { data: saved } = await supabase
-          .from("saved_lyrics")
-          .select("lines")
-          .eq("id", savedId)
-          .single();
-        if (saved?.lines && Array.isArray(saved.lines)) {
-          freshLines = saved.lines as unknown as LyricLine[];
-        }
-      } catch {}
-    }
-
-    setProgress(10);
-    setStage("analyzing_beats");
-
-    // 2. Parallel: beat analysis + lyric-analyze
-    const beatPromise = (async () => {
-      if (beatGrid) return beatGrid;
-      if (!hasRealAudio || audioFile.size === 0) return null;
-      try {
-        // audioBuffer is already being decoded in the effect above
-        // Wait for useBeatGrid to detect — poll
-        return new Promise<BeatGridData | null>((resolve) => {
-          setTimeout(() => resolve(null), 8000);
-        });
-      } catch (e) {
-        console.warn("[FitTab] Beat analysis failed:", e);
-        return null;
-      }
-    })();
-
-    setStage("analyzing_dna");
-    setProgress(25);
-
-    const lyricsText = freshLines
-      .filter((l: any) => l.tag !== "adlib")
-      .map((l: any) => l.text)
-      .join("\n");
-
-    // Encode audio for DNA analysis
-    let audioBase64: string | undefined;
-    let format: string | undefined;
-    if (hasRealAudio && audioFile.size > 0) {
-      try {
-        const arrayBuffer = await audioFile.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuffer);
-        let binary = "";
-        const chunkSize = 8192;
-        for (let i = 0; i < uint8.length; i += chunkSize) {
-          binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
-        }
-        audioBase64 = btoa(binary);
-        const name = audioFile.name.toLowerCase();
-        if (name.endsWith(".wav")) format = "wav";
-        else if (name.endsWith(".m4a")) format = "m4a";
-        else if (name.endsWith(".flac")) format = "flac";
-        else if (name.endsWith(".ogg")) format = "ogg";
-        else if (name.endsWith(".webm")) format = "webm";
-        else format = "mp3";
-      } catch {}
-    }
-
-    const dnaPromise = supabase.functions.invoke("lyric-analyze", {
-      body: {
-        title: lyricData.title,
-        artist: lyricData.artist,
-        lyrics: lyricsText,
-        audioBase64,
-        format,
-        beatGrid: beatGrid ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence } : undefined,
-        includeHooks: true,
-      },
-    });
-
-    setProgress(40);
-
-    // Wait for both
-    const [, dnaResult] = await Promise.all([beatPromise, dnaPromise]);
-
-    setProgress(60);
-
-    if (dnaResult.error) {
-      console.error("[FitTab] lyric-analyze error:", dnaResult.error);
-      toast.error("Song DNA analysis failed");
-      setStage("idle");
-      return;
-    }
-
-    const result = dnaResult.data;
-    // Parse hooks
-    const rawHooks = Array.isArray(result?.hottest_hooks)
-      ? result.hottest_hooks
-      : result?.hottest_hook
-        ? [result.hottest_hook]
-        : [];
-
-    const parseHook = (raw: any) => {
-      if (!raw?.start_sec) return null;
-      const startSec = Number(raw.start_sec);
-      const durationSec = Number(raw.duration_sec) || 10;
-      const conf = Number(raw.confidence) || 0;
-      if (conf < 0.5) return null;
-      return {
-        hook: { start: startSec, end: startSec + durationSec, score: Math.round(conf * 100), reasonCodes: [], previewText: "", status: conf >= 0.75 ? "confirmed" : "candidate" },
-        justification: raw.justification,
-        label: raw.label,
-      };
-    };
-
-    const parsedHooks = rawHooks.map(parseHook).filter(Boolean);
-    const primary = parsedHooks[0] || null;
-    const secondary = parsedHooks[1] || null;
-
-    const nextSongDna = {
-      mood: result?.mood,
-      description: result?.description,
-      meaning: result?.meaning,
-      hook: primary?.hook || null,
-      secondHook: secondary?.hook || null,
-      hookJustification: primary?.justification,
-      secondHookJustification: secondary?.justification,
-      hookLabel: primary?.label,
-      secondHookLabel: secondary?.label,
-      physicsSpec: result?.physics_spec || null,
-      scene_manifest: result?.scene_manifest || result?.sceneManifest || null,
-    };
-
-    setSongDna(nextSongDna);
-
-    // Build manifest from DNA
-    const builtManifest = buildManifestFromDna(nextSongDna as Record<string, unknown>);
-    if (builtManifest) {
-      const validated = safeManifest(builtManifest).manifest;
-      setSceneManifest(validated);
-    } else if (nextSongDna.scene_manifest) {
-      setSceneManifest(safeManifest(nextSongDna.scene_manifest).manifest);
-    }
-
-    setProgress(70);
-    setStage("generating_direction");
-
-    // 3. Auto-call cinematic-direction
-    try {
-      const lyricsForDirection = freshLines
-        .filter((l: any) => l.tag !== "adlib")
-        .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-
-      const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
-        body: {
-          title: lyricData.title,
-          artist: lyricData.artist,
-          lines: lyricsForDirection,
-          beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
-          lyricId: savedId || undefined,
-        },
-      });
-
-      if (dirResult?.cinematicDirection) {
-        setCinematicDirection(dirResult.cinematicDirection);
-        setSongDna((prev: any) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
-      }
-    } catch (e) {
-      console.warn("[FitTab] cinematic direction failed:", e);
-    }
-
-    setProgress(100);
-    setStage("ready");
-  };
-
-  // Dance button handler
+  // ── Dance publish handler ─────────────────────────────────────────────
   const handleDance = useCallback(async () => {
     if (!user || !sceneManifest || !lyricData || !audioFile || publishing) return;
     setPublishing(true);
-    setStage("publishing");
     setPublishStatus("Preparing…");
 
     try {
@@ -382,11 +169,9 @@ export function FitTab({
       if (!artistSlug || !songSlug) {
         toast.error("Couldn't generate a valid URL — check song/artist name");
         setPublishing(false);
-        setStage("ready");
         return;
       }
 
-      // 1. Generate background image
       setPublishStatus("Generating background…");
       let backgroundUrl: string | null = null;
       try {
@@ -397,7 +182,6 @@ export function FitTab({
         setBgImageUrl(backgroundUrl);
       } catch {}
 
-      // 2. Upload audio
       setPublishStatus("Uploading audio…");
       const fileExt = audioFile.name.split(".").pop() || "webm";
       const storagePath = `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${fileExt}`;
@@ -409,7 +193,6 @@ export function FitTab({
       const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
       const audioUrl = urlData.publicUrl;
 
-      // 3. Upsert shareable_lyric_dances
       setPublishStatus("Publishing…");
       const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
       const physicsSpec = songDna?.physicsSpec || {};
@@ -436,7 +219,6 @@ export function FitTab({
 
       if (insertError) throw insertError;
 
-      // 4. Redirect
       const url = `/${artistSlug}/${songSlug}/lyric-dance`;
       toast.success("Lyric Dance page published!");
       window.location.href = url;
@@ -449,21 +231,15 @@ export function FitTab({
     }
   }, [user, sceneManifest, lyricData, audioFile, publishing, songDna, beatGrid, cinematicDirection, setBgImageUrl]);
 
-  const stageLabel = {
-    idle: "Waiting…",
-    syncing: "Syncing transcript…",
-    analyzing_beats: "Analyzing rhythm…",
-    analyzing_dna: "Generating Song DNA…",
-    generating_direction: "Creating cinematic direction…",
-    ready: "Ready",
-    publishing: publishStatus || "Publishing…",
-  };
-
   const danceDisabled = !sceneManifest || publishing;
 
+  // ── Sections derived from songDna ─────────────────────────────────────
+  const physicsSpec = songDna?.physicsSpec;
+  const meaning = songDna?.meaning;
+
   return (
-    <div className="flex-1 px-4 py-6 space-y-6">
-      {/* ── Waveform with lazy beat markers ── */}
+    <div className="flex-1 px-4 py-6 space-y-4">
+      {/* Waveform */}
       <LyricWaveform
         waveform={waveform}
         isPlaying={isPlaying}
@@ -471,36 +247,165 @@ export function FitTab({
         onSeek={handleSeek}
         onTogglePlay={handleTogglePlay}
         beats={beatGrid?.beats ?? null}
-        beatGridLoading={!beatGrid && stage !== "ready" && stage !== "idle"}
+        beatGridLoading={false}
       />
 
-      {/* Progress section */}
-      {stage !== "ready" && stage !== "idle" && !publishing && (
-        <div className="glass-card rounded-xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin text-primary" />
-            <span className="text-sm text-muted-foreground">{stageLabel[stage]}</span>
-          </div>
-          <Progress value={progress} className="h-1.5" />
-        </div>
-      )}
-
-      {/* Ready state — Song DNA summary */}
-      {stage === "ready" && songDna && (
-        <div className="glass-card rounded-xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
+      {/* Song DNA results */}
+      {songDna && (
+        <div className="space-y-3">
+          {/* Header + Test Again */}
+          <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Song DNA</span>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
+              >
+                <RefreshCw size={10} />
+                Test Again
+              </button>
+            )}
           </div>
+
+          {/* Overview */}
           {songDna.description && (
-            <p className="text-sm text-muted-foreground italic leading-relaxed">{songDna.description}</p>
+            <div className="glass-card rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                <Music size={10} />
+                Overview
+              </div>
+              <p className="text-sm text-muted-foreground italic leading-relaxed">{songDna.description}</p>
+              {songDna.mood && (
+                <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                  {songDna.mood}
+                </span>
+              )}
+            </div>
           )}
-          {songDna.mood && (
-            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-              {songDna.mood}
-            </span>
+
+          {/* Meaning & Theme */}
+          {meaning && (
+            <div className="glass-card rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                <Sparkles size={10} />
+                Meaning
+              </div>
+              {meaning.theme && <p className="text-sm font-semibold text-foreground">{meaning.theme}</p>}
+              {meaning.narrative && <p className="text-xs text-muted-foreground leading-relaxed">{meaning.narrative}</p>}
+              {meaning.emotions && Array.isArray(meaning.emotions) && (
+                <div className="flex flex-wrap gap-1">
+                  {meaning.emotions.map((e: string, i: number) => (
+                    <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{e}</span>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
-          {songDna.meaning?.theme && (
-            <p className="text-sm font-semibold text-foreground">{songDna.meaning.theme}</p>
+
+          {/* Hooks */}
+          {(songDna.hook || songDna.secondHook) && (
+            <div className="glass-card rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                <Zap size={10} />
+                Hottest Hooks
+              </div>
+              {songDna.hook && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">{songDna.hookLabel || "Hook 1"}</span>
+                    <span className="text-[9px] text-muted-foreground">{songDna.hook.start?.toFixed(1)}s – {songDna.hook.end?.toFixed(1)}s</span>
+                    {songDna.hook.score && <span className="text-[9px] font-mono text-primary">{songDna.hook.score}%</span>}
+                  </div>
+                  {songDna.hookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.hookJustification}</p>}
+                </div>
+              )}
+              {songDna.secondHook && (
+                <div className="space-y-1 pt-1 border-t border-border/20">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/50 text-accent-foreground">{songDna.secondHookLabel || "Hook 2"}</span>
+                    <span className="text-[9px] text-muted-foreground">{songDna.secondHook.start?.toFixed(1)}s – {songDna.secondHook.end?.toFixed(1)}s</span>
+                  </div>
+                  {songDna.secondHookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.secondHookJustification}</p>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Physics / Visual System */}
+          {physicsSpec && (
+            <div className="glass-card rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                <Palette size={10} />
+                Visual System
+              </div>
+              {physicsSpec.system && (
+                <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                  {physicsSpec.system}
+                </span>
+              )}
+              {physicsSpec.palette && Array.isArray(physicsSpec.palette) && (
+                <div className="flex items-center gap-1">
+                  {physicsSpec.palette.map((c: string, i: number) => (
+                    <div key={i} className="w-5 h-5 rounded-full border border-border/40" style={{ backgroundColor: c }} title={c} />
+                  ))}
+                </div>
+              )}
+              {physicsSpec.typography && (
+                <p className="text-[10px] text-muted-foreground">
+                  Font: <span className="text-foreground">{physicsSpec.typography.fontFamily || physicsSpec.typography}</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Cinematic Direction */}
+          {cinematicDirection && (
+            <div className="glass-card rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                <Eye size={10} />
+                Cinematic Direction
+              </div>
+              {cinematicDirection.tension_curve && Array.isArray(cinematicDirection.tension_curve) && (
+                <div className="flex items-end gap-px h-8">
+                  {cinematicDirection.tension_curve.map((t: any, i: number) => (
+                    <div
+                      key={i}
+                      className="flex-1 bg-primary/40 rounded-t-sm"
+                      style={{ height: `${(t.tension ?? t.value ?? 0.5) * 100}%` }}
+                      title={t.label || `${i}`}
+                    />
+                  ))}
+                </div>
+              )}
+              {cinematicDirection.chapters && Array.isArray(cinematicDirection.chapters) && (
+                <div className="space-y-1">
+                  {cinematicDirection.chapters.slice(0, 4).map((ch: any, i: number) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-[9px] font-mono text-primary/70 mt-0.5">{ch.stage || `Ch ${i + 1}`}</span>
+                      <p className="text-[10px] text-muted-foreground leading-tight">{ch.description || ch.mood || ""}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {cinematicDirection.storyboard && Array.isArray(cinematicDirection.storyboard) && (
+                <p className="text-[9px] text-muted-foreground/60">{cinematicDirection.storyboard.length} storyboard frames</p>
+              )}
+            </div>
+          )}
+
+          {/* Beat Grid */}
+          {beatGrid && (
+            <div className="glass-card rounded-xl p-3 space-y-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                <Music size={10} />
+                Rhythm
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-foreground">{beatGrid.bpm.toFixed(0)} BPM</span>
+                <span className="text-[10px] text-muted-foreground">{Math.round((beatGrid.confidence ?? 0) * 100)}% confidence</span>
+                <span className="text-[10px] text-muted-foreground">{beatGrid.beats?.length ?? 0} beats</span>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -524,7 +429,7 @@ export function FitTab({
         )}
       </button>
 
-      {!sceneManifest && stage === "ready" && (
+      {!sceneManifest && !publishing && (
         <p className="text-[10px] text-muted-foreground text-center">
           Scene manifest could not be generated. Try re-analyzing.
         </p>

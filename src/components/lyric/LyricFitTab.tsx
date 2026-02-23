@@ -1,19 +1,24 @@
 /**
  * LyricFitTab — Thin parent container with two-tab architecture.
  * Holds all shared state. Renders LyricFitToggle + LyricsTab or FitTab.
+ * Analysis pipeline runs in background; Fit tab locked until ready.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sessionAudio } from "@/lib/sessionAudioCache";
+import { toast } from "sonner";
+import { safeManifest } from "@/engine/validateManifest";
+import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
+import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import type { LyricData, LyricLine } from "./LyricDisplay";
-import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
-import type { ReactNode } from "react";
+
+export type FitReadiness = "not_started" | "running" | "ready" | "error";
 
 interface Props {
   initialLyric?: any;
@@ -47,6 +52,20 @@ export function LyricFitTab({
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
   const [sceneManifest, setSceneManifest] = useState<FullSceneManifest | null>(null);
+
+  // Pipeline readiness
+  const [fitReadiness, setFitReadiness] = useState<FitReadiness>("not_started");
+  const [fitProgress, setFitProgress] = useState(0);
+  const [fitStageLabel, setFitStageLabel] = useState("");
+  const pipelineRanOnce = useRef(false);
+
+  // Beat grid detection from decoded audio
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
+
+  useEffect(() => {
+    if (detectedGrid && !beatGrid) setBeatGrid(detectedGrid);
+  }, [detectedGrid, beatGrid]);
 
   // Pipeline model config
   const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
@@ -92,21 +111,27 @@ export function LyricFitTab({
       setFmlyLines((initialLyric as any).fmly_lines ?? null);
       setVersionMeta((initialLyric as any).version_meta ?? null);
 
-      // Restore saved beat grid
       const savedBg = (initialLyric as any).beat_grid;
       if (savedBg) setBeatGrid(savedBg as BeatGridData);
 
-      // Restore saved song DNA
       const loadedSongDna = (initialLyric as any).song_dna ?? null;
       if (loadedSongDna) setSongDna(loadedSongDna);
 
-      // Restore saved song signature
       const savedSignature = (initialLyric as any).song_signature;
       if (savedSignature) setSongSignature(savedSignature as SongSignature);
 
       setBgImageUrl((initialLyric as any).background_image_url ?? null);
 
-      // Check session cache for real audio first
+      // If we already have songDna + sceneManifest from a previous run, mark ready
+      if (loadedSongDna) {
+        const m = buildManifestFromDna(loadedSongDna as Record<string, unknown>);
+        if (m) {
+          setSceneManifest(safeManifest(m).manifest);
+          setFitReadiness("ready");
+          pipelineRanOnce.current = true;
+        }
+      }
+
       const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
       if (cachedAudio) {
         setAudioFile(cachedAudio);
@@ -134,20 +159,200 @@ export function LyricFitTab({
     }
   }, [initialLyric, lyricData, resolveProjectTitle]);
 
+  // ── Background analysis pipeline ─────────────────────────────────────
+  const runPipeline = useCallback(async (forceRetry = false) => {
+    if (!lyricData || !audioFile || !lines.length) return;
+    if (pipelineRanOnce.current && !forceRetry) return;
+
+    pipelineRanOnce.current = true;
+    setFitReadiness("running");
+    setFitProgress(5);
+    setFitStageLabel("Syncing transcript…");
+
+    // 1. Sync latest transcript
+    let freshLines = lines;
+    if (savedId) {
+      try {
+        const { data: saved } = await supabase
+          .from("saved_lyrics")
+          .select("lines")
+          .eq("id", savedId)
+          .single();
+        if (saved?.lines && Array.isArray(saved.lines)) {
+          freshLines = saved.lines as unknown as LyricLine[];
+        }
+      } catch {}
+    }
+
+    setFitProgress(10);
+    setFitStageLabel("Analyzing rhythm…");
+
+    // 2. Decode audio for beat detection if needed
+    if (!beatGrid && hasRealAudio && audioFile.size > 0) {
+      try {
+        const ctx = new AudioContext();
+        const ab = await audioFile.arrayBuffer();
+        const buf = await ctx.decodeAudioData(ab);
+        setAudioBuffer(buf);
+        ctx.close();
+      } catch {}
+    }
+
+    setFitProgress(25);
+    setFitStageLabel("Generating Song DNA…");
+
+    // 3. lyric-analyze
+    const lyricsText = freshLines
+      .filter((l: any) => l.tag !== "adlib")
+      .map((l: any) => l.text)
+      .join("\n");
+
+    let audioBase64: string | undefined;
+    let format: string | undefined;
+    if (hasRealAudio && audioFile.size > 0) {
+      try {
+        const arrayBuffer = await audioFile.arrayBuffer();
+        const uint8 = new Uint8Array(arrayBuffer);
+        let binary = "";
+        const chunkSize = 8192;
+        for (let i = 0; i < uint8.length; i += chunkSize) {
+          binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+        }
+        audioBase64 = btoa(binary);
+        const name = audioFile.name.toLowerCase();
+        if (name.endsWith(".wav")) format = "wav";
+        else if (name.endsWith(".m4a")) format = "m4a";
+        else if (name.endsWith(".flac")) format = "flac";
+        else if (name.endsWith(".ogg")) format = "ogg";
+        else if (name.endsWith(".webm")) format = "webm";
+        else format = "mp3";
+      } catch {}
+    }
+
+    const { data: dnaResult, error: dnaError } = await supabase.functions.invoke("lyric-analyze", {
+      body: {
+        title: lyricData.title,
+        artist: lyricData.artist,
+        lyrics: lyricsText,
+        audioBase64,
+        format,
+        beatGrid: beatGrid ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence } : undefined,
+        includeHooks: true,
+      },
+    });
+
+    if (dnaError) {
+      console.error("[Pipeline] lyric-analyze error:", dnaError);
+      setFitReadiness("error");
+      setFitStageLabel("Analysis failed");
+      toast.error("Song DNA analysis failed — you can retry from the Fit tab");
+      return;
+    }
+
+    setFitProgress(55);
+
+    const result = dnaResult;
+    const rawHooks = Array.isArray(result?.hottest_hooks)
+      ? result.hottest_hooks
+      : result?.hottest_hook ? [result.hottest_hook] : [];
+
+    const parseHook = (raw: any) => {
+      if (!raw?.start_sec) return null;
+      const startSec = Number(raw.start_sec);
+      const durationSec = Number(raw.duration_sec) || 10;
+      const conf = Number(raw.confidence) || 0;
+      if (conf < 0.5) return null;
+      return {
+        hook: { start: startSec, end: startSec + durationSec, score: Math.round(conf * 100), reasonCodes: [], previewText: "", status: conf >= 0.75 ? "confirmed" : "candidate" },
+        justification: raw.justification,
+        label: raw.label,
+      };
+    };
+
+    const parsedHooks = rawHooks.map(parseHook).filter(Boolean);
+    const primary = parsedHooks[0] || null;
+    const secondary = parsedHooks[1] || null;
+
+    const nextSongDna = {
+      mood: result?.mood,
+      description: result?.description,
+      meaning: result?.meaning,
+      hook: primary?.hook || null,
+      secondHook: secondary?.hook || null,
+      hookJustification: primary?.justification,
+      secondHookJustification: secondary?.justification,
+      hookLabel: primary?.label,
+      secondHookLabel: secondary?.label,
+      physicsSpec: result?.physics_spec || null,
+      scene_manifest: result?.scene_manifest || result?.sceneManifest || null,
+    };
+
+    setSongDna(nextSongDna);
+
+    const builtManifest = buildManifestFromDna(nextSongDna as Record<string, unknown>);
+    if (builtManifest) {
+      setSceneManifest(safeManifest(builtManifest).manifest);
+    } else if (nextSongDna.scene_manifest) {
+      setSceneManifest(safeManifest(nextSongDna.scene_manifest).manifest);
+    }
+
+    setFitProgress(70);
+    setFitStageLabel("Creating cinematic direction…");
+
+    // 4. cinematic-direction
+    try {
+      const lyricsForDirection = freshLines
+        .filter((l: any) => l.tag !== "adlib")
+        .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+
+      const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
+        body: {
+          title: lyricData.title,
+          artist: lyricData.artist,
+          lines: lyricsForDirection,
+          beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
+          lyricId: savedId || undefined,
+        },
+      });
+
+      if (dirResult?.cinematicDirection) {
+        setCinematicDirection(dirResult.cinematicDirection);
+      }
+    } catch (e) {
+      console.warn("[Pipeline] cinematic direction failed:", e);
+    }
+
+    setFitProgress(100);
+    setFitReadiness("ready");
+    setFitStageLabel("Ready");
+    toast.success("Your Fit is ready! 🎬", { description: "Switch to the Fit tab to explore your song's DNA." });
+  }, [lyricData, audioFile, lines, savedId, hasRealAudio, beatGrid]);
+
+  // Auto-trigger pipeline when lyrics are first transcribed
+  const prevLinesLen = useRef(0);
+  useEffect(() => {
+    if (lines.length > 0 && prevLinesLen.current === 0 && !pipelineRanOnce.current && audioFile && lyricData) {
+      runPipeline();
+    }
+    prevLinesLen.current = lines.length;
+  }, [lines, audioFile, lyricData, runPipeline]);
+
+  const fitLocked = fitReadiness !== "ready";
   const fitDisabled = !lines || lines.length === 0;
 
   return (
     <div className="flex flex-col flex-1">
-      {/* Tab strip — only show when lyrics exist */}
       {lyricData && (
         <LyricFitToggle
           view={activeTab}
           onViewChange={setActiveTab}
-          fitDisabled={fitDisabled}
+          fitDisabled={fitDisabled || fitLocked}
+          fitReadiness={fitReadiness}
+          fitProgress={fitProgress}
+          fitStageLabel={fitStageLabel}
         />
       )}
 
-      {/* Tab content */}
       {activeTab === "lyrics" ? (
         <LyricsTab
           lyricData={lyricData}
@@ -165,7 +370,6 @@ export function LyricFitTab({
           setVersionMeta={setVersionMeta}
           onProjectSaved={onProjectSaved}
           onNewProject={() => {
-            // Reset all shared state
             setSongDna(null);
             setBeatGrid(null);
             setSongSignature(null);
@@ -173,6 +377,8 @@ export function LyricFitTab({
             setBgImageUrl(null);
             setSceneManifest(null);
             setLines([]);
+            setFitReadiness("not_started");
+            pipelineRanOnce.current = false;
             onNewProject?.();
           }}
           onHeaderProject={onHeaderProject}
@@ -198,6 +404,7 @@ export function LyricFitTab({
           setCinematicDirection={setCinematicDirection}
           bgImageUrl={bgImageUrl}
           setBgImageUrl={setBgImageUrl}
+          onRetry={() => runPipeline(true)}
         />
       ) : null}
     </div>
