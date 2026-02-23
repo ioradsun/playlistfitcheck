@@ -41,6 +41,7 @@ function parseHex(hex: string): [number, number, number] {
 }
 
 export class ParticleEngine {
+  private readonly maxParticles = MAX_PARTICLES;
   private readonly pool: Particle[] = Array.from({ length: MAX_PARTICLES }, () => ({
     x: 0, y: 0, vx: 0, vy: 0, life: 0, decay: 0.01, size: 1, rotation: 0, rotationSpeed: 0, opacity: 0, active: false,
   }));
@@ -63,6 +64,32 @@ export class ParticleEngine {
   setManifest(manifest: SceneManifest): void {
     this.manifest = manifest;
     this.config = manifest.particleConfig;
+  }
+
+
+  init(config: ParticleConfig, manifest: SceneManifest): void {
+    this.config = config;
+    this.manifest = manifest;
+    this.clear();
+
+    const warmCount = Math.floor(this.maxParticles * config.density * 0.3);
+    for (let i = 0; i < warmCount; i++) {
+      const slot = this.getFreeSlot();
+      if (slot) this.spawnParticle(slot);
+    }
+
+    console.log("[ParticleEngine] init:", {
+      system: config.system,
+      density: config.density,
+      warmed: warmCount,
+    });
+  }
+
+  clear(): void {
+    for (let i = 0; i < this.pool.length; i++) {
+      this.pool[i].active = false;
+      this.pool[i].life = 0;
+    }
   }
 
   setBounds(bounds: Rect): void {
@@ -153,10 +180,22 @@ export class ParticleEngine {
     for (let i = 0; i < this.pool.length && needed > 0; i++) {
       const p = this.pool[i];
       if (p.active) continue;
-      this.spawnForSystem(p);
-      p.active = true;
+      this.spawnParticle(p);
       needed--;
     }
+  }
+
+
+  private getFreeSlot(): Particle | null {
+    for (let i = 0; i < this.pool.length; i++) {
+      if (!this.pool[i].active) return this.pool[i];
+    }
+    return null;
+  }
+
+  private spawnParticle(particle: Particle): void {
+    this.spawnForSystem(particle);
+    particle.active = true;
   }
 
   private spawnForSystem(p: Particle): void {

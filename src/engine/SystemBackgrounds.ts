@@ -54,6 +54,7 @@ const combustionEmbers = new WeakMap<CanvasRenderingContext2D, CombustionEmber[]
 const orbitStars = new WeakMap<CanvasRenderingContext2D, OrbitStar[]>();
 const pressureRuleExtent = new WeakMap<CanvasRenderingContext2D, { extent: number; lastBeat: number }>();
 const particleEngines = new WeakMap<CanvasRenderingContext2D, ParticleEngine>();
+const particleSignatures = new WeakMap<CanvasRenderingContext2D, string>();
 
 // ── FRACTURE — Raw concrete with glowing stress cracks ─────────────────────
 
@@ -742,9 +743,27 @@ function getParticleEngine(ctx: CanvasRenderingContext2D, manifest: SceneManifes
   return engine;
 }
 
+
+
+function applyManifest(ctx: CanvasRenderingContext2D, manifest: SceneManifest): ParticleEngine {
+  const engine = getParticleEngine(ctx, manifest);
+  const signature = JSON.stringify(manifest.particleConfig);
+
+  if (particleSignatures.get(ctx) !== signature) {
+    if (manifest.particleConfig?.system && manifest.particleConfig.system !== "none") {
+      engine.init(manifest.particleConfig, manifest);
+    } else {
+      engine.clear();
+    }
+    particleSignatures.set(ctx, signature);
+  }
+
+  return engine;
+}
+
 export function drawForegroundParticles(ctx: CanvasRenderingContext2D, s: BackgroundState): void {
   if (!s.manifest) return;
-  const engine = getParticleEngine(ctx, s.manifest);
+  const engine = applyManifest(ctx, s.manifest);
   engine.setBounds({ x: 0, y: 0, w: s.w, h: s.h });
   if (s.lyricSafeZone) engine.setLyricSafeZone(s.lyricSafeZone.x, s.lyricSafeZone.y, s.lyricSafeZone.w, s.lyricSafeZone.h);
   if (!engine.shouldRenderForeground()) return;
@@ -761,7 +780,7 @@ export function drawSystemBackground(ctx: CanvasRenderingContext2D, s: Backgroun
   }
 
   if (s.manifest) {
-    const engine = getParticleEngine(ctx, s.manifest);
+    const engine = applyManifest(ctx, s.manifest);
     engine.setBounds({ x: 0, y: 0, w: s.w, h: s.h });
     if (s.lyricSafeZone) engine.setLyricSafeZone(s.lyricSafeZone.x, s.lyricSafeZone.y, s.lyricSafeZone.w, s.lyricSafeZone.h);
     engine.update(s.deltaMs ?? 16.67, s.beatIntensity ?? 0);

@@ -75,6 +75,8 @@ import type {
 } from "./ArtistFingerprintTypes";
 import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
 import { safeManifest } from "@/engine/validateManifest";
+import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
+import { animationResolver } from "@/engine/AnimationResolver";
 
 export interface LyricLine {
   start: number;
@@ -518,6 +520,7 @@ export function LyricDisplay({
     initialBackgroundImageUrl ?? null,
   );
   const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
+  const [manifest, setManifest] = useState<FullSceneManifest | null>(null);
 
   const beatIntensity = useBeatIntensity(beatAnalyserRef.current, hookDanceRunning && isPlaying);
 
@@ -575,6 +578,28 @@ export function LyricDisplay({
     [],
   );
 
+
+
+  useEffect(() => {
+    if (!songDna) return;
+
+    const manifestFromDna = buildManifestFromDna(songDna as Record<string, unknown>);
+    if (!manifestFromDna) return;
+
+    setManifest(manifestFromDna);
+    hookDanceRef.current?.loadManifest(manifestFromDna);
+    animationResolver.loadFromDna(songDna as Record<string, unknown>);
+
+    console.log("[LyricDisplay] engine loaded with manifest");
+  }, [songDna]);
+
+  useEffect(() => {
+    console.log("[LyricDisplay] backgroundImageUrl:",
+      backgroundImageUrl
+        ? backgroundImageUrl.slice(0, 80) + "..."
+        : "null — image not yet generated or failed"
+    );
+  }, [backgroundImageUrl]);
   const fetchSongDna = useCallback(async () => {
     if (dnaLoading || songDna) return;
     setDnaLoading(true);
@@ -819,6 +844,7 @@ export function LyricDisplay({
   }, [songDna, directorsCutRegenerating, data.title, data.artist, data.lines, getManifestDiff, generateBackgroundImage]);
 
   const currentManifest = useMemo<FullSceneManifest | null>(() => {
+    if (manifest) return manifest;
     if (!songDna) return null;
     if (songDna.scene_manifest) return safeManifest(songDna.scene_manifest).manifest;
     if (songDna.physicsSpec) {
@@ -830,7 +856,7 @@ export function LyricDisplay({
       })).manifest;
     }
     return null;
-  }, [songDna, data.title]);
+  }, [manifest, songDna, data.title]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw =
