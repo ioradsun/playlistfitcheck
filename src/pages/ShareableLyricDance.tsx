@@ -795,7 +795,7 @@ export default function ShareableLyricDance() {
       systemType: data.system_type,
     });
     // Override palette with cinematic direction visualWorld palette when available
-    const cinematicPalette = (data.cinematic_direction ?? data.song_dna?.cinematic_direction)?.visualWorld?.palette as string[] | undefined;
+    const cinematicPalette = data.cinematic_direction?.visualWorld?.palette as string[] | undefined;
     const effectivePalette = cinematicPalette && cinematicPalette.length >= 3
       ? cinematicPalette
       : resolvedManifest.palette;
