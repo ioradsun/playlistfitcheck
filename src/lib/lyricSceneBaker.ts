@@ -191,7 +191,7 @@ function bakeFrame(
             x: x + preOffset + heroOffset,
             y,
             alpha: Math.min(1, alpha + 0.15),
-            scale: scale * 1.3,
+            scale: scale * 1.15,
             visible,
           });
         }
