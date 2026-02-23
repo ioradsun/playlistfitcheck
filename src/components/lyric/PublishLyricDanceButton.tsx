@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
-import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
+// deriveSceneManifestFromSpec fallback removed — sceneManifest must come from props
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import type { ArtistDNA } from "./ArtistFingerprintTypes";
