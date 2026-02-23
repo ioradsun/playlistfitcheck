@@ -85,8 +85,8 @@ export function classifyWord(word: string): WordClass {
   if (directive?.kineticClass) {
     const k = directive.kineticClass;
     if (["IMPACT", "SCREAMING", "BREAKING"].includes(k)) return "IMPACT";
-    if (["TENDER", "WHISPERING"].includes(k)) return "TENDER";
-    if (["RUNNING", "FALLING", "SPINNING", "FLOATING", "RISING"].includes(k)) return "MOTION";
+    if (["TENDER", "WHISPERING", "DRIFTING", "ENVELOPING"].includes(k)) return "TENDER";
+    if (["RUNNING", "FALLING", "SPINNING", "FLOATING", "RISING", "SINKING", "SUBMERGING"].includes(k)) return "MOTION";
     if (k === "NEGATION") return "NEGATION";
     if (k === "STILL") return "NEUTRAL";
   }

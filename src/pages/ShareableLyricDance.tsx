@@ -1033,8 +1033,8 @@ export default function ShareableLyricDance() {
       const hookProgress = lineAnim
         ? Math.max(0, Math.min(1, (currentTime - activeLine!.start) / Math.max(0.001, activeLine!.end - activeLine!.start)))
         : 0;
-      const hookOffsetX = isInHook ? Math.sin(hookProgress * Math.PI) * 0.03 * baseAtmosphere : 0;
-      const hookOffsetY = isInHook ? Math.cos(hookProgress * Math.PI) * 0.02 * baseAtmosphere : 0;
+      const hookOffsetX = 0; // No background oscillation — Ken Burns zoom only
+      const hookOffsetY = 0;
 
       const nextHookStart = hookStartTimes.find(t => t > currentTime) ?? Number.POSITIVE_INFINITY;
       const timeToNextHook = nextHookStart - currentTime;
