@@ -48,6 +48,7 @@ import {
 } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
+import { LyricDanceDebugPanel } from "./LyricDanceDebugPanel";
 import { HookDanceCanvas } from "./HookDanceCanvas";
 import { LyricStage } from "./LyricStage";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
@@ -2744,6 +2745,21 @@ export function LyricDisplay({
           seed={`${data.title}-lyric-dance`}
           mood={songDna.mood}
           description={songDna.description}
+        />
+      )}
+
+      {/* Debug Panel */}
+      {songDna && (
+        <LyricDanceDebugPanel
+          data={{
+            songDna,
+            beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : null,
+            lines: data.lines,
+            title: data.title,
+            artist: data.artist,
+            overrides: hookDanceOverrides as unknown as Record<string, unknown>,
+            fingerprint: artistFingerprint,
+          }}
         />
       )}
 
