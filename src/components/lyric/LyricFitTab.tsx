@@ -66,7 +66,7 @@ export function LyricFitTab({
   const [fitProgress, setFitProgress] = useState(0);
   const [fitStageLabel, setFitStageLabel] = useState("");
   const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
-    transcript: "pending", rhythm: "pending", songDna: "pending", cinematic: "pending",
+    rhythm: "pending", songDna: "pending", cinematic: "pending", transcript: "pending",
   });
   const pipelineRanOnce = useRef(false);
 
