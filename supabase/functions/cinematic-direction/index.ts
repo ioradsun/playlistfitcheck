@@ -232,14 +232,31 @@ function clamp(n: unknown, min: number, max: number, fallback: number): number {
 }
 
 function extractJson(raw: string): Record<string, unknown> | null {
-  const cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+  let cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
+  cleaned = cleaned.slice(start, end + 1);
+
+  // First attempt: direct parse
   try {
-    return JSON.parse(cleaned.slice(start, end + 1));
+    return JSON.parse(cleaned);
   } catch {
-    return null;
+    // Fix common AI issues: trailing commas, JS comments, control chars
+    cleaned = cleaned
+      .replace(/\/\/[^\n]*/g, "")              // single-line comments
+      .replace(/\/\*[\s\S]*?\*\//g, "")        // block comments
+      .replace(/,\s*([}\]])/g, "$1")           // trailing commas
+      .replace(/[\x00-\x1F\x7F]/g, (ch) =>    // control characters
+        ch === "\n" || ch === "\r" || ch === "\t" ? ch : ""
+      );
+    try {
+      return JSON.parse(cleaned);
+    } catch (e2) {
+      console.error("[cinematic-direction] JSON parse failed after cleaning:", (e2 as Error).message);
+      console.error("[cinematic-direction] First 500 chars:", cleaned.slice(0, 500));
+      return null;
+    }
   }
 }
 
