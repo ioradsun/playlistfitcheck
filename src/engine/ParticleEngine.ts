@@ -152,6 +152,8 @@ export class ParticleEngine {
   private speedMultiplier = 1;
   private gravityMultiplier = 1;
   private behaviorHint: string | null = null;
+  private updateFrameSkip = 1;
+  private updateFrameCounter = 0;
 
   constructor(manifest: SceneManifest) {
     this.manifest = manifest;
@@ -177,6 +179,10 @@ export class ParticleEngine {
 
   setBehaviorHint(hint: string | null): void {
     this.behaviorHint = hint;
+  }
+
+  setUpdateFrameSkip(frameSkip: number): void {
+    this.updateFrameSkip = Math.max(1, Math.floor(frameSkip));
   }
 
   setChapterDirective(directive: string): void {
@@ -253,6 +259,8 @@ export class ParticleEngine {
 
   update(deltaMs: number, beatIntensity: number, nextConfig?: ParticleConfig): void {
     this.time += deltaMs;
+    this.updateFrameCounter += 1;
+    if (this.updateFrameCounter % this.updateFrameSkip !== 0) return;
     if (nextConfig) this.config = nextConfig;
     if (this.config.system === "none") return;
 

@@ -8,7 +8,18 @@ export function drawElementalWord(
   beatIntensity: number,
   appearanceCount: number,
   colorOverride: string | null,
+  options?: {
+    bubbleXPositions?: number[];
+    useBlur?: boolean;
+    isHeroWord?: boolean;
+    effectQuality?: "low" | "high";
+  },
 ): void {
+  const effectQuality = options?.effectQuality ?? "high";
+  const useBlur = Boolean(options?.useBlur && effectQuality === "high");
+  const bubbleXPositions = options?.bubbleXPositions ?? [];
+  const isHeroWord = Boolean(options?.isHeroWord);
+
   switch (elementalClass) {
     case "WATER":
     case "RAIN": {
@@ -29,11 +40,12 @@ export function drawElementalWord(
       ctx.restore();
 
       // Bubbles rising from word
-      const bubbleCount = 3 + appearanceCount * 2;
+      const bubbleCount = Math.max(1, bubbleXPositions.length || (3 + appearanceCount * 2));
       const bubbleSpeed = 1 + appearanceCount * 0.4;
-      const cappedBubbles = Math.min(bubbleCount, 18);
+      const cappedBubbles = Math.min(bubbleCount, effectQuality === "high" ? 12 : 8);
       for (let i = 0; i < cappedBubbles; i += 1) {
-        const bx = (wordWidth * i / cappedBubbles) + Math.sin(currentTime * 3 + i) * 4;
+        const fixedX = bubbleXPositions[i] ?? (wordWidth * i / cappedBubbles);
+        const bx = fixedX + Math.sin(currentTime * 3 + i) * 2;
         const byBase = -fontSize;
         const byOffset = (currentTime * (15 * bubbleSpeed) + i * 20) % 40;
         const by = byBase - byOffset;
@@ -106,7 +118,9 @@ export function drawElementalWord(
     case "SMOKE": {
       // Base word at reduced opacity
       ctx.globalAlpha *= 0.65;
-      ctx.filter = "blur(0.8px)";
+      if (useBlur) {
+        ctx.filter = "blur(0.8px)";
+      }
       ctx.fillStyle = colorOverride ?? "#8a8a8a";
       ctx.fillText(word, 0, 0);
       ctx.filter = "none";
@@ -134,7 +148,7 @@ export function drawElementalWord(
     case "NEON": {
       // Neon glow word
       const neonColor = colorOverride ?? "#00ffff";
-      ctx.shadowBlur = 15 + beatIntensity * 20;
+      ctx.shadowBlur = isHeroWord ? 15 + beatIntensity * 20 : 0;
       ctx.shadowColor = neonColor;
       ctx.fillStyle = "#ffffff";
       ctx.fillText(word, 0, 0);

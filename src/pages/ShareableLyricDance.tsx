@@ -28,6 +28,7 @@ import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimatio
 import { deriveCanvasManifest } from "@/engine/deriveCanvasManifest";
 import { applyKineticEffect } from "../engine/KineticEffects";
 import { drawElementalWord } from "../engine/ElementalEffects";
+import BeatAnalyzerWorker from "@/workers/beatAnalyzer.worker?worker";
 import * as WordClassifier from "@/engine/WordClassifier";
 import { DirectionInterpreter, getActiveShot, getCurrentTensionStage } from "@/engine/DirectionInterpreter";
 import type { WordHistory } from "@/engine/DirectionInterpreter";
@@ -704,7 +705,9 @@ export default function ShareableLyricDance() {
   const physicsSpec = data?.physics_spec;
 
   // Canvas
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const particleCanvasRef = useRef<HTMLCanvasElement>(null);
+  const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
   const rngRef = useRef<() => number>(() => 0);
@@ -716,13 +719,20 @@ export default function ShareableLyricDance() {
   const lineBeatMapRef = useRef<LineBeatMap[]>([]);
   const wordMeasureCache = useRef<Map<string, number>>(new Map());
   const evolutionCacheRef = useRef<Map<string, { count: number; scale: number; glow: number; opacity: number; yOffset: number }>>(new Map());
-  const lastBeatIntensityRef = useRef(0);
+  const particleFrameRef = useRef(0);
+  const directiveCacheRef = useRef<Map<string, WordDirective | null>>(new Map());
+  const chapterBoundaryRef = useRef<{ key: number; chapter: ReturnType<DirectionInterpreter["getCurrentChapter"]> | null }>({ key: -1, chapter: null });
+  const tensionBoundaryRef = useRef<{ key: number; stage: TensionStage | null }>({ key: -1, stage: null });
+  const lastBgChapterRef = useRef("");
+  const lastBgBeatRef = useRef(0);
+  const lastBgProgressRef = useRef(0);
 
   useEffect(() => {
     wordMeasureCache.current.clear();
     evolutionCacheRef.current.clear();
     interpreterRef.current?.invalidateEvolutionCache();
     interpreterRefStable.current?.invalidateEvolutionCache();
+    directiveCacheRef.current.clear();
   }, [data?.lyrics?.length]);
 
 
@@ -771,11 +781,21 @@ export default function ShareableLyricDance() {
   useEffect(() => {
     const lines = data?.lyrics;
     const beatGrid = data?.beat_grid;
-    if (lines && beatGrid) {
-      lineBeatMapRef.current = buildLineBeatMap(lines, beatGrid);
-    } else {
+    if (!lines || !beatGrid) {
       lineBeatMapRef.current = [];
+      return;
     }
+
+    const worker = new BeatAnalyzerWorker();
+    worker.postMessage({ lines, beats: beatGrid.beats ?? [] });
+    worker.onmessage = (e: MessageEvent<{ lineBeatMap: LineBeatMap[] }>) => {
+      lineBeatMapRef.current = e.data.lineBeatMap ?? [];
+    };
+    worker.onerror = () => {
+      lineBeatMapRef.current = buildLineBeatMap(lines, beatGrid);
+    };
+
+    return () => worker.terminate();
   }, [data?.lyrics, data?.beat_grid]);
 
   // ── Load data ─────────────────────────────────────────────────────────────
@@ -797,8 +817,15 @@ export default function ShareableLyricDance() {
           return;
         }
         const d = row as any as LyricDanceData;
-        setData(d);
+        const deferredDirection = d.cinematic_direction ?? null;
+        setData({ ...d, cinematic_direction: null });
         setLoading(false);
+
+        Promise.resolve().then(() => {
+          if (deferredDirection) {
+            setData(prev => prev ? { ...prev, cinematic_direction: deferredDirection } : prev);
+          }
+        });
 
         // Generate cinematic direction on-the-fly if missing from DB
         if (!d.cinematic_direction && d.lyrics?.length > 0) {
@@ -898,13 +925,15 @@ export default function ShareableLyricDance() {
   // ── Canvas render loop ────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!data || !canvasRef.current || !containerRef.current) return;
+    if (!data || !bgCanvasRef.current || !particleCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
-    const canvas = canvasRef.current;
+    const bgCanvas = bgCanvasRef.current;
+    const particleCanvas = particleCanvasRef.current;
+    const textCanvas = textCanvasRef.current;
     const container = containerRef.current;
-    const ctx = canvas.getContext("2d", { alpha: false })!;
-    const bgLayerCanvas = document.createElement("canvas");
-    const bgLayerCtx = bgLayerCanvas.getContext("2d", { alpha: false })!;
+    const bgCtx = bgCanvas.getContext("2d", { alpha: false })!;
+    const particleCtx = particleCanvas.getContext("2d", { alpha: true })!;
+    const textCtx = textCanvas.getContext("2d", { alpha: true })!;
 
     const spec = data.physics_spec;
     const lines = data.lyrics;
@@ -923,6 +952,7 @@ export default function ShareableLyricDance() {
     let particleEngine: ParticleEngine | null = null;
     if (resolvedManifest.particleConfig?.system !== "none") {
       particleEngine = new ParticleEngine(resolvedManifest);
+      particleEngine.setUpdateFrameSkip(2);
     }
     particleEngineRef.current = particleEngine;
 
@@ -1007,15 +1037,18 @@ export default function ShareableLyricDance() {
     };
 
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
+      const isMobile = window.innerWidth < 768;
+      const pixelRatio = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       const rect = container.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      bgLayerCanvas.width = rect.width;
-      bgLayerCanvas.height = rect.height;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      [bgCanvas, particleCanvas, textCanvas].forEach((layerCanvas) => {
+        layerCanvas.width = rect.width * pixelRatio;
+        layerCanvas.height = rect.height * pixelRatio;
+        layerCanvas.style.width = `${rect.width}px`;
+        layerCanvas.style.height = `${rect.height}px`;
+      });
+      bgCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      particleCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      textCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       wordMeasureCache.current.clear();
       evolutionCacheRef.current.clear();
       interpreterRef.current?.invalidateEvolutionCache();
@@ -1032,8 +1065,10 @@ export default function ShareableLyricDance() {
       const deltaMs = now - lastFrameTime;
       lastFrameTime = now;
 
-      const cw = canvas.width / (window.devicePixelRatio || 1);
-      const ch = canvas.height / (window.devicePixelRatio || 1);
+      const cw = textCanvas.clientWidth || textCanvas.width / (window.devicePixelRatio || 1);
+      const ch = textCanvas.clientHeight || textCanvas.height / (window.devicePixelRatio || 1);
+      const ctx = textCtx;
+      ctx.clearRect(0, 0, cw, ch);
       let drawCalls = 0;
       let cacheHits = 0;
       let cacheLookups = 0;
@@ -1045,10 +1080,10 @@ export default function ShareableLyricDance() {
           cacheHits += 1;
           return cached;
         }
-        const previousFont = ctx.font;
-        ctx.font = `${fSize}px ${fontFamily}`;
-        const width = ctx.measureText(word).width;
-        ctx.font = previousFont;
+        const previousFont = textCtx.font;
+        textCtx.font = `${fSize}px ${fontFamily}`;
+        const width = textCtx.measureText(word).width;
+        textCtx.font = previousFont;
         wordMeasureCache.current.set(key, width);
         return width;
       };
@@ -1099,7 +1134,17 @@ export default function ShareableLyricDance() {
       const songProgress = Math.max(0, Math.min(1, (currentTime - songStart) / totalDuration));
       const symbol = cinematicDirection?.symbolSystem;
       const camera = cinematicDirection?.cameraLanguage;
-      const tensionStage = getCurrentTensionStage(songProgress, cinematicDirection?.tensionCurve as TensionStage[] | undefined);
+      const chapterBoundaryKey = Math.floor(songProgress * 100 / 5);
+      if (chapterBoundaryRef.current.key !== chapterBoundaryKey) {
+        chapterBoundaryRef.current = { key: chapterBoundaryKey, chapter: interpreterNow?.getCurrentChapter(songProgress) ?? null };
+      }
+      const chapterDirective = chapterBoundaryRef.current.chapter;
+
+      const tensionBoundary = songProgress < 0.25 ? 0 : songProgress < 0.6 ? 1 : songProgress < 0.85 ? 2 : 3;
+      if (tensionBoundaryRef.current.key !== tensionBoundary) {
+        tensionBoundaryRef.current = { key: tensionBoundary, stage: getCurrentTensionStage(songProgress, cinematicDirection?.tensionCurve as TensionStage[] | undefined) ?? null };
+      }
+      const tensionStage = tensionBoundaryRef.current.stage;
       const shot = activeLineIndex >= 0
         ? getActiveShot(activeLineIndex, cinematicDirection?.shotProgression)
         : null;
@@ -1146,7 +1191,6 @@ export default function ShareableLyricDance() {
       const timeToNextHook = nextHookStart - currentTime;
       const isPreHook = Number.isFinite(nextHookStart) && timeToNextHook > 0 && timeToNextHook < 2.0;
 
-      const chapterDirective = interpreterNow?.getCurrentChapter(songProgress) ?? null;
       if (chapterDirective?.title !== chapterTransitionRef.current.current) {
         chapterTransitionRef.current = {
           previous: chapterTransitionRef.current.current,
@@ -1190,21 +1234,38 @@ export default function ShareableLyricDance() {
         typographyShift: null,
       };
 
-      const chapterChanged = chapterDirective?.title !== chapterTransitionRef.current.current;
-      const bgNeedsRedraw = chapterChanged || Math.abs(currentBeatIntensity - lastBeatIntensityRef.current) > 0.1;
-      if (bgNeedsRedraw) {
+      const bgNeedsUpdate =
+        chapterForRender.title !== lastBgChapterRef.current ||
+        Math.abs(currentBeatIntensity - lastBgBeatRef.current) > 0.15 ||
+        Math.abs(songProgress - lastBgProgressRef.current) > 0.05 ||
+        (lastBgBeatRef.current <= 0.2 && currentBeatIntensity > 0.2) ||
+        (lastBgBeatRef.current > 0.2 && currentBeatIntensity <= 0.2);
+
+      if (bgNeedsUpdate) {
         renderChapterBackground(
-          bgLayerCtx,
-          bgLayerCanvas,
+          bgCtx,
+          bgCanvas,
           chapterForRender,
           songProgress,
           currentBeatIntensity,
           currentTime,
           symbol,
         );
-        lastBeatIntensityRef.current = currentBeatIntensity;
+
+        renderChapterLighting(
+          bgCtx,
+          bgCanvas,
+          chapterForRender,
+          activeWordPosition,
+          songProgress,
+          currentBeatIntensity * lightIntensityRef.current,
+          currentTime,
+        );
+
+        lastBgChapterRef.current = chapterForRender.title;
+        lastBgBeatRef.current = currentBeatIntensity;
+        lastBgProgressRef.current = songProgress;
       }
-      ctx.drawImage(bgLayerCanvas, 0, 0, cw, ch);
       drawCalls += 2;
 
       // AI-generated background image with slow cinematic push and hook reframe.
@@ -1215,26 +1276,16 @@ export default function ShareableLyricDance() {
         const offsetY = (ch * (zoom - 1)) / 2;
         const reframeX = hookOffsetX * cw;
         const reframeY = hookOffsetY * ch;
-        ctx.globalAlpha = 0.55;
-        ctx.drawImage(
+        bgCtx.globalAlpha = 0.55;
+        bgCtx.drawImage(
           bgImg,
           -offsetX + reframeX,
           -offsetY + reframeY,
           cw * zoom,
           ch * zoom,
         );
-        ctx.globalAlpha = 1;
+        bgCtx.globalAlpha = 1;
       }
-
-      renderChapterLighting(
-        ctx,
-        canvas,
-        chapterForRender,
-        activeWordPosition,
-        songProgress,
-        currentBeatIntensity * lightIntensityRef.current,
-        currentTime,
-      );
 
       // Particle engine: update then draw parallax split layers.
       if (particleEngine) {
@@ -1260,8 +1311,12 @@ export default function ShareableLyricDance() {
         lightIntensityRef.current = tensionStage?.lightBrightness ?? 0.5;
         timedParticleConfig.density = Math.min(timedParticleConfig.density, maxParticles / 300);
         particleEngine.update(deltaMs, currentBeatIntensity, timedParticleConfig);
-        particleEngine.draw(ctx, "far");
-        drawCalls += 1;
+        particleFrameRef.current += 1;
+        if (particleFrameRef.current % 2 === 0) {
+          particleCtx.clearRect(0, 0, cw, ch);
+          particleEngine.draw(particleCtx, "all");
+          drawCalls += 1;
+        }
       }
 
       // Pre-hook darkness build (skipped during hook itself).
@@ -1280,12 +1335,6 @@ export default function ShareableLyricDance() {
 
       // Beat scale baseline decay.
       beatScaleRef.current = Math.max(1, beatScaleRef.current * 0.9);
-
-      // Near particles after overlays for cinematic depth.
-      if (particleEngine) {
-        particleEngine.draw(ctx, "near");
-        drawCalls += 1;
-      }
 
       // ── Comment rendering (constellation + river + center) ──
       const nodes = constellationRef.current;
@@ -1635,6 +1684,14 @@ export default function ShareableLyricDance() {
           };
         }
 
+        const getCachedDirective = (wordText: string): WordDirective | null => {
+          const key = wordText.toLowerCase();
+          if (!directiveCacheRef.current.has(key)) {
+            directiveCacheRef.current.set(key, interpreterNow?.getWordDirective(wordText) ?? null);
+          }
+          return directiveCacheRef.current.get(key) ?? null;
+        };
+
         renderedWords.forEach((word, renderedIndex) => {
           const normalizedWord = word.text.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
           const sourceWordIndex = displayMode === "single_word"
@@ -1659,7 +1716,7 @@ export default function ShareableLyricDance() {
             wordCountRef.current.get(word.text) ?? 0,
           );
 
-          const directive = interpreterNow?.getWordDirective(word.text) ?? null;
+          const directive = getCachedDirective(word.text);
           if (directive?.colorOverride) {
             props.color = directive.colorOverride;
           }
@@ -1846,6 +1903,11 @@ export default function ShareableLyricDance() {
           }
 
           if (directive?.elementalClass) {
+            const isMobile = window.innerWidth < 768;
+            const effectQuality = isMobile ? "low" : "high";
+            const maxBubbles = window.devicePixelRatio > 1 ? 8 : 4;
+            const bubbleCount = Math.min(maxBubbles, Math.max(3, appearanceCount + 2));
+            const bubbleXPositions = Array.from({ length: bubbleCount }, (_, i) => wordRenderWidth * (i / Math.max(1, bubbleCount)));
             drawElementalWord(
               ctx,
               word.text,
@@ -1856,6 +1918,12 @@ export default function ShareableLyricDance() {
               currentBeatIntensity,
               appearanceCount,
               directive.colorOverride ?? null,
+              {
+                bubbleXPositions,
+                useBlur: navigator.hardwareConcurrency > 4,
+                isHeroWord,
+                effectQuality,
+              },
             );
           } else if (props.letterSpacing !== "0em") {
             drawWithLetterSpacing(ctx, word.text, 0, 0, props.letterSpacing);
@@ -1934,22 +2002,15 @@ export default function ShareableLyricDance() {
         ctx.fillStyle = `rgba(${transitionRgb}, ${(1 - chapterTransitionProgress) * 0.3})`;
         ctx.fillRect(0, 0, cw, ch);
       }
-
-      // Breathing vignette pulse
-      const vignetteIntensity = (vignetteIntensityRef.current + currentBeatIntensity * 0.15) * baseAtmosphere;
-      const vignetteCx = cw / 2;
-      const vignetteCy = ch / 2;
-      const vignette = ctx.createRadialGradient(
-        vignetteCx,
-        vignetteCy,
-        ch * 0.3,
-        vignetteCx,
-        vignetteCy,
-        ch * 0.85,
-      );
-      vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(1, `rgba(0,0,0,${Math.max(0, Math.min(1, vignetteIntensity))})`);
-      ctx.fillStyle = vignette;
+      // Single composite overlay pass
+      const overlayR = isClimax ? 255 : 0;
+      const overlayG = isClimax ? 255 : 0;
+      const overlayB = isClimax ? 255 : 0;
+      const chapterOverlay = (chapterForRender.emotionalIntensity ?? 0.5) * 0.2;
+      const vignetteOverlay = (vignetteIntensityRef.current + currentBeatIntensity * 0.15) * baseAtmosphere * 0.35;
+      const climaxOverlay = isClimax ? currentBeatIntensity * 0.15 : 0;
+      const overlayA = Math.max(0, Math.min(0.9, chapterOverlay + vignetteOverlay + climaxOverlay));
+      ctx.fillStyle = `rgba(${overlayR},${overlayG},${overlayB},${overlayA})`;
       ctx.fillRect(0, 0, cw, ch);
 
       if (songProgress > 0.95 && cinematicDirection) {
@@ -2024,7 +2085,7 @@ export default function ShareableLyricDance() {
       dbg.vignetteIntensity = (0.55 + currentBeatIntensity * 0.15) * baseAtmosphere;
       dbg.songProgress = songProgress;
       // Direction
-      const chapter = interpreterNow?.getCurrentChapter(songProgress);
+      const chapter = chapterDirective;
       dbg.dirThesis = interpreterNow?.direction?.thesis ?? "—";
       dbg.dirChapter = chapter?.title ?? "—";
       dbg.dirChapterProgress = chapter ? Math.max(0, Math.min(1, (songProgress - chapter.startRatio) / Math.max(0.001, chapter.endRatio - chapter.startRatio))) : 0;
@@ -2255,7 +2316,9 @@ export default function ShareableLyricDance() {
         className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer"
         onClick={() => { if (!showCover) handleMuteToggle(); }}
       >
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+        <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full" />
+        <canvas id="particle-canvas" ref={particleCanvasRef} className="absolute inset-0 w-full h-full" />
+        <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full" />
 
         {/* Dark cover overlay */}
         <AnimatePresence>
