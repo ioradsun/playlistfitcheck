@@ -869,16 +869,8 @@ export function LyricDisplay({
     if (manifest) return manifest;
     if (!songDna) return null;
     if (songDna.scene_manifest) return safeManifest(songDna.scene_manifest).manifest;
-    if (songDna.physicsSpec) {
-      return safeManifest(deriveSceneManifestFromSpec({
-        spec: songDna.physicsSpec as PhysicsSpec,
-        mood: songDna.mood,
-        description: songDna.description,
-        songTitle: data.title,
-      })).manifest;
-    }
     return null;
-  }, [manifest, songDna, data.title]);
+  }, [manifest, songDna]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw =
