@@ -137,9 +137,13 @@ export class DirectionInterpreter {
   ) {}
 
   getCurrentChapter(songProgress: number): Chapter {
-    return this.direction.chapters.find((c) => (
+    const chapters = this.direction.chapters;
+    if (!Array.isArray(chapters) || chapters.length === 0) {
+      return { startRatio: 0, endRatio: 1, title: "Full Song", emotionalArc: "neutral", dominantColor: "#333333", lightBehavior: "steady", particleDirective: "ambient", backgroundDirective: "hold", emotionalIntensity: 0.5, typographyShift: null } as Chapter;
+    }
+    return chapters.find((c) => (
       songProgress >= c.startRatio && songProgress <= c.endRatio
-    )) ?? this.direction.chapters[0];
+    )) ?? chapters[0];
   }
 
   getWordDirective(word: string): WordDirective | null {
