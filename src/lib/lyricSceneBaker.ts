@@ -383,8 +383,9 @@ function bakeFrame(
       exitScale,
     });
 
-    if (frameIndex === 30 && lineActive && visible) {
-      console.log('[ANIM] frame 30 active chunk:', {
+    if (!state.hasLoggedAnim && visible) {
+      state.hasLoggedAnim = true;
+      console.log('[ANIM] first visible chunk:', {
         entryStyle: storyboardEntry?.entryStyle,
         entryOffsetY,
         entryOffsetX,
