@@ -565,16 +565,11 @@ export class LyricDancePlayer {
     }
 
     const palette = this.payload?.palette ?? this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"];
-    offCtx.fillStyle = palette[0] || "#0a0a0a";
+    const grad = offCtx.createLinearGradient(0, 0, 0, off.height);
+    grad.addColorStop(0, palette[0] || "#0a0a0a");
+    grad.addColorStop(1, palette[1] || "#111111");
+    offCtx.fillStyle = grad;
     offCtx.fillRect(0, 0, off.width, off.height);
-
-    // Optional subtle second tone band (still “draw once”)
-    if (palette[1]) {
-      offCtx.globalAlpha = 0.25;
-      offCtx.fillStyle = palette[1];
-      offCtx.fillRect(0, Math.floor(off.height * 0.55), off.width, Math.floor(off.height * 0.45));
-      offCtx.globalAlpha = 1;
-    }
 
     this.bgCache = off;
   }

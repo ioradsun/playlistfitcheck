@@ -115,14 +115,14 @@ function getTensionMotion(
   cinematicDirection: CinematicDirection | null,
   songProgress: number,
 ): number {
-  if (!cinematicDirection?.tensionCurve?.length) return 0.5;
+  if (!cinematicDirection?.tensionCurve?.length) return 1;
 
   const stages = cinematicDirection.tensionCurve as TensionStageLike[];
   const currentStage =
     stages.find((stage) => songProgress >= (stage.startRatio ?? 0) && songProgress <= (stage.endRatio ?? 1)) ??
     stages[stages.length - 1];
 
-  const motion = currentStage.motion ?? currentStage.motionIntensity ?? 0.5;
+  const motion = currentStage.motion ?? currentStage.motionIntensity ?? 1;
   return Math.max(0, Math.min(1, motion));
 }
 
@@ -170,7 +170,9 @@ function bakeFrame(
     const fadeOut = Math.min(1, Math.max(0, (line.end - tSec) / 0.3));
     const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
 
-    const x = linePositions[idx] + lineChapterOffsets[idx];
+    let x = linePositions[idx] + lineChapterOffsets[idx];
+    const estimatedWidth = line.text.length * 26;
+    x = Math.max(estimatedWidth / 2 + 40, Math.min(960 - estimatedWidth / 2 - 40, x));
     const y = getShotY(payload.cinematic_direction, chapter);
 
     const priorPulse = state.linePulse.get(idx) ?? 0;
@@ -224,8 +226,8 @@ function bakeFrame(
   return {
     timeMs,
     chunks,
-    cameraX: Math.sin(songProgress * Math.PI * 2) * 18 * tensionMotion,
-    cameraY: Math.cos(songProgress * Math.PI * 3) * 10 * tensionMotion,
+    cameraX: Math.sin(songProgress * Math.PI * 2) * 28 * tensionMotion,
+    cameraY: Math.cos(songProgress * Math.PI * 3) * 16 * tensionMotion,
     beatIndex,
   };
 }
