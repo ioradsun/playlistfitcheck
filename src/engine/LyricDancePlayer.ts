@@ -583,7 +583,7 @@ export class LyricDancePlayer {
       exitProgress: activeLine ? Math.max(0, 1 - (activeLine.end - clamped) / Math.max(0.1, activeLine.end - activeLine.start)) : 0,
       fontScale: frame?.cameraZoom ?? 1,
       scale: frame?.cameraZoom ?? 1,
-      lineColor: visibleChunks[0]?.color ?? "#ffffff",
+      lineColor: (visibleChunks[0] as any)?.color ?? "#ffffff",
       zoom: frame?.cameraZoom ?? 1,
 
       // Particles (from manifest)
