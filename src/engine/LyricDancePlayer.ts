@@ -245,6 +245,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     x: number;
     y: number;
     alpha: number;
+    scale: number;
     visible: boolean;
   }>;
 };
@@ -545,9 +546,8 @@ export class LyricDancePlayer {
     // Background — no camera offset
     if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
 
-    // Text drawn at true canvas center — no camera translate
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
+    // Camera applies to text layer only
+    this.ctx.translate(frame.cameraX, frame.cameraY);
 
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
@@ -555,10 +555,20 @@ export class LyricDancePlayer {
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
+      const cx = this.width / 2;
+      const cy = this.height / 2;
+
+      this.ctx.save();
+      this.ctx.translate(cx, cy);
+      this.ctx.scale(chunk.scale ?? 1, chunk.scale ?? 1);
+      this.ctx.translate(-cx, -cy);
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.font = obj.font;
       this.ctx.fillStyle = obj.color;
-      this.ctx.fillText(obj.text, this.width / 2, this.height / 2);
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(obj.text, cx, cy);
+      this.ctx.restore();
       drawCalls += 1;
     }
 
@@ -765,6 +775,7 @@ export class LyricDancePlayer {
         x: c.x * sx,
         y: c.y * sy,
         alpha: c.alpha,
+        scale: c.scale,
         visible: c.visible,
       })),
     }));
@@ -785,7 +796,7 @@ export class LyricDancePlayer {
         x: sx ? c.x / sx : c.x,
         y: sy ? c.y / sy : c.y,
         alpha: c.alpha,
-        scale: 1,
+        scale: c.scale,
         visible: c.visible,
       })),
     }));

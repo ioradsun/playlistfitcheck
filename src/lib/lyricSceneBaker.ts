@@ -68,7 +68,7 @@ type BakeState = {
   beats: number[];
   beatCursor: number;
   lastBeatIndex: number;
-  linePulse: Map<number, number>;
+  pulseBudget: number;
 };
 
 function getBeatIndex(tSec: number, state: BakeState): number {
@@ -107,21 +107,6 @@ function getShotY(_cinematicDirection: CinematicDirection | null, _chapter: Chap
   return 540 * 0.48;
 }
 
-function getTensionMotion(
-  cinematicDirection: CinematicDirection | null,
-  songProgress: number,
-): number {
-  if (!cinematicDirection?.tensionCurve?.length) return 1;
-
-  const stages = cinematicDirection.tensionCurve as TensionStageLike[];
-  const currentStage =
-    stages.find((stage) => songProgress >= (stage.startRatio ?? 0) && songProgress <= (stage.endRatio ?? 1)) ??
-    stages[stages.length - 1];
-
-  const motion = currentStage.motion ?? currentStage.motionIntensity ?? 1;
-  return Math.max(0, Math.min(1, motion));
-}
-
 function getActiveLineIndex(lines: LyricLine[], tSec: number): number {
   return lines.findIndex((line) => tSec >= line.start && tSec < line.end);
 }
@@ -140,21 +125,17 @@ function bakeFrame(
   const activeLineIndex = getActiveLineIndex(payload.lines, tSec);
   const beatIndex = getBeatIndex(tSec, state);
 
-  const onBeat = beatIndex !== state.lastBeatIndex;
-  if (onBeat && activeLineIndex >= 0) {
-    state.linePulse.set(activeLineIndex, 0.08);
+  if (beatIndex !== state.lastBeatIndex) {
     state.lastBeatIndex = beatIndex;
+    state.pulseBudget = 4;
   }
+  const beatPulse = state.pulseBudget > 0 ? (state.pulseBudget / 4) * 0.12 : 0;
+  if (state.pulseBudget > 0) state.pulseBudget -= 1;
 
-  const energy = (payload.physics_spec as PhysicsSpec & { energy?: number; params?: Record<string, number> })
-    .energy ?? payload.physics_spec?.params?.energy ?? 0.5;
-  const density = (payload.physics_spec as PhysicsSpec & { density?: number; params?: Record<string, number> })
-    .density ?? payload.physics_spec?.params?.density ?? 0.5;
-  const baseScale = 1 + Math.max(0, Math.min(1, energy)) * 0.15;
-  const pulseDecayPerFrame = 0.08 / 4;
-
-  const { chapterIndex, chapter } = getChapterIndexAndData(payload.cinematic_direction, songProgress);
-  const tensionMotion = getTensionMotion(payload.cinematic_direction, songProgress);
+  const { chapter } = getChapterIndexAndData(payload.cinematic_direction, songProgress);
+  const tensionMotion = payload.cinematic_direction?.tensionCurve?.find(
+    (s) => tSec >= (s.startSec ?? 0) && tSec < (s.endSec ?? 9999),
+  )?.motion ?? 0.5;
 
   const chunks: Keyframe["chunks"] = [];
 
@@ -173,9 +154,8 @@ function bakeFrame(
     x = Math.max(minX, Math.min(maxX, x));
     const y = getShotY(payload.cinematic_direction, chapter);
 
-    const priorPulse = state.linePulse.get(idx) ?? 0;
-    const pulse = lineActive ? priorPulse : 0;
-    const scale = baseScale + pulse * (0.85 + density * 0.15);
+    const visible = alpha > 0.001;
+    const scale = lineActive && visible ? 1.0 + beatPulse : 1.0;
 
     chunks.push({
       id: `${idx}`,
@@ -183,7 +163,7 @@ function bakeFrame(
       y,
       alpha,
       scale,
-      visible: alpha > 0.001,
+      visible,
     });
 
     if (lineActive && payload.cinematic_direction?.wordDirectives) {
@@ -210,22 +190,18 @@ function bakeFrame(
             y,
             alpha: Math.min(1, alpha + 0.15),
             scale: scale * 1.3,
-            visible: alpha > 0.001,
+            visible,
           });
         }
       }
-    }
-
-    if (priorPulse > 0) {
-      state.linePulse.set(idx, Math.max(0, priorPulse - pulseDecayPerFrame));
     }
   }
 
   return {
     timeMs,
     chunks,
-    cameraX: Math.sin(songProgress * Math.PI * 2) * 28 * tensionMotion,
-    cameraY: Math.cos(songProgress * Math.PI * 3) * 16 * tensionMotion,
+    cameraX: Math.sin(songProgress * Math.PI * 3.7) * 12 * tensionMotion,
+    cameraY: Math.cos(songProgress * Math.PI * 2.3) * 7 * tensionMotion,
     beatIndex,
   };
 }
@@ -247,8 +223,8 @@ function createBakeState(payload: ScenePayload): BakeState {
   return {
     beats: payload.beat_grid?.beats ?? [],
     beatCursor: 0,
-    lastBeatIndex: -1,
-    linePulse: new Map<number, number>(),
+    lastBeatIndex: 0,
+    pulseBudget: 0,
   };
 }
 
