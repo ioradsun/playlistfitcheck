@@ -49,6 +49,7 @@ export function LyricFitTab({
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const savedIdRef = useRef<string | null>(null);
   const [lines, setLines] = useState<LyricLine[]>([]);
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
@@ -106,6 +107,9 @@ export function LyricFitTab({
         if (f.lyric_transcription_model) setTranscriptionModel(f.lyric_transcription_model);
       });
   }, []);
+
+  // Keep ref in sync with savedId state
+  useEffect(() => { savedIdRef.current = savedId; }, [savedId]);
 
   // Load saved lyric from dashboard navigation
   useEffect(() => {
@@ -189,12 +193,13 @@ export function LyricFitTab({
 
     // 1. Fetch latest lines (internal, no stage label)
     let freshLines = lines;
-    if (savedId) {
+    const currentSavedId = savedIdRef.current;
+    if (currentSavedId) {
       try {
         const { data: saved } = await supabase
           .from("saved_lyrics")
           .select("lines")
-          .eq("id", savedId)
+          .eq("id", currentSavedId)
           .single();
         if (saved?.lines && Array.isArray(saved.lines)) {
           freshLines = saved.lines as unknown as LyricLine[];
@@ -332,7 +337,7 @@ export function LyricFitTab({
           artist: lyricData.artist,
           lines: lyricsForDirection,
           beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
-          lyricId: savedId || undefined,
+          lyricId: currentSavedId || undefined,
         },
       });
 
@@ -351,15 +356,19 @@ export function LyricFitTab({
     setPipelineStages(prev => ({ ...prev, cinematic: "done", transcript: "running" }));
 
     // 5. Persist songDna + cinematicDirection to saved_lyrics
-    if (savedId) {
-      try {
-        await supabase
-          .from("saved_lyrics")
-          .update({ song_dna: { ...nextSongDna, cinematicDirection: resolvedCinematic } as any, updated_at: new Date().toISOString() })
-          .eq("id", savedId);
-      } catch (e) {
-        console.warn("[Pipeline] Failed to persist song_dna:", e);
+    if (currentSavedId) {
+      const songDnaPayload = { ...nextSongDna, cinematicDirection: resolvedCinematic };
+      const { error: persistError } = await supabase
+        .from("saved_lyrics")
+        .update({ song_dna: songDnaPayload as any, updated_at: new Date().toISOString() })
+        .eq("id", currentSavedId);
+      if (persistError) {
+        console.error("[Pipeline] Failed to persist song_dna:", persistError);
+      } else {
+        console.log("[Pipeline] song_dna persisted to", currentSavedId);
       }
+    } else {
+      console.warn("[Pipeline] No savedId — song_dna not persisted");
     }
 
     setPipelineStages(prev => ({ ...prev, transcript: "done" }));
@@ -368,7 +377,7 @@ export function LyricFitTab({
     setFitReadiness("ready");
     setFitStageLabel("Ready");
     toast.success("Your Fit is ready! 🎬", { description: "Switch to the Fit tab to explore your song's DNA." });
-  }, [lyricData, audioFile, lines, savedId, hasRealAudio, beatGrid]);
+  }, [lyricData, audioFile, lines, hasRealAudio, beatGrid]);
 
   // Auto-trigger pipeline when lyrics are first transcribed
   const prevLinesLen = useRef(0);
