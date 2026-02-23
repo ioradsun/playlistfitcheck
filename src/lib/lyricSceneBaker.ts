@@ -308,7 +308,7 @@ function bakeFrame(
 
     const lineStart = line.start ?? 0;
     const lineEnd = line.end ?? 0;
-    const isCutStyle = entryStyle === 'cuts' || exitStyle === 'cuts';
+    const isCutStyle = (entryStyle as string) === 'cuts' || (exitStyle as string) === 'cuts';
     const fadeIn = isCutStyle
       ? (tSec >= lineStart ? 1 : 0)
       : Math.min(1, Math.max(0, (tSec - lineStart) / 0.2));
