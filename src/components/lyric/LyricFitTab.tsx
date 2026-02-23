@@ -449,6 +449,8 @@ export function LyricFitTab({
           bgImageUrl={bgImageUrl}
           setBgImageUrl={setBgImageUrl}
           onRetry={() => runPipeline(true)}
+          onHeaderProject={onHeaderProject}
+          onBack={() => setActiveTab("lyrics")}
         />
       ) : null}
     </div>
