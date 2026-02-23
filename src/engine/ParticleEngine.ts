@@ -86,6 +86,18 @@ export class ParticleEngine {
     this.config = config;
   }
 
+  /** Public accessor: count of currently active particles */
+  getActiveCount(): number {
+    let count = 0;
+    for (let i = 0; i < this.pool.length; i++) if (this.pool[i].active) count++;
+    return count;
+  }
+
+  /** Public accessor: current config snapshot */
+  getConfig(): ParticleConfig {
+    return this.config;
+  }
+
 
   init(config: ParticleConfig, manifest: SceneManifest): void {
     this.config = config;
