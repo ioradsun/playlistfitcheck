@@ -925,32 +925,14 @@ export default function ShareableLyricDance() {
         const fontSize = fs * activeLineAnim.fontScale;
         frameFontSize = fontSize;
 
+        const targetXOffset = 0;
         const sectionProgress = songProgress;
-        let targetXOffset = 0;
         let sectionZone: "verse" | "chorus" | "bridge" | "hook" | "outro" = "chorus";
-        if (sectionProgress < 0.33) {
-          targetXOffset = cw * -0.06;
-          sectionZone = "verse";
-        } else if (sectionProgress < 0.45) {
-          const t = (sectionProgress - 0.33) / 0.12;
-          targetXOffset = cw * (-0.06 + 0.06 * t);
-          sectionZone = "verse";
-        } else if (sectionProgress < 0.6) {
-          targetXOffset = 0;
-          sectionZone = "chorus";
-        } else if (sectionProgress < 0.75) {
-          targetXOffset = cw * 0.06;
-          sectionZone = "bridge";
-        } else {
-          const t = (sectionProgress - 0.75) / 0.25;
-          targetXOffset = cw * (0.06 * (1 - Math.max(0, Math.min(1, t))));
-          sectionZone = "outro";
-        }
-
-        if (activeLineAnim.isHookLine) {
-          targetXOffset = 0;
-          sectionZone = "hook";
-        }
+        if (sectionProgress < 0.33) sectionZone = "verse";
+        else if (sectionProgress < 0.6) sectionZone = "chorus";
+        else if (sectionProgress < 0.75) sectionZone = "bridge";
+        else sectionZone = "outro";
+        if (activeLineAnim.isHookLine) sectionZone = "hook";
         frameSectionZone = sectionZone;
 
         const strongMods = new Set(["PULSE_STRONG", "HEAT_SPIKE", "ERUPT", "FLAME_BURST", "EXPLODE"]);
