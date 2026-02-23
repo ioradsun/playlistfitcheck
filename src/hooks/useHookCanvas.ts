@@ -498,7 +498,7 @@ export function useHookCanvas(
       const words = activeLine.text.split(" ");
       let wordX = lineX - ctx.measureText(activeLine.text).width / 2;
       words.forEach((word, wi) => {
-        const wordAnim = animationResolver.resolveWord(lineIndex, wi, beatIntensity);
+        const wordAnim = animationResolver.resolveWord(activeLine.start, wi, beatIntensity);
         ctx.save();
         if (wordAnim) {
           applyWordMark(ctx, wordAnim, ct, manifest);

@@ -62,7 +62,9 @@ export class AnimationResolver {
         ? Math.min(1, (elapsed - (duration - exitDur)) / exitDur)
         : 0;
 
-    const activeMod = this.lineMods.get(lineIndex)?.[0] ?? null;
+    // line_mods are keyed by t_lyric (seconds), not lineIndex
+    const tKey = Math.round(lineStartSec);
+    const activeMod = this.lineMods.get(tKey)?.[0] ?? null;
     const isHookLine = this.hookRanges.some(
       (h) => lineStartSec >= h.start && lineStartSec < h.end,
     );
@@ -82,11 +84,13 @@ export class AnimationResolver {
   }
 
   resolveWord(
-    lineIndex: number,
+    lineStartSec: number,
     wordIndex: number,
     beatIntensity: number,
   ): WordAnimation | null {
-    const mark = this.wordMarks.get(`${lineIndex}:${wordIndex}`);
+    // word_marks are also keyed by t_lyric (seconds), not lineIndex
+    const tKey = Math.round(lineStartSec);
+    const mark = this.wordMarks.get(`${tKey}:${wordIndex}`);
     if (!mark) return null;
     return { mark, intensity: 0.5 + beatIntensity * 0.5 };
   }
