@@ -382,6 +382,19 @@ function bakeFrame(
       exitScale,
     });
 
+    if (frameIndex === 200 && lineActive && visible) {
+      console.log('[ANIM] frame 200 active chunk:', {
+        id: `${idx}`,
+        entryStyle: storyboardEntry?.entryStyle,
+        exitStyle: storyboardEntry?.exitStyle,
+        entryOffsetY,
+        entryOffsetX,
+        entryScale,
+        exitOffsetY,
+        entryProgress: entryProgress?.toFixed(3),
+      });
+    }
+
     if (lineActive) {
       const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
       const lineHeroWord = heroWord
