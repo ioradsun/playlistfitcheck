@@ -86,6 +86,45 @@ export function FitTab({
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
+
+  // Simple hash of lyrics to detect transcript changes
+  const computeLyricsHash = useCallback((lns: LyricLine[]) => {
+    const text = lns.filter(l => l.tag !== "adlib").map(l => `${l.text}|${l.start}|${l.end}`).join("\n");
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+    }
+    return String(hash);
+  }, []);
+
+  const currentLyricsHash = lyricData?.lines ? computeLyricsHash(lyricData.lines) : null;
+  const danceNeedsRegeneration = !publishedUrl || (publishedLyricsHash !== null && currentLyricsHash !== publishedLyricsHash);
+
+  // Check for existing published dance on load
+  useEffect(() => {
+    if (!user || !lyricData) return;
+    const artistSlug = slugify(lyricData.artist || "artist");
+    const songSlug = slugify(lyricData.title || "untitled");
+    if (!artistSlug || !songSlug) return;
+
+    supabase
+      .from("shareable_lyric_dances" as any)
+      .select("artist_slug, song_slug, lyrics")
+      .eq("user_id", user.id)
+      .eq("artist_slug", artistSlug)
+      .eq("song_slug", songSlug)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data) {
+          setPublishedUrl(`/${data.artist_slug}/${data.song_slug}/lyric-dance`);
+          // Hash the published lyrics to compare against current
+          const pubLines = Array.isArray(data.lyrics) ? data.lyrics : [];
+          setPublishedLyricsHash(computeLyricsHash(pubLines));
+        }
+      });
+  }, [user, lyricData, computeLyricsHash]);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -239,6 +278,8 @@ export function FitTab({
       if (insertError) throw insertError;
 
       const url = `/${artistSlug}/${songSlug}/lyric-dance`;
+      setPublishedUrl(url);
+      setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
       window.location.href = url;
     } catch (e: any) {
@@ -457,24 +498,34 @@ export function FitTab({
         </div>
       )}
 
-      {/* Dance button */}
-      <button
-        onClick={handleDance}
-        disabled={danceDisabled}
-        className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-      >
-        {publishing ? (
-          <span className="flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin" />
-            <span>{publishStatus || "Publishing…"}</span>
-          </span>
-        ) : (
-          <>
-            <Film size={14} />
-            Dance
-          </>
-        )}
-      </button>
+      {/* Dance button — reuse existing link until transcript changes */}
+      {publishedUrl && !danceNeedsRegeneration ? (
+        <a
+          href={publishedUrl}
+          className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+        >
+          <Film size={14} />
+          View Dance
+        </a>
+      ) : (
+        <button
+          onClick={handleDance}
+          disabled={danceDisabled}
+          className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+        >
+          {publishing ? (
+            <span className="flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>{publishStatus || "Publishing…"}</span>
+            </span>
+          ) : (
+            <>
+              <Film size={14} />
+              {publishedUrl ? "Regenerate Dance" : "Dance"}
+            </>
+          )}
+        </button>
+      )}
 
     </div>
   );
