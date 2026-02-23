@@ -1,20 +1,41 @@
 /**
- * FitTab — Displays analysis results (no waveform — shared waveform lives in Lyrics tab).
+ * FitTab — Displays analysis results with waveform + beat markers.
  * No auto-triggering; pipeline runs in LyricFitTab parent.
  * "Test Again" button to re-run analysis.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Film, RefreshCw, Music, Sparkles, Eye, Palette, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
+import { LyricWaveform } from "./LyricWaveform";
+import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
+import type { HeaderProjectSetter } from "./LyricsTab";
 
+const PEAK_SAMPLES = 200;
+
+function extractPeaks(buffer: AudioBuffer, samples: number): number[] {
+  const channel = buffer.getChannelData(0);
+  const blockSize = Math.floor(channel.length / samples);
+  const peaks: number[] = [];
+  for (let i = 0; i < samples; i++) {
+    let max = 0;
+    const start = i * blockSize;
+    for (let j = 0; j < blockSize; j++) {
+      const v = Math.abs(channel[start + j]);
+      if (v > max) max = v;
+    }
+    peaks.push(max);
+  }
+  const maxPeak = Math.max(...peaks, 0.01);
+  return peaks.map((p) => p / maxPeak);
+}
 
 interface Props {
   lyricData: LyricData;
@@ -34,6 +55,8 @@ interface Props {
   bgImageUrl: string | null;
   setBgImageUrl: (u: string | null) => void;
   onRetry?: () => void;
+  onHeaderProject?: HeaderProjectSetter;
+  onBack?: () => void;
 }
 
 export function FitTab({
@@ -54,11 +77,93 @@ export function FitTab({
   bgImageUrl,
   setBgImageUrl,
   onRetry,
+  onHeaderProject,
+  onBack,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
 
+  // ── Audio playback + waveform ─────────────────────────────────────────
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [waveform, setWaveform] = useState<WaveformData | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!audioFile || audioFile.size === 0) return;
+
+    const url = URL.createObjectURL(audioFile);
+    const audio = new Audio(url);
+    audio.preload = "auto";
+    audioRef.current = audio;
+
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => { setIsPlaying(false); setCurrentTime(0); };
+
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    audio.addEventListener("ended", onEnded);
+
+    const ctx = new AudioContext();
+    audioFile.arrayBuffer().then((ab) => {
+      ctx.decodeAudioData(ab).then((buf) => {
+        setWaveform({ peaks: extractPeaks(buf, PEAK_SAMPLES), duration: buf.duration });
+        ctx.close();
+      });
+    }).catch(() => {});
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("ended", onEnded);
+      URL.revokeObjectURL(url);
+      audioRef.current = null;
+    };
+  }, [audioFile]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      return;
+    }
+    const tick = () => {
+      if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [isPlaying]);
+
+  const handleSeek = useCallback((time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
+  }, []);
+
+  const handleTogglePlay = useCallback(() => {
+    if (!audioRef.current) return;
+    if (audioRef.current.paused) audioRef.current.play().catch(() => {});
+    else audioRef.current.pause();
+  }, []);
+
+  // ── Header project ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!onHeaderProject) return;
+    const title =
+      lyricData.title && lyricData.title !== "Unknown" && lyricData.title !== "Untitled"
+        ? lyricData.title
+        : audioFile.name.replace(/\.[^.]+$/, "");
+    onHeaderProject({ title, onBack: onBack ?? (() => {}) });
+    return () => onHeaderProject(null);
+  }, [lyricData.title, audioFile.name, onHeaderProject, onBack]);
 
   // ── Dance publish handler ─────────────────────────────────────────────
   const handleDance = useCallback(async () => {
