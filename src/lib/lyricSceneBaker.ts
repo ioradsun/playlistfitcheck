@@ -127,10 +127,11 @@ function bakeFrame(
 
   if (beatIndex !== state.lastBeatIndex) {
     state.lastBeatIndex = beatIndex;
-    state.pulseBudget = 4;
+    state.pulseBudget = 12;
   }
-  const beatPulse = state.pulseBudget > 0 ? (state.pulseBudget / 4) * 0.12 : 0;
   if (state.pulseBudget > 0) state.pulseBudget -= 1;
+  const pulseProgress = state.pulseBudget / 12;
+  const beatPulse = pulseProgress * pulseProgress * 0.08;
 
   const { chapter } = getChapterIndexAndData(payload.cinematic_direction, songProgress);
   const tensionMotion = payload.cinematic_direction?.tensionCurve?.find(
