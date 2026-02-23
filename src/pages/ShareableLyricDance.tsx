@@ -1316,29 +1316,60 @@ export default function ShareableLyricDance() {
         const wordDelay = wordsPerSecond > 0 ? 1 / wordsPerSecond : lineDuration;
         const visibleWordCount = words.filter((_, i) => currentTime >= activeLine.start + i * wordDelay).length;
         const drawWords = words.slice(0, visibleWordCount).map((text) => ({ text }));
-        const totalWords = drawWords.length;
 
-        const measuredWordWidths = drawWords.map(word => ctx.measureText(word.text).width);
+        const wordCount = words.length;
+        const isShort = wordCount <= 3;
+        const isFast = lineDuration < 1.5;
+        const hasImpactWord = words.some(word => WordClassifier.classifyWord(word) === "IMPACT");
+        type DisplayMode = "single_word" | "phrase_stack" | "two_line_stack";
+        const displayMode: DisplayMode = (activeLineAnim.isHookLine || isShort || hasImpactWord)
+          ? "single_word"
+          : isFast
+            ? "two_line_stack"
+            : "phrase_stack";
+
+        const previousLine = activeLineIndex > 0 ? lines[activeLineIndex - 1] : null;
+        if (displayMode === "two_line_stack" && previousLine) {
+          ctx.save();
+          ctx.font = `${Math.max(14, fontSize * 0.86)}px Inter, ui-sans-serif, system-ui`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "alphabetic";
+          ctx.fillStyle = activeLineAnim.lineColor;
+          ctx.globalAlpha = 0.25 * compositeAlpha;
+          ctx.fillText(previousLine.text, lineX, lineY - Math.max(40, fontSize * 1.5));
+          ctx.restore();
+        }
+
+        const renderedWords = displayMode === "single_word"
+          ? drawWords.slice(-1)
+          : displayMode === "two_line_stack"
+            ? words.map((text) => ({ text }))
+            : drawWords;
+
+        const measuredWordWidths = renderedWords.map(word => ctx.measureText(word.text).width);
         const baseSpaceWidth = ctx.measureText(" ").width;
-        const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, drawWords.length - 1) * baseSpaceWidth;
-        let cursorX = lineX - totalWidth / 2;
+        const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, renderedWords.length - 1) * baseSpaceWidth;
+        let cursorX = displayMode === "single_word" ? lineX : lineX - totalWidth / 2;
 
-        if (drawWords.length > 0) {
-          const activeWordIndex = Math.max(0, drawWords.length - 1);
+        if (renderedWords.length > 0) {
+          const activeWordIndex = Math.max(0, renderedWords.length - 1);
           const priorWidth = measuredWordWidths
             .slice(0, activeWordIndex)
             .reduce((sum, width) => sum + width, 0) + activeWordIndex * baseSpaceWidth;
           const activeWidth = measuredWordWidths[activeWordIndex] ?? 0;
           activeWordPosition = {
-            x: lineX - totalWidth / 2 + priorWidth + activeWidth / 2,
+            x: (displayMode === "single_word" ? lineX : lineX - totalWidth / 2) + priorWidth + activeWidth / 2,
             y: lineY,
           };
         }
 
-        drawWords.forEach((word, wordIndex) => {
+        renderedWords.forEach((word, renderedIndex) => {
           const normalizedWord = word.text.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
-          const resolvedWordStartTime = activeLine.start + wordIndex * wordDelay;
-          const appearanceKey = `${activeLine.start}:${wordIndex}:${normalizedWord}`;
+          const sourceWordIndex = displayMode === "single_word"
+            ? Math.max(0, visibleWordCount - 1)
+            : renderedIndex;
+          const resolvedWordStartTime = activeLine.start + Math.max(0, sourceWordIndex) * wordDelay;
+          const appearanceKey = `${activeLine.start}:${Math.max(0, sourceWordIndex)}:${normalizedWord}`;
 
           if (!seenWordAppearancesRef.current.has(appearanceKey) && currentTime >= resolvedWordStartTime) {
             const nextCount = (wordCountRef.current.get(normalizedWord) ?? 0) + 1;
@@ -1348,8 +1379,8 @@ export default function ShareableLyricDance() {
 
           const props = WordClassifier.getWordVisualProps(
             word.text,
-            wordIndex,
-            totalWords,
+            Math.max(0, sourceWordIndex),
+            Math.max(1, renderedWords.length),
             activeLineAnim,
             currentBeatIntensity,
             wordCountRef.current.get(word.text) ?? 0,
@@ -1360,15 +1391,17 @@ export default function ShareableLyricDance() {
           }
 
           const wordWidth = ctx.measureText(word.text).width;
-          const wordCenterX = cursorX + wordWidth / 2;
+          const wordCenterX = displayMode === "single_word"
+            ? lineX
+            : cursorX + wordWidth / 2;
           const wordX = wordCenterX;
           const wordY = lineY;
 
           ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui`;
           ctx.textAlign = "center";
           ctx.textBaseline = "alphabetic";
-          const wordRenderWidth = ctx.measureText(word).width;
-          const elementalClass = getElementalClass(word);
+          const wordRenderWidth = ctx.measureText(word.text).width;
+          const elementalClass = getElementalClass(word.text);
 
           // Scale
           ctx.save();
@@ -1380,7 +1413,10 @@ export default function ShareableLyricDance() {
           ctx.fillStyle = props.color;
 
           // Opacity
-          ctx.globalAlpha = props.opacity * compositeAlpha;
+          const modeOpacity = displayMode === "phrase_stack"
+            ? (renderedIndex === renderedWords.length - 1 ? 1 : 0.4)
+            : 1;
+          ctx.globalAlpha = props.opacity * compositeAlpha * modeOpacity;
 
           // Glow
           if (props.glowRadius > 0) {
@@ -1416,7 +1452,9 @@ export default function ShareableLyricDance() {
           wordCountRef.current.set(word.text, count + 1);
 
           ctx.globalAlpha = 1;
-          cursorX += wordWidth + baseSpaceWidth;
+          if (displayMode !== "single_word") {
+            cursorX += wordWidth + baseSpaceWidth;
+          }
         });
 
         if (drawWords.length === 0) {
