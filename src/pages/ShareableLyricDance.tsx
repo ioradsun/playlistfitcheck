@@ -480,6 +480,7 @@ export default function ShareableLyricDance() {
   const vignetteIntensityRef = useRef(0.55);
   const lightIntensityRef = useRef(1);
   const cameraZoomRef = useRef(1);
+  const beatIntensityRef = useRef(0);
   // Comment input (ShareableHook-style)
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -927,6 +928,7 @@ export default function ShareableLyricDance() {
         beatIndex++;
       }
       const currentBeatIntensity = smoothBeatIntensity;
+      beatIntensityRef.current = currentBeatIntensity;
 
       engineRef.current?.setViewportBounds(cw, ch);
       engineRef.current?.update(currentBeatIntensity, deltaMs / 1000, frameHadDownbeat);
@@ -1064,7 +1066,7 @@ export default function ShareableLyricDance() {
 
       // Particle engine: update via extracted function, then draw far layer on textCtx
       const lineDir = lineAnim ? (interpreterNow?.getLineDirection(activeLineIndex) ?? null) : null;
-      const particleResult = renderParticles(
+      const { drawCalls: particleDrawCalls, lightIntensity } = renderParticles(
         ctx, ctx,
         {
           particleEngine,
@@ -1087,8 +1089,8 @@ export default function ShareableLyricDance() {
         },
         particleStateRef.current,
       );
-      lightIntensityRef.current = particleResult.lightIntensity;
-      drawCalls += particleResult.drawCalls;
+      lightIntensityRef.current = lightIntensity;
+      drawCalls += particleDrawCalls;
 
       // PASS 1 — Far-layer particles (behind text, atmospheric)
       if (particleEngine) {
@@ -1326,7 +1328,7 @@ export default function ShareableLyricDance() {
       const dbg = liveDebugRef.current;
       dbg.time = currentTime;
       // Beat
-      dbg.beatIntensity = currentBeatIntensity;
+      dbg.beatIntensity = beatIntensityRef.current;
       dbg.physGlow = state.glow;
       // Physics Engine
       dbg.physicsActive = true;
@@ -1334,7 +1336,7 @@ export default function ShareableLyricDance() {
       dbg.heat = state.heat;
       dbg.velocity = state.velocity;
       dbg.rotation = state.rotation;
-      dbg.lastBeatForce = currentBeatIntensity;
+      dbg.lastBeatForce = beatIntensityRef.current;
       // Animation
       dbg.effectKey = frameEffectKey;
       dbg.entryProgress = frameEntry;
@@ -1350,7 +1352,7 @@ export default function ShareableLyricDance() {
       dbg.particleSystem = particleEngine?.getConfig().system ?? "none";
       dbg.particleDensity = particleEngine?.getConfig().density ?? 0;
       dbg.particleSpeed = particleEngine?.getConfig().speed ?? 0;
-      dbg.particleCount = particleEngine?.getActiveCount() ?? 0;
+      dbg.particleCount = particleEngineRef.current?.getActiveCount() ?? 0;
       dbg.songSection = `${frameSectionZone || getSongSection(songProgress)} · ${beatDensity.toFixed(1)}bps`;
       // Position
       dbg.xOffset = textStateRef.current.xOffset;
