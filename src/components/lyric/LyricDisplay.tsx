@@ -49,6 +49,7 @@ import {
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import { HookDanceCanvas } from "./HookDanceCanvas";
+import { LyricStage } from "./LyricStage";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { DirectorsCutPanel } from "./DirectorsCutPanel";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
@@ -164,6 +165,7 @@ interface Props {
   initialBeatGrid?: BeatGridData | null;
   initialSongSignature?: SongSignature | null;
   initialSongDna?: any | null;
+  initialBackgroundImageUrl?: string | null;
   onBack: () => void;
   onSaved?: (id: string) => void;
   onReuploadAudio?: (file: File) => void;
@@ -329,6 +331,7 @@ export function LyricDisplay({
   initialBeatGrid,
   initialSongSignature,
   initialSongDna,
+  initialBackgroundImageUrl,
   onBack,
   onSaved,
   onReuploadAudio,
@@ -510,6 +513,10 @@ export function LyricDisplay({
   } | null>(normalizeSongDnaWithManifest(initialSongDna, data.title) ?? null);
   const [dnaLoading, setDnaLoading] = useState(false);
   const [dnaRequested, setDnaRequested] = useState(!!initialSongDna);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(
+    initialBackgroundImageUrl ?? null,
+  );
+  const [isGeneratingBackground, setIsGeneratingBackground] = useState(false);
 
   const beatIntensity = useBeatIntensity(beatAnalyserRef.current, hookDanceRunning && isPlaying);
 
@@ -537,8 +544,35 @@ export function LyricDisplay({
       setSongDna(null);
       setDnaRequested(false);
       setDnaLoading(false);
+      setBackgroundImageUrl(null);
+      setIsGeneratingBackground(false);
     }
   }, [audioFile]);
+
+  const generateBackgroundImage = useCallback(
+    async (manifest: FullSceneManifest, userDirection?: string) => {
+      setIsGeneratingBackground(true);
+      try {
+        const { data: bgResult, error: bgError } = await supabase.functions.invoke(
+          "lyric-video-bg",
+          {
+            body: {
+              manifest,
+              userDirection,
+            },
+          },
+        );
+        if (bgError) throw bgError;
+        const url = bgResult?.imageUrl ?? null;
+        setBackgroundImageUrl(url);
+      } catch (error) {
+        console.warn("[lyric-video-bg] background generation failed:", error);
+      } finally {
+        setIsGeneratingBackground(false);
+      }
+    },
+    [],
+  );
 
   const fetchSongDna = useCallback(async () => {
     if (dnaLoading || songDna) return;
@@ -655,7 +689,18 @@ export function LyricDisplay({
         physicsSpec: result?.physics_spec || null,
         scene_manifest: result?.scene_manifest || result?.sceneManifest || null,
       };
-      setSongDna(normalizeSongDnaWithManifest(nextSongDna, data.title));
+      const normalizedSongDna = normalizeSongDnaWithManifest(nextSongDna, data.title);
+      setSongDna(normalizedSongDna);
+
+      const manifest = normalizedSongDna?.scene_manifest
+        ? safeManifest(normalizedSongDna.scene_manifest).manifest
+        : null;
+      if (manifest) {
+        void generateBackgroundImage(
+          manifest,
+          `Song: ${data.title} by ${data.artist}`,
+        );
+      }
 
       const typographyProfile = result?.physics_spec?.typographyProfile as
         | TypographyProfile
@@ -677,6 +722,7 @@ export function LyricDisplay({
     songDna,
     beatGrid,
     hottestHooksEnabled,
+    generateBackgroundImage,
   ]);
 
 
@@ -761,6 +807,7 @@ export function LyricDisplay({
       const afterManifest = safeManifest(merged.scene_manifest || beforeManifest).manifest;
       setManifestDiff(getManifestDiff(beforeManifest, afterManifest));
       setSongDna(merged);
+      void generateBackgroundImage(afterManifest, direction.trim());
       if (audioRef.current) audioRef.current.currentTime = playhead;
     } catch (error) {
       console.error("Director's Cut regenerate failed", error);
@@ -768,7 +815,7 @@ export function LyricDisplay({
     } finally {
       setDirectorsCutRegenerating(false);
     }
-  }, [songDna, directorsCutRegenerating, data.title, data.artist, data.lines, getManifestDiff]);
+  }, [songDna, directorsCutRegenerating, data.title, data.artist, data.lines, getManifestDiff, generateBackgroundImage]);
 
   const currentManifest = useMemo<FullSceneManifest | null>(() => {
     if (!songDna) return null;
@@ -1033,6 +1080,7 @@ export function LyricDisplay({
           : null,
         song_signature: (initialSongSignature as any) ?? null,
         song_dna: (songDna as any) ?? null,
+        background_image_url: backgroundImageUrl,
         updated_at: new Date().toISOString(),
       };
 
@@ -1076,6 +1124,7 @@ export function LyricDisplay({
     beatGrid,
     initialSongSignature,
     songDna,
+    backgroundImageUrl,
   ]);
 
   const scheduleAutosave = useCallback(() => {
@@ -2397,58 +2446,73 @@ export function LyricDisplay({
         {hookDanceRunning &&
           songDna?.physicsSpec &&
           songDna.hook &&
-          hookDancePrngRef.current && (
-            <HookDanceCanvas
-              physicsState={
-                hookDanceOverrides.energyMultiplier && hookDanceState
-                  ? {
-                      ...hookDanceState,
-                      scale:
-                        1 +
-                        (hookDanceState.scale - 1) *
-                          hookDanceOverrides.energyMultiplier,
-                      shake:
-                        hookDanceState.shake *
-                        (hookDanceOverrides.energyMultiplier ?? 1),
-                      glow:
-                        hookDanceState.glow *
-                        (hookDanceOverrides.energyMultiplier ?? 1),
-                    }
-                  : hookDanceState
-              }
-              spec={
-                hookDanceOverrides.system
-                  ? {
-                      ...(songDna.physicsSpec as PhysicsSpec),
-                      system: hookDanceOverrides.system,
-                    }
-                  : (songDna.physicsSpec as PhysicsSpec)
-              }
-              lines={data.lines.filter(
-                (l) =>
-                  l.start < songDna.hook!.end && l.end > songDna.hook!.start,
-              )}
-              hookStart={songDna.hook.start}
-              hookEnd={songDna.hook.end}
-              currentTime={hookDanceTime}
-              beatCount={hookDanceBeatCount}
-              prng={hookDancePrngRef.current}
-              onClose={() => hookDanceRef.current?.stop()}
-              onExport={() => setHookDanceExportOpen(true)}
-              onOverrides={setHookDanceOverrides}
-              fingerprint={artistFingerprint}
-              onFingerprintChange={(dna) => setArtistFingerprint(dna)}
-              songContext={{
-                bpm: beatGrid?.bpm,
-                mood: songDna?.mood,
-                physics_system:
-                  hookDanceOverrides.system || songDna?.physicsSpec?.system,
-                hook_lyric: songDna?.hook?.previewText,
-                description: songDna?.description,
-              }}
-            />
+          hookDancePrngRef.current &&
+          currentManifest && (
+            <LyricStage
+              manifest={currentManifest}
+              backgroundImageUrl={backgroundImageUrl}
+              isPlaying={isPlaying}
+              beatIntensity={beatIntensity}
+              currentLyricZone={currentLyricZone}
+            >
+              <HookDanceCanvas
+                physicsState={
+                  hookDanceOverrides.energyMultiplier && hookDanceState
+                    ? {
+                        ...hookDanceState,
+                        scale:
+                          1 +
+                          (hookDanceState.scale - 1) *
+                            hookDanceOverrides.energyMultiplier,
+                        shake:
+                          hookDanceState.shake *
+                          (hookDanceOverrides.energyMultiplier ?? 1),
+                        glow:
+                          hookDanceState.glow *
+                          (hookDanceOverrides.energyMultiplier ?? 1),
+                      }
+                    : hookDanceState
+                }
+                spec={
+                  hookDanceOverrides.system
+                    ? {
+                        ...(songDna.physicsSpec as PhysicsSpec),
+                        system: hookDanceOverrides.system,
+                      }
+                    : (songDna.physicsSpec as PhysicsSpec)
+                }
+                lines={data.lines.filter(
+                  (l) =>
+                    l.start < songDna.hook!.end && l.end > songDna.hook!.start,
+                )}
+                hookStart={songDna.hook.start}
+                hookEnd={songDna.hook.end}
+                currentTime={hookDanceTime}
+                beatCount={hookDanceBeatCount}
+                prng={hookDancePrngRef.current}
+                onClose={() => hookDanceRef.current?.stop()}
+                onExport={() => setHookDanceExportOpen(true)}
+                onOverrides={setHookDanceOverrides}
+                fingerprint={artistFingerprint}
+                onFingerprintChange={(dna) => setArtistFingerprint(dna)}
+                songContext={{
+                  bpm: beatGrid?.bpm,
+                  mood: songDna?.mood,
+                  physics_system:
+                    hookDanceOverrides.system || songDna?.physicsSpec?.system,
+                  hook_lyric: songDna?.hook?.previewText,
+                  description: songDna?.description,
+                }}
+              />
+            </LyricStage>
           )}
       </AnimatePresence>
+
+      {isGeneratingBackground && (
+        <div className="fixed left-1/2 top-20 z-[99] -translate-x-1/2 rounded-full border border-white/20 bg-black/40 px-3 py-1 text-xs text-white/90 backdrop-blur">
+          Generating cinematic background...
+        </div>
+      )}
 
       {/* v2.2: Conflict Resolution Modal — keeps Whisper timestamps, lets artist swap text */}
       <Dialog

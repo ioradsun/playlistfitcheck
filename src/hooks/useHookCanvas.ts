@@ -7,11 +7,38 @@ import { useRef, useCallback, useEffect } from "react";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { getEffect } from "@/engine/EffectRegistry";
-import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSystemStyle } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSafeTextColor, getSystemStyle } from "@/engine/SystemStyles";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
+
+
+function applyLyricShadow(
+  ctx: CanvasRenderingContext2D,
+  palette: [string, string, string],
+  typographyPersonality?: string,
+): void {
+  const isHeavy =
+    typographyPersonality === "MONUMENTAL" ||
+    typographyPersonality === "SHATTERED DISPLAY";
+  const shadowBase = (palette?.[0] ?? "#000000").replace(/\s+/g, "");
+  const shadowColor = /^#[0-9a-fA-F]{6}$/.test(shadowBase)
+    ? `${shadowBase}cc`
+    : "rgba(0,0,0,0.8)";
+
+  ctx.shadowColor = shadowColor;
+  ctx.shadowBlur = isHeavy ? 14 : 8;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = isHeavy ? 3 : 2;
+}
+
+function clearLyricShadow(ctx: CanvasRenderingContext2D): void {
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+}
 
 export const HOOK_CANVAS_COMPOSITING_HINTS = {
   maskUsesPaletteShadow: true,
@@ -134,6 +161,7 @@ export function useHookCanvas(
     const safeW = Math.max(1, w - safePad * 2);
     const safeH = Math.max(1, h - safePad * 2);
     const palette = hd.palette || ["#ffffff", "#a855f7", "#ec4899"];
+    const textColor = getSafeTextColor([palette[0] ?? "#111111", palette[1] ?? "#666666", palette[2] ?? "#ffffff"]);
 
     // Keep physics motion budgets tied to real lyric container dimensions.
     engineRef.current?.setViewportBounds(w, h);
@@ -180,9 +208,11 @@ export function useHookCanvas(
 
       ctx.font = "300 10px system-ui, -apple-system, sans-serif";
       ctx.globalAlpha = isHookFracture ? node.baseOpacity * 0.5 : node.baseOpacity;
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = textColor;
       const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
+      applyLyricShadow(ctx, [palette[0], palette[1], palette[2]], spec.typographyProfile?.personality);
       ctx.fillText(truncated, node.x * w, node.y * h);
+      clearLyricShadow(ctx);
     }
 
     // Pass 2: River rows
@@ -197,7 +227,7 @@ export function useHookCanvas(
 
         ctx.font = "300 11px system-ui, -apple-system, sans-serif";
         ctx.globalAlpha = row.opacity;
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = textColor;
 
         const rowY = row.y * h;
         const textWidths = rowComments.map(n => {
@@ -212,7 +242,9 @@ export function useHookCanvas(
           const truncated = rowComments[ci].text.length > 40 ? rowComments[ci].text.slice(0, 40) + "…" : rowComments[ci].text;
           let drawX = ((xBase % wrapWidth) + wrapWidth) % wrapWidth;
           if (drawX > w + 100) drawX -= wrapWidth;
+          applyLyricShadow(ctx, [palette[0], palette[1], palette[2]], spec.typographyProfile?.personality);
           ctx.fillText(truncated, drawX, rowY);
+          clearLyricShadow(ctx);
           xBase += textWidths[ci] + 120;
         }
       }
@@ -224,7 +256,7 @@ export function useHookCanvas(
         const elapsed = now - node.phaseStartTime;
         ctx.font = "400 14px system-ui, -apple-system, sans-serif";
         ctx.globalAlpha = 0.45;
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = textColor;
         ctx.textAlign = "center";
         const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
         ctx.fillText(truncated, w / 2, h / 2);
@@ -244,7 +276,7 @@ export function useHookCanvas(
 
         ctx.font = `300 ${Math.round(size)}px system-ui, -apple-system, sans-serif`;
         ctx.globalAlpha = opacity;
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = textColor;
         const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
         ctx.fillText(truncated, curX * w, curY * h);
         node.x = curX; node.y = curY; node.currentSize = size;

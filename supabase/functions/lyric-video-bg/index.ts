@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +51,53 @@ const LYRIC_VIDEO_NEGATIVE_PROMPT = [
   "HDR",
   "Instagram filter",
 ].join(", ");
+
+
+const LYRIC_BACKGROUNDS_BUCKET = "lyric-backgrounds";
+
+function decodeDataImage(dataUrl: string): { bytes: Uint8Array; contentType: string; extension: string } {
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) throw new Error("Unsupported data URL format");
+
+  const contentType = match[1];
+  const base64 = match[2];
+  const raw = atob(base64);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) {
+    bytes[i] = raw.charCodeAt(i);
+  }
+
+  const extension = contentType.includes("jpeg") ? "jpg" : contentType.split("/")[1] || "png";
+  return { bytes, contentType, extension };
+}
+
+async function uploadBackgroundDataUri(dataUrl: string): Promise<string> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for background uploads");
+  }
+
+  const { bytes, contentType, extension } = decodeDataImage(dataUrl);
+  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+  const filename = `bg-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from(LYRIC_BACKGROUNDS_BUCKET)
+    .upload(filename, bytes, {
+      contentType,
+      upsert: false,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data: publicData } = supabaseAdmin.storage
+    .from(LYRIC_BACKGROUNDS_BUCKET)
+    .getPublicUrl(filename);
+
+  if (!publicData?.publicUrl) throw new Error("Failed to resolve public URL for lyric background");
+  return publicData.publicUrl;
+}
 
 const iconicFrameInstruction = `
 COMPOSITION: This image must have one clear visual anchor —
@@ -342,6 +390,10 @@ serve(async (req) => {
       if (typeof content === "string" && content.startsWith("data:image")) {
         imageUrl = content;
       }
+    }
+
+    if (imageUrl?.startsWith("data:image")) {
+      imageUrl = await uploadBackgroundDataUri(imageUrl);
     }
 
     if (!imageUrl) {

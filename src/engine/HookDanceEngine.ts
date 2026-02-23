@@ -148,11 +148,16 @@ export class HookDanceEngine {
       steps++;
     }
 
+    const shrinkStep =
+      this.spec.typographyProfile?.personality === "MONUMENTAL"
+        ? 0.88
+        : 0.95;
+
     while ((width > input.safeWidth || height > input.safeHeight) && steps < 10) {
-      fontSize = Math.max(12, fontSize * 0.94);
+      fontSize = Math.max(12, fontSize * shrinkStep);
       lineHeight = Math.max(1.0, lineHeight * 0.98);
-      width *= 0.94;
-      height *= 0.94;
+      width *= shrinkStep;
+      height *= shrinkStep;
       steps++;
     }
 
