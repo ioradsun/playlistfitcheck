@@ -378,6 +378,12 @@ export function LyricFitTab({
           ? { ...dirResult.cinematicDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
           : dirResult.cinematicDirection;
         setCinematicDirection(enrichedDirection);
+
+        // Persist cinematic direction back to song_dna in DB
+        if (savedIdRef.current) {
+          const existingSongDna = songDna || {};
+          persistSongDna(savedIdRef.current, { ...existingSongDna, cinematicDirection: enrichedDirection });
+        }
       }
 
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
