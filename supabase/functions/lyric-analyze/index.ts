@@ -77,8 +77,8 @@ The backgroundSystem maps directly to the dominant physical force:
 - void      → absence, emptiness, darkness with one light source
 
 The particleConfig.system maps to what is physically in the air:
-- Ask literally: rain? snow? smoke? dust? sparks? petals? ash?
-  light beams? nothing?
+- Ask literally: embers? smoke? ash? rain? snow? lightning? fireflies?
+  stars? petals? dust? bubbles? glitch? confetti? crystals? moths?
 - If the world has no physical particles in the air, use "none"
 - Do not add particles for emotional effect — only for physical reality
 
@@ -134,7 +134,7 @@ Return this object at top-level as:
   "world": "...",
   "backgroundSystem": "void|fracture|pressure|breath|combustion|orbit",
   "particleConfig": {
-    "style": "none|embers|dust|rain|sparks|mist|debris",
+    "style": "embers|smoke|ash|rain|snow|lightning|fireflies|stars|petals|dust|bubbles|glitch|confetti|crystals|moths",
     "density": 0.0-1.0,
     "motion": "drift|rise|fall|orbit|pulse|chaotic",
     "scale": "fine|mixed|chunky"
@@ -144,11 +144,11 @@ Return this object at top-level as:
 COHERENCE TABLE (strict):
 - sterile/clinical/empty interiors → backgroundSystem: pressure or void; particles: none/dust only
 - rain-streaked windows/night streets → backgroundSystem: breath or orbit; particles: rain/mist
-- heat/fire/combustion imagery → backgroundSystem: combustion; particles: embers/sparks/debris
+- heat/fire/combustion imagery → backgroundSystem: combustion; particles: embers/smoke/ash
 - collapse/shattering/violent impact → backgroundSystem: fracture; particles: debris only
-- vast cosmic/rotational/gravitational space → backgroundSystem: orbit; particles: dust/mist
+- vast cosmic/rotational/gravitational space → backgroundSystem: orbit; particles: stars/fireflies
 
-Never output contradictory combos (e.g., sterile hospital + embers, underwater world + sparks).
+Never output contradictory combos (e.g., sterile hospital + embers, underwater world + ash).
 
 6. TYPOGRAPHY DERIVATION
 Select type personality that matches world, not genre:
@@ -214,26 +214,24 @@ Song: Defiant comeback, confidence, self-reclamation
 
 PARTICLE SYSTEM SELECTION:
 
-Based on the world you described, select the environmental particle system that would exist in that physical place. This is not a mood choice — it is a physical environment choice.
-Ask: "What is actually falling, drifting, or moving through the air in this place?"
+VALID PARTICLE SYSTEMS (use exactly these names):
+embers, smoke, ash, rain, snow, lightning, fireflies,
+stars, petals, dust, bubbles, glitch, confetti,
+crystals, moths
 
-World → particle mapping examples:
-- rain/window/wet/storm → rain
-- snow/winter/cold/blizzard → snow
-- fire/burning/ember/smolder → embers or flames
-- dust/desert/dry/forgotten → dust
-- smoke/haze/aftermath/fog → smoke
-- electric/voltage/spark/arc → sparks
-- flowers/petals/spring/bloom → petals
-- grief/ash/burned/ruin → ash
-- cathedral/church/rays/hope → light-rays
-- anxiety/static/interference → static-noise
-- underwater/ocean/dream/float → bubbles
-- clean/minimal/abstract → none
+Choose based on world and coreEmotion:
+- Fire/chaos worlds → embers, smoke, ash
+- Rain/melancholy → rain, bubbles
+- Winter/cold → snow, crystals
+- Night/dream → stars, fireflies, moths
+- Joy/celebration → confetti, petals
+- Glitch/digital → glitch, static
+- Desert/dry → dust, sand
+- Ocean/water → bubbles, rain
 
 Then set particleConfig with:
 - system, density (0-1), speed (0-1), opacity (0-1), color (hex), beatReactive, foreground
-- foreground true only for snow/petals/ash/light-rays
+- foreground true only for snow/petals/ash/confetti/crystals
 
 PARTICLE + BACKGROUND COHERENCE:
 Avoid incoherent pairings. Could this particle physically exist in the world? If not, use none.
@@ -353,8 +351,8 @@ function extractJson(raw: string): any | null {
 }
 
 type ParticleSystemType =
-  | "rain" | "snow" | "embers" | "flames" | "dust" | "smoke"
-  | "sparks" | "petals" | "ash" | "light-rays" | "static-noise" | "bubbles" | "none";
+  | "embers" | "smoke" | "ash" | "rain" | "snow" | "lightning" | "fireflies"
+  | "stars" | "petals" | "dust" | "bubbles" | "glitch" | "confetti" | "crystals" | "moths" | "none";
 
 interface ParticleConfig {
   system: ParticleSystemType;
@@ -389,7 +387,7 @@ function normalizeHexColor(color: string): string | null {
 
 
 const VALID_PARTICLE_SYSTEMS: ParticleSystemType[] = [
-  "rain","snow","embers","flames","dust","smoke","sparks","petals","ash","light-rays","static-noise","bubbles","none",
+  "embers","smoke","ash","rain","snow","lightning","fireflies","stars","petals","dust","bubbles","glitch","confetti","crystals","moths","none",
 ];
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
