@@ -251,6 +251,9 @@ export default function ShareableLyricDance() {
   useEffect(() => {
     if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
+    console.log('[PLAYER INIT] data keys:', Object.keys(data ?? {}));
+    console.log('[PLAYER INIT] cinematic_direction:', !!data?.cinematic_direction, 'type:', typeof data?.cinematic_direction, 'isArray:', Array.isArray(data?.cinematic_direction));
+
     let destroyed = false;
     const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, containerRef.current);
     playerRef.current = player;
