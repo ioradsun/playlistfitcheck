@@ -37,6 +37,11 @@ export type Keyframe = {
     visible: boolean;
     fontSize: number;
     color: string;
+    entryOffsetY: number;
+    entryOffsetX: number;
+    entryScale: number;
+    exitOffsetY: number;
+    exitScale: number;
   }>;
   cameraX: number;
   cameraY: number;
@@ -56,6 +61,7 @@ export type BakedTimeline = Keyframe[];
 const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
+const easeOut = (t: number): number => 1 - Math.pow(1 - t, 3);
 
 type WordDirectiveLike = {
   word?: string;
@@ -296,19 +302,64 @@ function bakeFrame(
   for (let idx = 0; idx < payload.lines.length; idx += 1) {
     const line = payload.lines[idx];
     const lineActive = idx === activeLineIndex;
+    const storyboardEntry = payload.cinematic_direction?.storyboard?.[idx] ?? null;
+    const entryStyle = storyboardEntry?.entryStyle ?? 'fades';
+    const exitStyle = storyboardEntry?.exitStyle ?? 'fades';
 
-    const fadeIn = Math.min(1, Math.max(0, (tSec - line.start) / 0.2));
-    const fadeOut = Math.min(1, Math.max(0, (line.end - tSec) / 0.3));
+    const lineStart = line.start ?? 0;
+    const lineEnd = line.end ?? 0;
+    const isCutStyle = entryStyle === 'cuts' || exitStyle === 'cuts';
+    const fadeIn = isCutStyle
+      ? (tSec >= lineStart ? 1 : 0)
+      : Math.min(1, Math.max(0, (tSec - lineStart) / 0.2));
+    const fadeOut = isCutStyle
+      ? (tSec < lineEnd ? 1 : 0)
+      : Math.min(1, Math.max(0, (lineEnd - tSec) / 0.3));
     const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
 
     const x = BASE_X;
     const y = BASE_Y_CENTER;
 
     const visible = alpha > 0.001;
-    const storyboardEntry = payload.cinematic_direction?.storyboard?.[idx] ?? null;
-    const entryStyle = storyboardEntry?.entryStyle ?? 'fades';
-    const exitStyle = storyboardEntry?.exitStyle ?? 'fades';
     const heroWord = storyboardEntry?.heroWord ?? pre.lineHeroWords[idx] ?? null;
+
+    const elapsed = tSec - lineStart;
+    const remaining = lineEnd - tSec;
+
+    const entryDuration = 0.25;
+    const exitDuration = exitStyle === 'lingers' ? 0.5 : 0.3;
+    const entryProgress = Math.min(1, Math.max(0, elapsed / entryDuration));
+    const exitProgress = Math.min(1, Math.max(0, 1 - remaining / exitDuration));
+    const ep = easeOut(entryProgress);
+    const xp = easeOut(exitProgress);
+
+    let entryOffsetY = 0;
+    let entryOffsetX = 0;
+    let entryScale = 1;
+    let exitOffsetY = 0;
+    let exitScale = 1;
+
+    if (!isCutStyle) {
+      if (entryStyle === 'rises') {
+        entryOffsetY = (1 - ep) * 40;
+      } else if (entryStyle === 'slams-in') {
+        entryScale = 1 + (1 - ep) * 0.4;
+      } else if (entryStyle === 'materializes') {
+        entryScale = 0.85 + ep * 0.15;
+      } else if (entryStyle === 'fractures-in') {
+        entryOffsetX = (1 - ep) * -30;
+      } else if (entryStyle === 'hiding') {
+        entryScale = 0.7 + ep * 0.3;
+      }
+
+      if (exitStyle === 'dissolves-upward') {
+        exitOffsetY = xp * -30;
+      } else if (exitStyle === 'burns-out') {
+        exitScale = 1 + xp * 0.15;
+      } else if (exitStyle === 'shatters') {
+        exitScale = 1 + xp * 0.25;
+      }
+    }
 
     const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
     const chunkScale = lineActive && visible ? scale : 1.0;
@@ -324,6 +375,11 @@ function bakeFrame(
       visible,
       fontSize: pre.lineFontSizes[idx] ?? 36,
       color: pre.lineColors[idx] ?? "#ffffff",
+      entryOffsetY,
+      entryOffsetX,
+      entryScale,
+      exitOffsetY,
+      exitScale,
     });
 
     if (lineActive) {
@@ -353,6 +409,11 @@ function bakeFrame(
             visible,
             fontSize: pre.lineFontSizes[idx] ?? 36,
             color: pre.lineColors[idx] ?? "#ffffff",
+            entryOffsetY,
+            entryOffsetX,
+            entryScale,
+            exitOffsetY,
+            exitScale,
           });
         }
       }
