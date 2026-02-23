@@ -78,6 +78,8 @@ export interface PhysicsState {
   rotation: number;
   /** deterministic shatter pulse for brittle systems */
   shatter: number;
+  /** optional per-word offsets for renderers that animate words independently */
+  wordOffsets: Array<{ x: number; y: number; rotation: number }>;
 }
 
 interface PhysicsViewportBounds {
@@ -172,9 +174,11 @@ export class PhysicsIntegrator {
 
     const normalizedStrength = Math.max(0, Math.min(1, strength));
     const brittleness = Math.max(0.001, this.spec.material.brittleness);
-    const shatterThreshold = Math.min(1.25, 0.65 + brittleness * 0.2);
-    if (normalizedStrength + (isDownbeat ? 0.25 : 0) >= shatterThreshold) {
-      this.shatterPulse = Math.min(1, this.shatterPulse + normalizedStrength);
+    if (normalizedStrength > 0.8) {
+      const shatterChance = Math.max(0, Math.min(1, brittleness * (normalizedStrength - 0.8) * 3));
+      if (Math.random() < shatterChance) {
+        this.shatterPulse = Math.min(1, this.shatterPulse + normalizedStrength);
+      }
     }
 
     // Increase thermal energy
@@ -183,21 +187,23 @@ export class PhysicsIntegrator {
   }
 
   /** Advance one fixed-timestep frame and return the current state */
-  tick(): PhysicsState {
+  tick(deltaTime = DT): PhysicsState {
+    const dt = Number.isFinite(deltaTime) ? Math.max(0, deltaTime) : DT;
     // Hooke's law:  F_spring = -k * x
     const springForce = -this.spec.material.elasticity * this.position;
     // Viscous damping: F_damp = -c * v
     const dampingForce = -this.spec.material.damping * this.velocity;
-    const upwardThermalForce = -this.spec.material.heat * 0.22;
+    const upwardThermalForce = -Math.max(0, Math.min(1, this.spec.material.heat)) * 0.35;
 
     // Semi-implicit Euler integration
-    this.velocity += (springForce + dampingForce + upwardThermalForce) * DT;
-    this.position += this.velocity * DT;
+    this.velocity += (springForce + dampingForce + upwardThermalForce) * dt;
+    this.position += this.velocity * dt;
 
     // Decay thermal & impulse
-    this.heat *= 0.95;
-    this.impulseNow *= 0.8;
-    this.shatterPulse *= 0.86;
+    const decayFrames = dt / DT;
+    this.heat *= Math.pow(0.95, decayFrames);
+    this.impulseNow *= Math.pow(0.8, decayFrames);
+    this.shatterPulse *= Math.pow(0.86, decayFrames);
 
     // Scale all motion budgets by the current lyric container size.
     const minViewportAxis = Math.max(1, Math.min(this.viewportBounds.width, this.viewportBounds.height));
@@ -228,6 +234,7 @@ export class PhysicsIntegrator {
         Math.min(0.14, this.velocity * 0.12 * Math.min(1, this.impulseNow))
       ),
       shatter: this.shatterPulse,
+      wordOffsets: [],
     };
   }
 
