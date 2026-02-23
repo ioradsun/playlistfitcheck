@@ -1700,8 +1700,10 @@ export default function ShareableLyricDance() {
         audio.pause();
         audio.src = "";
       }
-      container.style.willChange = "auto";
-      container.style.transform = "translate3d(0, 0, 0)";
+      if (containerRef.current) {
+        containerRef.current.style.willChange = "auto";
+        containerRef.current.style.transform = "translate3d(0, 0, 0)";
+      }
     };
   }, [data]);
 
