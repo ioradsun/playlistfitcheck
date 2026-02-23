@@ -24,7 +24,7 @@ import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
 import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
-import { classifyWord, getWordVisualProps } from "@/engine/WordClassifier";
+import * as WordClassifier from "@/engine/WordClassifier";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -194,6 +194,41 @@ function clamp01(value: number): number {
 
 function lerp(start: number, end: number, progress: number): number {
   return start + (end - start) * progress;
+}
+
+function drawWithLetterSpacing(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  letterSpacing: string,
+): void {
+  const parsedSpacing = Number.parseFloat(letterSpacing);
+  const spacingPx = Number.isFinite(parsedSpacing)
+    ? parsedSpacing * Number.parseFloat(ctx.font) * 0.5
+    : 0;
+
+  if (spacingPx === 0 || text.length <= 1) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+
+  const glyphWidths = Array.from(text).map((char) => ctx.measureText(char).width);
+  const totalWidth = glyphWidths.reduce((sum, width) => sum + width, 0) + spacingPx * (text.length - 1);
+  const originalAlign = ctx.textAlign;
+  const startX = originalAlign === "center"
+    ? x - totalWidth / 2
+    : originalAlign === "right" || originalAlign === "end"
+      ? x - totalWidth
+      : x;
+
+  ctx.textAlign = "left";
+  let cursorX = startX;
+  Array.from(text).forEach((char, index) => {
+    ctx.fillText(char, cursorX, y);
+    cursorX += glyphWidths[index] + spacingPx;
+  });
+  ctx.textAlign = originalAlign;
 }
 
 function getParticleConfigForTime(
@@ -1040,15 +1075,16 @@ export default function ShareableLyricDance() {
         const wordsPerSecond = words.length > 0 ? words.length / lineDuration : 1;
         const wordDelay = wordsPerSecond > 0 ? 1 / wordsPerSecond : lineDuration;
         const visibleWordCount = words.filter((_, i) => currentTime >= activeLine.start + i * wordDelay).length;
-        const drawWords = words.slice(0, visibleWordCount);
+        const drawWords = words.slice(0, visibleWordCount).map((text) => ({ text }));
+        const totalWords = drawWords.length;
 
-        const measuredWordWidths = drawWords.map(word => ctx.measureText(word).width);
+        const measuredWordWidths = drawWords.map(word => ctx.measureText(word.text).width);
         const baseSpaceWidth = ctx.measureText(" ").width;
         const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, drawWords.length - 1) * baseSpaceWidth;
         let cursorX = lineX - totalWidth / 2;
 
         drawWords.forEach((word, wordIndex) => {
-          const normalizedWord = word.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
+          const normalizedWord = word.text.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
           const resolvedWordStartTime = activeLine.start + wordIndex * wordDelay;
           const appearanceKey = `${activeLine.start}:${wordIndex}:${normalizedWord}`;
 
@@ -1058,84 +1094,73 @@ export default function ShareableLyricDance() {
             seenWordAppearancesRef.current.add(appearanceKey);
           }
 
-          const newCount = wordCountRef.current.get(normalizedWord) ?? 1;
-          const visualProps = getWordVisualProps(word, wordIndex, activeLineAnim, currentBeatIntensity, newCount);
+          const props = WordClassifier.getWordVisualProps(
+            word.text,
+            wordIndex,
+            totalWords,
+            activeLineAnim,
+            currentBeatIntensity,
+            wordCountRef.current.get(word.text) ?? 0,
+          );
+
           if (currentTime < resolvedWordStartTime) {
             return;
           }
 
-          const className = classifyWord(word);
-          const wordAge = currentTime - resolvedWordStartTime;
-          let animScale = visualProps.scale;
-          let flashColor = visualProps.color;
-
-          if (className === "IMPACT") {
-            const impactPhase = Math.min(1, wordAge / 0.24);
-            const slamScale = impactPhase < 0.5
-              ? 1 + (1.35 - 1) * (impactPhase / 0.5)
-              : 1.35 - (1.35 - 1) * ((impactPhase - 0.5) / 0.5);
-            animScale *= slamScale;
-            if (wordAge < 0.08) flashColor = "#ffffff";
-          } else if (className === "TENDER") {
-            const breathe = 0.95 + Math.sin((wordAge + wordIndex * 0.2) * 2.2) * 0.1;
-            animScale *= breathe;
-          } else if (className === "QUESTION") {
-            const drift = Math.min(1, wordAge / 0.5);
-            animScale *= 1 - 0.05 * drift;
-          } else if (className === "TRANSCENDENT") {
-            const pulse = 1 + 0.2 * (0.5 + 0.5 * Math.sin(wordAge * 2));
-            animScale *= pulse;
-          }
-
-          const wordWidth = ctx.measureText(word).width;
+          const wordWidth = ctx.measureText(word.text).width;
           const wordCenterX = cursorX + wordWidth / 2;
-          const wordPhysics = physicsState?.wordOffsets[wordIndex];
-          const drawX = (className === "SELF" ? lineX : wordCenterX + visualProps.xOffset) + (wordPhysics?.x ?? 0);
-          const drawY = lineY + visualProps.yOffset + (wordPhysics?.y ?? 0);
-          const wordRotation = wordPhysics?.rotation ?? 0;
+          const wordX = wordCenterX;
+          const wordY = lineY;
 
-          const prevAlpha = ctx.globalAlpha;
-          ctx.globalAlpha = compositeAlpha * visualProps.opacity;
-          ctx.fillStyle = flashColor;
-          ctx.shadowColor = flashColor;
-          ctx.shadowBlur = visualProps.glowRadius;
-
-          const shouldItalic = className === "OTHER";
-          const wordFontSize = fontSize * animScale;
-          ctx.font = `${shouldItalic ? "italic " : ""}${wordFontSize}px Inter, ui-sans-serif, system-ui`;
+          ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui`;
           ctx.textAlign = "center";
 
+          // Scale
           ctx.save();
-          if (Math.abs(wordRotation) > 0.0001) {
-            ctx.translate(drawX, drawY);
-            ctx.rotate(wordRotation);
-            ctx.translate(-drawX, -drawY);
+          ctx.translate(wordX, wordY);
+          ctx.scale(props.scale, props.scale);
+          ctx.translate(-wordX, -wordY);
+
+          // Color
+          ctx.fillStyle = props.color;
+
+          // Opacity
+          ctx.globalAlpha = props.opacity * compositeAlpha;
+
+          // Glow
+          if (props.glowRadius > 0) {
+            ctx.shadowBlur = props.glowRadius;
+            ctx.shadowColor = props.color;
           }
 
-          if (visualProps.showTrail) {
-            for (let t = visualProps.trailCount; t >= 1; t -= 1) {
-              ctx.globalAlpha = compositeAlpha * visualProps.opacity * (0.12 * t);
-              ctx.fillText(word, drawX - t * 8, drawY + t * 2);
-            }
-            ctx.globalAlpha = compositeAlpha * visualProps.opacity;
+          // Position offset
+          const finalX = wordX + props.xOffset;
+          const finalY = wordY + props.yOffset;
+
+          // Letter spacing (draw char by char if non-default)
+          if (props.letterSpacing !== "0em") {
+            drawWithLetterSpacing(ctx, word.text, finalX, finalY, props.letterSpacing);
+          } else {
+            ctx.fillText(word.text, finalX, finalY);
           }
 
-          ctx.fillText(word, drawX, drawY);
-
-          if (className === "NEGATION") {
-            const strikeY = drawY - wordFontSize * 0.1;
-            ctx.globalAlpha = compositeAlpha * 0.3;
-            ctx.strokeStyle = "#d1d5db";
-            ctx.lineWidth = Math.max(1, wordFontSize * 0.04);
-            ctx.beginPath();
-            ctx.moveTo(drawX - wordWidth / 2, strikeY);
-            ctx.lineTo(drawX + wordWidth / 2, strikeY);
-            ctx.stroke();
-          }
-
-          ctx.restore();
+          // Reset glow
           ctx.shadowBlur = 0;
-          ctx.globalAlpha = prevAlpha;
+          ctx.restore();
+
+          // Motion trail for MOTION class words
+          if (props.showTrail) {
+            for (let t = 1; t <= props.trailCount; t += 1) {
+              ctx.globalAlpha = (props.opacity * 0.3) / t;
+              ctx.fillText(word.text, finalX - (t * 4), finalY);
+            }
+          }
+
+          // Track word appearances for escalation
+          const count = wordCountRef.current.get(word.text) ?? 0;
+          wordCountRef.current.set(word.text, count + 1);
+
+          ctx.globalAlpha = 1;
           cursorX += wordWidth + baseSpaceWidth;
         });
 
