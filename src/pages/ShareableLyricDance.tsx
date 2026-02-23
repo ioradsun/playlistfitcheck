@@ -667,7 +667,6 @@ export default function ShareableLyricDance() {
             .maybeSingle()
         ).then(({ data: directionRow }) => {
             const deferredDirection = (directionRow as any)?.cinematic_direction
-              ?? (directionRow as any)?.song_dna?.cinematic_direction
               ?? null;
             if (deferredDirection) {
               setData(prev => prev ? { ...prev, cinematic_direction: deferredDirection } : prev);
