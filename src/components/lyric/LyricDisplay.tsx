@@ -2234,11 +2234,6 @@ export function LyricDisplay({
           )}
       </AnimatePresence>
 
-      {isGeneratingBackground && (
-        <div className="fixed left-1/2 top-20 z-[99] -translate-x-1/2 rounded-full border border-white/20 bg-black/40 px-3 py-1 text-xs text-white/90 backdrop-blur">
-          Generating cinematic background...
-        </div>
-      )}
 
       {/* v2.2: Conflict Resolution Modal — keeps Whisper timestamps, lets artist swap text */}
       <Dialog
