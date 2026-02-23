@@ -732,7 +732,7 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
-
+    console.log('[RENDER LOOP] Starting setup, cinematic_direction:', !!data.cinematic_direction);
     const bgCanvas = bgCanvasRef.current;
     const textCanvas = textCanvasRef.current;
     const container = containerRef.current;
@@ -915,6 +915,22 @@ export default function ShareableLyricDance() {
       };
       const currentTime = audio.currentTime;
       const interpreterNow = interpreterRefStable.current;
+
+      runtimeFrameCount++;
+      if (runtimeFrameCount % 120 === 1) {
+        const activeLine = lines.find(l => currentTime >= l.start && currentTime < l.end);
+        console.log('[RENDER DEBUG]', {
+          currentTime: currentTime.toFixed(2),
+          songStart: songStart.toFixed(2),
+          songEnd: songEnd.toFixed(2),
+          cw, ch,
+          linesCount: lines.length,
+          firstLineStart: lines[0]?.start,
+          activeLine: activeLine ? activeLine.text.slice(0, 30) : 'NONE',
+          audioMuted: audio.muted,
+          audioPaused: audio.paused,
+        });
+      }
 
       if (textStateRef.current.yBase === 0) textStateRef.current.yBase = ch * 0.5;
 
