@@ -251,6 +251,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
 
 const BASE_W = 960;
 const BASE_H = 540;
+let globalBakeLock = false;
 
 // ──────────────────────────────────────────────────────────────
 // Player
@@ -329,11 +330,25 @@ export class LyricDancePlayer {
 
   // Compatibility with existing React shell
   async init(): Promise<void> {
-    this.resize(this.canvas.offsetWidth || 0, this.canvas.offsetHeight || 0);
+    if (globalBakeLock) {
+      console.log('[PLAYER] bake already running, skipping');
+      this.rafHandle = requestAnimationFrame(this.tick);
+      return;
+    }
+
+    globalBakeLock = true;
+    this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
     const payload = this.buildScenePayload();
-    console.log('[PLAYER] baking start — lines:', payload.lines.length);
-    await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
-    console.log('[PLAYER] bake done — frames:', this.timeline.length);
+
+    try {
+      await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
+      console.log('[PLAYER] bake done — frames:', this.timeline.length);
+    } catch (e) {
+      console.error('[PLAYER] bake failed:', e);
+    } finally {
+      globalBakeLock = false;
+    }
+
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
     this.playing = true;
