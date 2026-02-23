@@ -257,6 +257,30 @@ function extractJson(raw: string): Record<string, unknown> | null {
     try {
       return JSON.parse(cleaned);
     } catch (e2) {
+      // Truncation recovery: close unclosed brackets/braces
+      const openBraces = (cleaned.match(/{/g) || []).length;
+      const closeBraces = (cleaned.match(/}/g) || []).length;
+      const openBrackets = (cleaned.match(/\[/g) || []).length;
+      const closeBrackets = (cleaned.match(/\]/g) || []).length;
+
+      if (openBraces > closeBraces || openBrackets > closeBrackets) {
+        console.warn("[cinematic-direction] Detected truncated JSON, attempting recovery");
+        // Remove trailing partial value (after last comma or colon)
+        let repaired = cleaned.replace(/,\s*"[^"]*"?\s*:?\s*[^}\]]*$/, "");
+        // Close remaining brackets/braces
+        const needBrackets = (repaired.match(/\[/g) || []).length - (repaired.match(/\]/g) || []).length;
+        const needBraces = (repaired.match(/{/g) || []).length - (repaired.match(/}/g) || []).length;
+        for (let i = 0; i < needBrackets; i++) repaired += "]";
+        for (let i = 0; i < needBraces; i++) repaired += "}";
+        // Clean trailing commas again after surgery
+        repaired = repaired.replace(/,\s*([}\]])/g, "$1");
+        try {
+          return JSON.parse(repaired);
+        } catch (e3) {
+          console.error("[cinematic-direction] Recovery also failed:", (e3 as Error).message);
+        }
+      }
+
       console.error("[cinematic-direction] JSON parse failed after cleaning:", (e2 as Error).message);
       console.error("[cinematic-direction] First 500 chars:", cleaned.slice(0, 500));
       return null;
@@ -384,7 +408,7 @@ serve(async (req) => {
           },
         ],
         temperature: 0.2,
-        max_tokens: 8000,
+        max_tokens: 12000,
         response_format: { type: "json_object" },
       }),
     });
