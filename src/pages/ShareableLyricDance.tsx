@@ -831,6 +831,7 @@ export default function ShareableLyricDance() {
     const bgCtx = bgCanvas.getContext("2d", { alpha: false })!;
     const textCtx = textCanvas.getContext("2d", { alpha: true })!;
 
+    let activePixelRatio = 1;
     const spec = data.physics_spec;
     const lines = data.lyrics;
 
@@ -970,6 +971,7 @@ export default function ShareableLyricDance() {
     resizeHandler = () => {
       const isMobile = window.innerWidth < 768;
       const pixelRatio = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+      activePixelRatio = pixelRatio;
       const rect = container.getBoundingClientRect();
       [bgCanvas, textCanvas].forEach((layerCanvas) => {
         layerCanvas.width = rect.width * pixelRatio;
@@ -1015,8 +1017,8 @@ export default function ShareableLyricDance() {
       const deltaMs = Math.min(100, now - lastFrameTime);
       lastFrameTime = now;
 
-      const cw = textCanvas.width / (window.devicePixelRatio || 1);
-      const ch = textCanvas.height / (window.devicePixelRatio || 1);
+      const cw = textCanvas.width / activePixelRatio;
+      const ch = textCanvas.height / activePixelRatio;
       const ctx = textCtx;
       ctx.clearRect(0, 0, cw, ch);
       let drawCalls = 0;
@@ -1507,7 +1509,7 @@ export default function ShareableLyricDance() {
         getWordWidth,
         isMobile,
         hardwareConcurrency: navigator.hardwareConcurrency ?? 4,
-        devicePixelRatio: window.devicePixelRatio ?? 1,
+        devicePixelRatio: activePixelRatio,
         precomputedLine: activePlanLine,
       }, textStateRef.current);
       const t4 = performance.now();
