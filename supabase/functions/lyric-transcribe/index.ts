@@ -583,7 +583,43 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 
-    const { audioBase64, format, analysisModel, transcriptionModel, referenceLyrics } = await req.json();
+    const contentType = req.headers.get("content-type") || "";
+    let audioBase64: string | undefined;
+    let format: string | undefined;
+    let analysisModel: string | undefined;
+    let transcriptionModel: string | undefined;
+    let referenceLyrics: string | undefined;
+
+    if (contentType.includes("multipart/form-data")) {
+      const form = await req.formData();
+      const audio = form.get("audio");
+      analysisModel = String(form.get("analysisModel") || "");
+      transcriptionModel = String(form.get("transcriptionModel") || "");
+      referenceLyrics = String(form.get("referenceLyrics") || "");
+
+      if (!(audio instanceof File)) {
+        throw new Error("No audio file provided");
+      }
+
+      const ext = audio.name.split(".").pop()?.toLowerCase() || "mp3";
+      format = ext;
+
+      const uint8 = new Uint8Array(await audio.arrayBuffer());
+      let binary = "";
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+      }
+      audioBase64 = btoa(binary);
+    } else {
+      const payload = await req.json();
+      audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : undefined;
+      format = typeof payload.format === "string" ? payload.format : undefined;
+      analysisModel = typeof payload.analysisModel === "string" ? payload.analysisModel : undefined;
+      transcriptionModel = typeof payload.transcriptionModel === "string" ? payload.transcriptionModel : undefined;
+      referenceLyrics = typeof payload.referenceLyrics === "string" ? payload.referenceLyrics : undefined;
+    }
+
     const editorMode = typeof referenceLyrics === "string" && referenceLyrics.trim().length > 0;
     if (editorMode) console.log(`[editor-mode] Reference lyrics provided (${referenceLyrics.trim().split("\n").length} lines)`);
     if (!audioBase64) throw new Error("No audio data provided");
