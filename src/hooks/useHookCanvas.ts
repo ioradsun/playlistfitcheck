@@ -480,7 +480,7 @@ export function useHookCanvas(
         typographyProfile: spec.typographyProfile,
       } as SceneManifest;
 
-      console.log('[draw] resolver loaded:', animationResolver.isLoaded?.() ?? 'no isLoaded method');
+      // AnimationResolver is a singleton — always available after loadFromDna()
       const anim = animationResolver.resolveLine(
         activeLine.start,
         activeLine.start,
