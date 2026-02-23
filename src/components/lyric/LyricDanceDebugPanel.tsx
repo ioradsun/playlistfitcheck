@@ -505,14 +505,16 @@ export function LyricDanceDebugPanel({ data, player = null }: Props) {
               </div>
               {/* Tabs */}
               <div className="flex border-t border-border/30">
-                <button
-                  onClick={() => setTab("hud")}
-                  className={`flex-1 py-2 text-[10px] font-mono font-bold uppercase tracking-widest transition-colors ${
-                    tab === "hud" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  HUD · Live State
-                </button>
+                {hasPlayer && (
+                  <button
+                    onClick={() => setTab("hud")}
+                    className={`flex-1 py-2 text-[10px] font-mono font-bold uppercase tracking-widest transition-colors ${
+                      tab === "hud" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    HUD · Live State
+                  </button>
+                )}
                 <button
                   onClick={() => setTab("data")}
                   className={`flex-1 py-2 text-[10px] font-mono font-bold uppercase tracking-widest transition-colors ${
