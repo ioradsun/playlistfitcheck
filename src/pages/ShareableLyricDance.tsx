@@ -726,6 +726,22 @@ export default function ShareableLyricDance() {
         setData(d);
         setLoading(false);
 
+        // Generate cinematic direction on-the-fly if missing from DB
+        if (!d.cinematic_direction && d.lyrics?.length > 0) {
+          console.log('[ShareableLyricDance] cinematic_direction missing — generating on-the-fly');
+          const linesForDir = (d.lyrics as any[])
+            .filter((l: any) => l.tag !== 'adlib')
+            .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+          supabase.functions.invoke("cinematic-direction", {
+            body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
+          }).then(({ data: dirResult }) => {
+            if (dirResult?.cinematicDirection) {
+              console.log('[ShareableLyricDance] cinematic direction generated, keys:', Object.keys(dirResult.cinematicDirection.wordDirectives || {}));
+              setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+            }
+          }).catch(e => console.warn('[ShareableLyricDance] cinematic direction generation failed:', e));
+        }
+
         // Preload AI background image if available
         if (d.background_url) {
           const img = new Image();

@@ -730,7 +730,7 @@ export function LyricDisplay({
         .filter((l) => l.tag !== "adlib")
         .map((l, i) => ({ text: l.text, start: l.start, end: l.end }));
       supabase.functions.invoke("cinematic-direction", {
-        body: { title: data.title, artist: data.artist, lines: lyricsForDirection, beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined },
+        body: { title: data.title, artist: data.artist, lines: lyricsForDirection, beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined, lyricId: currentSavedId || undefined },
       }).then(({ data: dirResult }) => {
         if (dirResult?.cinematicDirection) {
           setSongDna((prev: any) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
