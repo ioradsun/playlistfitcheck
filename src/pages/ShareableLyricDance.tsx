@@ -463,6 +463,9 @@ interface LyricDanceData {
   artist_dna: ArtistDNA | null;
   seed: string;
   scene_manifest: any | null;
+  song_dna: {
+    cinematic_direction?: CinematicDirection | null;
+  } | null;
   cinematic_direction: CinematicDirection | null;
   background_url: string | null;
 }
@@ -517,7 +520,7 @@ function snapToNearestBeat(timestamp: number, beats: number[], tolerance: number
   return Math.abs(nearest - timestamp) < tolerance ? nearest : timestamp;
 }
 
-const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,cinematic_direction,background_url";
+const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,song_dna,cinematic_direction,background_url";
 
 /** Draggable progress bar overlay at bottom of canvas */
 function ProgressBar({ audioRef, data, progressBarRef, onMouseDown, onTouchStart, palette }: {
@@ -640,7 +643,10 @@ export default function ShareableLyricDance() {
 
 
   useEffect(() => {
-    const cinematicDirection = data?.cinematic_direction ?? null;
+    const cinematicDirection =
+      data?.cinematic_direction ??
+      data?.song_dna?.cinematic_direction ??
+      null;
     console.log('cinematic_direction loaded:', 
       cinematicDirection ? 'YES' : 'NO',
       cinematicDirection?.wordDirectives 
@@ -652,13 +658,20 @@ export default function ShareableLyricDance() {
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const totalDuration = Math.max(0.001, songEnd - songStart);
 
-    if (cinematicDirection && totalDuration) {
-      interpreterRef.current = new DirectionInterpreter(cinematicDirection, totalDuration);
+    if (cinematicDirection) {
+      interpreterRef.current = new DirectionInterpreter(
+        cinematicDirection,
+        totalDuration
+      );
+      console.log('interpreter created with thesis:', 
+        cinematicDirection.thesis
+      );
     } else {
+      console.log('no cinematic_direction found anywhere');
       interpreterRef.current = null;
     }
     WordClassifier.setCinematicDirection(cinematicDirection);
-  }, [data?.cinematic_direction, data?.lyrics]);
+  }, [data?.cinematic_direction, data?.song_dna?.cinematic_direction, data?.lyrics]);
 
   useEffect(() => {
     interpreterRefStable.current = interpreterRef.current;
@@ -853,7 +866,7 @@ export default function ShareableLyricDance() {
     const songStart = lines.length > 0 ? Math.max(0, lines[0].start - 0.5) : 0;
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const totalDuration = Math.max(0.001, songEnd - songStart);
-    const cinematicDirection = data.cinematic_direction;
+    const cinematicDirection = data.cinematic_direction ?? data.song_dna?.cinematic_direction ?? null;
     const hookStartTimes = lines
       .filter((line, index) => animationResolver.resolveLine(index, line.start, line.end, line.start, 0, effectivePalette).isHookLine)
       .map(line => line.start)
