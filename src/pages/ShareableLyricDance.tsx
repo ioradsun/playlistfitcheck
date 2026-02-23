@@ -5,7 +5,7 @@
  * Thin React shell — all rendering is delegated to LyricDancePlayer.
  */
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,13 +29,13 @@ const DIRECTION_COLUMNS = "cinematic_direction";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
 
-function ProgressBar({ player, data, onSeekStart, onSeekEnd, palette }: {
+const ProgressBar = React.forwardRef<HTMLDivElement, {
   player: LyricDancePlayer | null;
   data: LyricDanceData;
   onSeekStart: () => void;
   onSeekEnd: () => void;
   palette: string[];
-}) {
+}>(function ProgressBar({ player, data, onSeekStart, onSeekEnd, palette }, _ref) {
   const [progress, setProgress] = useState(0);
   const barRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -111,7 +111,7 @@ function ProgressBar({ player, data, onSeekStart, onSeekEnd, palette }: {
       <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity" style={{ left: `calc(${progress * 100}% - 6px)` }} />
     </div>
   );
-}
+});
 
 // ─── Live Debug HUD ─────────────────────────────────────────────────
 
