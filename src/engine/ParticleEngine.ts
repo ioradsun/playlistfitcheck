@@ -179,6 +179,11 @@ export class ParticleEngine {
     this.config = config;
   }
 
+
+  setSystem(system: string): void {
+    this.config = { ...this.config, system: system as ParticleConfig["system"] };
+  }
+
   setDensityMultiplier(multiplier: number): void {
     this.densityMultiplier = clamp(multiplier, 0.1, 4);
   }

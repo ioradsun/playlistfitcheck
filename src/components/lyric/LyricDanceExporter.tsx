@@ -35,10 +35,11 @@ import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
 import { safeManifest } from "@/engine/validateManifest";
 import { getBackgroundSystemForTime } from "@/engine/getBackgroundSystemForTime";
 import { ParticleEngine } from "@/engine/ParticleEngine";
-import { DirectionInterpreter, getCurrentTensionStage, getActiveShot } from "@/engine/DirectionInterpreter";
+import { DirectionInterpreter, ensureFullTensionCurve, getCurrentTensionStage, getActiveShot } from "@/engine/DirectionInterpreter";
 import { renderChapterBackground } from "@/engine/BackgroundDirector";
 import { renderChapterLighting } from "@/engine/LightingDirector";
 import { renderText, type TextState, type TextInput } from "@/engine/renderText";
+import { renderSymbol } from "@/engine/SymbolRenderer";
 import { getParticleConfigForTime, renderParticles, type ParticleState } from "@/engine/renderFrame";
 import { animationResolver } from "@/engine/AnimationResolver";
 import type { CinematicDirection, Chapter } from "@/types/CinematicDirection";
@@ -250,18 +251,28 @@ export function LyricDanceExporter({
     const sortedBeatTimes = sortedBeats.map((b) => b.time);
     const effectivePalette = spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
 
+    // ── Cinematic direction interpreter ──────────────────────────────
+    const normalizedCinematicDirection = cinematicDirection
+      ? {
+          ...cinematicDirection,
+          tensionCurve: ensureFullTensionCurve(cinematicDirection.tensionCurve ?? []),
+        }
+      : null;
+
     // ── Particle engine ──────────────────────────────────────────────
     let particleEngine: ParticleEngine | null = null;
     if (baseManifest.particleConfig?.system !== "none") {
       particleEngine = new ParticleEngine(baseManifest);
       particleEngine.setBounds({ x: 0, y: 0, w: cw, h: ch });
+      if (normalizedCinematicDirection?.visualWorld?.particleSystem) {
+        particleEngine.setSystem(normalizedCinematicDirection.visualWorld.particleSystem);
+      }
       particleEngine.init(baseManifest.particleConfig, baseManifest);
     }
 
-    // ── Cinematic direction interpreter ──────────────────────────────
     let interpreter: DirectionInterpreter | null = null;
-    if (cinematicDirection) {
-      interpreter = new DirectionInterpreter(cinematicDirection, duration);
+    if (normalizedCinematicDirection) {
+      interpreter = new DirectionInterpreter(normalizedCinematicDirection, duration);
     }
 
     // ── Mutable state for particle + text layers ────────────────────
@@ -361,14 +372,14 @@ export function LyricDanceExporter({
         backgroundDirective: "default",
         typographyShift: null,
       };
-      const tensionStage = cinematicDirection
-        ? getCurrentTensionStage(songProgress, cinematicDirection.tensionCurve)
+      const tensionStage = normalizedCinematicDirection
+        ? getCurrentTensionStage(songProgress, normalizedCinematicDirection.tensionCurve)
         : null;
-      const shot = cinematicDirection
-        ? getActiveShot(activeLineIndex, cinematicDirection.shotProgression)
+      const shot = normalizedCinematicDirection
+        ? getActiveShot(activeLineIndex, normalizedCinematicDirection.shotProgression)
         : null;
       const isClimax = interpreter?.isClimaxMoment(songProgress) ?? false;
-      const symbol = cinematicDirection?.symbolSystem;
+      const symbol = normalizedCinematicDirection?.symbolSystem;
       const activeWordPosition = { x: cw / 2, y: ch / 2 };
 
       // ── Draw frame ──
@@ -428,6 +439,10 @@ export function LyricDanceExporter({
         );
       }
 
+      if (symbol) {
+        renderSymbol(ctx, symbol, songProgress, cw, ch);
+      }
+
       // ── Particles ────────────────────────────────────────────────
       if (particleEngine) {
         const lineDir = activeLine && interpreter
@@ -446,7 +461,7 @@ export function LyricDanceExporter({
             cw, ch,
             chapterDirective: chapter,
             isClimax,
-            climaxMaxParticleDensity: cinematicDirection?.climax?.maxParticleDensity ?? null,
+            climaxMaxParticleDensity: normalizedCinematicDirection?.climax?.maxParticleDensity ?? null,
             tensionParticleDensity: tensionStage?.particleDensity ?? null,
             tensionLightBrightness: tensionStage?.lightBrightness ?? null,
             hasLineAnim: !!activeLine,
@@ -489,7 +504,7 @@ export function LyricDanceExporter({
           shot,
           tensionStage,
           chapterDirective: chapter,
-          cinematicDirection: cinematicDirection ?? null,
+          cinematicDirection: normalizedCinematicDirection ?? null,
           isClimax,
           particleEngine,
           rng,
