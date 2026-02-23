@@ -1017,8 +1017,8 @@ export default function ShareableLyricDance() {
       const deltaMs = Math.min(100, now - lastFrameTime);
       lastFrameTime = now;
 
-      const cw = textCanvas.width / (window.devicePixelRatio || 1);
-      const ch = textCanvas.height / (window.devicePixelRatio || 1);
+      const cw = textCanvas.width / activePixelRatio;
+      const ch = textCanvas.height / activePixelRatio;
       const ctx = textCtx;
       ctx.clearRect(0, 0, cw, ch);
       let drawCalls = 0;
