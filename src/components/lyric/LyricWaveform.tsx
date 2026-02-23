@@ -1,5 +1,5 @@
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, forwardRef } from "react";
 import { Play, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { WaveformData } from "@/hooks/useAudioEngine";
