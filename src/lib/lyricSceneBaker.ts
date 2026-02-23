@@ -104,6 +104,7 @@ type BakeState = {
   springOffset: number;
   springVelocity: number;
   currentZoom: number;
+  hasLoggedAnim: boolean;
 };
 
 type PrebakedData = {
@@ -382,8 +383,9 @@ function bakeFrame(
       exitScale,
     });
 
-    if (frameIndex === 30 && lineActive && visible) {
-      console.log('[ANIM] frame 30 active chunk:', {
+    if (!state.hasLoggedAnim && visible) {
+      state.hasLoggedAnim = true;
+      console.log('[ANIM] first visible chunk:', {
         entryStyle: storyboardEntry?.entryStyle,
         entryOffsetY,
         entryOffsetX,
@@ -467,6 +469,7 @@ function createBakeState(payload: ScenePayload): BakeState {
     springOffset: 0,
     springVelocity: 0,
     currentZoom: 1.0,
+    hasLoggedAnim: false,
   };
 }
 
