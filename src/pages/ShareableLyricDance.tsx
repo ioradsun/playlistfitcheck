@@ -16,7 +16,10 @@ import { mulberry32, hashSeed, PhysicsIntegrator } from "@/engine/PhysicsIntegra
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { getEffect, type EffectState } from "@/engine/EffectRegistry";
-import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
+import { computeFitFontSize, computeStackedLayout, applyTypographyProfile } from "@/engine/SystemStyles";
+import { ParticleEngine } from "@/engine/ParticleEngine";
+import { safeManifest } from "@/engine/validateManifest";
+import type { SceneManifest } from "@/engine/SceneManifest";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -262,7 +265,26 @@ export default function ShareableLyricDance() {
 
     const spec = data.physics_spec;
     const lines = data.lyrics;
-    const palette = data.palette || ["#ffffff", "#a855f7", "#ec4899"];
+
+    // ── Derive SceneManifest from stored data ──────────────────────────────
+    const rawManifest = data.scene_manifest as Record<string, unknown> | null;
+    const { manifest, valid: manifestValid } = rawManifest ? safeManifest(rawManifest) : { manifest: null as any, valid: false };
+    const resolvedManifest: SceneManifest | null = manifestValid ? manifest : null;
+    const effectivePalette = resolvedManifest?.palette || data.palette || ["#ffffff", "#a855f7", "#ec4899"];
+    const effectiveSystem = resolvedManifest?.backgroundSystem || spec.system;
+
+    // Apply typography profile from manifest so SystemStyles uses correct font
+    if (resolvedManifest?.typographyProfile) {
+      applyTypographyProfile(resolvedManifest.typographyProfile);
+    } else if (spec.typographyProfile) {
+      applyTypographyProfile(spec.typographyProfile as any);
+    }
+
+    // Initialise particle engine if manifest defines particles
+    let particleEngine: ParticleEngine | null = null;
+    if (resolvedManifest && resolvedManifest.particleConfig?.system !== "none") {
+      particleEngine = new ParticleEngine(resolvedManifest);
+    }
 
     const integrator = new PhysicsIntegrator(spec);
     const rng = mulberry32(hashSeed(data.seed || data.id));
@@ -284,6 +306,7 @@ export default function ShareableLyricDance() {
 
     let beatIndex = 0;
     let prevTime = songStart;
+    let lastFrameTime = performance.now();
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -293,12 +316,19 @@ export default function ShareableLyricDance() {
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (particleEngine) {
+        particleEngine.setBounds({ x: 0, y: 0, w: rect.width, h: rect.height });
+      }
     };
     resize();
     window.addEventListener("resize", resize);
 
     const render = () => {
       animRef.current = requestAnimationFrame(render);
+      const now = performance.now();
+      const deltaMs = now - lastFrameTime;
+      lastFrameTime = now;
+
       const cw = canvas.width / (window.devicePixelRatio || 1);
       const ch = canvas.height / (window.devicePixelRatio || 1);
       const currentTime = audio.currentTime;
@@ -310,10 +340,13 @@ export default function ShareableLyricDance() {
         return;
       }
 
+      let currentBeatIntensity = 0;
       while (beatIndex < sortedBeats.length && sortedBeats[beatIndex] <= currentTime) {
         if (sortedBeats[beatIndex] > prevTime) {
           const isDownbeat = beatIndex % 4 === 0;
-          integrator.onBeat(isDownbeat ? 1 : 0.5, isDownbeat);
+          const strength = isDownbeat ? 1 : 0.5;
+          integrator.onBeat(strength, isDownbeat);
+          currentBeatIntensity = strength;
         }
         beatIndex++;
       }
@@ -329,7 +362,7 @@ export default function ShareableLyricDance() {
       // AI-generated background image (Ken Burns subtle drift)
       const bgImg = bgImageRef.current;
       if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
-        const scale = 1.05; // slight zoom for Ken Burns
+        const scale = 1.05;
         const driftX = Math.sin(currentTime * 0.02) * cw * 0.015;
         const driftY = Math.cos(currentTime * 0.015) * ch * 0.01;
         const imgAspect = bgImg.naturalWidth / bgImg.naturalHeight;
@@ -349,21 +382,30 @@ export default function ShareableLyricDance() {
         ctx.globalAlpha = 1;
       }
 
+      // Procedural background system — uses manifest's backgroundSystem
       drawSystemBackground(ctx, {
-        system: spec.system,
+        system: effectiveSystem,
         physState: state,
         w: cw, h: ch,
         time: currentTime,
         beatCount: beatIndex,
         rng,
-        palette,
+        palette: effectivePalette,
         hookStart: songStart,
         hookEnd: songEnd,
       });
 
+      // Particle engine (behind text if not foreground)
+      if (particleEngine) {
+        particleEngine.update(deltaMs, currentBeatIntensity);
+        if (!particleEngine.shouldRenderForeground()) {
+          particleEngine.draw(ctx);
+        }
+      }
+
       // ── Comment rendering (constellation + river + center) ──
       const nodes = constellationRef.current;
-      const now = Date.now();
+      const commentNow = Date.now();
       ctx.textBaseline = "middle";
       ctx.textAlign = "center";
 
@@ -418,7 +460,7 @@ export default function ShareableLyricDance() {
       // Pass 3: New submissions (center → transitioning → river)
       for (const node of nodes) {
         if (node.phase === "center") {
-          const elapsed = now - node.phaseStartTime;
+          const elapsed = commentNow - node.phaseStartTime;
           ctx.font = "400 14px system-ui, -apple-system, sans-serif";
           ctx.globalAlpha = 0.45;
           ctx.fillStyle = "#ffffff";
@@ -426,9 +468,9 @@ export default function ShareableLyricDance() {
           const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
           ctx.fillText(truncated, cw / 2, ch / 2);
           ctx.textAlign = "start";
-          if (elapsed >= 800) { node.phase = "transitioning"; node.phaseStartTime = now; }
+          if (elapsed >= 800) { node.phase = "transitioning"; node.phaseStartTime = commentNow; }
         } else if (node.phase === "transitioning") {
-          const elapsed = now - node.phaseStartTime;
+          const elapsed = commentNow - node.phaseStartTime;
           const t = Math.min(1, elapsed / 4000);
           const targetRow = RIVER_ROWS[node.riverRowIndex];
           const targetY = targetRow ? targetRow.y : node.seedY;
@@ -445,7 +487,7 @@ export default function ShareableLyricDance() {
           const truncated = node.text.length > 40 ? node.text.slice(0, 40) + "…" : node.text;
           ctx.fillText(truncated, curX * cw, curY * ch);
           node.x = curX; node.y = curY; node.currentSize = size;
-          if (elapsed >= 4000) { node.phase = "river"; node.phaseStartTime = now; }
+          if (elapsed >= 4000) { node.phase = "river"; node.phaseStartTime = commentNow; }
         }
       }
       ctx.globalAlpha = 1;
@@ -462,10 +504,10 @@ export default function ShareableLyricDance() {
         const age = (currentTime - activeLine.start) * 1000;
         const lineDur = activeLine.end - activeLine.start;
         const lineProgress = Math.min(1, (currentTime - activeLine.start) / lineDur);
-        const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, spec.system);
+        const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, effectiveSystem);
         const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
           ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
-          : computeFitFontSize(ctx, activeLine.text, cw, spec.system);
+          : computeFitFontSize(ctx, activeLine.text, cw, effectiveSystem);
 
         ctx.save();
         const effectState: EffectState = {
@@ -475,13 +517,18 @@ export default function ShareableLyricDance() {
           fs, age,
           progress: lineProgress,
           rng,
-          palette,
-          system: spec.system,
+          palette: effectivePalette,
+          system: effectiveSystem,
           effectiveLetterSpacing,
           stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
         };
         drawFn(ctx, effectState);
         ctx.restore();
+      }
+
+      // Foreground particles (snow, petals, ash, light-rays) render on top of text
+      if (particleEngine && particleEngine.shouldRenderForeground()) {
+        particleEngine.draw(ctx);
       }
 
       // Progress bar — rendered via HTML overlay now, skip canvas bar
