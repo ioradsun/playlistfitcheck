@@ -1939,6 +1939,18 @@ export default function ShareableLyricDance() {
           )}
         </AnimatePresence>
 
+        {/* Close / back button — top-right */}
+        <button
+          onClick={() => navigate(-1)}
+          className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/70 transition-all text-white/60 hover:text-white/90"
+          aria-label="Close"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="2" y1="2" x2="12" y2="12" />
+            <line x1="12" y1="2" x2="2" y2="12" />
+          </svg>
+        </button>
+
         {/* Top-left identity label (visible after cover dismissed) */}
         {!showCover && data && (
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2.5">
