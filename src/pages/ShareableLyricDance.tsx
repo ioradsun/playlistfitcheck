@@ -981,7 +981,10 @@ export default function ShareableLyricDance() {
         const compositeAlpha = Math.min(entryAlpha, exitAlpha);
 
         ctx.translate(lineX, lineY);
-        ctx.rotate(state.rotation);
+        // Keep lyrics horizontal by default; only apply transient beat-impact rotation.
+        if (Math.abs(state.rotation) > 0.0001) {
+          ctx.rotate(state.rotation);
+        }
         ctx.scale(activeLineAnim.scale * state.scale, activeLineAnim.scale * state.scale);
         ctx.translate(-lineX, -lineY);
 

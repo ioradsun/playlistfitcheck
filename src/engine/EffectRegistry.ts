@@ -186,6 +186,8 @@ const drawShatterIn: EffectFn = (ctx, s) => {
     const ease = 1 - Math.pow(1 - t, 3);
 
     const offsetY = (1 - ease) * (rng() > 0.5 ? -1 : 1) * Math.min(60, h * 0.18);
+    // Brief entry-only rotation that settles to horizontal as ease→1.
+    const entryRotation = (1 - ease) * (rng() - 0.5) * 0.24;
     setAlpha(ctx, s, ease);
 
     if (st.colorMode === "per-char") {
@@ -196,7 +198,13 @@ const drawShatterIn: EffectFn = (ctx, s) => {
       ctx.fillStyle = palette[0] || "#fff";
     }
     const p = clampPointToSafeZone(charPositions[i], h / 2 + offsetY + shakeY, zone);
-    ctx.fillText(char, p.x, p.y);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    if (Math.abs(entryRotation) > 0.0001) {
+      ctx.rotate(entryRotation);
+    }
+    ctx.fillText(char, 0, 0);
+    ctx.restore();
   });
   ctx.restore();
 };
@@ -371,6 +379,9 @@ const drawGlitchFlash: EffectFn = (ctx, s) => {
   const glitchOn = rng() > 0.7;
   const offsetX = glitchOn ? (rng() - 0.5) * Math.min(20, w * 0.04) : 0;
   const sliceY = glitchOn ? (rng() - 0.5) * Math.min(10, h * 0.025) : 0;
+  const frame = Math.floor(age / (1000 / 60));
+  const microRotationActive = glitchOn && frame % 14 < 3;
+  const microRotation = microRotationActive ? (rng() - 0.5) * (Math.PI / 180) * 6 : 0;
   const zone = getSafeZone(w, h, Math.max(12, physState.safeOffset));
 
   if (drawAutoStacked(ctx, s, w / 2, h / 2)) {
@@ -378,23 +389,40 @@ const drawGlitchFlash: EffectFn = (ctx, s) => {
     return;
   }
 
+  const drawWithOptionalMicroRotation = (draw: () => void) => {
+    if (!microRotationActive) {
+      draw();
+      return;
+    }
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(microRotation);
+    ctx.translate(-w / 2, -h / 2);
+    draw();
+    ctx.restore();
+  };
+
   if (glitchOn) {
-    const cyanP = clampPointToSafeZone(w / 2 + 3 + offsetX, h / 2 + sliceY, zone);
-    const redP = clampPointToSafeZone(w / 2 - 3 + offsetX, h / 2 - sliceY, zone);
-    setAlpha(ctx, s, 0.6);
-    ctx.fillStyle = "cyan";
-    ctx.fillText(displayText, cyanP.x, cyanP.y);
-    ctx.fillStyle = "red";
-    ctx.fillText(displayText, redP.x, redP.y);
+    drawWithOptionalMicroRotation(() => {
+      const cyanP = clampPointToSafeZone(w / 2 + 3 + offsetX, h / 2 + sliceY, zone);
+      const redP = clampPointToSafeZone(w / 2 - 3 + offsetX, h / 2 - sliceY, zone);
+      setAlpha(ctx, s, 0.6);
+      ctx.fillStyle = "cyan";
+      ctx.fillText(displayText, cyanP.x, cyanP.y);
+      ctx.fillStyle = "red";
+      ctx.fillText(displayText, redP.x, redP.y);
+    });
   }
 
-  setAlpha(ctx, s, 1);
-  const measured = ctx.measureText(displayText).width;
-  applyStyledFill(ctx, st, palette, w / 2, h / 2, measured);
-  ctx.shadowBlur = physState.glow * 0.3;
-  ctx.shadowColor = palette[1] || "#8b5cf6";
-  const mainP = clampPointToSafeZone(w / 2 + (glitchOn ? offsetX * 0.3 : 0), h / 2, zone);
-  ctx.fillText(displayText, mainP.x, mainP.y);
+  drawWithOptionalMicroRotation(() => {
+    setAlpha(ctx, s, 1);
+    const measured = ctx.measureText(displayText).width;
+    applyStyledFill(ctx, st, palette, w / 2, h / 2, measured);
+    ctx.shadowBlur = physState.glow * 0.3;
+    ctx.shadowColor = palette[1] || "#8b5cf6";
+    const mainP = clampPointToSafeZone(w / 2 + (glitchOn ? offsetX * 0.3 : 0), h / 2, zone);
+    ctx.fillText(displayText, mainP.x, mainP.y);
+  });
   ctx.restore();
 };
 
@@ -412,24 +440,20 @@ const drawWaveSurge: EffectFn = (ctx, s) => {
   const waveAmp = Math.min(15, 15 * Math.min(physState.scale, 1.3));
   const zone = getSafeZone(w, h, Math.max(12, physState.safeOffset));
 
-  // Arc layout: arrange chars in an arc
+  // Arc layout keeps baseline horizontal; only character positions follow an arc.
   if (st.layout === "arc") {
     const arcRadius = w * 0.3;
     const totalAngle = Math.PI * 0.6;
     chars.forEach((char, i) => {
       const angle = -totalAngle / 2 + (i / Math.max(1, chars.length - 1)) * totalAngle - Math.PI / 2;
-      const arcPoint = clampPointToSafeZone(
+      const p = clampPointToSafeZone(
         w / 2 + Math.cos(angle) * arcRadius,
         h / 2 + Math.sin(angle) * arcRadius + arcRadius * 0.3,
         zone,
       );
-      ctx.save();
-      ctx.translate(arcPoint.x, arcPoint.y);
-      ctx.rotate(angle + Math.PI / 2);
       ctx.fillStyle = palette[i % palette.length] || "#fff";
       setAlpha(ctx, s, 0.85 + physState.heat * 0.15);
-      ctx.fillText(char, 0, 0);
-      ctx.restore();
+      ctx.fillText(char, p.x, p.y);
     });
   } else {
     chars.forEach((char, i) => {
@@ -538,9 +562,7 @@ const drawHookFracture: EffectFn = (ctx, s) => {
       ctx.save();
       const drift = (i - chars.length / 2) * (driftMult / chars.length);
       const yOff = Math.sin(age * 0.01 + i * 1.7) * Math.min(physState.glow * 0.15, 15);
-      const rot = (rng() - 0.5) * Math.min(physState.heat * 0.4, 0.3);
       ctx.translate(drift, yOff);
-      ctx.rotate(rot);
       const x = charPositions[i];
       const p = clampPointToSafeZone(x + drift, yOff, {
         ...zone,
