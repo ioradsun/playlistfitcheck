@@ -3,7 +3,7 @@
  *
  * Receives PhysicsState + active lyric text each frame from HookDanceEngine,
  * looks up the AI-assigned effect for the current line, and draws it.
- * Applies AnimationResolver outputs (entry/exit, scale, mod effects) to canvas.
+ * Uses refs for all rapidly-changing values to avoid stale closures in rAF.
  */
 
 import { useRef, useEffect, useState, useCallback, forwardRef } from "react";
@@ -14,7 +14,7 @@ import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
-import { deriveCanvasManifest } from "@/engine/deriveCanvasManifest";
+import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
@@ -66,6 +66,26 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
   const startTimeRef = useRef(Date.now());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  // ── Refs for all rapidly-changing values (prevents stale closures in rAF) ──
+  const physicsStateRef = useRef(physicsState);
+  const currentTimeRef = useRef(currentTime);
+  const beatCountRef = useRef(beatCount);
+  const specRef = useRef(spec);
+  const linesRef = useRef(lines);
+  const hookStartRef = useRef(hookStart);
+  const hookEndRef = useRef(hookEnd);
+  const prngRef = useRef(prng);
+
+  // Keep refs synchronized with props
+  physicsStateRef.current = physicsState;
+  currentTimeRef.current = currentTime;
+  beatCountRef.current = beatCount;
+  specRef.current = spec;
+  linesRef.current = lines;
+  hookStartRef.current = hookStart;
+  hookEndRef.current = hookEnd;
+  prngRef.current = prng;
+
   // Fingerprint flow state
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [pendingDna, setPendingDna] = useState<ArtistDNA | null>(null);
@@ -90,7 +110,13 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
   const activePalette = overrides.palette || fpPalette || spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
   const activeSystem = overrides.system || spec.system;
 
-  // Resize canvas to fill container — use ResizeObserver for crisp rendering at any size
+  // Keep palette/system in refs too
+  const activePaletteRef = useRef(activePalette);
+  const activeSystemRef = useRef(activeSystem);
+  activePaletteRef.current = activePalette;
+  activeSystemRef.current = activeSystem;
+
+  // Resize canvas to fill container
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -113,145 +139,164 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
     return () => ro.disconnect();
   }, []);
 
-  // Draw every time physicsState updates
+  // ── rAF-driven draw loop — reads all values from refs ─────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !physicsState) return;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.width / dpr;
-    const h = canvas.height / dpr;
+    let animId = 0;
 
-    // Draw system-specific background
-    ctx.save();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawSystemBackground(ctx, {
-      system: activeSystem,
-      physState: physicsState,
-      w,
-      h,
-      time: currentTime,
-      beatCount,
-      rng: prng,
-      palette: activePalette,
-      hookStart,
-      hookEnd,
-    });
+    const draw = () => {
+      animId = requestAnimationFrame(draw);
 
-    // Find current lyric line in hook region
-    const activeLine = lines.find(
-      l => currentTime >= l.start && currentTime < l.end
-    );
-    const activeLineIndex = activeLine
-      ? lines.indexOf(activeLine)
-      : -1;
+      const ps = physicsStateRef.current;
+      if (!ps) return;
 
-    if (activeLine) {
-      // Resolve effect: v6 pool-based or v5 sequence-based
-      let effectKey = "STATIC_RESOLVE";
-      if (spec.effect_sequence) {
-        const seqEntry = spec.effect_sequence.find(e => e.line_index === activeLineIndex);
-        effectKey = seqEntry?.effect_key ?? "STATIC_RESOLVE";
-      } else if (spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
-        const isInHook = currentTime >= hookStart && currentTime <= hookEnd;
-        const isLastHookLine = isInHook && activeLine.end >= hookEnd - 0.5;
-        if (isLastHookLine) {
-          effectKey = "HOOK_FRACTURE";
-        } else {
-          const poolIdx = (spec.logic_seed + activeLineIndex * 7) % spec.effect_pool.length;
-          effectKey = spec.effect_pool[poolIdx];
-        }
-      }
-      const drawFn = getEffect(effectKey);
+      const ct = currentTimeRef.current;
+      const bc = beatCountRef.current;
+      const sp = specRef.current;
+      const ln = linesRef.current;
+      const hs = hookStartRef.current;
+      const he = hookEndRef.current;
+      const rng = prngRef.current;
+      const palette = activePaletteRef.current;
+      const system = activeSystemRef.current;
 
-      const age = (currentTime - activeLine.start) * 1000;
-      const lineDur = activeLine.end - activeLine.start;
-      const progress = Math.min(1, (currentTime - activeLine.start) / lineDur);
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.width / dpr;
+      const h = canvas.height / dpr;
 
-      // Use stacked layout for narrow viewports, single-line for wide
-      const stackedLayout = computeStackedLayout(ctx, activeLine.text, w, h, activeSystem);
-      const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
-        ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
-        : computeFitFontSize(ctx, activeLine.text, w, activeSystem);
-
-      // ── AnimationResolver: entry/exit, scale, mod ──────────────────────
-      // Compute a rough beat intensity from physics heat (no analyser in editor)
-      const editorBeatIntensity = physicsState ? physicsState.heat * 0.8 : 0;
-
-      const lineAnim = animationResolver.resolveLine(
-        activeLineIndex, activeLine.start, activeLine.end, currentTime, editorBeatIntensity,
-      );
-
-      // Derive manifest for entrance/exit type strings
-      const { manifest: editorManifest } = deriveCanvasManifest({
-        physicsSpec: spec,
-        fallbackPalette: activePalette,
-        systemType: activeSystem,
+      // Derive manifest via shared pipeline — includes text-safe palette
+      const { manifest, textPalette, textColor, contrastRatio } = deriveCanvasManifest({
+        physicsSpec: sp,
+        fallbackPalette: palette,
+        systemType: system,
       });
-      const lyricEntrance = editorManifest.lyricEntrance ?? "fades";
-      const lyricExit = editorManifest.lyricExit ?? "fades";
 
       ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawSystemBackground(ctx, {
+        system, physState: ps, w, h, time: ct, beatCount: bc,
+        rng, palette, hookStart: hs, hookEnd: he,
+      });
 
-      // Apply entrance/exit alpha
-      const entryAlpha = applyEntrance(ctx, lineAnim.entryProgress, lyricEntrance);
-      const exitAlpha = lineAnim.exitProgress > 0
-        ? applyExit(ctx, lineAnim.exitProgress, lyricExit)
-        : 1.0;
-      const compositeAlpha = Math.min(entryAlpha, exitAlpha);
+      // Find current lyric line
+      const activeLine = ln.find(l => ct >= l.start && ct < l.end);
+      const activeLineIndex = activeLine ? ln.indexOf(activeLine) : -1;
 
-      // Apply beat-reactive scale
-      const cx = w / 2;
-      const cy = h / 2;
-      ctx.translate(cx, cy);
-      ctx.scale(lineAnim.scale, lineAnim.scale);
-      ctx.translate(-cx, -cy);
+      if (activeLine) {
+        // Resolve effect
+        let effectKey = "STATIC_RESOLVE";
+        if (sp.effect_sequence) {
+          const seqEntry = sp.effect_sequence.find(e => e.line_index === activeLineIndex);
+          effectKey = seqEntry?.effect_key ?? "STATIC_RESOLVE";
+        } else if (sp.effect_pool && sp.effect_pool.length > 0 && sp.logic_seed != null) {
+          const isInHook = ct >= hs && ct <= he;
+          const isLastHookLine = isInHook && activeLine.end >= he - 0.5;
+          if (isLastHookLine) {
+            effectKey = "HOOK_FRACTURE";
+          } else {
+            const poolIdx = (sp.logic_seed + activeLineIndex * 7) % sp.effect_pool.length;
+            effectKey = sp.effect_pool[poolIdx];
+          }
+        }
+        const drawFn = getEffect(effectKey);
 
-      // Apply mod effect (pulse, shimmer, glitch, etc.)
-      if (lineAnim.activeMod) {
-        applyModEffect(ctx, lineAnim.activeMod, currentTime, editorBeatIntensity);
+        const age = (ct - activeLine.start) * 1000;
+        const lineDur = activeLine.end - activeLine.start;
+        const progress = Math.min(1, (ct - activeLine.start) / lineDur);
+
+        const stackedLayout = computeStackedLayout(ctx, activeLine.text, w, h, system);
+        const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
+          ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
+          : computeFitFontSize(ctx, activeLine.text, w, system);
+
+        // Beat intensity from physics heat (no analyser in editor)
+        const editorBeatIntensity = ps.heat * 0.8;
+
+        // AnimationResolver: entry/exit, scale, mod
+        const lineAnim = animationResolver.resolveLine(
+          activeLineIndex, activeLine.start, activeLine.end, ct, editorBeatIntensity,
+        );
+
+        const lyricEntrance = manifest.lyricEntrance ?? "fades";
+        const lyricExit = manifest.lyricExit ?? "fades";
+
+        ctx.save();
+
+        // Entry/exit alpha
+        const entryAlpha = applyEntrance(ctx, lineAnim.entryProgress, lyricEntrance);
+        const exitAlpha = lineAnim.exitProgress > 0
+          ? applyExit(ctx, lineAnim.exitProgress, lyricExit)
+          : 1.0;
+        const compositeAlpha = Math.min(entryAlpha, exitAlpha);
+
+        // Beat-reactive scale
+        const cx = w / 2;
+        const cy = h / 2;
+        ctx.translate(cx, cy);
+        ctx.scale(lineAnim.scale, lineAnim.scale);
+        ctx.translate(-cx, -cy);
+
+        // Mod effect
+        if (lineAnim.activeMod) {
+          applyModEffect(ctx, lineAnim.activeMod, ct, editorBeatIntensity);
+        }
+
+        const effectState: EffectState = {
+          text: activeLine.text,
+          physState: ps,
+          w, h, fs, age, progress, rng,
+          // KEY FIX: use textPalette (text-safe) instead of raw palette
+          palette: textPalette as string[],
+          system,
+          effectiveLetterSpacing,
+          stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
+          alphaMultiplier: compositeAlpha,
+        };
+
+        drawFn(ctx, effectState);
+        ctx.restore();
+
+        // 1Hz diagnostic log
+        logManifestDiagnostics("EditorCanvas", {
+          palette: manifest.palette as string[],
+          fontFamily: manifest.typographyProfile?.fontFamily ?? "—",
+          particleSystem: manifest.particleConfig?.system ?? "none",
+          beatIntensity: editorBeatIntensity,
+          activeMod: lineAnim.activeMod,
+          entryProgress: lineAnim.entryProgress,
+          exitProgress: lineAnim.exitProgress,
+          textColor,
+          contrastRatio,
+          effectKey,
+        });
+
+        // Micro-surprise overlay
+        if (
+          sp.micro_surprise &&
+          bc > 0 &&
+          bc % sp.micro_surprise.every_n_beats === 0
+        ) {
+          drawMicroSurprise(ctx, w, h, sp.micro_surprise.action, ps, rng);
+        }
       }
 
-      const effectState: EffectState = {
-        text: activeLine.text,
-        physState: physicsState,
-        w,
-        h,
-        fs,
-        age,
-        progress,
-        rng: prng,
-        palette: activePalette,
-        system: activeSystem,
-        effectiveLetterSpacing,
-        stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
-        alphaMultiplier: compositeAlpha,
-      };
+      // Progress bar
+      const hookProgress = (ct - hs) / (he - hs);
+      ctx.fillStyle = palette[1] || "#a855f7";
+      ctx.globalAlpha = 0.6;
+      ctx.fillRect(0, h - 3, w * Math.max(0, Math.min(1, hookProgress)), 3);
+      ctx.globalAlpha = 1;
 
-      drawFn(ctx, effectState);
       ctx.restore();
+    };
 
-      // Micro-surprise overlay
-      if (
-        spec.micro_surprise &&
-        beatCount > 0 &&
-        beatCount % spec.micro_surprise.every_n_beats === 0
-      ) {
-        drawMicroSurprise(ctx, w, h, spec.micro_surprise.action, physicsState, prng);
-      }
-    }
-
-    // Progress bar at bottom
-    const hookProgress = (currentTime - hookStart) / (hookEnd - hookStart);
-    ctx.fillStyle = activePalette[1] || "#a855f7";
-    ctx.globalAlpha = 0.6;
-    ctx.fillRect(0, h - 3, w * Math.max(0, Math.min(1, hookProgress)), 3);
-    ctx.globalAlpha = 1;
-
-    ctx.restore();
-  }, [physicsState, currentTime, beatCount, lines, hookStart, hookEnd, spec, prng, activePalette, activeSystem]);
+    animId = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animId);
+  }, []); // Stable — reads everything from refs
 
   return (
     <motion.div
