@@ -179,6 +179,7 @@ export function LyricFitTab({
     setFitReadiness("running");
     setFitProgress(5);
     setFitStageLabel("Syncing transcript…");
+    setPipelineStages({ transcript: "running", rhythm: "pending", songDna: "pending", cinematic: "pending" });
 
     // 1. Sync latest transcript
     let freshLines = lines;
