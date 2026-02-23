@@ -380,7 +380,6 @@ export class LyricDancePlayer {
         globalSongEndSec = payload.songEnd;
         globalBakeLock = false;
       })();
-      })();
     }
 
     // ALL instances wait for the promise — including the first one
