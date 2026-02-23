@@ -347,8 +347,8 @@ export class LyricDancePlayer {
 
       if (globalTimelineCache && globalChunkCache) {
         console.log('[PLAYER] reusing cached timeline — frames:', globalTimelineCache.length);
-        this.timeline = globalTimelineCache;
-        this.chunks = globalChunkCache;
+        this.timeline = [...globalTimelineCache];
+        this.chunks = new Map(globalChunkCache);
         this.buildBgCache();
       } else if (!globalBakeLock) {
         globalBakeLock = true;
