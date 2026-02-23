@@ -43,6 +43,50 @@ export function deriveSceneManifestFromSpec(params: {
     spec.palette?.[2] || "#e8e8e8",
   ] as [string, string, string];
 
+  // Use typography from physicsSpec if available, otherwise fallback defaults
+  const srcTypo = spec.typographyProfile as any;
+  const typographyProfile = srcTypo?.fontFamily
+    ? {
+        fontFamily: srcTypo.fontFamily,
+        fontWeight: srcTypo.fontWeight ?? 500,
+        letterSpacing: srcTypo.letterSpacing ?? "normal",
+        textTransform: srcTypo.textTransform ?? "none",
+        lineHeightMultiplier: srcTypo.lineHeightMultiplier ?? 1.4,
+        hasSerif: srcTypo.hasSerif ?? false,
+        personality: srcTypo.personality ?? "RAW TRANSCRIPT",
+      }
+    : {
+        fontFamily: "Inter",
+        fontWeight: 500,
+        letterSpacing: "normal" as const,
+        textTransform: "none" as const,
+        lineHeightMultiplier: 1.4,
+        hasSerif: false,
+        personality: "RAW TRANSCRIPT" as const,
+      };
+
+  // Use particle config from physicsSpec if available
+  const srcParticle = (spec as any).particleConfig;
+  const particleConfig = srcParticle?.system && srcParticle.system !== "none"
+    ? {
+        system: srcParticle.system,
+        density: srcParticle.density ?? 0.3,
+        speed: srcParticle.speed ?? 0.4,
+        opacity: srcParticle.opacity ?? 0.35,
+        color: srcParticle.color ?? palette[2],
+        beatReactive: srcParticle.beatReactive ?? false,
+        foreground: srcParticle.foreground ?? false,
+      }
+    : {
+        system: "none" as const,
+        density: 0.3,
+        speed: 0.4,
+        opacity: 0.35,
+        color: palette[2],
+        beatReactive: false,
+        foreground: false,
+      };
+
   return {
     world: moodToWorld(description),
     coreEmotion: mood || "brooding",
@@ -67,24 +111,8 @@ export function deriveSceneManifestFromSpec(params: {
     lyricExit: "fades",
     backgroundSystem,
     backgroundIntensity: backgroundSystem === "void" ? 0.35 : 0.5,
-    typographyProfile: {
-      fontFamily: "Inter",
-      fontWeight: 500,
-      letterSpacing: "normal",
-      textTransform: "none",
-      lineHeightMultiplier: 1.4,
-      hasSerif: false,
-      personality: "RAW TRANSCRIPT",
-    },
-    particleConfig: {
-      system: "none",
-      density: 0.3,
-      speed: 0.4,
-      opacity: 0.35,
-      color: palette[2],
-      beatReactive: false,
-      foreground: false,
-    },
+    typographyProfile,
+    particleConfig,
     songTitle: songTitle || "Unknown",
     generatedAt: Date.now(),
   };
