@@ -32,13 +32,14 @@ export type Keyframe = {
     x: number;
     y: number;
     alpha: number;
-    scale: number;
+    glow: number;
     visible: boolean;
     fontSize: number;
     color: string;
   }>;
   cameraX: number;
   cameraY: number;
+  cameraZoom: number;
   beatIndex: number;
   bgBlend: number;
   particles: Array<{
@@ -71,6 +72,12 @@ type TensionStageLike = {
   motion?: number;
 };
 
+type StoryboardEntryLike = {
+  startSec?: number;
+  endSec?: number;
+  shotType?: string;
+};
+
 type ChapterLike = {
   startSec?: number;
   endSec?: number;
@@ -80,7 +87,8 @@ type BakeState = {
   beats: number[];
   beatCursor: number;
   lastBeatIndex: number;
-  pulseBudget: number;
+  glowBudget: number;
+  currentZoom: number;
 };
 
 type PrebakedData = {
@@ -245,73 +253,100 @@ function bakeFrame(
 
   if (beatIndex !== state.lastBeatIndex) {
     state.lastBeatIndex = beatIndex;
-    state.pulseBudget = 6;
+    state.glowBudget = 13;
   }
-  if (state.pulseBudget > 0) state.pulseBudget -= 1;
-  const beatPulse = state.pulseBudget > 0 ? (state.pulseBudget / 6) * 0.15 : 0;
+  if (state.glowBudget > 0) state.glowBudget -= 1;
+  const glowProgress = state.glowBudget / 13;
+  const glow = glowProgress > 0.77
+    ? (glowProgress - 0.77) / 0.23
+    : glowProgress / 0.77;
 
-  const tensionMotion = pre.tensionMotionByFrame[frameIndex] ?? 0.5;
-  const cameraX = Math.sin(songProgress * Math.PI * 3.7) * 14 * tensionMotion;
-  const cameraY = Math.cos(songProgress * Math.PI * 2.3) * 8 * tensionMotion;
+  const { chapter } = getChapterIndexAndData(payload.cinematic_direction, songProgress);
+  const tensionStages = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
+  const tensionMotion = tensionStages.find(
+    (s) => tSec >= (s.startRatio ?? 0) && tSec < (s.endRatio ?? 9999),
+  )?.motionIntensity ?? 0.5;
 
-  const currentChapterIndex = pre.chapterIndexByFrame[frameIndex] ?? -1;
-  const bgBlend =
-    currentChapterIndex >= 0 ? currentChapterIndex / Math.max(1, pre.chapters.length - 1) : 0;
-
-  const particleCount = Math.max(0, Math.floor(pre.energy * 8 + beatPulse * 12 + pre.density * 2));
-  const particles: Keyframe["particles"] = Array.from({ length: particleCount }, (_, i) => ({
-    x: 0.1 + ((i * 0.618033) % 0.8),
-    y: 0.1 + ((i * 0.381966) % 0.8),
-    size: 1 + pre.energy * 2,
-    alpha: 0.06 + beatPulse * 0.12,
-  }));
+  // Shot type → camera zoom
+  const shotZoomMap: Record<string, number> = {
+    'CloseUp': 1.25,
+    'Medium': 1.0,
+    'Wide': 0.82,
+    'FloatingInWorld': 0.95,
+  };
+  const storyboard = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
+  const currentShot = storyboard.find(
+    (s) => tSec >= (s.startSec ?? 0) && tSec < (s.endSec ?? 9999),
+  )?.shotType ?? 'Medium';
+  const targetZoom = shotZoomMap[currentShot] ?? 1.0;
+  state.currentZoom += (targetZoom - state.currentZoom) * 0.02;
 
   const chunks: Keyframe["chunks"] = [];
 
   for (let idx = 0; idx < payload.lines.length; idx += 1) {
     const line = payload.lines[idx];
-    const visible = idx === activeLineIndex;
-    const lineStart = line.start ?? 0;
-    const lineEnd = line.end ?? lineStart;
-    const fadeIn = visible ? Math.min(1, Math.max(0, (tSec - lineStart) / 0.2)) : 0;
-    const fadeOut = visible ? Math.min(1, Math.max(0, (lineEnd - tSec) / 0.3)) : 0;
-    const alpha = Math.min(fadeIn, fadeOut);
-    const scale = visible ? 1.0 + beatPulse : 1.0;
-    const heroWord = pre.lineHeroWords[idx];
-    const fontSize = pre.lineFontSizes[idx] ?? 36;
+    const lineActive = idx === activeLineIndex;
 
-    const baseChunk = {
-      id: String(idx),
-      x: BASE_X,
-      y: BASE_Y_CENTER,
+    const fadeIn = Math.min(1, Math.max(0, (tSec - line.start) / 0.2));
+    const fadeOut = Math.min(1, Math.max(0, (line.end - tSec) / 0.3));
+    const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
+
+    let x = linePositions[idx] + lineChapterOffsets[idx];
+    const estimatedWidth = Math.min(880, line.text.length * 28);
+    const maxX = 960 - estimatedWidth / 2 - 60;
+    const minX = estimatedWidth / 2 + 60;
+    x = Math.max(minX, Math.min(maxX, x));
+    const y = getShotY(payload.cinematic_direction, chapter);
+
+    const visible = alpha > 0.001;
+    const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
+
+    chunks.push({
+      id: `${idx}`,
+      x,
+      y,
       alpha,
-      scale,
-      visible: visible && alpha > 0,
-      fontSize,
-      color: pre.lineColors[idx] ?? "#ffffff",
-    };
+      glow: chunkGlow,
+      visible,
+    });
 
-    chunks.push(baseChunk);
-
-    if (heroWord && visible) {
-      chunks.push({
-        id: `${idx}-hero`,
-        x: BASE_X,
-        y: BASE_Y_CENTER + fontSize * 1.4,
-        alpha: Math.min(1, alpha * 1.2),
-        scale: scale * 1.35,
-        visible: alpha > 0,
-        fontSize: fontSize * 1.3,
-        color: payload.palette?.[1] ?? "#aaccff",
+    if (lineActive && payload.cinematic_direction?.wordDirectives) {
+      const directives = Object.values(payload.cinematic_direction.wordDirectives as Record<string, WordDirectiveLike>);
+      const normalizedText = (line.text ?? "").toLowerCase();
+      const heroDirective = directives.find((directive) => {
+        const word = (directive.word ?? "").trim().toLowerCase();
+        return word.length > 0 && normalizedText.includes(word);
       });
+
+      if (heroDirective?.word) {
+        const heroWord = heroDirective.word.trim();
+        const lowerHero = heroWord.toLowerCase();
+        const heroStart = normalizedText.indexOf(lowerHero);
+        if (heroStart >= 0) {
+          const preText = line.text.slice(0, heroStart);
+          const approxCharW = 12;
+          const preOffset = (preText.length * approxCharW) / 2;
+          const heroOffset = (heroWord.length * approxCharW) / 2;
+
+          chunks.push({
+            id: `${idx}-hero`,
+            x: x + preOffset + heroOffset,
+            y,
+            alpha: Math.min(1, alpha + 0.15),
+            glow: Math.min(1, chunkGlow + 0.2),
+            visible,
+          });
+        }
+      }
     }
   }
 
   return {
     timeMs,
     chunks,
-    cameraX,
-    cameraY,
+    cameraX: Math.sin(songProgress * Math.PI * 3.7) * 12 * tensionMotion,
+    cameraY: Math.cos(songProgress * Math.PI * 2.3) * 7 * tensionMotion,
+    cameraZoom: state.currentZoom,
     beatIndex,
     bgBlend,
     particles,
@@ -323,7 +358,8 @@ function createBakeState(payload: ScenePayload): BakeState {
     beats: payload.beat_grid?.beats ?? [],
     beatCursor: 0,
     lastBeatIndex: -1,
-    pulseBudget: 0,
+    glowBudget: 0,
+    currentZoom: 1.0,
   };
 }
 

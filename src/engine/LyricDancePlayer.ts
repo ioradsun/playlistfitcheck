@@ -245,7 +245,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     x: number;
     y: number;
     alpha: number;
-    scale: number;
+    glow: number;
     visible: boolean;
   }>;
 };
@@ -543,11 +543,23 @@ export class LyricDancePlayer {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
 
-    // Background — no camera offset
+    // 1. Background — drawn at identity transform, always fills canvas
     if (this.bgCache) this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
 
-    // Camera applies to text layer only
+    // 2. Apply zoom around canvas center
+    const zoom = frame.cameraZoom ?? 1.0;
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+    this.ctx.translate(cx, cy);
+    this.ctx.scale(zoom, zoom);
+    this.ctx.translate(-cx, -cy);
+
+    // 3. Apply camera drift on top of zoom
     this.ctx.translate(frame.cameraX, frame.cameraY);
+
+    // 4. Draw text chunks with glow
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
 
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
@@ -555,20 +567,17 @@ export class LyricDancePlayer {
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
-      const cx = this.width / 2;
-      const cy = this.height / 2;
-
-      this.ctx.save();
-      this.ctx.translate(cx, cy);
-      this.ctx.scale(chunk.scale ?? 1, chunk.scale ?? 1);
-      this.ctx.translate(-cx, -cy);
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.font = obj.font;
       this.ctx.fillStyle = obj.color;
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
+
+      if (chunk.glow > 0) {
+        this.ctx.shadowColor = '#ffffff';
+        this.ctx.shadowBlur = chunk.glow * 24;
+      }
+
       this.ctx.fillText(obj.text, cx, cy);
-      this.ctx.restore();
+      this.ctx.shadowBlur = 0;
       drawCalls += 1;
     }
 
@@ -660,7 +669,7 @@ export class LyricDancePlayer {
     offCtx.fillStyle = grad;
     offCtx.fillRect(0, 0, off.width, off.height);
 
-    const env = sceneManifest?.environment?.toLowerCase() ?? "";
+    const env = ((sceneManifest as any)?.environment ?? "").toLowerCase();
     if (env.includes("ocean") || env.includes("water") || env.includes("surf")) {
       this.drawWaveBands(offCtx, off.width, off.height, palette);
     } else if (env.includes("city") || env.includes("urban") || env.includes("street")) {
@@ -770,12 +779,13 @@ export class LyricDancePlayer {
       beatIndex: f.beatIndex,
       cameraX: f.cameraX * sx,
       cameraY: f.cameraY * sy,
+      cameraZoom: f.cameraZoom,
       chunks: f.chunks.map((c) => ({
         id: c.id,
         x: c.x * sx,
         y: c.y * sy,
         alpha: c.alpha,
-        scale: c.scale,
+        glow: c.glow,
         visible: c.visible,
       })),
     }));
@@ -791,12 +801,13 @@ export class LyricDancePlayer {
       beatIndex: f.beatIndex,
       cameraX: sx ? f.cameraX / sx : f.cameraX,
       cameraY: sy ? f.cameraY / sy : f.cameraY,
+      cameraZoom: f.cameraZoom,
       chunks: f.chunks.map((c) => ({
         id: c.id,
         x: sx ? c.x / sx : c.x,
         y: sy ? c.y / sy : c.y,
         alpha: c.alpha,
-        scale: c.scale,
+        glow: c.glow,
         visible: c.visible,
       })),
     }));
