@@ -720,10 +720,23 @@ export function LyricDisplay({
         secondHookLabel: secondary?.label,
         physicsSpec: result?.physics_spec || null,
         scene_manifest: result?.scene_manifest || result?.sceneManifest || null,
-        cinematic_direction: result?.cinematicDirection || null,
+        cinematic_direction: null,
       };
       const normalizedSongDna = normalizeSongDnaWithManifest(nextSongDna, data.title);
       setSongDna(normalizedSongDna);
+
+      // Fire cinematic direction generation in parallel (non-blocking)
+      const lyricsForDirection = data.lines
+        .filter((l) => l.tag !== "adlib")
+        .map((l, i) => ({ text: l.text, start: l.start, end: l.end }));
+      supabase.functions.invoke("cinematic-direction", {
+        body: { title: data.title, artist: data.artist, lines: lyricsForDirection, beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined },
+      }).then(({ data: dirResult }) => {
+        if (dirResult?.cinematicDirection) {
+          setSongDna((prev: any) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+          console.log("[LyricDisplay] cinematic direction loaded");
+        }
+      }).catch((e) => console.warn("[LyricDisplay] cinematic direction failed:", e));
 
       const manifest = normalizedSongDna?.scene_manifest
         ? safeManifest(normalizedSongDna.scene_manifest).manifest

@@ -63,5 +63,8 @@ verify_jwt = false
 [functions.lyric-analyze]
 verify_jwt = false
 
+[functions.cinematic-direction]
+verify_jwt = false
+
 [functions.artist-fingerprint]
 verify_jwt = false
