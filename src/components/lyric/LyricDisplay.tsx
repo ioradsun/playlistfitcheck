@@ -2407,35 +2407,7 @@ export function LyricDisplay({
                 <Film size={10} />
                 Export Video
               </button>
-              <PublishLyricDanceButton
-                physicsSpec={songDna.physicsSpec as PhysicsSpec}
-                lines={data.lines}
-                beatGrid={{
-                  bpm: beatGrid.bpm,
-                  beats: beatGrid.beats,
-                  confidence: beatGrid.confidence,
-                }}
-                audioFile={audioFile}
-                songTitle={data.title}
-                artistName={
-                  data.artist &&
-                  data.artist !== "Unknown" &&
-                  data.artist !== "UNKNOWN"
-                    ? data.artist
-                    : "—"
-                }
-                system={songDna.physicsSpec.system}
-                palette={
-                  songDna.physicsSpec.palette || [
-                    "#ffffff",
-                    "#a855f7",
-                    "#ec4899",
-                  ]
-                }
-                fingerprint={artistFingerprint}
-                seed={`${data.title}-lyric-dance`}
-                songDna={songDna}
-              />
+              {/* PublishLyricDanceButton removed — publishing handled by FitTab */}
             </div>
           )}
 
