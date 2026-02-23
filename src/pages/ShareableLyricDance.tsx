@@ -30,6 +30,7 @@ import { applyKineticEffect } from "../engine/KineticEffects";
 import { drawElementalWord } from "../engine/ElementalEffects";
 import * as WordClassifier from "@/engine/WordClassifier";
 import { DirectionInterpreter } from "@/engine/DirectionInterpreter";
+import type { WordHistory } from "@/engine/DirectionInterpreter";
 import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
@@ -609,7 +610,7 @@ export default function ShareableLyricDance() {
     current: null,
     progress: 1,
   });
-  const wordAppearanceRef = useRef<Map<string, number>>(new Map());
+  const wordHistoryRef = useRef<Map<string, WordHistory>>(new Map());
   const climaxActiveRef = useRef(false);
   const silenceOffsetYRef = useRef(0);
   const silenceZoomRef = useRef(1);
@@ -1519,17 +1520,19 @@ export default function ShareableLyricDance() {
           ctx.textAlign = "center";
           ctx.textBaseline = "alphabetic";
           const wordRenderWidth = ctx.measureText(word.text).width;
-          const appearance = wordAppearanceRef.current.get(normalizedWord) ?? 0;
-          if (directive?.evolutionRule) {
-            if (normalizedWord === "drown") {
-              const bubbleSpeed = 1 + appearance * 0.5;
-              const bubbleCount = 3 + appearance * 2;
-              drawBubbles(ctx, wordX, wordY, wordRenderWidth, fontSize, bubbleCount, bubbleSpeed, currentTime);
-            }
-            if (normalizedWord === "down") {
-              const fallSpeed = 1 + appearance * 0.3;
-              wordY += Math.sin(currentTime * fallSpeed) * 3;
-            }
+          const existingHistory = wordHistoryRef.current.get(normalizedWord);
+          const appearance = existingHistory?.count ?? 0;
+          const appearanceCount = appearance + 1;
+          const historyForRule: WordHistory = {
+            count: appearanceCount,
+            firstSeen: existingHistory?.firstSeen ?? currentTime,
+            lastSeen: currentTime,
+            positions: [...(existingHistory?.positions ?? []), { x: wordX, y: wordY }],
+          };
+
+          if (directive?.evolutionRule && normalizedWord === "down") {
+            const fallSpeed = 1 + appearanceCount * 0.3;
+            wordY += Math.sin(currentTime * fallSpeed) * 3;
           }
 
           const isHeroWord = Boolean(lineDirection?.heroWord && word.text.toLowerCase().includes(lineDirection.heroWord.toLowerCase()));
@@ -1539,6 +1542,17 @@ export default function ShareableLyricDance() {
 
           const finalX = wordX + props.xOffset;
           const finalY = wordY + props.yOffset;
+
+          if (historyForRule.positions.length > 1 && directive?.evolutionRule) {
+            const lastPos = historyForRule.positions[historyForRule.positions.length - 2];
+            if (lastPos) {
+              ctx.save();
+              ctx.globalAlpha = 0.08;
+              ctx.fillStyle = directive.colorOverride ?? "#ffffff";
+              ctx.fillText(word.text, lastPos.x, lastPos.y);
+              ctx.restore();
+            }
+          }
 
           ctx.save();
           ctx.translate(finalX, finalY);
@@ -1555,19 +1569,63 @@ export default function ShareableLyricDance() {
             ctx.scale(1.2, 1.2);
           }
 
+          let evolutionScale = 1;
+          let evolutionGlow = 0;
+          let evolutionOpacity = 1;
+          let evolutionYOffset = 0;
+
+          if (directive?.evolutionRule) {
+            const evolution = interpreterNow?.applyEvolutionRule(
+              ctx,
+              directive.evolutionRule,
+              historyForRule,
+              0,
+              0,
+              wordRenderWidth,
+              fontSize,
+              currentBeatIntensity,
+              resolvedManifest.palette,
+            );
+            evolutionScale = evolution?.scaleMultiplier ?? 1;
+            evolutionGlow = evolution?.glowRadius ?? 0;
+            evolutionOpacity = evolution?.opacityMultiplier ?? 1;
+            evolutionYOffset = evolution?.yOffset ?? 0;
+          }
+
+          if (normalizedWord === "love" && directive?.evolutionRule) {
+            evolutionGlow = Math.max(evolutionGlow, appearanceCount * 3);
+            evolutionScale = Math.max(evolutionScale, 1 + appearanceCount * 0.03);
+            evolutionYOffset += appearanceCount;
+          }
+
           if (climaxActiveRef.current) {
-            ctx.scale(1.08, 1.08);
+            evolutionScale = Math.max(evolutionScale, 1.08);
             if (normalizedWord === "you") {
-              ctx.scale(1.22, 1.22);
+              evolutionScale = Math.max(evolutionScale, 1.5);
+              evolutionGlow = Math.max(evolutionGlow, 30);
             }
           }
 
-          ctx.fillStyle = directive?.colorOverride ?? props.color;
-          ctx.globalAlpha = props.opacity * compositeAlpha * modeOpacity;
+          const climaxTimeRatio = cinematicDirection?.climax?.timeRatio ?? 0.65;
+          if (songProgress > climaxTimeRatio) {
+            const postClimaxDecay = Math.max(0, 1 - (songProgress - climaxTimeRatio) * 3);
+            evolutionScale = 1 + (evolutionScale - 1) * postClimaxDecay;
+            evolutionGlow *= postClimaxDecay;
+          }
 
-          if (props.glowRadius > 0) {
-            ctx.shadowBlur = Math.max(ctx.shadowBlur, props.glowRadius);
-            ctx.shadowColor = props.color;
+          if (evolutionScale !== 1) {
+            ctx.scale(evolutionScale, evolutionScale);
+          }
+          if (evolutionYOffset !== 0) {
+            ctx.translate(0, evolutionYOffset);
+          }
+
+          ctx.fillStyle = directive?.colorOverride ?? props.color;
+          ctx.globalAlpha = props.opacity * compositeAlpha * modeOpacity * evolutionOpacity;
+
+          if (props.glowRadius > 0 || evolutionGlow > 0) {
+            ctx.shadowBlur = Math.max(ctx.shadowBlur, props.glowRadius, evolutionGlow);
+            ctx.shadowColor = directive?.colorOverride ?? props.color;
           }
 
           if (directive?.kineticClass) {
@@ -1580,18 +1638,23 @@ export default function ShareableLyricDance() {
               currentTime,
               currentBeatIntensity,
               renderedIndex,
-              appearance,
+              appearanceCount,
+              1 + appearanceCount * 0.3,
             );
           }
 
-          if (directive?.evolutionRule) {
-            interpreterNow?.applyEvolutionRule(
-              directive.evolutionRule,
-              appearance,
+          if (directive?.evolutionRule && normalizedWord === "drown") {
+            const blurAmount = Math.min(2, appearanceCount * 0.3);
+            ctx.filter = `blur(${blurAmount}px)`;
+            drawBubbles(
               ctx,
               0,
               0,
-              directive.colorOverride ?? null,
+              wordRenderWidth,
+              fontSize,
+              Math.min(20, 3 + appearanceCount * 2),
+              1 + appearanceCount * 0.4,
+              currentTime,
             );
           }
 
@@ -1604,7 +1667,7 @@ export default function ShareableLyricDance() {
               directive.elementalClass,
               currentTime,
               currentBeatIntensity,
-              appearance,
+              appearanceCount,
               directive.colorOverride ?? null,
             );
           } else if (props.letterSpacing !== "0em") {
@@ -1615,6 +1678,7 @@ export default function ShareableLyricDance() {
 
           // Reset glow
           ctx.shadowBlur = 0;
+          ctx.filter = "none";
           ctx.restore();
 
           // Motion trail for MOTION class words
@@ -1625,8 +1689,16 @@ export default function ShareableLyricDance() {
             }
           }
 
-          // Track word appearances for escalation
-          wordAppearanceRef.current.set(normalizedWord, appearance + 1);
+          // Track word history for evolution
+          wordHistoryRef.current.set(normalizedWord, {
+            count: appearanceCount,
+            firstSeen: existingHistory?.firstSeen ?? currentTime,
+            lastSeen: currentTime,
+            positions: [
+              ...(existingHistory?.positions ?? []).slice(-4),
+              { x: wordX, y: wordY },
+            ],
+          });
 
           ctx.globalAlpha = 1;
           if (displayMode !== "single_word") {

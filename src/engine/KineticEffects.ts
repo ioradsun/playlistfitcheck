@@ -8,19 +8,22 @@ export function applyKineticEffect(
   beatIntensity: number,
   wordIndex: number,
   appearanceCount: number,
+  evolutionSpeedMultiplier = 1,
 ): void {
   switch (kineticClass) {
     case "FALLING":
     case "SINKING": {
       // Fresh calculation each frame — never accumulated
-      const sinkDepth = Math.min(appearanceCount * 3, 20);
-      const sinkBob = Math.sin(currentTime * 2) * 3;
+      const sinkDepth = Math.min(appearanceCount * 3, 30);
+      const sinkBob = Math.sin(currentTime * (2 * evolutionSpeedMultiplier)) * 3;
       const totalSink = sinkDepth + sinkBob;
       ctx.translate(0, totalSink);
       // Shadow copies above — trail of where it was
       ctx.globalAlpha *= 0.2;
-      ctx.fillText(word, 0, -10);
-      ctx.fillText(word, 0, -20);
+      const trailLength = Math.min(8, Math.max(2, appearanceCount));
+      for (let t = 1; t <= trailLength; t += 1) {
+        ctx.fillText(word, 0, -(t * 10));
+      }
       ctx.globalAlpha /= 0.2;
       break;
     }
@@ -44,7 +47,7 @@ export function applyKineticEffect(
     case "FLOATING":
     case "DRIFTING": {
       // Gentle sine wave vertical drift
-      const floatY = Math.sin(currentTime * 0.8 + wordIndex) * 6;
+      const floatY = Math.sin(currentTime * (0.8 * evolutionSpeedMultiplier) + wordIndex) * 6;
       ctx.translate(0, floatY);
       // Soft glow
       ctx.shadowBlur = 8;
@@ -106,7 +109,7 @@ export function applyKineticEffect(
 
     case "RISING": {
       // Fresh calculation each frame — capped drift
-      const riseCycle = (currentTime % 3) / 3; // 0→1 over 3s
+      const riseCycle = ((currentTime * evolutionSpeedMultiplier) % 3) / 3; // 0→1 over 3s
       const riseY = -Math.min(riseCycle * fontSize * 0.3, 20);
       ctx.translate(0, riseY);
       ctx.globalAlpha *= 0.2;
