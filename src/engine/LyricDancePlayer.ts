@@ -684,14 +684,17 @@ export class LyricDancePlayer {
 
     console.log('[PAYLOAD] songStart:', songStart, 'songEnd:', songEnd,
       'first line start:', lines[0]?.start, 'last line end:', lines[lines.length - 1]?.end);
+    console.log('[PAYLOAD] cinematic_direction keys:',
+      Object.keys(this.data.cinematic_direction ?? {}),
+      'chapters:', this.data.cinematic_direction?.chapters?.length);
 
     return {
       lines,
-      beat_grid: this.data.beat_grid,
+      beat_grid: this.data.beat_grid ?? null,
+      cinematic_direction: this.data.cinematic_direction ?? null,
       physics_spec: this.data.physics_spec,
       scene_manifest: this.data.scene_manifest ?? null,
-      cinematic_direction: this.data.cinematic_direction ?? null,
-      palette: this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"],
+      palette: this.data.cinematic_direction?.visualWorld?.palette ?? ["#0a0a0a", "#111827", "#1a2a4a"],
       lineBeatMap: [],
       songStart,
       songEnd,
