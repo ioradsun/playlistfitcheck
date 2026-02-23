@@ -327,7 +327,6 @@ export function LyricDisplay({
   versionMeta: initVersionMeta,
   debugData,
   initialBeatGrid,
-  initialSongSignature,
   initialSongDna,
   initialBackgroundImageUrl,
   onBack,
