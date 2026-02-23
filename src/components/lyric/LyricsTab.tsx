@@ -63,6 +63,7 @@ export function LyricsTab({
   setFmlyLines,
   versionMeta,
   setVersionMeta,
+  beatGrid,
   onProjectSaved,
   onNewProject,
   onHeaderProject,
