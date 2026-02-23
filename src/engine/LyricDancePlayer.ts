@@ -335,36 +335,33 @@ export class LyricDancePlayer {
   async init(): Promise<void> {
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
 
-    if (globalTimelineCache && globalChunkCache) {
-      // Reuse cached bake from previous instance
-      console.log('[PLAYER] reusing cached timeline — frames:', globalTimelineCache.length);
-      this.timeline = [...globalTimelineCache];
-      this.chunks = new Map(globalChunkCache);
-      this.buildBgCache();
-    } else {
-      while (globalBakeLock && !globalTimelineCache && !globalChunkCache) {
-        await new Promise((resolve) => setTimeout(resolve, 16));
-      }
-
-      if (globalTimelineCache && globalChunkCache) {
-        console.log('[PLAYER] reusing cached timeline — frames:', globalTimelineCache.length);
-        this.timeline = [...globalTimelineCache];
-        this.chunks = new Map(globalChunkCache);
-        this.buildBgCache();
-      } else if (!globalBakeLock) {
-        globalBakeLock = true;
+    if (!globalTimelineCache && !globalBakeLock) {
+      // First instance — start the bake
+      globalBakeLock = true;
+      globalBakePromise = (async () => {
         const payload = this.buildScenePayload();
         try {
           await this.load(payload, (pct) => console.log('[PLAYER] bake pct:', pct));
-          globalTimelineCache = this.timeline;
-          globalChunkCache = this.chunks;
+          globalTimelineCache = [...this.timeline];
+          globalChunkCache = new Map(this.chunks);
           console.log('[PLAYER] bake done — frames:', this.timeline.length);
         } catch (e) {
           console.error('[PLAYER] bake failed:', e);
         } finally {
           globalBakeLock = false;
         }
-      }
+      })();
+      await globalBakePromise;
+    } else if (globalBakePromise && !globalTimelineCache) {
+      // Second instance — bake in progress, wait for it
+      console.log('[PLAYER] waiting for bake to complete');
+      await globalBakePromise;
+    }
+
+    if (globalTimelineCache && globalChunkCache) {
+      this.timeline = [...globalTimelineCache];
+      this.chunks = new Map(globalChunkCache);
+      this.buildBgCache();
     }
 
     this.audio.currentTime = this.songStartSec;
