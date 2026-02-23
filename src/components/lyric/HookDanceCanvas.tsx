@@ -270,7 +270,19 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         const cx = w / 2;
         const cy = h / 2;
         ctx.translate(cx, cy);
-        ctx.scale(lineAnim.scale, lineAnim.scale);
+        ctx.scale(lineAnim.scale * ps.scale, lineAnim.scale * ps.scale);
+        ctx.translate(-cx, -cy);
+
+        // ── Physics-driven word motion ──────────────────────────────────
+        const physShakeAngle = (bc * 2.3 + ct * 7.1) % (Math.PI * 2);
+        const physShakeX = Math.cos(physShakeAngle) * ps.shake;
+        const physShakeY = Math.sin(physShakeAngle) * ps.shake;
+        ctx.translate(
+          ps.offsetX + physShakeX,
+          ps.offsetY + physShakeY,
+        );
+        ctx.translate(cx, cy);
+        ctx.rotate(ps.rotation);
         ctx.translate(-cx, -cy);
 
         // Mod effect

@@ -971,8 +971,12 @@ export default function ShareableLyricDance() {
             break;
         }
 
-        const lineX = cw / 2 + xOffsetRef.current + xNudge + state.offsetX;
-        const lineY = yBaseRef.current + yNudge + state.offsetY;
+        // Physics-driven shake: deterministic angle from beat index + time
+        const physShakeAngle = (beatIndex * 2.3 + currentTime * 7.1) % (Math.PI * 2);
+        const physShakeX = Math.cos(physShakeAngle) * state.shake;
+        const physShakeY = Math.sin(physShakeAngle) * state.shake;
+        const lineX = cw / 2 + xOffsetRef.current + xNudge + state.offsetX + physShakeX;
+        const lineY = yBaseRef.current + yNudge + state.offsetY + physShakeY;
 
         ctx.save();
 
