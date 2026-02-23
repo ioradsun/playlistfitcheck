@@ -277,7 +277,9 @@ function LiveDebugHUD({ stateRef }: { stateRef: React.MutableRefObject<LiveDebug
 const distanceToZoom: Record<string, number> = {
   ExtremeWide: 0.7,
   Wide: 0.85,
+  MediumWide: 0.9,
   Medium: 1.0,
+  MediumClose: 1.1,
   Close: 1.2,
   ExtremeClose: 1.5,
 };
@@ -733,6 +735,10 @@ export default function ShareableLyricDance() {
   useEffect(() => {
     if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
     console.log('[RENDER LOOP] Starting setup, cinematic_direction:', !!data.cinematic_direction);
+    let audio: HTMLAudioElement | null = null;
+    let constellationInterval: ReturnType<typeof setInterval> | null = null;
+    let resizeHandler: (() => void) | null = null;
+    try {
     const bgCanvas = bgCanvasRef.current;
     const textCanvas = textCanvasRef.current;
     const container = containerRef.current;
@@ -819,10 +825,10 @@ export default function ShareableLyricDance() {
     const constellationCanvas = document.createElement("canvas");
     constellationCanvasRef.current = constellationCanvas;
     let constellationDirty = true;
-    const constellationInterval = setInterval(() => { constellationDirty = true; }, 100); // 10fps
+    constellationInterval = setInterval(() => { constellationDirty = true; }, 100); // 10fps
 
     // Set up audio
-    const audio = new Audio(data.audio_url);
+    audio = new Audio(data.audio_url);
     audio.loop = true;
     audio.muted = true;
     audio.preload = "auto";
@@ -856,7 +862,7 @@ export default function ShareableLyricDance() {
       return h;
     };
 
-    const resize = () => {
+    resizeHandler = () => {
       const isMobile = window.innerWidth < 768;
       const pixelRatio = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       const rect = container.getBoundingClientRect();
@@ -878,8 +884,8 @@ export default function ShareableLyricDance() {
         particleEngine.init(resolvedManifest.particleConfig, resolvedManifest);
       }
     };
-    resize();
-    window.addEventListener("resize", resize);
+    resizeHandler();
+    window.addEventListener("resize", resizeHandler);
 
     const FRAME_BUDGET_MS = 14;
     let runtimeFrameCount = 0;
@@ -1490,13 +1496,22 @@ export default function ShareableLyricDance() {
       prevTime = currentTime;
     };
 
+    animRef.current = requestAnimationFrame(render);
+
+    } catch (err: any) {
+      console.error('SETUP CRASH:', err);
+      console.error('Stack:', err?.stack);
+    }
+
     return () => {
       cancelAnimationFrame(animRef.current);
-      clearInterval(constellationInterval);
-      window.removeEventListener("resize", resize);
+      if (constellationInterval) clearInterval(constellationInterval);
+      if (resizeHandler) window.removeEventListener("resize", resizeHandler);
       engineRef.current?.stop();
-      audio.pause();
-      audio.src = "";
+      if (audio) {
+        audio.pause();
+        audio.src = "";
+      }
     };
   }, [data]);
 
