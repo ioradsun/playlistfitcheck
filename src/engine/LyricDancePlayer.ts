@@ -537,6 +537,7 @@ interface CommentChunk {
   startX: number;
   startY: number;
   endX: number;
+  endY: number;
   trailLength: number;
   fontSize: number;
 }
