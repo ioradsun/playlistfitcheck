@@ -2299,7 +2299,7 @@ export class LyricDancePlayer {
       if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
       if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
     } catch (err) {
-      console.error('[PLAYER] sim update crashed at tSec:', tSec, err);
+      // sim crash — silently continue
     }
   }
 
