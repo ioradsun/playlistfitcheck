@@ -13,6 +13,7 @@ interface Props {
   onLoadSaved?: (lyric: any) => void;
   loading: boolean;
   loadingMsg?: string;
+  sceneInput?: React.ReactNode;
 }
 
 export function LyricUploader({ onTranscribe, loading, loadingMsg }: Props) {
