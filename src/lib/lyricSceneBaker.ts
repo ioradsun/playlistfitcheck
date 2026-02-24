@@ -425,16 +425,18 @@ function bakeFrame(
   const chapterIdx = pre.chapterIndexByFrame[frameIndex] ?? -1;
   const bgBlend = chapterIdx >= 0 ? (chapterIdx / Math.max(1, pre.chapters.length - 1)) : 0;
 
-  const particles: Keyframe["particles"] = [];
-  const particleCount = Math.floor(pre.energy * 4);
-  for (let p = 0; p < particleCount; p += 1) {
-    particles.push({
-      x: Math.sin(songProgress * Math.PI * (p + 1) * 2.3) * 400 + 480,
-      y: Math.cos(songProgress * Math.PI * (p + 1) * 1.7) * 250 + 270,
-      size: 2 + pre.energy * 3,
-      alpha: 0.15 + glow * 0.3,
-    });
-  }
+  const particleCount = Math.floor(pre.energy * 12 + (state.glowBudget / 13) * 20);
+  const particles: Keyframe["particles"] = Array.from({ length: particleCount }, (_, i) => {
+    const seed = (i * 0.618033) % 1;
+    const seed2 = (i * 0.381966) % 1;
+    const drift = (tSec * 0.03 * (0.5 + seed * 0.5)) % 1;
+    return {
+      x: 0.1 + (seed * 0.8),
+      y: ((0.1 + seed2 * 0.8) - drift + 1) % 1,
+      size: 0.8 + seed * 2.5,
+      alpha: (0.04 + (state.glowBudget / 13) * 0.15) * (0.4 + seed * 0.6),
+    };
+  });
 
   return {
     timeMs,
