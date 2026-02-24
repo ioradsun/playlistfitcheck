@@ -532,6 +532,16 @@ interface EmotionalEvent {
   triggered: boolean;
 }
 
+interface WordEmitter {
+  type: WordEmitterType;
+  x: number;
+  y: number;
+  color: string;
+  startTime: number;
+  duration: number;
+  intensity: number;
+}
+
 interface CommentChunk {
   id: string;
   text: string;
