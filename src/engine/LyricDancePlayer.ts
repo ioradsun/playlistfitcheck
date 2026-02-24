@@ -2463,7 +2463,7 @@ export class LyricDancePlayer {
         iconStyle: c.iconStyle,
         iconPosition: c.iconPosition,
         iconScale: c.iconScale,
-        behavior: c.behavior,
+        behavior: c.behavior as any,
         entryOffsetY: c.entryOffsetY ?? 0,
         entryOffsetX: c.entryOffsetX ?? 0,
         entryScale: c.entryScale ?? 1,
