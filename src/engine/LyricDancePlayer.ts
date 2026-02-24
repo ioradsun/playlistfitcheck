@@ -2229,24 +2229,35 @@ export class LyricDancePlayer {
   }
 
   private updateSims(tSec: number, frame: ScaledKeyframe): void {
-    const simFrame = Math.floor(tSec * 24);
-    if (simFrame === this.lastSimFrame) return;
-    this.lastSimFrame = simFrame;
-    const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
-    const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
-    const chapterIdxRaw = chapters.findIndex((ch: any) => songProgress < (ch.endRatio ?? 1));
-    const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
-    const ci = Math.max(0, chapterIdx);
-    const chapter = chapters[ci] ?? {};
-    const intensity = (chapter as any)?.emotionalIntensity ?? 0.5;
-    const pulse = (frame as any).beatPulse ?? (frame.beatIndex ? (frame.beatIndex % 2 ? 0.2 : 0.7) : 0);
-    const sim = this.chapterSims[ci];
-    this.currentSimCanvases = [];
-    if (!sim) return;
-    if (sim.fire) { sim.fire.update(intensity, pulse); this.currentSimCanvases.push(sim.fire.canvas); }
-    if (sim.water) { sim.water.update(tSec, pulse, intensity); this.currentSimCanvases.push(sim.water.canvas); }
-    if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
-    if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
+    try {
+      const simFrame = Math.floor(tSec * 24);
+      if (simFrame === this.lastSimFrame) return;
+      this.lastSimFrame = simFrame;
+      const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
+      const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
+      const chapterIdxRaw = chapters.findIndex((ch: any) => songProgress < (ch.endRatio ?? 1));
+      const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
+      const ci = Math.max(0, chapterIdx);
+
+      // Log chapter transitions
+      if (ci !== this._lastSimChapterIdx) {
+        console.log('[PLAYER] chapter change:', this._lastSimChapterIdx, '→', ci, 'at tSec:', tSec.toFixed(2));
+        this._lastSimChapterIdx = ci;
+      }
+
+      const chapter = chapters[ci] ?? {};
+      const intensity = (chapter as any)?.emotionalIntensity ?? 0.5;
+      const pulse = (frame as any).beatPulse ?? (frame.beatIndex ? (frame.beatIndex % 2 ? 0.2 : 0.7) : 0);
+      const sim = this.chapterSims[ci];
+      this.currentSimCanvases = [];
+      if (!sim) return;
+      if (sim.fire) { sim.fire.update(intensity, pulse); this.currentSimCanvases.push(sim.fire.canvas); }
+      if (sim.water) { sim.water.update(tSec, pulse, intensity); this.currentSimCanvases.push(sim.water.canvas); }
+      if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
+      if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
+    } catch (err) {
+      console.error('[PLAYER] sim update crashed at tSec:', tSec, err);
+    }
   }
 
   private drawSimLayer(_frame: ScaledKeyframe): void {
