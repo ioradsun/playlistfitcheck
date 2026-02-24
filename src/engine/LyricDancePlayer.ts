@@ -1041,7 +1041,7 @@ export class LyricDancePlayer {
       const y = h * (0.3 + i * 0.2);
       const band = ctx.createLinearGradient(0, y - 40, 0, y + 40);
       band.addColorStop(0, 'transparent');
-      band.addColorStop(0.5, `${accent}08`);
+      band.addColorStop(0.5, `${accent}04`);
       band.addColorStop(1, 'transparent');
       ctx.fillStyle = band;
       ctx.fillRect(0, y - 40, w, 80);
