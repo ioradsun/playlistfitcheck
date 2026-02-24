@@ -145,6 +145,16 @@ CONSTRAINTS:
 
 type LyricLine = { text: string; start?: number; end?: number };
 
+interface SceneContext {
+  scene: string;
+  label: string;
+  timeOfDay: string;
+  baseLuminance: 'dark' | 'medium' | 'light';
+  colorTemperature: string;
+  textStyle: 'light' | 'dark';
+  fluxPromptSuffix?: string;
+}
+
 interface AnalyzeRequest {
   title?: string;
   artist?: string;
@@ -153,6 +163,7 @@ interface AnalyzeRequest {
   beatGrid?: { bpm?: number; beats?: number[]; confidence?: number };
   lyricId?: string;
   id?: string;
+  scene_context?: SceneContext | null;
 }
 
 function clamp(n: unknown, min: number, max: number, fallback: number): number {
@@ -316,11 +327,28 @@ serve(async (req) => {
       beatGrid: body.beatGrid ?? null,
     };
 
-    console.log(`[cinematic-direction] title="${title}" artist="${artist}" lines=${lines.length}`);
+    const sceneCtx = body.scene_context;
+    const scenePrefix = sceneCtx ? `
+SCENE CONTEXT — foundational visual world. All chapters must honor this.
+Scene: ${sceneCtx.scene} (${sceneCtx.label})
+Time of day: ${sceneCtx.timeOfDay}
+Luminance: ${sceneCtx.baseLuminance}
+${sceneCtx.baseLuminance === 'light'
+  ? 'USE BRIGHT COLORS. dominantColor must be light and vibrant. Backgrounds are luminous not dark.'
+  : sceneCtx.baseLuminance === 'medium'
+    ? 'Mix of light and dark. Some chapters bright, some shadowed.'
+    : 'USE DARK COLORS. dominantColor must be deep and shadowed.'}
+Color temperature: ${sceneCtx.colorTemperature}
+Text style: ${sceneCtx.textStyle === 'dark'
+  ? 'DARK TEXT — background is bright, text must be dark and saturated'
+  : 'LIGHT TEXT — background is dark, text should be white or light'}
+` : 'SCENE CONTEXT — not specified. Default to dark cinematic.\n';
+
+    console.log(`[cinematic-direction] title="${title}" artist="${artist}" lines=${lines.length} scene=${sceneCtx?.scene ?? 'none'}`);
 
     async function callAI(extraInstruction?: string): Promise<Record<string, unknown> | null> {
       const messages: { role: string; content: string }[] = [
-        { role: "system", content: MASTER_DIRECTOR_PROMPT_V2 },
+        { role: "system", content: scenePrefix + MASTER_DIRECTOR_PROMPT_V2 },
         { role: "user", content: `Song: ${artist} — ${title}\nLyrics:\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
       ];
       if (extraInstruction) {

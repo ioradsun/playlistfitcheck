@@ -1,0 +1,1 @@
+ALTER TABLE public.shareable_lyric_dances ADD COLUMN IF NOT EXISTS scene_context JSONB DEFAULT NULL;

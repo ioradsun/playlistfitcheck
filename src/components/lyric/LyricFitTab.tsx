@@ -17,6 +17,7 @@ import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest"
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
+import { SCENE_CONTEXTS, type SceneId } from "@/lib/sceneContexts";
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 export type GenerationJobStatus = "idle" | "running" | "done" | "error";
@@ -53,6 +54,7 @@ export function LyricFitTab({
   const { user } = useAuth();
   const artistNameRef = useRef<string>("artist");
   const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
+  const [selectedScene, setSelectedScene] = useState<SceneId | null>(null);
   const [fitUnlocked, setFitUnlocked] = useState(false);
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -396,6 +398,8 @@ export function LyricFitTab({
         .filter((l: any) => l.tag !== "adlib")
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
+      const sceneContext = selectedScene ? SCENE_CONTEXTS[selectedScene] : null;
+
       const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
         body: {
           title: lyricData.title,
@@ -403,6 +407,7 @@ export function LyricFitTab({
           lines: lyricsForDirection,
           beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
           lyricId: savedIdRef.current || undefined,
+          scene_context: sceneContext,
         },
       });
 
@@ -532,6 +537,38 @@ export function LyricFitTab({
 
   return (
     <div className="flex flex-col flex-1">
+      {!lyricData && (
+        <div className="w-full max-w-2xl mx-auto mb-6">
+          <p className="text-sm text-white/60 mb-3 font-mono tracking-widest uppercase">
+            Where does this song live?
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {Object.values(SCENE_CONTEXTS).map(scene => (
+              <button
+                key={scene.scene}
+                onClick={() => setSelectedScene(
+                  selectedScene === scene.scene ? null : scene.scene
+                )}
+                className={`
+                  flex flex-col items-center gap-1 p-3 rounded-lg border transition-all
+                  font-mono text-xs
+                  ${selectedScene === scene.scene
+                    ? 'border-[#00FF87] bg-[#00FF87]/10 text-white'
+                    : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white/80'
+                  }
+                `}
+              >
+                <span className="text-xl">{scene.emoji}</span>
+                <span className="text-center leading-tight">{scene.label}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-white/25 mt-2 font-mono">
+            {selectedScene ? `${SCENE_CONTEXTS[selectedScene].emoji} ${SCENE_CONTEXTS[selectedScene].label} selected` : 'Skip to let AI decide'}
+          </p>
+        </div>
+      )}
+
       {lyricData && (
         <LyricFitToggle
           view={activeTab}
