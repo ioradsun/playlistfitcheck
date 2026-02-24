@@ -1166,7 +1166,7 @@ export class LyricDancePlayer {
   }
 
   private async preloadFonts(): Promise<void> {
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const typoKey = cd?.typography as string;
     const fontMap: Record<string, string> = {
       'bold-impact': 'Oswald',

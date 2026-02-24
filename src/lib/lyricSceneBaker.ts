@@ -230,7 +230,7 @@ const PALETTE_COLORS: Record<string, string[]> = {
 };
 
 function resolveV3Palette(payload: ScenePayload): string[] {
-  const cd = payload.cinematic_direction as Record<string, unknown> | null;
+  const cd = payload.cinematic_direction as unknown as Record<string, unknown> | null;
   const paletteName = cd?.palette as string | undefined;
   if (paletteName && PALETTE_COLORS[paletteName]) {
     return PALETTE_COLORS[paletteName];
