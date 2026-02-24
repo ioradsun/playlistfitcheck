@@ -737,6 +737,7 @@ serve(async (req) => {
         title,
         artist,
         lines,
+        words: words.map(w => ({ word: w.word, start: w.start, end: w.end })),
         _debug: {
           version: "v14.0-transcription-only",
           mode: editorMode ? "editor" : "detective",
