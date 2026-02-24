@@ -1197,73 +1197,80 @@ export class LyricDancePlayer {
       const progress = Math.min(1, elapsed / comment.duration);
       if (progress >= 1) continue;
 
-      // Eased progress — fast entry, slow middle, fast exit
-      const ep = progress < 0.1
-        ? progress / 0.1 * 0.15
-        : progress > 0.85
-          ? 0.85 + (progress - 0.85) / 0.15 * 0.15
-          : progress;
+      // Eased progress — slow entry, then rockets off
+      // First 60% is slow drift, last 40% accelerates out
+      let ep: number;
+      if (progress < 0.6) {
+        // Slow ease-in: cubic deceleration for gentle drift
+        const t = progress / 0.6;
+        ep = 0.35 * (1 - Math.pow(1 - t, 3));
+      } else {
+        // Rocket out: exponential acceleration
+        const t = (progress - 0.6) / 0.4;
+        ep = 0.35 + 0.65 * (t * t * t);
+      }
 
       const x = comment.startX + (comment.endX - comment.startX) * ep;
-      const y = comment.startY;
+      const y = comment.startY + (comment.endY - comment.startY) * ep;
 
-      // Alpha — fade in and out
-      const alpha = progress < 0.1
-        ? progress / 0.1
-        : progress > 0.75
-          ? 1 - (progress - 0.75) / 0.25
+      // Alpha — fade in slowly, snap out
+      const alpha = progress < 0.15
+        ? progress / 0.15
+        : progress > 0.85
+          ? 1 - (progress - 0.85) / 0.15
           : 1;
 
       this.ctx.save();
 
       // Glow
       this.ctx.shadowColor = comment.color;
-      this.ctx.shadowBlur = 18;
+      this.ctx.shadowBlur = 14;
 
-      // Trail — gradient behind text direction of travel
-      const fromLeft = comment.endX > comment.startX;
-      const trailStart = fromLeft ? x - comment.trailLength : x + comment.trailLength;
-      const trail = this.ctx.createLinearGradient(trailStart, y, x, y);
+      // Trail direction — from current position back toward where it came from
+      const dx = comment.endX - comment.startX;
+      const dy = comment.endY - comment.startY;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const ux = dx / dist;
+      const uy = dy / dist;
+      const trailX = x - ux * comment.trailLength;
+      const trailY = y - uy * comment.trailLength;
+
+      const trail = this.ctx.createLinearGradient(trailX, trailY, x, y);
       trail.addColorStop(0, 'transparent');
-      trail.addColorStop(1, `${comment.color}${Math.floor(alpha * 180).toString(16).padStart(2, '0')}`);
+      trail.addColorStop(1, `${comment.color}${Math.floor(alpha * 140).toString(16).padStart(2, '0')}`);
       this.ctx.strokeStyle = trail;
-      this.ctx.lineWidth = comment.fontSize * 0.4;
+      this.ctx.lineWidth = comment.fontSize * 0.3;
       this.ctx.lineCap = 'round';
       this.ctx.beginPath();
-      this.ctx.moveTo(trailStart, y);
+      this.ctx.moveTo(trailX, trailY);
       this.ctx.lineTo(x, y);
       this.ctx.stroke();
 
       // Spark particles along trail
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 5; i++) {
         const seed = (i * 0.618033) % 1;
-        const sparkX = fromLeft
-          ? x - seed * comment.trailLength * 0.8
-          : x + seed * comment.trailLength * 0.8;
-        const sparkY = y + (Math.sin(nowSec * 8 + i * 2) * 8);
-        const sparkAlpha = (1 - seed) * alpha * 0.8;
+        const sparkX = x - ux * seed * comment.trailLength * 0.7;
+        const sparkY = y - uy * seed * comment.trailLength * 0.7 + Math.sin(nowSec * 8 + i * 2) * 6;
+        const sparkAlpha = (1 - seed) * alpha * 0.6;
         this.ctx.globalAlpha = sparkAlpha;
         this.ctx.fillStyle = comment.color;
         this.ctx.beginPath();
-        this.ctx.arc(sparkX, sparkY, 1.5 + seed * 2.5, 0, Math.PI * 2);
+        this.ctx.arc(sparkX, sparkY, 1 + seed * 2, 0, Math.PI * 2);
         this.ctx.fill();
       }
 
-      // Text
+      // Text — light weight, not bold
       this.ctx.globalAlpha = alpha;
-      this.ctx.font = `700 ${comment.fontSize}px "Space Mono", monospace`;
+      this.ctx.font = `400 ${comment.fontSize}px "Space Mono", monospace`;
       this.ctx.fillStyle = '#ffffff';
-      this.ctx.textAlign = 'left';
+      this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText(comment.text, x, y);
 
-      // Color dot — like a bullet
+      // Color dot — leading edge
       this.ctx.fillStyle = comment.color;
       this.ctx.beginPath();
-      this.ctx.arc(
-        fromLeft ? x - 12 : x + this.ctx.measureText(comment.text).width + 12,
-        y, 4, 0, Math.PI * 2
-      );
+      this.ctx.arc(x + ux * (this.ctx.measureText(comment.text).width / 2 + 10), y + uy * 4, 3, 0, Math.PI * 2);
       this.ctx.fill();
 
       this.ctx.shadowBlur = 0;
