@@ -104,6 +104,14 @@ export interface WordDirective {
   colorOverride: string | null;
   specialEffect: string | null;
   evolutionRule: string | null;
+  entry?: string | null;
+  behavior?: string | null;
+  exit?: string | null;
+  trail?: string | null;
+  ghostTrail?: boolean;
+  ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial' | null;
+  letterSequence?: boolean;
+  visualMetaphor?: string | null;
 }
 
 export interface LineDirection {
