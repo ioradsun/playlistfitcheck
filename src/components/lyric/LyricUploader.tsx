@@ -106,6 +106,8 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }:
         </CollapsibleContent>
       </Collapsible>
 
+      {sceneInput}
+
       <Button
         onClick={handleSubmit}
         className="w-full glow-primary"
