@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.update-submission-statuses]
 verify_jwt = false
+
+[functions.generate-chapter-images]
+verify_jwt = false

@@ -39,6 +39,7 @@ export interface LyricDanceData {
   seed: string;
   scene_manifest: any;
   cinematic_direction: CinematicDirection | null;
+  chapter_images?: string[];
 }
 
 export interface LiveDebugState {
@@ -582,6 +583,7 @@ export class LyricDancePlayer {
   private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim }> = [];
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
+  private chapterImages: HTMLImageElement[] = [];
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
@@ -692,6 +694,7 @@ export class LyricDancePlayer {
     this.deriveVisualSystems();
     this.buildChapterSims();
     this.buildEmotionalEvents();
+    await this.loadChapterImages();
 
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
@@ -973,7 +976,19 @@ export class LyricDancePlayer {
 
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.updateSims(tSec, frame);
+
+    // Background: static bg cache first, then chapter images on top
     this.drawBackground(frame);
+
+    // Chapter image overlay with crossfade
+    const bgBlend = frame.bgBlend ?? 0;
+    const totalChapters = this.bgCacheCount;
+    const chapterProgress = bgBlend * (totalChapters - 1);
+    const chapterIdx = Math.floor(chapterProgress);
+    const nextChapterIdx = Math.min(chapterIdx + 1, totalChapters - 1);
+    const chapterFraction = chapterProgress - chapterIdx;
+    this.drawChapterImage(chapterIdx, nextChapterIdx, chapterFraction);
+
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
     this.checkEmotionalEvents(tSec, songProgress);
@@ -1263,6 +1278,50 @@ export class LyricDancePlayer {
 
   // Per-chapter particle systems derived from cinematic direction
   public chapterParticleSystems: (string | null)[] = [];
+
+  private async loadChapterImages(): Promise<void> {
+    const urls = this.data.chapter_images ?? [];
+    if (urls.length === 0) return;
+    this.chapterImages = await Promise.all(
+      urls.map((url: string) => new Promise<HTMLImageElement>((resolve) => {
+        if (!url) { resolve(new Image()); return; }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(new Image()); // silent fail
+        img.src = url;
+      }))
+    );
+    console.log(`[PLAYER] Loaded ${this.chapterImages.filter(i => i.complete && i.naturalWidth > 0).length}/${urls.length} chapter images`);
+  }
+
+  private drawChapterImage(chapterIdx: number, nextChapterIdx: number, blend: number): void {
+    if (this.chapterImages.length === 0) return;
+
+    const current = this.chapterImages[chapterIdx];
+    const next = this.chapterImages[nextChapterIdx];
+
+    if (current?.complete && current.naturalWidth > 0) {
+      this.ctx.globalAlpha = 0.22;
+      this.ctx.drawImage(current, 0, 0, this.width, this.height);
+      this.ctx.globalAlpha = 1;
+    }
+
+    // Crossfade to next chapter image during transition
+    if (next?.complete && next.naturalWidth > 0 && blend > 0) {
+      this.ctx.globalAlpha = blend * 0.22;
+      this.ctx.drawImage(next, 0, 0, this.width, this.height);
+      this.ctx.globalAlpha = 1;
+    }
+
+    // Dark crush overlay — always on top of image
+    const crush = this.ctx.createLinearGradient(0, 0, 0, this.height);
+    crush.addColorStop(0, 'rgba(0,0,0,0.78)');
+    crush.addColorStop(0.5, 'rgba(0,0,0,0.68)');
+    crush.addColorStop(1, 'rgba(0,0,0,0.75)');
+    this.ctx.fillStyle = crush;
+    this.ctx.fillRect(0, 0, this.width, this.height);
+  }
 
   private tintedDarkBackground(hex: string): string {
     const clean = (hex || '#0a0a0a').replace('#', '').padEnd(6, '0');
