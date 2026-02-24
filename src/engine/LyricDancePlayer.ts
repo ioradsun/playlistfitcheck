@@ -793,7 +793,7 @@ export class LyricDancePlayer {
       onProgress(100);
       return chunkSnapshot;
     } catch (err) {
-      console.error('[PLAYER] load() error:', err);
+      
       throw err;
     }
   }

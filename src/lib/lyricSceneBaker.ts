@@ -1510,15 +1510,6 @@ export function bakeSceneChunked(
         sb as StoryboardEntryLike[],
         mwd[anchor?.clean] ?? null,
       );
-      console.log(`[BAKER ANIM] group ${i}:`, {
-        words: group.words.map(w => w.word).join(' '),
-        anchor: anchor?.word,
-        entry,
-        behavior,
-        exit,
-        kinetic: anchor?.directive?.kineticClass,
-        emphasis: anchor?.directive?.emphasisLevel,
-      });
     });
   }
   // --- End diagnostic logs ---
