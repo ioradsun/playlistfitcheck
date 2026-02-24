@@ -398,6 +398,8 @@ export function LyricFitTab({
         .filter((l: any) => l.tag !== "adlib")
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
+      const sceneContext = selectedScene ? SCENE_CONTEXTS[selectedScene] : null;
+
       const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
         body: {
           title: lyricData.title,
@@ -405,6 +407,7 @@ export function LyricFitTab({
           lines: lyricsForDirection,
           beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
           lyricId: savedIdRef.current || undefined,
+          scene_context: sceneContext,
         },
       });
 
