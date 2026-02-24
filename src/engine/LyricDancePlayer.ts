@@ -633,9 +633,6 @@ export class LyricDancePlayer {
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
-    const cx = this.width / 2;
-    const cy = this.height / 2;
-
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
@@ -643,8 +640,8 @@ export class LyricDancePlayer {
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
-      const drawX = cx + (chunk.entryOffsetX ?? 0);
-      const drawY = cy + (chunk.entryOffsetY ?? 0) + (chunk.exitOffsetY ?? 0);
+      const drawX = chunk.x;
+      const drawY = chunk.y;
       const drawScale = (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
 
       const zoom = frame.cameraZoom ?? 1.0;

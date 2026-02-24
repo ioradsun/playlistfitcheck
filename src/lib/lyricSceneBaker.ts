@@ -63,6 +63,19 @@ const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
 const easeOut = (t: number): number => 1 - Math.pow(1 - t, 3);
+const LAYOUT_TEMPLATES: Record<number, Array<[number, number]>> = {
+  1: [[0.5, 0.5]],
+  2: [[0.3, 0.5], [0.7, 0.5]],
+  3: [[0.25, 0.35], [0.5, 0.55], [0.75, 0.38]],
+  4: [[0.28, 0.35], [0.72, 0.32], [0.25, 0.65], [0.72, 0.65]],
+  5: [[0.18, 0.38], [0.38, 0.65], [0.5, 0.32], [0.65, 0.65], [0.82, 0.38]],
+  6: [[0.2, 0.35], [0.5, 0.28], [0.8, 0.35], [0.22, 0.65], [0.5, 0.70], [0.78, 0.63]],
+};
+
+const FILLER_WORDS = new Set([
+  'the', 'a', 'an', 'i', 'in', 'on', 'at', 'to', 'of', 'and', 'or', 'but', 'is', 'it',
+  'my', 'me', 'you', 'we', 'he', 'she', 'they', 'im', 'its', 'was', 'be', 'do',
+]);
 
 type WordDirectiveLike = {
   word?: string;
@@ -141,6 +154,50 @@ type PrebakedData = {
 };
 
 const WORD_LINGER = 0.5;
+
+function getLayoutPosition(wordIndex: number, totalWords: number): [number, number] {
+  if (LAYOUT_TEMPLATES[totalWords]) {
+    return LAYOUT_TEMPLATES[totalWords][wordIndex] ?? [0.5, 0.5];
+  }
+
+  const cols = Math.ceil(totalWords / 2);
+  const row = Math.floor(wordIndex / cols);
+  const col = wordIndex % cols;
+  const x = cols <= 1 ? 0.5 : 0.15 + (col / (cols - 1)) * 0.7;
+  const y = row === 0 ? 0.38 : 0.62;
+  return [x, y];
+}
+
+function getEntryAnimation(
+  nx: number,
+  ny: number,
+  entryStyle: string,
+  kineticClass: string | null,
+): { offsetX: number; offsetY: number; initScale: number } {
+  void entryStyle;
+  if (kineticClass === 'IMPACT') return { offsetX: 0, offsetY: 0, initScale: 1.8 };
+  if (kineticClass === 'RISING') return { offsetX: 0, offsetY: 50, initScale: 1 };
+  if (kineticClass === 'FALLING') return { offsetX: 0, offsetY: -50, initScale: 1 };
+
+  if (ny < 0.4) return { offsetX: 0, offsetY: -45, initScale: 1 };
+  if (ny > 0.6) return { offsetX: 0, offsetY: 45, initScale: 1 };
+  if (nx < 0.35) return { offsetX: -50, offsetY: 0, initScale: 1 };
+  if (nx > 0.65) return { offsetX: 50, offsetY: 0, initScale: 1 };
+  return { offsetX: 0, offsetY: 0, initScale: 1.4 };
+}
+
+function getWordFontSize(
+  word: string,
+  directive: WordDirectiveLike | null,
+  baseFontSize: number,
+): number {
+  const clean = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
+  if (FILLER_WORDS.has(clean)) return Math.round(baseFontSize * 0.65);
+
+  const emphasisLevel = directive?.emphasisLevel ?? 2;
+  const scale = 0.8 + (emphasisLevel - 1) * 0.2;
+  return Math.round(baseFontSize * scale);
+}
 
 const findByRatio = <T extends { startRatio?: number; endRatio?: number }>(
   arr: T[],
@@ -363,65 +420,54 @@ function bakeFrame(
 
   if (pre.wordMeta.length > 0) {
     const wordChunks = pre.wordMeta
-      .filter((wm) => tSec >= wm.start && tSec < (wm.end + WORD_LINGER))
+      .filter((wm) => {
+        return tSec >= wm.start && tSec < (wm.end + WORD_LINGER);
+      })
       .map((wm) => {
+        const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
+        const totalWords = lineWords.length;
+        const [nx, ny] = getLayoutPosition(wm.wordIndex, totalWords);
+
+        const canvasX = nx * 960;
+        const canvasY = ny * 540;
+
         const elapsed = tSec - wm.start;
         const remaining = (wm.end + WORD_LINGER) - tSec;
-
-        const entryAlpha = Math.min(1, elapsed / 0.04);
-        const exitAlpha = Math.min(1, remaining / 0.08);
+        const entryAlpha = Math.min(1, elapsed / 0.06);
+        const exitAlpha = Math.min(1, remaining / 0.1);
         const alpha = Math.min(entryAlpha, exitAlpha);
-
-        const stagger = wm.wordIndex * 0.025;
-        const adjustedElapsed = elapsed - stagger;
-        const ep = adjustedElapsed > 0 ? easeOut(Math.min(1, adjustedElapsed / 0.18)) : 0;
 
         const storyEntry = payload.cinematic_direction?.storyboard?.[wm.lineIndex];
         const entryStyle = storyEntry?.entryStyle ?? 'fades';
-        const kinetic = wm.directive?.kineticClass;
+        const kinetic = wm.directive?.kineticClass ?? null;
 
-        let offsetY = 0;
-        let offsetX = 0;
-        let entryScale = 1;
-        if (kinetic === 'RISING' || entryStyle === 'rises') {
-          offsetY = (1 - ep) * 40;
-        } else if (entryStyle === 'slams-in' || kinetic === 'IMPACT') {
-          entryScale = 1 + (1 - ep) * 0.5;
-        } else if (entryStyle === 'fractures-in') {
-          offsetX = (1 - ep) * -35;
-        } else if (entryStyle === 'materializes') {
-          entryScale = 0.8 + ep * 0.2;
-        } else if (kinetic === 'FALLING') {
-          offsetY = (1 - ep) * -30;
-        }
+        const { offsetX, offsetY, initScale } = getEntryAnimation(nx, ny, entryStyle, kinetic);
 
-        const cx = 960 / 2;
-        const cy = 540 / 2;
-        const xSpread = ((wm.wordIndex % 7) - 3) * 35;
-        const ySpread = ((wm.lineIndex % 5) - 2) * 32;
+        const stagger = wm.wordIndex * 0.04;
+        const adjustedElapsed = Math.max(0, elapsed - stagger);
+        const ep = easeOut(Math.min(1, adjustedElapsed / 0.22));
 
-        const isImpact = kinetic === 'IMPACT';
-        const x = isImpact ? cx : cx + xSpread;
-        const y = isImpact ? cy : cy + ySpread;
+        const animOffsetX = offsetX * (1 - ep);
+        const animOffsetY = offsetY * (1 - ep);
+        const entryScale = initScale > 1
+          ? 1 + (initScale - 1) * (1 - ep)
+          : 1;
 
         const color = wm.directive?.colorOverride
           ?? pre.lineColors[wm.lineIndex]
           ?? '#ffffff';
 
-        const emphasisLevel = wm.directive?.emphasisLevel ?? 1;
         const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
-        const fontSize = Math.round(baseFontSize * (1 + (emphasisLevel - 1) * 0.15));
+        const fontSize = getWordFontSize(wm.word, wm.directive, baseFontSize);
 
-        const wordGlow = emphasisLevel >= 4
-          ? glow * 1.5
-          : emphasisLevel >= 3
-            ? glow * 1.1
-            : glow;
+        const wordGlow = (wm.directive?.emphasisLevel ?? 0) >= 4
+          ? glow * 1.8
+          : glow * 0.6;
 
         return {
           id: `${wm.lineIndex}-${wm.wordIndex}`,
-          x: x + offsetX,
-          y: y + offsetY,
+          x: canvasX + animOffsetX,
+          y: canvasY + animOffsetY,
           alpha,
           scale: entryScale,
           visible: alpha > 0.01,
