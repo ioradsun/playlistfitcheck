@@ -1179,10 +1179,17 @@ function bakeFrame(
             const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0) : glow * 0.3) * semanticGlowMult;
             const chapterFontWeight = semanticFontWeight ?? currentChapter?.typographyShift?.fontWeight ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight ?? 700;
 
+            // Letter positioning: spread characters across word span, centered on pos.x
+            const charW = isLetterSequence ? pos.fontSize * 0.6 : 0;
+            const wordSpan = charW * letterTotal;
+            const letterOffsetX = isLetterSequence
+              ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5)
+              : 0;
+
             chunks.push({
               id: isLetterSequence ? `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}` : `${group.lineIndex}-${group.groupIndex}-${wi}`,
               text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
-              x: pos.x + finalOffsetX,
+              x: pos.x + finalOffsetX + letterOffsetX,
               y: pos.y + finalOffsetY,
               alpha: Math.max(0, Math.min(1, finalAlpha)),
               scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
