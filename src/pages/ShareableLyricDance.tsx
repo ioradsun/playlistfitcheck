@@ -269,8 +269,7 @@ export default function ShareableLyricDance() {
                   }).catch(() => {});
                 }
               }
-          }
-        });
+            }).catch(() => {});
 
         // Profile + comments
         const [profileResult, commentsResult] = await Promise.all([
