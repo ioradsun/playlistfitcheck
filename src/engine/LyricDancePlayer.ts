@@ -1941,9 +1941,6 @@ export class LyricDancePlayer {
         }
       }
 
-      if (this.chunks.size < 10) {
-        console.error('[PLAYER] CRITICAL: chunks map too small —', this.chunks.size, 'entries. phraseGroups:', this.phraseGroups?.length);
-      }
 
       return;
     }
