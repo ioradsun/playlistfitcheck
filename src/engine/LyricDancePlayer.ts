@@ -840,7 +840,6 @@ export class LyricDancePlayer {
     };
 
     const onAudioEnded = () => {
-      console.log('[EXPORT] audio ended event — stopping export');
       this.stopExport();
     };
     this.audio.addEventListener("ended", onAudioEnded, { once: true });
