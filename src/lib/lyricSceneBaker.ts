@@ -1276,6 +1276,7 @@ function bakeFrame(
           ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
           ?? 700,
         color: pre.lineColors[idx] ?? "#ffffff",
+        isAnchor: lineActive,
         entryOffsetY,
         entryOffsetX,
         entryScale,
