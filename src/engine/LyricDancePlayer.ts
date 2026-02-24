@@ -273,6 +273,260 @@ let globalSongStartSec = 0;
 let globalSongEndSec = 0;
 let globalSessionKey = '';
 
+const SIM_W = 96;
+const SIM_H = 54;
+
+interface PixelSim {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  buffer: Uint8ClampedArray;
+  imageData: ImageData;
+}
+
+function createPixelSim(): PixelSim {
+  const canvas = document.createElement('canvas');
+  canvas.width = SIM_W;
+  canvas.height = SIM_H;
+  const ctx = canvas.getContext('2d')!;
+  const imageData = ctx.createImageData(SIM_W, SIM_H);
+  return { canvas, ctx, buffer: imageData.data, imageData };
+}
+
+class FireSim {
+  private heat: Float32Array;
+  private sim: PixelSim;
+  private palette: Uint32Array;
+
+  constructor(
+    private colorMode: 'fire' | 'smoke' | 'ember',
+    private cooling: number = 0.12,
+  ) {
+    this.heat = new Float32Array((SIM_H + 2) * SIM_W);
+    this.sim = createPixelSim();
+    this.palette = this.buildPalette(colorMode);
+  }
+
+  private buildPalette(mode: 'fire' | 'smoke' | 'ember'): Uint32Array {
+    const p = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const t = i / 255;
+      let r = 0, g = 0, b = 0, a = 0;
+      if (mode === 'fire') {
+        r = Math.min(255, Math.floor(t < 0.5 ? t * 2 * 255 : 255));
+        g = Math.min(255, Math.floor(t < 0.5 ? 0 : (t - 0.5) * 2 * 200));
+        b = Math.min(255, Math.floor(t < 0.75 ? 0 : (t - 0.75) * 4 * 255));
+        a = Math.min(255, Math.floor(t * 300));
+      } else if (mode === 'smoke') {
+        const gray = Math.floor(t * 180);
+        r = gray; g = gray; b = gray + Math.floor(t * 30);
+        a = Math.min(255, Math.floor(t * 200));
+      } else {
+        r = Math.min(255, Math.floor(t < 0.4 ? t * 2.5 * 180 : 180 + (t - 0.4) * 1.25 * 75));
+        g = Math.min(255, Math.floor(t < 0.5 ? t * 100 : 100 + (t - 0.5) * 2 * 155));
+        b = Math.min(255, Math.floor(t < 0.3 ? t * 3 * 120 : Math.max(0, 120 - (t - 0.3) * 170)));
+        a = Math.min(255, Math.floor(t * 280));
+      }
+      p[i] = (a << 24) | (b << 16) | (g << 8) | r;
+    }
+    return p;
+  }
+
+  update(intensity: number, beatPulse: number): void {
+    const W = SIM_W;
+    const H = SIM_H;
+    const heat = this.heat;
+    const seedHeat = intensity * 0.9 + beatPulse * 0.8;
+    for (let x = 0; x < W; x++) {
+      const seed = Math.random();
+      heat[(H + 1) * W + x] = seed < 0.6 ? seedHeat + Math.random() * 0.1 : 0;
+      heat[H * W + x] = seed < 0.7 ? seedHeat * 0.8 : 0;
+    }
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const below1 = heat[(y + 1) * W + x];
+        const below2 = heat[(y + 2) * W + x];
+        const left = heat[(y + 1) * W + Math.max(0, x - 1)];
+        const right = heat[(y + 1) * W + Math.min(W - 1, x + 1)];
+        heat[y * W + x] = Math.max(0, (below1 + below2 + left + right) / 4 - this.cooling);
+      }
+    }
+    const buf = this.sim.buffer;
+    for (let i = 0; i < W * H; i++) {
+      const heatVal = Math.min(255, Math.floor(heat[i] * 255));
+      const color = this.palette[heatVal];
+      const idx = i * 4;
+      buf[idx] = color & 0xff;
+      buf[idx + 1] = (color >> 8) & 0xff;
+      buf[idx + 2] = (color >> 16) & 0xff;
+      buf[idx + 3] = (color >> 24) & 0xff;
+    }
+    this.sim.ctx.putImageData(this.sim.imageData, 0, 0);
+  }
+
+  get canvas(): HTMLCanvasElement { return this.sim.canvas; }
+}
+
+class WaterSim {
+  private buf1 = new Float32Array(SIM_W * SIM_H);
+  private buf2 = new Float32Array(SIM_W * SIM_H);
+  private sim = createPixelSim();
+  private dominantColor: [number, number, number];
+  private accentColor: [number, number, number];
+
+  constructor(dominant: string, accent: string) {
+    this.dominantColor = this.hexToRgb(dominant);
+    this.accentColor = this.hexToRgb(accent);
+  }
+
+  private hexToRgb(hex: string): [number, number, number] {
+    const c = hex.replace('#', '').padEnd(6, '0');
+    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+  }
+
+  disturb(x: number, y: number, strength: number): void {
+    const ix = Math.floor(x * SIM_W);
+    const iy = Math.floor(y * SIM_H);
+    if (ix > 0 && ix < SIM_W - 1 && iy > 0 && iy < SIM_H - 1) this.buf1[iy * SIM_W + ix] = strength;
+  }
+
+  update(tSec: number, beatPulse: number, intensity: number): void {
+    const W = SIM_W;
+    const H = SIM_H;
+    if (Math.random() < 0.08 + intensity * 0.15) this.disturb(Math.random(), Math.random() * 0.7, 0.8 + Math.random() * 0.4);
+    if (beatPulse > 0.5) this.disturb(0.5, 0.5, beatPulse * 1.2 + Math.sin(tSec * 0.1) * 0.05);
+    const damping = 0.985;
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const idx = y * W + x;
+        const wave = (this.buf1[(y - 1) * W + x] + this.buf1[(y + 1) * W + x] + this.buf1[y * W + x - 1] + this.buf1[y * W + x + 1]) / 2 - this.buf2[idx];
+        this.buf2[idx] = wave * damping;
+      }
+    }
+    const temp = this.buf1;
+    this.buf1 = this.buf2;
+    this.buf2 = temp;
+    const [dr, dg, db] = this.dominantColor;
+    const [ar, ag, ab] = this.accentColor;
+    const buf = this.sim.buffer;
+    for (let i = 0; i < W * H; i++) {
+      const wave = this.buf1[i];
+      const t = Math.max(0, Math.min(1, wave * 0.5 + 0.5));
+      const idx = i * 4;
+      buf[idx] = Math.min(255, Math.floor(dr * (1 - t) * 0.3 + ar * t * 0.6));
+      buf[idx + 1] = Math.min(255, Math.floor(dg * (1 - t) * 0.3 + ag * t * 0.6));
+      buf[idx + 2] = Math.min(255, Math.floor(Math.min(255, db * 0.4 + ab * t * 0.8 + wave * 80)));
+      buf[idx + 3] = Math.floor(120 + t * 80);
+    }
+    this.sim.ctx.putImageData(this.sim.imageData, 0, 0);
+  }
+
+  get canvas(): HTMLCanvasElement { return this.sim.canvas; }
+}
+
+class AuroraSim {
+  private sim = createPixelSim();
+  private colors: Array<[number, number, number]>;
+
+  constructor(dominant: string, accent: string) {
+    this.colors = [this.hexToRgb(dominant), this.hexToRgb(accent), [0, 200, 180], [120, 80, 200]];
+  }
+
+  private hexToRgb(hex: string): [number, number, number] {
+    const c = hex.replace('#', '').padEnd(6, '0');
+    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+  }
+
+  update(tSec: number, intensity: number): void {
+    const W = SIM_W;
+    const H = SIM_H;
+    const buf = this.sim.buffer;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const nx = x / W;
+        const ny = y / H;
+        let r = 0, g = 0, b = 0, a = 0;
+        for (let band = 0; band < 4; band++) {
+          const bandY = 0.1 + band * 0.18 + Math.sin(tSec * 0.3 + band * 1.4) * 0.06;
+          const bandW = 0.06 + band * 0.02 + Math.sin(tSec * 0.2 + band) * 0.02;
+          const dist = Math.abs(ny - bandY) / bandW;
+          if (dist > 1) continue;
+          const wave = Math.sin(nx * 8 + tSec * 0.5 + band * 2) * 0.3 + 0.7;
+          const brightness = (1 - dist) * wave * intensity * 0.6;
+          const [cr, cg, cb] = this.colors[band % this.colors.length];
+          r += cr * brightness; g += cg * brightness; b += cb * brightness; a += brightness * 180;
+        }
+        const idx = (y * W + x) * 4;
+        buf[idx] = Math.min(255, Math.floor(r));
+        buf[idx + 1] = Math.min(255, Math.floor(g));
+        buf[idx + 2] = Math.min(255, Math.floor(b));
+        buf[idx + 3] = Math.min(255, Math.floor(a));
+      }
+    }
+    this.sim.ctx.putImageData(this.sim.imageData, 0, 0);
+  }
+
+  get canvas(): HTMLCanvasElement { return this.sim.canvas; }
+}
+
+class RainSim {
+  private drops: Array<{ x: number; y: number; speed: number; length: number; alpha: number }>;
+  private sim = createPixelSim();
+  private accentColor: [number, number, number];
+
+  constructor(accent: string) {
+    this.accentColor = this.hexToRgb(accent);
+    this.drops = Array.from({ length: 80 }, (_, i) => ({
+      x: (i * 0.618033) % 1,
+      y: (i * 0.381966) % 1,
+      speed: 0.008 + (i * 0.618033 % 1) * 0.012,
+      length: 0.03 + (i * 0.381966 % 1) * 0.06,
+      alpha: 0.2 + (i % 5) * 0.08,
+    }));
+  }
+
+  private hexToRgb(hex: string): [number, number, number] {
+    const c = hex.replace('#', '').padEnd(6, '0');
+    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+  }
+
+  update(_tSec: number, intensity: number, beatPulse: number): void {
+    const W = SIM_W;
+    const H = SIM_H;
+    const buf = this.sim.buffer;
+    for (let i = 0; i < W * H * 4; i += 4) {
+      buf[i] = 5; buf[i + 1] = 5; buf[i + 2] = 8; buf[i + 3] = 255;
+    }
+    const [ar, ag, ab] = this.accentColor;
+    for (const drop of this.drops) {
+      drop.y = (drop.y + drop.speed * (1 + beatPulse * 0.5)) % 1;
+      const x = Math.floor(drop.x * W);
+      const y1 = Math.floor(drop.y * H);
+      const y2 = Math.floor((drop.y + drop.length) * H);
+      const alpha = Math.floor(drop.alpha * intensity * 255);
+      const denom = Math.max(1, y2 - y1);
+      for (let py = y1; py < Math.min(y2, H); py++) {
+        const t = (py - y1) / denom;
+        const idx = (py * W + x) * 4;
+        buf[idx] = Math.min(255, ar + Math.floor(t * 30));
+        buf[idx + 1] = Math.min(255, ag + Math.floor(t * 30));
+        buf[idx + 2] = Math.min(255, ab + Math.floor(t * 40));
+        buf[idx + 3] = Math.floor(alpha * (1 - t * 0.5));
+      }
+    }
+    this.sim.ctx.putImageData(this.sim.imageData, 0, 0);
+  }
+
+  get canvas(): HTMLCanvasElement { return this.sim.canvas; }
+}
+
+interface EmotionalEvent {
+  type: 'soul-flare' | 'void-moment' | 'light-break' | 'heartbeat' | 'color-drain' | 'lens-breath' | 'halo-ring' | 'echo-ghost' | 'tremor' | 'golden-rain' | 'world-shift';
+  triggerRatio: number;
+  intensity: number;
+  duration: number;
+  triggered: boolean;
+}
+
 
 // ──────────────────────────────────────────────────────────────
 // Player
@@ -324,6 +578,13 @@ export class LyricDancePlayer {
   private bgCaches: HTMLCanvasElement[] = [];
   private bgCacheCount = 0;
 
+  private backgroundSystem = 'default';
+  private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim }> = [];
+  private lastSimFrame = -1;
+  private currentSimCanvases: HTMLCanvasElement[] = [];
+  private emotionalEvents: EmotionalEvent[] = [];
+  private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
+
   // Playback
   private rafHandle = 0;
   private lastTimestamp = 0;
@@ -344,7 +605,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
   ) {
     // Invalidate cache if song changed (survives HMR)
-    const sessionKey = `v4-${data.id}-${data.words?.length ?? 0}`;
+    const sessionKey = `v6-${data.id}-${data.words?.length ?? 0}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;
@@ -428,6 +689,9 @@ export class LyricDancePlayer {
     this.songStartSec = globalSongStartSec;
     this.songEndSec = globalSongEndSec;
     this.buildBgCache();
+    this.deriveVisualSystems();
+    this.buildChapterSims();
+    this.buildEmotionalEvents();
 
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
@@ -453,6 +717,9 @@ export class LyricDancePlayer {
 
       this.timeline = this.scaleTimeline(baked);
       this.buildBgCache();
+      this.deriveVisualSystems();
+      this.buildChapterSims();
+      this.buildEmotionalEvents();
       onProgress(100);
       return chunkSnapshot;
     } catch (err) {
@@ -556,6 +823,7 @@ export class LyricDancePlayer {
     this.textCanvas.style.height = `${h}px`;
 
     if (this.payload) this.buildBgCache();
+    this.lastSimFrame = -1;
     if (this.timeline.length) this.timeline = this.scaleTimeline(this.unscaleTimeline());
   }
 
@@ -570,6 +838,9 @@ export class LyricDancePlayer {
     this.payload = { ...this.payload, cinematic_direction: direction };
     this.buildChunkCache(this.payload);
     this.buildBgCache();
+    this.deriveVisualSystems();
+    this.buildChapterSims();
+    this.buildEmotionalEvents();
   }
 
   destroy(): void {
@@ -607,7 +878,7 @@ export class LyricDancePlayer {
     this.ctx.clearRect(0, 0, this.width, this.height);
 
     this.update(deltaMs);
-    this.draw();
+    this.draw(this.audio.currentTime);
 
     this.rafHandle = requestAnimationFrame(this.tick);
   };
@@ -690,40 +961,40 @@ export class LyricDancePlayer {
     };
   }
 
-  private draw(): void {
+  private draw(tSec: number): void {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
 
+    const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
+
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.updateSims(tSec, frame);
     this.drawBackground(frame);
+    this.drawSimLayer(frame);
+    this.drawLightingOverlay(frame, tSec);
+    this.checkEmotionalEvents(tSec, songProgress);
+    this.drawEmotionalEvents(tSec);
 
-    // Apply camera drift — subtle only, no zoom transform
     this.ctx.translate(frame.cameraX ?? 0, frame.cameraY ?? 0);
-
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
-
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
-
       const drawX = chunk.x;
       const drawY = chunk.y;
       const zoom = frame.cameraZoom ?? 1.0;
       const fontSize = chunk.fontSize ?? 36;
-      const zoomedFont = obj.font.replace(
-        /(\d+(\.\d+)?)px/,
-        `${Math.round(fontSize * zoom)}px`
-      );
+      const zoomedFont = obj.font.replace(/(\d+(\.\d+)?)px/, `${Math.round(fontSize * zoom)}px`);
       const sx = chunk.scaleX ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
       const sy = chunk.scaleY ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
 
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
       this.ctx.font = zoomedFont;
-
       if (chunk.glow > 0) {
         this.ctx.shadowColor = chunk.color ?? '#ffffff';
         this.ctx.shadowBlur = chunk.glow * 32;
@@ -736,27 +1007,22 @@ export class LyricDancePlayer {
       this.ctx.fillText(obj.text, 0, 0);
       this.ctx.restore();
       this.ctx.shadowBlur = 0;
+      this.ctx.globalAlpha = 1;
       drawCalls += 1;
     }
 
-    // Particle pass — drawn after text, before reset
     if (frame.particles?.length) {
       for (const p of frame.particles) {
         this.ctx.globalAlpha = p.alpha;
         this.ctx.fillStyle = this.payload?.cinematic_direction?.visualWorld?.palette?.[1] ?? '#ffffff';
         this.ctx.beginPath();
-        this.ctx.arc(
-          p.x * this.width,
-          p.y * this.height,
-          p.size,
-          0,
-          Math.PI * 2
-        );
+        this.ctx.arc(p.x * this.width, p.y * this.height, p.size, 0, Math.PI * 2);
         this.ctx.fill();
       }
       this.ctx.globalAlpha = 1;
     }
 
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
@@ -822,6 +1088,7 @@ export class LyricDancePlayer {
 
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.buildBgCache();
+    this.lastSimFrame = -1;
     if (this.timeline.length) this.timeline = this.scaleTimeline(this.unscaleTimeline());
   }
 
@@ -919,12 +1186,12 @@ export class LyricDancePlayer {
 
   private mapBackgroundSystem(desc: string): string {
     const lower = (desc || '').toLowerCase();
+    if (lower.includes('fire') || lower.includes('ember') || lower.includes('flame') || lower.includes('burn')) return 'fire';
     if (lower.includes('smoke') || lower.includes('haze') || lower.includes('churn') || lower.includes('fog') || lower.includes('storm') || lower.includes('cloud')) return 'storm';
-    if (lower.includes('star') || lower.includes('space') || lower.includes('cosmic') || lower.includes('constellation')) return 'cosmic';
+    if (lower.includes('aurora') || lower.includes('northern') || lower.includes('teal curtain')) return 'aurora';
+    if (lower.includes('rain') || lower.includes('urban') || lower.includes('city') || lower.includes('neon')) return 'urban';
+    if (lower.includes('ebb') || lower.includes('flow') || lower.includes('drift') || lower.includes('wave') || lower.includes('ocean') || lower.includes('water')) return 'ocean';
     if (lower.includes('warm') || lower.includes('soft') || lower.includes('beam') || lower.includes('glow') || lower.includes('light') || lower.includes('clarity') || lower.includes('intimate') || lower.includes('reveal')) return 'intimate';
-    if (lower.includes('gold') || lower.includes('light floods') || lower.includes('sunrise') || lower.includes('dawn')) return 'golden';
-    if (lower.includes('ebb') || lower.includes('flow') || lower.includes('drift') || lower.includes('wave') || lower.includes('ocean') || lower.includes('water')) return 'intimate';
-    if (lower.includes('void') || lower.includes('dark') || lower.includes('dim') || lower.includes('shadow')) return 'void';
     return 'default';
   }
 
@@ -943,10 +1210,7 @@ export class LyricDancePlayer {
 
   private buildBgCache(): void {
     const chapters = this.payload?.cinematic_direction?.chapters ?? [];
-    const palette = this.payload?.cinematic_direction?.visualWorld?.palette
-      ?? this.payload?.palette
-      ?? ['#0a0a0a', '#111827', '#1a2a4a'];
-
+    const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
     const count = Math.max(1, chapters.length);
     this.bgCaches = [];
     this.chapterParticleSystems = [];
@@ -960,40 +1224,12 @@ export class LyricDancePlayer {
       if (!ctx) continue;
 
       const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
-      const accentColor = palette[1] ?? '#FFD700';
-      const intensity = chapter?.emotionalIntensity ?? 0.5;
-
-      // Combine all chapter description fields for richer keyword matching
       const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
-      const lightDesc = chapter?.light ?? '';
       const particleDesc = chapter?.particles ?? '';
-      const perChapterSystem = this.mapBackgroundSystem(bgDesc + ' ' + lightDesc);
-
-      // Per-chapter particle system
       this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
 
-      const grad = ctx.createLinearGradient(0, 0, 0, off.height);
-      grad.addColorStop(0, this.darken(dominantColor, 0.08));
-      grad.addColorStop(0.5, this.darken(dominantColor, 0.06));
-      grad.addColorStop(1, this.darken(dominantColor, 0.07));
-      ctx.fillStyle = grad;
+      ctx.fillStyle = dominantColor;
       ctx.fillRect(0, 0, off.width, off.height);
-
-      if (perChapterSystem === 'storm') {
-        this.drawStormAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
-      } else if (perChapterSystem === 'cosmic') {
-        this.drawCosmicAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
-      } else if (perChapterSystem === 'intimate') {
-        this.drawIntimateAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
-      } else if (perChapterSystem === 'golden') {
-        this.drawGoldenAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
-      } else if (perChapterSystem === 'void') {
-        // Pure dark — no atmosphere overlay, just the base gradient
-      } else {
-        this.drawRadialGlow(ctx, off.width, off.height, [dominantColor, accentColor]);
-      }
-
-      this.drawVignette(ctx, off.width, off.height, intensity);
       this.bgCaches.push(off);
     }
 
@@ -1108,6 +1344,221 @@ export class LyricDancePlayer {
     vignette.addColorStop(1, `rgba(0,0,0,${0.55 + intensity * 0.2})`);
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
+  }
+
+  private deriveVisualSystems(): void {
+    const chapter0 = this.payload?.cinematic_direction?.chapters?.[0] as any;
+    const bgDesc = chapter0?.backgroundDirective ?? chapter0?.background ?? '';
+    this.backgroundSystem = this.mapBackgroundSystem(bgDesc);
+  }
+
+  private buildChapterSims(): void {
+    const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
+    const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? ['#111111', '#FFD700'];
+    const accentColor = palette[1] ?? '#FFD700';
+    const bgSystem = this.backgroundSystem;
+    this.chapterSims = chapters.map((chapter: any, ci: number) => {
+      const dominant = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#111111';
+      const bgDesc = (chapter?.backgroundDirective ?? chapter?.background ?? '').toLowerCase();
+      const perSystem = this.mapBackgroundSystem(`${bgDesc} ${bgSystem}`);
+      const sim: { fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim } = {};
+      if (perSystem === 'fire') sim.fire = new FireSim('fire', 0.08 + (chapter?.emotionalIntensity ?? 0.5) * 0.1);
+      else if (perSystem === 'storm') sim.fire = new FireSim('smoke', 0.18);
+      else if (perSystem === 'ocean') sim.water = new WaterSim(dominant, accentColor);
+      else if (perSystem === 'aurora') sim.aurora = new AuroraSim(dominant, accentColor);
+      else if (perSystem === 'urban') sim.rain = new RainSim(accentColor);
+      else if (perSystem === 'intimate') sim.fire = new FireSim('ember', 0.25);
+      return sim;
+    });
+  }
+
+  private buildEmotionalEvents(): void {
+    const cd = this.payload?.cinematic_direction as any;
+    if (!cd) return;
+    const events: EmotionalEvent[] = [];
+    if (cd.climax?.timeRatio) events.push({ type: 'light-break', triggerRatio: cd.climax.timeRatio, intensity: cd.climax.maxLightIntensity ?? 1, duration: 1.2, triggered: false });
+    if (cd.chapters?.length >= 3) events.push({ type: 'world-shift', triggerRatio: cd.chapters[2].startRatio ?? 0.6, intensity: 0.8, duration: 2.0, triggered: false });
+    events.push({ type: 'lens-breath', triggerRatio: 0.05, intensity: 0.5, duration: 3.0, triggered: false });
+    const peakChapter = cd.chapters?.reduce((max: any, ch: any) => (ch.emotionalIntensity ?? 0) > (max?.emotionalIntensity ?? 0) ? ch : max, null);
+    if (peakChapter) events.push({ type: 'void-moment', triggerRatio: (peakChapter.startRatio ?? 0.6) + 0.05, intensity: 1.0, duration: 0.4, triggered: false });
+    events.push({ type: 'halo-ring', triggerRatio: 0.82, intensity: 0.9, duration: 1.5, triggered: false });
+    this.emotionalEvents = events;
+    this.activeEvents = [];
+  }
+
+  private updateSims(tSec: number, frame: Keyframe): void {
+    const simFrame = Math.floor(tSec * 24);
+    if (simFrame === this.lastSimFrame) return;
+    this.lastSimFrame = simFrame;
+    const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
+    const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
+    const chapterIdxRaw = chapters.findIndex((ch: any) => songProgress < (ch.endRatio ?? 1));
+    const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
+    const ci = Math.max(0, chapterIdx);
+    const chapter = chapters[ci] ?? {};
+    const intensity = chapter?.emotionalIntensity ?? 0.5;
+    const pulse = (frame as any).beatPulse ?? (frame.beatIndex ? (frame.beatIndex % 2 ? 0.2 : 0.7) : 0);
+    const sim = this.chapterSims[ci];
+    this.currentSimCanvases = [];
+    if (!sim) return;
+    if (sim.fire) { sim.fire.update(intensity, pulse); this.currentSimCanvases.push(sim.fire.canvas); }
+    if (sim.water) { sim.water.update(tSec, pulse, intensity); this.currentSimCanvases.push(sim.water.canvas); }
+    if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
+    if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
+  }
+
+  private drawSimLayer(_frame: Keyframe): void {
+    for (const simCanvas of this.currentSimCanvases) {
+      this.ctx.globalAlpha = 0.85;
+      this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
+      this.ctx.globalAlpha = 1;
+    }
+  }
+
+  private checkEmotionalEvents(tSec: number, songProgress: number): void {
+    for (const event of this.emotionalEvents) {
+      if (!event.triggered && Math.abs(songProgress - event.triggerRatio) < 0.005) {
+        event.triggered = true;
+        this.activeEvents.push({ event, startTime: tSec });
+      }
+    }
+    this.activeEvents = this.activeEvents.filter((ae) => tSec - ae.startTime < ae.event.duration + 0.1);
+  }
+
+  private drawEmotionalEvents(tSec: number): void {
+    for (const ae of this.activeEvents) {
+      const progress = (tSec - ae.startTime) / ae.event.duration;
+      const ep = Math.min(1, progress);
+      const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+      const easeIn = (t: number) => Math.pow(t, 3);
+      const accentColor = this.payload?.cinematic_direction?.visualWorld?.palette?.[1] ?? '#FFD700';
+
+      switch (ae.event.type) {
+        case 'light-break': {
+          const phase = ep < 0.3 ? easeOut(ep / 0.3) : 1 - easeIn((ep - 0.3) / 0.7);
+          this.ctx.globalAlpha = phase * ae.event.intensity * 0.85;
+          this.ctx.fillStyle = '#ffffff';
+          this.ctx.fillRect(0, 0, this.width, this.height);
+          this.ctx.globalAlpha = 1;
+          break;
+        }
+        case 'void-moment': {
+          const phase = ep < 0.2 ? easeOut(ep / 0.2) : 1 - easeOut((ep - 0.2) / 0.8);
+          this.ctx.globalAlpha = phase * 0.96;
+          this.ctx.fillStyle = '#000000';
+          this.ctx.fillRect(0, 0, this.width, this.height);
+          this.ctx.globalAlpha = 1;
+          break;
+        }
+        case 'halo-ring': {
+          const radius = ep * this.width * 0.8;
+          const ringWidth = 30 * (1 - ep);
+          if (ringWidth < 1) break;
+          this.ctx.strokeStyle = `${accentColor}${Math.floor((1 - ep) * ae.event.intensity * 180).toString(16).padStart(2, '0')}`;
+          this.ctx.lineWidth = ringWidth;
+          this.ctx.beginPath();
+          this.ctx.arc(this.width / 2, this.height / 2, radius, 0, Math.PI * 2);
+          this.ctx.stroke();
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'lens-breath': {
+          const breathe = Math.sin(ep * Math.PI * 4) * 0.008 * ae.event.intensity;
+          const cx = this.width / 2;
+          const cy = this.height / 2;
+          this.ctx.save();
+          this.ctx.translate(cx, cy);
+          this.ctx.scale(1 + breathe, 1 + breathe);
+          this.ctx.translate(-cx, -cy);
+          this.ctx.restore();
+          break;
+        }
+        case 'soul-flare': {
+          const startX = this.width * (0.1 + ep * 0.8);
+          const flareAlpha = ep < 0.5 ? ep * 2 * ae.event.intensity * 0.6 : (1 - ep) * 2 * ae.event.intensity * 0.6;
+          const flare = this.ctx.createLinearGradient(startX - 100, this.height * 0.3, startX + 100, this.height * 0.7);
+          flare.addColorStop(0, 'transparent');
+          flare.addColorStop(0.5, `${accentColor}${Math.floor(flareAlpha * 255).toString(16).padStart(2, '0')}`);
+          flare.addColorStop(1, 'transparent');
+          this.ctx.fillStyle = flare;
+          this.ctx.fillRect(0, 0, this.width, this.height);
+          break;
+        }
+        case 'color-drain': {
+          const phase = ep < 0.3 ? easeOut(ep / 0.3) : 1 - easeOut((ep - 0.3) / 0.7);
+          this.ctx.globalAlpha = phase * 0.7;
+          this.ctx.fillStyle = 'rgba(128,128,128,0.5)';
+          this.ctx.globalCompositeOperation = 'saturation';
+          this.ctx.fillRect(0, 0, this.width, this.height);
+          this.ctx.globalCompositeOperation = 'source-over';
+          this.ctx.globalAlpha = 1;
+          break;
+        }
+        case 'world-shift': {
+          const fadeAlpha = ep < 0.5 ? easeOut(ep * 2) * 0.3 : (1 - easeOut((ep - 0.5) * 2)) * 0.3;
+          const nextBg = this.bgCaches[Math.min(Math.floor(ep * this.bgCaches.length), this.bgCaches.length - 1)];
+          if (nextBg) {
+            this.ctx.globalAlpha = fadeAlpha;
+            this.ctx.drawImage(nextBg, 0, 0, this.width, this.height);
+            this.ctx.globalAlpha = 1;
+          }
+          break;
+        }
+        case 'heartbeat': {
+          const pulse1 = ep < 0.15 ? Math.sin(ep / 0.15 * Math.PI) : 0;
+          const pulse2 = ep > 0.2 && ep < 0.4 ? Math.sin((ep - 0.2) / 0.2 * Math.PI) * 0.7 : 0;
+          const pulse = Math.max(pulse1, pulse2) * ae.event.intensity * 0.3;
+          if (pulse > 0.01) {
+            this.ctx.globalAlpha = pulse;
+            this.ctx.fillStyle = accentColor;
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            this.ctx.globalAlpha = 1;
+          }
+          break;
+        }
+        case 'golden-rain': {
+          const count = Math.floor(30 + ae.event.intensity * 40);
+          for (let i = 0; i < count; i++) {
+            const seed = (i * 0.618033) % 1;
+            const x = seed * this.width;
+            const y = ((ep * 1.5 + (i * 0.381966 % 1)) % 1) * this.height;
+            const size = 1.5 + seed * 3;
+            const alpha = (1 - ep) * ae.event.intensity * 0.6;
+            this.ctx.globalAlpha = alpha;
+            this.ctx.fillStyle = accentColor;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, size, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          this.ctx.globalAlpha = 1;
+          break;
+        }
+        case 'tremor': {
+          if (ep < 0.3) {
+            const shake = Math.sin(ep * Math.PI * 20) * (1 - ep / 0.3) * 3 * ae.event.intensity;
+            this.ctx.save();
+            this.ctx.translate(shake, shake * 0.5);
+            this.ctx.restore();
+          }
+          break;
+        }
+        case 'echo-ghost':
+        default:
+          break;
+      }
+
+      this.ctx.globalAlpha = 1;
+      this.ctx.globalCompositeOperation = 'source-over';
+      this.ctx.lineWidth = 1;
+    }
+  }
+
+  private drawLightingOverlay(frame: ScaledKeyframe, tSec: number): void {
+    const pulse = (Math.sin(tSec * 2.5 + frame.beatIndex) * 0.5 + 0.5) * 0.08;
+    this.ctx.globalAlpha = pulse;
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillRect(0, 0, this.width, this.height);
+    this.ctx.globalAlpha = 1;
   }
 
   private drawBackground(frame: ScaledKeyframe): void {
