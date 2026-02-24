@@ -48,6 +48,7 @@ interface Props {
   onSavedId?: (id: string) => void;
   analysisModel: string;
   transcriptionModel: string;
+  sceneInput?: ReactNode;
 }
 
 export function LyricsTab({
