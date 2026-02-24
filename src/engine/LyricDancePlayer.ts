@@ -1134,7 +1134,7 @@ export class LyricDancePlayer {
 
   /** Resolve the effective palette from V3 cinematic_direction or fallback */
   private getResolvedPalette(): string[] {
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const chapters = (cd?.chapters as any[]) ?? [];
 
     // Find current chapter based on playback position
@@ -1192,7 +1192,7 @@ export class LyricDancePlayer {
   }
 
   private getAtmosphere(): string {
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const chapters = (cd?.chapters as any[]) ?? [];
     const songProg = this.audio
       ? this.audio.currentTime / (this.audio.duration || 1)
