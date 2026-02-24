@@ -650,6 +650,7 @@ export function LyricFitTab({
             analysisModel={analysisModel}
             transcriptionModel={transcriptionModel}
           />
+          </div>
         </div>
       ) : lyricData && audioFile ? (
         <FitTab
