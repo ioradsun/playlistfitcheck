@@ -39,6 +39,7 @@ interface Props {
   fingerprint?: ArtistDNA | null;
   seed: string;
   songDna?: SongDna | null;
+  words?: Array<{ word: string; start: number; end: number }> | null;
 }
 
 export function PublishLyricDanceButton({
