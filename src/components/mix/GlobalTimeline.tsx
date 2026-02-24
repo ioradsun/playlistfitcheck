@@ -115,7 +115,7 @@ export function GlobalTimeline({
     };
   }, [dragging, duration, markerStart, markerEnd, onMarkersChange, getTimeFromClientX]);
 
-  if (!waveform) return null;
+  if (!waveform) return <div className="glass-card rounded-xl p-4 min-h-[140px]" />;
 
   return (
     <div className="glass-card rounded-xl p-4 space-y-3">
