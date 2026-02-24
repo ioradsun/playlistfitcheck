@@ -268,6 +268,11 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     isAnchor?: boolean;
     color?: string;
     emitterType?: WordEmitterType;
+    trail?: string;
+    entryStyle?: string;
+    exitStyle?: string;
+    emphasisLevel?: number;
+    entryProgress?: number;
     iconGlyph?: string;
     iconStyle?: 'outline' | 'filled' | 'ghost';
     iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
@@ -547,16 +552,6 @@ interface EmotionalEvent {
   triggered: boolean;
 }
 
-interface WordEmitter {
-  type: WordEmitterType;
-  x: number;
-  y: number;
-  color: string;
-  startTime: number;
-  duration: number;
-  intensity: number;
-}
-
 interface CommentChunk {
   id: string;
   text: string;
@@ -569,6 +564,36 @@ interface CommentChunk {
   direction: 1 | -1;  // 1 = left-to-right, -1 = right-to-left
   trailLength: number;
   fontSize: number;
+}
+
+interface BurstParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  alpha: number;
+  color: string;
+  type: string;
+  rotation: number;
+  rotationSpeed: number;
+}
+
+interface BurstEmitter {
+  id: string;
+  x: number;
+  y: number;
+  startTime: number;
+  emitDuration: number;
+  totalDuration: number;
+  particles: BurstParticle[];
+  trailType: string;
+  direction: 'up' | 'down' | 'left' | 'right' | 'radial';
+  spawnRate: number;
+  maxParticles: number;
+  palette: { accent: string; glow: string; particle: string };
 }
 
 
@@ -632,8 +657,8 @@ export class LyricDancePlayer {
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
   // Word-local particle emitters
-  private wordEmitters: WordEmitter[] = [];
-  private firedEmitters = new Set<string>();
+  private burstEmitters: BurstEmitter[] = [];
+  private lastBurstTickMs = 0;
 
   // Comment comets
   private activeComments: CommentChunk[] = [];
@@ -827,8 +852,8 @@ export class LyricDancePlayer {
 
   seekTo(timeSec: number): void {
     this.seek(timeSec);
-    this.firedEmitters.clear();
-    this.wordEmitters = [];
+    this.burstEmitters = [];
+    this.lastBurstTickMs = 0;
   }
 
   async startExport(ratio: "16:9" | "9:16"): Promise<void> {
@@ -1204,33 +1229,25 @@ export class LyricDancePlayer {
     this.ctx.textBaseline = 'middle';
 
     let drawCalls = 0;
-    const nowSecEmitters = performance.now() / 1000;
-    // Clean up old emitters
-    this.wordEmitters = this.wordEmitters.filter(e => nowSecEmitters - e.startTime < e.duration + 0.2);
-    // Pre-compute chapter color for emitter spawning
-    const chaptersForEmitters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
-    const emitterSongProg = this.audio ? this.audio.currentTime / (this.audio?.duration || 1) : 0;
-    const emitterChIdx = chaptersForEmitters.findIndex((ch: any) => emitterSongProg >= (ch.startRatio ?? 0) && emitterSongProg < (ch.endRatio ?? 1));
-    const chapterColorForEmitters = (emitterChIdx >= 0 ? chaptersForEmitters[emitterChIdx]?.dominantColor : null) ?? '#FFD700';
+    const palette = this.getBurstPalette(songProgress);
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
 
-      // Spawn word emitter on first visibility
-      if (chunk.emitterType && chunk.emitterType !== 'none') {
-        const emitterKey = chunk.id;
-        if (!this.firedEmitters.has(emitterKey)) {
-          this.firedEmitters.add(emitterKey);
-          const chColor = (chapterColorForEmitters) ?? '#FFD700';
-          this.wordEmitters.push({
-            type: chunk.emitterType as WordEmitterType,
-            x: chunk.x,
-            y: chunk.y,
-            color: chunk.color ?? chColor,
-            startTime: nowSecEmitters,
-            duration: 1.8,
-            intensity: chunk.glow ?? 1.0,
-          });
-        }
+      if (
+        chunk.trail &&
+        chunk.trail !== 'none' &&
+        (chunk.entryProgress ?? 1) > 0 &&
+        (chunk.entryProgress ?? 1) < 0.5
+      ) {
+        this.spawnBurstEmitter(
+          chunk.id,
+          chunk.x,
+          chunk.y,
+          chunk.trail,
+          this.deriveParticleDirection(chunk.entryStyle ?? '', chunk.exitStyle ?? ''),
+          palette,
+          chunk.emphasisLevel ?? 3,
+        );
       }
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
@@ -1416,11 +1433,14 @@ export class LyricDancePlayer {
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
 
-    // Comment comets — after text, before watermark
-    this.drawComments(performance.now() / 1000);
+    const nowMs = performance.now();
+    const dt = this.lastBurstTickMs > 0 ? Math.max(0.001, Math.min(0.05, (nowMs - this.lastBurstTickMs) / 1000)) : 1 / 60;
+    this.lastBurstTickMs = nowMs;
+    this.updateBurstEmitters(dt);
+    this.renderBurstParticles();
 
-    // Word-local particle emitters
-    this.drawWordEmitters(performance.now() / 1000);
+    // Comment comets — after text/bursts, before watermark
+    this.drawComments(performance.now() / 1000);
 
     this.drawWatermark();
     this.debugState = { ...this.debugState, drawCalls };
@@ -1590,221 +1610,6 @@ export class LyricDancePlayer {
 
       this.ctx.shadowBlur = 0;
       this.ctx.restore();
-    }
-  }
-
-  private drawWordEmitters(nowSec: number): void {
-    for (const em of this.wordEmitters) {
-      const elapsed = nowSec - em.startTime;
-      const progress = Math.min(1, elapsed / em.duration);
-      if (progress >= 1) continue;
-      const ep = 1 - progress;
-
-      switch (em.type) {
-        case 'ember': {
-          const count = Math.floor(8 + em.intensity * 6);
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const seed2 = (i * 0.381966) % 1;
-            const drift = (elapsed * 0.12 * (0.5 + seed)) % 1;
-            const wobble = Math.sin(elapsed * 3 + i * 2) * 15;
-            const px = em.x + (seed - 0.5) * 60 + wobble;
-            const py = em.y - drift * 120;
-            const alpha = (1 - drift) * ep * 0.8;
-            if (alpha <= 0) continue;
-            this.ctx.globalAlpha = alpha;
-            this.ctx.fillStyle = seed < 0.5 ? em.color : '#FF8C00';
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 1 + seed2 * 2.5, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'frost': {
-          const count = 8;
-          for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2;
-            const dist = progress * 50;
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist;
-            this.ctx.globalAlpha = ep * 0.7;
-            this.ctx.strokeStyle = '#A8D8EA';
-            this.ctx.lineWidth = 1;
-            this.ctx.beginPath();
-            this.ctx.moveTo(em.x + Math.cos(angle) * 5, em.y + Math.sin(angle) * 5);
-            this.ctx.lineTo(px, py);
-            this.ctx.stroke();
-            this.ctx.fillStyle = '#E8F4FF';
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 1.5, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          this.ctx.globalAlpha = 1;
-          this.ctx.lineWidth = 1;
-          break;
-        }
-        case 'spark-burst': {
-          const count = 12;
-          for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2;
-            const speed = 80 + (i * 0.618033 % 1) * 60;
-            const dist = progress * speed;
-            const alpha = ep * (1 - progress * 0.5) * 0.9;
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist;
-            this.ctx.globalAlpha = alpha;
-            this.ctx.fillStyle = em.color;
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 1.5 + (1 - progress) * 2, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'dust-impact': {
-          const count = 10;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const angle = (seed - 0.5) * Math.PI;
-            const dist = progress * 40 * (0.5 + seed);
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist * 0.3;
-            this.ctx.globalAlpha = ep * 0.5;
-            this.ctx.fillStyle = '#888888';
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 2 + seed * 4, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'light-rays': {
-          const rayCount = 6;
-          for (let i = 0; i < rayCount; i++) {
-            const angle = (i / rayCount) * Math.PI * 2;
-            const rayLen = progress * 80 * em.intensity;
-            const alpha = ep * 0.4;
-            const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0');
-            const grad = this.ctx.createLinearGradient(
-              em.x, em.y,
-              em.x + Math.cos(angle) * rayLen,
-              em.y + Math.sin(angle) * rayLen
-            );
-            grad.addColorStop(0, `${em.color}${alphaHex}`);
-            grad.addColorStop(1, 'transparent');
-            this.ctx.strokeStyle = grad;
-            this.ctx.lineWidth = 2;
-            this.ctx.globalAlpha = 1;
-            this.ctx.beginPath();
-            this.ctx.moveTo(em.x, em.y);
-            this.ctx.lineTo(em.x + Math.cos(angle) * rayLen, em.y + Math.sin(angle) * rayLen);
-            this.ctx.stroke();
-          }
-          this.ctx.lineWidth = 1;
-          break;
-        }
-        case 'shockwave-ring': {
-          const radius = progress * this.width * 0.3;
-          this.ctx.globalAlpha = ep * 0.8;
-          this.ctx.strokeStyle = em.color;
-          this.ctx.lineWidth = 3 * ep;
-          this.ctx.beginPath();
-          this.ctx.arc(em.x, em.y, radius, 0, Math.PI * 2);
-          this.ctx.stroke();
-          this.ctx.globalAlpha = 1;
-          this.ctx.lineWidth = 1;
-          break;
-        }
-        case 'gold-coins': {
-          const count = 12;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const seed2 = (i * 0.381966) % 1;
-            const fallSpeed = 0.3 + seed * 0.4;
-            const px = em.x + (seed - 0.5) * 80;
-            const py = em.y + elapsed * fallSpeed * 100 * seed2;
-            const alpha = Math.max(0, ep - seed2 * 0.3) * 0.9;
-            this.ctx.globalAlpha = alpha;
-            this.ctx.fillStyle = '#FFD700';
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 2 + seed * 2, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'memory-orbs': {
-          const count = 6;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const angle = seed * Math.PI * 2;
-            const dist = progress * 40 * (0.5 + seed);
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist;
-            this.ctx.globalAlpha = ep * 0.5;
-            this.ctx.fillStyle = em.color;
-            this.ctx.shadowColor = em.color;
-            this.ctx.shadowBlur = 8;
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 3 + seed * 3, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.shadowBlur = 0;
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'motion-trail': {
-          const trailLen = progress * 60;
-          const alphaHex = Math.floor(ep * 120).toString(16).padStart(2, '0');
-          const grad = this.ctx.createLinearGradient(em.x - trailLen, em.y, em.x, em.y);
-          grad.addColorStop(0, 'transparent');
-          grad.addColorStop(1, `${em.color}${alphaHex}`);
-          this.ctx.strokeStyle = grad;
-          this.ctx.lineWidth = 4 * ep;
-          this.ctx.beginPath();
-          this.ctx.moveTo(em.x - trailLen, em.y);
-          this.ctx.lineTo(em.x, em.y);
-          this.ctx.stroke();
-          this.ctx.lineWidth = 1;
-          break;
-        }
-        case 'converge': {
-          const count = 8;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const fromLeft = i < count / 2;
-            const startX = fromLeft ? em.x - 100 : em.x + 100;
-            const px = startX + (em.x - startX) * progress;
-            const py = em.y + (seed - 0.5) * 20 * (1 - progress);
-            this.ctx.globalAlpha = progress * ep * 0.7;
-            this.ctx.fillStyle = em.color;
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 1.5 + seed, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'dark-absorb': {
-          const count = 8;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const angle = seed * Math.PI * 2 + elapsed * 2;
-            const startDist = 60;
-            const dist = startDist * (1 - progress);
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist;
-            this.ctx.globalAlpha = progress * 0.6;
-            this.ctx.fillStyle = '#000000';
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 2 + seed * 2, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-      }
     }
   }
 
@@ -2342,6 +2147,13 @@ export class LyricDancePlayer {
       this.lastSimFrame = simFrame;
       const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
       const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
+      const isClimaxZone = songProgress >= 0.75 && songProgress <= 0.85;
+      const climaxCurve = isClimaxZone
+        ? Math.sin(((songProgress - 0.75) / 0.1) * Math.PI)
+        : 0;
+      const ambientFraction = 0.15;
+      const climaxBoost = climaxCurve * 0.85;
+      const ambientSimScale = ambientFraction + climaxBoost;
       const chapterIdxRaw = chapters.findIndex((ch: any) => songProgress < (ch.endRatio ?? 1));
       const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
@@ -2351,7 +2163,7 @@ export class LyricDancePlayer {
       }
 
       const chapter = chapters[ci] ?? {};
-      const intensity = (chapter as any)?.emotionalIntensity ?? 0.5;
+      const intensity = ((chapter as any)?.emotionalIntensity ?? 0.5) * ambientSimScale;
       const pulse = (frame as any).beatPulse ?? (frame.beatIndex ? (frame.beatIndex % 2 ? 0.2 : 0.7) : 0);
       const sim = this.chapterSims[ci];
       this.currentSimCanvases = [];
@@ -2366,10 +2178,262 @@ export class LyricDancePlayer {
   }
 
   private drawSimLayer(_frame: ScaledKeyframe): void {
+    const songDuration = Math.max(1, this.songEndSec - this.songStartSec);
+    const songProgress = Math.max(0, Math.min(1, (this.currentTSec - this.songStartSec) / songDuration));
+    const isClimaxZone = songProgress >= 0.75 && songProgress <= 0.85;
+    const climaxCurve = isClimaxZone
+      ? Math.sin(((songProgress - 0.75) / 0.1) * Math.PI)
+      : 0;
+    const ambientFraction = 0.15;
+    const climaxBoost = climaxCurve * 0.85;
+    const simOpacity = ambientFraction + climaxBoost;
     for (const simCanvas of this.currentSimCanvases) {
-      this.ctx.globalAlpha = 0.38;
+      this.ctx.globalAlpha = 0.38 * simOpacity;
       this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
+    }
+  }
+
+  private getBurstPalette(songProgress: number): { accent: string; glow: string; particle: string } {
+    const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as Array<{ startRatio?: number; endRatio?: number; dominantColor?: string }>;
+    const chapter = chapters.find((ch) => songProgress >= (ch.startRatio ?? 0) && songProgress <= (ch.endRatio ?? 1));
+    const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.data.palette ?? [];
+    return {
+      accent: palette[1] ?? '#FFD700',
+      glow: chapter?.dominantColor ?? palette[0] ?? '#ffffff',
+      particle: palette[2] ?? '#ffffff',
+    };
+  }
+
+  private deriveParticleDirection(entryStyle: string, exitStyle: string): 'up' | 'down' | 'left' | 'right' | 'radial' {
+    switch (exitStyle) {
+      case 'drift-up':
+      case 'cascade-up':
+      case 'evaporate':
+        return 'up';
+      case 'sink':
+      case 'cascade-down':
+        return 'down';
+      case 'shatter':
+      case 'scatter-letters':
+      case 'burn-out':
+      case 'snap-out':
+        return 'radial';
+      case 'peel-off':
+        return 'right';
+      case 'peel-reverse':
+        return 'left';
+    }
+    switch (entryStyle) {
+      case 'rise':
+      case 'bloom':
+        return 'up';
+      case 'slam-down':
+      case 'drop':
+      case 'stomp':
+      case 'plant':
+      case 'tumble-in':
+        return 'down';
+      case 'explode-in':
+      case 'spin-in':
+        return 'radial';
+      case 'punch-in':
+        return 'right';
+      case 'drift-in':
+      case 'whisper':
+        return 'left';
+      default:
+        return 'radial';
+    }
+  }
+
+  private spawnBurstEmitter(
+    chunkId: string,
+    wordX: number,
+    wordY: number,
+    trailType: string,
+    direction: 'up' | 'down' | 'left' | 'right' | 'radial',
+    palette: { accent: string; glow: string; particle: string },
+    emphasisLevel: number,
+  ): void {
+    if (this.burstEmitters.some((emitter) => emitter.id === chunkId)) return;
+    const countScale = 0.5 + emphasisLevel * 0.15;
+    this.burstEmitters.push({
+      id: chunkId,
+      x: wordX,
+      y: wordY,
+      startTime: performance.now(),
+      emitDuration: 300 + emphasisLevel * 50,
+      totalDuration: 1500 + emphasisLevel * 200,
+      particles: [],
+      trailType,
+      direction,
+      spawnRate: Math.round(80 * countScale),
+      maxParticles: Math.round(50 * countScale),
+      palette,
+    });
+  }
+
+  private spawnBurstParticle(emitter: BurstEmitter): BurstParticle | null {
+    const baseSpeed = 40 + Math.random() * 60;
+    const spread = Math.random() * Math.PI * 2;
+    let vx = 0;
+    let vy = 0;
+    switch (emitter.direction) {
+      case 'up':
+        vx = Math.sin(spread) * baseSpeed * 0.3;
+        vy = -(baseSpeed * 0.7 + Math.random() * baseSpeed * 0.5);
+        break;
+      case 'down':
+        vx = Math.sin(spread) * baseSpeed * 0.3;
+        vy = baseSpeed * 0.7 + Math.random() * baseSpeed * 0.5;
+        break;
+      case 'left':
+        vx = -(baseSpeed * 0.8 + Math.random() * baseSpeed * 0.3);
+        vy = Math.sin(spread) * baseSpeed * 0.3;
+        break;
+      case 'right':
+        vx = baseSpeed * 0.8 + Math.random() * baseSpeed * 0.3;
+        vy = Math.sin(spread) * baseSpeed * 0.3;
+        break;
+      default:
+        vx = Math.cos(spread) * baseSpeed;
+        vy = Math.sin(spread) * baseSpeed;
+        break;
+    }
+    let size = 3;
+    let maxLife = 1.5;
+    let color = emitter.palette.particle;
+    switch (emitter.trailType) {
+      case 'ember': size = 2 + Math.random() * 4; maxLife = 1 + Math.random() * 0.8; color = emitter.palette.glow; vy -= 20; break;
+      case 'frost': size = 3 + Math.random() * 5; maxLife = 1.5 + Math.random() * 1; vx *= 0.5; vy *= 0.5; break;
+      case 'spark-burst': size = 1.5 + Math.random() * 2; maxLife = 0.5 + Math.random() * 0.5; vx *= 2; vy *= 2; color = emitter.palette.accent; break;
+      case 'dust-impact': size = 2 + Math.random() * 3; maxLife = 1.2 + Math.random() * 0.6; vy += 15; break;
+      case 'light-rays': size = 1 + Math.random() * 2; maxLife = 0.8 + Math.random() * 0.4; color = emitter.palette.glow; break;
+      case 'gold-coins': size = 4 + Math.random() * 3; maxLife = 1.5 + Math.random() * 0.5; vy += 30; color = '#FFD700'; break;
+      case 'dark-absorb': size = 3 + Math.random() * 4; maxLife = 1 + Math.random() * 0.5; vx *= -0.6; vy *= -0.6; color = '#000000'; break;
+      case 'motion-trail': size = 2 + Math.random() * 2; maxLife = 0.6 + Math.random() * 0.4; vx *= 0.3; vy *= 0.3; break;
+      case 'memory-orbs': size = 5 + Math.random() * 4; maxLife = 2 + Math.random() * 0.5; vx *= 0.2; vy *= 0.2; color = emitter.palette.glow; break;
+      default: return null;
+    }
+    return {
+      x: emitter.x + (Math.random() - 0.5) * 20,
+      y: emitter.y + (Math.random() - 0.5) * 10,
+      vx,
+      vy,
+      life: 1,
+      maxLife,
+      size,
+      alpha: 0.7 + Math.random() * 0.3,
+      color,
+      type: emitter.trailType,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 2,
+    };
+  }
+
+  private updateBurstEmitters(dt: number): void {
+    const now = performance.now();
+    for (let i = this.burstEmitters.length - 1; i >= 0; i -= 1) {
+      const emitter = this.burstEmitters[i];
+      const elapsed = now - emitter.startTime;
+      if (elapsed > emitter.totalDuration) {
+        this.burstEmitters.splice(i, 1);
+        continue;
+      }
+      if (elapsed < emitter.emitDuration && emitter.particles.length < emitter.maxParticles) {
+        const spawnCount = Math.ceil(emitter.spawnRate * dt);
+        for (let s = 0; s < spawnCount && emitter.particles.length < emitter.maxParticles; s += 1) {
+          const p = this.spawnBurstParticle(emitter);
+          if (p) emitter.particles.push(p);
+        }
+      }
+      for (let j = emitter.particles.length - 1; j >= 0; j -= 1) {
+        const p = emitter.particles[j];
+        p.life -= dt / p.maxLife;
+        if (p.life <= 0) {
+          emitter.particles.splice(j, 1);
+          continue;
+        }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.rotation += p.rotationSpeed * dt;
+        switch (p.type) {
+          case 'ember': p.vy -= 15 * dt; break;
+          case 'frost': p.vy += 5 * dt; break;
+          case 'dust-impact': p.vy += 25 * dt; break;
+          case 'gold-coins': p.vy += 40 * dt; break;
+          default: p.vy += 8 * dt; break;
+        }
+        p.vx *= (1 - 0.5 * dt);
+        p.vy *= (1 - 0.3 * dt);
+      }
+    }
+  }
+
+  private renderBurstParticles(): void {
+    for (const emitter of this.burstEmitters) {
+      for (const p of emitter.particles) {
+        const fadeAlpha = p.life * p.alpha;
+        if (fadeAlpha < 0.01) continue;
+        this.ctx.save();
+        this.ctx.globalAlpha = fadeAlpha;
+        this.ctx.translate(p.x, p.y);
+        switch (p.type) {
+          case 'ember': {
+            const gradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, p.size);
+            gradient.addColorStop(0, p.color);
+            gradient.addColorStop(0.6, p.color);
+            gradient.addColorStop(1, 'transparent');
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(-p.size, -p.size, p.size * 2, p.size * 2);
+            break;
+          }
+          case 'frost': {
+            this.ctx.rotate(p.rotation);
+            this.ctx.strokeStyle = p.color;
+            this.ctx.lineWidth = 1;
+            this.ctx.globalAlpha = fadeAlpha * 0.8;
+            for (let a = 0; a < 6; a += 1) {
+              const angle = (a / 6) * Math.PI * 2;
+              this.ctx.beginPath();
+              this.ctx.moveTo(0, 0);
+              this.ctx.lineTo(Math.cos(angle) * p.size, Math.sin(angle) * p.size);
+              this.ctx.stroke();
+            }
+            break;
+          }
+          case 'spark-burst':
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, p.size * 0.5, 0, Math.PI * 2);
+            this.ctx.fill();
+            break;
+          case 'dark-absorb':
+            this.ctx.fillStyle = p.color;
+            this.ctx.globalAlpha = fadeAlpha * 0.5;
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+            break;
+          case 'memory-orbs': {
+            const orbGrad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, p.size);
+            orbGrad.addColorStop(0, p.color);
+            orbGrad.addColorStop(0.4, `${p.color}80`);
+            orbGrad.addColorStop(1, 'transparent');
+            this.ctx.fillStyle = orbGrad;
+            this.ctx.fillRect(-p.size, -p.size, p.size * 2, p.size * 2);
+            break;
+          }
+          default:
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+            break;
+        }
+        this.ctx.restore();
+      }
     }
   }
 
@@ -2584,6 +2648,11 @@ export class LyricDancePlayer {
         fontSize: c.fontSize,
         color: c.color,
         emitterType: c.emitterType,
+        trail: c.trail,
+        entryStyle: c.entryStyle,
+        exitStyle: c.exitStyle,
+        emphasisLevel: c.emphasisLevel,
+        entryProgress: c.entryProgress,
         iconGlyph: c.iconGlyph,
         iconStyle: c.iconStyle,
         iconPosition: c.iconPosition,
@@ -2628,6 +2697,11 @@ export class LyricDancePlayer {
         isAnchor: c.isAnchor ?? false,
         color: c.color ?? "#ffffff",
         emitterType: c.emitterType,
+        trail: c.trail,
+        entryStyle: c.entryStyle,
+        exitStyle: c.exitStyle,
+        emphasisLevel: c.emphasisLevel,
+        entryProgress: c.entryProgress ?? 0,
         iconGlyph: c.iconGlyph,
         iconStyle: c.iconStyle,
         iconPosition: c.iconPosition,

@@ -44,6 +44,11 @@ export type Keyframe = {
     isAnchor: boolean;
     color: string;
     emitterType?: WordEmitterType;
+    trail?: string;
+    entryStyle?: string;
+    exitStyle?: string;
+    emphasisLevel?: number;
+    entryProgress?: number;
     iconGlyph?: string;
     iconStyle?: 'outline' | 'filled' | 'ghost';
     iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
@@ -439,6 +444,9 @@ type WordDirectiveLike = {
   ghostSpacing?: number;
   ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial';
   letterSequence?: boolean;
+  trail?: string;
+  entry?: string;
+  exit?: string;
 };
 
 
@@ -1184,6 +1192,11 @@ function bakeFrame(
               color,
               glow: wordGlow,
               emitterType: emitterType !== 'none' ? emitterType : undefined,
+              trail: wm.directive?.trail ?? (emitterType !== 'none' ? emitterType : 'none'),
+              entryStyle: (wm.directive?.entry as string | undefined) ?? effectiveEntry,
+              exitStyle: (wm.directive?.exit as string | undefined) ?? effectiveExit,
+              emphasisLevel: wm.directive?.emphasisLevel ?? 3,
+              entryProgress,
               iconGlyph: isAnchor && iconGlyph && !isLetterSequence ? iconGlyph : undefined,
               iconStyle: isAnchor && iconGlyph && !isLetterSequence ? iconStyle : undefined,
               iconPosition: isAnchor && iconGlyph && !isLetterSequence ? iconPosition : undefined,
@@ -1322,6 +1335,11 @@ function bakeFrame(
             ghostSpacing: wm.directive?.ghostSpacing,
             ghostDirection: wm.directive?.ghostDirection,
             frozen: isFrozen,
+            trail: wm.directive?.trail ?? 'none',
+            entryStyle: (wm.directive?.entry as string | undefined) ?? entry,
+            exitStyle: (wm.directive?.exit as string | undefined) ?? exit,
+            emphasisLevel: wm.directive?.emphasisLevel ?? 3,
+            entryProgress: Math.min(1, entryProgress),
           };
         });
 
