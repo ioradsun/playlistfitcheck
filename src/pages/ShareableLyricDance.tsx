@@ -191,12 +191,27 @@ export default function ShareableLyricDance() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [fontsReady, setFontsReady] = useState(false);
+  const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const [playerInstance, setPlayerInstance] = useState<LyricDancePlayer | null>(null);
+
+  const handleExport = useCallback((ratio: "16:9" | "9:16") => {
+    if (!playerRef.current) return;
+    setExporting(ratio);
+
+    playerRef.current.onExportComplete = () => {
+      setExporting(null);
+    };
+
+    playerRef.current.startExport(ratio).catch(() => {
+      setExporting(null);
+    });
+  }, []);
 
   // ── Data fetch ──────────────────────────────────────────────────────
 
@@ -247,10 +262,32 @@ export default function ShareableLyricDance() {
       });
   }, [artistSlug, songSlug]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFonts = async () => {
+      try {
+        await Promise.all([
+          document.fonts.load('700 16px "Montserrat"'),
+          document.fonts.load('400 16px "Space Mono"'),
+        ]);
+      } catch {
+        // continue with fallback fonts
+      } finally {
+        if (!cancelled) setFontsReady(true);
+      }
+    };
+
+    loadFonts();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // ── Player lifecycle ────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
+    if (!fontsReady || !data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
     console.log('[PLAYER INIT] data keys:', Object.keys(data ?? {}));
     console.log('[PLAYER INIT] cinematic_direction:', !!data?.cinematic_direction, 'type:', typeof data?.cinematic_direction, 'isArray:', Array.isArray(data?.cinematic_direction));
@@ -274,7 +311,7 @@ export default function ShareableLyricDance() {
       playerRef.current = null;
       setPlayerInstance(null);
     };
-  }, [data]);
+  }, [data, fontsReady]);
 
   // cinematic_direction gate ensures player always has it at construction — no late update needed
 
@@ -342,7 +379,7 @@ export default function ShareableLyricDance() {
 
   // ── Loading / Not Found ─────────────────────────────────────────────
 
-  if (loading) {
+  if (loading || !fontsReady) {
     return (
       <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center z-50">
         <div className="text-center space-y-3">
@@ -474,6 +511,40 @@ export default function ShareableLyricDance() {
             onSeekEnd={() => {}}
             palette={data.palette}
           />
+        )}
+
+        {!showCover && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-20">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleExport("9:16");
+              }}
+              disabled={!!exporting}
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-mono bg-black/70 border border-white/20 text-white hover:bg-black/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {exporting === "9:16" ? (
+                <span className="animate-pulse">Recording 9:16...</span>
+              ) : (
+                <>↓ <span className="text-[#00FF87]">9:16</span> TikTok</>
+              )}
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleExport("16:9");
+              }}
+              disabled={!!exporting}
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-mono bg-black/70 border border-white/20 text-white hover:bg-black/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {exporting === "16:9" ? (
+                <span className="animate-pulse">Recording 16:9...</span>
+              ) : (
+                <>↓ <span className="text-[#00FF87]">16:9</span> YouTube</>
+              )}
+            </button>
+          </div>
         )}
       </div>
 
