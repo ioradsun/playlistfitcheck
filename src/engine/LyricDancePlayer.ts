@@ -535,9 +535,9 @@ interface CommentChunk {
   startTime: number;
   duration: number;
   startX: number;
-  startY: number;
+  y: number;
   endX: number;
-  endY: number;
+  direction: 1 | -1;  // 1 = left-to-right, -1 = right-to-left
   trailLength: number;
   fontSize: number;
 }
@@ -1144,45 +1144,31 @@ export class LyricDancePlayer {
     const color = this.commentColors[this.commentColorIdx % this.commentColors.length];
     this.commentColorIdx++;
 
-    // Pick a random side: 0=left, 1=right, 2=top, 3=bottom
-    const entrySide = Math.floor(Math.random() * 4);
-    // Exit from a DIFFERENT side
-    let exitSide = Math.floor(Math.random() * 3);
-    if (exitSide >= entrySide) exitSide++;
-
+    // Left OR right entry only — rockets across horizontally
+    const fromLeft = Math.random() > 0.5;
+    const direction: 1 | -1 = fromLeft ? 1 : -1;
     const margin = 400;
-    const sidePos = (dim: number) => dim * (0.2 + Math.random() * 0.6);
-
-    let startX: number, startY: number, endX: number, endY: number;
-    if (entrySide === 0) { startX = -margin; startY = sidePos(this.height); }
-    else if (entrySide === 1) { startX = this.width + margin; startY = sidePos(this.height); }
-    else if (entrySide === 2) { startX = sidePos(this.width); startY = -margin; }
-    else { startX = sidePos(this.width); startY = this.height + margin; }
-
-    if (exitSide === 0) { endX = -margin; endY = sidePos(this.height); }
-    else if (exitSide === 1) { endX = this.width + margin; endY = sidePos(this.height); }
-    else if (exitSide === 2) { endX = sidePos(this.width); endY = -margin; }
-    else { endX = sidePos(this.width); endY = this.height + margin; }
+    const startX = fromLeft ? -margin : this.width + margin;
+    const endX = fromLeft ? this.width + margin : -margin;
+    const y = this.height * (0.15 + Math.random() * 0.7);
 
     const comment: CommentChunk = {
       id: `comment-${Date.now()}`,
       text,
       color,
       startTime: performance.now() / 1000,
-      duration: 4.5,
-      startX, startY, endX, endY,
+      duration: 3.5,
+      startX, y, endX, direction,
       trailLength: 120,
-      fontSize: Math.max(16, Math.min(24, Math.floor(240 / text.length))),
+      fontSize: Math.max(18, Math.min(26, Math.floor(280 / text.length))),
     };
 
     this.activeComments.push(comment);
 
-    // Cap at 8 active
     if (this.activeComments.length > 8) {
       this.activeComments = this.activeComments.slice(-8);
     }
 
-    // Clean up expired
     const now = performance.now() / 1000;
     this.activeComments = this.activeComments.filter(
       c => now - c.startTime < c.duration + 0.5
@@ -1194,84 +1180,89 @@ export class LyricDancePlayer {
 
     for (const comment of this.activeComments) {
       const elapsed = nowSec - comment.startTime;
-      const progress = Math.min(1, elapsed / comment.duration);
-      if (progress >= 1) continue;
+      const t = Math.min(1, elapsed / comment.duration);
+      if (t >= 1) continue;
 
-      // Eased progress — slow entry, then rockets off
-      // First 60% is slow drift, last 40% accelerates out
+      // Piecewise linear progress:
+      //   0-15%  → rocket in  (0 → ~0.15 of travel)
+      //   15-85% → steady cruise
+      //   85-100%→ rocket out
       let ep: number;
-      if (progress < 0.6) {
-        // Slow ease-in: cubic deceleration for gentle drift
-        const t = progress / 0.6;
-        ep = 0.35 * (1 - Math.pow(1 - t, 3));
+      if (t < 0.15) {
+        // fast ease-out entry
+        const s = t / 0.15;
+        ep = 0.15 * (1 - (1 - s) * (1 - s));
+      } else if (t < 0.85) {
+        // linear cruise
+        const s = (t - 0.15) / 0.70;
+        ep = 0.15 + s * 0.70;
       } else {
-        // Rocket out: exponential acceleration
-        const t = (progress - 0.6) / 0.4;
-        ep = 0.35 + 0.65 * (t * t * t);
+        // fast ease-in exit
+        const s = (t - 0.85) / 0.15;
+        ep = 0.85 + 0.15 * (s * s);
       }
 
       const x = comment.startX + (comment.endX - comment.startX) * ep;
-      const y = comment.startY + (comment.endY - comment.startY) * ep;
+      const y = comment.y;
 
-      // Alpha — fade in slowly, snap out
-      const alpha = progress < 0.15
-        ? progress / 0.15
-        : progress > 0.85
-          ? 1 - (progress - 0.85) / 0.15
+      // Alpha: fade in 10%, full middle, fade out last 25%
+      const alpha = t < 0.10
+        ? t / 0.10
+        : t > 0.75
+          ? 1 - (t - 0.75) / 0.25
           : 1;
 
       this.ctx.save();
 
-      // Glow
+      // Glow — shadowBlur 18 in comment color
       this.ctx.shadowColor = comment.color;
-      this.ctx.shadowBlur = 14;
+      this.ctx.shadowBlur = 18;
 
-      // Trail direction — from current position back toward where it came from
-      const dx = comment.endX - comment.startX;
-      const dy = comment.endY - comment.startY;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const ux = dx / dist;
-      const uy = dy / dist;
-      const trailX = x - ux * comment.trailLength;
-      const trailY = y - uy * comment.trailLength;
-
-      const trail = this.ctx.createLinearGradient(trailX, trailY, x, y);
+      // Trail — horizontal gradient behind text in direction of travel
+      const trailX = x - comment.direction * comment.trailLength;
+      const trail = this.ctx.createLinearGradient(trailX, y, x, y);
       trail.addColorStop(0, 'transparent');
       trail.addColorStop(1, `${comment.color}${Math.floor(alpha * 140).toString(16).padStart(2, '0')}`);
       this.ctx.strokeStyle = trail;
       this.ctx.lineWidth = comment.fontSize * 0.3;
       this.ctx.lineCap = 'round';
       this.ctx.beginPath();
-      this.ctx.moveTo(trailX, trailY);
+      this.ctx.moveTo(trailX, y);
       this.ctx.lineTo(x, y);
       this.ctx.stroke();
 
-      // Spark particles along trail
-      for (let i = 0; i < 5; i++) {
+      // 6 spark particles trailing behind with sine wobble
+      for (let i = 0; i < 6; i++) {
         const seed = (i * 0.618033) % 1;
-        const sparkX = x - ux * seed * comment.trailLength * 0.7;
-        const sparkY = y - uy * seed * comment.trailLength * 0.7 + Math.sin(nowSec * 8 + i * 2) * 6;
-        const sparkAlpha = (1 - seed) * alpha * 0.6;
+        const sparkX = x - comment.direction * seed * comment.trailLength * 0.8;
+        const sparkY = y + Math.sin(nowSec * 8 + i * 2.1) * 6;
+        const sparkAlpha = (1 - seed) * alpha * 0.7;
         this.ctx.globalAlpha = sparkAlpha;
         this.ctx.fillStyle = comment.color;
+        this.ctx.shadowBlur = 0;
         this.ctx.beginPath();
-        this.ctx.arc(sparkX, sparkY, 1 + seed * 2, 0, Math.PI * 2);
+        this.ctx.arc(sparkX, sparkY, 1.2 + seed * 2, 0, Math.PI * 2);
         this.ctx.fill();
       }
 
-      // Text — light weight, not bold
+      // Color bullet dot BEFORE the text
       this.ctx.globalAlpha = alpha;
-      this.ctx.font = `400 ${comment.fontSize}px "Space Mono", monospace`;
+      this.ctx.shadowBlur = 18;
+      this.ctx.shadowColor = comment.color;
+      const textWidth = this.ctx.measureText(comment.text).width || 60;
+      const dotX = x - comment.direction * (textWidth / 2 + 12);
+      this.ctx.fillStyle = comment.color;
+      this.ctx.beginPath();
+      this.ctx.arc(dotX, y, 3.5, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      // Text — 700 weight Space Mono, bold & punchy
+      this.ctx.globalAlpha = alpha;
+      this.ctx.font = `700 ${comment.fontSize}px "Space Mono", monospace`;
       this.ctx.fillStyle = '#ffffff';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText(comment.text, x, y);
-
-      // Color dot — leading edge
-      this.ctx.fillStyle = comment.color;
-      this.ctx.beginPath();
-      this.ctx.arc(x + ux * (this.ctx.measureText(comment.text).width / 2 + 10), y + uy * 4, 3, 0, Math.PI * 2);
-      this.ctx.fill();
 
       this.ctx.shadowBlur = 0;
       this.ctx.restore();
