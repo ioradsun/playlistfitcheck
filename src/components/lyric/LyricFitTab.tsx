@@ -582,7 +582,7 @@ export function LyricFitTab({
           ✓ {resolvedScene.moodSummary}
         </p>
       ) : !sceneDescription && (
-        <p className="text-xs text-muted-foreground/60">Example: Driving at night. On a rooftop. In a crowded club.</p>
+        <p className="text-xs text-muted-foreground/60 italic">Example: Driving at night. On a rooftop. In a crowded club.</p>
       )}
     </div>
   ) : null;
