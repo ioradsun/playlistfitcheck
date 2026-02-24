@@ -1172,7 +1172,12 @@ export class LyricDancePlayer {
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.updateSims(tSec, frame);
+
+    try {
+      this.updateSims(tSec, frame);
+    } catch (e) {
+      console.error('[PLAYER] sim update crash:', e);
+    }
 
     // Background: static bg cache first, then chapter images on top
     this.drawBackground(frame);
@@ -1188,7 +1193,13 @@ export class LyricDancePlayer {
 
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
-    this.checkEmotionalEvents(tSec, songProgress);
+
+    try {
+      this.checkEmotionalEvents(tSec, songProgress);
+    } catch (e) {
+      console.error('[PLAYER] emotional events crash:', e);
+    }
+
     this.drawEmotionalEvents(tSec);
 
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
