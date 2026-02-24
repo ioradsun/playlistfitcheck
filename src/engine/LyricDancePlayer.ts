@@ -528,6 +528,19 @@ interface EmotionalEvent {
   triggered: boolean;
 }
 
+interface CommentChunk {
+  id: string;
+  text: string;
+  color: string;
+  startTime: number;
+  duration: number;
+  startX: number;
+  startY: number;
+  endX: number;
+  trailLength: number;
+  fontSize: number;
+}
+
 
 // ──────────────────────────────────────────────────────────────
 // Player
