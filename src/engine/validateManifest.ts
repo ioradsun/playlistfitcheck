@@ -361,7 +361,6 @@ export function validateManifest(raw: unknown): ManifestValidationResult {
     console.group(
       `[SceneManifest] "${m.songTitle}" — ${warnings.length} warning(s)`,
     );
-    warnings.forEach((w) => console.warn(w));
     console.groupEnd();
   }
 

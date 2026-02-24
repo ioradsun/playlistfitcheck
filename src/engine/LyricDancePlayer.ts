@@ -793,7 +793,7 @@ export class LyricDancePlayer {
       onProgress(100);
       return chunkSnapshot;
     } catch (err) {
-      console.error('[PLAYER] load() error:', err);
+      
       throw err;
     }
   }
@@ -919,18 +919,18 @@ export class LyricDancePlayer {
   }
 
   updateChapterImages(urls: string[]): void {
-    console.log('[PLAYER] hot-updating chapter images:', urls.length);
+    
     this.data = { ...this.data, chapter_images: urls };
     this.loadChapterImages();
   }
 
   updateSceneContext(sceneCtx: SceneContext): void {
-    console.log('[PLAYER] hot-updating scene context');
+    
     this.data = { ...this.data, scene_context: sceneCtx };
   }
 
   destroy(): void {
-    console.log('[PLAYER] destroy() called — stack:', new Error().stack);
+    
     this.destroyed = true;
     this.stopHealthMonitor();
     cancelAnimationFrame(this.rafHandle);
@@ -960,18 +960,7 @@ export class LyricDancePlayer {
       const fps = this.frameCount / 5;
       this.frameCount = 0;
 
-      const mem = (performance as any).memory;
-      console.warn('[HEALTH]', {
-        tSec: this.currentTSec?.toFixed(1),
-        fps: fps.toFixed(1),
-        wordEmitters: this.wordEmitters?.length ?? 0,
-        firedEmitters: this.firedEmitters?.size ?? 0,
-        activeEvents: this.activeEvents?.length ?? 0,
-        activeComments: this.activeComments?.length ?? 0,
-        chapterSims: this.chapterSims?.length ?? 0,
-        heapMB: mem ? (mem.usedJSHeapSize / 1048576).toFixed(1) : 'n/a',
-        heapLimitMB: mem ? (mem.jsHeapSizeLimit / 1048576).toFixed(1) : 'n/a',
-      });
+      // Health check — silent (no logging)
     }, 5000);
   }
 
@@ -996,7 +985,7 @@ export class LyricDancePlayer {
       this.update(deltaMs);
       this.draw(this.audio.currentTime);
     } catch (err) {
-      console.error('[PLAYER] render crash caught:', err);
+      // render crash — silently continue
     } finally {
       // ALWAYS reschedule — even after crash — loop must never die
       if (!this.destroyed && this.playing) {
@@ -1145,7 +1134,7 @@ export class LyricDancePlayer {
     try {
       this._draw(tSec);
     } catch (err) {
-      console.error('[PLAYER CRASH] at tSec:', tSec, err);
+      // draw crash — silently continue
       // Don't stop health monitor — let loop continue
     }
   }
@@ -1158,11 +1147,6 @@ export class LyricDancePlayer {
     if (this._lastLoggedTSec === tSec && tSec > 0) {
       this._stalledFrames = (this._stalledFrames ?? 0) + 1;
       if (this._stalledFrames > 10) {
-        console.error('[PLAYER] audio stalled at tSec:', tSec, {
-          audioCurrentTime: this.audio?.currentTime,
-          audioPaused: this.audio?.paused,
-          audioReadyState: this.audio?.readyState,
-        });
         this._stalledFrames = 0;
       }
     } else {
@@ -1180,7 +1164,7 @@ export class LyricDancePlayer {
     try {
       this.updateSims(tSec, frame);
     } catch (e) {
-      console.error('[PLAYER] sim update crash:', e);
+      // sim crash — silently continue
     }
 
     // Background: static bg cache first, then chapter images on top
@@ -1201,7 +1185,7 @@ export class LyricDancePlayer {
     try {
       this.checkEmotionalEvents(tSec, songProgress);
     } catch (e) {
-      console.error('[PLAYER] emotional events crash:', e);
+      // emotional events crash — silently continue
     }
 
     this.drawEmotionalEvents(tSec);
@@ -1957,9 +1941,6 @@ export class LyricDancePlayer {
         }
       }
 
-      if (this.chunks.size < 10) {
-        console.error('[PLAYER] CRITICAL: chunks map too small —', this.chunks.size, 'entries. phraseGroups:', this.phraseGroups?.length);
-      }
 
       return;
     }
@@ -2102,7 +2083,7 @@ export class LyricDancePlayer {
   }
 
   private buildBgCache(): void {
-    console.log('[PLAYER] building bgCache...');
+    
     try {
       const chapters = this.payload?.cinematic_direction?.chapters ?? [];
       const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
@@ -2130,9 +2111,9 @@ export class LyricDancePlayer {
       }
 
       this.bgCacheCount = this.bgCaches.length;
-      console.log('[PLAYER] bgCache built:', this.bgCaches?.length);
+      
     } catch (err) {
-      console.error('[PLAYER] bgCache build failed:', err);
+      
     }
   }
 
@@ -2253,7 +2234,7 @@ export class LyricDancePlayer {
   }
 
   private buildChapterSims(): void {
-    console.log('[PLAYER] building chapter sims...');
+    
     try {
       const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
       const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? ['#111111', '#FFD700'];
@@ -2272,9 +2253,9 @@ export class LyricDancePlayer {
         else if (perSystem === 'intimate') sim.fire = new FireSim('ember', 0.25);
         return sim;
       });
-      console.log('[PLAYER] chapter sims built:', this.chapterSims.length);
+      
     } catch (err) {
-      console.error('[PLAYER] chapter sim build failed:', err);
+      
     }
   }
 
@@ -2303,9 +2284,7 @@ export class LyricDancePlayer {
       const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
 
-      // Log chapter transitions
       if (ci !== this._lastSimChapterIdx) {
-        console.log('[PLAYER] chapter change:', this._lastSimChapterIdx, '→', ci, 'at tSec:', tSec.toFixed(2));
         this._lastSimChapterIdx = ci;
       }
 
@@ -2320,7 +2299,7 @@ export class LyricDancePlayer {
       if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
       if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
     } catch (err) {
-      console.error('[PLAYER] sim update crashed at tSec:', tSec, err);
+      // sim crash — silently continue
     }
   }
 
