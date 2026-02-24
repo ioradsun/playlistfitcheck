@@ -1226,6 +1226,9 @@ function bakeFrame(
           const directiveTrail = wm.directive?.trail ?? 'none';
           const emitterType: WordEmitterType = semanticEffect?.emitterType
             ?? (directiveTrail !== 'none' ? directiveTrail as WordEmitterType : 'none');
+          if (emitterType !== 'none') {
+            console.log('[PARTICLE]', { word: wm.word, emitterType, source: semanticEffect?.emitterType ? 'semantic' : 'directive', trail: directiveTrail, metaphor });
+          }
 
           const isLetterSequence = wm.directive?.letterSequence === true;
           const letterTotal = isLetterSequence ? wm.word.length : 1;
