@@ -63,6 +63,7 @@ export type Keyframe = {
 
 export type BakedTimeline = Keyframe[];
 
+let _bakerDebugLogged = false;
 const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
@@ -231,12 +232,15 @@ function assignWordAnimations(
     fades: motionDefaults.exits[1] ?? 'dissolve',
   };
 
-  const entryVariant = motionDefaults.entries[wm.wordIndex % motionDefaults.entries.length];
+  // Use lineIndex + wordIndex as seed for variation across groups
+  const variationSeed = ((wm.lineIndex ?? 0) * 7 + (wm.wordIndex ?? 0) * 3) % 4;
+
+  const entryVariant = motionDefaults.entries[variationSeed % motionDefaults.entries.length];
   const behaviorOptions = motionDefaults.behaviors;
   const behaviorVariant = behaviorOptions.length > 0
-    ? behaviorOptions[(wm.wordIndex ?? 0) % behaviorOptions.length]
+    ? behaviorOptions[variationSeed % behaviorOptions.length]
     : 'pulse';
-  const exitVariant = motionDefaults.exits[wm.wordIndex % motionDefaults.exits.length];
+  const exitVariant = motionDefaults.exits[variationSeed % motionDefaults.exits.length];
 
   return {
     entry: entryMap[storyEntryStyle] ?? entryVariant,
@@ -1001,7 +1005,8 @@ function bakeFrame(
             ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0)
             : glow * 0.3;
 
-          if (chunks.length === 0) {
+          if (!_bakerDebugLogged) {
+            _bakerDebugLogged = true;
             console.log('[BAKER] first chunk animation:', {
               entry,
               behavior,
@@ -1310,6 +1315,7 @@ export function bakeScene(
   payload: ScenePayload,
   onProgress?: (progress: number) => void,
 ): BakedTimeline {
+  _bakerDebugLogged = false;
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const frames: BakedTimeline = [];
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
@@ -1375,6 +1381,7 @@ export function bakeSceneChunked(
   onProgress?: (progress: number) => void,
   framesPerChunk = 120,
 ): Promise<BakedTimeline> {
+  _bakerDebugLogged = false;
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
   const visualMode = getVisualMode(payload);
