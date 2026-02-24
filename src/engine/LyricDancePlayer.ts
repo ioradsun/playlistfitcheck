@@ -11,6 +11,7 @@ import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
+import { drawIcon, type IconGlyph, type IconStyle } from "@/lib/lyricIcons";
 import {
   bakeSceneChunked,
   type BakedTimeline,
@@ -260,6 +261,11 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     isAnchor?: boolean;
     color?: string;
     emitterType?: WordEmitterType;
+    iconGlyph?: string;
+    iconStyle?: 'outline' | 'filled' | 'ghost';
+    iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
+    iconScale?: number;
+    behavior?: string;
     visible: boolean;
     entryOffsetY?: number;
     entryOffsetX?: number;
@@ -649,7 +655,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
   ) {
     // Invalidate cache if song changed (survives HMR)
-    const sessionKey = `v11-${data.id}-${data.words?.length ?? 0}`;
+    const sessionKey = `v12-${data.id}-${data.words?.length ?? 0}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;
@@ -1179,28 +1185,73 @@ export class LyricDancePlayer {
       const chapterColor = (chIdx >= 0 ? chapters[chIdx]?.dominantColor : null) ?? '#FFD700';
       this.drawWordHalo(drawX, drawY, fontSize, isAnchor, chapterColor, chunk.alpha);
 
-      this.ctx.globalAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
-      this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
-      this.ctx.font = `${fontWeight} ${safeFontSize}px "Montserrat", sans-serif`;
-      // Safety: if font assignment failed silently
-      if (!this.ctx.font.includes('px')) {
-        this.ctx.font = `700 36px "Montserrat", sans-serif`;
-      }
-      if (!this._textDrawLogged) {
-        this._textDrawLogged = true;
-        console.log('[PLAYER] drawing text:', obj.text, 'font:', this.ctx.font, 'alpha:', chunk.alpha);
-      }
-      if (chunk.glow > 0) {
-        this.ctx.shadowColor = chunk.color ?? '#ffffff';
-        this.ctx.shadowBlur = chunk.glow * 32;
+      const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
+      const iconBaseSize = (chunk.fontSize ?? 36) * (chunk.iconScale ?? 2.0);
+      const iconColor = chunk.color ?? chapterColor;
+      const iconPulse = chunk.iconPosition === 'behind' && chunk.behavior === 'pulse'
+        ? 1.0 + Math.sin(performance.now() / 1000 * 2) * 0.03
+        : 1.0;
+      const iconSize = iconBaseSize * iconPulse;
+      let iconX = drawX;
+      let iconY = drawY;
+      let iconOpacity = drawAlpha * 0.18;
+
+      switch (chunk.iconPosition) {
+        case 'behind':
+          iconX = drawX;
+          iconY = drawY;
+          iconOpacity = drawAlpha * 0.15;
+          break;
+        case 'above':
+          iconX = drawX;
+          iconY = drawY - (chunk.fontSize ?? 36) * 1.5;
+          iconOpacity = drawAlpha * 0.6;
+          break;
+        case 'beside':
+          iconX = drawX - iconSize * 0.8;
+          iconY = drawY;
+          iconOpacity = drawAlpha * 0.7;
+          break;
+        case 'replace':
+          iconX = drawX;
+          iconY = drawY;
+          iconOpacity = drawAlpha * 0.9;
+          break;
       }
 
-      this.ctx.save();
-      this.ctx.translate(drawX, drawY);
-      this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
-      this.ctx.scale(sx, sy);
-      this.ctx.fillText(obj.text, 0, 0);
-      this.ctx.restore();
+      const drawBefore = chunk.iconPosition === 'behind' || chunk.iconPosition === 'replace';
+      if (chunk.iconGlyph && chunk.visible && drawBefore) {
+        drawIcon(this.ctx, chunk.iconGlyph as IconGlyph, iconX, iconY, iconSize, iconColor, (chunk.iconStyle as IconStyle) ?? 'ghost', iconOpacity);
+      }
+
+      if (chunk.iconPosition !== 'replace') {
+        this.ctx.globalAlpha = drawAlpha;
+        this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
+        this.ctx.font = `${fontWeight} ${safeFontSize}px "Montserrat", sans-serif`;
+        // Safety: if font assignment failed silently
+        if (!this.ctx.font.includes('px')) {
+          this.ctx.font = `700 36px "Montserrat", sans-serif`;
+        }
+        if (!this._textDrawLogged) {
+          this._textDrawLogged = true;
+          console.log('[PLAYER] drawing text:', obj.text, 'font:', this.ctx.font, 'alpha:', chunk.alpha);
+        }
+        if (chunk.glow > 0) {
+          this.ctx.shadowColor = chunk.color ?? '#ffffff';
+          this.ctx.shadowBlur = chunk.glow * 32;
+        }
+
+        this.ctx.save();
+        this.ctx.translate(drawX, drawY);
+        this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
+        this.ctx.scale(sx, sy);
+        this.ctx.fillText(obj.text, 0, 0);
+        this.ctx.restore();
+      }
+
+      if (chunk.iconGlyph && chunk.visible && !drawBefore) {
+        drawIcon(this.ctx, chunk.iconGlyph as IconGlyph, iconX, iconY, iconSize, iconColor, (chunk.iconStyle as IconStyle) ?? 'outline', iconOpacity);
+      }
       this.ctx.shadowBlur = 0;
       this.ctx.globalAlpha = 1;
       drawCalls += 1;
@@ -2364,6 +2415,11 @@ export class LyricDancePlayer {
         fontSize: c.fontSize,
         color: c.color,
         emitterType: c.emitterType,
+        iconGlyph: c.iconGlyph,
+        iconStyle: c.iconStyle,
+        iconPosition: c.iconPosition,
+        iconScale: c.iconScale,
+        behavior: c.behavior,
         visible: c.visible,
         entryOffsetY: c.entryOffsetY,
         entryOffsetX: c.entryOffsetX,
@@ -2403,6 +2459,11 @@ export class LyricDancePlayer {
         isAnchor: c.isAnchor ?? false,
         color: c.color ?? "#ffffff",
         emitterType: c.emitterType,
+        iconGlyph: c.iconGlyph,
+        iconStyle: c.iconStyle,
+        iconPosition: c.iconPosition,
+        iconScale: c.iconScale,
+        behavior: c.behavior,
         entryOffsetY: c.entryOffsetY ?? 0,
         entryOffsetX: c.entryOffsetX ?? 0,
         entryScale: c.entryScale ?? 1,

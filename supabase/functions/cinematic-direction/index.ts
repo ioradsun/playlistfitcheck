@@ -81,9 +81,44 @@ OUTPUT SCHEMA:
       "lineIndex": 0,
       "entryStyle": "rises | slams-in | fractures-in | materializes | cuts | whisper | bloom | drop | plant | snap-in",
       "exitStyle": "dissolves-upward | burns-out | shatters | lingers | fades | drift-up | sink | evaporate",
-      "heroWord": "most important word in this line or null"
+      "heroWord": "most important word in this line or null",
+      "iconGlyph": "one of the available icon names below — assign when the LINE has strong visual imagery",
+      "iconStyle": "outline | filled | ghost",
+      "iconPosition": "behind | above | beside | replace",
+      "iconScale": "1.0-3.0 — size relative to font size"
     }
   ],
+
+  "storyboardIconRules": {
+    "availableIcons": [
+      "heart", "broken-heart", "ring", "rose", "lips", "hands-reaching", "two-figures", "alone-figure",
+      "tear", "kiss-mark", "embrace", "heartbeat-line",
+      "crown", "fist", "trophy", "diamond", "money-stack", "key", "throne", "shield", "chains", "broken-chains",
+      "fire", "wave", "lightning", "sun", "moon", "rain", "snow-crystal", "mountain", "flower", "wind", "cloud", "star",
+      "plane", "road-horizon", "compass", "footsteps", "arrow-up", "arrow-forward", "bridge", "rocket",
+      "skull", "prison-bars", "falling-figure", "storm-cloud", "crying-eye", "hourglass", "ghost", "shadow",
+      "city-skyline", "car", "bottle", "clock-midnight", "phone", "street-light", "crowd",
+      "wings", "cross", "praying-hands", "dove", "halo", "eye-of-providence", "infinity", "light-beam",
+      "bird-flying", "open-cage", "open-door", "horizon", "butterfly",
+      "microphone", "vinyl-record", "headphones", "music-note", "speaker-wave"
+    ],
+    "rules": [
+      "Only assign icons to lines with CLEAR visual imagery — 10-20% of lines max",
+      "Read full phrase meaning in context — do not assign by keyword alone",
+      "I wanna take you with me -> plane",
+      "locked up with no way out -> prison-bars",
+      "burning bridges -> fire",
+      "counting all my money -> money-stack",
+      "heart is breaking -> broken-heart",
+      "chasing the sun -> sun",
+      "riding through the city -> car",
+      "fell from grace -> falling-figure or wings",
+      "iconPosition behind for most assignments — large and ghosted",
+      "iconPosition replace only for the single most iconic visual line in the song",
+      "iconPosition above for subtle punctuation",
+      "iconScale 2.0-3.0 for behind, 0.8-1.2 for above and beside"
+    ]
+  },
 
   "wordDirectives": {
     "word": {
