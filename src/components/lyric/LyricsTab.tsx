@@ -202,10 +202,11 @@ export function LyricsTab({
             title: resolveProjectTitle(data.title, file.name),
             artist: data.artist || "Unknown",
             lines: data.lines,
+            words: data.words ?? null,
             filename: file.name,
             ...(audioUrl ? { audio_url: audioUrl } : {}),
             updated_at: new Date().toISOString(),
-          });
+          } as any);
         }
 
         await new Promise((r) => setTimeout(r, 600));
