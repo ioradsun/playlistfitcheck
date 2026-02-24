@@ -985,7 +985,7 @@ export class LyricDancePlayer {
       this.update(deltaMs);
       this.draw(this.audio.currentTime);
     } catch (err) {
-      console.error('[PLAYER] render crash caught:', err);
+      // render crash — silently continue
     } finally {
       // ALWAYS reschedule — even after crash — loop must never die
       if (!this.destroyed && this.playing) {
