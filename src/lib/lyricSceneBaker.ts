@@ -1179,10 +1179,17 @@ function bakeFrame(
             const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0) : glow * 0.3) * semanticGlowMult;
             const chapterFontWeight = semanticFontWeight ?? currentChapter?.typographyShift?.fontWeight ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight ?? 700;
 
+            // Letter positioning: spread characters across word span, centered on pos.x
+            const charW = isLetterSequence ? pos.fontSize * 0.6 : 0;
+            const wordSpan = charW * letterTotal;
+            const letterOffsetX = isLetterSequence
+              ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5)
+              : 0;
+
             chunks.push({
               id: isLetterSequence ? `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}` : `${group.lineIndex}-${group.groupIndex}-${wi}`,
               text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
-              x: pos.x + finalOffsetX,
+              x: pos.x + finalOffsetX + letterOffsetX,
               y: pos.y + finalOffsetY,
               alpha: Math.max(0, Math.min(1, finalAlpha)),
               scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
@@ -1319,10 +1326,17 @@ function bakeFrame(
               ? glow * manifestDirective.glow
               : (wm.directive?.emphasisLevel ?? 0) >= 4 ? glow * 1.8 : glow * 0.6;
 
+            // Letter positioning: spread characters across word span, centered on canvasX
+            const charW2 = isLetterSequence ? fontSize * 0.6 : 0;
+            const wordSpan2 = charW2 * letterTotal;
+            const letterOffsetX2 = isLetterSequence
+              ? (li * charW2) - (wordSpan2 * 0.5) + (charW2 * 0.5)
+              : 0;
+
             return {
               id: isLetterSequence ? `${wm.lineIndex}-${wm.wordIndex}-L${li}` : `${wm.lineIndex}-${wm.wordIndex}`,
               text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
-              x: canvasX + finalOffsetX,
+              x: canvasX + finalOffsetX + letterOffsetX2,
               y: canvasY + finalOffsetY,
               alpha: finalAlpha,
               scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
