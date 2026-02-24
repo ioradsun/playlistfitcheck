@@ -1126,9 +1126,9 @@ function bakeFrame(
 
           const metaphor = wm.directive?.visualMetaphor as VisualMetaphor | undefined;
           const semanticEffect = metaphor ? SEMANTIC_EFFECTS[metaphor] : null;
-          const effectiveEntry = semanticEffect?.entry ?? entry;
-          const effectiveBehavior = semanticEffect?.behavior ?? behavior;
-          const effectiveExit = semanticEffect?.exit ?? exit;
+          const effectiveEntry = (wm.directive?.entry as EntryStyle) ?? semanticEffect?.entry ?? entry;
+          const effectiveBehavior = (wm.directive?.behavior as BehaviorStyle) ?? semanticEffect?.behavior ?? behavior;
+          const effectiveExit = (wm.directive?.exit as ExitStyle) ?? semanticEffect?.exit ?? exit;
           const entryDurationMult = semanticEffect?.entryDurationMult ?? 1.0;
           const semanticAlphaMax = semanticEffect?.alphaMax ?? 1.0;
           const semanticScaleX = semanticEffect?.scaleX ?? 1.0;
