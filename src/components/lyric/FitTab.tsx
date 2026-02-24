@@ -275,6 +275,7 @@ export function FitTab({
           scene_manifest: sceneManifest,
           background_url: backgroundUrl,
           cinematic_direction: cinematicDirection || null,
+          words: words ?? null,
         }, { onConflict: "artist_slug,song_slug" });
 
       if (insertError) throw insertError;

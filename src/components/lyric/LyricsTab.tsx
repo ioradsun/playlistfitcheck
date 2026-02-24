@@ -222,6 +222,7 @@ export function LyricsTab({
         };
         setLyricData(newLyricData);
         setLines(data.lines);
+        setWords?.(data.words ?? null);
         setAudioFile(file);
         setHasRealAudio(true);
         setSavedId(projectId);
