@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bug, ChevronDown, ChevronRight, Copy, X, RefreshCw, Sparkles } from "lucide-react";
+import { Bug, ChevronDown, ChevronRight, Copy, X, RefreshCw, Sparkles, Clapperboard } from "lucide-react";
 import { toast } from "sonner";
 
 import type { SceneManifest } from "@/engine/SceneManifest";
@@ -452,9 +452,10 @@ interface Props {
   player?: LyricDancePlayer | null;
   onRegenerateSong?: () => void;
   onRegenerateDance?: () => void;
+  onRegenerateDirector?: () => void;
 }
 
-export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance }: Props) {
+export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance, onRegenerateDirector }: Props) {
   const [open, setOpen] = useState(false);
   const hasPlayer = player != null;
   const [tab, setTab] = useState<"hud" | "data">(hasPlayer ? "hud" : "data");
@@ -500,6 +501,11 @@ export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, on
                   {onRegenerateSong && (
                     <button onClick={onRegenerateSong} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold text-orange-400 hover:bg-orange-400/10 transition-colors" title="Re-run song analysis pipeline">
                       <RefreshCw size={12} /> Song
+                    </button>
+                  )}
+                  {onRegenerateDirector && (
+                    <button onClick={onRegenerateDirector} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold text-purple-400 hover:bg-purple-400/10 transition-colors" title="Re-run scene manifest (Director)">
+                      <Clapperboard size={12} /> Director
                     </button>
                   )}
                   {onRegenerateDance && (

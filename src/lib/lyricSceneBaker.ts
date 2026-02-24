@@ -106,7 +106,7 @@ const ANIM_PARAMS = {
 
 const getVisualMode = (payload: ScenePayload): VisualMode => {
   const sceneManifest = payload.scene_manifest ?? null;
-  const manifestMode = sceneManifest?.visualMode;
+  const manifestMode = (sceneManifest as any)?.visualMode;
   if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
   if (!payload.cinematic_direction) return 'cinematic';
   const physicsProfile = payload.cinematic_direction.visualWorld?.physicsProfile;
@@ -483,7 +483,7 @@ function bakeFrame(
   const tensionMotion = pre.tensionMotionByFrame[frameIndex] ?? 0.5;
 
   const chapters = pre.chapters;
-  const sceneManifest = (payload.scene_manifest ?? null) as Record<string, unknown> | null;
+  const sceneManifest = (payload.scene_manifest ?? null) as unknown as Record<string, unknown> | null;
   const manifestWordDirectives = (sceneManifest?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
   const manifestLineLayouts = (sceneManifest?.lineLayouts ?? {}) as Record<string, ManifestLineLayout>;
   const manifestChapters = (sceneManifest?.chapters ?? []) as ManifestChapter[];
