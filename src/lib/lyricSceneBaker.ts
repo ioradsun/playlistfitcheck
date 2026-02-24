@@ -651,20 +651,28 @@ function getLayoutForMode(
   return template[wordIndex % template.length];
 }
 
+const EMPHASIS_CURVE: Record<number, number> = {
+  1: 0.90,
+  2: 1.00,
+  3: 1.20,
+  4: 1.45,
+  5: 1.75,
+};
+
 function getWordFontSize(
   word: string,
   directive: WordDirectiveLike | null,
   baseFontSize: number,
-  visualMode: VisualMode,
+  _visualMode: VisualMode,
 ): number {
   const clean = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
   if (isFillerWord(clean)) return Math.round(baseFontSize * 0.65);
 
   const emphasisLevel = directive?.emphasisLevel ?? 2;
-  const emphasisMultiplier = visualMode === 'explosive' ? 0.25
-    : visualMode === 'cinematic' ? 0.18 : 0.12;
-  const scale = 0.8 + (emphasisLevel - 1) * emphasisMultiplier;
-  return Math.round(baseFontSize * scale);
+  const scale = EMPHASIS_CURVE[emphasisLevel] ?? 1.0;
+  // Clamp: hero word never exceeds 32% of reference canvas height (540)
+  const maxFontSize = 540 * 0.32; // 172.8px at reference
+  return Math.min(Math.round(baseFontSize * scale), maxFontSize);
 }
 
 function findAnchorWord(words: WordMetaEntry[]): number {
@@ -800,7 +808,7 @@ function getGroupLayout(
   const cx = canvasW * (posVariant[0] + (visualMode === 'explosive' ? deterministicSpread : 0));
   const cy = canvasH * (posVariant[1] + (visualMode === 'explosive' ? deterministicSpread : 0));
 
-  const MIN_FONT = 28;
+  const MIN_FONT = 30;
 
   if (count === 1) {
     const isFiller = isFillerWord(group.words[0].word);
@@ -826,7 +834,7 @@ function getGroupLayout(
     if (isAnchor) {
       const anchorFontSize = Math.max(
         MIN_FONT,
-        baseFontSize * (1.0 + (emp - 1) * 0.15),
+        baseFontSize * (EMPHASIS_CURVE[emp] ?? 1.0),
       );
       positions.push({ x: cx, y: cy, fontSize: anchorFontSize, isAnchor: true, isFiller });
     } else {
@@ -836,7 +844,7 @@ function getGroupLayout(
 
       const supportFontSize = Math.max(
         MIN_FONT,
-        isFiller ? baseFontSize * 0.55 : baseFontSize * 0.75,
+        isFiller ? baseFontSize * 0.60 : baseFontSize * 0.80,
       );
 
       positions.push({
@@ -948,12 +956,12 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     const actSizeMultiplier = actIdx === 0 ? 0.85 : actIdx === 1 ? 1.0 : 1.2;
 
     const shotFontSizes: Record<string, number> = {
-      Wide: 22,
-      Medium: 36,
-      Close: 48,
-      CloseUp: 52,
-      ExtremeClose: 64,
-      FloatingInWorld: 30,
+      Wide: 30,
+      Medium: 38,
+      Close: 46,
+      CloseUp: 50,
+      ExtremeClose: 56,
+      FloatingInWorld: 32,
     };
 
     const baseFontSize = shotFontSizes[shot] ?? 36;
