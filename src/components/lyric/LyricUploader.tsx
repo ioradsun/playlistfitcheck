@@ -13,9 +13,10 @@ interface Props {
   onLoadSaved?: (lyric: any) => void;
   loading: boolean;
   loadingMsg?: string;
+  sceneInput?: React.ReactNode;
 }
 
-export function LyricUploader({ onTranscribe, loading, loadingMsg }: Props) {
+export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }: Props) {
   const siteCopy = useSiteCopy();
   const [files, setFiles] = useState<File[]>([]);
   const [referenceLyrics, setReferenceLyrics] = useState("");
@@ -104,6 +105,8 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg }: Props) {
           </div>
         </CollapsibleContent>
       </Collapsible>
+
+      {sceneInput}
 
       <Button
         onClick={handleSubmit}
