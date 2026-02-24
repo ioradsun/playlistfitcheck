@@ -266,6 +266,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     frozen?: boolean;
     fontSize?: number;
     fontWeight?: number;
+    fontFamily?: string;
     isAnchor?: boolean;
     color?: string;
     emitterType?: WordEmitterType;
@@ -287,6 +288,21 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     exitScale?: number;
   }>;
 };
+
+function lerpColor(a: string, b: string, t: number): string {
+  const clamp = Math.max(0, Math.min(1, t));
+  const parse = (hex: string): [number, number, number] => {
+    const clean = hex.replace('#', '');
+    if (clean.length !== 6) return [10, 10, 15];
+    return [parseInt(clean.slice(0, 2), 16), parseInt(clean.slice(2, 4), 16), parseInt(clean.slice(4, 6), 16)];
+  };
+  const [ar, ag, ab] = parse(a);
+  const [br, bg, bb] = parse(b);
+  const r = Math.round(ar + (br - ar) * clamp);
+  const g = Math.round(ag + (bg - ag) * clamp);
+  const bl = Math.round(ab + (bb - ab) * clamp);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
+}
 
 const BASE_W = 960;
 const BASE_H = 540;
@@ -1355,9 +1371,10 @@ export class LyricDancePlayer {
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
-        this.ctx.font = `${fontWeight} ${safeFontSize}px "Montserrat", sans-serif`;
+        const family = chunk.fontFamily ?? '"Roboto Mono", monospace';
+        this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
         if (!this.ctx.font.includes('px')) {
-          this.ctx.font = `700 36px "Montserrat", sans-serif`;
+          this.ctx.font = `700 36px "Roboto Mono", monospace`;
         }
         if (chunk.glow > 0) {
           this.ctx.shadowColor = chunk.color ?? '#ffffff';
@@ -1434,10 +1451,24 @@ export class LyricDancePlayer {
     if (frame.particles?.length) {
       for (const p of frame.particles) {
         this.ctx.globalAlpha = p.alpha;
-        this.ctx.fillStyle = this.payload?.cinematic_direction?.visualWorld?.palette?.[1] ?? '#ffffff';
-        this.ctx.beginPath();
-        this.ctx.arc(p.x * this.width, p.y * this.height, p.size, 0, Math.PI * 2);
-        this.ctx.fill();
+        this.ctx.fillStyle = frame.particleColor ?? this.payload?.palette?.[2] ?? '#ffffff';
+        if (p.shape === 'line') {
+          this.ctx.fillRect(p.x * this.width, p.y * this.height, Math.max(1, p.size * 0.6), Math.max(2, p.size * 4));
+        } else if (p.shape === 'diamond') {
+          const x = p.x * this.width;
+          const y = p.y * this.height;
+          this.ctx.beginPath();
+          this.ctx.moveTo(x, y - p.size);
+          this.ctx.lineTo(x + p.size, y);
+          this.ctx.lineTo(x, y + p.size);
+          this.ctx.lineTo(x - p.size, y);
+          this.ctx.closePath();
+          this.ctx.fill();
+        } else {
+          this.ctx.beginPath();
+          this.ctx.arc(p.x * this.width, p.y * this.height, p.size, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
       }
       this.ctx.globalAlpha = 1;
     }
@@ -3075,7 +3106,17 @@ export class LyricDancePlayer {
   }
 
   private drawBackground(frame: ScaledKeyframe): void {
-    if (this.bgCaches.length === 0) return;
+    const palette = this.payload?.palette ?? ['#0A0A0F', '#FFD700', '#F0F0F0', '#FFD700', '#2A2520'];
+    const baseBg = palette[0] ?? '#0A0A0F';
+    const lum = frame.bgBlend ?? 0.05;
+    this.ctx.globalAlpha = 1;
+    this.ctx.fillStyle = lerpColor(baseBg, '#F8F8FA', lum);
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    if (this.bgCaches.length === 0) {
+      this.applyAtmosphere(frame, palette);
+      return;
+    }
 
     const bgBlend = frame.bgBlend ?? 0;
     const totalChapters = this.bgCacheCount;
@@ -3093,6 +3134,37 @@ export class LyricDancePlayer {
       this.ctx.globalAlpha = chapterFraction;
       this.ctx.drawImage(nextBg, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
+    }
+
+    this.applyAtmosphere(frame, palette);
+  }
+
+  private applyAtmosphere(frame: ScaledKeyframe, palette: string[]): void {
+    const atmo = frame.atmosphere;
+    if (!atmo) return;
+
+    if (atmo.tintStrength > 0) {
+      this.ctx.save();
+      this.ctx.globalAlpha = atmo.tintStrength;
+      this.ctx.fillStyle = palette[1] ?? '#FFD700';
+      this.ctx.globalCompositeOperation = 'multiply';
+      this.ctx.fillRect(0, 0, this.width, this.height);
+      this.ctx.restore();
+    }
+
+    if (atmo.vignetteStrength > 0) {
+      const gradient = this.ctx.createRadialGradient(
+        this.width / 2,
+        this.height / 2,
+        this.width * 0.3,
+        this.width / 2,
+        this.height / 2,
+        this.width * 0.7,
+      );
+      gradient.addColorStop(0, 'rgba(0,0,0,0)');
+      gradient.addColorStop(1, `rgba(0,0,0,${atmo.vignetteStrength})`);
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(0, 0, this.width, this.height);
     }
   }
 
