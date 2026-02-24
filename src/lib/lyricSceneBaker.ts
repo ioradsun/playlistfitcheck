@@ -140,7 +140,7 @@ type PrebakedData = {
   wordMeta: WordMetaEntry[];
 };
 
-const WORD_LINGER = 0.1;
+const WORD_LINGER = 0.5;
 
 const findByRatio = <T extends { startRatio?: number; endRatio?: number }>(
   arr: T[],
@@ -397,8 +397,8 @@ function bakeFrame(
 
         const cx = 960 / 2;
         const cy = 540 / 2;
-        const xSpread = ((wm.wordIndex % 7) - 3) * 22;
-        const ySpread = ((wm.lineIndex % 3) - 1) * 28;
+        const xSpread = ((wm.wordIndex % 7) - 3) * 35;
+        const ySpread = ((wm.lineIndex % 5) - 2) * 32;
 
         const isImpact = kinetic === 'IMPACT';
         const x = isImpact ? cx : cx + xSpread;
