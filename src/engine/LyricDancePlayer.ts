@@ -2630,6 +2630,7 @@ export class LyricDancePlayer {
     // Uniform scale for size-dependent values (fontSize, glow).
     // Uses min to preserve aspect ratio — letterbox rather than stretch.
     const sU = Math.min(sx, sy);
+    console.log('[SCALE]', { sx, sy, sU, sampleFontSize: raw[0]?.chunks?.[0]?.fontSize, scaled: (raw[0]?.chunks?.[0]?.fontSize ?? 0) * sU });
 
     return raw.map((f) => ({
       timeMs: f.timeMs,
