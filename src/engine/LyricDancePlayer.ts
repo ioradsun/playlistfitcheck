@@ -930,7 +930,7 @@ export class LyricDancePlayer {
   }
 
   destroy(): void {
-    console.log('[PLAYER] destroy() called — stack:', new Error().stack);
+    
     this.destroyed = true;
     this.stopHealthMonitor();
     cancelAnimationFrame(this.rafHandle);
