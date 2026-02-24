@@ -2113,7 +2113,7 @@ export class LyricDancePlayer {
       this.bgCacheCount = this.bgCaches.length;
       
     } catch (err) {
-      console.error('[PLAYER] bgCache build failed:', err);
+      
     }
   }
 
