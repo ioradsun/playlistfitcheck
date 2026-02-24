@@ -231,12 +231,15 @@ function assignWordAnimations(
     fades: motionDefaults.exits[1] ?? 'dissolve',
   };
 
-  const entryVariant = motionDefaults.entries[wm.wordIndex % motionDefaults.entries.length];
+  // Use lineIndex + wordIndex as seed for variation across groups
+  const variationSeed = ((wm.lineIndex ?? 0) * 7 + (wm.wordIndex ?? 0) * 3) % 4;
+
+  const entryVariant = motionDefaults.entries[variationSeed % motionDefaults.entries.length];
   const behaviorOptions = motionDefaults.behaviors;
   const behaviorVariant = behaviorOptions.length > 0
-    ? behaviorOptions[(wm.wordIndex ?? 0) % behaviorOptions.length]
+    ? behaviorOptions[variationSeed % behaviorOptions.length]
     : 'pulse';
-  const exitVariant = motionDefaults.exits[wm.wordIndex % motionDefaults.exits.length];
+  const exitVariant = motionDefaults.exits[variationSeed % motionDefaults.exits.length];
 
   return {
     entry: entryMap[storyEntryStyle] ?? entryVariant,
