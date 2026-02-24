@@ -15,6 +15,7 @@ export type LineBeatMap = {
 
 export type ScenePayload = {
   lines: LyricLine[];
+  words?: Array<{ word: string; start: number; end: number }>;
   beat_grid: { bpm: number; beats: number[]; confidence: number };
   physics_spec: PhysicsSpec;
   scene_manifest: SceneManifest | null;

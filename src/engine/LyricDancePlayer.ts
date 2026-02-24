@@ -703,6 +703,7 @@ export class LyricDancePlayer {
 
     const payload = {
       lines,
+      words: this.data.words ?? [],
       beat_grid: this.data.beat_grid,
       physics_spec: this.data.physics_spec,
       scene_manifest: this.data.scene_manifest ?? null,
