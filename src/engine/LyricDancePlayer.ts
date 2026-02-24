@@ -1135,6 +1135,124 @@ export class LyricDancePlayer {
     this.ctx.restore();
   }
 
+  // ────────────────────────────────────────────────────────────
+  // Comment comets
+  // ────────────────────────────────────────────────────────────
+
+  public fireComment(text: string): void {
+    const fromLeft = Math.random() > 0.5;
+    const color = this.commentColors[this.commentColorIdx % this.commentColors.length];
+    this.commentColorIdx++;
+
+    const comment: CommentChunk = {
+      id: `comment-${Date.now()}`,
+      text,
+      color,
+      startTime: performance.now() / 1000,
+      duration: 3.5,
+      startX: fromLeft ? -400 : this.width + 400,
+      startY: this.height * (0.2 + Math.random() * 0.6),
+      endX: fromLeft ? this.width + 400 : -400,
+      trailLength: 120,
+      fontSize: Math.max(18, Math.min(28, Math.floor(280 / text.length))),
+    };
+
+    this.activeComments.push(comment);
+
+    // Cap at 8 active
+    if (this.activeComments.length > 8) {
+      this.activeComments = this.activeComments.slice(-8);
+    }
+
+    // Clean up expired
+    const now = performance.now() / 1000;
+    this.activeComments = this.activeComments.filter(
+      c => now - c.startTime < c.duration + 0.5
+    );
+  }
+
+  private drawComments(nowSec: number): void {
+    if (this.activeComments.length === 0) return;
+
+    for (const comment of this.activeComments) {
+      const elapsed = nowSec - comment.startTime;
+      const progress = Math.min(1, elapsed / comment.duration);
+      if (progress >= 1) continue;
+
+      // Eased progress — fast entry, slow middle, fast exit
+      const ep = progress < 0.1
+        ? progress / 0.1 * 0.15
+        : progress > 0.85
+          ? 0.85 + (progress - 0.85) / 0.15 * 0.15
+          : progress;
+
+      const x = comment.startX + (comment.endX - comment.startX) * ep;
+      const y = comment.startY;
+
+      // Alpha — fade in and out
+      const alpha = progress < 0.1
+        ? progress / 0.1
+        : progress > 0.75
+          ? 1 - (progress - 0.75) / 0.25
+          : 1;
+
+      this.ctx.save();
+
+      // Glow
+      this.ctx.shadowColor = comment.color;
+      this.ctx.shadowBlur = 18;
+
+      // Trail — gradient behind text direction of travel
+      const fromLeft = comment.endX > comment.startX;
+      const trailStart = fromLeft ? x - comment.trailLength : x + comment.trailLength;
+      const trail = this.ctx.createLinearGradient(trailStart, y, x, y);
+      trail.addColorStop(0, 'transparent');
+      trail.addColorStop(1, `${comment.color}${Math.floor(alpha * 180).toString(16).padStart(2, '0')}`);
+      this.ctx.strokeStyle = trail;
+      this.ctx.lineWidth = comment.fontSize * 0.4;
+      this.ctx.lineCap = 'round';
+      this.ctx.beginPath();
+      this.ctx.moveTo(trailStart, y);
+      this.ctx.lineTo(x, y);
+      this.ctx.stroke();
+
+      // Spark particles along trail
+      for (let i = 0; i < 6; i++) {
+        const seed = (i * 0.618033) % 1;
+        const sparkX = fromLeft
+          ? x - seed * comment.trailLength * 0.8
+          : x + seed * comment.trailLength * 0.8;
+        const sparkY = y + (Math.sin(nowSec * 8 + i * 2) * 8);
+        const sparkAlpha = (1 - seed) * alpha * 0.8;
+        this.ctx.globalAlpha = sparkAlpha;
+        this.ctx.fillStyle = comment.color;
+        this.ctx.beginPath();
+        this.ctx.arc(sparkX, sparkY, 1.5 + seed * 2.5, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+
+      // Text
+      this.ctx.globalAlpha = alpha;
+      this.ctx.font = `700 ${comment.fontSize}px "Space Mono", monospace`;
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.textAlign = 'left';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(comment.text, x, y);
+
+      // Color dot — like a bullet
+      this.ctx.fillStyle = comment.color;
+      this.ctx.beginPath();
+      this.ctx.arc(
+        fromLeft ? x - 12 : x + this.ctx.measureText(comment.text).width + 12,
+        y, 4, 0, Math.PI * 2
+      );
+      this.ctx.fill();
+
+      this.ctx.shadowBlur = 0;
+      this.ctx.restore();
+    }
+  }
+
   private setResolution(width: number, height: number): void {
     this.width = width;
     this.height = height;
