@@ -1380,7 +1380,7 @@ export class LyricDancePlayer {
             if (chunk.rotation) this.ctx.rotate(chunk.rotation);
             this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
             this.ctx.scale(sx, sy);
-            this.ctx.fillText(obj.text, 0, 0);
+            this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
             this.ctx.restore();
           }
           this.ctx.globalAlpha = drawAlpha;
