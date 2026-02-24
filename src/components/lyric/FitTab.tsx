@@ -516,7 +516,7 @@ export function FitTab({
           </a>
           <button
             onClick={handleDance}
-            disabled={danceDisabled}
+            disabled={republishDisabled}
             className="flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 px-4 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
           >
             {publishing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
