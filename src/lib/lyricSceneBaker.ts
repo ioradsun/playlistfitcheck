@@ -43,6 +43,7 @@ export type Keyframe = {
     fontWeight: number;
     isAnchor: boolean;
     color: string;
+    emitterType?: WordEmitterType;
     entryOffsetY: number;
     entryOffsetX: number;
     entryScale: number;
