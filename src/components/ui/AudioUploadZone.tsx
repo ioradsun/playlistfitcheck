@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Upload, Music, X } from "lucide-react";
+import { X } from "lucide-react";
 import { toast } from "sonner";
 
 const ACCEPTED_EXTENSIONS = /\.(mp3|wav|m4a|ogg|flac|aac|aiff|wma)$/i;
@@ -49,6 +49,11 @@ export function AudioUploadZone({
     onChange(files.filter((_, i) => i !== index));
   };
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!disabled) validateAndAdd(e.dataTransfer.files);
+  };
+
   return (
     <div className="space-y-2">
       <input
@@ -59,40 +64,32 @@ export function AudioUploadZone({
         className="hidden"
         onChange={(e) => validateAndAdd(e.target.files)}
         disabled={disabled}
+        aria-label="Upload audio file"
       />
 
-      {files.length > 0 && (
-        <div className="space-y-1.5">
-          {files.map((file, i) => (
-            <div key={`${file.name}-${i}`} className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Music size={14} className="shrink-0 text-primary" />
-              <span className="truncate flex-1">{file.name}</span>
-              {maxFiles > 1 && (
-                <span className="text-xs shrink-0">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
-              )}
-              <button
-                type="button"
-                onClick={() => removeFile(i)}
-                className="shrink-0 p-0.5 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ))}
+      {files.length > 0 ? (
+        <div className="flex flex-col items-center gap-1 py-4">
+          <span className="text-sm font-medium text-foreground truncate max-w-[80%]">{files[0].name}</span>
+          <button
+            type="button"
+            onClick={() => { removeFile(0); inputRef.current?.click(); }}
+            className="text-xs text-primary hover:text-primary/80 transition-colors"
+          >
+            Change song
+          </button>
         </div>
-      )}
-
-      {files.length < maxFiles && (
+      ) : (
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+          onDrop={handleDrop}
+          onDragOver={(e) => e.preventDefault()}
+          className="w-full flex flex-col items-center justify-center gap-1.5 py-8 rounded-lg border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
           disabled={disabled}
+          aria-label="Upload your song"
         >
-          <Upload size={14} />
-          {maxFiles > 1 && files.length > 0
-            ? `Add more (${files.length}/${maxFiles})`
-            : label}
+          <span className="text-base font-medium text-foreground">Upload your song</span>
+          <span className="text-xs text-muted-foreground">MP3 or WAV</span>
         </button>
       )}
     </div>

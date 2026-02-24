@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
-import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AudioUploadZone } from "@/components/ui/AudioUploadZone";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
 interface Props {
@@ -29,6 +27,8 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }:
     onTranscribe(files[0], lyrics);
   };
 
+  const hasLyrics = referenceLyrics.length > 0;
+
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
       <div className="space-y-1">
@@ -37,53 +37,31 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }:
       </div>
 
       <div className="glass-card rounded-xl p-4 space-y-4 text-left">
-        {/* Upload */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium">Song</span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
-                  <Info size={13} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs max-w-[220px]">MP3, WAV, M4A · 75 MB max · Large files auto-compressed</TooltipContent>
-            </Tooltip>
-          </div>
-          <AudioUploadZone
-            label="Upload"
-            files={files}
-            onChange={setFiles}
-            maxFiles={1}
-            disabled={loading}
-          />
-        </div>
+        {/* Upload — no label */}
+        <AudioUploadZone
+          label="Upload"
+          files={files}
+          onChange={setFiles}
+          maxFiles={1}
+          disabled={loading}
+        />
 
-        {/* Lyrics */}
+        {/* Lyrics — no label, contextual helper */}
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium">Lyrics <span className="text-muted-foreground font-normal">(optional)</span></span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
-                  <Info size={13} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs max-w-[240px]">
-                Paste your lyrics so the AI aligns rather than guesses — dramatically better accuracy
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          {hasLyrics && (
+            <span className="text-xs text-muted-foreground mb-1 block">Lyrics (optional)</span>
+          )}
           <Textarea
             value={referenceLyrics}
             onChange={(e) => setReferenceLyrics(e.target.value)}
-            placeholder="Paste your song lyrics here..."
+            placeholder="Add lyrics (optional)"
             className="min-h-[80px] resize-y text-sm bg-muted/20 border-border font-mono"
             disabled={loading}
+            aria-label="Paste your song lyrics"
           />
         </div>
 
-        {/* Scene */}
+        {/* Scene — no label */}
         {sceneInput}
       </div>
 
