@@ -1098,6 +1098,13 @@ export class LyricDancePlayer {
 
     let drawCalls = 0;
     const nowSecEmitters = performance.now() / 1000;
+    // Clean up old emitters
+    this.wordEmitters = this.wordEmitters.filter(e => nowSecEmitters - e.startTime < e.duration + 0.2);
+    // Pre-compute chapter color for emitter spawning
+    const chaptersForEmitters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
+    const emitterSongProg = this.audio ? this.audio.currentTime / (this.audio?.duration || 1) : 0;
+    const emitterChIdx = chaptersForEmitters.findIndex((ch: any) => emitterSongProg >= (ch.startRatio ?? 0) && emitterSongProg < (ch.endRatio ?? 1));
+    const chapterColorForEmitters = (emitterChIdx >= 0 ? chaptersForEmitters[emitterChIdx]?.dominantColor : null) ?? '#FFD700';
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
 
