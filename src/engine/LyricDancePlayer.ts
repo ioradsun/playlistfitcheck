@@ -1259,10 +1259,6 @@ export class LyricDancePlayer {
         if (!this.ctx.font.includes('px')) {
           this.ctx.font = `700 36px "Montserrat", sans-serif`;
         }
-        if (!this._textDrawLogged) {
-          this._textDrawLogged = true;
-          console.log('[PLAYER] drawing text:', obj.text, 'font:', this.ctx.font, 'alpha:', chunk.alpha);
-        }
         if (chunk.glow > 0) {
           this.ctx.shadowColor = chunk.color ?? '#ffffff';
           this.ctx.shadowBlur = chunk.glow * 32;
