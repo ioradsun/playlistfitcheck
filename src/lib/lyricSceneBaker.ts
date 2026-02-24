@@ -1065,7 +1065,7 @@ function bakeFrame(
         }
       }
     } else {
-      const wordLinger = WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4;
+      const wordLinger = pre.animParams.linger;
       const wordChunks = pre.wordMeta
         .filter((wm) => {
           return tSec >= wm.start && tSec < (wm.end + wordLinger);
