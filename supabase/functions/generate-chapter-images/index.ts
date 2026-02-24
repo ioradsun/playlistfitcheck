@@ -41,12 +41,16 @@ function colorToMood(hex: string): string {
 
 function buildImagePrompt(chapter: ChapterInput, sceneCtx?: SceneContext | null): string {
   const moodFromColor = colorToMood(chapter.dominantColor);
+  const directive = chapter.backgroundDirective || '';
   const exposureGuide = sceneCtx?.baseLuminance === 'light'
     ? 'bright luminous exposure, soft light, airy atmosphere'
     : sceneCtx?.baseLuminance === 'medium'
       ? 'natural exposure, balanced light and shadow'
       : 'ultra dark exposure, 90% shadow, deep blacks';
-  return `Cinematic background scene, ${chapter.backgroundDirective}, ${sceneCtx?.fluxPromptSuffix ?? 'dark cinematic moody'}, ${exposureGuide}, ${moodFromColor} color grading, no people, no text, no faces, photorealistic, film grain, 4k`;
+  if (!directive) {
+    console.warn(`[chapter-images] Empty backgroundDirective for chapter ${chapter.index}`);
+  }
+  return `Cinematic background scene, ${directive}, ${sceneCtx?.fluxPromptSuffix ?? 'dark cinematic moody'}, ${exposureGuide}, ${moodFromColor} color grading, no people, no text, no faces, photorealistic, film grain, 4k`;
 }
 
 async function generateImage(

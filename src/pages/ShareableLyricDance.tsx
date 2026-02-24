@@ -274,7 +274,7 @@ export default function ShareableLyricDance() {
                     lyric_dance_id: d.id,
                     chapters: chapters.map((ch: any, i: number) => ({
                       index: i,
-                      backgroundDirective: ch.backgroundDirective ?? ch.background ?? "",
+                      backgroundDirective: ch.backgroundDirective ?? ch.background ?? ch.description ?? "",
                       dominantColor: ch.dominantColor ?? "#333333",
                       emotionalIntensity: ch.emotionalIntensity ?? 0.5,
                     })),
