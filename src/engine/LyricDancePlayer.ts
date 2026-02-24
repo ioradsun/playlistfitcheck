@@ -1061,7 +1061,7 @@ export class LyricDancePlayer {
       ctx.fillRect(x - w * 0.05, 0, w * 0.15, h);
     }
     const bloom = ctx.createRadialGradient(w * 0.5, h * 0.4, 0, w * 0.5, h * 0.4, w * 0.35);
-    bloom.addColorStop(0, `${accent}20`);
+    bloom.addColorStop(0, `${accent}10`);
     bloom.addColorStop(1, 'transparent');
     ctx.fillStyle = bloom;
     ctx.fillRect(0, 0, w, h);
