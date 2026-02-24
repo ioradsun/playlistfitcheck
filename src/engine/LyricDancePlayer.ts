@@ -917,18 +917,42 @@ export class LyricDancePlayer {
     }
   }
 
+  private mapBackgroundSystem(desc: string): string {
+    const lower = (desc || '').toLowerCase();
+    if (lower.includes('smoke') || lower.includes('haze') || lower.includes('churn') || lower.includes('fog') || lower.includes('storm') || lower.includes('cloud')) return 'storm';
+    if (lower.includes('star') || lower.includes('space') || lower.includes('cosmic') || lower.includes('constellation')) return 'cosmic';
+    if (lower.includes('warm') || lower.includes('soft') || lower.includes('beam') || lower.includes('glow') || lower.includes('light') || lower.includes('clarity') || lower.includes('intimate') || lower.includes('reveal')) return 'intimate';
+    if (lower.includes('gold') || lower.includes('light floods') || lower.includes('sunrise') || lower.includes('dawn')) return 'golden';
+    if (lower.includes('ebb') || lower.includes('flow') || lower.includes('drift') || lower.includes('wave') || lower.includes('ocean') || lower.includes('water')) return 'intimate';
+    if (lower.includes('void') || lower.includes('dark') || lower.includes('dim') || lower.includes('shadow')) return 'void';
+    return 'default';
+  }
+
+  private mapParticleSystem(desc: string): string | null {
+    const lower = (desc || '').toLowerCase();
+    if (lower.includes('smoke') || lower.includes('swirl') || lower.includes('churn')) return 'dust';
+    if (lower.includes('spark') || lower.includes('ember') || lower.includes('fire')) return 'embers';
+    if (lower.includes('mist') || lower.includes('dissipat') || lower.includes('fog')) return 'snow';
+    if (lower.includes('rain') || lower.includes('drip') || lower.includes('drop')) return 'rain';
+    if (lower.includes('star') || lower.includes('shimmer') || lower.includes('glint')) return 'stars';
+    return null;
+  }
+
+  // Per-chapter particle systems derived from cinematic direction
+  public chapterParticleSystems: (string | null)[] = [];
+
   private buildBgCache(): void {
     const chapters = this.payload?.cinematic_direction?.chapters ?? [];
     const palette = this.payload?.cinematic_direction?.visualWorld?.palette
       ?? this.payload?.palette
       ?? ['#0a0a0a', '#111827', '#1a2a4a'];
-    const backgroundSystem = this.payload?.cinematic_direction?.visualWorld?.backgroundSystem ?? 'default';
 
     const count = Math.max(1, chapters.length);
     this.bgCaches = [];
+    this.chapterParticleSystems = [];
 
     for (let ci = 0; ci < count; ci++) {
-      const chapter = chapters[ci];
+      const chapter = chapters[ci] as any;
       const off = document.createElement('canvas');
       off.width = this.width;
       off.height = this.height;
@@ -937,8 +961,16 @@ export class LyricDancePlayer {
 
       const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
       const accentColor = palette[1] ?? '#FFD700';
-      const bgDirective = chapter?.backgroundDirective?.toLowerCase() ?? '';
       const intensity = chapter?.emotionalIntensity ?? 0.5;
+
+      // Combine all chapter description fields for richer keyword matching
+      const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
+      const lightDesc = chapter?.light ?? '';
+      const particleDesc = chapter?.particles ?? '';
+      const perChapterSystem = this.mapBackgroundSystem(bgDesc + ' ' + lightDesc);
+
+      // Per-chapter particle system
+      this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
 
       const grad = ctx.createLinearGradient(0, 0, 0, off.height);
       grad.addColorStop(0, this.darken(dominantColor, 0.08));
@@ -947,14 +979,16 @@ export class LyricDancePlayer {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, off.width, off.height);
 
-      if (backgroundSystem === 'storm' || bgDirective.includes('storm') || bgDirective.includes('cloud')) {
+      if (perChapterSystem === 'storm') {
         this.drawStormAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
-      } else if (backgroundSystem === 'cosmic' || bgDirective.includes('space') || bgDirective.includes('star')) {
+      } else if (perChapterSystem === 'cosmic') {
         this.drawCosmicAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
-      } else if (backgroundSystem === 'intimate' || bgDirective.includes('warm') || bgDirective.includes('soft')) {
+      } else if (perChapterSystem === 'intimate') {
         this.drawIntimateAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
-      } else if (bgDirective.includes('gold') || bgDirective.includes('light floods')) {
+      } else if (perChapterSystem === 'golden') {
         this.drawGoldenAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
+      } else if (perChapterSystem === 'void') {
+        // Pure dark — no atmosphere overlay, just the base gradient
       } else {
         this.drawRadialGlow(ctx, off.width, off.height, [dominantColor, accentColor]);
       }
