@@ -653,6 +653,7 @@ export class LyricDancePlayer {
   // Stall detection
   private _lastLoggedTSec = 0;
   private _stalledFrames = 0;
+  private _lastSimChapterIdx = -1;
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
