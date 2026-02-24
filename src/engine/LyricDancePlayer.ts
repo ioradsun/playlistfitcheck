@@ -2297,13 +2297,27 @@ export class LyricDancePlayer {
     this.lastWordEmitterSpawnMsByChunk.set(chunkId, nowMsEmitters);
 
     const nowSecEmitters = nowMsEmitters / 1000;
+    const EMITTER_DURATIONS: Record<string, number> = {
+      ember: 3.5,
+      frost: 2.5,
+      'spark-burst': 0.5,
+      'dust-impact': 1.2,
+      'light-rays': 2.0,
+      'shockwave-ring': 0.6,
+      'gold-coins': 2.2,
+      'memory-orbs': 3.8,
+      'motion-trail': 0.7,
+      converge: 0.9,
+      'dark-absorb': 3.0,
+    };
+
     this.wordEmitters.push({
       type: emitterType,
       x: wordX,
       y: wordY,
       color: palette.glow,
       startTime: nowSecEmitters,
-      duration: 2.8,
+      duration: EMITTER_DURATIONS[emitterType] ?? 2.0,
       intensity: Math.max(0.5, emphasisLevel / 3),
     });
   }
@@ -2472,15 +2486,56 @@ export class LyricDancePlayer {
   }
 
   private drawWordEmitters(nowSec: number): void {
-    // Viewport-aware particle scaling — all sizes/spreads multiply by this
     const pScale = Math.max(1, Math.min(this.width / 960, this.height / 540));
-
-    this.wordEmitters = this.wordEmitters.filter((em) => nowSec - em.startTime <= em.duration);
 
     for (const em of this.wordEmitters) {
       const elapsed = nowSec - em.startTime;
-      const progress = Math.max(0, Math.min(1, elapsed / em.duration));
+      const linearProgress = Math.min(1, elapsed / em.duration);
+      if (linearProgress >= 1) continue;
+
+      // ── Per-emitter easing ──
+      let progress: number;
+      switch (em.type) {
+        case 'spark-burst':
+        case 'shockwave-ring':
+        case 'motion-trail': {
+          const t = linearProgress;
+          progress = t < 0.3 ? (t / 0.3) * 0.8 : 0.8 + ((t - 0.3) / 0.7) * 0.2;
+          break;
+        }
+        case 'frost':
+        case 'converge':
+          progress = 1 - Math.pow(1 - linearProgress, 2.5);
+          break;
+        case 'gold-coins':
+        case 'dust-impact':
+          progress = Math.pow(linearProgress, 1.8);
+          break;
+        case 'dark-absorb':
+          progress = Math.pow(linearProgress, 2.5);
+          break;
+        default:
+          progress = linearProgress;
+          break;
+      }
+
       const ep = 1 - progress;
+
+      // ── Per-emitter alpha fade ──
+      let fadeAlpha: number;
+      switch (em.type) {
+        case 'spark-burst':
+        case 'shockwave-ring':
+          fadeAlpha = linearProgress < 0.7 ? 1.0 : 1 - ((linearProgress - 0.7) / 0.3);
+          break;
+        case 'ember':
+        case 'memory-orbs':
+          fadeAlpha = linearProgress < 0.6 ? 1.0 : 1 - ((linearProgress - 0.6) / 0.4);
+          break;
+        default:
+          fadeAlpha = 1 - linearProgress;
+          break;
+      }
 
       switch (em.type) {
         case 'ember': {
@@ -2492,16 +2547,25 @@ export class LyricDancePlayer {
             const wobble = Math.sin(elapsed * 2.5 + i * 2) * 20 * pScale;
             const px = em.x + (seed - 0.5) * 100 * pScale + wobble;
             const py = em.y - drift * 180 * pScale;
-            const alpha = (1 - drift) * ep * 0.9;
+            const alpha = (1 - drift) * fadeAlpha * 0.9;
             if (alpha <= 0) continue;
-            const radius = (3 + seed2 * 5) * pScale;
+            const size = (3 + seed2 * 4) * pScale;
+            const rotation = elapsed * 2 + seed * Math.PI * 2;
+            const color = seed < 0.3 ? '#FFD700' : seed < 0.6 ? '#FF8C00' : em.color;
+
+            this.ctx.save();
+            this.ctx.translate(px, py);
+            this.ctx.rotate(rotation);
             this.ctx.globalAlpha = alpha;
-            this.ctx.shadowColor = seed < 0.5 ? em.color : '#FF8C00';
-            this.ctx.shadowBlur = radius * 3;
-            this.ctx.fillStyle = seed < 0.5 ? em.color : '#FF8C00';
+            this.ctx.shadowColor = color;
+            this.ctx.shadowBlur = size * 3;
+            this.ctx.fillStyle = color;
             this.ctx.beginPath();
-            this.ctx.arc(px, py, radius, 0, Math.PI * 2);
+            this.ctx.moveTo(0, -size * 1.8);
+            this.ctx.bezierCurveTo(size * 0.6, -size * 0.8, size * 0.8, size * 0.3, 0, size * 0.8);
+            this.ctx.bezierCurveTo(-size * 0.8, size * 0.3, -size * 0.6, -size * 0.8, 0, -size * 1.8);
             this.ctx.fill();
+            this.ctx.restore();
           }
           this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
@@ -2514,19 +2578,54 @@ export class LyricDancePlayer {
             const dist = progress * 80 * pScale;
             const px = em.x + Math.cos(angle) * dist;
             const py = em.y + Math.sin(angle) * dist;
-            this.ctx.globalAlpha = ep * 0.85;
+            const size = (3 + Math.sin(elapsed * 4 + i) * 1) * pScale;
+            const crystalRotation = angle + elapsed * 0.3;
+
+            this.ctx.save();
+            this.ctx.translate(px, py);
+            this.ctx.rotate(crystalRotation);
+            this.ctx.globalAlpha = fadeAlpha * 0.85;
             this.ctx.shadowColor = '#A8D8EA';
             this.ctx.shadowBlur = 8 * pScale;
             this.ctx.strokeStyle = '#A8D8EA';
-            this.ctx.lineWidth = 2 * pScale;
+            this.ctx.fillStyle = '#E8F4FF';
+            this.ctx.lineWidth = 1.5 * pScale;
+
+            for (let arm = 0; arm < 3; arm++) {
+              const armAngle = (arm / 3) * Math.PI;
+              const ax = Math.cos(armAngle) * size * 2;
+              const ay = Math.sin(armAngle) * size * 2;
+              this.ctx.beginPath();
+              this.ctx.moveTo(-ax, -ay);
+              this.ctx.lineTo(ax, ay);
+              this.ctx.stroke();
+              const tipSize = size * 0.4;
+              for (const sign of [1, -1]) {
+                const tx = ax * sign;
+                const ty = ay * sign;
+                this.ctx.beginPath();
+                this.ctx.moveTo(tx, ty - tipSize);
+                this.ctx.lineTo(tx + tipSize * 0.6, ty);
+                this.ctx.lineTo(tx, ty + tipSize);
+                this.ctx.lineTo(tx - tipSize * 0.6, ty);
+                this.ctx.closePath();
+                this.ctx.fill();
+              }
+            }
+            this.ctx.restore();
+          }
+          this.ctx.globalAlpha = fadeAlpha * 0.4;
+          this.ctx.strokeStyle = '#A8D8EA';
+          this.ctx.lineWidth = 1 * pScale;
+          this.ctx.shadowColor = '#A8D8EA';
+          this.ctx.shadowBlur = 4 * pScale;
+          for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const dist = progress * 80 * pScale;
             this.ctx.beginPath();
             this.ctx.moveTo(em.x + Math.cos(angle) * 8 * pScale, em.y + Math.sin(angle) * 8 * pScale);
-            this.ctx.lineTo(px, py);
+            this.ctx.lineTo(em.x + Math.cos(angle) * dist * 0.6, em.y + Math.sin(angle) * dist * 0.6);
             this.ctx.stroke();
-            this.ctx.fillStyle = '#E8F4FF';
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, (3 + Math.sin(elapsed * 4 + i) * 1) * pScale, 0, Math.PI * 2);
-            this.ctx.fill();
           }
           this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
@@ -2536,20 +2635,35 @@ export class LyricDancePlayer {
         case 'spark-burst': {
           const count = 16;
           for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2;
+            const angle = (i / count) * Math.PI * 2 + ((i * 0.618033) % 1) * 0.3;
             const speed = (100 + ((i * 0.618033) % 1) * 80) * pScale;
             const dist = progress * speed;
-            const alpha = ep * (1 - progress * 0.4) * 0.95;
+            const alpha = fadeAlpha * 0.95;
             const px = em.x + Math.cos(angle) * dist;
             const py = em.y + Math.sin(angle) * dist;
-            const radius = (3 + (1 - progress) * 4) * pScale;
+            const streakLen = (8 + (1 - progress) * 12) * pScale;
+            const tailX = px - Math.cos(angle) * streakLen;
+            const tailY = py - Math.sin(angle) * streakLen;
+
+            this.ctx.save();
             this.ctx.globalAlpha = alpha;
             this.ctx.shadowColor = em.color;
-            this.ctx.shadowBlur = radius * 2.5;
-            this.ctx.fillStyle = em.color;
+            this.ctx.shadowBlur = 6 * pScale;
+            this.ctx.strokeStyle = em.color;
+            this.ctx.lineWidth = (2 + (1 - progress) * 2) * pScale;
+            this.ctx.lineCap = 'round';
             this.ctx.beginPath();
-            this.ctx.arc(px, py, radius, 0, Math.PI * 2);
+            this.ctx.moveTo(tailX, tailY);
+            this.ctx.lineTo(px, py);
+            this.ctx.stroke();
+
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.shadowColor = '#FFFFFF';
+            this.ctx.shadowBlur = 4 * pScale;
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, (1.5 + (1 - progress)) * pScale, 0, Math.PI * 2);
             this.ctx.fill();
+            this.ctx.restore();
           }
           this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
@@ -2563,42 +2677,53 @@ export class LyricDancePlayer {
             const dist = progress * 60 * (0.5 + seed) * pScale;
             const px = em.x + Math.cos(angle) * dist;
             const py = em.y + Math.sin(angle) * dist * 0.3;
-            const radius = (4 + seed * 6) * pScale;
-            this.ctx.globalAlpha = ep * 0.6;
-            this.ctx.shadowColor = '#888888';
-            this.ctx.shadowBlur = radius * 1.5;
-            this.ctx.fillStyle = '#888888';
+            const radius = (5 + seed * 8) * pScale;
+
+            this.ctx.save();
+            this.ctx.globalAlpha = fadeAlpha * 0.45;
+            const grad = this.ctx.createRadialGradient(px, py, 0, px, py, radius);
+            grad.addColorStop(0, 'rgba(160,160,160,0.6)');
+            grad.addColorStop(0.5, 'rgba(140,140,140,0.3)');
+            grad.addColorStop(1, 'rgba(120,120,120,0)');
+            this.ctx.fillStyle = grad;
             this.ctx.beginPath();
             this.ctx.arc(px, py, radius, 0, Math.PI * 2);
             this.ctx.fill();
+            this.ctx.restore();
           }
-          this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
           break;
         }
         case 'light-rays': {
           const rayCount = 8;
           for (let i = 0; i < rayCount; i++) {
-            const angle = (i / rayCount) * Math.PI * 2;
+            const angle = (i / rayCount) * Math.PI * 2 + elapsed * 0.15;
             const rayLen = progress * 120 * em.intensity * pScale;
-            const alpha = ep * 0.6;
+            const alpha = fadeAlpha * 0.6;
+            const tipX = em.x + Math.cos(angle) * rayLen;
+            const tipY = em.y + Math.sin(angle) * rayLen;
+            const perpX = Math.cos(angle + Math.PI / 2);
+            const perpY = Math.sin(angle + Math.PI / 2);
+            const baseWidth = 3 * pScale;
+
             this.ctx.save();
             this.ctx.globalAlpha = alpha;
             this.ctx.shadowColor = em.color;
             this.ctx.shadowBlur = 12 * pScale;
-            const grad = this.ctx.createLinearGradient(
-              em.x, em.y,
-              em.x + Math.cos(angle) * rayLen,
-              em.y + Math.sin(angle) * rayLen,
-            );
-            const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0');
-            grad.addColorStop(0, `${em.color}${alphaHex}`);
-            grad.addColorStop(1, 'transparent');
-            this.ctx.strokeStyle = grad;
-            this.ctx.lineWidth = 3 * pScale;
+            this.ctx.fillStyle = em.color;
+            this.ctx.beginPath();
+            this.ctx.moveTo(em.x + perpX * baseWidth, em.y + perpY * baseWidth);
+            this.ctx.lineTo(tipX, tipY);
+            this.ctx.lineTo(em.x - perpX * baseWidth, em.y - perpY * baseWidth);
+            this.ctx.closePath();
+            this.ctx.fill();
+
+            this.ctx.strokeStyle = '#FFFFFF';
+            this.ctx.lineWidth = 1 * pScale;
+            this.ctx.globalAlpha = alpha * 0.7;
             this.ctx.beginPath();
             this.ctx.moveTo(em.x, em.y);
-            this.ctx.lineTo(em.x + Math.cos(angle) * rayLen, em.y + Math.sin(angle) * rayLen);
+            this.ctx.lineTo(tipX, tipY);
             this.ctx.stroke();
             this.ctx.restore();
           }
@@ -2608,16 +2733,22 @@ export class LyricDancePlayer {
         case 'shockwave-ring': {
           const radius = progress * this.width * 0.3;
           const lineW = 4 * ep * pScale;
-          this.ctx.globalAlpha = ep * 0.85;
+          this.ctx.save();
+          this.ctx.globalAlpha = fadeAlpha * 0.5;
           this.ctx.shadowColor = em.color;
-          this.ctx.shadowBlur = lineW * 4;
+          this.ctx.shadowBlur = lineW * 6;
           this.ctx.strokeStyle = em.color;
+          this.ctx.lineWidth = lineW * 0.5;
+          this.ctx.beginPath();
+          this.ctx.arc(em.x, em.y, radius * 1.08, 0, Math.PI * 2);
+          this.ctx.stroke();
+          this.ctx.globalAlpha = fadeAlpha * 0.85;
+          this.ctx.strokeStyle = '#FFFFFF';
           this.ctx.lineWidth = lineW;
           this.ctx.beginPath();
           this.ctx.arc(em.x, em.y, radius, 0, Math.PI * 2);
           this.ctx.stroke();
-          this.ctx.shadowBlur = 0;
-          this.ctx.globalAlpha = 1;
+          this.ctx.restore();
           this.ctx.lineWidth = 1;
           break;
         }
@@ -2629,16 +2760,25 @@ export class LyricDancePlayer {
             const fallSpeed = 0.25 + seed * 0.35;
             const px = em.x + (seed - 0.5) * 120 * pScale;
             const py = em.y + elapsed * fallSpeed * 100 * seed2 * pScale;
-            const alpha = Math.max(0, ep - seed2 * 0.3) * 0.9;
-            const radius = (4 + seed * 4) * pScale;
-            const glint = Math.sin(elapsed * 6 + i * 3) > 0.7 ? 1.4 : 1.0;
+            const alpha = Math.max(0, fadeAlpha - seed2 * 0.3) * 0.9;
+            const coinSize = (4 + seed * 3) * pScale;
+            const flipPhase = Math.cos(elapsed * 8 + i * 2.3);
+            const coinWidth = coinSize * Math.abs(flipPhase);
+            const glint = Math.abs(flipPhase) > 0.85;
+
+            this.ctx.save();
+            this.ctx.translate(px, py);
             this.ctx.globalAlpha = alpha;
             this.ctx.shadowColor = '#FFD700';
-            this.ctx.shadowBlur = radius * 2 * glint;
-            this.ctx.fillStyle = '#FFD700';
+            this.ctx.shadowBlur = coinSize * (glint ? 4 : 2);
+            this.ctx.fillStyle = glint ? '#FFFACD' : '#FFD700';
             this.ctx.beginPath();
-            this.ctx.arc(px, py, radius * glint, 0, Math.PI * 2);
+            this.ctx.ellipse(0, 0, Math.max(1, coinWidth), coinSize, 0, 0, Math.PI * 2);
             this.ctx.fill();
+            this.ctx.strokeStyle = '#DAA520';
+            this.ctx.lineWidth = 0.5 * pScale;
+            this.ctx.stroke();
+            this.ctx.restore();
           }
           this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
@@ -2653,13 +2793,27 @@ export class LyricDancePlayer {
             const px = em.x + Math.cos(angle) * dist;
             const py = em.y + Math.sin(angle) * dist - elapsed * 8 * pScale;
             const radius = (5 + seed * 5) * pScale;
-            this.ctx.globalAlpha = ep * 0.65;
+
+            this.ctx.save();
+            this.ctx.globalAlpha = fadeAlpha * 0.65;
             this.ctx.shadowColor = em.color;
             this.ctx.shadowBlur = radius * 3;
-            this.ctx.fillStyle = em.color;
+
+            const grad = this.ctx.createRadialGradient(px, py, 0, px, py, radius);
+            grad.addColorStop(0, em.color + '40');
+            grad.addColorStop(0.6, em.color + '15');
+            grad.addColorStop(1, 'transparent');
+            this.ctx.fillStyle = grad;
             this.ctx.beginPath();
             this.ctx.arc(px, py, radius, 0, Math.PI * 2);
             this.ctx.fill();
+
+            this.ctx.strokeStyle = em.color;
+            this.ctx.lineWidth = 1.5 * pScale;
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, radius * 0.7, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.restore();
           }
           this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
@@ -2667,23 +2821,31 @@ export class LyricDancePlayer {
         }
         case 'motion-trail': {
           const trailLen = progress * 100 * pScale;
-          const alpha = ep * 0.7;
-          const alphaHex = Math.floor(alpha * 200).toString(16).padStart(2, '0');
+          const alpha = fadeAlpha * 0.7;
           const lineW = 6 * ep * pScale;
+          const headX = em.x;
+          const headY = em.y;
+          const perpSize = lineW * 0.5;
+
           this.ctx.save();
           this.ctx.globalAlpha = alpha;
           this.ctx.shadowColor = em.color;
           this.ctx.shadowBlur = lineW * 2;
-          const grad = this.ctx.createLinearGradient(em.x - trailLen, em.y, em.x, em.y);
-          grad.addColorStop(0, 'transparent');
-          grad.addColorStop(1, `${em.color}${alphaHex}`);
-          this.ctx.strokeStyle = grad;
-          this.ctx.lineWidth = lineW;
-          this.ctx.lineCap = 'round';
+          this.ctx.fillStyle = em.color;
           this.ctx.beginPath();
-          this.ctx.moveTo(em.x - trailLen, em.y);
-          this.ctx.lineTo(em.x, em.y);
-          this.ctx.stroke();
+          this.ctx.moveTo(headX - trailLen, headY);
+          this.ctx.lineTo(headX, headY - perpSize);
+          this.ctx.lineTo(headX + 3 * pScale, headY);
+          this.ctx.lineTo(headX, headY + perpSize);
+          this.ctx.closePath();
+          this.ctx.fill();
+
+          this.ctx.fillStyle = '#FFFFFF';
+          this.ctx.shadowColor = '#FFFFFF';
+          this.ctx.shadowBlur = 4 * pScale;
+          this.ctx.beginPath();
+          this.ctx.arc(headX, headY, 2 * pScale, 0, Math.PI * 2);
+          this.ctx.fill();
           this.ctx.restore();
           this.ctx.lineWidth = 1;
           break;
@@ -2697,14 +2859,23 @@ export class LyricDancePlayer {
             const startX = fromLeft ? em.x - range : em.x + range;
             const px = startX + (em.x - startX) * progress;
             const py = em.y + (seed - 0.5) * 30 * (1 - progress) * pScale;
-            const radius = (3 + seed * 3) * pScale;
-            this.ctx.globalAlpha = progress * ep * 0.8;
+            const size = (3 + seed * 3) * pScale;
+            const dir = fromLeft ? 1 : -1;
+
+            this.ctx.save();
+            this.ctx.translate(px, py);
+            this.ctx.globalAlpha = progress * fadeAlpha * 0.8;
             this.ctx.shadowColor = em.color;
-            this.ctx.shadowBlur = radius * 2;
+            this.ctx.shadowBlur = size * 2;
             this.ctx.fillStyle = em.color;
             this.ctx.beginPath();
-            this.ctx.arc(px, py, radius, 0, Math.PI * 2);
+            this.ctx.moveTo(dir * size * 1.5, 0);
+            this.ctx.lineTo(-dir * size * 0.5, -size * 0.8);
+            this.ctx.lineTo(-dir * size * 0.2, 0);
+            this.ctx.lineTo(-dir * size * 0.5, size * 0.8);
+            this.ctx.closePath();
             this.ctx.fill();
+            this.ctx.restore();
           }
           this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
@@ -2720,25 +2891,41 @@ export class LyricDancePlayer {
             const px = em.x + Math.cos(angle) * dist;
             const py = em.y + Math.sin(angle) * dist;
             const radius = (4 + seed * 4) * pScale;
+
+            this.ctx.save();
+            this.ctx.translate(px, py);
+            this.ctx.rotate(angle + elapsed * 3);
             this.ctx.globalAlpha = progress * 0.7;
+            this.ctx.fillStyle = '#0a0a0a';
             this.ctx.shadowColor = '#000000';
-            this.ctx.shadowBlur = radius * 2;
-            this.ctx.fillStyle = '#111111';
+            this.ctx.shadowBlur = radius * 3;
             this.ctx.beginPath();
-            this.ctx.arc(px, py, radius, 0, Math.PI * 2);
+            this.ctx.moveTo(0, -radius);
+            this.ctx.lineTo(radius * 0.5, -radius * 0.2);
+            this.ctx.lineTo(radius * 0.3, radius * 0.6);
+            this.ctx.lineTo(-radius * 0.4, radius * 0.4);
+            this.ctx.lineTo(-radius * 0.6, -radius * 0.3);
+            this.ctx.closePath();
             this.ctx.fill();
+            this.ctx.restore();
           }
+          this.ctx.save();
+          this.ctx.globalAlpha = progress * 0.5;
+          const voidRadius = progress * 15 * pScale;
+          const voidGrad = this.ctx.createRadialGradient(em.x, em.y, 0, em.x, em.y, voidRadius);
+          voidGrad.addColorStop(0, 'rgba(0,0,0,0.8)');
+          voidGrad.addColorStop(1, 'rgba(0,0,0,0)');
+          this.ctx.fillStyle = voidGrad;
+          this.ctx.beginPath();
+          this.ctx.arc(em.x, em.y, voidRadius, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.restore();
           this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
           break;
         }
       }
     }
-
-    this.ctx.shadowBlur = 0;
-    this.ctx.globalAlpha = 1;
-    this.ctx.lineWidth = 1;
-    this.ctx.lineCap = 'butt';
   }
 
   private checkEmotionalEvents(tSec: number, songProgress: number): void {
