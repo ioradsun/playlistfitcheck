@@ -21,7 +21,7 @@ SECTION 1 — WORLD DEFAULTS (7 picks)
 
 Pick exactly one value for each of these 7 dimensions.
 
-These are the SONG-WIDE DEFAULTS. Chapters can override 4 of them.
+These are the SONG-WIDE DEFAULTS. Chapters can override 5 of them.
 
 SCENE TONE — controls light/dark foundation:
   "dark"         — moody, cinematic, dark backgrounds
@@ -29,6 +29,15 @@ SCENE TONE — controls light/dark foundation:
   "mixed-dawn"   — dark → dark → light (sunrise arc, hope ending)
   "mixed-dusk"   — light → light → dark (descent arc, heavy ending)
   "mixed-pulse"  — dark → light → dark (brief hope, return to weight)
+
+SCENE TONE SELECTION:
+  sceneTone reflects the DOMINANT emotional weight of the song, not the opening.
+  A song that starts bright but ends in destruction = "mixed-dusk" (light → dark).
+  A song that starts dark but ends hopeful = "mixed-dawn" (dark → light).
+  Only use "light" if the song is PREDOMINANTLY bright/positive throughout.
+  Only use "dark" if the song is PREDOMINANTLY heavy/moody throughout.
+  When in doubt, use "mixed-*" — it unlocks both palette lists and lets
+  chapters override palette per-act for natural progression.
 
 ATMOSPHERE — controls background image treatment:
   "void"       — near-black/white, text floats in space
@@ -40,7 +49,7 @@ ATMOSPHERE — controls background image treatment:
   "glass"      — frosted glass effect, modern
   "clean"      — minimal overlay, image-forward
 
-PALETTE — locked color set (MUST match tone):
+PALETTE — locked color set:
   Dark palettes:  "cold-gold", "warm-ember", "ice-blue", "midnight-rose", "neon-green", "storm-grey", "blood-red", "lavender-dream", "earth-brown"
   Light palettes: "pure-white", "soft-cream", "sky-blue", "sunset-pink", "spring-green"
 
@@ -73,10 +82,10 @@ EMOTIONAL ARC — how intensity evolves over the song:
   "eruption"   — quiet start, explodes Act 2, Act 3 rides energy
 
 COMPATIBILITY RULES:
-- If sceneTone is "dark", palette MUST be from the Dark list
-- If sceneTone is "light", palette MUST be from the Light list
-- If sceneTone is "light", texture should NOT be "fire" or "storm"
-- "mixed-*" tones can use any palette
+- If sceneTone is "dark", top-level palette MUST be from the Dark list
+- If sceneTone is "light", top-level palette MUST be from the Light list
+- "mixed-*" tones can use any palette from either list
+- Per-chapter palette overrides can use ANY palette regardless of sceneTone
 
 ═══════════════════════════════════════
 SECTION 2 — CHAPTERS (exactly 3)
@@ -93,10 +102,17 @@ Each chapter has:
 - "mood": 2-3 emotional keywords
 
 OPTIONAL per chapter — override the song defaults for THIS act:
+- "palette": override palette for this chapter (any palette, regardless of sceneTone)
 - "motion": override motion for this chapter (same values as Section 1)
 - "texture": override texture for this chapter (same values as Section 1)
 - "typography": override typography for this chapter (same values as Section 1)
 - "atmosphere": override atmosphere for this chapter (same values as Section 1)
+
+PALETTE OVERRIDE is critical for songs whose emotional arc shifts between
+moods. If Act 1 is hopeful and Act 3 is destructive, the text colors
+must change to stay readable against completely different backgrounds.
+Use palette overrides whenever the chapter background would make the
+default palette's text color unreadable.
 
 Use chapter overrides to CREATE A JOURNEY. Don't repeat the same values
 as the song defaults unless you mean it. Think like a film director —
@@ -109,10 +125,17 @@ Chapter descriptions should paint a SCENE, not describe effects.
   BAD:  "Warm tones with spiritual energy"
 
 CHAPTER OVERRIDE EXAMPLES:
-  Song about loss with hope ending:
+  Song about loss with hope ending (sceneTone "mixed-dawn"):
     Act 1: motion "drift", texture "rain", atmosphere "haze"
     Act 2: motion "weighted", texture "storm" (pain escalates)
-    Act 3: motion "fluid", texture "aurora", atmosphere "clean" (release)
+    Act 3: motion "fluid", texture "aurora", atmosphere "clean",
+           palette "sky-blue" (release — palette shifts to hope)
+
+  Song starts bright, ends in destruction (sceneTone "mixed-dusk"):
+    Act 1: (uses song defaults — "elastic", palette "spring-green")
+    Act 2: palette "earth-brown", texture "smoke", atmosphere "haze"
+    Act 3: palette "warm-ember", motion "glitch", texture "fire",
+           atmosphere "cinematic" (full destruction — palette matches fire)
 
   Trap banger with quiet bridge:
     Act 1: (uses song defaults — "weighted", "fire")
@@ -121,7 +144,8 @@ CHAPTER OVERRIDE EXAMPLES:
 
   Don't override every chapter. Only override when the emotional shift
   demands a different feel. If Act 1 matches the song defaults, omit
-  the override fields entirely.
+  the override fields entirely. Palette overrides are most useful for
+  "mixed-*" sceneTones where the mood shifts dramatically between acts.
 
 ═══════════════════════════════════════
 SECTION 3 — STORYBOARD (sparse)
@@ -215,7 +239,8 @@ TRAILS:
 
 MODIFIER RULES:
 - ghostTrail: for echo, repeat, reverb, haunt, voices, forever, again (2-4 per song)
-- letterSequence: for break, shatter, split, count, crumble, apart, scatter (3-5 per song)
+- letterSequence: for break, shatter, split, count, crumble, apart, scatter, rain, fall (3-5 per song)
+  Always pair letterSequence with a semantic exit: gravity-fall, scatter-fly, scatter-letters, melt
 - freeze behavior: for freeze, stop, still, stuck, trapped, numb (1-2 per song)
 - Choose animations by what the word MEANS, not how loud it is
 - Abstract emotional words (love, truth, hope) → use emphasisLevel + visualMetaphor
@@ -229,94 +254,98 @@ SECTION 5 — OUTPUT SCHEMA
 Return this exact JSON structure. All top-level keys are required.
 
 {
-  "sceneTone": "mixed-dawn",
+  "sceneTone": "mixed-dusk",
   "atmosphere": "haze",
-  "palette": "storm-grey",
-  "motion": "drift",
-  "typography": "raw-condensed",
-  "texture": "rain",
-  "emotionalArc": "slow-burn",
+  "palette": "spring-green",
+  "motion": "elastic",
+  "typography": "clean-modern",
+  "texture": "dust",
+  "emotionalArc": "surge",
 
   "chapters": [
     {
       "act": 1,
       "startRatio": 0.0,
       "endRatio": 0.25,
-      "description": "Empty rain-soaked street, single streetlight, puddles reflecting amber",
-      "mood": "isolated, heavy, still"
+      "description": "A vibrant green field under bright afternoon sun, wind stirring tall grass",
+      "mood": "energetic, restless, anticipating"
     },
     {
       "act": 2,
       "startRatio": 0.25,
       "endRatio": 0.75,
-      "description": "Inside a moving car, rain on windshield, blurred city lights passing",
-      "mood": "restless, searching, momentum",
+      "description": "The green field browning at the edges, dust rising, distant haze on the horizon",
+      "mood": "unsettled, building, chaotic",
+      "palette": "earth-brown",
       "motion": "weighted",
-      "texture": "storm",
-      "atmosphere": "cinematic"
+      "texture": "smoke",
+      "atmosphere": "haze"
     },
     {
       "act": 3,
       "startRatio": 0.75,
       "endRatio": 1.0,
-      "description": "Standing on a rooftop at dawn, rain stopping, first light breaking through clouds",
-      "mood": "release, clarity, resolve",
-      "motion": "fluid",
-      "texture": "aurora",
-      "typography": "elegant-serif",
-      "atmosphere": "clean"
+      "description": "A wide shot of a field consumed by wildfire, smoke billowing into reddish-orange sky",
+      "mood": "explosive, destructive, release",
+      "palette": "warm-ember",
+      "motion": "glitch",
+      "texture": "fire",
+      "typography": "display-heavy",
+      "atmosphere": "cinematic"
     }
   ],
 
   "storyboard": [
     {
       "lineIndex": 0,
-      "heroWord": "RAIN",
-      "entryStyle": "rise",
-      "exitStyle": "dissolve"
+      "heroWord": "FIRE",
+      "entryStyle": "explode-in",
+      "exitStyle": "burn-out"
     },
     {
       "lineIndex": 5,
-      "heroWord": "ROAD",
-      "entryStyle": "drift-in",
-      "exitStyle": "evaporate"
+      "heroWord": "FLAMES",
+      "entryStyle": "rise",
+      "exitStyle": "soar"
     },
     {
       "lineIndex": 12,
-      "heroWord": "HEART",
-      "entryStyle": "materialize",
-      "exitStyle": "shatter"
+      "heroWord": "INSANE",
+      "entryStyle": "slam-down",
+      "exitStyle": "scatter-letters"
     }
   ],
 
   "wordDirectives": {
-    "rain": {
-      "word": "rain",
-      "emphasisLevel": 4,
-      "entry": "rise",
-      "behavior": "float",
-      "exit": "dissolve",
-      "trail": "frost",
-      "visualMetaphor": "gravity-drop"
-    },
-    "shatter": {
-      "word": "shatter",
+    "fire": {
+      "word": "fire",
       "emphasisLevel": 5,
       "entry": "explode-in",
-      "behavior": "vibrate",
-      "exit": "scatter-letters",
-      "trail": "spark-burst",
-      "letterSequence": true
+      "behavior": "pulse",
+      "exit": "burn-out",
+      "trail": "ember",
+      "letterSequence": true,
+      "visualMetaphor": "letters igniting and scattering like sparks"
     },
-    "echo": {
-      "word": "echo",
-      "emphasisLevel": 3,
+    "flames": {
+      "word": "flames",
+      "emphasisLevel": 5,
+      "entry": "rise",
+      "behavior": "grow",
+      "exit": "soar",
+      "trail": "ember",
+      "visualMetaphor": "word rising and glowing like fire"
+    },
+    "smoke": {
+      "word": "smoke",
+      "emphasisLevel": 4,
       "entry": "materialize",
       "behavior": "float",
-      "exit": "evaporate",
+      "exit": "drift-up",
       "trail": "none",
       "ghostTrail": true,
-      "ghostDirection": "radial"
+      "ghostDirection": "up",
+      "visualMetaphor": "word appears hazily and floats up leaving faint trails"
     }
   }
 }
@@ -324,7 +353,7 @@ Return this exact JSON structure. All top-level keys are required.
 VALIDATION:
 - sceneTone, atmosphere, palette, motion, typography, texture, emotionalArc are ALL required top-level strings
 - chapters array MUST have exactly 3 entries
-- Chapter override fields (motion, texture, typography, atmosphere) are OPTIONAL — only include when overriding
+- Chapter override fields (palette, motion, texture, typography, atmosphere) are OPTIONAL — only include when overriding
 - storyboard array MUST have 15-25 entries
 - wordDirectives MUST have 15-25 entries
 - All enum values MUST be from the lists above — do NOT invent values
