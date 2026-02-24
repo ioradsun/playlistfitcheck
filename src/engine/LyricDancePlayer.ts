@@ -900,8 +900,12 @@ export class LyricDancePlayer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
 
-    this.update(deltaMs);
-    this.draw(this.audio.currentTime);
+    try {
+      this.update(deltaMs);
+      this.draw(this.audio.currentTime);
+    } catch (err) {
+      console.error('[PLAYER] render crash caught:', err);
+    }
 
     this.rafHandle = requestAnimationFrame(this.tick);
   };
