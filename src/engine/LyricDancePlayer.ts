@@ -1084,6 +1084,10 @@ export class LyricDancePlayer {
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
+
+    // Comment comets — after text, before watermark
+    this.drawComments(performance.now() / 1000);
+
     this.drawWatermark();
     this.debugState = { ...this.debugState, drawCalls };
   }
