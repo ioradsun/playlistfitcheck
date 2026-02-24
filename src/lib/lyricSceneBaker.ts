@@ -232,7 +232,10 @@ function assignWordAnimations(
   };
 
   const entryVariant = motionDefaults.entries[wm.wordIndex % motionDefaults.entries.length];
-  const behaviorVariant = motionDefaults.behaviors[wm.wordIndex % motionDefaults.behaviors.length];
+  const behaviorOptions = motionDefaults.behaviors;
+  const behaviorVariant = behaviorOptions.length > 0
+    ? behaviorOptions[(wm.wordIndex ?? 0) % behaviorOptions.length]
+    : 'pulse';
   const exitVariant = motionDefaults.exits[wm.wordIndex % motionDefaults.exits.length];
 
   return {
