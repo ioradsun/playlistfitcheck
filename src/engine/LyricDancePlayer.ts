@@ -248,6 +248,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
   cameraY: number;
   chunks: Array<{
     id: string;
+    text: string;
     x: number;
     y: number;
     alpha: number;
