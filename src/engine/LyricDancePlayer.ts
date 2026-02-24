@@ -1530,8 +1530,8 @@ export class LyricDancePlayer {
 
     const current = this.chapterImages[chapterIdx];
     const next = this.chapterImages[nextChapterIdx];
-    const chapterProgress = this.getSongProgress();
-    const currentChapter = findChapter(this.payload?.cinematic_direction?.chapters as any[] | undefined, chapterProgress);
+    const duration = this.audio?.duration || 1;
+    const chapterProgress = this.audio ? this.audio.currentTime / duration : 0;
 
     const imageOpacity = 0.32;
     if (current?.complete && current.naturalWidth > 0) {
