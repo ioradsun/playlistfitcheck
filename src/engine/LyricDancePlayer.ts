@@ -1161,7 +1161,7 @@ export class LyricDancePlayer {
   }
 
   private getAtmosphere(): string {
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     return (cd?.atmosphere as string) ?? 'cinematic';
   }
 
