@@ -230,7 +230,7 @@ const PALETTE_COLORS: Record<string, string[]> = {
 };
 
 function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): string[] {
-  const cd = payload.cinematic_direction as Record<string, unknown> | null;
+  const cd = payload.cinematic_direction as unknown as Record<string, unknown> | null;
   const chapters = (cd?.chapters as any[]) ?? [];
 
   // Check per-chapter palette override first
