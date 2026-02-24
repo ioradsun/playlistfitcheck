@@ -978,7 +978,7 @@ export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, on
 
             {/* Content */}
             <div className="p-3">
-              {tab === "hud" ? <HudTab player={player} /> : tab === "prompt" ? <PromptTab data={data} /> : <DataTab data={data} />}
+              {tab === "hud" ? <HudTab player={player} /> : tab === "prompt" ? <PromptTab data={data} onRunCustomPrompt={onRunCustomPrompt ? handleRunCustomPrompt : undefined} isRunning={customPromptRunning} /> : <DataTab data={data} />}
             </div>
           </motion.aside>
         )}
