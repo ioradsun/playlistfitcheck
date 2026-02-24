@@ -248,6 +248,9 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     alpha: number;
     glow: number;
     scale: number;
+    scaleX?: number;
+    scaleY?: number;
+    skewX?: number;
     fontSize?: number;
     color?: string;
     visible: boolean;
@@ -862,7 +865,7 @@ export class LyricDancePlayer {
     const fontFamily = typo?.fontFamily?.trim() || 'Montserrat';
     const fontWeight = typo?.fontWeight || 800;
     const textTransform = typo?.textTransform || 'uppercase';
-    const baseFontPx = 36;
+    const baseFontPx = 42;
     const font = `${fontWeight} ${baseFontPx}px ${fontFamily}`;
     measureCtx.font = font;
 
@@ -938,9 +941,9 @@ export class LyricDancePlayer {
       const intensity = chapter?.emotionalIntensity ?? 0.5;
 
       const grad = ctx.createLinearGradient(0, 0, 0, off.height);
-      grad.addColorStop(0, this.darken(dominantColor, 0.85));
-      grad.addColorStop(0.5, this.darken(dominantColor, 0.6));
-      grad.addColorStop(1, this.darken(dominantColor, 0.75));
+      grad.addColorStop(0, this.darken(dominantColor, 0.08));
+      grad.addColorStop(0.5, this.darken(dominantColor, 0.06));
+      grad.addColorStop(1, this.darken(dominantColor, 0.07));
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, off.width, off.height);
 
@@ -991,14 +994,14 @@ export class LyricDancePlayer {
       const y = (i * 0.381966 % 1) * h * 0.7;
       const r = w * (0.2 + intensity * 0.15);
       const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, `${dominant}22`);
+      grad.addColorStop(0, `${dominant}10`);
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
     }
     if (intensity > 0.6) {
       const lightGrad = ctx.createLinearGradient(w * 0.3, 0, w * 0.7, h * 0.3);
-      lightGrad.addColorStop(0, `${accent}18`);
+      lightGrad.addColorStop(0, `${accent}0c`);
       lightGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = lightGrad;
       ctx.fillRect(0, 0, w, h);
@@ -1020,7 +1023,7 @@ export class LyricDancePlayer {
     }
     ctx.globalAlpha = 1;
     const nebula = ctx.createRadialGradient(w * 0.6, h * 0.3, 0, w * 0.6, h * 0.3, w * 0.4);
-    nebula.addColorStop(0, `${accent}12`);
+    nebula.addColorStop(0, `${accent}09`);
     nebula.addColorStop(1, 'transparent');
     ctx.fillStyle = nebula;
     ctx.fillRect(0, 0, w, h);
@@ -1029,8 +1032,8 @@ export class LyricDancePlayer {
 
   private drawIntimateAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
     const glow = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, w * 0.5);
-    glow.addColorStop(0, `${accent}14`);
-    glow.addColorStop(0.5, `${dominant}08`);
+    glow.addColorStop(0, `${accent}0a`);
+    glow.addColorStop(0.5, `${dominant}04`);
     glow.addColorStop(1, 'transparent');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
@@ -1038,7 +1041,7 @@ export class LyricDancePlayer {
       const y = h * (0.3 + i * 0.2);
       const band = ctx.createLinearGradient(0, y - 40, 0, y + 40);
       band.addColorStop(0, 'transparent');
-      band.addColorStop(0.5, `${accent}08`);
+      band.addColorStop(0.5, `${accent}04`);
       band.addColorStop(1, 'transparent');
       ctx.fillStyle = band;
       ctx.fillRect(0, y - 40, w, 80);
@@ -1051,14 +1054,14 @@ export class LyricDancePlayer {
     for (let i = 0; i < beamCount; i++) {
       const x = w * (0.2 + (i / beamCount) * 0.6);
       const beam = ctx.createLinearGradient(x, 0, x + w * 0.05, h);
-      beam.addColorStop(0, `${accent}25`);
-      beam.addColorStop(0.4, `${accent}10`);
+      beam.addColorStop(0, `${accent}12`);
+      beam.addColorStop(0.4, `${accent}08`);
       beam.addColorStop(1, 'transparent');
       ctx.fillStyle = beam;
       ctx.fillRect(x - w * 0.05, 0, w * 0.15, h);
     }
     const bloom = ctx.createRadialGradient(w * 0.5, h * 0.4, 0, w * 0.5, h * 0.4, w * 0.35);
-    bloom.addColorStop(0, `${accent}20`);
+    bloom.addColorStop(0, `${accent}10`);
     bloom.addColorStop(1, 'transparent');
     ctx.fillStyle = bloom;
     ctx.fillRect(0, 0, w, h);
