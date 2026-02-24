@@ -2234,7 +2234,7 @@ export class LyricDancePlayer {
   }
 
   private buildChapterSims(): void {
-    console.log('[PLAYER] building chapter sims...');
+    
     try {
       const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
       const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? ['#111111', '#FFD700'];
