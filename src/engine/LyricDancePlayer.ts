@@ -1097,8 +1097,27 @@ export class LyricDancePlayer {
     this.ctx.textBaseline = 'middle';
 
     let drawCalls = 0;
+    const nowSecEmitters = performance.now() / 1000;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
+
+      // Spawn word emitter on first visibility
+      if (chunk.emitterType && chunk.emitterType !== 'none') {
+        const emitterKey = chunk.id;
+        if (!this.firedEmitters.has(emitterKey)) {
+          this.firedEmitters.add(emitterKey);
+          const chColor = (chapterColorForEmitters) ?? '#FFD700';
+          this.wordEmitters.push({
+            type: chunk.emitterType as WordEmitterType,
+            x: chunk.x,
+            y: chunk.y,
+            color: chunk.color ?? chColor,
+            startTime: nowSecEmitters,
+            duration: 1.8,
+            intensity: chunk.glow ?? 1.0,
+          });
+        }
+      }
       // One-time debug for first visible chunk
       if (chunk.visible && !(this as any)._debuggedChunk) {
         (this as any)._debuggedChunk = true;
