@@ -1147,11 +1147,6 @@ export class LyricDancePlayer {
     if (this._lastLoggedTSec === tSec && tSec > 0) {
       this._stalledFrames = (this._stalledFrames ?? 0) + 1;
       if (this._stalledFrames > 10) {
-        console.error('[PLAYER] audio stalled at tSec:', tSec, {
-          audioCurrentTime: this.audio?.currentTime,
-          audioPaused: this.audio?.paused,
-          audioReadyState: this.audio?.readyState,
-        });
         this._stalledFrames = 0;
       }
     } else {
