@@ -109,6 +109,14 @@ OUTPUT SCHEMA:
   }
 }
 
+CRITICAL CONTRAST RULE:
+dominantColor must always be dark enough for light text to read against it.
+Maximum luminance for any dominantColor: 0.15 (keep colors dark and rich).
+Good: #1A1A2E, #0D0D0D, #1a0a00, #0a1520
+Bad: #E0BBE4, #FFFFFF, #F0F0F0, #C0C0C0
+If the emotional tone requires a light color (white, lavender, gold) — 
+express it through the accent color and particles, NOT the background.
+
 CONSTRAINTS:
 - storyboard must cover every lyric line.
 - wordDirectives: only emotionally significant words, 10-25 max.

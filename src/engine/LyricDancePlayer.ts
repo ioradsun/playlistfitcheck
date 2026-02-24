@@ -1000,7 +1000,8 @@ export class LyricDancePlayer {
       this.ctx.fillStyle = halo;
       this.ctx.fillRect(drawX - haloR, drawY - haloR, haloR * 2, haloR * 2);
 
-      this.ctx.globalAlpha = chunk.alpha;
+      const drawAlpha = chunk.alpha < 0.1 ? chunk.alpha : Math.max(0.65, chunk.alpha);
+      this.ctx.globalAlpha = drawAlpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
       this.ctx.font = zoomedFont;
       if (chunk.glow > 0) {
