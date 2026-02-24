@@ -566,8 +566,8 @@ export function LyricFitTab({
             setSceneDescription(e.target.value);
             setResolvedScene(null);
           }}
-          placeholder="Where are you when this song plays?"
-          className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+          placeholder="Where are you when this song plays? ex: driving at night. on a rooftop. in a crowded club."
+          className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder:text-muted-foreground/50 placeholder:italic focus:outline-none focus:ring-1 focus:ring-primary/50"
           maxLength={200}
           aria-label="Scene description"
         />
@@ -581,9 +581,7 @@ export function LyricFitTab({
         <p className="text-primary text-xs font-mono">
           ✓ {resolvedScene.moodSummary}
         </p>
-      ) : !sceneDescription && (
-        <p className="text-xs text-muted-foreground/60 italic">Example: Driving at night. On a rooftop. In a crowded club.</p>
-      )}
+      ) : null}
     </div>
   ) : null;
 
