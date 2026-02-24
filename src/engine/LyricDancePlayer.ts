@@ -964,6 +964,10 @@ export class LyricDancePlayer {
   private draw(tSec: number): void {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
+    if (this.fpsAccum.frames === 1) {
+      console.log('[PLAYER] chunk keys sample:', [...this.chunks.keys()].slice(0, 5));
+      console.log('[PLAYER] frame chunk ids sample:', frame.chunks.slice(0, 5).map(c => c.id));
+    }
 
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
@@ -1000,8 +1004,7 @@ export class LyricDancePlayer {
       this.ctx.fillStyle = halo;
       this.ctx.fillRect(drawX - haloR, drawY - haloR, haloR * 2, haloR * 2);
 
-      const drawAlpha = chunk.alpha < 0.1 ? chunk.alpha : Math.max(0.65, chunk.alpha);
-      this.ctx.globalAlpha = drawAlpha;
+      this.ctx.globalAlpha = chunk.alpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
       this.ctx.font = zoomedFont;
       if (chunk.glow > 0) {
@@ -1149,29 +1152,60 @@ export class LyricDancePlayer {
     const lines = payload.lines ?? [];
 
     if (words.length > 0) {
-      const lineWordCounters: Record<number, number> = {};
+      // Replicate the baker's phrase-grouping to generate matching 3-part keys:
+      // ${lineIndex}-${groupIndex}-${wordIndex}
+      const MAX_GROUP_SIZE = 5;
+      const MIN_GROUP_DURATION = 0.3;
 
+      const lineMap = new Map<number, Array<{ word: string; start: number; end: number }>>();
       for (const w of words) {
         const lineIndex = lines.findIndex(
           (l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999),
         );
         const li = Math.max(0, lineIndex);
-        const wi = lineWordCounters[li] ?? 0;
-        lineWordCounters[li] = wi + 1;
-
-        const key = `${li}-${wi}`;
-        const displayWord = textTransform === 'uppercase'
-          ? w.word.toUpperCase()
-          : w.word;
-
-        this.chunks.set(key, {
-          id: key,
-          text: displayWord,
-          color: '#ffffff',
-          font,
-          width: measureCtx.measureText(displayWord).width,
-        });
+        if (!lineMap.has(li)) lineMap.set(li, []);
+        lineMap.get(li)!.push(w);
       }
+
+      for (const [lineIdx, lineWords] of lineMap) {
+        let groupIdx = 0;
+        let current: Array<{ word: string; start: number; end: number }> = [];
+
+        const flushGroup = () => {
+          if (current.length === 0) return;
+          for (let wi = 0; wi < current.length; wi++) {
+            const key = `${lineIdx}-${groupIdx}-${wi}`;
+            const displayWord = textTransform === 'uppercase'
+              ? current[wi].word.toUpperCase()
+              : current[wi].word;
+            this.chunks.set(key, {
+              id: key,
+              text: displayWord,
+              color: '#ffffff',
+              font,
+              width: measureCtx.measureText(displayWord).width,
+            });
+          }
+          groupIdx += 1;
+          current = [];
+        };
+
+        for (let i = 0; i < lineWords.length; i++) {
+          current.push(lineWords[i]);
+          const duration = current[current.length - 1].end - current[0].start;
+          const isNaturalBreak = /[,\.!?;]$/.test(lineWords[i].word);
+          const isMaxSize = current.length >= MAX_GROUP_SIZE;
+          const isLast = i === lineWords.length - 1;
+
+          if (isLast) {
+            flushGroup();
+          } else if ((isNaturalBreak || isMaxSize) && duration >= MIN_GROUP_DURATION) {
+            flushGroup();
+          }
+        }
+      }
+
+      console.log('[PLAYER] chunk keys sample:', [...this.chunks.keys()].slice(0, 5));
       return;
     }
 
@@ -1217,18 +1251,6 @@ export class LyricDancePlayer {
   // Per-chapter particle systems derived from cinematic direction
   public chapterParticleSystems: (string | null)[] = [];
 
-  private enforceDarkColor(hex: string): string {
-    const clean = (hex || '#0a0a0a').replace('#', '').padEnd(6, '0');
-    const r = parseInt(clean.slice(0, 2), 16) / 255;
-    const g = parseInt(clean.slice(2, 4), 16) / 255;
-    const b = parseInt(clean.slice(4, 6), 16) / 255;
-    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    if (lum <= 0.15) return hex;
-    const scale = 0.12 / lum;
-    const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255 * scale)));
-    return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
-  }
-
   private buildBgCache(): void {
     const chapters = this.payload?.cinematic_direction?.chapters ?? [];
     const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
@@ -1244,8 +1266,7 @@ export class LyricDancePlayer {
       const ctx = off.getContext('2d');
       if (!ctx) continue;
 
-      let dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
-      dominantColor = this.enforceDarkColor(dominantColor);
+      const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
       const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
       const particleDesc = chapter?.particles ?? '';
       this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
