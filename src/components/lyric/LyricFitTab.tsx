@@ -59,6 +59,7 @@ export function LyricFitTab({
   const [lines, setLines] = useState<LyricLine[]>([]);
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
+  const [words, setWords] = useState<Array<{ word: string; start: number; end: number }> | null>(null);
 
   const [songDna, setSongDna] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
