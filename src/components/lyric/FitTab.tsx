@@ -80,6 +80,7 @@ export function FitTab({
   bgImageUrl,
   setBgImageUrl,
   generationStatus,
+  words,
   onRetry,
   onHeaderProject,
   onBack,

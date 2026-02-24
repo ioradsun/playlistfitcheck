@@ -65,6 +65,7 @@ export function LyricsTab({
   versionMeta,
   setVersionMeta,
   beatGrid,
+  setWords,
   onProjectSaved,
   onNewProject,
   onHeaderProject,
