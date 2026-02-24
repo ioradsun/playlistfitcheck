@@ -14,9 +14,17 @@ interface ChapterInput {
   emotionalIntensity: number;
 }
 
+interface SceneContext {
+  scene: string;
+  label: string;
+  baseLuminance?: 'dark' | 'medium' | 'light';
+  fluxPromptSuffix?: string;
+}
+
 interface RequestBody {
   lyric_dance_id: string;
   chapters: ChapterInput[];
+  scene_context?: SceneContext | null;
 }
 
 function colorToMood(hex: string): string {
