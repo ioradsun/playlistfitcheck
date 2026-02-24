@@ -54,6 +54,7 @@ export function PublishLyricDanceButton({
   fingerprint,
   seed,
   songDna,
+  words,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
