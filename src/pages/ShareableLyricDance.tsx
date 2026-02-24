@@ -270,8 +270,8 @@ export default function ShareableLyricDance() {
                 }
               }
             }).catch(() => {});
-
-        // Profile + comments
+          }
+        });
         const [profileResult, commentsResult] = await Promise.all([
           supabase.from("profiles").select("display_name, avatar_url").eq("id", d.user_id).maybeSingle(),
           supabase.from("lyric_dance_comments" as any).select("id, text, submitted_at").eq("dance_id", d.id).order("submitted_at", { ascending: true }).limit(100),
