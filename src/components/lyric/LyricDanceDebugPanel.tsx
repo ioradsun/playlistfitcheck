@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bug, ChevronDown, ChevronRight, Copy, X, RefreshCw, Sparkles, Clapperboard } from "lucide-react";
+import { Bug, ChevronDown, ChevronRight, Copy, X, RefreshCw, Sparkles, Clapperboard, Play, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import type { SceneManifest } from "@/engine/SceneManifest";
