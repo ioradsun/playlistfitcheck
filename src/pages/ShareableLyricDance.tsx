@@ -361,6 +361,9 @@ export default function ShareableLyricDance() {
       setHasSubmitted(true);
       setInputText("");
 
+      // Fire comet on canvas
+      playerRef.current?.fireComment(newComment.text);
+
       // Push to player constellation
       const player = playerRef.current;
       if (player) {
