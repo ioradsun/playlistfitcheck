@@ -982,6 +982,7 @@ export type Database = {
           updated_at: string
           user_id: string
           version_meta: Json | null
+          words: Json | null
         }
         Insert: {
           artist?: string
@@ -999,6 +1000,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           version_meta?: Json | null
+          words?: Json | null
         }
         Update: {
           artist?: string
@@ -1016,6 +1018,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           version_meta?: Json | null
+          words?: Json | null
         }
         Relationships: []
       }
