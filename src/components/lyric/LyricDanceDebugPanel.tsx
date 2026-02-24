@@ -865,12 +865,24 @@ interface Props {
   onRegenerateSong?: () => void;
   onRegenerateDance?: () => void;
   onRegenerateDirector?: () => void;
+  onRunCustomPrompt?: (systemPrompt: string) => Promise<void>;
 }
 
-export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance, onRegenerateDirector }: Props) {
+export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance, onRegenerateDirector, onRunCustomPrompt }: Props) {
   const [open, setOpen] = useState(false);
+  const [customPromptRunning, setCustomPromptRunning] = useState(false);
   const hasPlayer = player != null;
   const [tab, setTab] = useState<"hud" | "data" | "prompt">(hasPlayer ? "hud" : "data");
+
+  const handleRunCustomPrompt = async (systemPrompt: string) => {
+    if (!onRunCustomPrompt || customPromptRunning) return;
+    setCustomPromptRunning(true);
+    try {
+      await onRunCustomPrompt(systemPrompt);
+    } finally {
+      setCustomPromptRunning(false);
+    }
+  };
 
   const copyAll = () => {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
