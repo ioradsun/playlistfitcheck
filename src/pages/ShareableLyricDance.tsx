@@ -556,6 +556,32 @@ export default function ShareableLyricDance() {
             toast.error(e.message || "Failed to sync words");
           }
         }}
+        onRegenerateDirector={async () => {
+          if (!data) return;
+          toast.info("Re-running Director (scene manifest)…");
+          try {
+            const { data: result, error } = await supabase.functions.invoke("generate-scene-manifest", {
+              body: {
+                cinematic_direction: data.cinematic_direction,
+                lyrics: data.lyrics,
+                words: data.words ?? [],
+                beat_grid: data.beat_grid,
+                song_duration: data.lyrics.length > 0 ? data.lyrics[data.lyrics.length - 1].end : 0,
+                lyricId: data.id,
+              },
+            });
+            if (error) throw error;
+            if (result?.scene_manifest) {
+              toast.success("Scene manifest updated — reloading…");
+              setTimeout(() => window.location.reload(), 800);
+            } else {
+              toast.error("Director returned empty manifest");
+            }
+          } catch (e: any) {
+            console.error("[DEBUG] Director error:", e);
+            toast.error(e.message || "Director call failed");
+          }
+        }}
         data={{
           songDna: {
             mood: (data.physics_spec as any)?.mood, description: (data.physics_spec as any)?.description,
