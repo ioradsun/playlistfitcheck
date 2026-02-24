@@ -1141,21 +1141,38 @@ export class LyricDancePlayer {
   // ────────────────────────────────────────────────────────────
 
   public fireComment(text: string): void {
-    const fromLeft = Math.random() > 0.5;
     const color = this.commentColors[this.commentColorIdx % this.commentColors.length];
     this.commentColorIdx++;
+
+    // Pick a random side: 0=left, 1=right, 2=top, 3=bottom
+    const entrySide = Math.floor(Math.random() * 4);
+    // Exit from a DIFFERENT side
+    let exitSide = Math.floor(Math.random() * 3);
+    if (exitSide >= entrySide) exitSide++;
+
+    const margin = 400;
+    const sidePos = (dim: number) => dim * (0.2 + Math.random() * 0.6);
+
+    let startX: number, startY: number, endX: number, endY: number;
+    if (entrySide === 0) { startX = -margin; startY = sidePos(this.height); }
+    else if (entrySide === 1) { startX = this.width + margin; startY = sidePos(this.height); }
+    else if (entrySide === 2) { startX = sidePos(this.width); startY = -margin; }
+    else { startX = sidePos(this.width); startY = this.height + margin; }
+
+    if (exitSide === 0) { endX = -margin; endY = sidePos(this.height); }
+    else if (exitSide === 1) { endX = this.width + margin; endY = sidePos(this.height); }
+    else if (exitSide === 2) { endX = sidePos(this.width); endY = -margin; }
+    else { endX = sidePos(this.width); endY = this.height + margin; }
 
     const comment: CommentChunk = {
       id: `comment-${Date.now()}`,
       text,
       color,
       startTime: performance.now() / 1000,
-      duration: 3.5,
-      startX: fromLeft ? -400 : this.width + 400,
-      startY: this.height * (0.2 + Math.random() * 0.6),
-      endX: fromLeft ? this.width + 400 : -400,
+      duration: 4.5,
+      startX, startY, endX, endY,
       trailLength: 120,
-      fontSize: Math.max(18, Math.min(28, Math.floor(280 / text.length))),
+      fontSize: Math.max(16, Math.min(24, Math.floor(240 / text.length))),
     };
 
     this.activeComments.push(comment);
