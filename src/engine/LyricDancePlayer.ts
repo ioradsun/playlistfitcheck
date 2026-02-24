@@ -15,6 +15,7 @@ import {
   type BakedTimeline,
   type Keyframe,
   type ScenePayload,
+  type WordEmitterType,
 } from "@/lib/lyricSceneBaker";
 
 // ──────────────────────────────────────────────────────────────
