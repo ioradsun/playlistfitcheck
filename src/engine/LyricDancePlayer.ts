@@ -2337,6 +2337,7 @@ export class LyricDancePlayer {
         fontSize: c.fontSize,
         color: c.color,
         emitterType: c.emitterType,
+        visible: c.visible,
         entryOffsetY: c.entryOffsetY,
         entryOffsetX: c.entryOffsetX,
         entryScale: c.entryScale,
