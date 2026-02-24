@@ -47,15 +47,15 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }:
         />
 
         {/* Lyrics — no label, contextual helper */}
-        <div>
+        <div className="space-y-1.5">
           {hasLyrics && (
-            <span className="text-xs text-muted-foreground mb-1 block">Lyrics (optional)</span>
+            <span className="text-xs text-muted-foreground/60 block">Lyrics (optional)</span>
           )}
           <Textarea
             value={referenceLyrics}
             onChange={(e) => setReferenceLyrics(e.target.value)}
-            placeholder="Add lyrics (optional)"
-            className="min-h-[80px] resize-y text-sm bg-muted/20 border-border font-mono"
+            placeholder="Adding lyrics improves timing and accuracy."
+            className="min-h-[80px] resize-y text-sm bg-background border border-border rounded-lg px-3 py-2.5 font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
             disabled={loading}
             aria-label="Paste your song lyrics"
           />
