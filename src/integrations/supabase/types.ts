@@ -967,7 +967,6 @@ export type Database = {
       }
       saved_lyrics: {
         Row: {
-          artist: string
           audio_url: string | null
           background_image_url: string | null
           beat_grid: Json | null
@@ -985,7 +984,6 @@ export type Database = {
           words: Json | null
         }
         Insert: {
-          artist?: string
           audio_url?: string | null
           background_image_url?: string | null
           beat_grid?: Json | null
@@ -1003,7 +1001,6 @@ export type Database = {
           words?: Json | null
         }
         Update: {
-          artist?: string
           audio_url?: string | null
           background_image_url?: string | null
           beat_grid?: Json | null
