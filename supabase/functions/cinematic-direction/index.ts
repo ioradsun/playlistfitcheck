@@ -89,7 +89,8 @@ OUTPUT SCHEMA:
     "word": {
       "kineticClass": "RISING | FALLING | IMPACT | SPINNING | FLOATING",
       "emphasisLevel": 1-5,
-      "colorOverride": "#hex or null"
+      "colorOverride": "#hex or null",
+      "visualMetaphor": "ember-burst | frost-form | lens-focus | gravity-drop | ascent | fracture | heartbeat | pain-weight | isolation | convergence | shockwave | void-absorb | radiance | gold-rain | speed-blur | slow-drift | power-surge | dream-float | truth-snap | motion-streak"
     }
   },
 
@@ -112,6 +113,9 @@ OUTPUT SCHEMA:
 CONSTRAINTS:
 - storyboard must cover every lyric line.
 - wordDirectives: only emotionally significant words, 10-25 max.
+- For each wordDirective visualMetaphor, assign based on the word's meaning in this song context, not just the token.
+- Examples: "cold cash" -> "gold-rain" (not "frost-form"), "fire the shot" -> "shockwave" (not "ember-burst"), "falling in love" -> "heartbeat" (not "gravity-drop").
+- Only assign visualMetaphor to emphasisLevel 3+ words; skip filler/low-emphasis words.
 - tensionCurve must contain exactly 3 entries aligned to chapter ranges.
 `;
 
