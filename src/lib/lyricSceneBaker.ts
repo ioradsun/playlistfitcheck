@@ -964,7 +964,8 @@ function bakeFrame(
             : Math.abs(wi - group.anchorWordIdx) * animParams.stagger;
 
           const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay);
-          const entryProgress = adjustedElapsed / Math.max(0.01, animParams.entryDuration);
+          const rawEntryProgress = adjustedElapsed / Math.max(0.01, animParams.entryDuration);
+          const entryProgress = Math.min(1, Math.max(0, rawEntryProgress));
           const exitProgress = Math.max(0, (tSec - group.end) / Math.max(0.01, animParams.exitDuration));
 
           const entryState = computeEntryState(entry, entryProgress, motionDefaults.behaviorIntensity);
