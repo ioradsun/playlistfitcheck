@@ -718,6 +718,9 @@ export default function ShareableLyricDance() {
           beatGrid: data.beat_grid as any, lines: data.lyrics,
           title: data.song_name, artist: data.artist_name,
           overrides: {}, fingerprint: data.artist_dna,
+          scene_context: data.scene_context as any,
+          chapter_images: data.chapter_images,
+          words: data.words,
         }}
       />
     </div>
