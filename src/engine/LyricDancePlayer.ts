@@ -992,6 +992,14 @@ export class LyricDancePlayer {
       const sx = chunk.scaleX ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
       const sy = chunk.scaleY ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
 
+      // Behind each word — subtle dark halo for legibility
+      const haloR = fontSize * 2.2;
+      const halo = this.ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, haloR);
+      halo.addColorStop(0, 'rgba(0,0,0,0.45)');
+      halo.addColorStop(1, 'transparent');
+      this.ctx.fillStyle = halo;
+      this.ctx.fillRect(drawX - haloR, drawY - haloR, haloR * 2, haloR * 2);
+
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
       this.ctx.font = zoomedFont;
@@ -1386,7 +1394,7 @@ export class LyricDancePlayer {
     this.activeEvents = [];
   }
 
-  private updateSims(tSec: number, frame: Keyframe): void {
+  private updateSims(tSec: number, frame: ScaledKeyframe): void {
     const simFrame = Math.floor(tSec * 24);
     if (simFrame === this.lastSimFrame) return;
     this.lastSimFrame = simFrame;
@@ -1396,7 +1404,7 @@ export class LyricDancePlayer {
     const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
     const ci = Math.max(0, chapterIdx);
     const chapter = chapters[ci] ?? {};
-    const intensity = chapter?.emotionalIntensity ?? 0.5;
+    const intensity = (chapter as any)?.emotionalIntensity ?? 0.5;
     const pulse = (frame as any).beatPulse ?? (frame.beatIndex ? (frame.beatIndex % 2 ? 0.2 : 0.7) : 0);
     const sim = this.chapterSims[ci];
     this.currentSimCanvases = [];
@@ -1407,9 +1415,9 @@ export class LyricDancePlayer {
     if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
   }
 
-  private drawSimLayer(_frame: Keyframe): void {
+  private drawSimLayer(_frame: ScaledKeyframe): void {
     for (const simCanvas of this.currentSimCanvases) {
-      this.ctx.globalAlpha = 0.85;
+      this.ctx.globalAlpha = 0.38;
       this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
     }
