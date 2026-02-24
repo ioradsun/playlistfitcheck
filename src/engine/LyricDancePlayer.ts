@@ -276,6 +276,11 @@ let globalSessionKey = '';
 // ──────────────────────────────────────────────────────────────
 
 export class LyricDancePlayer {
+  static RESOLUTIONS = {
+    "16:9": { width: 1920, height: 1080 },
+    "9:16": { width: 1080, height: 1920 },
+  };
+
   // DOM (React passes these in; engine owns them after construction)
   private bgCanvas: HTMLCanvasElement;
   private textCanvas: HTMLCanvasElement;
@@ -287,6 +292,12 @@ export class LyricDancePlayer {
   private dpr: number = window.devicePixelRatio || 1;
   private width = 0; // logical px
   private height = 0; // logical px
+  private mediaRecorder: MediaRecorder | null = null;
+  private isExporting = false;
+  private displayWidth = 0;
+  private displayHeight = 0;
+  private wasLoopingBeforeExport = true;
+  public onExportComplete: (() => void) | null = null;
 
   // Audio (React reads this)
   public audio: HTMLAudioElement;
@@ -368,6 +379,8 @@ export class LyricDancePlayer {
   // Compatibility with existing React shell
   async init(): Promise<void> {
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
+    this.displayWidth = this.width;
+    this.displayHeight = this.height;
 
     // Cache exists but was baked without cinematic direction — invalidate before promise reuse
     if (globalTimelineCache && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
@@ -461,6 +474,59 @@ export class LyricDancePlayer {
     this.currentTimeMs = Math.max(0, (t - this.songStartSec) * 1000);
   }
 
+  seekTo(timeSec: number): void {
+    this.seek(timeSec);
+  }
+
+  async startExport(ratio: "16:9" | "9:16"): Promise<void> {
+    if (this.isExporting || !this.payload) return;
+
+    const { width, height } = LyricDancePlayer.RESOLUTIONS[ratio];
+    this.isExporting = true;
+    this.wasLoopingBeforeExport = this.audio.loop;
+    this.audio.loop = false;
+
+    this.setResolution(width, height);
+    this.seekTo(0);
+
+    const stream = this.canvas.captureStream(30);
+    const mimeType = MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "video/webm";
+
+    this.mediaRecorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: 8_000_000,
+    });
+
+    const chunks: Blob[] = [];
+    this.mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    this.mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${this.data.artist_name ?? "artist"}-${this.data.song_name ?? "song"}-${ratio.replace(":", "x")}.${mimeType.includes("mp4") ? "mp4" : "webm"}`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      this.isExporting = false;
+      this.mediaRecorder = null;
+      this.audio.loop = this.wasLoopingBeforeExport;
+      this.setResolution(this.displayWidth, this.displayHeight);
+      this.onExportComplete?.();
+    };
+
+    this.mediaRecorder.start(100);
+    this.play();
+  }
+
+  stopExport(): void {
+    if (!this.mediaRecorder || this.mediaRecorder.state === "inactive") return;
+    this.mediaRecorder.stop();
+  }
+
   resize(logicalW: number, logicalH: number): void {
     const w = Math.max(1, Math.floor(logicalW));
     const h = Math.max(1, Math.floor(logicalH));
@@ -540,6 +606,10 @@ export class LyricDancePlayer {
     const t = this.audio.currentTime;
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
+
+    if (this.isExporting && clamped >= this.songEndSec) {
+      this.stopExport();
+    }
 
 
     this.fpsAccum.t += deltaMs;
@@ -675,7 +745,69 @@ export class LyricDancePlayer {
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
+    this.drawWatermark();
     this.debugState = { ...this.debugState, drawCalls };
+  }
+
+  private drawWatermark(): void {
+    const margin = 20;
+    const padX = 14;
+    const padY = 8;
+    const text = "♥ tools.FMLY";
+    const fontSize = Math.max(12, this.width * 0.013);
+
+    this.ctx.save();
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.font = `400 ${fontSize}px "Space Mono", "Geist Mono", monospace`;
+    (this.ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = "0.08em";
+
+    const textWidth = this.ctx.measureText(text).width;
+    const badgeW = textWidth + padX * 2;
+    const badgeH = fontSize + padY * 2;
+    const x = this.width - badgeW - margin;
+    const y = this.height - badgeH - margin;
+
+    const radius = badgeH / 2;
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + radius, y);
+    this.ctx.lineTo(x + badgeW - radius, y);
+    this.ctx.arcTo(x + badgeW, y, x + badgeW, y + badgeH, radius);
+    this.ctx.lineTo(x + badgeW, y + badgeH - radius);
+    this.ctx.arcTo(x + badgeW, y + badgeH, x, y + badgeH, radius);
+    this.ctx.lineTo(x + radius, y + badgeH);
+    this.ctx.arcTo(x, y + badgeH, x, y, radius);
+    this.ctx.lineTo(x, y + radius);
+    this.ctx.arcTo(x, y, x + badgeW, y, radius);
+    this.ctx.closePath();
+
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+    this.ctx.fill();
+
+    this.ctx.fillStyle = "#00FF87";
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "middle";
+    this.ctx.globalAlpha = 1;
+    this.ctx.fillText(text, x + padX, y + badgeH / 2);
+
+    this.ctx.restore();
+  }
+
+  private setResolution(width: number, height: number): void {
+    this.width = width;
+    this.height = height;
+    this.canvas.width = Math.floor(width * this.dpr);
+    this.canvas.height = Math.floor(height * this.dpr);
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.height = `${height}px`;
+
+    this.textCanvas.width = this.canvas.width;
+    this.textCanvas.height = this.canvas.height;
+    this.textCanvas.style.width = `${width}px`;
+    this.textCanvas.style.height = `${height}px`;
+
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.buildBgCache();
+    if (this.timeline.length) this.timeline = this.scaleTimeline(this.unscaleTimeline());
   }
 
   // ────────────────────────────────────────────────────────────
@@ -928,7 +1060,7 @@ export class LyricDancePlayer {
     ctx.fillRect(0, 0, w, h);
   }
 
-  private drawBackground(frame: ScaledKeyframe): void {
+  private drawBackground(frame: Keyframe): void {
     if (this.bgCaches.length === 0) return;
 
     const bgBlend = frame.bgBlend ?? 0;
