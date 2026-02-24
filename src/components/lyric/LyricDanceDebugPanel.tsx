@@ -203,6 +203,10 @@ interface DebugData {
   artist: string;
   overrides: Record<string, unknown>;
   fingerprint: unknown;
+  // Extended fields for shareable dance debug
+  scene_context?: { sourceDescription?: string; baseLuminance?: number; colorTemperature?: number; timeOfDay?: string; textStyle?: string; moodSummary?: string } | null;
+  chapter_images?: string[];
+  words?: Array<{ word: string; start: number; end: number }>;
 }
 
 function DataTab({ data }: { data: DebugData }) {
