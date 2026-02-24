@@ -604,6 +604,7 @@ export function LyricDisplay({
       const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
         body: {
           title: data.title,
+          artist: user?.user_metadata?.display_name || user?.user_metadata?.full_name || "artist",
           lyrics: lyricsText,
           userSceneDirection: direction.trim(),
           includeHooks: false,
