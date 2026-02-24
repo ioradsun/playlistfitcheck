@@ -979,23 +979,26 @@ export class LyricDancePlayer {
   }
 
   private tick = (timestamp: number): void => {
-    if (this.destroyed) return;
-
-    const deltaMs = Math.min(timestamp - (this.lastTimestamp || timestamp), 100);
-    this.lastTimestamp = timestamp;
-
-    // ALWAYS start frame with this exact sequence
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.ctx.clearRect(0, 0, this.width, this.height);
+    if (this.destroyed) return; // truly dead — no reschedule
 
     try {
+      const deltaMs = Math.min(timestamp - (this.lastTimestamp || timestamp), 100);
+      this.lastTimestamp = timestamp;
+
+      // ALWAYS start frame with this exact sequence
+      this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this.ctx.clearRect(0, 0, this.width, this.height);
+
       this.update(deltaMs);
       this.draw(this.audio.currentTime);
     } catch (err) {
       console.error('[PLAYER] render crash caught:', err);
+    } finally {
+      // ALWAYS reschedule — even after crash — loop must never die
+      if (!this.destroyed && this.playing) {
+        this.rafHandle = requestAnimationFrame(this.tick);
+      }
     }
-
-    this.rafHandle = requestAnimationFrame(this.tick);
   };
 
   private drawWordHalo(
@@ -1139,7 +1142,7 @@ export class LyricDancePlayer {
       this._draw(tSec);
     } catch (err) {
       console.error('[PLAYER CRASH] at tSec:', tSec, err);
-      this.stopHealthMonitor();
+      // Don't stop health monitor — let loop continue
     }
   }
 
@@ -1169,7 +1172,12 @@ export class LyricDancePlayer {
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.updateSims(tSec, frame);
+
+    try {
+      this.updateSims(tSec, frame);
+    } catch (e) {
+      console.error('[PLAYER] sim update crash:', e);
+    }
 
     // Background: static bg cache first, then chapter images on top
     this.drawBackground(frame);
@@ -1185,7 +1193,13 @@ export class LyricDancePlayer {
 
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
-    this.checkEmotionalEvents(tSec, songProgress);
+
+    try {
+      this.checkEmotionalEvents(tSec, songProgress);
+    } catch (e) {
+      console.error('[PLAYER] emotional events crash:', e);
+    }
+
     this.drawEmotionalEvents(tSec);
 
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
