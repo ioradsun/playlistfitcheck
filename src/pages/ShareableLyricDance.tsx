@@ -201,6 +201,7 @@ export default function ShareableLyricDance() {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const [playerInstance, setPlayerInstance] = useState<LyricDancePlayer | null>(null);
+  const playerInitializedRef = useRef(false);
 
   const handleExport = useCallback((ratio: "16:9" | "9:16") => {
     if (!playerRef.current) return;
