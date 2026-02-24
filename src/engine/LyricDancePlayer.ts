@@ -797,6 +797,8 @@ export class LyricDancePlayer {
 
   seekTo(timeSec: number): void {
     this.seek(timeSec);
+    this.firedEmitters.clear();
+    this.wordEmitters = [];
   }
 
   async startExport(ratio: "16:9" | "9:16"): Promise<void> {
