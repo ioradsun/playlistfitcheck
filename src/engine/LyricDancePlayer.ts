@@ -1396,7 +1396,7 @@ export class LyricDancePlayer {
     const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
     const ci = Math.max(0, chapterIdx);
     const chapter = chapters[ci] ?? {};
-    const intensity = chapter?.emotionalIntensity ?? 0.5;
+    const intensity = (chapter as any)?.emotionalIntensity ?? 0.5;
     const pulse = (frame as any).beatPulse ?? (frame.beatIndex ? (frame.beatIndex % 2 ? 0.2 : 0.7) : 0);
     const sim = this.chapterSims[ci];
     this.currentSimCanvases = [];
