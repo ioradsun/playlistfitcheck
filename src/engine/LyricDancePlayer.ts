@@ -248,6 +248,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
   cameraY: number;
   chunks: Array<{
     id: string;
+    text: string;
     x: number;
     y: number;
     alpha: number;
@@ -1380,7 +1381,7 @@ export class LyricDancePlayer {
             if (chunk.rotation) this.ctx.rotate(chunk.rotation);
             this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
             this.ctx.scale(sx, sy);
-            this.ctx.fillText(obj.text, 0, 0);
+            this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
             this.ctx.restore();
           }
           this.ctx.globalAlpha = drawAlpha;
@@ -1393,7 +1394,7 @@ export class LyricDancePlayer {
         }
         this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
         this.ctx.scale(sx, sy);
-        this.ctx.fillText(obj.text, 0, 0);
+        this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
         this.ctx.restore();
 
         if (filterApplied) {
@@ -2637,6 +2638,7 @@ export class LyricDancePlayer {
       cameraZoom: f.cameraZoom,
       chunks: f.chunks.map((c) => ({
         id: c.id,
+        text: c.text,
         x: c.x * sx,
         y: c.y * sy,
         alpha: c.alpha,
@@ -2683,6 +2685,7 @@ export class LyricDancePlayer {
       cameraZoom: f.cameraZoom,
       chunks: f.chunks.map((c) => ({
         id: c.id,
+        text: c.text,
         x: sx ? c.x / sx : c.x,
         y: sy ? c.y / sy : c.y,
         alpha: c.alpha,

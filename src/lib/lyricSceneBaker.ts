@@ -31,6 +31,7 @@ export type Keyframe = {
   timeMs: number;
   chunks: Array<{
     id: string;
+    text: string;
     x: number;
     y: number;
     alpha: number;
@@ -1179,6 +1180,7 @@ function bakeFrame(
 
             chunks.push({
               id: isLetterSequence ? `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}` : `${group.lineIndex}-${group.groupIndex}-${wi}`,
+              text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
               x: pos.x + finalOffsetX,
               y: pos.y + finalOffsetY,
               alpha: Math.max(0, Math.min(1, finalAlpha)),
@@ -1309,6 +1311,7 @@ function bakeFrame(
 
           return {
             id: `${wm.lineIndex}-${wm.wordIndex}`,
+            text: wm.word,
             x: canvasX + finalOffsetX,
             y: canvasY + finalOffsetY,
             alpha: finalAlpha,
@@ -1416,6 +1419,7 @@ function bakeFrame(
 
       chunks.push({
         id: `${idx}`,
+        text: line.text,
         x,
         y,
         alpha,
@@ -1458,6 +1462,7 @@ function bakeFrame(
 
           chunks.push({
             id: `${idx}-hero`,
+            text: directiveWord.toUpperCase(),
             x: x + preOffset + heroOffset,
             y,
             alpha: Math.min(1, alpha + ((entryStyle as string) === 'punch' ? 0.2 : 0.15)),
