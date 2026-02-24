@@ -263,11 +263,16 @@ export function LyricFitTab({
   }, []);
 
   // Persist song_dna whenever we have both a saved project and computed DNA
+  // Only persist when songDna changes (not cinematicDirection alone — that's handled in startCinematicDirection)
   useEffect(() => {
     if (savedIdRef.current && songDna) {
-      persistSongDna(savedIdRef.current, { ...songDna, cinematicDirection });
+      const payload = { ...songDna };
+      // Only include cinematicDirection if it's not null (avoid overwriting a deliberate clear)
+      if (cinematicDirection) payload.cinematicDirection = cinematicDirection;
+      persistSongDna(savedIdRef.current, payload);
     }
-  }, [savedId, songDna, cinematicDirection, persistSongDna]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedId, songDna, persistSongDna]);
 
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
     if (!targetAudioFile || !hasRealAudio || targetAudioFile.size === 0) return;
@@ -398,7 +403,7 @@ export function LyricFitTab({
     }
 
     if (savedIdRef.current) {
-      await persistSongDna(savedIdRef.current, { ...nextSongDna, cinematicDirection });
+      await persistSongDna(savedIdRef.current, nextSongDna);
     }
   }, [lyricData, generationStatus.songDna, hasRealAudio, beatGrid, cinematicDirection, persistSongDna, songDna]);
 
@@ -526,28 +531,40 @@ export function LyricFitTab({
     setPipelineStages({ rhythm: "pending", songDna: "pending", cinematic: "pending", transcript: "pending" });
   }, [generationStatus]);
 
-  const retryGeneration = useCallback(() => {
+  const retryGenerationRef = useRef<() => void>(() => {});
+  retryGenerationRef.current = () => {
     if (!audioFile || !lines.length) return;
-    // Reset all non-done statuses to idle so pipeline functions re-run
+    // Reset all state
     setSongDna(null);
     setCinematicDirection(null);
     setBeatGrid(null);
     setSceneManifest(null);
+    setAudioBuffer(null);
     setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
     pipelineTriggeredRef.current = false;
 
-    // Also clear cinematicDirection from DB so it doesn't get reloaded
+    // Clear from DB
     if (savedIdRef.current) {
-      persistSongDna(savedIdRef.current, { cinematicDirection: null });
+      persistSongDna(savedIdRef.current, { cinematicDirection: null, song_dna: null });
     }
+  };
 
-    // Delay to let state clear before re-triggering
-    setTimeout(() => {
-      startBeatAnalysis(audioFile);
-      startLyricAnalyze(lines, audioFile);
+  // Separate effect to re-trigger pipeline after state clears
+  const retryFlagRef = useRef(0);
+  const retryGeneration = useCallback(() => {
+    retryGenerationRef.current();
+    retryFlagRef.current += 1;
+    // Use a micro-delay then check when state has actually cleared
+    const checkId = retryFlagRef.current;
+    const tryStart = () => {
+      if (retryFlagRef.current !== checkId) return; // superseded
+      // By now React state should be cleared; re-read from refs
+      startBeatAnalysis(audioFile!);
+      startLyricAnalyze(lines, audioFile!);
       startCinematicDirection(lines, true);
-    }, 300);
-  }, [audioFile, lines, startBeatAnalysis, startLyricAnalyze, startCinematicDirection, persistSongDna]);
+    };
+    setTimeout(tryStart, 500);
+  }, [audioFile, lines, startBeatAnalysis, startLyricAnalyze, startCinematicDirection]);
 
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
