@@ -296,11 +296,14 @@ export function LyricsTab({
 
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
-      <LyricUploader
-        onTranscribe={handleTranscribe}
-        loading={loading}
-        loadingMsg={loadingMsg}
-      />
+      <div className="flex flex-col items-center w-full max-w-2xl gap-6">
+        {sceneInput}
+        <LyricUploader
+          onTranscribe={handleTranscribe}
+          loading={loading}
+          loadingMsg={loadingMsg}
+        />
+      </div>
       <LyricProgressModal
         open={progressOpen}
         currentStage={progressStage}
