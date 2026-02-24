@@ -1419,6 +1419,7 @@ function bakeFrame(
 
       chunks.push({
         id: `${idx}`,
+        text: line.text,
         x,
         y,
         alpha,
