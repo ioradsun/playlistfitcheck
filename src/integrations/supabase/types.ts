@@ -1243,6 +1243,7 @@ export type Database = {
           lyrics: Json
           palette: Json
           physics_spec: Json
+          scene_context: Json | null
           scene_manifest: Json | null
           seed: string
           song_name: string
@@ -1267,6 +1268,7 @@ export type Database = {
           lyrics: Json
           palette?: Json
           physics_spec: Json
+          scene_context?: Json | null
           scene_manifest?: Json | null
           seed?: string
           song_name: string
@@ -1291,6 +1293,7 @@ export type Database = {
           lyrics?: Json
           palette?: Json
           physics_spec?: Json
+          scene_context?: Json | null
           scene_manifest?: Json | null
           seed?: string
           song_name?: string
