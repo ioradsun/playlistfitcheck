@@ -66,6 +66,22 @@ const easeOut = (t: number): number => 1 - Math.pow(1 - t, 3);
 
 type WordDirectiveLike = {
   word?: string;
+  kineticClass?: string;
+  colorOverride?: string;
+  emphasisLevel?: number;
+};
+
+interface WordEntry {
+  word: string;
+  start: number;
+  end: number;
+}
+
+type WordMetaEntry = WordEntry & {
+  clean: string;
+  directive: WordDirectiveLike | null;
+  lineIndex: number;
+  wordIndex: number;
 };
 
 type TensionStageLike = {
@@ -121,7 +137,10 @@ type PrebakedData = {
   glowMax: number;
   energy: number;
   density: number;
+  wordMeta: WordMetaEntry[];
 };
+
+const WORD_LINGER = 0.1;
 
 const findByRatio = <T extends { startRatio?: number; endRatio?: number }>(
   arr: T[],
@@ -218,6 +237,27 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
   const chapterIndexByFrame = new Array<number>(totalFrames + 1).fill(-1);
   const tensionMotionByFrame = new Array<number>(totalFrames + 1).fill(0.5);
   const activeLineByFrame = new Array<number>(totalFrames + 1).fill(-1);
+  const words: WordEntry[] = payload.words ?? [];
+  const wordMeta: WordMetaEntry[] = words.map((w) => {
+    const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const directive = wordDirectivesMap[clean] ?? null;
+    const lineIndex = payload.lines.findIndex(
+      (l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999),
+    );
+    return {
+      ...w,
+      clean,
+      directive,
+      lineIndex: Math.max(0, lineIndex),
+      wordIndex: 0,
+    };
+  });
+
+  const lineWordCounters: Record<number, number> = {};
+  for (const wm of wordMeta) {
+    lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0;
+    wm.wordIndex = lineWordCounters[wm.lineIndex]++;
+  }
 
   for (let frameIndex = 0; frameIndex <= totalFrames; frameIndex += 1) {
     const tSec = payload.songStart + (frameIndex * FRAME_STEP_MS) / 1000;
@@ -250,6 +290,7 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
     glowMax: beatResponse === 'slam' ? 1.2 * heat : 0.6 * heat,
     energy,
     density,
+    wordMeta,
   };
 }
 
@@ -320,47 +361,125 @@ function bakeFrame(
 
   const chunks: Keyframe["chunks"] = [];
 
-  for (let idx = 0; idx < payload.lines.length; idx += 1) {
-    const line = payload.lines[idx];
-    const lineActive = idx === activeLineIndex;
-    const storyboardEntry = payload.cinematic_direction?.storyboard?.[idx] ?? null;
-    const entryStyle = storyboardEntry?.entryStyle ?? 'fades';
-    const exitStyle = storyboardEntry?.exitStyle ?? 'fades';
+  if (pre.wordMeta.length > 0) {
+    const wordChunks = pre.wordMeta
+      .filter((wm) => tSec >= wm.start && tSec < (wm.end + WORD_LINGER))
+      .map((wm) => {
+        const elapsed = tSec - wm.start;
+        const remaining = (wm.end + WORD_LINGER) - tSec;
 
-    const lineStart = line.start ?? 0;
-    const lineEnd = line.end ?? 0;
-    const isCutStyle = (entryStyle as string) === 'cuts' || (exitStyle as string) === 'cuts';
-    const fadeIn = isCutStyle
-      ? (tSec >= lineStart ? 1 : 0)
-      : Math.min(1, Math.max(0, (tSec - lineStart) / 0.2));
-    const fadeOut = isCutStyle
-      ? (tSec < lineEnd ? 1 : 0)
-      : Math.min(1, Math.max(0, (lineEnd - tSec) / 0.3));
-    const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
+        const entryAlpha = Math.min(1, elapsed / 0.04);
+        const exitAlpha = Math.min(1, remaining / 0.08);
+        const alpha = Math.min(entryAlpha, exitAlpha);
 
-    const x = BASE_X;
-    const y = BASE_Y_CENTER;
+        const stagger = wm.wordIndex * 0.025;
+        const adjustedElapsed = elapsed - stagger;
+        const ep = adjustedElapsed > 0 ? easeOut(Math.min(1, adjustedElapsed / 0.18)) : 0;
 
-    const visible = alpha > 0.001;
-    const heroWord = storyboardEntry?.heroWord ?? pre.lineHeroWords[idx] ?? null;
+        const storyEntry = payload.cinematic_direction?.storyboard?.[wm.lineIndex];
+        const entryStyle = storyEntry?.entryStyle ?? 'fades';
+        const kinetic = wm.directive?.kineticClass;
 
-    const elapsed = tSec - lineStart;
-    const remaining = lineEnd - tSec;
+        let offsetY = 0;
+        let offsetX = 0;
+        let entryScale = 1;
+        if (kinetic === 'RISING' || entryStyle === 'rises') {
+          offsetY = (1 - ep) * 40;
+        } else if (entryStyle === 'slams-in' || kinetic === 'IMPACT') {
+          entryScale = 1 + (1 - ep) * 0.5;
+        } else if (entryStyle === 'fractures-in') {
+          offsetX = (1 - ep) * -35;
+        } else if (entryStyle === 'materializes') {
+          entryScale = 0.8 + ep * 0.2;
+        } else if (kinetic === 'FALLING') {
+          offsetY = (1 - ep) * -30;
+        }
 
-    const entryDuration = 0.25;
-    const exitDuration = exitStyle === 'lingers' ? 0.5 : 0.3;
-    const entryProgress = Math.min(1, Math.max(0, elapsed / entryDuration));
-    const exitProgress = Math.min(1, Math.max(0, 1 - remaining / exitDuration));
-    const ep = easeOut(entryProgress);
-    const xp = easeOut(exitProgress);
+        const cx = 960 / 2;
+        const cy = 540 / 2;
+        const xSpread = ((wm.wordIndex % 7) - 3) * 22;
+        const ySpread = ((wm.lineIndex % 3) - 1) * 28;
 
-    let entryOffsetY = 0;
-    let entryOffsetX = 0;
-    let entryScale = 1;
-    let exitOffsetY = 0;
-    let exitScale = 1;
+        const isImpact = kinetic === 'IMPACT';
+        const x = isImpact ? cx : cx + xSpread;
+        const y = isImpact ? cy : cy + ySpread;
 
-    if (!isCutStyle) {
+        const color = wm.directive?.colorOverride
+          ?? pre.lineColors[wm.lineIndex]
+          ?? '#ffffff';
+
+        const emphasisLevel = wm.directive?.emphasisLevel ?? 1;
+        const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
+        const fontSize = Math.round(baseFontSize * (1 + (emphasisLevel - 1) * 0.15));
+
+        const wordGlow = emphasisLevel >= 4
+          ? glow * 1.5
+          : emphasisLevel >= 3
+            ? glow * 1.1
+            : glow;
+
+        return {
+          id: `${wm.lineIndex}-${wm.wordIndex}`,
+          x: x + offsetX,
+          y: y + offsetY,
+          alpha,
+          scale: entryScale,
+          visible: alpha > 0.01,
+          fontSize,
+          color,
+          glow: wordGlow,
+          entryOffsetY: 0,
+          entryOffsetX: 0,
+          entryScale,
+          exitOffsetY: 0,
+          exitScale: 1,
+        };
+      });
+
+    chunks.push(...wordChunks);
+  } else {
+
+    for (let idx = 0; idx < payload.lines.length; idx += 1) {
+      const line = payload.lines[idx];
+      const lineActive = idx === activeLineIndex;
+      const storyboardEntry = payload.cinematic_direction?.storyboard?.[idx] ?? null;
+      const entryStyle = storyboardEntry?.entryStyle ?? 'fades';
+      const exitStyle = storyboardEntry?.exitStyle ?? 'fades';
+
+      const lineStart = line.start ?? 0;
+      const lineEnd = line.end ?? 0;
+      const isCutStyle = (entryStyle as string) === 'cuts' || (exitStyle as string) === 'cuts';
+      const fadeIn = isCutStyle
+        ? (tSec >= lineStart ? 1 : 0)
+        : Math.min(1, Math.max(0, (tSec - lineStart) / 0.2));
+      const fadeOut = isCutStyle
+        ? (tSec < lineEnd ? 1 : 0)
+        : Math.min(1, Math.max(0, (lineEnd - tSec) / 0.3));
+      const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
+
+      const x = BASE_X;
+      const y = BASE_Y_CENTER;
+
+      const visible = alpha > 0.001;
+      const heroWord = storyboardEntry?.heroWord ?? pre.lineHeroWords[idx] ?? null;
+
+      const elapsed = tSec - lineStart;
+      const remaining = lineEnd - tSec;
+
+      const entryDuration = 0.25;
+      const exitDuration = exitStyle === 'lingers' ? 0.5 : 0.3;
+      const entryProgress = Math.min(1, Math.max(0, elapsed / entryDuration));
+      const exitProgress = Math.min(1, Math.max(0, 1 - remaining / exitDuration));
+      const ep = easeOut(entryProgress);
+      const xp = easeOut(exitProgress);
+
+      let entryOffsetY = 0;
+      let entryOffsetX = 0;
+      let entryScale = 1;
+      let exitOffsetY = 0;
+      let exitScale = 1;
+
+      if (!isCutStyle) {
       if (entryStyle === 'rises') {
         entryOffsetY = (1 - ep) * 40;
       } else if (entryStyle === 'slams-in') {
@@ -380,39 +499,39 @@ function bakeFrame(
       } else if (exitStyle === 'shatters') {
         exitScale = 1 + xp * 0.25;
       }
-    }
+      }
 
-    const chunkGlow = lineActive && visible ? glow * pre.glowMax : 0;
-    const chunkScale = lineActive && visible ? scale : 1.0;
-
-
-    chunks.push({
-      id: `${idx}`,
-      x,
-      y,
-      alpha,
-      glow: chunkGlow,
-      scale: chunkScale,
-      visible,
-      fontSize: pre.lineFontSizes[idx] ?? 36,
-      color: pre.lineColors[idx] ?? "#ffffff",
-      entryOffsetY,
-      entryOffsetX,
-      entryScale,
-      exitOffsetY,
-      exitScale,
-    });
+      const chunkGlow = lineActive && visible ? glow * pre.glowMax : 0;
+      const chunkScale = lineActive && visible ? scale : 1.0;
 
 
-    if (lineActive) {
-      const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
-      const lineHeroWord = heroWord
-        ? wordDirectivesMap[heroWord] ?? null
-        : null;
-      const normalizedText = (line.text ?? "").toLowerCase();
-      const directiveWord = (lineHeroWord?.word ?? heroWord ?? "").trim();
+      chunks.push({
+        id: `${idx}`,
+        x,
+        y,
+        alpha,
+        glow: chunkGlow,
+        scale: chunkScale,
+        visible,
+        fontSize: pre.lineFontSizes[idx] ?? 36,
+        color: pre.lineColors[idx] ?? "#ffffff",
+        entryOffsetY,
+        entryOffsetX,
+        entryScale,
+        exitOffsetY,
+        exitScale,
+      });
 
-      if (directiveWord) {
+
+      if (lineActive) {
+        const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
+        const lineHeroWord = heroWord
+          ? wordDirectivesMap[heroWord] ?? null
+          : null;
+        const normalizedText = (line.text ?? "").toLowerCase();
+        const directiveWord = (lineHeroWord?.word ?? heroWord ?? "").trim();
+
+        if (directiveWord) {
         const lowerHero = directiveWord.toLowerCase();
         const heroStart = normalizedText.indexOf(lowerHero);
         if (heroStart >= 0) {
@@ -437,6 +556,7 @@ function bakeFrame(
             exitOffsetY,
             exitScale,
           });
+        }
         }
       }
     }
@@ -487,8 +607,6 @@ export function bakeScene(
   payload: ScenePayload,
   onProgress?: (progress: number) => void,
 ): BakedTimeline {
-  console.log('[BAKER] words sample:', payload.words?.slice(0, 5));
-  console.log('[BAKER] words total:', payload.words?.length);
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const frames: BakedTimeline = [];
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
