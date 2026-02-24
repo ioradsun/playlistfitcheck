@@ -2459,7 +2459,7 @@ export function LyricDisplay({
           beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : null,
           lines: data.lines,
           title: data.title,
-          artist: data.artist,
+          artist: profileDisplayName,
           overrides: hookDanceOverrides as unknown as Record<string, unknown>,
           fingerprint: artistFingerprint,
         }}

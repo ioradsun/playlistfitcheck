@@ -214,7 +214,7 @@ export function LyricsTab({
 
         const newLyricData: LyricData = {
           title: resolveProjectTitle(data.title, file.name),
-          artist: data.artist || "Unknown",
+          artist: data.artist || undefined,
           lines: data.lines,
           hooks: data.hooks,
           metadata: data.metadata,

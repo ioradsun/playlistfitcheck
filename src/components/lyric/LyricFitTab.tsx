@@ -389,7 +389,6 @@ export function LyricFitTab({
       const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
         body: {
           title: lyricData.title,
-          artist: lyricData.artist,
           lines: lyricsForDirection,
           beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
           lyricId: savedIdRef.current || undefined,
