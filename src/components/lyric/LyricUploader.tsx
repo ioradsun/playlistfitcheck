@@ -55,7 +55,7 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }:
             value={referenceLyrics}
             onChange={(e) => setReferenceLyrics(e.target.value)}
             placeholder="Adding lyrics improves timing and accuracy."
-            className="min-h-[80px] resize-y text-sm bg-background border border-border rounded-lg px-3 py-2.5 font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="min-h-[80px] resize-y text-sm bg-background border border-border rounded-lg px-3 py-2.5 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
             disabled={loading}
             aria-label="Paste your song lyrics"
           />
