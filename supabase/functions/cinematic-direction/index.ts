@@ -596,10 +596,16 @@ Text style: ${sceneCtx.textStyle === 'dark'
       // Don't fail — return with warnings so debug panel can still show data
     }
 
-    const saved = await persistCinematicDirection(parsed, lyricId);
-    console.log("Saved cinematic direction:", saved ? "OK" : "FAILED");
+    // Icon count diagnostic
+    const storyboard = Array.isArray(parsed.storyboard) ? parsed.storyboard : [];
+    const iconCount = storyboard.filter((s: any) => s.iconGlyph).length;
+    console.log(`[CINEMATIC] Icons assigned: ${iconCount} / ${storyboard.length} lines`);
+    if (iconCount < 5) {
+      console.warn(`[CINEMATIC] WARNING: Only ${iconCount} icons assigned — expected 10-15`);
+    }
 
-    console.log(`[cinematic-direction] ✓ Generated for "${title}" by "${artist}"`);
+    const saved = await persistCinematicDirection(parsed, lyricId);
+    console.log(`[cinematic-direction] ✓ Generated for "${title}" by "${artist}" — icons: ${iconCount}`);
 
     return new Response(JSON.stringify({ cinematicDirection: parsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
