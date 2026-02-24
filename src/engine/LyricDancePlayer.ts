@@ -1407,9 +1407,9 @@ export class LyricDancePlayer {
     if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
   }
 
-  private drawSimLayer(_frame: Keyframe): void {
+  private drawSimLayer(_frame: ScaledKeyframe): void {
     for (const simCanvas of this.currentSimCanvases) {
-      this.ctx.globalAlpha = 0.85;
+      this.ctx.globalAlpha = 0.38;
       this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
     }
