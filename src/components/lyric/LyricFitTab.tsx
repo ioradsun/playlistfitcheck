@@ -402,14 +402,14 @@ export function LyricFitTab({
     }
   }, [lyricData, generationStatus.songDna, hasRealAudio, beatGrid, cinematicDirection, persistSongDna, songDna]);
 
-  const startCinematicDirection = useCallback(async (sourceLines: LyricLine[]) => {
+  const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
     if (!lyricData || !sourceLines.length) return;
     // Data-existence guard: if we already have cinematicDirection (e.g. loaded from DB), skip
-    if (cinematicDirection) {
+    if (!force && cinematicDirection) {
       setGenerationStatus(prev => prev.cinematicDirection === "done" ? prev : ({ ...prev, cinematicDirection: "done" }));
       return;
     }
-    if (generationStatus.cinematicDirection === "running" || generationStatus.cinematicDirection === "done") return;
+    if (!force && (generationStatus.cinematicDirection === "running" || generationStatus.cinematicDirection === "done")) return;
 
     setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running" }));
     setPipelineStages(prev => ({ ...prev, cinematic: "running" }));
