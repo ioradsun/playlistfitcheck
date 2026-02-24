@@ -1061,14 +1061,14 @@ export class LyricDancePlayer {
       const sx = chunk.scaleX ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
       const sy = chunk.scaleY ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
 
-      // Behind each word — simple dark halo for legibility (no gradient allocation)
-      const haloR = fontSize * 2.2;
-      this.ctx.globalAlpha = 0.35;
-      this.ctx.fillStyle = '#000000';
-      this.ctx.beginPath();
-      this.ctx.arc(drawX, drawY, haloR, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.globalAlpha = 1;
+      // Hierarchical halo — anchor vs supporting
+      const isAnchor = chunk.isAnchor ?? false;
+      const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
+      const songDur = this.audio?.duration || 1;
+      const songProg = this.audio ? this.audio.currentTime / songDur : 0;
+      const chIdx = chapters.findIndex((ch: any) => songProg >= (ch.startRatio ?? 0) && songProg < (ch.endRatio ?? 1));
+      const chapterColor = (chIdx >= 0 ? chapters[chIdx]?.dominantColor : null) ?? '#FFD700';
+      this.drawWordHalo(drawX, drawY, fontSize, isAnchor, chapterColor, chunk.alpha);
 
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
