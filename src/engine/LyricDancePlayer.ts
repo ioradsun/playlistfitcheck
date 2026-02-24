@@ -976,7 +976,19 @@ export class LyricDancePlayer {
 
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.updateSims(tSec, frame);
+
+    // Background: static bg cache first, then chapter images on top
     this.drawBackground(frame);
+
+    // Chapter image overlay with crossfade
+    const bgBlend = frame.bgBlend ?? 0;
+    const totalChapters = this.bgCacheCount;
+    const chapterProgress = bgBlend * (totalChapters - 1);
+    const chapterIdx = Math.floor(chapterProgress);
+    const nextChapterIdx = Math.min(chapterIdx + 1, totalChapters - 1);
+    const chapterFraction = chapterProgress - chapterIdx;
+    this.drawChapterImage(chapterIdx, nextChapterIdx, chapterFraction);
+
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
     this.checkEmotionalEvents(tSec, songProgress);
