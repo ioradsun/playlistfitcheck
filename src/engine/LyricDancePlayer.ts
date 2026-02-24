@@ -1136,7 +1136,7 @@ export class LyricDancePlayer {
   private getResolvedPalette(): string[] {
     const baked = (this.data as any)?.resolvedPalette;
     if (baked && Array.isArray(baked) && baked.length >= 5) return baked;
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const paletteName = cd?.palette as string | undefined;
     if (paletteName && LyricDancePlayer.PALETTE_COLORS[paletteName]) {
       return LyricDancePlayer.PALETTE_COLORS[paletteName];
@@ -1152,7 +1152,7 @@ export class LyricDancePlayer {
   }
 
   private getResolvedFont(): string {
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const typoKey = cd?.typography as string | undefined;
     if (typoKey && LyricDancePlayer.TYPOGRAPHY_FONTS[typoKey]) {
       return LyricDancePlayer.TYPOGRAPHY_FONTS[typoKey];
@@ -1161,12 +1161,12 @@ export class LyricDancePlayer {
   }
 
   private getAtmosphere(): string {
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     return (cd?.atmosphere as string) ?? 'cinematic';
   }
 
   private async preloadFonts(): Promise<void> {
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const typoKey = cd?.typography as string;
     const fontMap: Record<string, string> = {
       'bold-impact': 'Oswald',
