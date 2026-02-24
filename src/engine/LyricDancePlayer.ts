@@ -328,6 +328,16 @@ export class LyricDancePlayer {
     textCanvas: HTMLCanvasElement,
     container: HTMLDivElement,
   ) {
+    // Invalidate cache if song changed (survives HMR)
+    const sessionKey = `${data.id}-${data.lyrics?.length}`;
+    if (globalSessionKey !== sessionKey) {
+      globalSessionKey = sessionKey;
+      globalBakePromise = null;
+      globalTimelineCache = null;
+      globalChunkCache = null;
+      globalBakeLock = false;
+      globalHasCinematicDirection = false;
+    }
     // Always clear cache on construction — component gates on full data
     globalBakePromise = null;
     globalTimelineCache = null;
