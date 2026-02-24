@@ -202,7 +202,6 @@ export function LyricsTab({
             id: projectId,
             user_id: user.id,
             title: resolveProjectTitle(data.title, file.name),
-            artist: data.artist || "Unknown",
             lines: data.lines,
             words: data.words ?? null,
             filename: file.name,
