@@ -2684,6 +2684,7 @@ export class LyricDancePlayer {
       cameraZoom: f.cameraZoom,
       chunks: f.chunks.map((c) => ({
         id: c.id,
+        text: c.text,
         x: sx ? c.x / sx : c.x,
         y: sy ? c.y / sy : c.y,
         alpha: c.alpha,
