@@ -33,7 +33,6 @@ interface Props {
   beatGrid: { bpm: number; beats: number[]; confidence: number };
   audioFile: File;
   songTitle: string;
-  artistName: string;
   system: string;
   palette: string[];
   fingerprint?: ArtistDNA | null;
@@ -48,7 +47,6 @@ export function PublishLyricDanceButton({
   beatGrid,
   audioFile,
   songTitle,
-  artistName,
   system,
   palette,
   fingerprint,
@@ -73,7 +71,7 @@ export function PublishLyricDanceButton({
         .eq("id", user.id)
         .single();
 
-      const displayName = profile?.display_name || artistName || "artist";
+      const displayName = profile?.display_name || "artist";
       const artistSlug = slugify(displayName);
       const songSlug = slugify(songTitle || "untitled");
 
@@ -148,7 +146,7 @@ export function PublishLyricDanceButton({
       setPublishing(false);
       setStatus("");
     }
-  }, [user, physicsSpec, lines, beatGrid, audioFile, songTitle, artistName, system, palette, fingerprint, seed, publishing, songDna]);
+  }, [user, physicsSpec, lines, beatGrid, audioFile, songTitle, system, palette, fingerprint, seed, publishing, songDna]);
 
   if (!user) return null;
 

@@ -220,7 +220,7 @@ export function FitTab({
         .eq("id", user.id)
         .single();
 
-      const displayName = profile?.display_name || lyricData.artist || "artist";
+      const displayName = profile?.display_name || "artist";
       const artistSlug = slugify(displayName);
       const songSlug = slugify(lyricData.title || "untitled");
 

@@ -23,7 +23,6 @@ interface Props {
   beatGrid: { bpm: number; beats: number[]; confidence: number };
   audioFile: File;
   songTitle: string;
-  artistName: string;
   system: string;
   palette: string[];
   fingerprint?: ArtistDNA | null;
@@ -40,7 +39,6 @@ export function PublishHookButton({
   beatGrid,
   audioFile,
   songTitle,
-  artistName,
   system,
   palette,
   fingerprint,
@@ -61,7 +59,7 @@ export function PublishHookButton({
         .eq("id", user.id)
         .single();
 
-      const displayName = profile?.display_name || artistName || "artist";
+      const displayName = profile?.display_name || "artist";
       const artistSlug = slugify(displayName);
       const songSlug = slugify(songTitle || "untitled");
 
@@ -203,7 +201,7 @@ export function PublishHookButton({
     } finally {
       setPublishing(false);
     }
-  }, [user, hook, secondHook, hookLabel, secondHookLabel, physicsSpec, lines, beatGrid, audioFile, songTitle, artistName, system, palette, fingerprint, publishing]);
+  }, [user, hook, secondHook, hookLabel, secondHookLabel, physicsSpec, lines, beatGrid, audioFile, songTitle, system, palette, fingerprint, publishing]);
 
   if (!user) return null;
 
