@@ -1047,8 +1047,8 @@ export class LyricDancePlayer {
       const drawY = chunk.y;
       const zoom = frame.cameraZoom ?? 1.0;
       const fontSize = chunk.fontSize ?? 36;
-      const zoomedFont = obj.font.replace(/(\d+(\.\d+)?)px/, `${Math.round(fontSize * zoom)}px`);
       const fontWeight = chunk.fontWeight ?? 700;
+      const safeFontSize = Math.max(12, Math.round(fontSize * zoom) || 36);
       const sx = chunk.scaleX ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
       const sy = chunk.scaleY ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
 
@@ -1063,7 +1063,15 @@ export class LyricDancePlayer {
 
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
-      this.ctx.font = zoomedFont.replace(/^\d+/, `${fontWeight}`);
+      this.ctx.font = `${fontWeight} ${safeFontSize}px "Montserrat", sans-serif`;
+      // Safety: if font assignment failed silently
+      if (!this.ctx.font.includes('px')) {
+        this.ctx.font = `700 36px "Montserrat", sans-serif`;
+      }
+      if (!this._textDrawLogged) {
+        this._textDrawLogged = true;
+        console.log('[PLAYER] drawing text:', obj.text, 'font:', this.ctx.font, 'alpha:', chunk.alpha);
+      }
       if (chunk.glow > 0) {
         this.ctx.shadowColor = chunk.color ?? '#ffffff';
         this.ctx.shadowBlur = chunk.glow * 32;
