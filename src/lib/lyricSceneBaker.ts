@@ -41,6 +41,7 @@ export type Keyframe = {
     visible: boolean;
     fontSize: number;
     fontWeight: number;
+    isAnchor: boolean;
     color: string;
     entryOffsetY: number;
     entryOffsetX: number;
@@ -1073,6 +1074,7 @@ function bakeFrame(
             visible: finalAlpha > 0.01,
             fontSize: pos.fontSize,
             fontWeight: chapterFontWeight,
+            isAnchor,
             color,
             glow: wordGlow,
             skewX: finalSkewX,
@@ -1176,6 +1178,7 @@ function bakeFrame(
             visible: finalAlpha > 0.01,
             fontSize,
             fontWeight: chapterFontWeight,
+            isAnchor: (wm.directive?.emphasisLevel ?? 0) >= 3,
             color,
             glow: wordGlow * (1 + finalGlowMult),
             entryOffsetY: 0,
@@ -1273,6 +1276,7 @@ function bakeFrame(
           ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
           ?? 700,
         color: pre.lineColors[idx] ?? "#ffffff",
+        isAnchor: lineActive,
         entryOffsetY,
         entryOffsetX,
         entryScale,
@@ -1314,6 +1318,7 @@ function bakeFrame(
               ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
               ?? 700,
             color: pre.lineColors[idx] ?? "#ffffff",
+            isAnchor: true,
             entryOffsetY,
             entryOffsetX,
             entryScale,
