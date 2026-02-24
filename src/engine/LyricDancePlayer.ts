@@ -1844,7 +1844,8 @@ export class LyricDancePlayer {
     const duration = this.audio?.duration || 1;
     const chapterProgress = this.audio ? this.audio.currentTime / duration : 0;
 
-    const imageOpacity = 0.32;
+    const sceneCtx = this.data.scene_context;
+    const imageOpacity = sceneCtx?.backgroundOpacity ?? 0.32;
     if (current?.complete && current.naturalWidth > 0) {
       this.ctx.globalAlpha = Math.min(0.35, imageOpacity);
       this.ctx.drawImage(current, 0, 0, this.width, this.height);
@@ -1862,19 +1863,27 @@ export class LyricDancePlayer {
     const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
     const currentChapterObj = chapters.find((ch: any) => chapterProgress >= (ch.startRatio ?? 0) && chapterProgress < (ch.endRatio ?? 1));
     const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
-    const baseCrushAlpha = Math.max(0.65, 0.72 - intensity * 0.15);
+    const sceneCrushOpacity = sceneCtx?.crushOpacity ?? 0.72;
+    const baseCrushAlpha = Math.max(0.40, sceneCrushOpacity - intensity * 0.15);
     const currentLum = this.getAverageLuminance(current);
     const nextLum = blend > 0 ? this.getAverageLuminance(next) : null;
     const blendLum = currentLum != null && nextLum != null
       ? currentLum * (1 - blend) + nextLum * blend
       : currentLum ?? nextLum;
-    const luminanceCrushAlpha = blendLum != null && blendLum > 0.72 ? 0.78 : baseCrushAlpha;
-    const crushAlpha = Math.max(0.65, luminanceCrushAlpha);
+    const luminanceCrushAlpha = blendLum != null && blendLum > 0.72 ? baseCrushAlpha + 0.06 : baseCrushAlpha;
+    const crushAlpha = Math.max(0.40, luminanceCrushAlpha);
+
+    const crushColor = sceneCtx?.baseLuminance === 'light'
+      ? `rgba(255,255,255,${crushAlpha * 0.4})`
+      : `rgba(0,0,0,${crushAlpha})`;
 
     const crush = this.ctx.createLinearGradient(0, 0, 0, this.height);
-    crush.addColorStop(0, `rgba(0,0,0,${crushAlpha})`);
-    crush.addColorStop(0.5, `rgba(0,0,0,${Math.max(0.65, crushAlpha - 0.06)})`);
-    crush.addColorStop(1, `rgba(0,0,0,${crushAlpha})`);
+    const crushColorMid = sceneCtx?.baseLuminance === 'light'
+      ? `rgba(255,255,255,${Math.max(0.20, crushAlpha * 0.4 - 0.06)})`
+      : `rgba(0,0,0,${Math.max(0.40, crushAlpha - 0.06)})`;
+    crush.addColorStop(0, crushColor);
+    crush.addColorStop(0.5, crushColorMid);
+    crush.addColorStop(1, crushColor);
     this.ctx.fillStyle = crush;
     this.ctx.fillRect(0, 0, this.width, this.height);
   }
