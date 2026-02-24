@@ -508,6 +508,11 @@ export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, on
                       <Sparkles size={12} /> Dance
                     </button>
                   )}
+                  {onRegenerateDirector && (
+                    <button onClick={onRegenerateDirector} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold text-purple-400 hover:bg-purple-400/10 transition-colors" title="Re-run scene manifest (Director)">
+                      <Clapperboard size={12} /> Director
+                    </button>
+                  )}
                   <button onClick={copyAll} className="p-1.5 rounded text-muted-foreground hover:text-foreground transition-colors" title="Copy all data">
                     <Copy size={14} />
                   </button>
