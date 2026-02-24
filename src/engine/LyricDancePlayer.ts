@@ -30,6 +30,7 @@ export interface LyricDanceData {
   song_name: string;
   audio_url: string;
   lyrics: LyricLine[];
+  words?: Array<{ word: string; start: number; end: number }>;
   physics_spec: PhysicsSpec;
   beat_grid: { bpm: number; beats: number[]; confidence: number };
   palette: string[];
