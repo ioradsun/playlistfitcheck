@@ -63,13 +63,59 @@ const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
 const easeOut = (t: number): number => 1 - Math.pow(1 - t, 3);
-const LAYOUT_TEMPLATES: Record<number, Array<[number, number]>> = {
+type VisualMode = 'intimate' | 'cinematic' | 'explosive';
+
+const INTIMATE_LAYOUTS: Record<number, Array<[number, number]>> = {
   1: [[0.5, 0.5]],
-  2: [[0.3, 0.5], [0.7, 0.5]],
+  2: [[0.42, 0.48], [0.58, 0.52]],
+  3: [[0.38, 0.45], [0.5, 0.55], [0.62, 0.45]],
+  4: [[0.35, 0.43], [0.5, 0.37], [0.5, 0.6], [0.65, 0.5]],
+  5: [[0.35, 0.4], [0.45, 0.58], [0.5, 0.35], [0.55, 0.58], [0.65, 0.4]],
+  6: [[0.35, 0.4], [0.45, 0.58], [0.5, 0.35], [0.55, 0.58], [0.65, 0.4], [0.5, 0.5]],
+};
+
+const CINEMATIC_LAYOUTS: Record<number, Array<[number, number]>> = {
+  1: [[0.5, 0.5]],
+  2: [[0.3, 0.45], [0.7, 0.55]],
   3: [[0.25, 0.35], [0.5, 0.55], [0.75, 0.38]],
   4: [[0.28, 0.35], [0.72, 0.32], [0.25, 0.65], [0.72, 0.65]],
-  5: [[0.18, 0.38], [0.38, 0.65], [0.5, 0.32], [0.65, 0.65], [0.82, 0.38]],
-  6: [[0.2, 0.35], [0.5, 0.28], [0.8, 0.35], [0.22, 0.65], [0.5, 0.70], [0.78, 0.63]],
+  5: [[0.18, 0.38], [0.38, 0.65], [0.5, 0.3], [0.65, 0.65], [0.82, 0.38]],
+  6: [[0.2, 0.32], [0.5, 0.25], [0.8, 0.32], [0.22, 0.68], [0.5, 0.73], [0.78, 0.65]],
+};
+
+const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {
+  1: [[0.5, 0.5]],
+  2: [[0.22, 0.42], [0.78, 0.58]],
+  3: [[0.15, 0.35], [0.55, 0.65], [0.85, 0.3]],
+  4: [[0.15, 0.3], [0.82, 0.28], [0.18, 0.7], [0.8, 0.68]],
+  5: [[0.12, 0.35], [0.35, 0.72], [0.5, 0.25], [0.68, 0.7], [0.88, 0.33]],
+  6: [[0.12, 0.28], [0.42, 0.18], [0.82, 0.25], [0.15, 0.72], [0.55, 0.8], [0.85, 0.7]],
+};
+
+const ANIM_PARAMS = {
+  intimate: { entryDuration: 0.35, offsetMagnitude: 25, impactScale: 1.15, stagger: 0.06, linger: 0.6 },
+  cinematic: { entryDuration: 0.22, offsetMagnitude: 45, impactScale: 1.4, stagger: 0.04, linger: 0.5 },
+  explosive: { entryDuration: 0.12, offsetMagnitude: 70, impactScale: 1.8, stagger: 0.025, linger: 0.35 },
+} satisfies Record<VisualMode, {
+  entryDuration: number;
+  offsetMagnitude: number;
+  impactScale: number;
+  stagger: number;
+  linger: number;
+}>;
+
+const getVisualMode = (payload: ScenePayload): VisualMode => {
+  if (!payload.cinematic_direction) return 'cinematic';
+  const physicsProfile = payload.cinematic_direction.visualWorld?.physicsProfile;
+  const backgroundSystem = payload.cinematic_direction.visualWorld?.backgroundSystem ?? 'default';
+  const heat = physicsProfile?.heat ?? 0.5;
+  const beatResponse = physicsProfile?.beatResponse ?? 'pulse';
+
+  return heat > 0.7 || backgroundSystem === 'storm' || beatResponse === 'slam'
+    ? 'explosive'
+    : heat > 0.4 || backgroundSystem === 'cosmic' || backgroundSystem === 'urban'
+      ? 'cinematic'
+      : 'intimate';
 };
 
 const FILLER_WORDS = new Set([
@@ -115,6 +161,7 @@ type StoryboardEntryLike = {
 type ChapterLike = {
   startRatio?: number;
   endRatio?: number;
+  emotionalIntensity?: number;
   dominantColor?: string;
   typographyShift?: {
     fontWeight?: number;
@@ -151,21 +198,25 @@ type PrebakedData = {
   energy: number;
   density: number;
   wordMeta: WordMetaEntry[];
+  visualMode: VisualMode;
+  heat: number;
 };
 
-const WORD_LINGER = 0.5;
-
-function getLayoutPosition(wordIndex: number, totalWords: number): [number, number] {
-  if (LAYOUT_TEMPLATES[totalWords]) {
-    return LAYOUT_TEMPLATES[totalWords][wordIndex] ?? [0.5, 0.5];
-  }
-
-  const cols = Math.ceil(totalWords / 2);
-  const row = Math.floor(wordIndex / cols);
-  const col = wordIndex % cols;
-  const x = cols <= 1 ? 0.5 : 0.15 + (col / (cols - 1)) * 0.7;
-  const y = row === 0 ? 0.38 : 0.62;
-  return [x, y];
+function getLayoutForMode(
+  mode: VisualMode,
+  wordIndex: number,
+  totalWords: number,
+  chapterEmotionalIntensity: number,
+): [number, number] {
+  const effectiveMode = chapterEmotionalIntensity > 0.8 && mode !== 'intimate' ? 'explosive' : mode;
+  const templates = effectiveMode === 'explosive'
+    ? EXPLOSIVE_LAYOUTS
+    : effectiveMode === 'cinematic'
+      ? CINEMATIC_LAYOUTS
+      : INTIMATE_LAYOUTS;
+  const cap = Math.min(totalWords, 6);
+  const template = templates[cap] ?? templates[6];
+  return template[wordIndex % template.length];
 }
 
 function getEntryAnimation(
@@ -173,16 +224,17 @@ function getEntryAnimation(
   ny: number,
   entryStyle: string,
   kineticClass: string | null,
+  animParams: (typeof ANIM_PARAMS)[VisualMode],
 ): { offsetX: number; offsetY: number; initScale: number } {
   void entryStyle;
-  if (kineticClass === 'IMPACT') return { offsetX: 0, offsetY: 0, initScale: 1.8 };
-  if (kineticClass === 'RISING') return { offsetX: 0, offsetY: 50, initScale: 1 };
-  if (kineticClass === 'FALLING') return { offsetX: 0, offsetY: -50, initScale: 1 };
+  if (kineticClass === 'IMPACT') return { offsetX: 0, offsetY: 0, initScale: animParams.impactScale };
+  if (kineticClass === 'RISING') return { offsetX: 0, offsetY: animParams.offsetMagnitude, initScale: 1 };
+  if (kineticClass === 'FALLING') return { offsetX: 0, offsetY: -animParams.offsetMagnitude, initScale: 1 };
 
-  if (ny < 0.4) return { offsetX: 0, offsetY: -45, initScale: 1 };
-  if (ny > 0.6) return { offsetX: 0, offsetY: 45, initScale: 1 };
-  if (nx < 0.35) return { offsetX: -50, offsetY: 0, initScale: 1 };
-  if (nx > 0.65) return { offsetX: 50, offsetY: 0, initScale: 1 };
+  if (ny < 0.4) return { offsetX: 0, offsetY: -animParams.offsetMagnitude * 0.9, initScale: 1 };
+  if (ny > 0.6) return { offsetX: 0, offsetY: animParams.offsetMagnitude * 0.9, initScale: 1 };
+  if (nx < 0.35) return { offsetX: -animParams.offsetMagnitude, offsetY: 0, initScale: 1 };
+  if (nx > 0.65) return { offsetX: animParams.offsetMagnitude, offsetY: 0, initScale: 1 };
   return { offsetX: 0, offsetY: 0, initScale: 1.4 };
 }
 
@@ -190,12 +242,15 @@ function getWordFontSize(
   word: string,
   directive: WordDirectiveLike | null,
   baseFontSize: number,
+  visualMode: VisualMode,
 ): number {
   const clean = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
   if (FILLER_WORDS.has(clean)) return Math.round(baseFontSize * 0.65);
 
   const emphasisLevel = directive?.emphasisLevel ?? 2;
-  const scale = 0.8 + (emphasisLevel - 1) * 0.2;
+  const emphasisMultiplier = visualMode === 'explosive' ? 0.25
+    : visualMode === 'cinematic' ? 0.18 : 0.12;
+  const scale = 0.8 + (emphasisLevel - 1) * emphasisMultiplier;
   return Math.round(baseFontSize * scale);
 }
 
@@ -221,7 +276,7 @@ export function blendWithWhite(hex: string, whiteFraction: number): string {
   return `#${br.toString(16).padStart(2, "0")}${bg.toString(16).padStart(2, "0")}${bb.toString(16).padStart(2, "0")}`;
 }
 
-function createPrebakedData(payload: ScenePayload, totalFrames: number): PrebakedData {
+function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMode: VisualMode): PrebakedData {
   const chapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
   const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
   const tensionCurve = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
@@ -348,6 +403,8 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
     energy,
     density,
     wordMeta,
+    visualMode,
+    heat,
   };
 }
 
@@ -419,33 +476,36 @@ function bakeFrame(
   const chunks: Keyframe["chunks"] = [];
 
   if (pre.wordMeta.length > 0) {
+    const currentChapter = findByRatio(chapters, songProgress);
+    const chapterEmotionalIntensity = currentChapter?.emotionalIntensity ?? pre.heat;
+    const animParams = ANIM_PARAMS[pre.visualMode];
     const wordChunks = pre.wordMeta
       .filter((wm) => {
-        return tSec >= wm.start && tSec < (wm.end + WORD_LINGER);
+        return tSec >= wm.start && tSec < (wm.end + animParams.linger);
       })
       .map((wm) => {
         const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
         const totalWords = lineWords.length;
-        const [nx, ny] = getLayoutPosition(wm.wordIndex, totalWords);
+        const [nx, ny] = getLayoutForMode(pre.visualMode, wm.wordIndex, totalWords, chapterEmotionalIntensity);
 
         const canvasX = nx * 960;
         const canvasY = ny * 540;
 
         const elapsed = tSec - wm.start;
-        const remaining = (wm.end + WORD_LINGER) - tSec;
+        const remaining = (wm.end + animParams.linger) - tSec;
         const entryAlpha = Math.min(1, elapsed / 0.06);
-        const exitAlpha = Math.min(1, remaining / 0.1);
+        const exitAlpha = Math.min(1, remaining / Math.max(animParams.linger, 0.1));
         const alpha = Math.min(entryAlpha, exitAlpha);
 
         const storyEntry = payload.cinematic_direction?.storyboard?.[wm.lineIndex];
         const entryStyle = storyEntry?.entryStyle ?? 'fades';
         const kinetic = wm.directive?.kineticClass ?? null;
 
-        const { offsetX, offsetY, initScale } = getEntryAnimation(nx, ny, entryStyle, kinetic);
+        const { offsetX, offsetY, initScale } = getEntryAnimation(nx, ny, entryStyle, kinetic, animParams);
 
-        const stagger = wm.wordIndex * 0.04;
+        const stagger = wm.wordIndex * animParams.stagger;
         const adjustedElapsed = Math.max(0, elapsed - stagger);
-        const ep = easeOut(Math.min(1, adjustedElapsed / 0.22));
+        const ep = easeOut(Math.min(1, adjustedElapsed / animParams.entryDuration));
 
         const animOffsetX = offsetX * (1 - ep);
         const animOffsetY = offsetY * (1 - ep);
@@ -458,10 +518,10 @@ function bakeFrame(
           ?? '#ffffff';
 
         const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
-        const fontSize = getWordFontSize(wm.word, wm.directive, baseFontSize);
+        const fontSize = getWordFontSize(wm.word, wm.directive, baseFontSize, pre.visualMode);
 
         const wordGlow = (wm.directive?.emphasisLevel ?? 0) >= 4
-          ? glow * 1.8
+          ? glow * animParams.impactScale
           : glow * 0.6;
 
         return {
@@ -656,8 +716,9 @@ export function bakeScene(
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const frames: BakedTimeline = [];
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
+  const visualMode = getVisualMode(payload);
   const state = createBakeState(payload);
-  const pre = createPrebakedData(payload, totalFrames);
+  const pre = createPrebakedData(payload, totalFrames, visualMode);
 
   for (let frameIndex = 0; frameIndex <= totalFrames; frameIndex += 1) {
     frames.push(bakeFrame(frameIndex, payload, durationMs, state, pre));
@@ -678,8 +739,9 @@ export function bakeSceneChunked(
 ): Promise<BakedTimeline> {
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
+  const visualMode = getVisualMode(payload);
   const state = createBakeState(payload);
-  const pre = createPrebakedData(payload, totalFrames);
+  const pre = createPrebakedData(payload, totalFrames, visualMode);
 
   const frames: BakedTimeline = [];
   let frameIndex = 0;
