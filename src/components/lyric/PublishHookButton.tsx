@@ -201,7 +201,7 @@ export function PublishHookButton({
     } finally {
       setPublishing(false);
     }
-  }, [user, hook, secondHook, hookLabel, secondHookLabel, physicsSpec, lines, beatGrid, audioFile, songTitle, artistName, system, palette, fingerprint, publishing]);
+  }, [user, hook, secondHook, hookLabel, secondHookLabel, physicsSpec, lines, beatGrid, audioFile, songTitle, system, palette, fingerprint, publishing]);
 
   if (!user) return null;
 

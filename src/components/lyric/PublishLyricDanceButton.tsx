@@ -146,7 +146,7 @@ export function PublishLyricDanceButton({
       setPublishing(false);
       setStatus("");
     }
-  }, [user, physicsSpec, lines, beatGrid, audioFile, songTitle, artistName, system, palette, fingerprint, seed, publishing, songDna]);
+  }, [user, physicsSpec, lines, beatGrid, audioFile, songTitle, system, palette, fingerprint, seed, publishing, songDna]);
 
   if (!user) return null;
 

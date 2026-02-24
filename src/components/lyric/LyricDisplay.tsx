@@ -2028,8 +2028,7 @@ export function LyricDisplay({
                         confidence: beatGrid.confidence,
                       }}
                       audioFile={audioFile}
-                      songTitle={data.title}
-                      artistName={data.artist}
+                       songTitle={data.title}
                       system={
                         hookDanceOverrides.system || songDna.physicsSpec.system
                       }
