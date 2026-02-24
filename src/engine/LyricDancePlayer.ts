@@ -307,8 +307,8 @@ export class LyricDancePlayer {
   private chunks: Map<string, ChunkState> = new Map();
 
   // Background cache
-  private bgCache: HTMLCanvasElement | null = null;
-  private bgCache2: HTMLCanvasElement | null = null;
+  private bgCaches: HTMLCanvasElement[] = [];
+  private bgCacheCount = 0;
 
   // Playback
   private rafHandle = 0;
@@ -479,7 +479,7 @@ export class LyricDancePlayer {
     this.textCanvas.style.width = `${w}px`;
     this.textCanvas.style.height = `${h}px`;
 
-    this.buildBgCache();
+    if (this.payload) this.buildBgCache();
     if (this.timeline.length) this.timeline = this.scaleTimeline(this.unscaleTimeline());
   }
 
@@ -509,8 +509,8 @@ export class LyricDancePlayer {
     // Only clear local reference, not the global cache
     this.chunks = new Map();
     this.timeline = [];
-    this.bgCache = null;
-    this.bgCache2 = null;
+    this.bgCaches = [];
+    this.bgCacheCount = 0;
 
     this.audio.pause();
     this.audio.src = "";
@@ -614,18 +614,7 @@ export class LyricDancePlayer {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
 
-
-    if (this.bgCache) {
-      this.ctx.globalAlpha = 1;
-      this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
-    }
-
-    // Blend overlay toward next chapter color
-    if (frame.bgBlend > 0 && this.bgCache2) {
-      this.ctx.globalAlpha = (frame.bgBlend % 1);
-      this.ctx.drawImage(this.bgCache2, 0, 0, this.width, this.height);
-      this.ctx.globalAlpha = 1;
-    }
+    this.drawBackground(frame);
 
     // Apply camera drift — subtle only, no zoom transform
     this.ctx.translate(frame.cameraX ?? 0, frame.cameraY ?? 0);
@@ -781,110 +770,184 @@ export class LyricDancePlayer {
   }
 
   private buildBgCache(): void {
-    const buildCanvas = (dominantColor: string): HTMLCanvasElement | null => {
-      const off = document.createElement("canvas");
-      off.width = this.canvas.width;
-      off.height = this.canvas.height;
+    const chapters = this.payload?.cinematic_direction?.chapters ?? [];
+    const palette = this.payload?.cinematic_direction?.visualWorld?.palette
+      ?? this.payload?.palette
+      ?? ['#0a0a0a', '#111827', '#1a2a4a'];
+    const backgroundSystem = this.payload?.cinematic_direction?.visualWorld?.backgroundSystem ?? 'default';
 
-      const offCtx = off.getContext("2d", { alpha: false });
-      if (!offCtx) return null;
+    const count = Math.max(1, chapters.length);
+    this.bgCaches = [];
 
-      const palette = this.payload?.palette ?? this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"];
-      const sceneManifest = this.payload?.scene_manifest;
+    for (let ci = 0; ci < count; ci++) {
+      const chapter = chapters[ci];
+      const off = document.createElement('canvas');
+      off.width = this.width;
+      off.height = this.height;
+      const ctx = off.getContext('2d');
+      if (!ctx) continue;
 
-      const grad = offCtx.createLinearGradient(0, 0, 0, off.height);
-      grad.addColorStop(0, dominantColor || "#0a0a0a");
-      grad.addColorStop(0.6, palette[1] || "#111827");
-      grad.addColorStop(1, palette[2] ? `${palette[2]}33` : "#0a0a0a");
-      offCtx.fillStyle = grad;
-      offCtx.fillRect(0, 0, off.width, off.height);
+      const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
+      const accentColor = palette[1] ?? '#FFD700';
+      const bgDirective = chapter?.backgroundDirective?.toLowerCase() ?? '';
+      const intensity = chapter?.emotionalIntensity ?? 0.5;
 
-      const env = ((sceneManifest as any)?.environment ?? "").toLowerCase();
-      if (env.includes("ocean") || env.includes("water") || env.includes("surf")) {
-        this.drawWaveBands(offCtx, off.width, off.height, palette);
-      } else if (env.includes("city") || env.includes("urban") || env.includes("street")) {
-        this.drawLightStreaks(offCtx, off.width, off.height, palette);
-      } else if (env.includes("space") || env.includes("cosmos") || env.includes("star")) {
-        this.drawStarField(offCtx, off.width, off.height, palette);
-      } else if (env.includes("forest") || env.includes("nature") || env.includes("wood")) {
-        this.drawOrganicShapes(offCtx, off.width, off.height, palette);
+      const grad = ctx.createLinearGradient(0, 0, 0, off.height);
+      grad.addColorStop(0, this.darken(dominantColor, 0.85));
+      grad.addColorStop(0.5, this.darken(dominantColor, 0.6));
+      grad.addColorStop(1, this.darken(dominantColor, 0.75));
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, off.width, off.height);
+
+      if (backgroundSystem === 'storm' || bgDirective.includes('storm') || bgDirective.includes('cloud')) {
+        this.drawStormAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
+      } else if (backgroundSystem === 'cosmic' || bgDirective.includes('space') || bgDirective.includes('star')) {
+        this.drawCosmicAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
+      } else if (backgroundSystem === 'intimate' || bgDirective.includes('warm') || bgDirective.includes('soft')) {
+        this.drawIntimateAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
+      } else if (bgDirective.includes('gold') || bgDirective.includes('light floods')) {
+        this.drawGoldenAtmosphere(ctx, off.width, off.height, dominantColor, accentColor, intensity);
       } else {
-        this.drawRadialGlow(offCtx, off.width, off.height, palette);
+        this.drawRadialGlow(ctx, off.width, off.height, [dominantColor, accentColor]);
       }
 
-      const vignette = offCtx.createRadialGradient(
-        off.width / 2, off.height / 2, off.height * 0.3,
-        off.width / 2, off.height / 2, off.height * 0.9,
-      );
-      vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(1, "rgba(0,0,0,0.65)");
-      offCtx.fillStyle = vignette;
-      offCtx.fillRect(0, 0, off.width, off.height);
-
-      return off;
-    };
-
-    const palette = this.payload?.palette ?? this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"];
-    this.bgCache = buildCanvas(palette[0] || "#0a0a0a");
-    this.bgCache2 = buildCanvas(palette[1] || "#111111");
-  }
-
-  private drawWaveBands(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
-    ctx.save();
-    for (let i = 0; i < 6; i += 1) {
-      const y = (height / 6) * i + height * 0.08;
-      ctx.globalAlpha = 0.08 + i * 0.01;
-      ctx.fillStyle = palette[i % palette.length] || palette[1] || "#1f2937";
-      ctx.fillRect(-width * 0.1, y, width * 1.2, height * 0.07);
+      this.drawVignette(ctx, off.width, off.height, intensity);
+      this.bgCaches.push(off);
     }
-    ctx.restore();
-  }
 
-  private drawLightStreaks(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
-    ctx.save();
-    for (let i = 0; i < 16; i += 1) {
-      const x = (width / 16) * i + ((i % 3) - 1) * 8;
-      ctx.globalAlpha = 0.08 + (i % 4) * 0.02;
-      ctx.fillStyle = palette[(i + 1) % palette.length] || "#9ca3af";
-      ctx.fillRect(x, 0, Math.max(2, width * 0.005), height);
-    }
-    ctx.restore();
-  }
-
-  private drawStarField(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
-    ctx.save();
-    for (let i = 0; i < 90; i += 1) {
-      const x = (width * ((i * 37) % 100)) / 100;
-      const y = (height * ((i * 53) % 100)) / 100;
-      const size = (i % 3) + 1;
-      ctx.globalAlpha = 0.08 + (i % 5) * 0.02;
-      ctx.fillStyle = palette[(i + 2) % palette.length] || "#f3f4f6";
-      ctx.fillRect(x, y, size, size);
-    }
-    ctx.restore();
-  }
-
-  private drawOrganicShapes(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
-    ctx.save();
-    ctx.translate(width * 0.5, height * 0.5);
-    for (let i = 0; i < 7; i += 1) {
-      ctx.rotate(0.35);
-      ctx.globalAlpha = 0.1 + i * 0.01;
-      ctx.fillStyle = palette[(i + 1) % palette.length] || "#065f46";
-      ctx.fillRect(-width * 0.45, -height * 0.06, width * 0.9, height * 0.12);
-    }
-    ctx.restore();
+    this.bgCacheCount = this.bgCaches.length;
   }
 
   private drawRadialGlow(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
     const glow = ctx.createRadialGradient(width / 2, height / 2, height * 0.08, width / 2, height / 2, height * 0.7);
-    glow.addColorStop(0, palette[2] || "rgba(255,255,255,0.2)");
-    glow.addColorStop(1, "rgba(0,0,0,0)");
+    glow.addColorStop(0, palette[1] || 'rgba(255,255,255,0.2)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.save();
     ctx.globalAlpha = 0.16;
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  private darken(hex: string, factor: number): string {
+    const clean = hex.replace('#', '');
+    const padded = clean.length >= 6 ? clean : clean.padEnd(6, '0');
+    const r = Math.round(parseInt(padded.slice(0, 2), 16) * factor);
+    const g = Math.round(parseInt(padded.slice(2, 4), 16) * factor);
+    const b = Math.round(parseInt(padded.slice(4, 6), 16) * factor);
+    const clamp = (v: number) => Math.max(0, Math.min(255, v));
+    return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
+  }
+
+  private drawStormAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
+    for (let i = 0; i < 6; i++) {
+      const x = (i * 0.618033 % 1) * w;
+      const y = (i * 0.381966 % 1) * h * 0.7;
+      const r = w * (0.2 + intensity * 0.15);
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, `${dominant}22`);
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (intensity > 0.6) {
+      const lightGrad = ctx.createLinearGradient(w * 0.3, 0, w * 0.7, h * 0.3);
+      lightGrad.addColorStop(0, `${accent}18`);
+      lightGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = lightGrad;
+      ctx.fillRect(0, 0, w, h);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private drawCosmicAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
+    for (let i = 0; i < 80; i++) {
+      const x = (i * 0.618033 % 1) * w;
+      const y = (i * 0.381966 % 1) * h;
+      const size = 0.5 + (i % 3) * 0.5;
+      const alpha = 0.3 + (i % 4) * 0.15;
+      ctx.globalAlpha = alpha * intensity;
+      ctx.fillStyle = i % 7 === 0 ? accent : '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    const nebula = ctx.createRadialGradient(w * 0.6, h * 0.3, 0, w * 0.6, h * 0.3, w * 0.4);
+    nebula.addColorStop(0, `${accent}12`);
+    nebula.addColorStop(1, 'transparent');
+    ctx.fillStyle = nebula;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+  }
+
+  private drawIntimateAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
+    const glow = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, w * 0.5);
+    glow.addColorStop(0, `${accent}14`);
+    glow.addColorStop(0.5, `${dominant}08`);
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 3; i++) {
+      const y = h * (0.3 + i * 0.2);
+      const band = ctx.createLinearGradient(0, y - 40, 0, y + 40);
+      band.addColorStop(0, 'transparent');
+      band.addColorStop(0.5, `${accent}08`);
+      band.addColorStop(1, 'transparent');
+      ctx.fillStyle = band;
+      ctx.fillRect(0, y - 40, w, 80);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private drawGoldenAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
+    const beamCount = Math.floor(2 + intensity * 3);
+    for (let i = 0; i < beamCount; i++) {
+      const x = w * (0.2 + (i / beamCount) * 0.6);
+      const beam = ctx.createLinearGradient(x, 0, x + w * 0.05, h);
+      beam.addColorStop(0, `${accent}25`);
+      beam.addColorStop(0.4, `${accent}10`);
+      beam.addColorStop(1, 'transparent');
+      ctx.fillStyle = beam;
+      ctx.fillRect(x - w * 0.05, 0, w * 0.15, h);
+    }
+    const bloom = ctx.createRadialGradient(w * 0.5, h * 0.4, 0, w * 0.5, h * 0.4, w * 0.35);
+    bloom.addColorStop(0, `${accent}20`);
+    bloom.addColorStop(1, 'transparent');
+    ctx.fillStyle = bloom;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+  }
+
+  private drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number): void {
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.25, w / 2, h / 2, h * 0.85);
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, `rgba(0,0,0,${0.55 + intensity * 0.2})`);
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  private drawBackground(frame: Keyframe): void {
+    if (this.bgCaches.length === 0) return;
+
+    const bgBlend = frame.bgBlend ?? 0;
+    const totalChapters = this.bgCacheCount;
+    const chapterProgress = bgBlend * (totalChapters - 1);
+    const chapterIdx = Math.floor(chapterProgress);
+    const chapterFraction = chapterProgress - chapterIdx;
+
+    const currentBg = this.bgCaches[Math.min(chapterIdx, totalChapters - 1)];
+    const nextBg = this.bgCaches[Math.min(chapterIdx + 1, totalChapters - 1)];
+
+    this.ctx.globalAlpha = 1;
+    this.ctx.drawImage(currentBg, 0, 0, this.width, this.height);
+
+    if (chapterFraction > 0 && nextBg !== currentBg) {
+      this.ctx.globalAlpha = chapterFraction;
+      this.ctx.drawImage(nextBg, 0, 0, this.width, this.height);
+      this.ctx.globalAlpha = 1;
+    }
   }
 
   // ────────────────────────────────────────────────────────────
