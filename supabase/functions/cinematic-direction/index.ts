@@ -342,6 +342,7 @@ interface AnalyzeRequest {
   lyricId?: string;
   id?: string;
   scene_context?: SceneContext | null;
+  systemPromptOverride?: string;
 }
 
 function extractJson(raw: string): Record<string, unknown> | null {
