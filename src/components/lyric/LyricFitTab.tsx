@@ -129,7 +129,6 @@ export function LyricFitTab({
       const filename = initialLyric.filename || "saved-lyrics.mp3";
       const newData: LyricData = {
         title: resolveProjectTitle(initialLyric.title, filename),
-        artist: initialLyric.artist,
         lines: initialLyric.lines as any[],
       };
       setLyricData(newData);
