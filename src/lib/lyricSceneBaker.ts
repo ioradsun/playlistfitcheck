@@ -440,7 +440,6 @@ type WordDirectiveLike = {
   colorOverride?: string;
   emphasisLevel?: number;
   visualMetaphor?: string;
-  behavior?: string;
   ghostTrail?: boolean;
   ghostCount?: number;
   ghostSpacing?: number;
@@ -448,6 +447,7 @@ type WordDirectiveLike = {
   letterSequence?: boolean;
   trail?: string;
   entry?: string;
+  behavior?: string;
   exit?: string;
 };
 
@@ -1126,9 +1126,9 @@ function bakeFrame(
 
           const metaphor = wm.directive?.visualMetaphor as VisualMetaphor | undefined;
           const semanticEffect = metaphor ? SEMANTIC_EFFECTS[metaphor] : null;
-          const effectiveEntry = (wm.directive?.entry as EntryStyle) ?? semanticEffect?.entry ?? entry;
-          const effectiveBehavior = (wm.directive?.behavior as BehaviorStyle) ?? semanticEffect?.behavior ?? behavior;
-          const effectiveExit = (wm.directive?.exit as ExitStyle) ?? semanticEffect?.exit ?? exit;
+          const effectiveEntry = (wm.directive?.entry as EntryStyle | undefined) ?? semanticEffect?.entry ?? entry;
+          const effectiveBehavior = (wm.directive?.behavior as BehaviorStyle | undefined) ?? semanticEffect?.behavior ?? behavior;
+          const effectiveExit = (wm.directive?.exit as ExitStyle | undefined) ?? semanticEffect?.exit ?? exit;
           const entryDurationMult = semanticEffect?.entryDurationMult ?? 1.0;
           const semanticAlphaMax = semanticEffect?.alphaMax ?? 1.0;
           const semanticScaleX = semanticEffect?.scaleX ?? 1.0;
@@ -1136,7 +1136,9 @@ function bakeFrame(
           const semanticGlowMult = semanticEffect?.glowMultiplier ?? 1.0;
           const semanticFontWeight = semanticEffect?.fontWeight ?? null;
           const semanticColorOverride = semanticEffect?.colorOverride ?? null;
-          const emitterType = semanticEffect?.emitterType ?? 'none';
+          const directiveTrail = wm.directive?.trail ?? 'none';
+          const emitterType: WordEmitterType = semanticEffect?.emitterType
+            ?? (directiveTrail !== 'none' ? directiveTrail as WordEmitterType : 'none');
 
           const isLetterSequence = wm.directive?.letterSequence === true;
           const letterTotal = isLetterSequence ? wm.word.length : 1;
@@ -1255,12 +1257,15 @@ function bakeFrame(
 
           const stagger = wm.wordIndex * (pre.manifestStagger ?? lineLayout?.stagger ?? 0);
 
-          const { entry, behavior, exit } = assignWordAnimations(
+          const { entry: baseEntry, behavior: baseBehavior, exit: baseExit } = assignWordAnimations(
             wm,
             motionDefaults,
             storyboard as StoryboardEntryLike[],
             manifestDirective,
           );
+          const entry = (wm.directive?.entry as EntryStyle | undefined) ?? baseEntry;
+          const behavior = (wm.directive?.behavior as BehaviorStyle | undefined) ?? baseBehavior;
+          const exit = (wm.directive?.exit as ExitStyle | undefined) ?? baseExit;
 
           const splitExitStyles: ExitStyle[] = ['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up'];
           const isLetterSequence = wm.directive?.letterSequence === true;
