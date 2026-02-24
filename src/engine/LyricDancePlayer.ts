@@ -1001,7 +1001,7 @@ export class LyricDancePlayer {
     }
     if (intensity > 0.6) {
       const lightGrad = ctx.createLinearGradient(w * 0.3, 0, w * 0.7, h * 0.3);
-      lightGrad.addColorStop(0, `${accent}18`);
+      lightGrad.addColorStop(0, `${accent}0c`);
       lightGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = lightGrad;
       ctx.fillRect(0, 0, w, h);
