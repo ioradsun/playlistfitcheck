@@ -1386,7 +1386,7 @@ export class LyricDancePlayer {
     this.activeEvents = [];
   }
 
-  private updateSims(tSec: number, frame: Keyframe): void {
+  private updateSims(tSec: number, frame: ScaledKeyframe): void {
     const simFrame = Math.floor(tSec * 24);
     if (simFrame === this.lastSimFrame) return;
     this.lastSimFrame = simFrame;
