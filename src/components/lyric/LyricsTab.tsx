@@ -73,6 +73,7 @@ export function LyricsTab({
   onSavedId,
   analysisModel,
   transcriptionModel,
+  sceneInput,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Syncing...");
