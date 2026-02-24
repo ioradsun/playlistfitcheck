@@ -1142,7 +1142,7 @@ export class LyricDancePlayer {
       this._draw(tSec);
     } catch (err) {
       console.error('[PLAYER CRASH] at tSec:', tSec, err);
-      this.stopHealthMonitor();
+      // Don't stop health monitor — let loop continue
     }
   }
 
