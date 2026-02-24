@@ -401,6 +401,23 @@ export function LyricFitTab({
           : dirResult.cinematicDirection;
         setCinematicDirection(enrichedDirection);
 
+        const sceneManifestRes = await supabase.functions.invoke("generate-scene-manifest", {
+          body: {
+            cinematic_direction: enrichedDirection,
+            lyrics: sourceLines,
+            words: words ?? [],
+            beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats.map((time) => ({ time })) } : null,
+            song_duration: sourceLines[sourceLines.length - 1]?.end ?? 0,
+            lyricId: savedIdRef.current || undefined,
+          },
+        });
+        const generatedManifest = sceneManifestRes.data?.scene_manifest ?? null;
+        if (generatedManifest) {
+          const validatedManifest = safeManifest(generatedManifest).manifest;
+          setSceneManifest(validatedManifest);
+          setSongDna((prev: any) => ({ ...(prev || {}), scene_manifest: validatedManifest }));
+        }
+
         // Persist cinematic direction back to song_dna in DB
         if (savedIdRef.current) {
           const existingSongDna = songDna || {};
@@ -414,7 +431,7 @@ export function LyricFitTab({
     } catch {
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error" }));
     }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna]);
+  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna, words]);
 
   const pipelineTriggeredRef = useRef(false);
   useEffect(() => {
