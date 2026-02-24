@@ -16,10 +16,12 @@ You may NOT invent colors, styles, effects, or any values not listed below.
 Return ONLY valid JSON. No markdown. No explanation. No preamble.
 
 ═══════════════════════════════════════
-SECTION 1 — WORLD SELECTION (7 picks)
+SECTION 1 — WORLD DEFAULTS (7 picks)
 ═══════════════════════════════════════
 
 Pick exactly one value for each of these 7 dimensions.
+
+These are the SONG-WIDE DEFAULTS. Chapters can override 4 of them.
 
 SCENE TONE — controls light/dark foundation:
   "dark"         — moody, cinematic, dark backgrounds
@@ -80,7 +82,8 @@ COMPATIBILITY RULES:
 SECTION 2 — CHAPTERS (exactly 3)
 ═══════════════════════════════════════
 
-Provide exactly 3 chapters. These drive the AI background image generation.
+Provide exactly 3 chapters. These drive the AI background image generation
+AND control how animation physics change across the song.
 
 Each chapter has:
 - "act": 1, 2, or 3
@@ -89,11 +92,36 @@ Each chapter has:
 - "description": a vivid 1-sentence scene for the background image
 - "mood": 2-3 emotional keywords
 
+OPTIONAL per chapter — override the song defaults for THIS act:
+- "motion": override motion for this chapter (same values as Section 1)
+- "texture": override texture for this chapter (same values as Section 1)
+- "typography": override typography for this chapter (same values as Section 1)
+- "atmosphere": override atmosphere for this chapter (same values as Section 1)
+
+Use chapter overrides to CREATE A JOURNEY. Don't repeat the same values
+as the song defaults unless you mean it. Think like a film director —
+each act should feel different.
+
 Chapter descriptions should paint a SCENE, not describe effects.
   GOOD: "Empty highway at 3am, headlights cutting through fog"
   BAD:  "Dark moody atmosphere with particles"
   GOOD: "Golden sunlight pouring through a cracked church window"
   BAD:  "Warm tones with spiritual energy"
+
+CHAPTER OVERRIDE EXAMPLES:
+  Song about loss with hope ending:
+    Act 1: motion "drift", texture "rain", atmosphere "haze"
+    Act 2: motion "weighted", texture "storm" (pain escalates)
+    Act 3: motion "fluid", texture "aurora", atmosphere "clean" (release)
+
+  Trap banger with quiet bridge:
+    Act 1: (uses song defaults — "weighted", "fire")
+    Act 2: motion "drift", texture "smoke", typography "whisper-soft"
+    Act 3: motion "glitch", texture "storm" (biggest energy)
+
+  Don't override every chapter. Only override when the emotional shift
+  demands a different feel. If Act 1 matches the song defaults, omit
+  the override fields entirely.
 
 ═══════════════════════════════════════
 SECTION 3 — STORYBOARD (sparse)
@@ -145,9 +173,9 @@ Each word directive has:
 
 OPTIONAL per word:
 - "trail": particle trail effect (see list below)
-- "ghostTrail": true — leaves fading echo copies (2-4 words max per song)
+- "ghostTrail": true — leaves fading echo copies (2-4 per song)
 - "ghostDirection": "up" | "down" | "left" | "right" | "radial"
-- "letterSequence": true — letters animate individually (3-5 words max per song)
+- "letterSequence": true — letters animate individually (3-5 per song)
 - "visualMetaphor": freeform string describing the intended visual
 
 BEHAVIORS:
@@ -174,11 +202,11 @@ SECTION 5 — OUTPUT SCHEMA
 Return this exact JSON structure. All top-level keys are required.
 
 {
-  "sceneTone": "dark",
-  "atmosphere": "cinematic",
-  "palette": "cold-gold",
-  "motion": "fluid",
-  "typography": "clean-modern",
+  "sceneTone": "mixed-dawn",
+  "atmosphere": "haze",
+  "palette": "storm-grey",
+  "motion": "drift",
+  "typography": "raw-condensed",
   "texture": "rain",
   "emotionalArc": "slow-burn",
 
@@ -195,14 +223,21 @@ Return this exact JSON structure. All top-level keys are required.
       "startRatio": 0.25,
       "endRatio": 0.75,
       "description": "Inside a moving car, rain on windshield, blurred city lights passing",
-      "mood": "restless, searching, momentum"
+      "mood": "restless, searching, momentum",
+      "motion": "weighted",
+      "texture": "storm",
+      "atmosphere": "cinematic"
     },
     {
       "act": 3,
       "startRatio": 0.75,
       "endRatio": 1.0,
       "description": "Standing on a rooftop at dawn, rain stopping, first light breaking through clouds",
-      "mood": "release, clarity, resolve"
+      "mood": "release, clarity, resolve",
+      "motion": "fluid",
+      "texture": "aurora",
+      "typography": "elegant-serif",
+      "atmosphere": "clean"
     }
   ],
 
@@ -260,12 +295,13 @@ Return this exact JSON structure. All top-level keys are required.
 }
 
 VALIDATION:
-- sceneTone, atmosphere, palette, motion, typography, texture, emotionalArc are ALL required strings
+- sceneTone, atmosphere, palette, motion, typography, texture, emotionalArc are ALL required top-level strings
 - chapters array MUST have exactly 3 entries
+- Chapter override fields (motion, texture, typography, atmosphere) are OPTIONAL — only include when overriding
 - storyboard array MUST have 15-25 entries
 - wordDirectives MUST have 15-25 entries
 - All enum values MUST be from the lists above — do NOT invent values
-- Do NOT include fields named: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve, iconGlyph, iconStyle, iconPosition, iconScale
+- Do NOT include fields named: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve, iconGlyph, iconStyle, iconPosition, iconScale, visualWorld
 - If you include ANY of those forbidden fields, the output is INVALID
 
 Return JSON only. No markdown fences. No explanation.
@@ -355,7 +391,7 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
       "beatAlignment", "emotionalIntent", "visualTreatment",
       "particleBehavior", "transitionToNext", "dominantColor",
       "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "text",
-      "iconGlyph", "iconStyle", "iconPosition", "iconScale",
+      "iconGlyph", "iconStyle", "iconPosition", "iconScale", "visualWorld",
     ];
 
     for (const entry of raw.storyboard) {

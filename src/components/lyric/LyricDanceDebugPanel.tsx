@@ -682,10 +682,12 @@ You may NOT invent colors, styles, effects, or any values not listed below.
 Return ONLY valid JSON. No markdown. No explanation. No preamble.
 
 ═══════════════════════════════════════
-SECTION 1 — WORLD SELECTION (7 picks)
+SECTION 1 — WORLD DEFAULTS (7 picks)
 ═══════════════════════════════════════
 
 Pick exactly one value for each of these 7 dimensions.
+
+These are the SONG-WIDE DEFAULTS. Chapters can override 4 of them.
 
 SCENE TONE — controls light/dark foundation:
   "dark"         — moody, cinematic, dark backgrounds
@@ -746,7 +748,8 @@ COMPATIBILITY RULES:
 SECTION 2 — CHAPTERS (exactly 3)
 ═══════════════════════════════════════
 
-Provide exactly 3 chapters. These drive the AI background image generation.
+Provide exactly 3 chapters. These drive the AI background image generation
+AND control how animation physics change across the song.
 
 Each chapter has:
 - "act": 1, 2, or 3
@@ -755,95 +758,48 @@ Each chapter has:
 - "description": a vivid 1-sentence scene for the background image
 - "mood": 2-3 emotional keywords
 
+OPTIONAL per chapter — override the song defaults for THIS act:
+- "motion": override motion for this chapter (same values as Section 1)
+- "texture": override texture for this chapter (same values as Section 1)
+- "typography": override typography for this chapter (same values as Section 1)
+- "atmosphere": override atmosphere for this chapter (same values as Section 1)
+
+Use chapter overrides to CREATE A JOURNEY. Don't repeat the same values
+as the song defaults unless you mean it. Think like a film director —
+each act should feel different.
+
 Chapter descriptions should paint a SCENE, not describe effects.
   GOOD: "Empty highway at 3am, headlights cutting through fog"
   BAD:  "Dark moody atmosphere with particles"
+
+CHAPTER OVERRIDE EXAMPLES:
+  Song about loss with hope ending:
+    Act 1: motion "drift", texture "rain", atmosphere "haze"
+    Act 2: motion "weighted", texture "storm" (pain escalates)
+    Act 3: motion "fluid", texture "aurora", atmosphere "clean" (release)
+
+  Don't override every chapter. Only override when the emotional shift
+  demands a different feel.
 
 ═══════════════════════════════════════
 SECTION 3 — STORYBOARD (sparse)
 ═══════════════════════════════════════
 
-The storyboard is SPARSE. Only include entries for lines that have a strong emotional or visual moment. Do NOT include an entry for every lyric line.
-
-Target: 15-25 storyboard entries out of all lyric lines.
-
-Each storyboard entry has:
-- "lineIndex": integer (0-based index into the lyrics array)
-- "heroWord": the most emotionally significant word on that line (UPPERCASE)
-- "entryStyle": pick from entries list below
-- "exitStyle": pick from exits list below
-
-ENTRY STYLES:
-  slam-down, punch-in, explode-in, snap-in, rise, materialize,
-  breathe-in, drift-in, drop, plant, stomp, cut-in, whisper, bloom,
-  focus-in, spin-in, tumble-in
-
-EXIT STYLES:
-  shatter, snap-out, burn-out, dissolve, drift-up, sink, cut-out,
-  vanish, linger, evaporate, blur-out, spin-out,
-  scatter-letters, peel-off, peel-reverse, cascade-down, cascade-up
+Target: 15-25 storyboard entries. Each has lineIndex, heroWord (UPPERCASE), entryStyle, exitStyle.
 
 ═══════════════════════════════════════
 SECTION 4 — WORD DIRECTIVES (semantic animation)
 ═══════════════════════════════════════
 
-For 15-25 emotionally or visually significant words across the song,
-choose animations that make the word's LITERAL MEANING visible.
-
-If the word means upward motion → it should move up.
-If the word means destruction → it should break apart.
-If the word means cold → it should trail frost.
-If the word means clarity → it should sharpen from blur.
-If the word means spinning → it should rotate.
-If the word means echo → it should leave ghost copies.
-If the word means frozen → it should stop dead.
-
-Let the word tell you what it needs.
-
-Each word directive has:
-- "word": the word (lowercase)
-- "emphasisLevel": 1-5 (1=subtle, 5=showstopper)
-- "entry": pick from entry styles list above
-- "behavior": pick from behaviors list below
-- "exit": pick from exit styles list above
-
-OPTIONAL per word:
-- "trail": particle trail effect (see list below)
-- "ghostTrail": true — leaves fading echo copies (2-4 per song)
-- "ghostDirection": "up" | "down" | "left" | "right" | "radial"
-- "letterSequence": true — letters animate individually (3-5 per song)
-- "visualMetaphor": freeform string describing the intended visual
-
-BEHAVIORS:
-  pulse, vibrate, float, grow, contract, flicker, orbit, lean, none,
-  freeze, tilt, pendulum, pulse-focus
-
-TRAILS:
-  ember, frost, spark-burst, dust-impact, light-rays, gold-coins,
-  dark-absorb, motion-trail, memory-orbs, none
-
-MODIFIER RULES:
-- ghostTrail: for echo, repeat, reverb, haunt, voices, forever, again (2-4 per song)
-- letterSequence: for break, shatter, split, count, crumble, apart, scatter (3-5 per song)
-- freeze behavior: for freeze, stop, still, stuck, trapped, numb (1-2 per song)
-- Choose animations by what the word MEANS, not how loud it is
-- Abstract emotional words (love, truth, hope) → use emphasisLevel + visualMetaphor
-- Concrete action words (fly, crash, burn, freeze) → use semantic entry/exit/trail
-- Not every word needs a trail. Most need "none" or omit the field.
-
-═══════════════════════════════════════
-SECTION 5 — OUTPUT SCHEMA
-═══════════════════════════════════════
-
-Return this exact JSON structure. All top-level keys are required.
+15-25 words with entry, behavior, exit, optional trail/ghostTrail/letterSequence.
 
 VALIDATION:
-- sceneTone, atmosphere, palette, motion, typography, texture, emotionalArc are ALL required strings
+- sceneTone, atmosphere, palette, motion, typography, texture, emotionalArc are ALL required top-level strings
 - chapters array MUST have exactly 3 entries
+- Chapter override fields (motion, texture, typography, atmosphere) are OPTIONAL
 - storyboard array MUST have 15-25 entries
 - wordDirectives MUST have 15-25 entries
-- All enum values MUST be from the lists above — do NOT invent values
-- Do NOT include forbidden fields: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve, iconGlyph, iconStyle, iconPosition, iconScale
+- Do NOT include forbidden fields: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve, iconGlyph, iconStyle, iconPosition, iconScale, visualWorld
 
 Return JSON only. No markdown fences. No explanation.`;
 
