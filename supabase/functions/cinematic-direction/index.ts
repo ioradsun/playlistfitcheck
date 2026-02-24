@@ -461,29 +461,9 @@ Text style: ${sceneCtx.textStyle === 'dark'
       }
     }
 
-    // Retry once if icons are too few
-    const initialIcons = Array.isArray(parsed.storyboard) ? (parsed.storyboard as any[]).filter((s: any) => s.iconGlyph).length : 0;
-    if (initialIcons < 8) {
-      console.warn(`[cinematic-direction] Only ${initialIcons} icons, retrying for more...`);
-      try {
-        const retryParsed = await callAI(
-          `Your previous response only had ${initialIcons} storyboard entries with iconGlyph. This is INVALID. ` +
-          `You MUST assign iconGlyph to at least 10 storyboard entries (aim for 12-15). ` +
-          `Every chapter needs at least 3 icons. Use glyphs like: fire, heart, star, moon, crown, wings, diamond, eye, lightning, rain, broken-heart, sparkle, skull, compass, anchor. ` +
-          `Use iconPosition "behind" with iconStyle "ghost" for mood words, "above" with "outline" for descriptive words, "beside" with "outline" for action words. ` +
-          `Return the COMPLETE JSON again with at least 10 iconGlyph assignments in the storyboard.`
-        );
-        if (retryParsed) {
-          const retryIcons = Array.isArray(retryParsed.storyboard) ? (retryParsed.storyboard as any[]).filter((s: any) => s.iconGlyph).length : 0;
-          if (retryIcons > initialIcons) {
-            parsed = retryParsed;
-            console.log(`[cinematic-direction] Icon retry succeeded: ${retryIcons} icons`);
-          }
-        }
-      } catch (e) {
-        console.warn("[cinematic-direction] Icon retry failed, using original");
-      }
-    }
+    // Deterministic icon injection — Gemini rarely assigns enough icons,
+    // so we guarantee 10-15 by analyzing heroWords and wordDirectives
+    ensureMinimumIcons(parsed, lines);
 
     // Enforce numeric ranges
     const visualWorld = (parsed.visualWorld ?? {}) as Record<string, unknown>;
