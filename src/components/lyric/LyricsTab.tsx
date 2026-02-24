@@ -48,6 +48,7 @@ interface Props {
   onSavedId?: (id: string) => void;
   analysisModel: string;
   transcriptionModel: string;
+  sceneInput?: ReactNode;
 }
 
 export function LyricsTab({
@@ -72,6 +73,7 @@ export function LyricsTab({
   onSavedId,
   analysisModel,
   transcriptionModel,
+  sceneInput,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Syncing...");
@@ -294,7 +296,8 @@ export function LyricsTab({
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
+    <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto">
+      {sceneInput}
       <LyricUploader
         onTranscribe={handleTranscribe}
         loading={loading}
