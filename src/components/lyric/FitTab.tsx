@@ -297,6 +297,7 @@ export function FitTab({
     generationStatus.cinematicDirection === "done";
   const hasErrors = Object.values(generationStatus).includes("error");
   const danceDisabled = !sceneManifest || publishing || !allReady;
+  const republishDisabled = publishing || !allReady;
 
   // ── Sections derived from songDna ─────────────────────────────────────
   const physicsSpec = songDna?.physicsSpec;
