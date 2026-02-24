@@ -75,8 +75,17 @@ EMOTIONAL ARC — how intensity evolves over the song:
 COMPATIBILITY RULES:
 - If sceneTone is "dark", palette MUST be from the Dark list
 - If sceneTone is "light", palette MUST be from the Light list
-- If sceneTone is "light", texture should NOT be "fire" or "storm"
-- "mixed-*" tones can use any palette
+- "mixed-*" tones can use any palette from either list
+- Per-chapter palette overrides can use any palette regardless of sceneTone
+
+SCENE TONE SELECTION:
+- sceneTone reflects the DOMINANT emotional weight of the song, not the opening
+- A song that starts bright but ends in destruction = "mixed-dusk" (light → dark)
+- A song that starts dark but ends hopeful = "mixed-dawn" (dark → light)
+- Only use "light" if the song is PREDOMINANTLY bright/positive
+- Only use "dark" if the song is PREDOMINANTLY heavy/moody
+- When in doubt, use "mixed-*" — it unlocks both palette lists and lets
+  chapters override palette per-act for natural progression
 
 ═══════════════════════════════════════
 SECTION 2 — CHAPTERS (exactly 3)
@@ -93,10 +102,16 @@ Each chapter has:
 - "mood": 2-3 emotional keywords
 
 OPTIONAL per chapter — override the song defaults for THIS act:
+- "palette": override palette for this chapter (any palette from Section 1, regardless of sceneTone)
 - "motion": override motion for this chapter (same values as Section 1)
 - "texture": override texture for this chapter (same values as Section 1)
 - "typography": override typography for this chapter (same values as Section 1)
 - "atmosphere": override atmosphere for this chapter (same values as Section 1)
+
+PALETTE OVERRIDE is especially useful for songs with emotional arcs
+that shift between moods. Example: a song that starts hopeful and
+ends in chaos should shift palette from a light/bright set to a
+dark/intense set as the energy changes.
 
 Use chapter overrides to CREATE A JOURNEY. Don't repeat the same values
 as the song defaults unless you mean it. Think like a film director —
@@ -109,10 +124,17 @@ Chapter descriptions should paint a SCENE, not describe effects.
   BAD:  "Warm tones with spiritual energy"
 
 CHAPTER OVERRIDE EXAMPLES:
-  Song about loss with hope ending:
+  Song about loss with hope ending (sceneTone "mixed-dawn"):
     Act 1: motion "drift", texture "rain", atmosphere "haze"
     Act 2: motion "weighted", texture "storm" (pain escalates)
-    Act 3: motion "fluid", texture "aurora", atmosphere "clean" (release)
+    Act 3: motion "fluid", texture "aurora", atmosphere "clean",
+           palette "sky-blue" (release — palette shifts to hope)
+
+  Song starts bright, ends in destruction (sceneTone "mixed-dusk"):
+    Act 1: (uses song defaults — "elastic", "spring-green")
+    Act 2: palette "earth-brown", texture "smoke", atmosphere "haze"
+    Act 3: palette "warm-ember", motion "glitch", texture "fire",
+           atmosphere "cinematic" (full destruction — palette matches fire)
 
   Trap banger with quiet bridge:
     Act 1: (uses song defaults — "weighted", "fire")
@@ -121,7 +143,8 @@ CHAPTER OVERRIDE EXAMPLES:
 
   Don't override every chapter. Only override when the emotional shift
   demands a different feel. If Act 1 matches the song defaults, omit
-  the override fields entirely.
+  the override fields entirely. Palette overrides are most useful for
+  "mixed-*" sceneTones where the mood shifts dramatically between acts.
 
 ═══════════════════════════════════════
 SECTION 3 — STORYBOARD (sparse)

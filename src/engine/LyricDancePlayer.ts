@@ -1134,13 +1134,44 @@ export class LyricDancePlayer {
 
   /** Resolve the effective palette from V3 cinematic_direction or fallback */
   private getResolvedPalette(): string[] {
-    const baked = (this.data as any)?.resolvedPalette;
-    if (baked && Array.isArray(baked) && baked.length >= 5) return baked;
     const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const chapters = (cd?.chapters as any[]) ?? [];
+
+    // Find current chapter based on playback position
+    const songProg = this.audio
+      ? this.audio.currentTime / (this.audio.duration || 1)
+      : 0;
+    const chIdx = chapters.findIndex((ch: any) =>
+      songProg >= (ch.startRatio ?? 0) && songProg < (ch.endRatio ?? 1)
+    );
+
+    // Try prebaked per-chapter palette
+    const bakedPalettes = (this.data as any)?.resolvedPalettes;
+    if (bakedPalettes && Array.isArray(bakedPalettes) && chIdx >= 0 && bakedPalettes[chIdx]) {
+      return bakedPalettes[chIdx];
+    }
+
+    // Try chapter-level palette override from raw data
+    if (chIdx >= 0) {
+      const chapterPalette = chapters[chIdx]?.palette as string | undefined;
+      if (chapterPalette && LyricDancePlayer.PALETTE_COLORS[chapterPalette]) {
+        return LyricDancePlayer.PALETTE_COLORS[chapterPalette];
+      }
+    }
+
+    // Try prebaked default
+    const bakedDefault = (this.data as any)?.resolvedPaletteDefault;
+    if (bakedDefault && Array.isArray(bakedDefault) && bakedDefault.length >= 5) {
+      return bakedDefault;
+    }
+
+    // Try top-level palette name
     const paletteName = cd?.palette as string | undefined;
     if (paletteName && LyricDancePlayer.PALETTE_COLORS[paletteName]) {
       return LyricDancePlayer.PALETTE_COLORS[paletteName];
     }
+
+    // Final fallback
     const existing = this.payload?.palette ?? [];
     return [
       existing[0] ?? '#0A0A0F',
@@ -1162,6 +1193,19 @@ export class LyricDancePlayer {
 
   private getAtmosphere(): string {
     const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const chapters = (cd?.chapters as any[]) ?? [];
+    const songProg = this.audio
+      ? this.audio.currentTime / (this.audio.duration || 1)
+      : 0;
+    const chIdx = chapters.findIndex((ch: any) =>
+      songProg >= (ch.startRatio ?? 0) && songProg < (ch.endRatio ?? 1)
+    );
+
+    // Chapter-level override
+    if (chIdx >= 0 && chapters[chIdx]?.atmosphere) {
+      return chapters[chIdx].atmosphere;
+    }
+    // Top-level default
     return (cd?.atmosphere as string) ?? 'cinematic';
   }
 

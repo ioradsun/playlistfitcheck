@@ -229,12 +229,28 @@ const PALETTE_COLORS: Record<string, string[]> = {
   'spring-green': ['#F0FFF0', '#228844', '#0A200F', '#34D058', '#3A7A4A'],
 };
 
-function resolveV3Palette(payload: ScenePayload): string[] {
+function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): string[] {
   const cd = payload.cinematic_direction as Record<string, unknown> | null;
+  const chapters = (cd?.chapters as any[]) ?? [];
+
+  // Check per-chapter palette override first
+  if (chapterProgress != null && chapters.length > 0) {
+    const chapter = chapters.find((ch: any) =>
+      chapterProgress >= (ch.startRatio ?? 0) && chapterProgress < (ch.endRatio ?? 1)
+    );
+    const chapterPalette = chapter?.palette as string | undefined;
+    if (chapterPalette && PALETTE_COLORS[chapterPalette]) {
+      return PALETTE_COLORS[chapterPalette];
+    }
+  }
+
+  // Fall back to top-level palette
   const paletteName = cd?.palette as string | undefined;
   if (paletteName && PALETTE_COLORS[paletteName]) {
     return PALETTE_COLORS[paletteName];
   }
+
+  // Final fallback
   const existing = payload.palette ?? [];
   return [
     existing[0] ?? '#0A0A0F',
@@ -824,7 +840,8 @@ type PrebakedData = {
   lineHeroWords: Array<string | null>;
   lineFontSizes: number[];
   lineColors: string[];
-  resolvedPalette: string[];
+  resolvedPalettes: string[][];
+  resolvedPaletteDefault: string[];
   fontFamily: string;
   textTransform: 'none' | 'uppercase';
   letterSpacing: number;
@@ -1122,7 +1139,7 @@ export function blendWithWhite(hex: string, whiteFraction: number): string {
 
 function resolveWorldDefaults(payload: ScenePayload, chapters: ChapterLike[]) {
   const cd = payload.cinematic_direction as (CinematicDirection & Record<string, unknown>) | null;
-  const resolvedPalette = resolveV3Palette(payload);
+  const resolvedPaletteDefault = resolveV3Palette(payload);
 
   const typographyName = (cd?.typography as string | undefined) ?? 'clean-modern';
   const baseTypography = TYPOGRAPHY_PROFILES[typographyName] ?? TYPOGRAPHY_PROFILES['clean-modern'];
@@ -1161,7 +1178,7 @@ function resolveWorldDefaults(payload: ScenePayload, chapters: ChapterLike[]) {
   });
 
   return {
-    resolvedPalette,
+    resolvedPaletteDefault,
     baseTypography,
     motionProfile,
     chapterMotionProfiles,
@@ -1196,7 +1213,11 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   const chapterMotionProfiles = resolved.chapterMotionProfiles;
   const chapterMotionDefaults = resolved.chapterMotionDefaults;
   const chapterFontWeights: number[] = resolved.chapterTypography.map((typo) => typo.fontWeight);
-  const resolvedPalette = resolveV3Palette(payload);
+  const resolvedPaletteDefault = resolveV3Palette(payload);
+  const resolvedPalettes = chapters.map((ch: any) => {
+    const mid = ((ch.startRatio ?? 0) + (ch.endRatio ?? 1)) / 2;
+    return resolveV3Palette(payload, mid);
+  });
 
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
   const chapterCount = Math.max(1, chapters.length || 4);
@@ -1244,14 +1265,17 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     const lineProgress = songDuration > 0
       ? ((line.start ?? 0) - (payload.songStart ?? 0)) / songDuration
       : 0;
+    // Resolve palette per-line (picks chapter override if available)
+    const linePalette = resolveV3Palette(payload, lineProgress);
+
     const chapter = findByRatio(chapters, lineProgress);
     const chapterIndex = chapters.indexOf(chapter as ChapterLike);
     const colorOverride = (chapter as any)?.typographyShift?.colorOverride
       ?? (chapter as any)?.overrides?.colorOverride;
     if (colorOverride) return colorOverride;
 
-    const textColor = resolvedPalette[2];
-    const accentColor = resolvedPalette[1];
+    const textColor = linePalette[2];
+    const accentColor = linePalette[1];
 
     if (chapterIndex >= 2) return accentColor;
     if (chapterIndex === 1) return blendWithWhite(accentColor, 0.35);
@@ -1341,7 +1365,8 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     lineHeroWords,
     lineFontSizes,
     lineColors,
-    resolvedPalette,
+    resolvedPalettes,
+    resolvedPaletteDefault,
     fontFamily: resolved.baseTypography.fontFamily,
     textTransform: resolved.baseTypography.textTransform,
     letterSpacing: resolved.baseTypography.letterSpacing,
@@ -1933,7 +1958,8 @@ function bakeFrame(
     glow: 3,
     dim: 4,
   };
-  const particleColor = pre.resolvedPalette[textureColorMap[chapterTexture.particleColor]] ?? pre.resolvedPalette[2] ?? '#ffffff';
+  const activePalette = pre.resolvedPalettes[activeChapterIdx] ?? pre.resolvedPaletteDefault;
+  const particleColor = activePalette[textureColorMap[chapterTexture.particleColor]] ?? activePalette[2] ?? '#ffffff';
 
   const chapterAtmosphere = pre.chapterAtmosphere[activeChapterIdx] ?? pre.chapterAtmosphere[0] ?? ATMOSPHERE_CONFIGS.cinematic;
 
