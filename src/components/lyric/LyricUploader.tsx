@@ -16,7 +16,7 @@ interface Props {
   sceneInput?: React.ReactNode;
 }
 
-export function LyricUploader({ onTranscribe, loading, loadingMsg }: Props) {
+export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }: Props) {
   const siteCopy = useSiteCopy();
   const [files, setFiles] = useState<File[]>([]);
   const [referenceLyrics, setReferenceLyrics] = useState("");
