@@ -616,6 +616,7 @@ export class LyricDancePlayer {
   private songEndSec = 0;
   private playing = false;
   private destroyed = false;
+  private _textDrawLogged = false;
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
 
 
@@ -1046,8 +1047,8 @@ export class LyricDancePlayer {
       const drawY = chunk.y;
       const zoom = frame.cameraZoom ?? 1.0;
       const fontSize = chunk.fontSize ?? 36;
-      const zoomedFont = obj.font.replace(/(\d+(\.\d+)?)px/, `${Math.round(fontSize * zoom)}px`);
       const fontWeight = chunk.fontWeight ?? 700;
+      const safeFontSize = Math.max(12, Math.round(fontSize * zoom) || 36);
       const sx = chunk.scaleX ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
       const sy = chunk.scaleY ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
 
@@ -1062,7 +1063,15 @@ export class LyricDancePlayer {
 
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
-      this.ctx.font = zoomedFont.replace(/^\d+/, `${fontWeight}`);
+      this.ctx.font = `${fontWeight} ${safeFontSize}px "Montserrat", sans-serif`;
+      // Safety: if font assignment failed silently
+      if (!this.ctx.font.includes('px')) {
+        this.ctx.font = `700 36px "Montserrat", sans-serif`;
+      }
+      if (!this._textDrawLogged) {
+        this._textDrawLogged = true;
+        console.log('[PLAYER] drawing text:', obj.text, 'font:', this.ctx.font, 'alpha:', chunk.alpha);
+      }
       if (chunk.glow > 0) {
         this.ctx.shadowColor = chunk.color ?? '#ffffff';
         this.ctx.shadowBlur = chunk.glow * 32;
@@ -1521,8 +1530,8 @@ export class LyricDancePlayer {
 
     const current = this.chapterImages[chapterIdx];
     const next = this.chapterImages[nextChapterIdx];
-    const chapterProgress = this.getSongProgress();
-    const currentChapter = findChapter(this.payload?.cinematic_direction?.chapters as any[] | undefined, chapterProgress);
+    const duration = this.audio?.duration || 1;
+    const chapterProgress = this.audio ? this.audio.currentTime / duration : 0;
 
     const imageOpacity = 0.32;
     if (current?.complete && current.naturalWidth > 0) {
@@ -1539,7 +1548,9 @@ export class LyricDancePlayer {
     }
 
     // Dark crush overlay — always on top of image
-    const intensity = currentChapter?.emotionalIntensity ?? 0.5;
+    const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
+    const currentChapterObj = chapters.find((ch: any) => chapterProgress >= (ch.startRatio ?? 0) && chapterProgress < (ch.endRatio ?? 1));
+    const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
     const baseCrushAlpha = Math.max(0.65, 0.72 - intensity * 0.15);
     const currentLum = this.getAverageLuminance(current);
     const nextLum = blend > 0 ? this.getAverageLuminance(next) : null;
@@ -2051,6 +2062,7 @@ export class LyricDancePlayer {
         skewX: c.skewX ?? 0,
         visible: c.visible,
         fontSize: c.fontSize ?? 36,
+        fontWeight: c.fontWeight ?? 700,
         color: c.color ?? "#ffffff",
         entryOffsetY: c.entryOffsetY ?? 0,
         entryOffsetX: c.entryOffsetX ?? 0,
