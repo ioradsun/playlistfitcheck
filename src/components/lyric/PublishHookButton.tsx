@@ -39,7 +39,6 @@ export function PublishHookButton({
   beatGrid,
   audioFile,
   songTitle,
-  artistName,
   system,
   palette,
   fingerprint,
