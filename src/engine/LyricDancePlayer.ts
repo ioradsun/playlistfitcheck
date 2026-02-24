@@ -600,6 +600,11 @@ export class LyricDancePlayer {
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
+  // Comment comets
+  private activeComments: CommentChunk[] = [];
+  private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
+  private commentColorIdx = 0;
+
   // Playback
   private rafHandle = 0;
   private lastTimestamp = 0;
