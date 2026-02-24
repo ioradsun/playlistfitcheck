@@ -994,7 +994,7 @@ export class LyricDancePlayer {
       const y = (i * 0.381966 % 1) * h * 0.7;
       const r = w * (0.2 + intensity * 0.15);
       const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, `${dominant}22`);
+      grad.addColorStop(0, `${dominant}10`);
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
