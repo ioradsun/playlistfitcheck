@@ -508,13 +508,46 @@ const Index = () => {
   const handleNewMix = useCallback(() => { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }, [navigate]);
   const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }, [navigate]);
 
+  // Track if a project transition is in progress for smooth skeleton display
+  const [transitionTool, setTransitionTool] = useState<string | null>(null);
+
   const handleSidebarTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
+    setHeaderProject(null);
     // Reset loaded project for the clicked tool so it opens fresh/new
-    if (tab === "lyric") { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }
-    else if (tab === "mix") { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }
-    else if (tab === "hitfit") { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }
-  }, [setActiveTab, navigate]);
+    // but only if we actually have a loaded project (avoid no-op remounts)
+    if (tab === "lyric" && loadedLyric) {
+      setTransitionTool("lyric");
+      setLoadedLyric(null);
+      navigate("/LyricFit", { replace: true });
+      // Clear transition after React re-renders with new key
+      requestAnimationFrame(() => setTransitionTool(null));
+    } else if (tab === "mix" && loadedMixProject) {
+      setTransitionTool("mix");
+      setLoadedMixProject(null);
+      navigate("/MixFit", { replace: true });
+      requestAnimationFrame(() => setTransitionTool(null));
+    } else if (tab === "hitfit" && loadedHitFitAnalysis) {
+      setTransitionTool("hitfit");
+      setLoadedHitFitAnalysis(null);
+      navigate("/HitFit", { replace: true });
+      requestAnimationFrame(() => setTransitionTool(null));
+    } else if (tab === "profit") {
+      setProfitArtistUrl(null);
+      setProfitSavedReport(null);
+      setProfitLoadKey(k => k + 1);
+      navigate("/ProFit", { replace: true });
+    } else if (tab === "vibefit") {
+      setLoadedVibeFitResult(null);
+      setVibeFitLoadKey(k => k + 1);
+      navigate("/VibeFit", { replace: true });
+    } else if (tab === "playlist") {
+      setResult(null);
+      setVibeAnalysis(null);
+      setSongFitAnalysis(null);
+      navigate("/PlaylistFit", { replace: true });
+    }
+  }, [setActiveTab, navigate, loadedLyric, loadedMixProject, loadedHitFitAnalysis]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
     // Only reset state for the tool being loaded — don't touch other tools'
