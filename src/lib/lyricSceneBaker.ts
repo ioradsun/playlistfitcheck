@@ -1024,9 +1024,13 @@ function bakeFrame(
           const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
           const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
           const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
-          const finalAlpha = exitProgress > 0
-            ? exitState.alpha
-            : entryState.alpha * (behaviorState.alpha ?? 1);
+          const isEntryComplete = entryProgress >= 1.0;
+          const isExiting = exitProgress > 0;
+          const finalAlpha = isExiting
+            ? Math.max(0, exitState.alpha)
+            : isEntryComplete
+              ? 1.0 * (behaviorState.alpha ?? 1)
+              : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
           const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
           const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
 
