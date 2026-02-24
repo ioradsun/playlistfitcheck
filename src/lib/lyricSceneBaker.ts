@@ -1133,22 +1133,6 @@ function bakeFrame(
             ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
             ?? 700;
 
-          if (!_bakerDebugLogged) {
-            _bakerDebugLogged = true;
-            console.log('[BAKER] first chunk animation:', {
-              entry: effectiveEntry,
-              behavior: effectiveBehavior,
-              exit: effectiveExit,
-              metaphor: metaphor ?? 'none',
-              entryProgress: entryProgress.toFixed(2),
-              entryState,
-              finalOffsetY: finalOffsetY.toFixed(1),
-              finalScaleX: finalScaleX.toFixed(2),
-              finalScaleY: finalScaleY.toFixed(2),
-              finalAlpha: finalAlpha.toFixed(2),
-            });
-          }
-
           chunks.push({
             id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
             x: pos.x + finalOffsetX,
