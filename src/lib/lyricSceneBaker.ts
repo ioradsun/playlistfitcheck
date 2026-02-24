@@ -449,6 +449,18 @@ type PrebakedData = {
   wordMeta: WordMetaEntry[];
   visualMode: VisualMode;
   heat: number;
+  // Pre-computed once (was previously rebuilt every frame)
+  phraseGroups: PhraseGroup[] | null;
+  groupLayouts: Map<string, GroupPosition[]>;
+  motionProfile: MotionProfile;
+  motionDefaults: MotionDefaults;
+  animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number };
+  manifestWordDirectives: Record<string, ManifestWordDirective>;
+  manifestLineLayouts: Record<string, ManifestLineLayout>;
+  manifestChapters: ManifestChapter[];
+  manifestStagger: number | null;
+  storyboard: StoryboardEntryLike[];
+};
 };
 
 function getLayoutForMode(
