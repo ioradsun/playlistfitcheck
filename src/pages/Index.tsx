@@ -65,6 +65,48 @@ const TabChunkFallback = () => (
   </div>
 );
 
+/** Contextual skeleton shown during project transitions — prevents blank flash */
+const ProjectTransitionSkeleton = ({ tool }: { tool: string }) => {
+  if (tool === "lyric") {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 animate-pulse">
+        {/* Toggle bar */}
+        <div className="border-b border-border/40 h-11 flex items-center justify-center gap-8">
+          <div className="h-3 w-12 rounded bg-muted" />
+          <div className="h-3 w-8 rounded bg-muted/60" />
+        </div>
+        {/* Waveform area */}
+        <div className="h-16 mx-4 mt-4 rounded-lg bg-muted/30" />
+        {/* Lyrics lines */}
+        <div className="flex-1 px-4 py-6 space-y-3">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="h-4 rounded bg-muted/20" style={{ width: `${60 + Math.random() * 30}%` }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (tool === "mix") {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 animate-pulse px-4 py-6 space-y-4">
+        <div className="h-8 w-48 rounded bg-muted/30" />
+        <div className="h-32 rounded-lg bg-muted/20" />
+        <div className="h-32 rounded-lg bg-muted/20" />
+      </div>
+    );
+  }
+  if (tool === "hitfit") {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center animate-pulse px-4 py-6 space-y-4">
+        <div className="w-20 h-20 rounded-full bg-muted/20" />
+        <div className="h-4 w-40 rounded bg-muted/30" />
+        <div className="h-3 w-56 rounded bg-muted/20" />
+      </div>
+    );
+  }
+  return <TabChunkFallback />;
+};
+
 const PATH_TO_TAB: Record<string, string> = {
   "/CrowdFit": "songfit",
   "/HookFit": "hookfit",
