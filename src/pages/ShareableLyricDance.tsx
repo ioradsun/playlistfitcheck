@@ -184,6 +184,14 @@ export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
 
+  // ── Unmount detection ──────────────────────────────────────────────
+  useEffect(() => {
+    console.log('[PAGE] ShareableLyricDance MOUNTED');
+    return () => {
+      console.log('[PAGE] ShareableLyricDance UNMOUNTED — stack:', new Error().stack);
+    };
+  }, []);
+
   const [data, setData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
