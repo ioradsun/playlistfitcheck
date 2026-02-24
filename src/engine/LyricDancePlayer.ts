@@ -2255,7 +2255,7 @@ export class LyricDancePlayer {
       });
       
     } catch (err) {
-      console.error('[PLAYER] chapter sim build failed:', err);
+      
     }
   }
 
