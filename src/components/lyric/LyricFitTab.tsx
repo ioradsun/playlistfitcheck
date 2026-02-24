@@ -540,33 +540,41 @@ export function LyricFitTab({
   return (
     <div className="flex flex-col flex-1">
       {!lyricData && (
-        <div className="w-full max-w-2xl mx-auto mb-6">
-          <p className="text-sm text-white/60 mb-3 font-mono tracking-widest uppercase">
-            Where does this song live?
+        <div className="w-full max-w-2xl mx-auto mb-6 space-y-4">
+          <p className="text-sm text-white/60 font-mono tracking-widest uppercase">
+            Where are you when this song plays?
           </p>
-          <div className="grid grid-cols-4 gap-2">
-            {Object.values(SCENE_CONTEXTS).map(scene => (
-              <button
-                key={scene.scene}
-                onClick={() => setSelectedScene(
-                  selectedScene === scene.scene ? null : scene.scene
-                )}
-                className={`
-                  flex flex-col items-center gap-1 p-3 rounded-lg border transition-all
-                  font-mono text-xs
-                  ${selectedScene === scene.scene
-                    ? 'border-[#00FF87] bg-[#00FF87]/10 text-white'
-                    : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white/80'
-                  }
-                `}
-              >
-                <span className="text-xl">{scene.emoji}</span>
-                <span className="text-center leading-tight">{scene.label}</span>
-              </button>
-            ))}
+
+          <div className="relative">
+            <textarea
+              value={sceneDescription}
+              onChange={e => {
+                setSceneDescription(e.target.value);
+                setResolvedScene(null);
+              }}
+              placeholder="driving home late at night... laying in bed thinking... pregame with the boys..."
+              className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white/80 
+                         font-mono text-sm placeholder-white/25 resize-none h-16
+                         focus:outline-none focus:border-[#00FF87]/50"
+              maxLength={200}
+            />
+            {resolvingScene && (
+              <div className="absolute right-3 top-3 text-white/30 text-xs font-mono animate-pulse">
+                reading vibe...
+              </div>
+            )}
           </div>
-          <p className="text-xs text-white/25 mt-2 font-mono">
-            {selectedScene ? `${SCENE_CONTEXTS[selectedScene].emoji} ${SCENE_CONTEXTS[selectedScene].label} selected` : 'Skip to let AI decide'}
+
+          {resolvedScene && !resolvingScene && (
+            <div className="border border-[#00FF87]/20 bg-[#00FF87]/5 rounded-lg p-3">
+              <p className="text-[#00FF87] text-xs font-mono">
+                ✓ {resolvedScene.moodSummary}
+              </p>
+            </div>
+          )}
+
+          <p className="text-xs text-white/20 font-mono">
+            Skip to let AI decide
           </p>
         </div>
       )}
