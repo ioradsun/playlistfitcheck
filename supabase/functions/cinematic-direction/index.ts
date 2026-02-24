@@ -92,39 +92,69 @@ OUTPUT SCHEMA:
 
   "wordDirectives": {
     "word": {
-      "kineticClass": "RISING | FALLING | IMPACT | SPINNING | FLOATING",
+      "word": "string",
       "emphasisLevel": 1-5,
-      "colorOverride": "#hex or null",
-      "visualMetaphor": one of the following based on the word's meaning IN CONTEXT:
-
-        "ember-burst"    → fire, heat, burning, passion — word generates flame
-        "frost-form"     → cold, ice, freeze, numb — word crystallizes into existence  
-        "lens-focus"     → focus, clarity, vision, sharp — word sharpens from blur
-        "gravity-drop"   → fall, crash, collapse, weight — word slams with gravity
-        "ascent"         → rise, up, soar, higher, fly — word floats upward
-        "fracture"       → broken, shatter, crack, torn — word assembles then breaks
-        "heartbeat"      → love, heart, devotion, tender — word pulses with warmth
-        "pain-weight"    → hurt, pain, wound, ache — word lands heavy and lingers
-        "isolation"      → alone, lost, empty, void — word barely exists
-        "convergence"    → together, hold, united, close — word pulls everything toward it
-        "shockwave"      → scream, explode, loud, blast — word detonates
-        "void-absorb"    → dark, shadow, night, abyss — word absorbs light
-        "radiance"       → light, shine, golden, bright — word radiates outward
-        "gold-rain"      → money, cash, rich, numbers — word rains gold
-        "speed-blur"     → run, fast, rush, chase — word streaks
-        "slow-drift"     → wait, slow, silence, pause — word barely moves
-        "power-surge"    → strong, power, force, king — word dominates canvas
-        "dream-float"    → dream, memory, remember, past — word drifts ethereally
-        "truth-snap"     → truth, real, know, certain — word snaps in with no ceremony
-        "motion-streak"  → move, go, push, drive — word leaves a trail
-
-      Assign visualMetaphor based on the word's MEANING IN THIS SONG — not just the word itself.
-      "cold cash" → "gold-rain" not "frost-form"
-      "fire the shot" → "shockwave" not "ember-burst"
-      "falling in love" → "heartbeat" not "gravity-drop"
-      Only assign to emphasisLevel 3+ words — skip filler and low emphasis words.
+      "entry": "slam-down | punch-in | explode-in | snap-in | rise | materialize | breathe-in | drift-in | drop | plant | stomp | cut-in | whisper | bloom | focus-in | spin-in | tumble-in",
+      "behavior": "pulse | vibrate | float | grow | contract | flicker | orbit | lean | none | freeze | tilt | pendulum | pulse-focus",
+      "exit": "shatter | snap-out | burn-out | dissolve | drift-up | sink | cut-out | vanish | linger | evaporate | blur-out | spin-out | scatter-letters | peel-off | peel-reverse | cascade-down | cascade-up",
+      "trail": "ember | frost | spark-burst | dust-impact | light-rays | gold-coins | dark-absorb | motion-trail | memory-orbs | none",
+      "ghostTrail": "boolean optional",
+      "ghostDirection": "up | down | left | right | radial",
+      "letterSequence": "boolean optional",
+      "visualMetaphor": "string optional",
+      "kineticClass": "string optional"
     }
   },
+
+─── WORD DIRECTIVES (semantic animation) ───
+
+For 15-25 emotionally or visually significant words, choose animations
+that make the word's LITERAL MEANING visible.
+
+If the word means upward motion → it should move up.
+If the word means destruction → it should break apart.
+If the word means cold → it should trail frost.
+If the word means clarity → it should sharpen from blur.
+If the word means spinning → it should rotate.
+If the word means echo → it should leave ghost copies.
+If the word means frozen → it should stop dead.
+
+Let the word tell you what it needs.
+
+ENTRY (pick one per word):
+  slam-down, punch-in, explode-in, snap-in, rise, materialize,
+  breathe-in, drift-in, drop, plant, stomp, cut-in, whisper, bloom,
+  focus-in, spin-in, tumble-in
+
+BEHAVIOR (pick one per word):
+  pulse, vibrate, float, grow, contract, flicker, orbit, lean, none,
+  freeze, tilt, pendulum, pulse-focus
+
+EXIT (pick one per word):
+  shatter, snap-out, burn-out, dissolve, drift-up, sink, cut-out,
+  vanish, linger, evaporate, blur-out, spin-out,
+  scatter-letters, peel-off, peel-reverse, cascade-down, cascade-up
+
+TRAIL (pick one per word):
+  ember, frost, spark-burst, dust-impact, light-rays, gold-coins,
+  dark-absorb, motion-trail, memory-orbs, none
+
+OPTIONAL MODIFIERS:
+  ghostTrail: true + ghostDirection (up/down/left/right/radial)
+    → for words like: echo, repeat, reverb, haunt, voices, forever, again
+    → use on 2-4 words max per song
+  letterSequence: true
+    → for words like: break, shatter, split, count, crumble, apart, scatter
+    → use on 3-5 words max per song
+
+RULES:
+- Choose animations based on what the word MEANS, not how loud it is
+- Abstract emotional words (love, truth, hope) use emphasis + visualMetaphor
+- Concrete action words (fly, crash, burn, freeze) use semantic entry/exit/trail
+- Not every word needs a trail. Most need none.
+- freeze behavior on 1-2 words max (showstopper moment)
+- Always include: word, emphasisLevel (1-5), entry, behavior, exit
+- Optionally include: trail, ghostTrail, ghostDirection, letterSequence, visualMetaphor, kineticClass
 
   "tensionCurve": [
     {

@@ -256,6 +256,13 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     scaleX?: number;
     scaleY?: number;
     skewX?: number;
+    blur?: number;
+    rotation?: number;
+    ghostTrail?: boolean;
+    ghostCount?: number;
+    ghostSpacing?: number;
+    ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial';
+    frozen?: boolean;
     fontSize?: number;
     fontWeight?: number;
     isAnchor?: boolean;
@@ -1227,8 +1234,10 @@ export class LyricDancePlayer {
       }
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
-      const drawX = Number.isFinite(chunk.x) ? chunk.x : 0;
-      const drawY = Number.isFinite(chunk.y) ? chunk.y : 0;
+      const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
+      const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
+      const drawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
+      const drawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
       const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
       const fontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
       const fontWeight = chunk.fontWeight ?? 700;
@@ -1316,7 +1325,6 @@ export class LyricDancePlayer {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
         this.ctx.font = `${fontWeight} ${safeFontSize}px "Montserrat", sans-serif`;
-        // Safety: if font assignment failed silently
         if (!this.ctx.font.includes('px')) {
           this.ctx.font = `700 36px "Montserrat", sans-serif`;
         }
@@ -1325,12 +1333,55 @@ export class LyricDancePlayer {
           this.ctx.shadowBlur = chunk.glow * 32;
         }
 
+        let filterApplied = false;
+        if ((chunk.blur ?? 0) > 0.01) {
+          this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
+          filterApplied = true;
+        }
+
+        if (chunk.ghostTrail && chunk.visible) {
+          const count = chunk.ghostCount ?? 3;
+          const spacing = chunk.ghostSpacing ?? 8;
+          const dir = chunk.ghostDirection ?? 'up';
+          for (let g = count; g >= 1; g--) {
+            const ghostAlpha = drawAlpha * (0.12 + (count - g) * 0.06);
+            const offset = g * spacing;
+            let gx = 0, gy = 0;
+            switch (dir) {
+              case 'up': gy = offset; break;
+              case 'down': gy = -offset; break;
+              case 'left': gx = offset; break;
+              case 'right': gx = -offset; break;
+              case 'radial':
+                gx = Math.cos(g * 1.2) * offset;
+                gy = Math.sin(g * 1.2) * offset;
+                break;
+            }
+            this.ctx.globalAlpha = ghostAlpha;
+            this.ctx.save();
+            this.ctx.translate(drawX + gx, drawY + gy);
+            if (chunk.rotation) this.ctx.rotate(chunk.rotation);
+            this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
+            this.ctx.scale(sx, sy);
+            this.ctx.fillText(obj.text, 0, 0);
+            this.ctx.restore();
+          }
+          this.ctx.globalAlpha = drawAlpha;
+        }
+
         this.ctx.save();
         this.ctx.translate(drawX, drawY);
+        if (chunk.rotation) {
+          this.ctx.rotate(chunk.rotation);
+        }
         this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
         this.ctx.scale(sx, sy);
         this.ctx.fillText(obj.text, 0, 0);
         this.ctx.restore();
+
+        if (filterApplied) {
+          this.ctx.filter = 'none';
+        }
       }
 
       if (chunk.iconGlyph && chunk.visible && !drawBefore) {
@@ -1923,20 +1974,31 @@ export class LyricDancePlayer {
       this.chunks.clear();
 
       if (this.phraseGroups && this.phraseGroups.length > 0) {
+        const wordDirectives = (this.payload?.cinematic_direction?.wordDirectives ?? {}) as Record<string, any>;
         for (const group of this.phraseGroups) {
+          let anchorIdx = group.words.length - 1;
+          let maxEmp = -1;
+          for (let i = 0; i < group.words.length; i++) {
+            const clean = group.words[i].word.replace(/[^a-zA-Z]/g, '').toLowerCase();
+            const emp = wordDirectives[clean]?.emphasisLevel ?? 1;
+            if (emp > maxEmp) { maxEmp = emp; anchorIdx = i; }
+          }
           for (let wi = 0; wi < group.words.length; wi++) {
             const wm = group.words[wi];
-            const key = `${group.lineIndex}-${group.groupIndex}-${wi}`;
-            const displayWord = textTransform === 'uppercase'
-              ? wm.word.toUpperCase()
-              : wm.word;
-            this.chunks.set(key, {
-              id: key,
-              text: displayWord,
-              color: '#ffffff',
-              font,
-              width: measureCtx.measureText(displayWord).width,
-            });
+            const clean = wm.word.replace(/[^a-zA-Z]/g, '').toLowerCase();
+            const shouldSplit = wi === anchorIdx && wordDirectives[clean]?.letterSequence === true;
+            if (shouldSplit) {
+              const letters = Array.from(wm.word);
+              for (let li = 0; li < letters.length; li++) {
+                const displayLetter = textTransform === 'uppercase' ? letters[li].toUpperCase() : letters[li];
+                const key = `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}`;
+                this.chunks.set(key, { id: key, text: displayLetter, color: '#ffffff', font, width: measureCtx.measureText(displayLetter).width });
+              }
+            } else {
+              const key = `${group.lineIndex}-${group.groupIndex}-${wi}`;
+              const displayWord = textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word;
+              this.chunks.set(key, { id: key, text: displayWord, color: '#ffffff', font, width: measureCtx.measureText(displayWord).width });
+            }
           }
         }
       }
