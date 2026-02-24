@@ -556,48 +556,48 @@ export function LyricFitTab({
 
   const fitDisabled = !lines || lines.length === 0;
 
-  return (
-    <div className="flex flex-col flex-1">
-      {!lyricData && (
-        <div className="w-full max-w-2xl mx-auto mb-6 space-y-4">
-          <p className="text-sm text-white/70 font-mono tracking-widest uppercase">
-            Where are you when this song plays?
-          </p>
+  const sceneInputNode = !lyricData ? (
+    <div className="w-full max-w-2xl mx-auto mb-6 space-y-3">
+      <p className="text-sm text-white/70 font-mono tracking-widest uppercase">
+        Where are you when this song plays?
+      </p>
 
-          <div className="relative">
-            <textarea
-              value={sceneDescription}
-              onChange={e => {
-                setSceneDescription(e.target.value);
-                setResolvedScene(null);
-              }}
-              placeholder="driving home late at night... laying in bed thinking... pregame with the boys..."
-              className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white/90 
-                         font-mono text-sm placeholder-white/30 resize-none h-16
-                         focus:outline-none focus:border-[#00FF87]/50"
-              maxLength={200}
-            />
-            {resolvingScene && (
-              <div className="absolute right-3 top-3 text-white/40 text-xs font-mono animate-pulse">
-                reading vibe...
-              </div>
-            )}
+      <div className="relative">
+        <textarea
+          value={sceneDescription}
+          onChange={e => {
+            setSceneDescription(e.target.value);
+            setResolvedScene(null);
+          }}
+          placeholder="driving home late at night... laying in bed thinking... pregame with the boys..."
+          className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white/90 
+                     font-mono text-sm placeholder-white/30 resize-none h-16
+                     focus:outline-none focus:border-[#00FF87]/50"
+          maxLength={200}
+        />
+        {resolvingScene && (
+          <div className="absolute right-3 top-3 text-white/40 text-xs font-mono animate-pulse">
+            reading vibe...
           </div>
+        )}
+      </div>
 
-          {resolvedScene && !resolvingScene && (
-            <div className="border border-[#00FF87]/20 bg-[#00FF87]/5 rounded-lg p-3">
-              <p className="text-[#00FF87] text-xs font-mono">
-                ✓ {resolvedScene.moodSummary}
-              </p>
-            </div>
-          )}
-
-          <p className="text-xs text-white/30 font-mono">
-            Skip to let AI decide
+      {resolvedScene && !resolvingScene && (
+        <div className="border border-[#00FF87]/20 bg-[#00FF87]/5 rounded-lg p-3">
+          <p className="text-[#00FF87] text-xs font-mono">
+            ✓ {resolvedScene.moodSummary}
           </p>
         </div>
       )}
 
+      <p className="text-xs text-white/30 font-mono">
+        Skip to let AI decide
+      </p>
+    </div>
+  ) : null;
+
+  return (
+    <div className="flex flex-col flex-1">
       {lyricData && (
         <LyricFitToggle
           view={activeTab}
@@ -612,41 +612,43 @@ export function LyricFitTab({
       )}
 
       {activeTab === "lyrics" ? (
-        <LyricsTab
-          lyricData={lyricData}
-          setLyricData={setLyricData}
-          audioFile={audioFile}
-          setAudioFile={setAudioFile}
-          hasRealAudio={hasRealAudio}
-          setHasRealAudio={setHasRealAudio}
-          savedId={savedId}
-          setSavedId={setSavedId}
-          setLines={setLines}
-          fmlyLines={fmlyLines}
-          setFmlyLines={setFmlyLines}
-          versionMeta={versionMeta}
-          setVersionMeta={setVersionMeta}
-          beatGrid={beatGrid}
-          setWords={setWords}
-          onProjectSaved={onProjectSaved}
-          onNewProject={() => {
-            setSongDna(null);
-            setBeatGrid(null);
-            setSongSignature(null);
-            setCinematicDirection(null);
-            setBgImageUrl(null);
-            setSceneManifest(null);
-            setLines([]);
-            setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
-            setFitReadiness("not_started");
-            setFitUnlocked(false);
-            onNewProject?.();
-          }}
-          onHeaderProject={onHeaderProject}
-          onSavedId={onSavedId}
-          analysisModel={analysisModel}
-          transcriptionModel={transcriptionModel}
-        />
+        <div className="flex flex-col flex-1">
+          {sceneInputNode}
+          <LyricsTab
+            lyricData={lyricData}
+            setLyricData={setLyricData}
+            audioFile={audioFile}
+            setAudioFile={setAudioFile}
+            hasRealAudio={hasRealAudio}
+            setHasRealAudio={setHasRealAudio}
+            savedId={savedId}
+            setSavedId={setSavedId}
+            setLines={setLines}
+            fmlyLines={fmlyLines}
+            setFmlyLines={setFmlyLines}
+            versionMeta={versionMeta}
+            setVersionMeta={setVersionMeta}
+            beatGrid={beatGrid}
+            setWords={setWords}
+            onProjectSaved={onProjectSaved}
+            onNewProject={() => {
+              setSongDna(null);
+              setBeatGrid(null);
+              setSongSignature(null);
+              setCinematicDirection(null);
+              setBgImageUrl(null);
+              setSceneManifest(null);
+              setLines([]);
+              setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
+              setFitReadiness("not_started");
+              setFitUnlocked(false);
+              onNewProject?.();
+            }}
+            onHeaderProject={onHeaderProject}
+            onSavedId={onSavedId}
+            analysisModel={analysisModel}
+            transcriptionModel={transcriptionModel}
+          />
       ) : lyricData && audioFile ? (
         <FitTab
           lyricData={lyricData}
