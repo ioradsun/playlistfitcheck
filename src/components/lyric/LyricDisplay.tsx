@@ -2463,6 +2463,33 @@ export function LyricDisplay({
           overrides: hookDanceOverrides as unknown as Record<string, unknown>,
           fingerprint: artistFingerprint,
         }}
+        onRegenerateDirector={async () => {
+          if (!songDna) return;
+          toast.info("Re-generating scene manifest…");
+          try {
+            const lastLine = data.lines[data.lines.length - 1];
+            const { data: result, error } = await supabase.functions.invoke("generate-scene-manifest", {
+              body: {
+                cinematic_direction: (songDna as any)?.cinematic_direction ?? null,
+                lyrics: data.lines,
+                words: (songDna as any)?.words ?? [],
+                beat_grid: beatGrid ?? null,
+                song_duration: lastLine?.end ?? 0,
+                lyricId: currentSavedId ?? undefined,
+              },
+            });
+            if (error) throw error;
+            if (result?.scene_manifest) {
+              setSongDna((prev) => prev ? normalizeSongDnaWithManifest({ ...prev, scene_manifest: result.scene_manifest }, data.title) : prev);
+              toast.success("Scene manifest updated");
+            } else {
+              toast.error("No scene manifest returned");
+            }
+          } catch (e: any) {
+            console.error("[DEBUG] Director error:", e);
+            toast.error(e.message || "Failed to generate scene manifest");
+          }
+        }}
       />
 
       {/* Battle Page Popup Overlay */}
