@@ -44,6 +44,11 @@ export type Keyframe = {
     isAnchor: boolean;
     color: string;
     emitterType?: WordEmitterType;
+    iconGlyph?: string;
+    iconStyle?: 'outline' | 'filled' | 'ghost';
+    iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
+    iconScale?: number;
+    behavior?: BehaviorStyle;
     entryOffsetY: number;
     entryOffsetX: number;
     entryScale: number;
@@ -458,6 +463,10 @@ type StoryboardEntryLike = {
   exitStyle?: string;
   heroWord?: string;
   shotType?: string;
+  iconGlyph?: string;
+  iconStyle?: 'outline' | 'filled' | 'ghost';
+  iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
+  iconScale?: number;
 };
 
 type ChapterLike = {
@@ -1043,6 +1052,11 @@ function bakeFrame(
           storyboard as StoryboardEntryLike[],
           manifestAnchorDirective,
         );
+        const storyEntry = storyboard?.[group.lineIndex];
+        const iconGlyph = storyEntry?.iconGlyph ?? null;
+        const iconStyle = storyEntry?.iconStyle ?? 'ghost';
+        const iconPosition = storyEntry?.iconPosition ?? 'behind';
+        const iconScale = storyEntry?.iconScale ?? 2.0;
 
         for (let wi = 0; wi < group.words.length; wi += 1) {
           const wm = group.words[wi];
@@ -1151,6 +1165,11 @@ function bakeFrame(
             color,
             glow: wordGlow,
             emitterType: emitterType !== 'none' ? emitterType : undefined,
+            iconGlyph: isAnchor && iconGlyph ? iconGlyph : undefined,
+            iconStyle: isAnchor && iconGlyph ? iconStyle : undefined,
+            iconPosition: isAnchor && iconGlyph ? iconPosition : undefined,
+            iconScale: isAnchor && iconGlyph ? iconScale : undefined,
+            behavior: effectiveBehavior,
             skewX: finalSkewX,
             entryOffsetY: 0,
             entryOffsetX: 0,
@@ -1261,6 +1280,7 @@ function bakeFrame(
             exitOffsetY: 0,
             exitScale: 1,
             skewX: finalSkewX,
+            behavior,
           };
         });
 
