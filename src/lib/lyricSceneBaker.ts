@@ -1074,6 +1074,7 @@ function bakeFrame(
             visible: finalAlpha > 0.01,
             fontSize: pos.fontSize,
             fontWeight: chapterFontWeight,
+            isAnchor,
             color,
             glow: wordGlow,
             skewX: finalSkewX,
