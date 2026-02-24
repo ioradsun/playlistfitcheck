@@ -673,7 +673,8 @@ REMINDER: You MUST assign iconGlyph to at least 10 storyboard entries spread acr
   );
 }
 
-const CINEMATIC_PROMPT_PREVIEW = `You are a film director designing a cinematic lyric video.
+const CINEMATIC_PROMPT_PREVIEW = `
+You are a film director designing a cinematic lyric video.
 
 You will receive song lyrics and audio analysis data. Your job is to SELECT visual presets from constrained menus, identify hero moments in the lyrics, and choose semantic animations for important words.
 
@@ -771,6 +772,8 @@ each act should feel different.
 Chapter descriptions should paint a SCENE, not describe effects.
   GOOD: "Empty highway at 3am, headlights cutting through fog"
   BAD:  "Dark moody atmosphere with particles"
+  GOOD: "Golden sunlight pouring through a cracked church window"
+  BAD:  "Warm tones with spiritual energy"
 
 CHAPTER OVERRIDE EXAMPLES:
   Song about loss with hope ending:
@@ -778,30 +781,198 @@ CHAPTER OVERRIDE EXAMPLES:
     Act 2: motion "weighted", texture "storm" (pain escalates)
     Act 3: motion "fluid", texture "aurora", atmosphere "clean" (release)
 
+  Trap banger with quiet bridge:
+    Act 1: (uses song defaults — "weighted", "fire")
+    Act 2: motion "drift", texture "smoke", typography "whisper-soft"
+    Act 3: motion "glitch", texture "storm" (biggest energy)
+
   Don't override every chapter. Only override when the emotional shift
-  demands a different feel.
+  demands a different feel. If Act 1 matches the song defaults, omit
+  the override fields entirely.
 
 ═══════════════════════════════════════
 SECTION 3 — STORYBOARD (sparse)
 ═══════════════════════════════════════
 
-Target: 15-25 storyboard entries. Each has lineIndex, heroWord (UPPERCASE), entryStyle, exitStyle.
+The storyboard is SPARSE. Only include entries for lines that have a strong emotional or visual moment. Do NOT include an entry for every lyric line.
+
+Target: 15-25 storyboard entries out of all lyric lines.
+
+Each storyboard entry has:
+- "lineIndex": integer (0-based index into the lyrics array)
+- "heroWord": the most emotionally significant word on that line (UPPERCASE)
+- "entryStyle": pick from entries list below
+- "exitStyle": pick from exits list below
+
+ENTRY STYLES:
+  slam-down, punch-in, explode-in, snap-in, rise, materialize,
+  breathe-in, drift-in, drop, plant, stomp, cut-in, whisper, bloom,
+  focus-in, spin-in, tumble-in
+
+EXIT STYLES:
+  shatter, snap-out, burn-out, dissolve, drift-up, sink, cut-out,
+  vanish, linger, evaporate, blur-out, spin-out,
+  scatter-letters, peel-off, peel-reverse, cascade-down, cascade-up
 
 ═══════════════════════════════════════
 SECTION 4 — WORD DIRECTIVES (semantic animation)
 ═══════════════════════════════════════
 
-15-25 words with entry, behavior, exit, optional trail/ghostTrail/letterSequence.
+For 15-25 emotionally or visually significant words across the song,
+choose animations that make the word's LITERAL MEANING visible.
+
+If the word means upward motion → it should move up.
+If the word means destruction → it should break apart.
+If the word means cold → it should trail frost.
+If the word means clarity → it should sharpen from blur.
+If the word means spinning → it should rotate.
+If the word means echo → it should leave ghost copies.
+If the word means frozen → it should stop dead.
+
+Let the word tell you what it needs.
+
+Each word directive has:
+- "word": the word (lowercase)
+- "emphasisLevel": 1-5 (1=subtle, 5=showstopper)
+- "entry": pick from entry styles list above
+- "behavior": pick from behaviors list below
+- "exit": pick from exit styles list above
+
+OPTIONAL per word:
+- "trail": particle trail effect (see list below)
+- "ghostTrail": true — leaves fading echo copies (2-4 per song)
+- "ghostDirection": "up" | "down" | "left" | "right" | "radial"
+- "letterSequence": true — letters animate individually (3-5 per song)
+- "visualMetaphor": freeform string describing the intended visual
+
+BEHAVIORS:
+  pulse, vibrate, float, grow, contract, flicker, orbit, lean, none,
+  freeze, tilt, pendulum, pulse-focus
+
+TRAILS:
+  ember, frost, spark-burst, dust-impact, light-rays, gold-coins,
+  dark-absorb, motion-trail, memory-orbs, none
+
+MODIFIER RULES:
+- ghostTrail: for echo, repeat, reverb, haunt, voices, forever, again (2-4 per song)
+- letterSequence: for break, shatter, split, count, crumble, apart, scatter (3-5 per song)
+- freeze behavior: for freeze, stop, still, stuck, trapped, numb (1-2 per song)
+- Choose animations by what the word MEANS, not how loud it is
+- Abstract emotional words (love, truth, hope) → use emphasisLevel + visualMetaphor
+- Concrete action words (fly, crash, burn, freeze) → use semantic entry/exit/trail
+- Not every word needs a trail. Most need "none" or omit the field.
+
+═══════════════════════════════════════
+SECTION 5 — OUTPUT SCHEMA
+═══════════════════════════════════════
+
+Return this exact JSON structure. All top-level keys are required.
+
+{
+  "sceneTone": "mixed-dawn",
+  "atmosphere": "haze",
+  "palette": "storm-grey",
+  "motion": "drift",
+  "typography": "raw-condensed",
+  "texture": "rain",
+  "emotionalArc": "slow-burn",
+
+  "chapters": [
+    {
+      "act": 1,
+      "startRatio": 0.0,
+      "endRatio": 0.25,
+      "description": "Empty rain-soaked street, single streetlight, puddles reflecting amber",
+      "mood": "isolated, heavy, still"
+    },
+    {
+      "act": 2,
+      "startRatio": 0.25,
+      "endRatio": 0.75,
+      "description": "Inside a moving car, rain on windshield, blurred city lights passing",
+      "mood": "restless, searching, momentum",
+      "motion": "weighted",
+      "texture": "storm",
+      "atmosphere": "cinematic"
+    },
+    {
+      "act": 3,
+      "startRatio": 0.75,
+      "endRatio": 1.0,
+      "description": "Standing on a rooftop at dawn, rain stopping, first light breaking through clouds",
+      "mood": "release, clarity, resolve",
+      "motion": "fluid",
+      "texture": "aurora",
+      "typography": "elegant-serif",
+      "atmosphere": "clean"
+    }
+  ],
+
+  "storyboard": [
+    {
+      "lineIndex": 0,
+      "heroWord": "RAIN",
+      "entryStyle": "rise",
+      "exitStyle": "dissolve"
+    },
+    {
+      "lineIndex": 5,
+      "heroWord": "ROAD",
+      "entryStyle": "drift-in",
+      "exitStyle": "evaporate"
+    },
+    {
+      "lineIndex": 12,
+      "heroWord": "HEART",
+      "entryStyle": "materialize",
+      "exitStyle": "shatter"
+    }
+  ],
+
+  "wordDirectives": {
+    "rain": {
+      "word": "rain",
+      "emphasisLevel": 4,
+      "entry": "rise",
+      "behavior": "float",
+      "exit": "dissolve",
+      "trail": "frost",
+      "visualMetaphor": "gravity-drop"
+    },
+    "shatter": {
+      "word": "shatter",
+      "emphasisLevel": 5,
+      "entry": "explode-in",
+      "behavior": "vibrate",
+      "exit": "scatter-letters",
+      "trail": "spark-burst",
+      "letterSequence": true
+    },
+    "echo": {
+      "word": "echo",
+      "emphasisLevel": 3,
+      "entry": "materialize",
+      "behavior": "float",
+      "exit": "evaporate",
+      "trail": "none",
+      "ghostTrail": true,
+      "ghostDirection": "radial"
+    }
+  }
+}
 
 VALIDATION:
 - sceneTone, atmosphere, palette, motion, typography, texture, emotionalArc are ALL required top-level strings
 - chapters array MUST have exactly 3 entries
-- Chapter override fields (motion, texture, typography, atmosphere) are OPTIONAL
+- Chapter override fields (motion, texture, typography, atmosphere) are OPTIONAL — only include when overriding
 - storyboard array MUST have 15-25 entries
 - wordDirectives MUST have 15-25 entries
-- Do NOT include forbidden fields: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve, iconGlyph, iconStyle, iconPosition, iconScale, visualWorld
+- All enum values MUST be from the lists above — do NOT invent values
+- Do NOT include fields named: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve, iconGlyph, iconStyle, iconPosition, iconScale, visualWorld
+- If you include ANY of those forbidden fields, the output is INVALID
 
-Return JSON only. No markdown fences. No explanation.`;
+Return JSON only. No markdown fences. No explanation.
+`;
 
 // ─── Main Panel ─────────────────────────────────────────────────────
 
