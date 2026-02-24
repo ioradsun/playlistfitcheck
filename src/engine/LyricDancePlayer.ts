@@ -644,6 +644,12 @@ export class LyricDancePlayer {
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
 
 
+  // Health monitor
+  private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private frameCount = 0;
+  private lastHealthCheck = 0;
+  private currentTSec = 0;
+
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
 
