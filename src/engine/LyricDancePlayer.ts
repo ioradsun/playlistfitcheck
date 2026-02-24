@@ -2677,7 +2677,7 @@ export class LyricDancePlayer {
   private unscaleTimeline(): BakedTimeline {
     const sx = this.width / BASE_W;
     const sy = this.height / BASE_H;
-    const sU = Math.min(sx, sy) || 1;
+    const sU = Math.max(1, Math.min(sx, sy));
 
     return this.timeline.map((f) => ({
       timeMs: f.timeMs,
