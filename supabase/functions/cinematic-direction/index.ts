@@ -82,43 +82,47 @@ OUTPUT SCHEMA:
       "entryStyle": "rises | slams-in | fractures-in | materializes | cuts | whisper | bloom | drop | plant | snap-in",
       "exitStyle": "dissolves-upward | burns-out | shatters | lingers | fades | drift-up | sink | evaporate",
       "heroWord": "most important word in this line or null",
-      "iconGlyph": "one of the available icon names below — assign when the LINE has strong visual imagery",
-      "iconStyle": "outline | filled | ghost",
-      "iconPosition": "behind | above | beside | replace",
-      "iconScale": "1.0-3.0 — size relative to font size"
+      "iconGlyph": "string, optional — one of the available glyphs listed below",
+      "iconStyle": "outline | filled | ghost — optional, default outline",
+      "iconPosition": "behind | above | beside | replace — optional, default behind",
+      "iconScale": "number, optional, default 2.0 — size relative to font size (1.0-3.0)"
     }
   ],
 
-  "storyboardIconRules": {
-    "availableIcons": [
-      "heart", "broken-heart", "ring", "rose", "lips", "hands-reaching", "two-figures", "alone-figure",
-      "tear", "kiss-mark", "embrace", "heartbeat-line",
-      "crown", "fist", "trophy", "diamond", "money-stack", "key", "throne", "shield", "chains", "broken-chains",
-      "fire", "wave", "lightning", "sun", "moon", "rain", "snow-crystal", "mountain", "flower", "wind", "cloud", "star",
-      "plane", "road-horizon", "compass", "footsteps", "arrow-up", "arrow-forward", "bridge", "rocket",
-      "skull", "prison-bars", "falling-figure", "storm-cloud", "crying-eye", "hourglass", "ghost", "shadow",
-      "city-skyline", "car", "bottle", "clock-midnight", "phone", "street-light", "crowd",
-      "wings", "cross", "praying-hands", "dove", "halo", "eye-of-providence", "infinity", "light-beam",
-      "bird-flying", "open-cage", "open-door", "horizon", "butterfly",
-      "microphone", "vinyl-record", "headphones", "music-note", "speaker-wave"
-    ],
-    "rules": [
-      "Only assign icons to lines with CLEAR visual imagery — 10-20% of lines max",
-      "Read full phrase meaning in context — do not assign by keyword alone",
-      "I wanna take you with me -> plane",
-      "locked up with no way out -> prison-bars",
-      "burning bridges -> fire",
-      "counting all my money -> money-stack",
-      "heart is breaking -> broken-heart",
-      "chasing the sun -> sun",
-      "riding through the city -> car",
-      "fell from grace -> falling-figure or wings",
-      "iconPosition behind for most assignments — large and ghosted",
-      "iconPosition replace only for the single most iconic visual line in the song",
-      "iconPosition above for subtle punctuation",
-      "iconScale 2.0-3.0 for behind, 0.8-1.2 for above and beside"
-    ]
-  },
+  ## ICON VISUAL METAPHORS
+
+  Icons are visual metaphors that tell the story alongside the lyrics. They are NOT decoration — they are the emotional vocabulary of the video.
+
+  ASSIGNMENT RULES:
+  - Assign iconGlyph to 10-15 storyboard entries across the song (roughly 15-25% of lines)
+  - Every chapter MUST have at least 3 icons
+  - Choose the anchor/hero word lines where a visual symbol amplifies the emotional meaning
+  - Spread icons across the full emotional arc — do not cluster them
+
+  AVAILABLE GLYPHS:
+  fire, water-drop, lightning, snowflake, sun, moon, star, cloud, rain, wind, leaf, flower, tree, mountain, wave, heart, broken-heart, eye, hand-open, hand-fist, crown, skull, wings, feather, diamond, clock, hourglass, lock, key, chain, anchor, compass, arrow-up, arrow-down, spiral, infinity, music-note, microphone, speaker, headphones, camera, film, book, pen, brush, palette, mask, mirror, door, window, house, car, road, bridge, city, globe, flag, sword, shield, torch, candle, smoke, ghost, shadow, sparkle, burst, ripple, orbit, target, crosshair, fingerprint, dna, atom, pill, coin
+
+  ICON POSITION — choose based on emotional function:
+  - "behind" — atmospheric mood. Large icon behind the word at medium opacity. Use for mood/setting words: darkness, rain, silence, night. ~40-50% of icons.
+  - "above" — thought/annotation. Small icon floating above the word. Use for descriptive words: fly, shine, dream, remember. ~25-30% of icons.
+  - "beside" — action companion. Icon sits next to the word. Use for action words: run, fight, reach, hold. ~15-20% of icons.
+  - "replace" — climactic substitution. Icon REPLACES the text entirely. Use only 1-2 times per song at the absolute peak emotional moment. The glyph must be instantly recognizable.
+
+  ICON STYLE:
+  - "ghost" — faded ethereal, best for "behind" position
+  - "outline" — clean line art, best for "above" and "beside"
+  - "filled" — solid shape, best for "replace"
+
+  ICON SCALE:
+  - Default 2.0. Use 2.5-3.0 for dramatic behind moments. Use 1.5 for subtle accent.
+
+  EXAMPLE for a heartbreak/driving song:
+  - Line with "TEARS" → iconGlyph: "rain", iconPosition: "behind", iconStyle: "ghost", iconScale: 2.5
+  - Line with "ROAD" → iconGlyph: "road", iconPosition: "beside", iconStyle: "outline", iconScale: 2.0
+  - Line with "HEART" → iconGlyph: "broken-heart", iconPosition: "replace", iconStyle: "filled", iconScale: 2.0
+  - Line with "STARS" → iconGlyph: "star", iconPosition: "above", iconStyle: "outline", iconScale: 2.0
+  - Line with "BURN" → iconGlyph: "fire", iconPosition: "behind", iconStyle: "ghost", iconScale: 2.5
+  - Line with "FREE" → iconGlyph: "wings", iconPosition: "above", iconStyle: "outline", iconScale: 2.0
 
   "wordDirectives": {
     "word": {
