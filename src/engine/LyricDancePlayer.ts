@@ -616,6 +616,10 @@ export class LyricDancePlayer {
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
+  // Word-local particle emitters
+  private wordEmitters: WordEmitter[] = [];
+  private firedEmitters = new Set<string>();
+
   // Comment comets
   private activeComments: CommentChunk[] = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
