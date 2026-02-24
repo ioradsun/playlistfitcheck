@@ -105,6 +105,9 @@ const ANIM_PARAMS = {
 }>;
 
 const getVisualMode = (payload: ScenePayload): VisualMode => {
+  const sceneManifest = payload.scene_manifest ?? null;
+  const manifestMode = sceneManifest?.visualMode;
+  if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
   if (!payload.cinematic_direction) return 'cinematic';
   const physicsProfile = payload.cinematic_direction.visualWorld?.physicsProfile;
   const backgroundSystem = payload.cinematic_direction.visualWorld?.backgroundSystem ?? 'default';
@@ -128,6 +131,31 @@ type WordDirectiveLike = {
   kineticClass?: string;
   colorOverride?: string;
   emphasisLevel?: number;
+};
+
+
+type ManifestWordDirective = {
+  position?: [number, number];
+  fontSize?: number;
+  scaleX?: number;
+  scaleY?: number;
+  color?: string;
+  glow?: number;
+  entryStyle?: string;
+  exitStyle?: string;
+  kineticClass?: string;
+};
+
+type ManifestLineLayout = {
+  positions?: Array<[number, number]>;
+  stagger?: number;
+};
+
+type ManifestChapter = {
+  zoom?: number;
+  driftIntensity?: number;
+  dominantColor?: string;
+  atmosphere?: string;
 };
 
 interface WordEntry {
@@ -408,6 +436,7 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   };
 }
 
+
 function getBeatIndex(tSec: number, state: BakeState): number {
   if (!state.beats.length) return -1;
 
@@ -454,6 +483,11 @@ function bakeFrame(
   const tensionMotion = pre.tensionMotionByFrame[frameIndex] ?? 0.5;
 
   const chapters = pre.chapters;
+  const sceneManifest = (payload.scene_manifest ?? null) as Record<string, unknown> | null;
+  const manifestWordDirectives = (sceneManifest?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
+  const manifestLineLayouts = (sceneManifest?.lineLayouts ?? {}) as Record<string, ManifestLineLayout>;
+  const manifestChapters = (sceneManifest?.chapters ?? []) as ManifestChapter[];
+  const manifestStagger = typeof sceneManifest?.stagger === 'number' ? sceneManifest.stagger : null;
   const distanceToZoom: Record<string, number> = {
     'Wide': 0.82,
     'Medium': 1.0,
@@ -467,7 +501,8 @@ function bakeFrame(
   );
   const chapterCameraEntry = (payload.cinematic_direction?.cameraLanguage?.distanceByChapter ?? [])
     .find((d) => (d as CameraDistanceLike).chapterIndex === currentChapterIdx) as CameraDistanceLike | undefined;
-  const targetZoom = distanceToZoom[chapterCameraEntry?.distance ?? 'Medium'] ?? 1.0;
+  const fallbackZoom = distanceToZoom[chapterCameraEntry?.distance ?? 'Medium'] ?? 1.0;
+  const targetZoom = manifestChapters[currentChapterIdx]?.zoom ?? fallbackZoom;
 
   state.currentZoom = state.currentZoom ?? 1.0;
   state.currentZoom += (targetZoom - state.currentZoom) * 0.015;
@@ -486,7 +521,12 @@ function bakeFrame(
       .map((wm) => {
         const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
         const totalWords = lineWords.length;
-        const [nx, ny] = getLayoutForMode(pre.visualMode, wm.wordIndex, totalWords, chapterEmotionalIntensity);
+        const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
+        const lineLayout = manifestLineLayouts[String(wm.lineIndex)] ?? null;
+        const position = manifestDirective?.position
+          ?? lineLayout?.positions?.[wm.wordIndex]
+          ?? getLayoutForMode(pre.visualMode, wm.wordIndex, totalWords, chapterEmotionalIntensity);
+        const [nx, ny] = position;
 
         const canvasX = nx * 960;
         const canvasY = ny * 540;
@@ -498,12 +538,12 @@ function bakeFrame(
         const alpha = Math.min(entryAlpha, exitAlpha);
 
         const storyEntry = payload.cinematic_direction?.storyboard?.[wm.lineIndex];
-        const entryStyle = storyEntry?.entryStyle ?? 'fades';
-        const kinetic = wm.directive?.kineticClass ?? null;
+        const entryStyle = manifestDirective?.entryStyle ?? storyEntry?.entryStyle ?? 'fades';
+        const kinetic = manifestDirective?.kineticClass ?? wm.directive?.kineticClass ?? null;
 
         const { offsetX, offsetY, initScale } = getEntryAnimation(nx, ny, entryStyle, kinetic, animParams);
 
-        const stagger = wm.wordIndex * animParams.stagger;
+        const stagger = wm.wordIndex * (manifestStagger ?? lineLayout?.stagger ?? animParams.stagger);
         const adjustedElapsed = Math.max(0, elapsed - stagger);
         const ep = easeOut(Math.min(1, adjustedElapsed / animParams.entryDuration));
 
@@ -513,23 +553,27 @@ function bakeFrame(
           ? 1 + (initScale - 1) * (1 - ep)
           : 1;
 
-        const color = wm.directive?.colorOverride
+        const color = manifestDirective?.color
+          ?? wm.directive?.colorOverride
           ?? pre.lineColors[wm.lineIndex]
           ?? '#ffffff';
 
         const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
-        const fontSize = getWordFontSize(wm.word, wm.directive, baseFontSize, pre.visualMode);
+        const fontSize = manifestDirective?.fontSize
+          ?? getWordFontSize(wm.word, wm.directive, baseFontSize, pre.visualMode);
 
-        const wordGlow = (wm.directive?.emphasisLevel ?? 0) >= 4
-          ? glow * animParams.impactScale
-          : glow * 0.6;
+        const manifestScaleX = manifestDirective?.scaleX ?? null;
+        const manifestScaleY = manifestDirective?.scaleY ?? null;
+        const wordGlow = manifestDirective?.glow
+          ? glow * manifestDirective.glow
+          : (wm.directive?.emphasisLevel ?? 0) >= 4 ? glow * 1.8 : glow * 0.6;
 
         return {
           id: `${wm.lineIndex}-${wm.wordIndex}`,
           x: canvasX + animOffsetX,
           y: canvasY + animOffsetY,
           alpha,
-          scale: entryScale,
+          scale: entryScale * (manifestScaleX ?? 1) * (manifestScaleY ?? 1),
           visible: alpha > 0.01,
           fontSize,
           color,
