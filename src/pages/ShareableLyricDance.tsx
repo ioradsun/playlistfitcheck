@@ -358,9 +358,20 @@ export default function ShareableLyricDance() {
 
     playerInitializedRef.current = true;
     let destroyed = false;
-    const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, containerRef.current);
+    const container = containerRef.current;
+    const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, container);
     playerRef.current = player;
     setPlayerInstance(player);
+
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        player.resize(width, height);
+      }
+    });
+    ro.observe(container);
 
     player.init()
       .then(() => {
@@ -372,6 +383,7 @@ export default function ShareableLyricDance() {
 
     return () => {
       destroyed = true;
+      ro.disconnect();
       player.destroy();
       playerRef.current = null;
       setPlayerInstance(null);
