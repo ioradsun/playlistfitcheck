@@ -40,7 +40,7 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }:
         {siteCopy.tools.lyric?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.lyric.subheading}</p>}
       </div>
 
-      <div className="glass-card rounded-xl p-4 space-y-2">
+      <div className="glass-card rounded-xl p-4 space-y-3">
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-medium">Song</span>
           <Tooltip>
@@ -59,6 +59,7 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }:
           maxFiles={1}
           disabled={loading}
         />
+        {sceneInput}
       </div>
 
       {/* Optional Lyrics Paste */}
