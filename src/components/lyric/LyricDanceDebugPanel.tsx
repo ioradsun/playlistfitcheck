@@ -657,7 +657,7 @@ interface Props {
 export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance, onRegenerateDirector }: Props) {
   const [open, setOpen] = useState(false);
   const hasPlayer = player != null;
-  const [tab, setTab] = useState<"hud" | "data">(hasPlayer ? "hud" : "data");
+  const [tab, setTab] = useState<"hud" | "data" | "prompt">(hasPlayer ? "hud" : "data");
 
   const copyAll = () => {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
