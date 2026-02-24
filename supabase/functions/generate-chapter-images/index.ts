@@ -137,7 +137,7 @@ serve(async (req) => {
 
   try {
     const body = (await req.json()) as RequestBody;
-    const { lyric_dance_id, chapters } = body;
+    const { lyric_dance_id, chapters, scene_context } = body;
 
     if (!lyric_dance_id || !Array.isArray(chapters) || chapters.length === 0) {
       return new Response(
