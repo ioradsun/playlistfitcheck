@@ -478,9 +478,10 @@ export function LyricFitTab({
   }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna, words]);
 
   const pipelineTriggeredRef = useRef(false);
+  const [pipelineRetryCount, setPipelineRetryCount] = useState(0);
   useEffect(() => {
     if (!lines?.length || !audioFile) return;
-    if (pipelineTriggeredRef.current) return;
+    if (pipelineTriggeredRef.current && pipelineRetryCount === 0) return;
     // If all data already loaded from DB, skip pipeline entirely
     if (songDna && beatGrid && cinematicDirection) {
       pipelineTriggeredRef.current = true;
@@ -488,11 +489,12 @@ export function LyricFitTab({
       return;
     }
     pipelineTriggeredRef.current = true;
+    console.log("[Pipeline] Starting pipeline, retry:", pipelineRetryCount);
     startBeatAnalysis(audioFile);
     startLyricAnalyze(lines, audioFile);
-    startCinematicDirection(lines);
+    startCinematicDirection(lines, pipelineRetryCount > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, audioFile]);
+  }, [lines, audioFile, pipelineRetryCount]);
 
   useEffect(() => {
     const values = Object.values(generationStatus);
