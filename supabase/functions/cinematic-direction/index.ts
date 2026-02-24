@@ -89,7 +89,35 @@ OUTPUT SCHEMA:
     "word": {
       "kineticClass": "RISING | FALLING | IMPACT | SPINNING | FLOATING",
       "emphasisLevel": 1-5,
-      "colorOverride": "#hex or null"
+      "colorOverride": "#hex or null",
+      "visualMetaphor": one of the following based on the word's meaning IN CONTEXT:
+
+        "ember-burst"    → fire, heat, burning, passion — word generates flame
+        "frost-form"     → cold, ice, freeze, numb — word crystallizes into existence  
+        "lens-focus"     → focus, clarity, vision, sharp — word sharpens from blur
+        "gravity-drop"   → fall, crash, collapse, weight — word slams with gravity
+        "ascent"         → rise, up, soar, higher, fly — word floats upward
+        "fracture"       → broken, shatter, crack, torn — word assembles then breaks
+        "heartbeat"      → love, heart, devotion, tender — word pulses with warmth
+        "pain-weight"    → hurt, pain, wound, ache — word lands heavy and lingers
+        "isolation"      → alone, lost, empty, void — word barely exists
+        "convergence"    → together, hold, united, close — word pulls everything toward it
+        "shockwave"      → scream, explode, loud, blast — word detonates
+        "void-absorb"    → dark, shadow, night, abyss — word absorbs light
+        "radiance"       → light, shine, golden, bright — word radiates outward
+        "gold-rain"      → money, cash, rich, numbers — word rains gold
+        "speed-blur"     → run, fast, rush, chase — word streaks
+        "slow-drift"     → wait, slow, silence, pause — word barely moves
+        "power-surge"    → strong, power, force, king — word dominates canvas
+        "dream-float"    → dream, memory, remember, past — word drifts ethereally
+        "truth-snap"     → truth, real, know, certain — word snaps in with no ceremony
+        "motion-streak"  → move, go, push, drive — word leaves a trail
+
+      Assign visualMetaphor based on the word's MEANING IN THIS SONG — not just the word itself.
+      "cold cash" → "gold-rain" not "frost-form"
+      "fire the shot" → "shockwave" not "ember-burst"
+      "falling in love" → "heartbeat" not "gravity-drop"
+      Only assign to emphasisLevel 3+ words — skip filler and low emphasis words.
     }
   },
 
