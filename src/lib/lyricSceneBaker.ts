@@ -997,6 +997,20 @@ function bakeFrame(
             ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0)
             : glow * 0.3;
 
+          if (chunks.length === 0) {
+            console.log('[BAKER] first chunk animation:', {
+              entry,
+              behavior,
+              exit,
+              entryProgress: entryProgress.toFixed(2),
+              entryState,
+              finalOffsetY: finalOffsetY.toFixed(1),
+              finalScaleX: finalScaleX.toFixed(2),
+              finalScaleY: finalScaleY.toFixed(2),
+              finalAlpha: finalAlpha.toFixed(2),
+            });
+          }
+
           chunks.push({
             id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
             x: pos.x + finalOffsetX,
