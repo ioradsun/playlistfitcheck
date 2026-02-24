@@ -104,7 +104,7 @@ type BakeState = {
   springOffset: number;
   springVelocity: number;
   currentZoom: number;
-  hasLoggedAnim: boolean;
+  
 };
 
 type PrebakedData = {
