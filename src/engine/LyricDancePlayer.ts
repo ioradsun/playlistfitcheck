@@ -341,7 +341,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
   ) {
     // Invalidate cache if song changed (survives HMR)
-    const sessionKey = `v3-${data.id}-${data.words?.length ?? 0}`;
+    const sessionKey = `v4-${data.id}-${data.words?.length ?? 0}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;
@@ -708,14 +708,14 @@ export class LyricDancePlayer {
 
       const drawX = chunk.x;
       const drawY = chunk.y;
-      const drawScale = (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
-
       const zoom = frame.cameraZoom ?? 1.0;
       const fontSize = chunk.fontSize ?? 36;
       const zoomedFont = obj.font.replace(
         /(\d+(\.\d+)?)px/,
-        `${Math.round(fontSize * zoom * drawScale)}px`
+        `${Math.round(fontSize * zoom)}px`
       );
+      const sx = chunk.scaleX ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
+      const sy = chunk.scaleY ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
 
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
@@ -726,7 +726,12 @@ export class LyricDancePlayer {
         this.ctx.shadowBlur = chunk.glow * 32;
       }
 
-      this.ctx.fillText(obj.text, drawX, drawY);
+      this.ctx.save();
+      this.ctx.translate(drawX, drawY);
+      this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
+      this.ctx.scale(sx, sy);
+      this.ctx.fillText(obj.text, 0, 0);
+      this.ctx.restore();
       this.ctx.shadowBlur = 0;
       drawCalls += 1;
     }
@@ -829,6 +834,7 @@ export class LyricDancePlayer {
     const payload = {
       lines,
       words: this.data.words ?? [],
+      bpm: this.data.beat_grid?.bpm ?? null,
       beat_grid: this.data.beat_grid,
       physics_spec: this.data.physics_spec,
       scene_manifest: this.data.scene_manifest ?? null,
@@ -1126,6 +1132,9 @@ export class LyricDancePlayer {
         alpha: c.alpha,
         glow: c.glow,
         scale: c.scale,
+        scaleX: c.scaleX,
+        scaleY: c.scaleY,
+        skewX: c.skewX,
         fontSize: c.fontSize,
         color: c.color,
         visible: c.visible,
@@ -1158,6 +1167,9 @@ export class LyricDancePlayer {
         alpha: c.alpha,
         glow: c.glow,
         scale: c.scale,
+        scaleX: c.scaleX ?? c.scale,
+        scaleY: c.scaleY ?? c.scale,
+        skewX: c.skewX ?? 0,
         visible: c.visible,
         fontSize: c.fontSize ?? 36,
         color: c.color ?? "#ffffff",
