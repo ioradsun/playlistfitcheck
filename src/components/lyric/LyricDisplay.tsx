@@ -2491,6 +2491,34 @@ export function LyricDisplay({
             toast.error(e.message || "Failed to generate scene manifest");
           }
         }}
+        onRunCustomPrompt={async (systemPrompt: string) => {
+          toast.info("Running cinematic-direction with custom prompt…");
+          try {
+            const lyricsForDirection = data.lines
+              .filter((l: any) => l.tag !== "adlib")
+              .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+            const { data: dirResult, error } = await supabase.functions.invoke("cinematic-direction", {
+              body: {
+                title: data.title,
+                artist: profileDisplayName,
+                lines: lyricsForDirection,
+                beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
+                lyricId: currentSavedId ?? undefined,
+                systemPromptOverride: systemPrompt,
+              },
+            });
+            if (error) throw error;
+            if (dirResult?.cinematicDirection) {
+              setSongDna((prev) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+              toast.success("Custom prompt result applied");
+            } else {
+              toast.error("No cinematic direction returned");
+            }
+          } catch (e: any) {
+            console.error("[DEBUG] Custom prompt error:", e);
+            toast.error(e.message || "Failed to run custom prompt");
+          }
+        }}
       />
 
       {/* Battle Page Popup Overlay */}
