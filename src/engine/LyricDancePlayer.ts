@@ -1136,7 +1136,7 @@ export class LyricDancePlayer {
   private getResolvedPalette(): string[] {
     const baked = (this.data as any)?.resolvedPalette;
     if (baked && Array.isArray(baked) && baked.length >= 5) return baked;
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const paletteName = cd?.palette as string | undefined;
     if (paletteName && LyricDancePlayer.PALETTE_COLORS[paletteName]) {
       return LyricDancePlayer.PALETTE_COLORS[paletteName];
