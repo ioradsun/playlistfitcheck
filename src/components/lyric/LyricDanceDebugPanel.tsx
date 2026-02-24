@@ -544,6 +544,106 @@ function DataTab({ data }: { data: DebugData }) {
   );
 }
 
+// ─── PROMPT Tab (shows the exact prompt sent to AI) ─────────────────
+
+function PromptTab({ data }: { data: DebugData }) {
+  const { lines, title, artist } = data;
+  const direction = data.songDna?.cinematic_direction;
+
+  const sceneCtx = data.scene_context;
+  const scenePrefix = sceneCtx
+    ? `SCENE CONTEXT — foundational visual world. All chapters must honor this.
+Scene: ${sceneCtx.sourceDescription ?? "unknown"}
+Time of day: ${sceneCtx.timeOfDay ?? "unknown"}
+Luminance: ${sceneCtx.baseLuminance ?? "unknown"}
+Color temperature: ${sceneCtx.colorTemperature ?? "unknown"}
+Text style: ${sceneCtx.textStyle ?? "light"}`
+    : "SCENE CONTEXT — not specified. Default to dark cinematic.";
+
+  const systemPrompt = scenePrefix + "\n\n" + CINEMATIC_PROMPT_PREVIEW;
+
+  const userPrompt = `Song: ${artist} — ${title}
+Lyrics (${lines.length} lines):
+${lines.filter(l => l.tag !== "adlib").map(l => l.text).join("\n")}
+
+Create the cinematic_direction. 3 acts. Be decisive. JSON only.
+
+REMINDER: You MUST assign iconGlyph to at least 10 storyboard entries spread across all 3 chapters. Each chapter needs at least 3 icons. Use position "behind"/"above"/"beside"/"replace" and style "ghost"/"outline"/"filled". This is mandatory.`;
+
+  const iconCount = direction?.storyboard?.filter((s: any) => s.iconGlyph).length ?? 0;
+
+  return (
+    <div className="space-y-0">
+      <CollapsibleSection title="Result Stats" defaultOpen>
+        <div className="space-y-0.5">
+          <KV label="Icons in storyboard" value={`${iconCount} / ${direction?.storyboard?.length ?? 0} lines`} />
+          <KV label="Word directives" value={Object.keys(direction?.wordDirectives ?? {}).length} />
+          <KV label="Chapters" value={direction?.chapters?.length ?? 0} />
+          <KV label="Tension stages" value={(direction as any)?.tensionCurve?.length ?? 0} />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="System Prompt" defaultOpen>
+        <div className="relative group">
+          <pre className="text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap break-all bg-background/50 rounded p-2 max-h-[400px] overflow-auto">
+            {systemPrompt}
+          </pre>
+          <button
+            onClick={() => { navigator.clipboard.writeText(systemPrompt); toast.success("System prompt copied"); }}
+            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-background/80 text-muted-foreground hover:text-foreground"
+          >
+            <Copy size={10} />
+          </button>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="User Prompt" defaultOpen>
+        <div className="relative group">
+          <pre className="text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap break-all bg-background/50 rounded p-2 max-h-[400px] overflow-auto">
+            {userPrompt}
+          </pre>
+          <button
+            onClick={() => { navigator.clipboard.writeText(userPrompt); toast.success("User prompt copied"); }}
+            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-background/80 text-muted-foreground hover:text-foreground"
+          >
+            <Copy size={10} />
+          </button>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Full Request Body">
+        <JsonBlock value={{
+          model: "google/gemini-2.5-flash",
+          temperature: 0.7,
+          max_tokens: 8192,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }} />
+      </CollapsibleSection>
+    </div>
+  );
+}
+
+const CINEMATIC_PROMPT_PREVIEW = `You are a music video director. Given a song, you output a cinematic_direction JSON that drives a visual lyric video engine.
+
+RULES:
+- Respond with valid JSON only. No markdown. No explanation.
+- Always output exactly 3 chapters covering ratios 0→0.25, 0.25→0.75, 0.75→1.0
+- Be decisive. One clear vision per song. No hedging.
+- Chapter 3 contains the climax — mark it with climax.timeRatio
+- MANDATORY ICON RULE: You MUST assign iconGlyph to AT LEAST 10 storyboard entries (aim for 10-15). Each chapter must have at least 3 icons.
+
+[Full prompt truncated for display — copy to see complete version]
+
+CONSTRAINTS:
+- storyboard must cover every lyric line.
+- storyboard MUST have iconGlyph on at least 10 entries — this is mandatory.
+- wordDirectives: only emotionally significant words, 10-25 max.
+- tensionCurve must contain exactly 3 entries aligned to chapter ranges.`;
+
 // ─── Main Panel ─────────────────────────────────────────────────────
 
 interface Props {
@@ -557,7 +657,7 @@ interface Props {
 export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance, onRegenerateDirector }: Props) {
   const [open, setOpen] = useState(false);
   const hasPlayer = player != null;
-  const [tab, setTab] = useState<"hud" | "data">(hasPlayer ? "hud" : "data");
+  const [tab, setTab] = useState<"hud" | "data" | "prompt">(hasPlayer ? "hud" : "data");
 
   const copyAll = () => {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
@@ -640,12 +740,20 @@ export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, on
                 >
                   DATA · Received
                 </button>
+                <button
+                  onClick={() => setTab("prompt")}
+                  className={`flex-1 py-2 text-[10px] font-mono font-bold uppercase tracking-widest transition-colors ${
+                    tab === "prompt" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  PROMPT
+                </button>
               </div>
             </div>
 
             {/* Content */}
             <div className="p-3">
-              {tab === "hud" ? <HudTab player={player} /> : <DataTab data={data} />}
+              {tab === "hud" ? <HudTab player={player} /> : tab === "prompt" ? <PromptTab data={data} /> : <DataTab data={data} />}
             </div>
           </motion.aside>
         )}
