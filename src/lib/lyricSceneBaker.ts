@@ -212,21 +212,38 @@ const TYPOGRAPHY_FONT_WEIGHTS: Record<string, number> = {
 };
 
 const PALETTE_COLORS: Record<string, string[]> = {
-  'cold-gold': ['#0A0A0F', '#C9A96E', '#F0ECE2', '#FFD700', '#2A2520'],
-  'warm-ember': ['#1A0A05', '#E8632B', '#FFF0E6', '#FF6B35', '#3D1A0A'],
-  'ice-blue': ['#050A14', '#4FA4D4', '#E8F4F8', '#00BFFF', '#0A1F33'],
-  'midnight-rose': ['#0F0510', '#C74B7A', '#F5E6EE', '#FF69B4', '#2D0A1A'],
-  'neon-green': ['#050F05', '#39FF14', '#E6FFE6', '#00FF41', '#0A2A0A'],
-  'storm-grey': ['#0E0E12', '#8A8D93', '#E8E8EC', '#A0A4AC', '#1E1E25'],
-  'blood-red': ['#120505', '#C41E1E', '#FFE6E6', '#FF2020', '#2D0A0A'],
-  'lavender-dream': ['#0A0510', '#9B72CF', '#F0E6FF', '#B088F9', '#1E0A33'],
-  'earth-brown': ['#0F0A05', '#8B6D4E', '#F5EDE2', '#A0845C', '#2D200A'],
-  'pure-white': ['#F8F8FA', '#1A1A2E', '#111111', '#4444FF', '#D0D0D8'],
-  'soft-cream': ['#FFF8F0', '#5C4033', '#1A1008', '#C49A6C', '#E8DDD0'],
-  'sky-blue': ['#EEF5FF', '#1E3A5F', '#0A1A30', '#3B82F6', '#C8DAF0'],
-  'sunset-pink': ['#FFF0F0', '#8B2252', '#1A0510', '#FF6B9D', '#E8C8D0'],
-  'spring-green': ['#F0FFF0', '#1A5C2E', '#0A200F', '#34D058', '#C0E8C8'],
+  // [background, accent, text, glow, dim]
+  'cold-gold': ['#0A0A0F', '#C9A96E', '#F0ECE2', '#FFD700', '#5A4A30'],
+  'warm-ember': ['#1A0A05', '#E8632B', '#FFF0E6', '#FF6B35', '#7D3A1A'],
+  'ice-blue': ['#050A14', '#4FA4D4', '#E8F4F8', '#00BFFF', '#2A5570'],
+  'midnight-rose': ['#0F0510', '#D4618C', '#F5E6EE', '#FF69B4', '#8A3358'],
+  'neon-green': ['#050F05', '#39FF14', '#E6FFE6', '#00FF41', '#1A7A0A'],
+  'storm-grey': ['#0E0E12', '#A0A4AC', '#E8E8EC', '#B8BCC4', '#5A5A66'],
+  'blood-red': ['#120505', '#D43030', '#FFE6E6', '#FF3030', '#7A1A1A'],
+  'lavender-dream': ['#0A0510', '#B088F9', '#F0E6FF', '#C49EFF', '#5A3A8A'],
+  'earth-brown': ['#0F0A05', '#A0845C', '#F5EDE2', '#C4A878', '#6A5030'],
+  'pure-white': ['#F8F8FA', '#3344AA', '#1A1A2E', '#4466FF', '#8888AA'],
+  'soft-cream': ['#FFF8F0', '#8B6040', '#1A1008', '#C49A6C', '#6A4A30'],
+  'sky-blue': ['#EEF5FF', '#2255AA', '#0A1A30', '#3B82F6', '#4A6A9A'],
+  'sunset-pink': ['#FFF0F0', '#AA3366', '#1A0510', '#FF6B9D', '#883355'],
+  'spring-green': ['#F0FFF0', '#228844', '#0A200F', '#34D058', '#3A7A4A'],
 };
+
+function resolveV3Palette(payload: ScenePayload): string[] {
+  const cd = payload.cinematic_direction as Record<string, unknown> | null;
+  const paletteName = cd?.palette as string | undefined;
+  if (paletteName && PALETTE_COLORS[paletteName]) {
+    return PALETTE_COLORS[paletteName];
+  }
+  const existing = payload.palette ?? [];
+  return [
+    existing[0] ?? '#0A0A0F',
+    existing[1] ?? '#FFD700',
+    existing[2] ?? '#F0F0F0',
+    existing[3] ?? '#FFD700',
+    existing[4] ?? '#555555',
+  ];
+}
 
 const TYPOGRAPHY_PROFILES: Record<string, TypographyProfile> = {
   'bold-impact': { fontFamily: '"Oswald", sans-serif', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.05, heroWeight: 900 },
@@ -1070,11 +1087,15 @@ function getGroupLayout(
 function dimColor(hex: string, factor: number): string {
   const clean = hex.replace('#', '');
   if (clean.length !== 6) return hex;
-  const r = Math.round(parseInt(clean.slice(0, 2), 16) * factor);
-  const g = Math.round(parseInt(clean.slice(2, 4), 16) * factor);
-  const b = Math.round(parseInt(clean.slice(4, 6), 16) * factor);
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const target = 100;
+  const dr = Math.round(r * factor + target * (1 - factor));
+  const dg = Math.round(g * factor + target * (1 - factor));
+  const db = Math.round(b * factor + target * (1 - factor));
   const clamp = (v: number) => Math.max(0, Math.min(255, v));
-  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
+  return `#${clamp(dr).toString(16).padStart(2, '0')}${clamp(dg).toString(16).padStart(2, '0')}${clamp(db).toString(16).padStart(2, '0')}`;
 }
 
 const findByRatio = <T extends { startRatio?: number; endRatio?: number }>(
@@ -1101,10 +1122,7 @@ export function blendWithWhite(hex: string, whiteFraction: number): string {
 
 function resolveWorldDefaults(payload: ScenePayload, chapters: ChapterLike[]) {
   const cd = payload.cinematic_direction as (CinematicDirection & Record<string, unknown>) | null;
-  const paletteName = (cd?.palette as string | undefined) ?? undefined;
-  const resolvedPalette = (paletteName && PALETTE_COLORS[paletteName])
-    ? PALETTE_COLORS[paletteName]
-    : (payload.palette?.length ? payload.palette : ['#0A0A0F', '#FFD700', '#F0F0F0', '#FFD700', '#2A2520']);
+  const resolvedPalette = resolveV3Palette(payload);
 
   const typographyName = (cd?.typography as string | undefined) ?? 'clean-modern';
   const baseTypography = TYPOGRAPHY_PROFILES[typographyName] ?? TYPOGRAPHY_PROFILES['clean-modern'];
@@ -1178,6 +1196,7 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   const chapterMotionProfiles = resolved.chapterMotionProfiles;
   const chapterMotionDefaults = resolved.chapterMotionDefaults;
   const chapterFontWeights: number[] = resolved.chapterTypography.map((typo) => typo.fontWeight);
+  const resolvedPalette = resolveV3Palette(payload);
 
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
   const chapterCount = Math.max(1, chapters.length || 4);
@@ -1227,13 +1246,16 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
       : 0;
     const chapter = findByRatio(chapters, lineProgress);
     const chapterIndex = chapters.indexOf(chapter as ChapterLike);
-    const colorOverride = chapter?.typographyShift?.colorOverride;
+    const colorOverride = (chapter as any)?.typographyShift?.colorOverride
+      ?? (chapter as any)?.overrides?.colorOverride;
     if (colorOverride) return colorOverride;
 
-    const textColor = resolved.resolvedPalette?.[2] ?? '#F0F0F0';
-    const accentColor = resolved.resolvedPalette?.[1] ?? '#FFD700';
-    const baseColor = chapterIndex >= 2 ? accentColor : textColor;
-    return blendWithWhite(baseColor, 0.55);
+    const textColor = resolvedPalette[2];
+    const accentColor = resolvedPalette[1];
+
+    if (chapterIndex >= 2) return accentColor;
+    if (chapterIndex === 1) return blendWithWhite(accentColor, 0.35);
+    return textColor;
   });
 
   const chapterIndexByFrame = new Array<number>(totalFrames + 1).fill(-1);
@@ -1319,7 +1341,7 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     lineHeroWords,
     lineFontSizes,
     lineColors,
-    resolvedPalette: resolved.resolvedPalette,
+    resolvedPalette,
     fontFamily: resolved.baseTypography.fontFamily,
     textTransform: resolved.baseTypography.textTransform,
     letterSpacing: resolved.baseTypography.letterSpacing,

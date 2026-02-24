@@ -763,7 +763,6 @@ export class LyricDancePlayer {
 
   // Compatibility with existing React shell
   async init(): Promise<void> {
-    // Preload Montserrat at required weights for canvas rendering
     await Promise.all([
       document.fonts.load('400 16px Montserrat'),
       document.fonts.load('700 16px Montserrat'),
@@ -789,6 +788,7 @@ export class LyricDancePlayer {
       globalBakePromise = (async () => {
         const payload = this.buildScenePayload();
         this.payload = payload;
+        await this.preloadFonts();
         this.songStartSec = payload.songStart;
         this.songEndSec = payload.songEnd;
 
@@ -1105,6 +1105,61 @@ export class LyricDancePlayer {
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
 
+  private static readonly TYPOGRAPHY_FONTS: Record<string, string> = {
+    'bold-impact': '"Oswald", sans-serif',
+    'clean-modern': '"Montserrat", sans-serif',
+    'elegant-serif': '"Playfair Display", serif',
+    'raw-condensed': '"Barlow Condensed", sans-serif',
+    'whisper-soft': '"Nunito", sans-serif',
+    'tech-mono': '"JetBrains Mono", monospace',
+    'display-heavy': '"Bebas Neue", sans-serif',
+    'editorial-light': '"Cormorant Garamond", serif',
+  };
+
+  /** Resolve the effective palette from V3 cinematic_direction or fallback */
+  private getResolvedPalette(): string[] {
+    const baked = (this.data as any)?.resolvedPalette;
+    if (baked && Array.isArray(baked) && baked.length >= 5) return baked;
+    const existing = this.payload?.palette ?? [];
+    return [
+      existing[0] ?? '#0A0A0F',
+      existing[1] ?? '#FFD700',
+      existing[2] ?? '#F0F0F0',
+      existing[3] ?? '#FFD700',
+      existing[4] ?? '#555555',
+    ];
+  }
+
+  private getResolvedFont(): string {
+    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const typoKey = cd?.typography as string | undefined;
+    if (typoKey && LyricDancePlayer.TYPOGRAPHY_FONTS[typoKey]) {
+      return LyricDancePlayer.TYPOGRAPHY_FONTS[typoKey];
+    }
+    return '"Montserrat", sans-serif';
+  }
+
+  private async preloadFonts(): Promise<void> {
+    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const typoKey = cd?.typography as string;
+    const fontMap: Record<string, string> = {
+      'bold-impact': 'Oswald',
+      'clean-modern': 'Montserrat',
+      'elegant-serif': 'Playfair Display',
+      'raw-condensed': 'Barlow Condensed',
+      'whisper-soft': 'Nunito',
+      'tech-mono': 'JetBrains Mono',
+      'display-heavy': 'Bebas Neue',
+      'editorial-light': 'Cormorant Garamond',
+    };
+    const fontName = fontMap[typoKey] ?? 'Montserrat';
+    try {
+      await document.fonts.load(`700 48px "${fontName}"`);
+    } catch {
+      // Font load failed — fallback is fine
+    }
+  }
+
   private hexWithAlpha(hex: string, alpha: number): string {
     const clean = hex.replace('#', '');
     if (clean.length !== 6) return `rgba(0,0,0,${alpha})`;
@@ -1297,11 +1352,8 @@ export class LyricDancePlayer {
 
       // Hierarchical halo — anchor vs supporting
       const isAnchor = chunk.isAnchor ?? false;
-      const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
-      const songDur = this.audio?.duration || 1;
-      const songProg = this.audio ? this.audio.currentTime / songDur : 0;
-      const chIdx = chapters.findIndex((ch: any) => songProg >= (ch.startRatio ?? 0) && songProg < (ch.endRatio ?? 1));
-      const chapterColor = (chIdx >= 0 ? chapters[chIdx]?.dominantColor : null) ?? '#FFD700';
+      const haloPal = this.getResolvedPalette();
+      const chapterColor = haloPal[1];
       this.drawWordHalo(drawX, drawY, fontSize, isAnchor, chapterColor, chunk.alpha);
 
       const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
@@ -1371,10 +1423,11 @@ export class LyricDancePlayer {
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
-        const family = chunk.fontFamily ?? '"Roboto Mono", monospace';
+        const resolvedFont = this.getResolvedFont();
+        const family = chunk.fontFamily ?? resolvedFont;
         this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
         if (!this.ctx.font.includes('px')) {
-          this.ctx.font = `700 36px "Roboto Mono", monospace`;
+          this.ctx.font = `700 36px ${resolvedFont}`;
         }
         if (chunk.glow > 0) {
           this.ctx.shadowColor = chunk.color ?? '#ffffff';
@@ -1911,16 +1964,26 @@ export class LyricDancePlayer {
     const chapterProgress = this.audio ? this.audio.currentTime / duration : 0;
 
     const sceneCtx = this.data.scene_context;
-    const imageOpacity = sceneCtx?.backgroundOpacity ?? 0.32;
+    const atmosphere = (this.payload?.cinematic_direction as any)?.atmosphere ?? 'cinematic';
+    const atmosphereOpacity: Record<string, number> = {
+      void: 0.10,
+      cinematic: 0.65,
+      haze: 0.50,
+      split: 0.75,
+      grain: 0.60,
+      wash: 0.55,
+      glass: 0.45,
+      clean: 0.85,
+    };
+    const targetImageOpacity = atmosphereOpacity[atmosphere] ?? 0.65;
     if (current?.complete && current.naturalWidth > 0) {
-      this.ctx.globalAlpha = Math.min(0.35, imageOpacity);
+      this.ctx.globalAlpha = targetImageOpacity;
       this.ctx.drawImage(current, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
     }
 
-    // Crossfade to next chapter image during transition
     if (next?.complete && next.naturalWidth > 0 && blend > 0) {
-      this.ctx.globalAlpha = Math.min(0.35, blend * imageOpacity);
+      this.ctx.globalAlpha = blend * targetImageOpacity;
       this.ctx.drawImage(next, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
     }
@@ -1929,15 +1992,26 @@ export class LyricDancePlayer {
     const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
     const currentChapterObj = chapters.find((ch: any) => chapterProgress >= (ch.startRatio ?? 0) && chapterProgress < (ch.endRatio ?? 1));
     const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
-    const sceneCrushOpacity = sceneCtx?.crushOpacity ?? 0.72;
-    const baseCrushAlpha = Math.max(0.40, sceneCrushOpacity - intensity * 0.15);
+    const atmosphereCrush: Record<string, number> = {
+      void: 0.80,
+      cinematic: 0.35,
+      haze: 0.25,
+      split: 0.20,
+      grain: 0.30,
+      wash: 0.30,
+      glass: 0.35,
+      clean: 0.12,
+    };
+    const crushTarget = atmosphereCrush[atmosphere] ?? 0.35;
+    const sceneCrushOpacity = sceneCtx?.crushOpacity ?? crushTarget;
+    const baseCrushAlpha = Math.max(0.10, sceneCrushOpacity - intensity * 0.1);
     const currentLum = this.getAverageLuminance(current);
     const nextLum = blend > 0 ? this.getAverageLuminance(next) : null;
     const blendLum = currentLum != null && nextLum != null
       ? currentLum * (1 - blend) + nextLum * blend
       : currentLum ?? nextLum;
     const luminanceCrushAlpha = blendLum != null && blendLum > 0.72 ? baseCrushAlpha + 0.06 : baseCrushAlpha;
-    const crushAlpha = Math.max(0.40, luminanceCrushAlpha);
+    const crushAlpha = Math.max(0.10, luminanceCrushAlpha);
 
     const crushColor = sceneCtx?.baseLuminance === 'light'
       ? `rgba(255,255,255,${crushAlpha * 0.4})`
@@ -1999,7 +2073,6 @@ export class LyricDancePlayer {
     
     try {
       const chapters = this.payload?.cinematic_direction?.chapters ?? [];
-      const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
       const count = Math.max(1, chapters.length);
       this.bgCaches = [];
       this.chapterParticleSystems = [];
@@ -2012,8 +2085,8 @@ export class LyricDancePlayer {
         const ctx = off.getContext('2d');
         if (!ctx) continue;
 
-        const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
-        const bgColor = this.tintedDarkBackground(dominantColor);
+        const resolvedPal = this.getResolvedPalette();
+        const bgColor = resolvedPal[0];
         const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
         const particleDesc = chapter?.particles ?? '';
         this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
@@ -2150,7 +2223,7 @@ export class LyricDancePlayer {
     
     try {
       const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
-      const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? ['#111111', '#FFD700'];
+      const palette = this.getResolvedPalette();
       const accentColor = palette[1] ?? '#FFD700';
       const bgSystem = this.backgroundSystem;
       this.chapterSims = chapters.map((chapter: any, ci: number) => {
@@ -2241,12 +2314,10 @@ export class LyricDancePlayer {
   }
 
   private getBurstPalette(songProgress: number): { accent: string; glow: string; particle: string } {
-    const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as Array<{ startRatio?: number; endRatio?: number; dominantColor?: string }>;
-    const chapter = chapters.find((ch) => songProgress >= (ch.startRatio ?? 0) && songProgress <= (ch.endRatio ?? 1));
-    const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.data.palette ?? [];
+    const palette = this.getResolvedPalette();
     return {
       accent: palette[1] ?? '#FFD700',
-      glow: chapter?.dominantColor ?? palette[0] ?? '#ffffff',
+      glow: palette[3] ?? '#ffffff',
       particle: palette[2] ?? '#ffffff',
     };
   }
@@ -2390,7 +2461,7 @@ export class LyricDancePlayer {
       case 'dust-impact': size = 2 + Math.random() * 3; maxLife = 1.2 + Math.random() * 0.6; vy += 15; break;
       case 'light-rays': size = 1 + Math.random() * 2; maxLife = 0.8 + Math.random() * 0.4; color = emitter.palette.glow; break;
       case 'gold-coins': size = 4 + Math.random() * 3; maxLife = 1.5 + Math.random() * 0.5; vy += 30; color = '#FFD700'; break;
-      case 'dark-absorb': size = 3 + Math.random() * 4; maxLife = 1 + Math.random() * 0.5; vx *= -0.6; vy *= -0.6; color = '#000000'; break;
+      case 'dark-absorb': { size = 3 + Math.random() * 4; maxLife = 1 + Math.random() * 0.5; vx *= -0.6; vy *= -0.6; const darkPal = this.getResolvedPalette(); color = darkPal[0]; break; }
       case 'motion-trail': size = 2 + Math.random() * 2; maxLife = 0.6 + Math.random() * 0.4; vx *= 0.3; vy *= 0.3; break;
       case 'memory-orbs': size = 5 + Math.random() * 4; maxLife = 2 + Math.random() * 0.5; vx *= 0.2; vy *= 0.2; color = emitter.palette.glow; break;
       default: return null;
@@ -2713,9 +2784,9 @@ export class LyricDancePlayer {
             this.ctx.save();
             this.ctx.globalAlpha = fadeAlpha * 0.45;
             const grad = this.ctx.createRadialGradient(px, py, 0, px, py, radius);
-            grad.addColorStop(0, 'rgba(160,160,160,0.6)');
-            grad.addColorStop(0.5, 'rgba(140,140,140,0.3)');
-            grad.addColorStop(1, 'rgba(120,120,120,0)');
+            grad.addColorStop(0, this.hexWithAlpha(em.color, 0.6));
+            grad.addColorStop(0.5, this.hexWithAlpha(em.color, 0.3));
+            grad.addColorStop(1, this.hexWithAlpha(em.color, 0));
             this.ctx.fillStyle = grad;
             this.ctx.beginPath();
             this.ctx.arc(px, py, radius, 0, Math.PI * 2);
@@ -2927,8 +2998,9 @@ export class LyricDancePlayer {
             this.ctx.translate(px, py);
             this.ctx.rotate(angle + elapsed * 3);
             this.ctx.globalAlpha = progress * 0.7;
-            this.ctx.fillStyle = '#0a0a0a';
-            this.ctx.shadowColor = '#000000';
+            const darkPal = this.getResolvedPalette();
+            this.ctx.fillStyle = darkPal[0];
+            this.ctx.shadowColor = darkPal[0];
             this.ctx.shadowBlur = radius * 3;
             this.ctx.beginPath();
             this.ctx.moveTo(0, -radius);
@@ -2975,7 +3047,8 @@ export class LyricDancePlayer {
       const ep = Math.min(1, progress);
       const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
       const easeIn = (t: number) => Math.pow(t, 3);
-      const accentColor = this.payload?.cinematic_direction?.visualWorld?.palette?.[1] ?? '#FFD700';
+      const rpal = this.getResolvedPalette();
+      const accentColor = rpal[1];
 
       switch (ae.event.type) {
         case 'light-break': {
