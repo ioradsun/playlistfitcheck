@@ -55,6 +55,17 @@ export type Keyframe = {
     exitOffsetY: number;
     exitScale: number;
     skewX: number;
+    blur?: number;
+    rotation?: number;
+    ghostTrail?: boolean;
+    ghostCount?: number;
+    ghostSpacing?: number;
+    ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial';
+    letterIndex?: number;
+    letterTotal?: number;
+    letterDelay?: number;
+    isLetterChunk?: boolean;
+    frozen?: boolean;
   }>;
   cameraX: number;
   cameraY: number;
@@ -91,17 +102,20 @@ type EntryStyle =
   | 'rise' | 'materialize' | 'breathe-in' | 'drift-in' | 'surface'
   | 'drop' | 'plant' | 'stomp' | 'cut-in'
   | 'whisper' | 'bloom' | 'melt-in' | 'ink-drop'
+  | 'focus-in' | 'spin-in' | 'tumble-in'
   | 'fades';
 
 type BehaviorStyle =
   | 'pulse' | 'vibrate' | 'float' | 'grow' | 'contract'
-  | 'flicker' | 'orbit' | 'lean' | 'none';
+  | 'flicker' | 'orbit' | 'lean' | 'freeze' | 'tilt' | 'pendulum' | 'pulse-focus' | 'none';
 
 type ExitStyle =
   | 'shatter' | 'snap-out' | 'burn-out' | 'punch-out'
   | 'dissolve' | 'drift-up' | 'exhale' | 'sink'
   | 'drop-out' | 'cut-out' | 'vanish'
   | 'linger' | 'evaporate' | 'whisper-out'
+  | 'blur-out' | 'spin-out' | 'scatter-letters'
+  | 'peel-off' | 'peel-reverse' | 'cascade-down' | 'cascade-up'
   | 'fades';
 
 type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
@@ -123,6 +137,8 @@ interface AnimState {
   alpha: number;
   skewX: number;
   glowMult: number;
+  blur: number;
+  rotation: number;
 }
 
 const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
@@ -262,47 +278,61 @@ function computeEntryState(style: EntryStyle, progress: number, intensity: numbe
   const ee = easeOutElastic(Math.min(1, progress));
 
   switch (style) {
-    case 'slam-down': return { offsetX: 0, offsetY: -(1 - ep) * 80 * intensity, scaleX: 1 + (1 - ep) * 0.3 * intensity, scaleY: ep < 0.9 ? 1 : 1 - (1 - ep) * 10 * intensity, alpha: Math.min(1, progress * 8), skewX: 0, glowMult: ep > 0.85 ? (1 - ep) * 4 : 0 };
-    case 'punch-in': return { offsetX: (1 - eb) * -120 * intensity, offsetY: 0, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 6), skewX: (1 - ep) * -8 * intensity, glowMult: 0 };
-    case 'explode-in': return { offsetX: 0, offsetY: 0, scaleX: 1 + (1 - ep) * 2.5 * intensity, scaleY: 1 + (1 - ep) * 2.5 * intensity, alpha: Math.min(1, progress * 4), skewX: 0, glowMult: (1 - ep) * 2 };
-    case 'snap-in': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: progress > 0.01 ? 1 : 0, skewX: 0, glowMult: 0 };
-    case 'rise': return { offsetX: 0, offsetY: (1 - ep) * 45 * intensity, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0 };
-    case 'materialize': return { offsetX: 0, offsetY: 0, scaleX: 0.75 + ep * 0.25, scaleY: 0.75 + ep * 0.25, alpha: easeOut(Math.min(1, progress * 1.5)), skewX: 0, glowMult: (1 - ep) * 0.8 };
-    case 'breathe-in': return { offsetX: 0, offsetY: 0, scaleX: 0.9 + ee * 0.1, scaleY: 0.9 + ee * 0.1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0 };
-    case 'drift-in': return { offsetX: (1 - ep) * -30, offsetY: (1 - ep) * 10, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 1.5)), skewX: (1 - ep) * -3, glowMult: 0 };
-    case 'surface': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: easeIn(Math.min(1, progress * 1.2)), skewX: 0, glowMult: (1 - ep) * 1.5 };
-    case 'drop': return { offsetX: 0, offsetY: -(1 - ep) * 60 * intensity, scaleX: 1, scaleY: 1, alpha: progress > 0.1 ? 1 : 0, skewX: 0, glowMult: 0 };
-    case 'plant': return { offsetX: 0, offsetY: 0, scaleX: 1 + (1 - ep) * 0.2, scaleY: 1 + (1 - ep) * 0.2, alpha: progress > 0.05 ? 1 : 0, skewX: 0, glowMult: 0 };
-    case 'stomp': { const wipeProgress = Math.min(1, progress * 3); return { offsetX: 0, offsetY: (1 - wipeProgress) * 20, scaleX: 1, scaleY: wipeProgress, alpha: wipeProgress, skewX: 0, glowMult: 0 }; }
-    case 'cut-in': return { offsetX: (1 - ep) * -40, offsetY: 0, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 5), skewX: 0, glowMult: 0 };
-    case 'whisper': return { offsetX: 0, offsetY: 0, scaleX: 0.95 + ep * 0.05, scaleY: 0.95 + ep * 0.05, alpha: easeIn(Math.min(1, progress * 0.8)), skewX: 0, glowMult: 0 };
-    case 'bloom': return { offsetX: 0, offsetY: 0, scaleX: 0.5 + ep * 0.5, scaleY: 0.5 + ep * 0.5, alpha: easeOut(Math.min(1, progress * 1.2)), skewX: 0, glowMult: (1 - ep) * 2.5 };
-    case 'melt-in': return { offsetX: 0, offsetY: (1 - ep) * 15, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 1.8)), skewX: (1 - ep) * 2, glowMult: 0 };
-    case 'ink-drop': return { offsetX: 0, offsetY: 0, scaleX: ep < 0.5 ? ep * 2 : 1, scaleY: ep < 0.5 ? ep * 2 : 1, alpha: Math.min(1, progress * 3), skewX: 0, glowMult: (1 - ep) * 0.5 };
-    case 'shatter-in': return { offsetX: (1 - ep) * (Math.random() > 0.5 ? 30 : -30), offsetY: (1 - ep) * (Math.random() > 0.5 ? -20 : 20), scaleX: 0.8 + ep * 0.2, scaleY: 0.8 + ep * 0.2, alpha: Math.min(1, progress * 4), skewX: (1 - ep) * 5, glowMult: 0 };
-    default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0 };
+    case 'slam-down': return { offsetX: 0, offsetY: -(1 - ep) * 80 * intensity, scaleX: 1 + (1 - ep) * 0.3 * intensity, scaleY: ep < 0.9 ? 1 : 1 - (1 - ep) * 10 * intensity, alpha: Math.min(1, progress * 8), skewX: 0, glowMult: ep > 0.85 ? (1 - ep) * 4 : 0, blur: 0, rotation: 0 };
+    case 'punch-in': return { offsetX: (1 - eb) * -120 * intensity, offsetY: 0, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 6), skewX: (1 - ep) * -8 * intensity, glowMult: 0, blur: 0, rotation: 0 };
+    case 'explode-in': return { offsetX: 0, offsetY: 0, scaleX: 1 + (1 - ep) * 2.5 * intensity, scaleY: 1 + (1 - ep) * 2.5 * intensity, alpha: Math.min(1, progress * 4), skewX: 0, glowMult: (1 - ep) * 2, blur: 0, rotation: 0 };
+    case 'snap-in': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: progress > 0.01 ? 1 : 0, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'rise': return { offsetX: 0, offsetY: (1 - ep) * 45 * intensity, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'materialize': return { offsetX: 0, offsetY: 0, scaleX: 0.75 + ep * 0.25, scaleY: 0.75 + ep * 0.25, alpha: easeOut(Math.min(1, progress * 1.5)), skewX: 0, glowMult: (1 - ep) * 0.8, blur: 0, rotation: 0 };
+    case 'breathe-in': return { offsetX: 0, offsetY: 0, scaleX: 0.9 + ee * 0.1, scaleY: 0.9 + ee * 0.1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'drift-in': return { offsetX: (1 - ep) * -30, offsetY: (1 - ep) * 10, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 1.5)), skewX: (1 - ep) * -3, glowMult: 0, blur: 0, rotation: 0 };
+    case 'surface': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: easeIn(Math.min(1, progress * 1.2)), skewX: 0, glowMult: (1 - ep) * 1.5, blur: 0, rotation: 0 };
+    case 'drop': return { offsetX: 0, offsetY: -(1 - ep) * 60 * intensity, scaleX: 1, scaleY: 1, alpha: progress > 0.1 ? 1 : 0, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'plant': return { offsetX: 0, offsetY: 0, scaleX: 1 + (1 - ep) * 0.2, scaleY: 1 + (1 - ep) * 0.2, alpha: progress > 0.05 ? 1 : 0, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'stomp': { const wipeProgress = Math.min(1, progress * 3); return { offsetX: 0, offsetY: (1 - wipeProgress) * 20, scaleX: 1, scaleY: wipeProgress, alpha: wipeProgress, skewX: 0, glowMult: 0, blur: 0, rotation: 0 }; }
+    case 'cut-in': return { offsetX: (1 - ep) * -40, offsetY: 0, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 5), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'whisper': return { offsetX: 0, offsetY: 0, scaleX: 0.95 + ep * 0.05, scaleY: 0.95 + ep * 0.05, alpha: easeIn(Math.min(1, progress * 0.8)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'bloom': return { offsetX: 0, offsetY: 0, scaleX: 0.5 + ep * 0.5, scaleY: 0.5 + ep * 0.5, alpha: easeOut(Math.min(1, progress * 1.2)), skewX: 0, glowMult: (1 - ep) * 2.5, blur: 0, rotation: 0 };
+    case 'melt-in': return { offsetX: 0, offsetY: (1 - ep) * 15, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 1.8)), skewX: (1 - ep) * 2, glowMult: 0, blur: 0, rotation: 0 };
+    case 'ink-drop': return { offsetX: 0, offsetY: 0, scaleX: ep < 0.5 ? ep * 2 : 1, scaleY: ep < 0.5 ? ep * 2 : 1, alpha: Math.min(1, progress * 3), skewX: 0, glowMult: (1 - ep) * 0.5, blur: 0, rotation: 0 };
+    case 'shatter-in': return { offsetX: (1 - ep) * (Math.random() > 0.5 ? 30 : -30), offsetY: (1 - ep) * (Math.random() > 0.5 ? -20 : 20), scaleX: 0.8 + ep * 0.2, scaleY: 0.8 + ep * 0.2, alpha: Math.min(1, progress * 4), skewX: (1 - ep) * 5, glowMult: 0, blur: 0, rotation: 0 };
+    case 'focus-in': return { offsetX: 0, offsetY: 0, scaleX: 1.05 - ep * 0.05, scaleY: 1.05 - ep * 0.05, alpha: Math.min(1, progress * 1.5), skewX: 0, glowMult: (1 - ep) * 1.5, blur: (1 - ep) * 1.0, rotation: 0 };
+    case 'spin-in': return { offsetX: 0, offsetY: 0, scaleX: 0.5 + ep * 0.5, scaleY: 0.5 + ep * 0.5, alpha: Math.min(1, progress * 3), skewX: 0, glowMult: (1 - ep) * 1.0, blur: 0, rotation: (1 - ep) * Math.PI * 2 };
+    case 'tumble-in': return { offsetX: 0, offsetY: -(1 - ep) * 60, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 4), skewX: 0, glowMult: 0, blur: 0, rotation: (1 - ep) * Math.PI };
+    default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
   }
 }
 
-function computeExitState(style: ExitStyle, progress: number, intensity: number): AnimState {
+function computeExitState(style: ExitStyle, progress: number, intensity: number, letterIndex = 0, letterTotal = 1): AnimState {
   const ep = easeOut(Math.min(1, progress));
   const ei = easeIn(Math.min(1, progress));
   switch (style) {
-    case 'shatter': return { offsetX: ep * 40 * (Math.random() > 0.5 ? 1 : -1), offsetY: ep * -30, scaleX: 1 + ep * 0.4, scaleY: 1 - ep * 0.3, alpha: 1 - ei, skewX: ep * 10, glowMult: ep * 1.5 };
-    case 'snap-out': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: progress > 0.02 ? 0 : 1, skewX: 0, glowMult: 0 };
-    case 'burn-out': return { offsetX: 0, offsetY: 0, scaleX: 1 + ep * 0.1, scaleY: 1 + ep * 0.1, alpha: 1 - ei, skewX: 0, glowMult: ep * 3 };
-    case 'punch-out': return { offsetX: ep * 150 * intensity, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 3), skewX: ep * 8, glowMult: 0 };
-    case 'dissolve': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0 };
-    case 'drift-up': return { offsetX: 0, offsetY: -ep * 35, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0 };
-    case 'exhale': return { offsetX: 0, offsetY: 0, scaleX: 1 - ep * 0.1, scaleY: 1 - ep * 0.1, alpha: 1 - ep, skewX: 0, glowMult: 0 };
-    case 'sink': return { offsetX: 0, offsetY: ep * 40, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0 };
-    case 'drop-out': return { offsetX: 0, offsetY: ep * 200 * intensity, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 4), skewX: 0, glowMult: 0 };
-    case 'cut-out': return { offsetX: ep * 60, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 5), skewX: 0, glowMult: 0 };
-    case 'vanish': return { offsetX: 0, offsetY: 0, scaleX: 1 - ei * 0.8, scaleY: 1 - ei * 0.8, alpha: 1 - ei, skewX: 0, glowMult: 0 };
-    case 'linger': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 0.28, skewX: 0, glowMult: 0 };
-    case 'evaporate': return { offsetX: 0, offsetY: -ep * 12, scaleX: 1, scaleY: 1, alpha: 1 - easeIn(Math.min(1, progress * 0.7)), skewX: 0, glowMult: 0 };
-    case 'whisper-out': return { offsetX: 0, offsetY: 0, scaleX: 1 - ep * 0.08, scaleY: 1 - ep * 0.08, alpha: 1 - easeIn(Math.min(1, progress * 0.9)), skewX: 0, glowMult: 0 };
-    default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0 };
+    case 'shatter': return { offsetX: ep * 40 * (Math.random() > 0.5 ? 1 : -1), offsetY: ep * -30, scaleX: 1 + ep * 0.4, scaleY: 1 - ep * 0.3, alpha: 1 - ei, skewX: ep * 10, glowMult: ep * 1.5, blur: 0, rotation: 0 };
+    case 'snap-out': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: progress > 0.02 ? 0 : 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'burn-out': return { offsetX: 0, offsetY: 0, scaleX: 1 + ep * 0.1, scaleY: 1 + ep * 0.1, alpha: 1 - ei, skewX: 0, glowMult: ep * 3, blur: 0, rotation: 0 };
+    case 'punch-out': return { offsetX: ep * 150 * intensity, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 3), skewX: ep * 8, glowMult: 0, blur: 0, rotation: 0 };
+    case 'dissolve': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'drift-up': return { offsetX: 0, offsetY: -ep * 35, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'exhale': return { offsetX: 0, offsetY: 0, scaleX: 1 - ep * 0.1, scaleY: 1 - ep * 0.1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'sink': return { offsetX: 0, offsetY: ep * 40, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'drop-out': return { offsetX: 0, offsetY: ep * 200 * intensity, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 4), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'cut-out': return { offsetX: ep * 60, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 5), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'vanish': return { offsetX: 0, offsetY: 0, scaleX: 1 - ei * 0.8, scaleY: 1 - ei * 0.8, alpha: 1 - ei, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'linger': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 0.28, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'evaporate': return { offsetX: 0, offsetY: -ep * 12, scaleX: 1, scaleY: 1, alpha: 1 - easeIn(Math.min(1, progress * 0.7)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'whisper-out': return { offsetX: 0, offsetY: 0, scaleX: 1 - ep * 0.08, scaleY: 1 - ep * 0.08, alpha: 1 - easeIn(Math.min(1, progress * 0.9)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'blur-out': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ep * 0.3, skewX: 0, glowMult: 0, blur: ep * 1.0, rotation: 0 };
+    case 'spin-out': return { offsetX: 0, offsetY: 0, scaleX: 1 - ei * 0.5, scaleY: 1 - ei * 0.5, alpha: 1 - ei, skewX: 0, glowMult: 0, blur: 0, rotation: ep * Math.PI * 2 };
+    case 'scatter-letters': {
+      const angle = (letterIndex / Math.max(1, letterTotal)) * Math.PI * 2;
+      const dist = ep * 120;
+      return { offsetX: Math.cos(angle) * dist, offsetY: Math.sin(angle) * dist, scaleX: 1 - ei * 0.5, scaleY: 1 - ei * 0.5, alpha: 1 - ei, skewX: 0, glowMult: 0, blur: 0, rotation: ep * (angle > Math.PI ? 0.5 : -0.5) };
+    }
+    case 'peel-off': return { offsetX: ep * 30, offsetY: ep * -20, scaleX: 1 - ep * 0.3, scaleY: 1 - ep * 0.3, alpha: 1 - ep, skewX: ep * 5, glowMult: 0, blur: 0, rotation: 0 };
+    case 'peel-reverse': return { offsetX: ep * -30, offsetY: ep * -20, scaleX: 1 - ep * 0.3, scaleY: 1 - ep * 0.3, alpha: 1 - ep, skewX: ep * -5, glowMult: 0, blur: 0, rotation: 0 };
+    case 'cascade-down': return { offsetX: 0, offsetY: ep * ep * 200, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'cascade-up': return { offsetX: 0, offsetY: -(ep * ep * 200), scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
   }
 }
 
@@ -317,6 +347,19 @@ function computeBehaviorState(style: BehaviorStyle, tSec: number, wordStart: num
     case 'flicker': return { alpha: 0.85 + Math.random() * 0.15 };
     case 'orbit': { const angle = age * 1.2; return { offsetX: Math.sin(angle) * 2 * intensity, offsetY: Math.cos(angle) * 1.5 * intensity }; }
     case 'lean': return { skewX: Math.sin(age * 0.8) * 4 * intensity };
+    case 'freeze': {
+      if (age > 0.3) {
+        return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, blur: 0, rotation: 0 };
+      }
+      const pulse = Math.sin(beatPhase * Math.PI * 2) * 0.04 * intensity;
+      return { scaleX: 1 + pulse, scaleY: 1 + pulse };
+    }
+    case 'tilt': return { rotation: Math.sin(age * 2) * 0.14 * intensity };
+    case 'pendulum': return { rotation: Math.sin(age * 0.8) * 0.26 * intensity };
+    case 'pulse-focus': {
+      const focusPulse = Math.sin(beatPhase * Math.PI * 2) * 0.3;
+      return { blur: Math.max(0, focusPulse) };
+    }
     default: return {};
   }
 }
@@ -391,6 +434,11 @@ type WordDirectiveLike = {
   colorOverride?: string;
   emphasisLevel?: number;
   visualMetaphor?: string;
+  ghostTrail?: boolean;
+  ghostCount?: number;
+  ghostSpacing?: number;
+  ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial';
+  letterSequence?: boolean;
 };
 
 
@@ -1063,11 +1111,9 @@ function bakeFrame(
           if (!pos) continue;
 
           const isAnchor = wi === group.anchorWordIdx;
-          const staggerDelay = isAnchor
-            ? 0
-            : Math.abs(wi - group.anchorWordIdx) * animParams.stagger;
+          const staggerDelay = isAnchor ? 0 : Math.abs(wi - group.anchorWordIdx) * animParams.stagger;
+          const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
 
-          // Semantic effect lookup — takes priority over all other animation assignment
           const metaphor = wm.directive?.visualMetaphor as VisualMetaphor | undefined;
           const semanticEffect = metaphor ? SEMANTIC_EFFECTS[metaphor] : null;
           const effectiveEntry = semanticEffect?.entry ?? entry;
@@ -1082,84 +1128,86 @@ function bakeFrame(
           const semanticColorOverride = semanticEffect?.colorOverride ?? null;
           const emitterType = semanticEffect?.emitterType ?? 'none';
 
-          const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay);
-          const effectiveEntryDuration = animParams.entryDuration * entryDurationMult;
-          const rawEntryProgress = adjustedElapsed / Math.max(0.01, effectiveEntryDuration);
-          const entryProgress = Math.min(1, Math.max(0, rawEntryProgress));
-          const exitProgress = Math.max(0, (tSec - group.end) / Math.max(0.01, animParams.exitDuration));
+          const isLetterSequence = isAnchor && wm.directive?.letterSequence === true;
+          const letterTotal = isLetterSequence ? wm.word.length : 1;
+          const splitExitStyles: ExitStyle[] = ['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up'];
 
-          const entryState = computeEntryState(effectiveEntry, entryProgress, motionDefaults.behaviorIntensity);
-          const exitState = computeExitState(effectiveExit, exitProgress, motionDefaults.behaviorIntensity);
-          const beatPhase = beatIndex >= 0
-            ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
-            : 0;
-          const behaviorState = computeBehaviorState(
-            effectiveBehavior,
-            tSec,
-            group.start,
-            beatPhase,
-            motionDefaults.behaviorIntensity,
-          );
+          for (let li = 0; li < letterTotal; li += 1) {
+            const letterDelay = isLetterSequence ? li * 0.06 : 0;
+            const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay - letterDelay);
+            const effectiveEntryDuration = animParams.entryDuration * entryDurationMult;
+            const rawEntryProgress = adjustedElapsed / Math.max(0.01, effectiveEntryDuration);
+            const entryProgress = Math.min(1, Math.max(0, rawEntryProgress));
+            const exitDelay = isLetterSequence && splitExitStyles.includes(effectiveExit) ? letterDelay : 0;
+            const exitProgress = Math.max(0, (tSec - group.end - exitDelay) / Math.max(0.01, animParams.exitDuration));
 
-          const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
-          const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
-          const rawScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
-          const rawScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
-          const finalScaleX = rawScaleX * semanticScaleX;
-          const finalScaleY = rawScaleY * semanticScaleY;
-          const isEntryComplete = entryProgress >= 1.0;
-          const isExiting = exitProgress > 0;
-          const rawFinalAlpha = isExiting
-            ? Math.max(0, exitState.alpha)
-            : isEntryComplete
-              ? 1.0 * (behaviorState.alpha ?? 1)
-              : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
-          const finalAlpha = Math.min(semanticAlphaMax, rawFinalAlpha);
-          const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
-          const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
+            const entryState = computeEntryState(effectiveEntry, entryProgress, motionDefaults.behaviorIntensity);
+            const exitState = computeExitState(effectiveExit, exitProgress, motionDefaults.behaviorIntensity, li, letterTotal);
+            const beatPhase = beatIndex >= 0
+              ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
+              : 0;
+            const behaviorState = computeBehaviorState(effectiveBehavior, tSec, group.start, beatPhase, motionDefaults.behaviorIntensity);
 
-          const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
-          const baseColor = semanticColorOverride
-            ?? manifestDirective?.color
-            ?? wm.directive?.colorOverride
-            ?? pre.lineColors[wm.lineIndex]
-            ?? '#ffffff';
-          const color = isAnchor ? baseColor : dimColor(baseColor, 0.65);
-          const wordGlow = (isAnchor
-            ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0)
-            : glow * 0.3) * semanticGlowMult;
-          const chapterFontWeight = semanticFontWeight
-            ?? currentChapter?.typographyShift?.fontWeight
-            ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
-            ?? 700;
+            const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
+            const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
+            const rawScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
+            const rawScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
+            const finalScaleX = rawScaleX * semanticScaleX;
+            const finalScaleY = rawScaleY * semanticScaleY;
+            const isEntryComplete = entryProgress >= 1.0;
+            const isExiting = exitProgress > 0;
+            const rawFinalAlpha = isExiting ? Math.max(0, exitState.alpha) : isEntryComplete ? 1.0 * (behaviorState.alpha ?? 1) : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
+            const finalAlpha = Math.min(semanticAlphaMax, rawFinalAlpha);
+            const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
+            const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
+            const finalBlur = (entryState.blur ?? 0) + (exitState.blur ?? 0) + (behaviorState.blur ?? 0);
+            const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
+            const isFrozen = effectiveBehavior === 'freeze' && (tSec - group.start) > 0.3;
 
-          chunks.push({
-            id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
-            x: pos.x + finalOffsetX,
-            y: pos.y + finalOffsetY,
-            alpha: Math.max(0, Math.min(1, finalAlpha)),
-            scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
-            scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
-            scale: 1,
-            visible: finalAlpha > 0.01,
-            fontSize: pos.fontSize,
-            fontWeight: chapterFontWeight,
-            isAnchor,
-            color,
-            glow: wordGlow,
-            emitterType: emitterType !== 'none' ? emitterType : undefined,
-            iconGlyph: isAnchor && iconGlyph ? iconGlyph : undefined,
-            iconStyle: isAnchor && iconGlyph ? iconStyle : undefined,
-            iconPosition: isAnchor && iconGlyph ? iconPosition : undefined,
-            iconScale: isAnchor && iconGlyph ? iconScale : undefined,
-            behavior: effectiveBehavior,
-            skewX: finalSkewX,
-            entryOffsetY: 0,
-            entryOffsetX: 0,
-            entryScale: 1,
-            exitOffsetY: 0,
-            exitScale: 1,
-          });
+            const baseColor = semanticColorOverride ?? manifestDirective?.color ?? wm.directive?.colorOverride ?? pre.lineColors[wm.lineIndex] ?? '#ffffff';
+            const color = isAnchor ? baseColor : dimColor(baseColor, 0.65);
+            const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0) : glow * 0.3) * semanticGlowMult;
+            const chapterFontWeight = semanticFontWeight ?? currentChapter?.typographyShift?.fontWeight ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight ?? 700;
+
+            chunks.push({
+              id: isLetterSequence ? `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}` : `${group.lineIndex}-${group.groupIndex}-${wi}`,
+              x: pos.x + finalOffsetX,
+              y: pos.y + finalOffsetY,
+              alpha: Math.max(0, Math.min(1, finalAlpha)),
+              scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
+              scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
+              scale: 1,
+              visible: finalAlpha > 0.01,
+              fontSize: pos.fontSize,
+              fontWeight: chapterFontWeight,
+              isAnchor,
+              color,
+              glow: wordGlow,
+              emitterType: emitterType !== 'none' ? emitterType : undefined,
+              iconGlyph: isAnchor && iconGlyph && !isLetterSequence ? iconGlyph : undefined,
+              iconStyle: isAnchor && iconGlyph && !isLetterSequence ? iconStyle : undefined,
+              iconPosition: isAnchor && iconGlyph && !isLetterSequence ? iconPosition : undefined,
+              iconScale: isAnchor && iconGlyph && !isLetterSequence ? iconScale : undefined,
+              behavior: effectiveBehavior,
+              skewX: finalSkewX,
+              blur: Math.max(0, Math.min(1, finalBlur)),
+              rotation: finalRotation,
+              ghostTrail: wm.directive?.ghostTrail,
+              ghostCount: wm.directive?.ghostCount,
+              ghostSpacing: wm.directive?.ghostSpacing,
+              ghostDirection: wm.directive?.ghostDirection,
+              letterIndex: isLetterSequence ? li : undefined,
+              letterTotal: isLetterSequence ? letterTotal : undefined,
+              letterDelay,
+              isLetterChunk: isLetterSequence || undefined,
+              frozen: isFrozen,
+              entryOffsetY: 0,
+              entryOffsetX: 0,
+              entryScale: 1,
+              exitOffsetY: 0,
+              exitScale: 1,
+            });
+          }
         }
       }
     } else {
@@ -1225,6 +1273,9 @@ function bakeFrame(
               : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
           const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
           const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
+          const finalBlur = (entryState.blur ?? 0) + (exitState.blur ?? 0) + (behaviorState.blur ?? 0);
+          const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
+          const isFrozen = behavior === 'freeze' && (tSec - wm.start) > 0.3;
 
           const color = manifestDirective?.color
             ?? wm.directive?.colorOverride
@@ -1264,6 +1315,13 @@ function bakeFrame(
             exitScale: 1,
             skewX: finalSkewX,
             behavior,
+            blur: Math.max(0, Math.min(1, finalBlur)),
+            rotation: finalRotation,
+            ghostTrail: wm.directive?.ghostTrail,
+            ghostCount: wm.directive?.ghostCount,
+            ghostSpacing: wm.directive?.ghostSpacing,
+            ghostDirection: wm.directive?.ghostDirection,
+            frozen: isFrozen,
           };
         });
 
