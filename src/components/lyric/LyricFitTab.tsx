@@ -400,7 +400,7 @@ export function LyricFitTab({
         .filter((l: any) => l.tag !== "adlib")
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
-      const sceneContext = selectedScene ? SCENE_CONTEXTS[selectedScene] : null;
+      const sceneContext = resolvedScene ?? null;
 
       const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
         body: {
