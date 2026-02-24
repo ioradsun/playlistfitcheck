@@ -650,6 +650,10 @@ export class LyricDancePlayer {
   private lastHealthCheck = 0;
   private currentTSec = 0;
 
+  // Stall detection
+  private _lastLoggedTSec = 0;
+  private _stalledFrames = 0;
+
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
 
