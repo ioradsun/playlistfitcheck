@@ -1164,7 +1164,7 @@ export class LyricDancePlayer {
       this.drawWordHalo(drawX, drawY, fontSize, isAnchor, chapterColor, chunk.alpha);
 
       this.ctx.globalAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
-      this.ctx.fillStyle = chunk.color ?? obj.color;
+      this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
       this.ctx.font = `${fontWeight} ${safeFontSize}px "Montserrat", sans-serif`;
       // Safety: if font assignment failed silently
       if (!this.ctx.font.includes('px')) {
