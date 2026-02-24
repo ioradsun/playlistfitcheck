@@ -41,6 +41,7 @@ interface Props {
   versionMeta: any | null;
   setVersionMeta: (v: any | null) => void;
   beatGrid?: BeatGridData | null;
+  setWords?: (w: Array<{ word: string; start: number; end: number }> | null) => void;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;
@@ -64,6 +65,7 @@ export function LyricsTab({
   versionMeta,
   setVersionMeta,
   beatGrid,
+  setWords,
   onProjectSaved,
   onNewProject,
   onHeaderProject,
@@ -220,6 +222,7 @@ export function LyricsTab({
         };
         setLyricData(newLyricData);
         setLines(data.lines);
+        setWords?.(data.words ?? null);
         setAudioFile(file);
         setHasRealAudio(true);
         setSavedId(projectId);

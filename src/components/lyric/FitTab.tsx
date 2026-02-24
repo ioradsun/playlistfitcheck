@@ -56,6 +56,7 @@ interface Props {
   bgImageUrl: string | null;
   setBgImageUrl: (u: string | null) => void;
   generationStatus: GenerationStatus;
+  words?: Array<{ word: string; start: number; end: number }> | null;
   onRetry?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
@@ -79,6 +80,7 @@ export function FitTab({
   bgImageUrl,
   setBgImageUrl,
   generationStatus,
+  words,
   onRetry,
   onHeaderProject,
   onBack,
@@ -273,6 +275,7 @@ export function FitTab({
           scene_manifest: sceneManifest,
           background_url: backgroundUrl,
           cinematic_direction: cinematicDirection || null,
+          words: words ?? null,
         }, { onConflict: "artist_slug,song_slug" });
 
       if (insertError) throw insertError;

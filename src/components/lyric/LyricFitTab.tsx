@@ -59,6 +59,7 @@ export function LyricFitTab({
   const [lines, setLines] = useState<LyricLine[]>([]);
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
+  const [words, setWords] = useState<Array<{ word: string; start: number; end: number }> | null>(null);
 
   const [songDna, setSongDna] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
@@ -137,6 +138,7 @@ export function LyricFitTab({
       savedIdRef.current = initialLyric.id;
       setFmlyLines((initialLyric as any).fmly_lines ?? null);
       setVersionMeta((initialLyric as any).version_meta ?? null);
+      setWords((initialLyric as any).words ?? null);
 
       const savedBg = (initialLyric as any).beat_grid;
       if (savedBg) {
@@ -532,6 +534,7 @@ export function LyricFitTab({
           versionMeta={versionMeta}
           setVersionMeta={setVersionMeta}
           beatGrid={beatGrid}
+          setWords={setWords}
           onProjectSaved={onProjectSaved}
           onNewProject={() => {
             setSongDna(null);
@@ -570,6 +573,7 @@ export function LyricFitTab({
           bgImageUrl={bgImageUrl}
           setBgImageUrl={setBgImageUrl}
           generationStatus={generationStatus}
+          words={words}
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
           onBack={() => handleViewChange("lyrics")}

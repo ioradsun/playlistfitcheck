@@ -39,6 +39,7 @@ interface Props {
   fingerprint?: ArtistDNA | null;
   seed: string;
   songDna?: SongDna | null;
+  words?: Array<{ word: string; start: number; end: number }> | null;
 }
 
 export function PublishLyricDanceButton({
@@ -53,6 +54,7 @@ export function PublishLyricDanceButton({
   fingerprint,
   seed,
   songDna,
+  words,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
@@ -131,6 +133,7 @@ export function PublishLyricDanceButton({
           seed,
           scene_manifest: sceneManifest,
           background_url: backgroundUrl,
+          words: words ?? null,
         }, { onConflict: "artist_slug,song_slug" });
 
       if (insertError) throw insertError;
