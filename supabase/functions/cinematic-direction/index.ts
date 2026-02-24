@@ -330,6 +330,207 @@ async function persistCinematicDirection(cinematicDirection: Record<string, unkn
   return false;
 }
 
+// ── Word-to-icon mapping for deterministic icon injection ──────────
+const WORD_ICON_MAP: Record<string, { glyph: string; position: string; style: string }> = {
+  // Emotion / feeling
+  love: { glyph: "heart", position: "behind", style: "ghost" },
+  heart: { glyph: "heart", position: "behind", style: "ghost" },
+  hate: { glyph: "broken-heart", position: "behind", style: "ghost" },
+  broken: { glyph: "broken-heart", position: "above", style: "outline" },
+  pain: { glyph: "broken-heart", position: "behind", style: "ghost" },
+  cry: { glyph: "rain", position: "behind", style: "ghost" },
+  tears: { glyph: "rain", position: "behind", style: "ghost" },
+  // Nature / weather
+  rain: { glyph: "rain", position: "behind", style: "ghost" },
+  storm: { glyph: "lightning", position: "behind", style: "ghost" },
+  fire: { glyph: "fire", position: "behind", style: "ghost" },
+  burn: { glyph: "fire", position: "behind", style: "ghost" },
+  flame: { glyph: "fire", position: "beside", style: "outline" },
+  ice: { glyph: "snowflake", position: "above", style: "outline" },
+  cold: { glyph: "snowflake", position: "behind", style: "ghost" },
+  snow: { glyph: "snowflake", position: "behind", style: "ghost" },
+  sun: { glyph: "sun", position: "behind", style: "ghost" },
+  moon: { glyph: "moon", position: "behind", style: "ghost" },
+  star: { glyph: "star", position: "above", style: "outline" },
+  stars: { glyph: "star", position: "behind", style: "ghost" },
+  night: { glyph: "moon", position: "behind", style: "ghost" },
+  sky: { glyph: "cloud", position: "behind", style: "ghost" },
+  ocean: { glyph: "wave", position: "behind", style: "ghost" },
+  sea: { glyph: "wave", position: "behind", style: "ghost" },
+  wave: { glyph: "wave", position: "behind", style: "ghost" },
+  wind: { glyph: "wind", position: "behind", style: "ghost" },
+  flower: { glyph: "flower", position: "above", style: "outline" },
+  tree: { glyph: "tree", position: "behind", style: "ghost" },
+  mountain: { glyph: "mountain", position: "behind", style: "ghost" },
+  // Body / identity
+  eye: { glyph: "eye", position: "above", style: "outline" },
+  eyes: { glyph: "eye", position: "behind", style: "ghost" },
+  hand: { glyph: "hand-open", position: "beside", style: "outline" },
+  fist: { glyph: "hand-fist", position: "beside", style: "outline" },
+  // Power / status
+  king: { glyph: "crown", position: "above", style: "outline" },
+  queen: { glyph: "crown", position: "above", style: "outline" },
+  crown: { glyph: "crown", position: "above", style: "outline" },
+  throne: { glyph: "crown", position: "behind", style: "ghost" },
+  diamond: { glyph: "diamond", position: "above", style: "outline" },
+  gold: { glyph: "diamond", position: "above", style: "outline" },
+  money: { glyph: "coin", position: "above", style: "outline" },
+  rich: { glyph: "coin", position: "beside", style: "outline" },
+  // Motion / journey
+  fly: { glyph: "wings", position: "above", style: "outline" },
+  free: { glyph: "wings", position: "above", style: "outline" },
+  wings: { glyph: "wings", position: "behind", style: "ghost" },
+  road: { glyph: "road", position: "beside", style: "outline" },
+  drive: { glyph: "road", position: "beside", style: "outline" },
+  run: { glyph: "arrow-up", position: "beside", style: "outline" },
+  fall: { glyph: "arrow-down", position: "behind", style: "ghost" },
+  rise: { glyph: "arrow-up", position: "above", style: "outline" },
+  // Time / memory
+  time: { glyph: "clock", position: "above", style: "outline" },
+  wait: { glyph: "hourglass", position: "above", style: "outline" },
+  forever: { glyph: "infinity", position: "above", style: "outline" },
+  memory: { glyph: "clock", position: "behind", style: "ghost" },
+  remember: { glyph: "clock", position: "behind", style: "ghost" },
+  dream: { glyph: "sparkle", position: "above", style: "outline" },
+  dreams: { glyph: "sparkle", position: "behind", style: "ghost" },
+  sleep: { glyph: "moon", position: "behind", style: "ghost" },
+  // Conflict / darkness
+  fight: { glyph: "sword", position: "beside", style: "outline" },
+  war: { glyph: "sword", position: "behind", style: "ghost" },
+  kill: { glyph: "skull", position: "behind", style: "ghost" },
+  death: { glyph: "skull", position: "behind", style: "ghost" },
+  dead: { glyph: "skull", position: "behind", style: "ghost" },
+  dark: { glyph: "shadow", position: "behind", style: "ghost" },
+  shadow: { glyph: "shadow", position: "behind", style: "ghost" },
+  ghost: { glyph: "ghost", position: "behind", style: "ghost" },
+  lost: { glyph: "compass", position: "above", style: "outline" },
+  // Freedom / barriers
+  lock: { glyph: "lock", position: "above", style: "outline" },
+  locked: { glyph: "lock", position: "behind", style: "ghost" },
+  key: { glyph: "key", position: "beside", style: "outline" },
+  chain: { glyph: "chain", position: "behind", style: "ghost" },
+  door: { glyph: "door", position: "beside", style: "outline" },
+  home: { glyph: "house", position: "behind", style: "ghost" },
+  // Sound / music
+  sing: { glyph: "music-note", position: "above", style: "outline" },
+  song: { glyph: "music-note", position: "above", style: "outline" },
+  voice: { glyph: "microphone", position: "beside", style: "outline" },
+  scream: { glyph: "speaker", position: "beside", style: "filled" },
+  // Light / energy
+  light: { glyph: "sparkle", position: "behind", style: "ghost" },
+  shine: { glyph: "sparkle", position: "above", style: "outline" },
+  glow: { glyph: "sparkle", position: "behind", style: "ghost" },
+  bright: { glyph: "sun", position: "behind", style: "ghost" },
+  // Misc
+  smoke: { glyph: "smoke", position: "behind", style: "ghost" },
+  city: { glyph: "city", position: "behind", style: "ghost" },
+  world: { glyph: "globe", position: "behind", style: "ghost" },
+  mirror: { glyph: "mirror", position: "above", style: "outline" },
+  truth: { glyph: "eye", position: "above", style: "outline" },
+  soul: { glyph: "ghost", position: "behind", style: "ghost" },
+  angel: { glyph: "wings", position: "above", style: "outline" },
+  devil: { glyph: "fire", position: "behind", style: "ghost" },
+  heaven: { glyph: "cloud", position: "behind", style: "ghost" },
+  hell: { glyph: "fire", position: "behind", style: "ghost" },
+  blood: { glyph: "water-drop", position: "behind", style: "ghost" },
+  breath: { glyph: "wind", position: "above", style: "outline" },
+  touch: { glyph: "hand-open", position: "beside", style: "outline" },
+  hold: { glyph: "hand-open", position: "beside", style: "outline" },
+  power: { glyph: "lightning", position: "behind", style: "ghost" },
+  energy: { glyph: "lightning", position: "above", style: "outline" },
+  magic: { glyph: "sparkle", position: "above", style: "outline" },
+  target: { glyph: "target", position: "above", style: "outline" },
+  bridge: { glyph: "bridge", position: "behind", style: "ghost" },
+  window: { glyph: "window", position: "above", style: "outline" },
+};
+
+const TARGET_ICON_COUNT = 12;
+const MIN_ICON_COUNT = 10;
+
+function ensureMinimumIcons(parsed: Record<string, unknown>, lines: LyricLine[]): void {
+  const storyboard = parsed.storyboard as Record<string, unknown>[];
+  if (!Array.isArray(storyboard)) return;
+
+  // Count existing AI-assigned icons
+  const existingCount = storyboard.filter((s) => s.iconGlyph).length;
+  if (existingCount >= MIN_ICON_COUNT) {
+    console.log(`[cinematic-direction] AI assigned ${existingCount} icons — sufficient`);
+    return;
+  }
+
+  console.log(`[cinematic-direction] AI only assigned ${existingCount} icons — injecting more deterministically`);
+
+  // Build candidate list: lines without icons, scored by keyword matches
+  const wordDirectives = (parsed.wordDirectives ?? {}) as Record<string, any>;
+  const candidates: { idx: number; glyph: string; position: string; style: string; score: number }[] = [];
+
+  for (let i = 0; i < storyboard.length; i++) {
+    if (storyboard[i].iconGlyph) continue; // already has icon
+    const lineText = (lines[i]?.text ?? storyboard[i].heroWord ?? "").toLowerCase();
+    const words = lineText.replace(/[^a-z\s]/g, "").split(/\s+/);
+    const heroWord = String(storyboard[i].heroWord ?? "").toLowerCase().replace(/[^a-z]/g, "");
+
+    // Check heroWord first, then all words in line
+    const wordsToCheck = heroWord ? [heroWord, ...words] : words;
+    for (const w of wordsToCheck) {
+      const mapping = WORD_ICON_MAP[w];
+      if (mapping) {
+        // Score: heroWord match = 3, wordDirective match = 2, plain match = 1
+        const score = (w === heroWord ? 3 : 0) + (wordDirectives[w] ? 2 : 0) + 1;
+        candidates.push({ idx: i, ...mapping, score });
+        break; // one icon per line
+      }
+    }
+  }
+
+  // Sort by score descending, then spread across the song
+  candidates.sort((a, b) => b.score - a.score);
+
+  // How many more do we need?
+  const needed = TARGET_ICON_COUNT - existingCount;
+  const totalLines = storyboard.length;
+
+  // Space icons evenly — pick from candidates but enforce minimum spacing
+  const selected: number[] = [];
+  const usedIndices = new Set(
+    storyboard.map((s, i) => s.iconGlyph ? i : -1).filter(i => i >= 0)
+  );
+
+  const minSpacing = Math.max(2, Math.floor(totalLines / (TARGET_ICON_COUNT + 2)));
+
+  for (const c of candidates) {
+    if (selected.length >= needed) break;
+    // Check spacing from existing and selected icons
+    const tooClose = [...usedIndices].some(ui => Math.abs(ui - c.idx) < minSpacing);
+    if (tooClose) continue;
+    selected.push(c.idx);
+    usedIndices.add(c.idx);
+  }
+
+  // If still not enough, relax spacing and fill from remaining candidates
+  if (selected.length < needed) {
+    for (const c of candidates) {
+      if (selected.length >= needed) break;
+      if (usedIndices.has(c.idx)) continue;
+      selected.push(c.idx);
+      usedIndices.add(c.idx);
+    }
+  }
+
+  // Apply icons to storyboard
+  for (const idx of selected) {
+    const c = candidates.find(c => c.idx === idx);
+    if (!c) continue;
+    storyboard[idx].iconGlyph = c.glyph;
+    storyboard[idx].iconPosition = c.position;
+    storyboard[idx].iconStyle = c.style;
+    storyboard[idx].iconScale = c.position === "behind" ? 2.5 : 2.0;
+  }
+
+  const finalCount = storyboard.filter((s) => s.iconGlyph).length;
+  console.log(`[cinematic-direction] After injection: ${finalCount} icons (was ${existingCount}, added ${finalCount - existingCount})`);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -461,29 +662,9 @@ Text style: ${sceneCtx.textStyle === 'dark'
       }
     }
 
-    // Retry once if icons are too few
-    const initialIcons = Array.isArray(parsed.storyboard) ? (parsed.storyboard as any[]).filter((s: any) => s.iconGlyph).length : 0;
-    if (initialIcons < 8) {
-      console.warn(`[cinematic-direction] Only ${initialIcons} icons, retrying for more...`);
-      try {
-        const retryParsed = await callAI(
-          `Your previous response only had ${initialIcons} storyboard entries with iconGlyph. This is INVALID. ` +
-          `You MUST assign iconGlyph to at least 10 storyboard entries (aim for 12-15). ` +
-          `Every chapter needs at least 3 icons. Use glyphs like: fire, heart, star, moon, crown, wings, diamond, eye, lightning, rain, broken-heart, sparkle, skull, compass, anchor. ` +
-          `Use iconPosition "behind" with iconStyle "ghost" for mood words, "above" with "outline" for descriptive words, "beside" with "outline" for action words. ` +
-          `Return the COMPLETE JSON again with at least 10 iconGlyph assignments in the storyboard.`
-        );
-        if (retryParsed) {
-          const retryIcons = Array.isArray(retryParsed.storyboard) ? (retryParsed.storyboard as any[]).filter((s: any) => s.iconGlyph).length : 0;
-          if (retryIcons > initialIcons) {
-            parsed = retryParsed;
-            console.log(`[cinematic-direction] Icon retry succeeded: ${retryIcons} icons`);
-          }
-        }
-      } catch (e) {
-        console.warn("[cinematic-direction] Icon retry failed, using original");
-      }
-    }
+    // Deterministic icon injection — Gemini rarely assigns enough icons,
+    // so we guarantee 10-15 by analyzing heroWords and wordDirectives
+    ensureMinimumIcons(parsed, lines);
 
     // Enforce numeric ranges
     const visualWorld = (parsed.visualWorld ?? {}) as Record<string, unknown>;
