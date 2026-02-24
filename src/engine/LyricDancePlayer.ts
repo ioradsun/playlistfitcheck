@@ -1454,28 +1454,18 @@ export class LyricDancePlayer {
         }
       }
 
-      console.log('[PLAYER] total chunks registered:', this.chunks.size);
-      console.log('[PLAYER] chunk keys sample:', [...this.chunks.keys()].slice(0, 5));
+      if (this.chunks.size < 10) {
+        console.error('[PLAYER] CRITICAL: chunks map too small —', this.chunks.size, 'entries. phraseGroups:', this.phraseGroups?.length);
+      } else {
+        console.log('[PLAYER] chunks OK:', this.chunks.size, 'entries');
+      }
 
       return;
     }
 
-    for (let i = 0; i < lines.length; i++) {
-      const rawText = lines[i]?.text ?? '';
-      const text = textTransform === 'uppercase'
-        ? rawText.toUpperCase()
-        : rawText;
-      const color = payload.palette?.[2] ?? '#ffffff';
-      const width = measureCtx.measureText(text).width;
-
-      this.chunks.set(String(i), {
-        id: String(i),
-        text,
-        color,
-        font,
-        width,
-      });
-    }
+    // No words available — leave chunks empty rather than registering
+    // mismatched line-level keys that would never match the baker's
+    // ${lineIndex}-${groupIndex}-${wordIndex} format.
   }
 
   private mapBackgroundSystem(desc: string): string {
