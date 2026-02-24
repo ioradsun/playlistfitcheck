@@ -166,10 +166,33 @@ const TYPOGRAPHY_FONT_WEIGHTS: Record<string, number> = {
   'editorial-light': 400,
 };
 
-function getTypographyFontWeight(payload: ScenePayload): number {
-  const typography = (payload.cinematic_direction as any)?.typography as string | undefined;
-  if (typography && typography in TYPOGRAPHY_FONT_WEIGHTS) {
-    return TYPOGRAPHY_FONT_WEIGHTS[typography];
+const HEAT_FROM_MOTION: Record<string, number> = {
+  weighted: 0.8, elastic: 0.6, fluid: 0.45, glitch: 0.7, drift: 0.2,
+};
+
+const BEAT_FROM_MOTION: Record<string, string> = {
+  weighted: 'slam', elastic: 'pulse', fluid: 'pulse', glitch: 'snap', drift: 'pulse',
+};
+
+function resolveMotionProfile(motionField: string | undefined, payload: ScenePayload): MotionProfile {
+  if (motionField && motionField in MOTION_DEFAULTS) {
+    return motionField as MotionProfile;
+  }
+  const physics = payload.cinematic_direction?.visualWorld?.physicsProfile;
+  const heat = physics?.heat ?? 0.5;
+  const beatResponse = physics?.beatResponse ?? 'pulse';
+  const backgroundSystem = payload.cinematic_direction?.visualWorld?.backgroundSystem ?? '';
+  const chaos = (physics as Record<string, unknown> | undefined)?.chaos ?? 'stable';
+  if (beatResponse === 'slam' || heat > 0.75) return 'weighted';
+  if (chaos === 'glitch' || backgroundSystem === 'urban') return 'glitch';
+  if (heat > 0.55 || backgroundSystem === 'storm') return 'elastic';
+  if (heat < 0.3 || backgroundSystem === 'intimate') return 'drift';
+  return 'fluid';
+}
+
+function resolveTypographyFontWeight(typographyField: string | undefined, payload: ScenePayload): number {
+  if (typographyField && typographyField in TYPOGRAPHY_FONT_WEIGHTS) {
+    return TYPOGRAPHY_FONT_WEIGHTS[typographyField];
   }
   return payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight ?? 700;
 }
@@ -233,24 +256,8 @@ const getVisualMode = (payload: ScenePayload): VisualMode => {
 
 
 function deriveMotionProfile(payload: ScenePayload): MotionProfile {
-  // New prompt returns motion directly as a top-level field
   const directMotion = (payload.cinematic_direction as any)?.motion as string | undefined;
-  if (directMotion && directMotion in MOTION_DEFAULTS) {
-    return directMotion as MotionProfile;
-  }
-
-  // Fallback: old visualWorld path
-  const physics = payload.cinematic_direction?.visualWorld?.physicsProfile;
-  const heat = physics?.heat ?? 0.5;
-  const beatResponse = physics?.beatResponse ?? 'pulse';
-  const backgroundSystem = payload.cinematic_direction?.visualWorld?.backgroundSystem ?? '';
-  const chaos = (physics as Record<string, unknown> | undefined)?.chaos ?? 'stable';
-
-  if (beatResponse === 'slam' || heat > 0.75) return 'weighted';
-  if (chaos === 'glitch' || backgroundSystem === 'urban') return 'glitch';
-  if (heat > 0.55 || backgroundSystem === 'storm') return 'elastic';
-  if (heat < 0.3 || backgroundSystem === 'intimate') return 'drift';
-  return 'fluid';
+  return resolveMotionProfile(directMotion, payload);
 }
 
 function assignWordAnimations(
@@ -573,6 +580,11 @@ type ChapterLike = {
     fontWeight?: number;
     colorOverride?: string;
   };
+  // Per-chapter overrides from new Gemini prompt
+  motion?: string;
+  texture?: string;
+  typography?: string;
+  atmosphere?: string;
 };
 
 type CameraDistanceLike = {
@@ -611,6 +623,9 @@ type PrebakedData = {
   groupLayouts: Map<string, GroupPosition[]>;
   motionProfile: MotionProfile;
   motionDefaults: MotionDefaults;
+  chapterMotionProfiles: MotionProfile[];
+  chapterMotionDefaults: MotionDefaults[];
+  chapterFontWeights: number[];
   animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number };
   manifestWordDirectives: Record<string, ManifestWordDirective>;
   manifestLineLayouts: Record<string, ManifestLineLayout>;
@@ -885,14 +900,26 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   const density = Number(physSpec?.density ?? 0.5);
   const storyboards = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
   const songDuration = Math.max(0.01, payload.songEnd - payload.songStart);
-  // Derive heat/beatResponse from motion pick when visualWorld is absent
-  const motionPick = (payload.cinematic_direction as any)?.motion as string | undefined;
-  const heatFromMotion: Record<string, number> = { weighted: 0.8, elastic: 0.6, fluid: 0.45, glitch: 0.7, drift: 0.2 };
-  const beatFromMotion: Record<string, string> = { weighted: 'slam', elastic: 'pulse', fluid: 'pulse', glitch: 'snap', drift: 'pulse' };
+  // Global heat/beatResponse from motion pick or old path
+  const globalMotion = (payload.cinematic_direction as any)?.motion as string | undefined;
+  const globalTypography = (payload.cinematic_direction as any)?.typography as string | undefined;
   const heat = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat
-    ?? (motionPick ? heatFromMotion[motionPick] ?? 0.5 : 0.5);
+    ?? HEAT_FROM_MOTION[globalMotion ?? ''] ?? 0.5;
   const beatResponse = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse
-    ?? (motionPick ? beatFromMotion[motionPick] ?? 'pulse' : 'slam');
+    ?? BEAT_FROM_MOTION[globalMotion ?? ''] ?? 'slam';
+
+  // Per-chapter motion profiles and font weights
+  const chapterMotionProfiles: MotionProfile[] = chapters.map((ch) => {
+    const chapterMotion = ch.motion ?? globalMotion;
+    return resolveMotionProfile(chapterMotion, payload);
+  });
+  const chapterMotionDefaults: MotionDefaults[] = chapterMotionProfiles.map((mp) => MOTION_DEFAULTS[mp]);
+  const globalFontWeight = resolveTypographyFontWeight(globalTypography, payload);
+  const chapterFontWeights: number[] = chapters.map((ch) => {
+    return ch.typography
+      ? (TYPOGRAPHY_FONT_WEIGHTS[ch.typography] ?? globalFontWeight)
+      : globalFontWeight;
+  });
 
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
   const chapterCount = Math.max(1, chapters.length || 4);
@@ -1045,6 +1072,9 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     groupLayouts,
     motionProfile,
     motionDefaults,
+    chapterMotionProfiles,
+    chapterMotionDefaults,
+    chapterFontWeights,
     animParams,
     manifestWordDirectives,
     manifestLineLayouts,
@@ -1128,7 +1158,9 @@ function bakeFrame(
   if (pre.wordMeta.length > 0) {
     const currentChapter = findByRatio(chapters, songProgress);
     const chapterEmotionalIntensity = currentChapter?.emotionalIntensity ?? pre.heat;
-    const motionDefaults = pre.motionDefaults;
+    // Use per-chapter motion if available, else global
+    const activeChapterIdx = currentChapterIdx >= 0 ? currentChapterIdx : 0;
+    const motionDefaults = pre.chapterMotionDefaults[activeChapterIdx] ?? pre.motionDefaults;
     const storyboard = pre.storyboard;
     const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
     const animParams = pre.animParams;
@@ -1223,7 +1255,7 @@ function bakeFrame(
             const baseColor = semanticColorOverride ?? manifestDirective?.color ?? wm.directive?.colorOverride ?? pre.lineColors[wm.lineIndex] ?? '#ffffff';
             const color = isAnchor ? baseColor : dimColor(baseColor, 0.65);
             const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0) : glow * 0.3) * semanticGlowMult;
-            const chapterFontWeight = semanticFontWeight ?? currentChapter?.typographyShift?.fontWeight ?? getTypographyFontWeight(payload);
+            const chapterFontWeight = semanticFontWeight ?? currentChapter?.typographyShift?.fontWeight ?? pre.chapterFontWeights[activeChapterIdx] ?? 700;
 
             // Letter positioning: spread characters across word span, centered on pos.x
             const charW = isLetterSequence ? pos.fontSize * 0.6 : 0;
@@ -1367,8 +1399,10 @@ function bakeFrame(
             const soloWordBonus = pre.motionProfile === 'drift' || pre.motionProfile === 'fluid' ? 1.3 : 1.0;
             const fontSize = manifestDirective?.fontSize
               ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
-          const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
-            ?? getTypographyFontWeight(payload);
+            const activeChIdx = chapters.findIndex((ch) =>
+              songProgress >= (ch.startRatio ?? 0) && songProgress < (ch.endRatio ?? 1));
+            const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
+              ?? pre.chapterFontWeights[activeChIdx >= 0 ? activeChIdx : 0] ?? 700;
 
             const wordGlow = manifestDirective?.glow
               ? glow * manifestDirective.glow
@@ -1506,7 +1540,7 @@ function bakeFrame(
         visible,
         fontSize: pre.lineFontSizes[idx] ?? 36,
         fontWeight: (currentChapterIdx >= 0 ? chapters[currentChapterIdx]?.typographyShift?.fontWeight : undefined)
-          ?? getTypographyFontWeight(payload),
+          ?? pre.chapterFontWeights[currentChapterIdx >= 0 ? currentChapterIdx : 0] ?? 700,
         color: pre.lineColors[idx] ?? "#ffffff",
         isAnchor: lineActive,
         entryOffsetY,
@@ -1548,7 +1582,7 @@ function bakeFrame(
             visible,
             fontSize: pre.lineFontSizes[idx] ?? 36,
             fontWeight: (currentChapterIdx >= 0 ? chapters[currentChapterIdx]?.typographyShift?.fontWeight : undefined)
-              ?? getTypographyFontWeight(payload),
+              ?? pre.chapterFontWeights[currentChapterIdx >= 0 ? currentChapterIdx : 0] ?? 700,
             color: pre.lineColors[idx] ?? "#ffffff",
             isAnchor: true,
             entryOffsetY,
@@ -1645,10 +1679,8 @@ export function bakeSceneChunked(
     const md = MOTION_DEFAULTS[mp];
     const ps = payload.physics_spec as unknown as Record<string, unknown> | null;
     const motionDiag = (payload.cinematic_direction as any)?.motion as string | undefined;
-    const heatMap: Record<string, number> = { weighted: 0.8, elastic: 0.6, fluid: 0.45, glitch: 0.7, drift: 0.2 };
-    const beatMap: Record<string, string> = { weighted: 'slam', elastic: 'pulse', fluid: 'pulse', glitch: 'snap', drift: 'pulse' };
-    const h = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat ?? heatMap[motionDiag ?? ''] ?? 0.5;
-    const br = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse ?? beatMap[motionDiag ?? ''] ?? 'slam';
+    const h = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat ?? HEAT_FROM_MOTION[motionDiag ?? ''] ?? 0.5;
+    const br = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse ?? BEAT_FROM_MOTION[motionDiag ?? ''] ?? 'slam';
     const ch = Number(ps?.chaos ?? 0);
     const ap = {
       linger: ({ weighted: 0.15, fluid: 0.55, elastic: 0.2, drift: 0.8, glitch: 0.05 } as Record<string, number>)[mp] ?? 0.4,
