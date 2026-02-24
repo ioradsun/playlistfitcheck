@@ -43,12 +43,15 @@ export type Keyframe = {
     entryScale: number;
     exitOffsetY: number;
     exitScale: number;
+    scaleX: number;
+    scaleY: number;
   }>;
   cameraX: number;
   cameraY: number;
   cameraZoom: number;
   beatIndex: number;
   bgBlend: number;
+  beatPulse: number;
   particles: Array<{
     x: number;
     y: number;
@@ -507,6 +510,31 @@ function bakeFrame(
         const adjustedElapsed = Math.max(0, elapsed - stagger);
         const ep = easeOut(Math.min(1, adjustedElapsed / animParams.entryDuration));
 
+        let scaleX = 1.0;
+        let scaleY = 1.0;
+
+        if (kinetic === 'IMPACT') {
+          const impactStretch = Math.max(0, 1 - ep);
+          scaleX = 1 + impactStretch * 0.6;
+          scaleY = 1 - impactStretch * 0.35;
+        } else if (kinetic === 'RISING') {
+          scaleX = 1 - (1 - ep) * 0.2;
+          scaleY = 1 + (1 - ep) * 0.25;
+        } else if (kinetic === 'FALLING') {
+          scaleX = 1 + (1 - ep) * 0.3;
+          scaleY = 1 - (1 - ep) * 0.25;
+        } else if (kinetic === 'SPINNING') {
+          scaleX = 0.3 + ep * 0.7;
+          scaleY = 1.0;
+        } else if (kinetic === 'FLOATING') {
+          scaleX = 1.05;
+          scaleY = 0.95;
+        } else if (entryStyle === 'slams-in') {
+          const slamStretch = Math.max(0, 1 - ep);
+          scaleX = 1 + slamStretch * 0.35;
+          scaleY = 1 - slamStretch * 0.2;
+        }
+
         const animOffsetX = offsetX * (1 - ep);
         const animOffsetY = offsetY * (1 - ep);
         const entryScale = initScale > 1
@@ -539,6 +567,8 @@ function bakeFrame(
           entryScale,
           exitOffsetY: 0,
           exitScale: 1,
+          scaleX,
+          scaleY,
         };
       });
 
@@ -626,6 +656,8 @@ function bakeFrame(
         entryScale,
         exitOffsetY,
         exitScale,
+        scaleX: 1,
+        scaleY: 1,
       });
 
 
@@ -661,6 +693,8 @@ function bakeFrame(
             entryScale,
             exitOffsetY,
             exitScale,
+            scaleX: 1,
+            scaleY: 1,
           });
         }
         }
@@ -692,6 +726,7 @@ function bakeFrame(
     cameraZoom: state.currentZoom,
     beatIndex,
     bgBlend,
+    beatPulse: Math.max(0, Math.min(1, state.springVelocity * 2 + glow * 0.5)),
     particles,
   };
 }

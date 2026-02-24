@@ -256,6 +256,8 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     entryScale?: number;
     exitOffsetY?: number;
     exitScale?: number;
+    scaleX?: number;
+    scaleY?: number;
   }>;
 };
 
@@ -614,18 +616,8 @@ export class LyricDancePlayer {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
 
-
-    if (this.bgCache) {
-      this.ctx.globalAlpha = 1;
-      this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
-    }
-
-    // Blend overlay toward next chapter color
-    if (frame.bgBlend > 0 && this.bgCache2) {
-      this.ctx.globalAlpha = (frame.bgBlend % 1);
-      this.ctx.drawImage(this.bgCache2, 0, 0, this.width, this.height);
-      this.ctx.globalAlpha = 1;
-    }
+    this.drawBackground(frame);
+    this.drawBeatReactiveOverlay(frame);
 
     // Apply camera drift — subtle only, no zoom transform
     this.ctx.translate(frame.cameraX ?? 0, frame.cameraY ?? 0);
@@ -642,26 +634,33 @@ export class LyricDancePlayer {
 
       const drawX = chunk.x;
       const drawY = chunk.y;
-      const drawScale = (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
+      const sx = (chunk.scaleX ?? 1) * (chunk.entryScale ?? 1);
+      const sy = chunk.scaleY ?? 1;
 
       const zoom = frame.cameraZoom ?? 1.0;
       const fontSize = chunk.fontSize ?? 36;
       const zoomedFont = obj.font.replace(
         /(\d+(\.\d+)?)px/,
-        `${Math.round(fontSize * zoom * drawScale)}px`
+        `${Math.round(fontSize * zoom * (chunk.exitScale ?? 1))}px`
       );
 
+      this.ctx.save();
       this.ctx.globalAlpha = chunk.alpha;
-      this.ctx.fillStyle = chunk.color ?? obj.color;
-      this.ctx.font = zoomedFont;
+      this.ctx.translate(drawX, drawY);
+      this.ctx.scale(sx, sy);
 
       if (chunk.glow > 0) {
         this.ctx.shadowColor = chunk.color ?? '#ffffff';
-        this.ctx.shadowBlur = chunk.glow * 32;
+        this.ctx.shadowBlur = chunk.glow * 28;
       }
 
-      this.ctx.fillText(obj.text, drawX, drawY);
+      this.ctx.fillStyle = chunk.color ?? obj.color;
+      this.ctx.font = zoomedFont;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(obj.text, 0, 0);
       this.ctx.shadowBlur = 0;
+      this.ctx.restore();
       drawCalls += 1;
     }
 
@@ -687,6 +686,47 @@ export class LyricDancePlayer {
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
     this.debugState = { ...this.debugState, drawCalls };
+  }
+
+  private drawBackground(frame: ScaledKeyframe): void {
+    if (this.bgCache) {
+      this.ctx.globalAlpha = 1;
+      this.ctx.drawImage(this.bgCache, 0, 0, this.width, this.height);
+    }
+
+    if (frame.bgBlend > 0 && this.bgCache2) {
+      this.ctx.globalAlpha = (frame.bgBlend % 1);
+      this.ctx.drawImage(this.bgCache2, 0, 0, this.width, this.height);
+      this.ctx.globalAlpha = 1;
+    }
+  }
+
+  private drawBeatReactiveOverlay(frame: Keyframe): void {
+    const pulse = frame.beatPulse ?? 0;
+    if (pulse < 0.01) return;
+
+    const chapters = this.payload?.cinematic_direction?.chapters ?? [];
+    const bgBlend = frame.bgBlend ?? 0;
+    const chapterIdx = Math.min(
+      Math.floor(bgBlend * Math.max(1, chapters.length - 1)),
+      chapters.length - 1,
+    );
+    const chapter = chapters[chapterIdx];
+    const accentColor = this.payload?.cinematic_direction?.visualWorld?.palette?.[1] ?? '#FFD700';
+    const dominantColor = chapter?.dominantColor ?? '#111111';
+
+    const burstRadius = this.width * (0.3 + pulse * 0.4);
+    const burst = this.ctx.createRadialGradient(
+      this.width / 2, this.height / 2, 0,
+      this.width / 2, this.height / 2, burstRadius,
+    );
+    burst.addColorStop(0, `${accentColor}${Math.floor(pulse * 28).toString(16).padStart(2, '0')}`);
+    burst.addColorStop(0.4, `${dominantColor}${Math.floor(pulse * 12).toString(16).padStart(2, '0')}`);
+    burst.addColorStop(1, 'transparent');
+
+    this.ctx.globalAlpha = 1;
+    this.ctx.fillStyle = burst;
+    this.ctx.fillRect(0, 0, this.width, this.height);
   }
 
   // ────────────────────────────────────────────────────────────
@@ -913,6 +953,7 @@ export class LyricDancePlayer {
       timeMs: f.timeMs,
       beatIndex: f.beatIndex,
       bgBlend: f.bgBlend,
+      beatPulse: f.beatPulse,
       particles: f.particles,
       cameraX: f.cameraX * sx,
       cameraY: f.cameraY * sy,
@@ -932,6 +973,8 @@ export class LyricDancePlayer {
         entryScale: c.entryScale,
         exitOffsetY: c.exitOffsetY,
         exitScale: c.exitScale,
+        scaleX: c.scaleX,
+        scaleY: c.scaleY,
       })),
     }));
   }
@@ -945,6 +988,7 @@ export class LyricDancePlayer {
       timeMs: f.timeMs,
       beatIndex: f.beatIndex,
       bgBlend: f.bgBlend,
+      beatPulse: f.beatPulse,
       particles: f.particles,
       cameraX: sx ? f.cameraX / sx : f.cameraX,
       cameraY: sy ? f.cameraY / sy : f.cameraY,
@@ -964,6 +1008,8 @@ export class LyricDancePlayer {
         entryScale: c.entryScale ?? 1,
         exitOffsetY: c.exitOffsetY ?? 0,
         exitScale: c.exitScale ?? 1,
+        scaleX: c.scaleX ?? 1,
+        scaleY: c.scaleY ?? 1,
       })),
     }));
   }
