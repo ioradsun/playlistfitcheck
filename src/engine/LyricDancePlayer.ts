@@ -1417,11 +1417,13 @@ export class LyricDancePlayer {
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
 
+      // Spawn word emitters near exit so particles bloom as the word is leaving,
+      // not competing while it's the focus. Fire when entry is complete AND exit has begun.
+      const isExiting = (chunk.exitScale !== 1) || (chunk.exitOffsetY !== 0) || ((chunk.entryProgress ?? 0) >= 1 && chunk.alpha < 0.85);
       if (
         chunk.trail &&
         chunk.trail !== 'none' &&
-        (chunk.entryProgress ?? 1) > 0 &&
-        (chunk.entryProgress ?? 1) < 0.5
+        isExiting
       ) {
         this.spawnBurstEmitter(
           chunk.id,
