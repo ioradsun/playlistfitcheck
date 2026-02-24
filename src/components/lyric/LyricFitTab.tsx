@@ -138,6 +138,7 @@ export function LyricFitTab({
       savedIdRef.current = initialLyric.id;
       setFmlyLines((initialLyric as any).fmly_lines ?? null);
       setVersionMeta((initialLyric as any).version_meta ?? null);
+      setWords((initialLyric as any).words ?? null);
 
       const savedBg = (initialLyric as any).beat_grid;
       if (savedBg) {
