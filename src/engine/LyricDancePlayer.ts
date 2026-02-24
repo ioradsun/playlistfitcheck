@@ -291,7 +291,7 @@ export class LyricDancePlayer {
 
   // Public debug surface (React reads this)
   public debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
-  private _hasLoggedDrawChunk = false;
+  
 
   // Public writeable surface (React pushes comments here)
   public constellationNodes: any[] = [];
