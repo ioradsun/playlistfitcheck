@@ -2627,6 +2627,9 @@ export class LyricDancePlayer {
   private scaleTimeline(raw: BakedTimeline): ScaledKeyframe[] {
     const sx = this.width / BASE_W;
     const sy = this.height / BASE_H;
+    // Uniform scale for size-dependent values (fontSize, glow).
+    // Uses min to preserve aspect ratio — letterbox rather than stretch.
+    const sU = Math.min(sx, sy);
 
     return raw.map((f) => ({
       timeMs: f.timeMs,
@@ -2642,12 +2645,12 @@ export class LyricDancePlayer {
         x: c.x * sx,
         y: c.y * sy,
         alpha: c.alpha,
-        glow: c.glow,
+        glow: c.glow * sU,
         scale: c.scale,
         scaleX: c.scaleX,
         scaleY: c.scaleY,
         skewX: c.skewX,
-        fontSize: c.fontSize,
+        fontSize: c.fontSize * sU,
         color: c.color,
         emitterType: c.emitterType,
         trail: c.trail,
@@ -2674,6 +2677,7 @@ export class LyricDancePlayer {
   private unscaleTimeline(): BakedTimeline {
     const sx = this.width / BASE_W;
     const sy = this.height / BASE_H;
+    const sU = Math.min(sx, sy) || 1;
 
     return this.timeline.map((f) => ({
       timeMs: f.timeMs,
@@ -2689,13 +2693,13 @@ export class LyricDancePlayer {
         x: sx ? c.x / sx : c.x,
         y: sy ? c.y / sy : c.y,
         alpha: c.alpha,
-        glow: c.glow,
+        glow: c.glow / sU,
         scale: c.scale,
         scaleX: c.scaleX ?? c.scale,
         scaleY: c.scaleY ?? c.scale,
         skewX: c.skewX ?? 0,
         visible: c.visible,
-        fontSize: c.fontSize ?? 36,
+        fontSize: (c.fontSize ?? 36) / sU,
         fontWeight: c.fontWeight ?? 700,
         isAnchor: c.isAnchor ?? false,
         color: c.color ?? "#ffffff",
