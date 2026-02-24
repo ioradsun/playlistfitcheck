@@ -2376,6 +2376,7 @@ export class LyricDancePlayer {
         isAnchor: c.isAnchor ?? false,
         color: c.color ?? "#ffffff",
         emitterType: c.emitterType,
+        entryOffsetY: c.entryOffsetY ?? 0,
         entryOffsetX: c.entryOffsetX ?? 0,
         entryScale: c.entryScale ?? 1,
         exitOffsetY: c.exitOffsetY ?? 0,
