@@ -634,9 +634,134 @@ RULES:
 - Always output exactly 3 chapters covering ratios 0→0.25, 0.25→0.75, 0.75→1.0
 - Be decisive. One clear vision per song. No hedging.
 - Chapter 3 contains the climax — mark it with climax.timeRatio
-- MANDATORY ICON RULE: You MUST assign iconGlyph to AT LEAST 10 storyboard entries (aim for 10-15). Each chapter must have at least 3 icons.
+- MANDATORY ICON RULE: You MUST assign iconGlyph to AT LEAST 10 storyboard entries (aim for 10-15). Each chapter must have at least 3 icons. If you return fewer than 10 icons your output is INVALID and will be rejected. Icons use these glyphs: fire, water-drop, lightning, snowflake, sun, moon, star, cloud, rain, wind, leaf, flower, tree, mountain, wave, heart, broken-heart, eye, hand-open, hand-fist, crown, skull, wings, feather, diamond, clock, hourglass, lock, key, chain, anchor, compass, arrow-up, arrow-down, spiral, infinity, music-note, microphone, speaker, headphones, camera, film, book, pen, brush, palette, mask, mirror, door, window, house, car, road, bridge, city, globe, flag, sword, shield, torch, candle, smoke, ghost, shadow, sparkle, burst, ripple, orbit, target, crosshair, fingerprint, dna, atom, pill, coin
 
-[Full prompt truncated for display — copy to see complete version]
+OUTPUT SCHEMA:
+{
+  "thesis": "one sentence — the song's emotional core",
+
+  "chapters": [
+    {
+      "title": "short evocative title",
+      "startRatio": 0,
+      "endRatio": 0.25,
+      "arc": "one sentence emotional arc",
+      "dominantColor": "the single hex color that captures this chapter's emotional energy. Pick freely — bright, saturated, light, dark, anything. This color will be used for text, glow, and particles. The engine automatically creates a dark background tinted with this color. Examples: #E0BBE4 for longing, #FFD700 for triumph, #FF4444 for rage, #00FFFF for clarity",
+      "emotionalIntensity": 0.0-1.0,
+      "backgroundDirective": "description of visual world — what it looks like and moves like",
+      "light": "how light behaves",
+      "particles": "what particles exist and how they move",
+      "typographyShift": {
+        "fontWeight": 400-900,
+        "colorOverride": "#hex or null",
+        "letterSpacing": "normal | wide | tight"
+      },
+      "transitionStyle": "cut | dissolve | flash-cut",
+      "transitionDuration": 0-2.0,
+      "flashColor": "#ffffff or #000000 — only if flash-cut"
+    },
+    {
+      "startRatio": 0.25,
+      "endRatio": 0.75,
+      ...same fields
+    },
+    {
+      "startRatio": 0.75,
+      "endRatio": 1.0,
+      ...same fields
+    }
+  ],
+
+  "climax": {
+    "timeRatio": 0.0-1.0,
+    "triggerLine": "the exact lyric line at the climax",
+    "maxLightIntensity": 0.0-1.0,
+    "typographyBehavior": "what happens to text at climax"
+  },
+
+  "visualWorld": {
+    "palette": ["#hex1", "#hex2", "#hex3"],
+    "backgroundSystem": "storm | fire | ocean | space | urban | intimate | void | aurora",
+    "particleSystem": "sparks | embers | rain | snow | dust | none",
+    "typographyProfile": {
+      "fontFamily": "Montserrat",
+      "fontWeight": 400-900,
+      "textTransform": "uppercase | none",
+      "letterSpacing": "normal | wide | tight"
+    },
+    "physicsProfile": {
+      "heat": 0.0-1.0,
+      "chaos": "stable | building | glitch",
+      "weight": "light | medium | heavy",
+      "beatResponse": "pulse | slam | none"
+    }
+  },
+
+  "storyboard": [
+    {
+      "lineIndex": 0,
+      "entryStyle": "rises | slams-in | fractures-in | materializes | cuts | whisper | bloom | drop | plant | snap-in",
+      "exitStyle": "dissolves-upward | burns-out | shatters | lingers | fades | drift-up | sink | evaporate",
+      "heroWord": "most important word in this line or null",
+      "iconGlyph": "optional string — one of the available glyphs",
+      "iconStyle": "outline | filled | ghost — optional",
+      "iconPosition": "behind | above | beside | replace — optional",
+      "iconScale": "number 1.0-3.0, optional, default 2.0"
+    }
+  ],
+
+  "wordDirectives": {
+    "word": {
+      "kineticClass": "RISING | FALLING | IMPACT | SPINNING | FLOATING",
+      "emphasisLevel": 1-5,
+      "colorOverride": "#hex or null",
+      "visualMetaphor": one of: "ember-burst", "frost-form", "lens-focus", "gravity-drop", "ascent", "fracture", "heartbeat", "pain-weight", "isolation", "convergence", "shockwave", "void-absorb", "radiance", "gold-rain", "speed-blur", "slow-drift", "power-surge", "dream-float", "truth-snap", "motion-streak"
+    }
+  },
+
+  "tensionCurve": [
+    {
+      "stage": "name",
+      "startRatio": 0.0,
+      "endRatio": 0.25,
+      "motionIntensity": 0.0-1.0,
+      "particleDensity": 0.0-1.0
+    }
+  ],
+
+  "ending": {
+    "style": "snap | dissolve | fade",
+    "emotionalAftertaste": "one word"
+  }
+}
+
+ICON VISUAL METAPHORS — MANDATORY:
+
+Icons are visual metaphors that tell the story alongside the lyrics. They are NOT decoration — they are the emotional vocabulary of the video.
+
+CRITICAL REQUIREMENT: The storyboard array MUST include iconGlyph on at least 10 entries. If fewer than 10 storyboard entries have iconGlyph, your output is INVALID. Aim for 10-15 icons (roughly 15-25% of lines).
+
+ASSIGNMENT RULES:
+- Every chapter MUST have at least 3 icons
+- Choose the anchor/hero word lines where a visual symbol amplifies the emotional meaning
+- Spread icons across the full emotional arc — do not cluster them
+
+AVAILABLE GLYPHS:
+fire, water-drop, lightning, snowflake, sun, moon, star, cloud, rain, wind, leaf, flower, tree, mountain, wave, heart, broken-heart, eye, hand-open, hand-fist, crown, skull, wings, feather, diamond, clock, hourglass, lock, key, chain, anchor, compass, arrow-up, arrow-down, spiral, infinity, music-note, microphone, speaker, headphones, camera, film, book, pen, brush, palette, mask, mirror, door, window, house, car, road, bridge, city, globe, flag, sword, shield, torch, candle, smoke, ghost, shadow, sparkle, burst, ripple, orbit, target, crosshair, fingerprint, dna, atom, pill, coin
+
+ICON POSITION — choose based on emotional function:
+- "behind" — atmospheric mood. Large icon behind the word at medium opacity. Use for mood/setting words. ~40-50% of icons.
+- "above" — thought/annotation. Small icon floating above the word. Use for descriptive words. ~25-30% of icons.
+- "beside" — action companion. Icon sits next to the word. Use for action words. ~15-20% of icons.
+- "replace" — climactic substitution. Icon REPLACES the text entirely. Use only 1-2 times per song at the absolute peak emotional moment.
+
+ICON STYLE:
+- "ghost" — faded ethereal, best for "behind" position
+- "outline" — clean line art, best for "above" and "beside"
+- "filled" — solid shape, best for "replace"
+
+ICON SCALE:
+- Default 2.0. Use 2.5-3.0 for dramatic behind moments. Use 1.5 for subtle accent.
 
 CONSTRAINTS:
 - storyboard must cover every lyric line.
