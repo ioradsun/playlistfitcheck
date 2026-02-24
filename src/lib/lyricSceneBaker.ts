@@ -820,6 +820,37 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
       }
     }
   }
+  // Pre-compute phrase groups, motion profile, and layouts ONCE
+  const sceneManifest = (payload.scene_manifest ?? null) as unknown as Record<string, unknown> | null;
+  const manifestWordDirectives = (sceneManifest?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
+  const manifestLineLayouts = (sceneManifest?.lineLayouts ?? {}) as Record<string, ManifestLineLayout>;
+  const manifestChapters = (sceneManifest?.chapters ?? []) as ManifestChapter[];
+  const manifestStagger = typeof sceneManifest?.stagger === 'number' ? sceneManifest.stagger : null;
+  const storyboard = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
+
+  const motionProfile = deriveMotionProfile(payload);
+  const motionDefaults = MOTION_DEFAULTS[motionProfile];
+
+  const WORD_LINGER_BY_PROFILE: Record<string, number> = {
+    weighted: 0.15, fluid: 0.55, elastic: 0.2, drift: 0.8, glitch: 0.05,
+  };
+  const animParams = {
+    linger: WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4,
+    stagger: manifestStagger ?? 0.05,
+    entryDuration: motionDefaults.entryDuration,
+    exitDuration: motionDefaults.exitDuration,
+  };
+
+  const phraseGroups = words.length > 0 ? buildPhraseGroups(wordMeta) : null;
+
+  const groupLayouts = new Map<string, GroupPosition[]>();
+  if (phraseGroups) {
+    for (const group of phraseGroups) {
+      const key = `${group.lineIndex}-${group.groupIndex}`;
+      const baseFontSize = lineFontSizes[group.lineIndex] ?? 36;
+      groupLayouts.set(key, getGroupLayout(group, visualMode, 960, 540, baseFontSize));
+    }
+  }
 
   return {
     chapters,
@@ -836,6 +867,16 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     wordMeta,
     visualMode,
     heat,
+    phraseGroups,
+    groupLayouts,
+    motionProfile,
+    motionDefaults,
+    animParams,
+    manifestWordDirectives,
+    manifestLineLayouts,
+    manifestChapters,
+    manifestStagger,
+    storyboard,
   };
 }
 
