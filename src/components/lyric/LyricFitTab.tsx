@@ -557,10 +557,7 @@ export function LyricFitTab({
   const fitDisabled = !lines || lines.length === 0;
 
   const sceneInputNode = !lyricData ? (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Scene <span className="text-muted-foreground font-normal">(optional)</span></span>
-      </div>
+    <div className="space-y-1.5">
       <div className="relative">
         <input
           type="text"
@@ -569,9 +566,10 @@ export function LyricFitTab({
             setSceneDescription(e.target.value);
             setResolvedScene(null);
           }}
-          placeholder="driving home late at night... pregame with the boys..."
+          placeholder="Where are you when this song plays?"
           className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
           maxLength={200}
+          aria-label="Scene description"
         />
         {resolvingScene && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-mono animate-pulse">
@@ -579,10 +577,12 @@ export function LyricFitTab({
           </div>
         )}
       </div>
-      {resolvedScene && !resolvingScene && (
+      {resolvedScene && !resolvingScene ? (
         <p className="text-primary text-xs font-mono">
           ✓ {resolvedScene.moodSummary}
         </p>
+      ) : !sceneDescription && (
+        <p className="text-xs text-muted-foreground/60">Example: Driving at night. On a rooftop. In a crowded club.</p>
       )}
     </div>
   ) : null;
