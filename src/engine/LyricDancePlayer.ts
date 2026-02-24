@@ -1251,6 +1251,19 @@ export class LyricDancePlayer {
   // Per-chapter particle systems derived from cinematic direction
   public chapterParticleSystems: (string | null)[] = [];
 
+  private tintedDarkBackground(hex: string): string {
+    const clean = (hex || '#0a0a0a').replace('#', '').padEnd(6, '0');
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    const max = Math.max(r, g, b, 1);
+    const factor = 0.07;
+    const tr = Math.round(r / max * 255 * factor);
+    const tg = Math.round(g / max * 255 * factor);
+    const tb = Math.round(b / max * 255 * factor);
+    return `#${tr.toString(16).padStart(2, '0')}${tg.toString(16).padStart(2, '0')}${tb.toString(16).padStart(2, '0')}`;
+  }
+
   private buildBgCache(): void {
     const chapters = this.payload?.cinematic_direction?.chapters ?? [];
     const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
@@ -1267,11 +1280,12 @@ export class LyricDancePlayer {
       if (!ctx) continue;
 
       const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
+      const bgColor = this.tintedDarkBackground(dominantColor);
       const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
       const particleDesc = chapter?.particles ?? '';
       this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
 
-      ctx.fillStyle = dominantColor;
+      ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, off.width, off.height);
       this.bgCaches.push(off);
     }
