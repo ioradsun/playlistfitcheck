@@ -760,6 +760,7 @@ export class LyricDancePlayer {
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
     this.playing = true;
+    this.startHealthMonitor();
     this.rafHandle = requestAnimationFrame(this.tick);
   }
 
