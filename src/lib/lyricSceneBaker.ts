@@ -1261,7 +1261,7 @@ function bakeFrame(
         scaleY: chunkScale,
         visible,
         fontSize: pre.lineFontSizes[idx] ?? 36,
-        fontWeight: currentChapter?.typographyShift?.fontWeight
+        fontWeight: (currentChapterIdx >= 0 ? chapters[currentChapterIdx]?.typographyShift?.fontWeight : undefined)
           ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
           ?? 700,
         color: pre.lineColors[idx] ?? "#ffffff",
