@@ -133,6 +133,7 @@ export function PublishLyricDanceButton({
           seed,
           scene_manifest: sceneManifest,
           background_url: backgroundUrl,
+          words: words ?? null,
         }, { onConflict: "artist_slug,song_slug" });
 
       if (insertError) throw insertError;
