@@ -14,6 +14,7 @@ RULES:
 - Always output exactly 3 chapters covering ratios 0→0.25, 0.25→0.75, 0.75→1.0
 - Be decisive. One clear vision per song. No hedging.
 - Chapter 3 contains the climax — mark it with climax.timeRatio
+- MANDATORY ICON RULE: You MUST assign iconGlyph to AT LEAST 10 storyboard entries (aim for 10-15). Each chapter must have at least 3 icons. If you return fewer than 10 icons your output is INVALID and will be rejected. Icons use these glyphs: fire, water-drop, lightning, snowflake, sun, moon, star, cloud, rain, wind, leaf, flower, tree, mountain, wave, heart, broken-heart, eye, hand-open, hand-fist, crown, skull, wings, feather, diamond, clock, hourglass, lock, key, chain, anchor, compass, arrow-up, arrow-down, spiral, infinity, music-note, microphone, speaker, headphones, camera, film, book, pen, brush, palette, mask, mirror, door, window, house, car, road, bridge, city, globe, flag, sword, shield, torch, candle, smoke, ghost, shadow, sparkle, burst, ripple, orbit, target, crosshair, fingerprint, dna, atom, pill, coin
 
 OUTPUT SCHEMA:
 {
@@ -382,7 +383,7 @@ Text style: ${sceneCtx.textStyle === 'dark'
     async function callAI(extraInstruction?: string): Promise<Record<string, unknown> | null> {
       const messages: { role: string; content: string }[] = [
         { role: "system", content: scenePrefix + MASTER_DIRECTOR_PROMPT_V2 },
-        { role: "user", content: `Song: ${artist} — ${title}\nLyrics:\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
+        { role: "user", content: `Song: ${artist} — ${title}\nLyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.\n\nREMINDER: You MUST assign iconGlyph to at least 10 storyboard entries spread across all 3 chapters. Each chapter needs at least 3 icons. Use position "behind"/"above"/"beside"/"replace" and style "ghost"/"outline"/"filled". This is mandatory.` },
       ];
       if (extraInstruction) {
         messages.push({ role: "user", content: extraInstruction });
@@ -457,6 +458,30 @@ Text style: ${sceneCtx.textStyle === 'dark'
         }
       } catch (e) {
         console.warn("[cinematic-direction] Retry failed, using original response");
+      }
+    }
+
+    // Retry once if icons are too few
+    const initialIcons = Array.isArray(parsed.storyboard) ? (parsed.storyboard as any[]).filter((s: any) => s.iconGlyph).length : 0;
+    if (initialIcons < 8) {
+      console.warn(`[cinematic-direction] Only ${initialIcons} icons, retrying for more...`);
+      try {
+        const retryParsed = await callAI(
+          `Your previous response only had ${initialIcons} storyboard entries with iconGlyph. This is INVALID. ` +
+          `You MUST assign iconGlyph to at least 10 storyboard entries (aim for 12-15). ` +
+          `Every chapter needs at least 3 icons. Use glyphs like: fire, heart, star, moon, crown, wings, diamond, eye, lightning, rain, broken-heart, sparkle, skull, compass, anchor. ` +
+          `Use iconPosition "behind" with iconStyle "ghost" for mood words, "above" with "outline" for descriptive words, "beside" with "outline" for action words. ` +
+          `Return the COMPLETE JSON again with at least 10 iconGlyph assignments in the storyboard.`
+        );
+        if (retryParsed) {
+          const retryIcons = Array.isArray(retryParsed.storyboard) ? (retryParsed.storyboard as any[]).filter((s: any) => s.iconGlyph).length : 0;
+          if (retryIcons > initialIcons) {
+            parsed = retryParsed;
+            console.log(`[cinematic-direction] Icon retry succeeded: ${retryIcons} icons`);
+          }
+        }
+      } catch (e) {
+        console.warn("[cinematic-direction] Icon retry failed, using original");
       }
     }
 
