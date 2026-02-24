@@ -1429,22 +1429,33 @@ export class LyricDancePlayer {
         end: Math.max(g.end, g.start + MIN_GROUP_DURATION),
       }));
 
-      // Step 5: Register every word in every group
-      for (const group of finalGroups) {
-        for (let wi = 0; wi < group.words.length; wi++) {
-          const key = `${group.lineIndex}-${group.groupIndex}-${wi}`;
-          const displayWord = textTransform === 'uppercase'
-            ? group.words[wi].word.toUpperCase()
-            : group.words[wi].word;
-          this.chunks.set(key, {
-            id: key,
-            text: displayWord,
-            color: '#ffffff',
-            font,
-            width: measureCtx.measureText(displayWord).width,
-          });
+      // Store phrase groups on the instance
+      this.phraseGroups = finalGroups;
+
+      // Clear and rebuild chunk map from ALL phrase groups
+      this.chunks.clear();
+
+      if (this.phraseGroups && this.phraseGroups.length > 0) {
+        for (const group of this.phraseGroups) {
+          for (let wi = 0; wi < group.words.length; wi++) {
+            const wm = group.words[wi];
+            const key = `${group.lineIndex}-${group.groupIndex}-${wi}`;
+            const displayWord = textTransform === 'uppercase'
+              ? wm.word.toUpperCase()
+              : wm.word;
+            this.chunks.set(key, {
+              id: key,
+              text: displayWord,
+              color: '#ffffff',
+              font,
+              width: measureCtx.measureText(displayWord).width,
+            });
+          }
         }
       }
+
+      console.log('[PLAYER] total chunks registered:', this.chunks.size);
+      console.log('[PLAYER] chunk keys sample:', [...this.chunks.keys()].slice(0, 5));
 
       return;
     }
