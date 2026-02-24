@@ -1548,7 +1548,9 @@ export class LyricDancePlayer {
     }
 
     // Dark crush overlay — always on top of image
-    const intensity = currentChapter?.emotionalIntensity ?? 0.5;
+    const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
+    const currentChapterObj = chapters.find((ch: any) => chapterProgress >= (ch.startRatio ?? 0) && chapterProgress < (ch.endRatio ?? 1));
+    const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
     const baseCrushAlpha = Math.max(0.65, 0.72 - intensity * 0.15);
     const currentLum = this.getAverageLuminance(current);
     const nextLum = blend > 0 ? this.getAverageLuminance(next) : null;
