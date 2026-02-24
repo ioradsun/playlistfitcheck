@@ -533,9 +533,9 @@ export function LyricFitTab({
     setPipelineStages({ rhythm: "pending", songDna: "pending", cinematic: "pending", transcript: "pending" });
   }, [generationStatus]);
 
-  const retryGenerationRef = useRef<() => void>(() => {});
-  retryGenerationRef.current = () => {
+  const retryGeneration = useCallback(() => {
     if (!audioFile || !lines.length) return;
+    console.log("[Pipeline] Retry requested — clearing all state");
     // Reset all state
     setSongDna(null);
     setCinematicDirection(null);
@@ -547,26 +547,15 @@ export function LyricFitTab({
 
     // Clear from DB
     if (savedIdRef.current) {
-      persistSongDna(savedIdRef.current, { cinematicDirection: null, song_dna: null });
+      persistSongDna(savedIdRef.current, { cinematicDirection: null });
     }
-  };
 
-  // Separate effect to re-trigger pipeline after state clears
-  const retryFlagRef = useRef(0);
-  const retryGeneration = useCallback(() => {
-    retryGenerationRef.current();
-    retryFlagRef.current += 1;
-    // Use a micro-delay then check when state has actually cleared
-    const checkId = retryFlagRef.current;
-    const tryStart = () => {
-      if (retryFlagRef.current !== checkId) return; // superseded
-      // By now React state should be cleared; re-read from refs
-      startBeatAnalysis(audioFile!);
-      startLyricAnalyze(lines, audioFile!);
-      startCinematicDirection(lines, true);
-    };
-    setTimeout(tryStart, 500);
-  }, [audioFile, lines, startBeatAnalysis, startLyricAnalyze, startCinematicDirection]);
+    // Bump retry counter — the pipeline effect will re-run with fresh closures
+    // after React processes the state clears above
+    setTimeout(() => {
+      setPipelineRetryCount(c => c + 1);
+    }, 100);
+  }, [audioFile, lines, persistSongDna]);
 
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
