@@ -1130,7 +1130,7 @@ function bakeFrame(
             ?? '#ffffff';
 
           const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
-          const soloWordBonus = motionProfile === 'drift' || motionProfile === 'fluid' ? 1.3 : 1.0;
+          const soloWordBonus = pre.motionProfile === 'drift' || pre.motionProfile === 'fluid' ? 1.3 : 1.0;
           const fontSize = manifestDirective?.fontSize
             ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
 
