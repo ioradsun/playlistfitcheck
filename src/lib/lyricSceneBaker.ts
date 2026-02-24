@@ -1054,18 +1054,34 @@ function bakeFrame(
             ? 0
             : Math.abs(wi - group.anchorWordIdx) * animParams.stagger;
 
+          // Semantic effect lookup — takes priority over all other animation assignment
+          const metaphor = wm.directive?.visualMetaphor as VisualMetaphor | undefined;
+          const semanticEffect = metaphor ? SEMANTIC_EFFECTS[metaphor] : null;
+          const effectiveEntry = semanticEffect?.entry ?? entry;
+          const effectiveBehavior = semanticEffect?.behavior ?? behavior;
+          const effectiveExit = semanticEffect?.exit ?? exit;
+          const entryDurationMult = semanticEffect?.entryDurationMult ?? 1.0;
+          const semanticAlphaMax = semanticEffect?.alphaMax ?? 1.0;
+          const semanticScaleX = semanticEffect?.scaleX ?? 1.0;
+          const semanticScaleY = semanticEffect?.scaleY ?? 1.0;
+          const semanticGlowMult = semanticEffect?.glowMultiplier ?? 1.0;
+          const semanticFontWeight = semanticEffect?.fontWeight ?? null;
+          const semanticColorOverride = semanticEffect?.colorOverride ?? null;
+          const emitterType = semanticEffect?.emitterType ?? 'none';
+
           const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay);
-          const rawEntryProgress = adjustedElapsed / Math.max(0.01, animParams.entryDuration);
+          const effectiveEntryDuration = animParams.entryDuration * entryDurationMult;
+          const rawEntryProgress = adjustedElapsed / Math.max(0.01, effectiveEntryDuration);
           const entryProgress = Math.min(1, Math.max(0, rawEntryProgress));
           const exitProgress = Math.max(0, (tSec - group.end) / Math.max(0.01, animParams.exitDuration));
 
-          const entryState = computeEntryState(entry, entryProgress, motionDefaults.behaviorIntensity);
-          const exitState = computeExitState(exit, exitProgress, motionDefaults.behaviorIntensity);
+          const entryState = computeEntryState(effectiveEntry, entryProgress, motionDefaults.behaviorIntensity);
+          const exitState = computeExitState(effectiveExit, exitProgress, motionDefaults.behaviorIntensity);
           const beatPhase = beatIndex >= 0
             ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
             : 0;
           const behaviorState = computeBehaviorState(
-            behavior,
+            effectiveBehavior,
             tSec,
             group.start,
             beatPhase,
@@ -1074,37 +1090,43 @@ function bakeFrame(
 
           const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
           const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
-          const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
-          const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
+          const rawScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
+          const rawScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
+          const finalScaleX = rawScaleX * semanticScaleX;
+          const finalScaleY = rawScaleY * semanticScaleY;
           const isEntryComplete = entryProgress >= 1.0;
           const isExiting = exitProgress > 0;
-          const finalAlpha = isExiting
+          const rawFinalAlpha = isExiting
             ? Math.max(0, exitState.alpha)
             : isEntryComplete
               ? 1.0 * (behaviorState.alpha ?? 1)
               : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
+          const finalAlpha = Math.min(semanticAlphaMax, rawFinalAlpha);
           const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
           const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
 
           const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
-          const baseColor = manifestDirective?.color
+          const baseColor = semanticColorOverride
+            ?? manifestDirective?.color
             ?? wm.directive?.colorOverride
             ?? pre.lineColors[wm.lineIndex]
             ?? '#ffffff';
           const color = isAnchor ? baseColor : dimColor(baseColor, 0.65);
-          const wordGlow = isAnchor
+          const wordGlow = (isAnchor
             ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0)
-            : glow * 0.3;
-          const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
+            : glow * 0.3) * semanticGlowMult;
+          const chapterFontWeight = semanticFontWeight
+            ?? currentChapter?.typographyShift?.fontWeight
             ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
             ?? 700;
 
           if (!_bakerDebugLogged) {
             _bakerDebugLogged = true;
             console.log('[BAKER] first chunk animation:', {
-              entry,
-              behavior,
-              exit,
+              entry: effectiveEntry,
+              behavior: effectiveBehavior,
+              exit: effectiveExit,
+              metaphor: metaphor ?? 'none',
               entryProgress: entryProgress.toFixed(2),
               entryState,
               finalOffsetY: finalOffsetY.toFixed(1),
@@ -1128,6 +1150,7 @@ function bakeFrame(
             isAnchor,
             color,
             glow: wordGlow,
+            emitterType: emitterType !== 'none' ? emitterType : undefined,
             skewX: finalSkewX,
             entryOffsetY: 0,
             entryOffsetX: 0,
