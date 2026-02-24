@@ -167,7 +167,7 @@ export const LyricWaveform = forwardRef<HTMLDivElement, LyricWaveformProps>(func
 
   if (!waveform) {
     return (
-      <div className="h-16 rounded-lg bg-muted/30 animate-pulse flex items-center justify-center">
+      <div className="h-[88px] rounded-lg bg-muted/30 animate-pulse flex items-center justify-center">
         <span className="text-xs text-muted-foreground">Loading waveform…</span>
       </div>
     );
