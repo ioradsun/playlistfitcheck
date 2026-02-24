@@ -1032,8 +1032,8 @@ export class LyricDancePlayer {
 
   private drawIntimateAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
     const glow = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, w * 0.5);
-    glow.addColorStop(0, `${accent}14`);
-    glow.addColorStop(0.5, `${dominant}08`);
+    glow.addColorStop(0, `${accent}0a`);
+    glow.addColorStop(0.5, `${dominant}04`);
     glow.addColorStop(1, 'transparent');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
