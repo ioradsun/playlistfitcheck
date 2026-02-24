@@ -1326,10 +1326,17 @@ function bakeFrame(
               ? glow * manifestDirective.glow
               : (wm.directive?.emphasisLevel ?? 0) >= 4 ? glow * 1.8 : glow * 0.6;
 
+            // Letter positioning: spread characters across word span, centered on canvasX
+            const charW2 = isLetterSequence ? fontSize * 0.6 : 0;
+            const wordSpan2 = charW2 * letterTotal;
+            const letterOffsetX2 = isLetterSequence
+              ? (li * charW2) - (wordSpan2 * 0.5) + (charW2 * 0.5)
+              : 0;
+
             return {
               id: isLetterSequence ? `${wm.lineIndex}-${wm.wordIndex}-L${li}` : `${wm.lineIndex}-${wm.wordIndex}`,
               text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
-              x: canvasX + finalOffsetX,
+              x: canvasX + finalOffsetX + letterOffsetX2,
               y: canvasY + finalOffsetY,
               alpha: finalAlpha,
               scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
