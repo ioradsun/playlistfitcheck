@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bug, ChevronDown, ChevronRight, Copy, X } from "lucide-react";
+import { Bug, ChevronDown, ChevronRight, Copy, X, RefreshCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import type { SceneManifest } from "@/engine/SceneManifest";
@@ -450,9 +450,11 @@ function DataTab({ data }: { data: DebugData }) {
 interface Props {
   data: DebugData;
   player?: LyricDancePlayer | null;
+  onRegenerateSong?: () => void;
+  onRegenerateDance?: () => void;
 }
 
-export function LyricDanceDebugPanel({ data, player = null }: Props) {
+export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance }: Props) {
   const [open, setOpen] = useState(false);
   const hasPlayer = player != null;
   const [tab, setTab] = useState<"hud" | "data">(hasPlayer ? "hud" : "data");
@@ -495,6 +497,16 @@ export function LyricDanceDebugPanel({ data, player = null }: Props) {
                   <span className="text-xs font-mono font-semibold uppercase tracking-wider">Debug Panel</span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {onRegenerateSong && (
+                    <button onClick={onRegenerateSong} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold text-orange-400 hover:bg-orange-400/10 transition-colors" title="Re-run song analysis pipeline">
+                      <RefreshCw size={12} /> Song
+                    </button>
+                  )}
+                  {onRegenerateDance && (
+                    <button onClick={onRegenerateDance} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors" title="Republish dance">
+                      <Sparkles size={12} /> Dance
+                    </button>
+                  )}
                   <button onClick={copyAll} className="p-1.5 rounded text-muted-foreground hover:text-foreground transition-colors" title="Copy all data">
                     <Copy size={14} />
                   </button>
