@@ -303,7 +303,6 @@ export function LyricFitTab({
     const { data: dnaResult, error: dnaError } = await supabase.functions.invoke("lyric-analyze", {
       body: {
         title: lyricData.title,
-        artist: lyricData.artist,
         lyrics: lyricsText,
         audioBase64,
         format,
