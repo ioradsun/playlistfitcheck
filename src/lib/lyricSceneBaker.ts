@@ -41,6 +41,7 @@ export type Keyframe = {
     visible: boolean;
     fontSize: number;
     fontWeight: number;
+    isAnchor: boolean;
     color: string;
     entryOffsetY: number;
     entryOffsetX: number;
