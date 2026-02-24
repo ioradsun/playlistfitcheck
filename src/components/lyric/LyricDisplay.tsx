@@ -885,7 +885,6 @@ export function LyricDisplay({
 
       const payload: Record<string, any> = {
         title: data.title,
-        artist: data.artist,
         lines: explicitLines as any,
         fmly_lines: (fmlyLines as any) ?? null,
         version_meta: {
