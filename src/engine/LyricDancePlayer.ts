@@ -535,9 +535,9 @@ interface CommentChunk {
   startTime: number;
   duration: number;
   startX: number;
-  startY: number;
+  y: number;
   endX: number;
-  endY: number;
+  direction: 1 | -1;  // 1 = left-to-right, -1 = right-to-left
   trailLength: number;
   fontSize: number;
 }
