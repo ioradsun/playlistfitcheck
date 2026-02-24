@@ -6,6 +6,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { safeManifest } from "@/engine/validateManifest";
 import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
@@ -49,6 +50,8 @@ export function LyricFitTab({
   onHeaderProject,
   onSavedId,
 }: Props) {
+  const { user } = useAuth();
+  const artistNameRef = useRef<string>("artist");
   const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
   const [fitUnlocked, setFitUnlocked] = useState(false);
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
@@ -82,6 +85,12 @@ export function LyricFitTab({
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("profiles").select("display_name").eq("id", user.id).single()
+      .then(({ data }) => { if (data?.display_name) artistNameRef.current = data.display_name; });
+  }, [user]);
 
   useEffect(() => {
     if (!detectedGrid || beatGrid) return;
@@ -303,6 +312,7 @@ export function LyricFitTab({
     const { data: dnaResult, error: dnaError } = await supabase.functions.invoke("lyric-analyze", {
       body: {
         title: lyricData.title,
+        artist: artistNameRef.current,
         lyrics: lyricsText,
         audioBase64,
         format,
@@ -389,6 +399,7 @@ export function LyricFitTab({
       const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
         body: {
           title: lyricData.title,
+          artist: artistNameRef.current,
           lines: lyricsForDirection,
           beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
           lyricId: savedIdRef.current || undefined,
