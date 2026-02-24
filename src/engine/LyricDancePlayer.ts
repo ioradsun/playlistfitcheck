@@ -941,9 +941,9 @@ export class LyricDancePlayer {
       const intensity = chapter?.emotionalIntensity ?? 0.5;
 
       const grad = ctx.createLinearGradient(0, 0, 0, off.height);
-      grad.addColorStop(0, this.darken(dominantColor, 0.85));
-      grad.addColorStop(0.5, this.darken(dominantColor, 0.6));
-      grad.addColorStop(1, this.darken(dominantColor, 0.75));
+      grad.addColorStop(0, this.darken(dominantColor, 0.08));
+      grad.addColorStop(0.5, this.darken(dominantColor, 0.06));
+      grad.addColorStop(1, this.darken(dominantColor, 0.07));
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, off.width, off.height);
 
