@@ -25,7 +25,7 @@ OUTPUT SCHEMA:
       "startRatio": 0,
       "endRatio": 0.25,
       "arc": "one sentence emotional arc",
-      "dominantColor": "#hex",
+      "dominantColor": "the single hex color that captures this chapter's emotional energy. Pick freely — bright, saturated, light, dark, anything. This color will be used for text, glow, and particles. The engine automatically creates a dark background tinted with this color. Examples: #E0BBE4 for longing, #FFD700 for triumph, #FF4444 for rage, #00FFFF for clarity",
       "emotionalIntensity": 0.0-1.0,
       "backgroundDirective": "description of visual world — what it looks like and moves like",
       "light": "how light behaves",

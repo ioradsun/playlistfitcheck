@@ -1267,11 +1267,12 @@ export class LyricDancePlayer {
       if (!ctx) continue;
 
       const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
+      const bgColor = this.tintedDarkBackground(dominantColor);
       const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
       const particleDesc = chapter?.particles ?? '';
       this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
 
-      ctx.fillStyle = dominantColor;
+      ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, off.width, off.height);
       this.bgCaches.push(off);
     }
