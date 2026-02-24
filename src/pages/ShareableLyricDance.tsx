@@ -201,6 +201,7 @@ export default function ShareableLyricDance() {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const [playerInstance, setPlayerInstance] = useState<LyricDancePlayer | null>(null);
+  const playerInitializedRef = useRef(false);
 
   const handleExport = useCallback((ratio: "16:9" | "9:16") => {
     if (!playerRef.current) return;
@@ -299,11 +300,16 @@ export default function ShareableLyricDance() {
     };
   }, []);
 
-  // ── Player lifecycle ────────────────────────────────────────────────
+  // ── Player lifecycle (init ONCE) ─────────────────────────────────────
+
+  const playerKey = data?.id;
 
   useEffect(() => {
-    if (!fontsReady || !data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
+    if (playerInitializedRef.current) return;
+    if (!fontsReady || !data || !data.words?.length || !data.cinematic_direction) return;
+    if (!bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
+    playerInitializedRef.current = true;
     let destroyed = false;
     const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, containerRef.current);
     playerRef.current = player;
@@ -322,10 +328,21 @@ export default function ShareableLyricDance() {
       player.destroy();
       playerRef.current = null;
       setPlayerInstance(null);
+      playerInitializedRef.current = false;
     };
-  }, [data, fontsReady]);
+  }, [playerKey, fontsReady, data?.words?.length, !!data?.cinematic_direction]);
 
-  // cinematic_direction gate ensures player always has it at construction — no late update needed
+  // ── Hot-patch chapter images without restart ───────────────────────
+  useEffect(() => {
+    if (!playerRef.current || !data?.chapter_images?.length) return;
+    playerRef.current.updateChapterImages(data.chapter_images);
+  }, [data?.chapter_images]);
+
+  // ── Hot-patch scene context without restart ────────────────────────
+  useEffect(() => {
+    if (!playerRef.current || !data?.scene_context) return;
+    playerRef.current.updateSceneContext(data.scene_context);
+  }, [data?.scene_context]);
 
   // ── Realtime comment comets ─────────────────────────────────────────
   useEffect(() => {
