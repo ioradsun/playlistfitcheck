@@ -1090,9 +1090,7 @@ export class LyricDancePlayer {
   }
 
   private getTextColor(chunkColor: string): string {
-    if (this.data.scene_context?.textStyle === 'dark') {
-      return this.darkenColor(chunkColor, 0.4);
-    }
+    // V3: colors come pre-resolved from the palette. Don't darken again.
     return chunkColor;
   }
 
@@ -1104,6 +1102,24 @@ export class LyricDancePlayer {
     const b = Math.round(parseInt(clean.slice(4, 6), 16) * (1 - amount));
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
+
+  private static readonly PALETTE_COLORS: Record<string, string[]> = {
+    // [background, accent, text, glow, dim]
+    'cold-gold': ['#0A0A0F', '#C9A96E', '#F0ECE2', '#FFD700', '#5A4A30'],
+    'warm-ember': ['#1A0A05', '#E8632B', '#FFF0E6', '#FF6B35', '#7D3A1A'],
+    'ice-blue': ['#050A14', '#4FA4D4', '#E8F4F8', '#00BFFF', '#2A5570'],
+    'midnight-rose': ['#0F0510', '#D4618C', '#F5E6EE', '#FF69B4', '#8A3358'],
+    'neon-green': ['#050F05', '#39FF14', '#E6FFE6', '#00FF41', '#1A7A0A'],
+    'storm-grey': ['#0E0E12', '#A0A4AC', '#E8E8EC', '#B8BCC4', '#5A5A66'],
+    'blood-red': ['#120505', '#D43030', '#FFE6E6', '#FF3030', '#7A1A1A'],
+    'lavender-dream': ['#0A0510', '#B088F9', '#F0E6FF', '#C49EFF', '#5A3A8A'],
+    'earth-brown': ['#0F0A05', '#A0845C', '#F5EDE2', '#C4A878', '#6A5030'],
+    'pure-white': ['#F8F8FA', '#3344AA', '#1A1A2E', '#4466FF', '#8888AA'],
+    'soft-cream': ['#FFF8F0', '#8B6040', '#1A1008', '#C49A6C', '#6A4A30'],
+    'sky-blue': ['#EEF5FF', '#2255AA', '#0A1A30', '#3B82F6', '#4A6A9A'],
+    'sunset-pink': ['#FFF0F0', '#AA3366', '#1A0510', '#FF6B9D', '#883355'],
+    'spring-green': ['#F0FFF0', '#228844', '#0A200F', '#34D058', '#3A7A4A'],
+  };
 
   private static readonly TYPOGRAPHY_FONTS: Record<string, string> = {
     'bold-impact': '"Oswald", sans-serif',
@@ -1120,6 +1136,11 @@ export class LyricDancePlayer {
   private getResolvedPalette(): string[] {
     const baked = (this.data as any)?.resolvedPalette;
     if (baked && Array.isArray(baked) && baked.length >= 5) return baked;
+    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const paletteName = cd?.palette as string | undefined;
+    if (paletteName && LyricDancePlayer.PALETTE_COLORS[paletteName]) {
+      return LyricDancePlayer.PALETTE_COLORS[paletteName];
+    }
     const existing = this.payload?.palette ?? [];
     return [
       existing[0] ?? '#0A0A0F',
@@ -1137,6 +1158,11 @@ export class LyricDancePlayer {
       return LyricDancePlayer.TYPOGRAPHY_FONTS[typoKey];
     }
     return '"Montserrat", sans-serif';
+  }
+
+  private getAtmosphere(): string {
+    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    return (cd?.atmosphere as string) ?? 'cinematic';
   }
 
   private async preloadFonts(): Promise<void> {
@@ -1305,6 +1331,36 @@ export class LyricDancePlayer {
     }
 
     this.drawEmotionalEvents(tSec);
+
+    // Word-local particle emitters — render behind text
+    this.drawWordEmitters(performance.now() / 1000);
+
+    // Ambient particles — render behind text, use V3 palette glow color
+    if (frame.particles?.length) {
+      const ambientPal = this.getResolvedPalette();
+      for (const p of frame.particles) {
+        this.ctx.globalAlpha = p.alpha;
+        this.ctx.fillStyle = ambientPal[3];
+        if (p.shape === 'line') {
+          this.ctx.fillRect(p.x * this.width, p.y * this.height, Math.max(1, p.size * 0.6), Math.max(2, p.size * 4));
+        } else if (p.shape === 'diamond') {
+          const x = p.x * this.width;
+          const y = p.y * this.height;
+          this.ctx.beginPath();
+          this.ctx.moveTo(x, y - p.size);
+          this.ctx.lineTo(x + p.size, y);
+          this.ctx.lineTo(x, y + p.size);
+          this.ctx.lineTo(x - p.size, y);
+          this.ctx.closePath();
+          this.ctx.fill();
+        } else {
+          this.ctx.beginPath();
+          this.ctx.arc(p.x * this.width, p.y * this.height, p.size, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+      }
+      this.ctx.globalAlpha = 1;
+    }
 
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
     const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
@@ -1501,31 +1557,6 @@ export class LyricDancePlayer {
       drawCalls += 1;
     }
 
-    if (frame.particles?.length) {
-      for (const p of frame.particles) {
-        this.ctx.globalAlpha = p.alpha;
-        this.ctx.fillStyle = frame.particleColor ?? this.payload?.palette?.[2] ?? '#ffffff';
-        if (p.shape === 'line') {
-          this.ctx.fillRect(p.x * this.width, p.y * this.height, Math.max(1, p.size * 0.6), Math.max(2, p.size * 4));
-        } else if (p.shape === 'diamond') {
-          const x = p.x * this.width;
-          const y = p.y * this.height;
-          this.ctx.beginPath();
-          this.ctx.moveTo(x, y - p.size);
-          this.ctx.lineTo(x + p.size, y);
-          this.ctx.lineTo(x, y + p.size);
-          this.ctx.lineTo(x - p.size, y);
-          this.ctx.closePath();
-          this.ctx.fill();
-        } else {
-          this.ctx.beginPath();
-          this.ctx.arc(p.x * this.width, p.y * this.height, p.size, 0, Math.PI * 2);
-          this.ctx.fill();
-        }
-      }
-      this.ctx.globalAlpha = 1;
-    }
-
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
@@ -1536,7 +1567,6 @@ export class LyricDancePlayer {
     this.lastBurstTickMs = nowMs;
     this.updateBurstEmitters(dt);
     this.renderBurstParticles();
-    this.drawWordEmitters(performance.now() / 1000);
 
     // Comment comets — after text/bursts, before watermark
     this.drawComments(performance.now() / 1000);
@@ -1964,7 +1994,7 @@ export class LyricDancePlayer {
     const chapterProgress = this.audio ? this.audio.currentTime / duration : 0;
 
     const sceneCtx = this.data.scene_context;
-    const atmosphere = (this.payload?.cinematic_direction as any)?.atmosphere ?? 'cinematic';
+    const atmosphere = this.getAtmosphere();
     const atmosphereOpacity: Record<string, number> = {
       void: 0.10,
       cinematic: 0.65,
@@ -2020,7 +2050,7 @@ export class LyricDancePlayer {
     const crush = this.ctx.createLinearGradient(0, 0, 0, this.height);
     const crushColorMid = sceneCtx?.baseLuminance === 'light'
       ? `rgba(255,255,255,${Math.max(0.20, crushAlpha * 0.4 - 0.06)})`
-      : `rgba(0,0,0,${Math.max(0.40, crushAlpha - 0.06)})`;
+      : `rgba(0,0,0,${Math.max(0.10, crushAlpha - 0.06)})`;
     crush.addColorStop(0, crushColor);
     crush.addColorStop(0.5, crushColorMid);
     crush.addColorStop(1, crushColor);
@@ -2054,19 +2084,6 @@ export class LyricDancePlayer {
     } catch {
       return null;
     }
-  }
-
-  private tintedDarkBackground(hex: string): string {
-    const clean = (hex || '#0a0a0a').replace('#', '').padEnd(6, '0');
-    const r = parseInt(clean.slice(0, 2), 16);
-    const g = parseInt(clean.slice(2, 4), 16);
-    const b = parseInt(clean.slice(4, 6), 16);
-    const max = Math.max(r, g, b, 1);
-    const factor = 0.07;
-    const tr = Math.round(r / max * 255 * factor);
-    const tg = Math.round(g / max * 255 * factor);
-    const tb = Math.round(b / max * 255 * factor);
-    return `#${tr.toString(16).padStart(2, '0')}${tg.toString(16).padStart(2, '0')}${tb.toString(16).padStart(2, '0')}`;
   }
 
   private buildBgCache(): void {
@@ -2998,9 +3015,8 @@ export class LyricDancePlayer {
             this.ctx.translate(px, py);
             this.ctx.rotate(angle + elapsed * 3);
             this.ctx.globalAlpha = progress * 0.7;
-            const darkPal = this.getResolvedPalette();
-            this.ctx.fillStyle = darkPal[0];
-            this.ctx.shadowColor = darkPal[0];
+            this.ctx.fillStyle = em.color;
+            this.ctx.shadowColor = em.color;
             this.ctx.shadowBlur = radius * 3;
             this.ctx.beginPath();
             this.ctx.moveTo(0, -radius);
@@ -3016,8 +3032,12 @@ export class LyricDancePlayer {
           this.ctx.globalAlpha = progress * 0.5;
           const voidRadius = progress * 15 * pScale;
           const voidGrad = this.ctx.createRadialGradient(em.x, em.y, 0, em.x, em.y, voidRadius);
-          voidGrad.addColorStop(0, 'rgba(0,0,0,0.8)');
-          voidGrad.addColorStop(1, 'rgba(0,0,0,0)');
+          const vc = em.color.replace('#', '');
+          const vr = parseInt(vc.slice(0, 2), 16) || 0;
+          const vg = parseInt(vc.slice(2, 4), 16) || 0;
+          const vb = parseInt(vc.slice(4, 6), 16) || 0;
+          voidGrad.addColorStop(0, `rgba(${vr},${vg},${vb},0.6)`);
+          voidGrad.addColorStop(1, `rgba(${vr},${vg},${vb},0)`);
           this.ctx.fillStyle = voidGrad;
           this.ctx.beginPath();
           this.ctx.arc(em.x, em.y, voidRadius, 0, Math.PI * 2);
