@@ -1252,56 +1252,47 @@ export class LyricDancePlayer {
       const t = Math.min(1, elapsed / comment.duration);
       if (t >= 1) continue;
 
-      // Piecewise linear progress:
-      //   0-15%  → rocket in  (0 → ~0.15 of travel)
-      //   15-85% → steady cruise
-      //   85-100%→ rocket out
+      // Piecewise speed curve: rocket-cruise-rocket
       let ep: number;
       if (t < 0.15) {
-        // fast ease-out entry
-        const s = t / 0.15;
-        ep = 0.15 * (1 - (1 - s) * (1 - s));
-      } else if (t < 0.85) {
-        // linear cruise
-        const s = (t - 0.15) / 0.70;
-        ep = 0.15 + s * 0.70;
+        ep = (t / 0.15) * 0.2;
+      } else if (t > 0.82) {
+        ep = 0.2 + ((t - 0.15) / 0.67) * 0.6 + ((t - 0.82) / 0.18) * 0.2;
       } else {
-        // fast ease-in exit
-        const s = (t - 0.85) / 0.15;
-        ep = 0.85 + 0.15 * (s * s);
+        ep = 0.2 + ((t - 0.15) / 0.67) * 0.6;
       }
 
       const x = comment.startX + (comment.endX - comment.startX) * ep;
       const y = comment.y;
 
-      // Alpha: fade in 10%, full middle, fade out last 25%
-      const alpha = t < 0.10
+      // Alpha: fade in 10%, full middle, fade out last 25% — capped at 65%
+      const alpha = (t < 0.10
         ? t / 0.10
         : t > 0.75
           ? 1 - (t - 0.75) / 0.25
-          : 1;
+          : 1) * 0.65;
 
       this.ctx.save();
 
-      // Glow — shadowBlur 18 in comment color
+      // Glow — softer
       this.ctx.shadowColor = comment.color;
-      this.ctx.shadowBlur = 18;
+      this.ctx.shadowBlur = 6;
 
-      // Trail — horizontal gradient behind text in direction of travel
+      // Trail — thinner, more transparent
       const trailX = x - comment.direction * comment.trailLength;
       const trail = this.ctx.createLinearGradient(trailX, y, x, y);
       trail.addColorStop(0, 'transparent');
-      trail.addColorStop(1, `${comment.color}${Math.floor(alpha * 140).toString(16).padStart(2, '0')}`);
+      trail.addColorStop(1, `${comment.color}${Math.floor(alpha * 120).toString(16).padStart(2, '0')}`);
       this.ctx.strokeStyle = trail;
-      this.ctx.lineWidth = comment.fontSize * 0.3;
+      this.ctx.lineWidth = comment.fontSize * 0.15;
       this.ctx.lineCap = 'round';
       this.ctx.beginPath();
       this.ctx.moveTo(trailX, y);
       this.ctx.lineTo(x, y);
       this.ctx.stroke();
 
-      // 6 spark particles trailing behind with sine wobble
-      for (let i = 0; i < 6; i++) {
+      // 3 spark particles — smaller
+      for (let i = 0; i < 3; i++) {
         const seed = (i * 0.618033) % 1;
         const sparkX = x - comment.direction * seed * comment.trailLength * 0.8;
         const sparkY = y + Math.sin(nowSec * 8 + i * 2.1) * 6;
@@ -1310,25 +1301,25 @@ export class LyricDancePlayer {
         this.ctx.fillStyle = comment.color;
         this.ctx.shadowBlur = 0;
         this.ctx.beginPath();
-        this.ctx.arc(sparkX, sparkY, 1.2 + seed * 2, 0, Math.PI * 2);
+        this.ctx.arc(sparkX, sparkY, 0.8 + seed * 0.7, 0, Math.PI * 2);
         this.ctx.fill();
       }
 
-      // Color bullet dot BEFORE the text
+      // Color bullet dot — smaller
       this.ctx.globalAlpha = alpha;
-      this.ctx.shadowBlur = 18;
+      this.ctx.shadowBlur = 6;
       this.ctx.shadowColor = comment.color;
       const textWidth = this.ctx.measureText(comment.text).width || 60;
       const dotX = x - comment.direction * (textWidth / 2 + 12);
       this.ctx.fillStyle = comment.color;
       this.ctx.beginPath();
-      this.ctx.arc(dotX, y, 3.5, 0, Math.PI * 2);
+      this.ctx.arc(dotX, y, 2.5, 0, Math.PI * 2);
       this.ctx.fill();
 
-      // Text — 700 weight Space Mono, bold & punchy
+      // Text — lighter weight, smaller, muted white
       this.ctx.globalAlpha = alpha;
-      this.ctx.font = `700 ${comment.fontSize}px "Space Mono", monospace`;
-      this.ctx.fillStyle = '#ffffff';
+      this.ctx.font = `400 ${comment.fontSize * 0.85}px "Space Mono", monospace`;
+      this.ctx.fillStyle = 'rgba(255,255,255,0.75)';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText(comment.text, x, y);
