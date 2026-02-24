@@ -1185,7 +1185,7 @@ export class LyricDancePlayer {
     try {
       this.checkEmotionalEvents(tSec, songProgress);
     } catch (e) {
-      console.error('[PLAYER] emotional events crash:', e);
+      // emotional events crash — silently continue
     }
 
     this.drawEmotionalEvents(tSec);
