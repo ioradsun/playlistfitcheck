@@ -1478,7 +1478,6 @@ export function bakeSceneChunked(
   onProgress?: (progress: number) => void,
   framesPerChunk = 120,
 ): Promise<BakedTimeline> {
-  _bakerDebugLogged = false;
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
   const visualMode = getVisualMode(payload);
