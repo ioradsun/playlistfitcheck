@@ -403,7 +403,7 @@ export function LyricFitTab({
     }
 
     if (savedIdRef.current) {
-      await persistSongDna(savedIdRef.current, { ...nextSongDna, cinematicDirection });
+      await persistSongDna(savedIdRef.current, nextSongDna);
     }
   }, [lyricData, generationStatus.songDna, hasRealAudio, beatGrid, cinematicDirection, persistSongDna, songDna]);
 
