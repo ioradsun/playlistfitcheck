@@ -54,7 +54,9 @@ export function LyricFitTab({
   const { user } = useAuth();
   const artistNameRef = useRef<string>("artist");
   const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
-  const [selectedScene, setSelectedScene] = useState<SceneId | null>(null);
+  const [sceneDescription, setSceneDescription] = useState('');
+  const [resolvedScene, setResolvedScene] = useState<SceneContextResult | null>(null);
+  const [resolvingScene, setResolvingScene] = useState(false);
   const [fitUnlocked, setFitUnlocked] = useState(false);
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
