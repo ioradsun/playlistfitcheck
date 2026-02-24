@@ -2083,7 +2083,7 @@ export class LyricDancePlayer {
   }
 
   private buildBgCache(): void {
-    console.log('[PLAYER] building bgCache...');
+    
     try {
       const chapters = this.payload?.cinematic_direction?.chapters ?? [];
       const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
