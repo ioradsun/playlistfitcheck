@@ -416,37 +416,9 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
     raw.texture = "dust";
   }
 
-  const VALID_GLYPHS = new Set([
-    "fire", "water-drop", "lightning", "snowflake", "sun", "moon", "star", "cloud",
-    "rain", "wind", "leaf", "flower", "tree", "mountain", "wave", "heart", "broken-heart",
-    "eye", "hand-open", "hand-fist", "crown", "skull", "wings", "feather", "diamond",
-    "clock", "hourglass", "lock", "key", "chain", "anchor", "compass", "arrow-up",
-    "arrow-down", "spiral", "infinity", "music-note", "microphone", "speaker",
-    "headphones", "camera", "film", "book", "pen", "brush", "palette", "mask", "mirror",
-    "door", "window", "house", "car", "road", "bridge", "city", "globe", "flag", "sword",
-    "shield", "torch", "candle", "smoke", "ghost", "shadow", "sparkle", "burst", "ripple",
-    "orbit", "target", "crosshair", "fingerprint", "dna", "atom", "pill", "coin",
-  ]);
-
-  if (Array.isArray(raw.storyboard)) {
-    for (const entry of raw.storyboard) {
-      if (entry.iconGlyph && !VALID_GLYPHS.has(entry.iconGlyph)) {
-        console.warn(`[CINEMATIC] Invalid iconGlyph: "${entry.iconGlyph}" on line ${entry.lineIndex} — removing`);
-        delete entry.iconGlyph;
-        delete entry.iconStyle;
-        delete entry.iconPosition;
-        delete entry.iconScale;
-      }
-    }
-  }
-
   const storyboard = raw.storyboard ?? [];
-  const iconCount = storyboard.filter((s: any) => s.iconGlyph).length;
   const wordCount = Object.keys(raw.wordDirectives ?? {}).length;
-  console.log(`[CINEMATIC] Storyboard: ${storyboard.length} entries, ${iconCount} icons, ${wordCount} word directives`);
-  if (iconCount < 5) {
-    console.warn(`[CINEMATIC] WARNING: Only ${iconCount} icons — expected 10-15`);
-  }
+  console.log(`[CINEMATIC] Storyboard: ${storyboard.length} entries, ${wordCount} word directives`);
 
   return raw;
 }
