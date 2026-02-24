@@ -33,7 +33,6 @@ interface Props {
   beatGrid: { bpm: number; beats: number[]; confidence: number };
   audioFile: File;
   songTitle: string;
-  artistName: string;
   system: string;
   palette: string[];
   fingerprint?: ArtistDNA | null;
