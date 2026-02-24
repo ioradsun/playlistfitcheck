@@ -42,6 +42,7 @@ export interface LyricDanceData {
   scene_manifest: any;
   cinematic_direction: CinematicDirection | null;
   chapter_images?: string[];
+  scene_context?: SceneContext | null;
 }
 
 export interface LiveDebugState {
