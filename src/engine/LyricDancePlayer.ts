@@ -1023,7 +1023,7 @@ export class LyricDancePlayer {
     }
     ctx.globalAlpha = 1;
     const nebula = ctx.createRadialGradient(w * 0.6, h * 0.3, 0, w * 0.6, h * 0.3, w * 0.4);
-    nebula.addColorStop(0, `${accent}12`);
+    nebula.addColorStop(0, `${accent}09`);
     nebula.addColorStop(1, 'transparent');
     ctx.fillStyle = nebula;
     ctx.fillRect(0, 0, w, h);
