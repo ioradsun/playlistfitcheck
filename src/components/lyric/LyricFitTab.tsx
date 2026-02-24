@@ -612,46 +612,42 @@ export function LyricFitTab({
       )}
 
       {activeTab === "lyrics" ? (
-        <div className="flex flex-col flex-1 overflow-y-auto">
-          {sceneInputNode}
-          <div className="flex-1 flex flex-col">
-          <LyricsTab
-            lyricData={lyricData}
-            setLyricData={setLyricData}
-            audioFile={audioFile}
-            setAudioFile={setAudioFile}
-            hasRealAudio={hasRealAudio}
-            setHasRealAudio={setHasRealAudio}
-            savedId={savedId}
-            setSavedId={setSavedId}
-            setLines={setLines}
-            fmlyLines={fmlyLines}
-            setFmlyLines={setFmlyLines}
-            versionMeta={versionMeta}
-            setVersionMeta={setVersionMeta}
-            beatGrid={beatGrid}
-            setWords={setWords}
-            onProjectSaved={onProjectSaved}
-            onNewProject={() => {
-              setSongDna(null);
-              setBeatGrid(null);
-              setSongSignature(null);
-              setCinematicDirection(null);
-              setBgImageUrl(null);
-              setSceneManifest(null);
-              setLines([]);
-              setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
-              setFitReadiness("not_started");
-              setFitUnlocked(false);
-              onNewProject?.();
-            }}
-            onHeaderProject={onHeaderProject}
-            onSavedId={onSavedId}
-            analysisModel={analysisModel}
-            transcriptionModel={transcriptionModel}
-          />
-          </div>
-        </div>
+        <LyricsTab
+          lyricData={lyricData}
+          setLyricData={setLyricData}
+          audioFile={audioFile}
+          setAudioFile={setAudioFile}
+          hasRealAudio={hasRealAudio}
+          setHasRealAudio={setHasRealAudio}
+          savedId={savedId}
+          setSavedId={setSavedId}
+          setLines={setLines}
+          fmlyLines={fmlyLines}
+          setFmlyLines={setFmlyLines}
+          versionMeta={versionMeta}
+          setVersionMeta={setVersionMeta}
+          beatGrid={beatGrid}
+          setWords={setWords}
+          onProjectSaved={onProjectSaved}
+          onNewProject={() => {
+            setSongDna(null);
+            setBeatGrid(null);
+            setSongSignature(null);
+            setCinematicDirection(null);
+            setBgImageUrl(null);
+            setSceneManifest(null);
+            setLines([]);
+            setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
+            setFitReadiness("not_started");
+            setFitUnlocked(false);
+            onNewProject?.();
+          }}
+          onHeaderProject={onHeaderProject}
+          onSavedId={onSavedId}
+          analysisModel={analysisModel}
+          transcriptionModel={transcriptionModel}
+          sceneInput={sceneInputNode}
+        />
       ) : lyricData && audioFile ? (
         <FitTab
           lyricData={lyricData}
