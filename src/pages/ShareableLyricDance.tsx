@@ -226,6 +226,15 @@ export default function ShareableLyricDance() {
 
   // ── Data fetch ──────────────────────────────────────────────────────
 
+  // ── Data change tracking ───────────────────────────────────────────
+  useEffect(() => {
+    console.log('[PAGE] data id changed:', data?.id);
+  }, [data?.id]);
+
+  useEffect(() => {
+    console.log('[PAGE] full data object changed — keys:', Object.keys(data ?? {}));
+  }, [data]);
+
   useEffect(() => {
     if (!artistSlug || !songSlug) return;
     setLoading(true);
