@@ -927,11 +927,8 @@ function bakeFrame(
   const tensionMotion = pre.tensionMotionByFrame[frameIndex] ?? 0.5;
 
   const chapters = pre.chapters;
-  const sceneManifest = (payload.scene_manifest ?? null) as unknown as Record<string, unknown> | null;
-  const manifestWordDirectives = (sceneManifest?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
-  const manifestLineLayouts = (sceneManifest?.lineLayouts ?? {}) as Record<string, ManifestLineLayout>;
-  const manifestChapters = (sceneManifest?.chapters ?? []) as ManifestChapter[];
-  const manifestStagger = typeof sceneManifest?.stagger === 'number' ? sceneManifest.stagger : null;
+  const manifestWordDirectives = pre.manifestWordDirectives;
+  const manifestChapters = pre.manifestChapters;
   const distanceToZoom: Record<string, number> = {
     'Wide': 0.82,
     'Medium': 1.0,
@@ -957,38 +954,12 @@ function bakeFrame(
   if (pre.wordMeta.length > 0) {
     const currentChapter = findByRatio(chapters, songProgress);
     const chapterEmotionalIntensity = currentChapter?.emotionalIntensity ?? pre.heat;
-    const motionProfile = deriveMotionProfile(payload);
-    const motionDefaults = MOTION_DEFAULTS[motionProfile];
-    const storyboard = payload.cinematic_direction?.storyboard ?? [];
+    const motionDefaults = pre.motionDefaults;
+    const storyboard = pre.storyboard;
     const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
-
-    const WORD_LINGER_BY_PROFILE: Record<string, number> = {
-      weighted: 0.15,
-      fluid: 0.55,
-      elastic: 0.2,
-      drift: 0.8,
-      glitch: 0.05,
-    };
-
-    const animParams = {
-      linger: WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4,
-      stagger: manifestStagger ?? 0.05,
-      entryDuration: motionDefaults.entryDuration,
-      exitDuration: motionDefaults.exitDuration,
-    };
-
-    const phraseGroups = payload.words?.length > 0
-      ? buildPhraseGroups(pre.wordMeta)
-      : null;
-
-    const groupLayouts = new Map<string, GroupPosition[]>();
-    if (phraseGroups) {
-      for (const group of phraseGroups) {
-        const key = `${group.lineIndex}-${group.groupIndex}`;
-        const baseFontSize = pre.lineFontSizes[group.lineIndex] ?? 36;
-        groupLayouts.set(key, getGroupLayout(group, pre.visualMode, 960, 540, baseFontSize));
-      }
-    }
+    const animParams = pre.animParams;
+    const phraseGroups = pre.phraseGroups;
+    const groupLayouts = pre.groupLayouts;
 
     if (phraseGroups) {
       for (const group of phraseGroups) {
