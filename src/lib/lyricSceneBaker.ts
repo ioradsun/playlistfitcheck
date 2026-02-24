@@ -398,12 +398,12 @@ function computeExitState(style: ExitStyle, progress: number, intensity: number,
 function computeBehaviorState(style: BehaviorStyle, tSec: number, wordStart: number, beatPhase: number, intensity: number): Partial<AnimState> {
   const age = tSec - wordStart;
   switch (style) {
-    case 'pulse': { const pulse = Math.sin(beatPhase * Math.PI * 2) * 0.04 * intensity; return { scaleX: 1 + pulse, scaleY: 1 + pulse }; }
-    case 'vibrate': return { offsetX: Math.sin(tSec * 80) * 1.5 * intensity };
+    case 'pulse': { const pulse = Math.sin(beatPhase * Math.PI * 2) * 0.03 * intensity; return { scaleX: 1 + pulse, scaleY: 1 + pulse }; }
+    case 'vibrate': return { offsetX: Math.sin(tSec * 18) * 1.2 * intensity };
     case 'float': return { offsetY: Math.sin(age * 1.8) * 4 * intensity };
     case 'grow': { const growScale = 1 + Math.min(0.15, age * 0.04) * intensity; return { scaleX: growScale, scaleY: growScale }; }
     case 'contract': { const contractScale = 1 - Math.min(0.1, age * 0.03) * intensity; return { scaleX: contractScale, scaleY: contractScale }; }
-    case 'flicker': return { alpha: 0.85 + Math.random() * 0.15 };
+    case 'flicker': { const f = Math.sin(tSec * 6) * 0.5 + Math.sin(tSec * 13) * 0.5; return { alpha: 0.88 + f * 0.12 }; }
     case 'orbit': { const angle = age * 1.2; return { offsetX: Math.sin(angle) * 2 * intensity, offsetY: Math.cos(angle) * 1.5 * intensity }; }
     case 'lean': return { skewX: Math.sin(age * 0.8) * 4 * intensity };
     case 'freeze': {
