@@ -362,6 +362,26 @@ function bakeFrame(
   const chunks: Keyframe["chunks"] = [];
 
   if (pre.wordMeta.length > 0) {
+    // Pre-compute x positions for each word within its line
+    // so words lay out as readable text centered on canvas
+    const wordPositions = pre.wordMeta.map((wm) => {
+      const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
+      const totalWidth = lineWords.reduce((sum, w) => sum + (w.word.length * 18), 0);
+      const startX = (960 / 2) - (totalWidth / 2);
+
+      let x = startX;
+      for (const lw of lineWords) {
+        if (lw.wordIndex === wm.wordIndex) break;
+        x += lw.word.length * 18 + 12;
+      }
+      x += (wm.word.length * 18) / 2;
+
+      // Y varies by line index for multi-line feel
+      const y = (540 / 2) + ((wm.lineIndex % 3) - 1) * 52;
+
+      return { x, y };
+    });
+
     const wordChunks = pre.wordMeta
       .filter((wm) => tSec >= wm.start && tSec < (wm.end + WORD_LINGER))
       .map((wm) => {
@@ -395,14 +415,10 @@ function bakeFrame(
           offsetY = (1 - ep) * -30;
         }
 
-        const cx = 960 / 2;
-        const cy = 540 / 2;
-        const xSpread = ((wm.wordIndex % 7) - 3) * 35;
-        const ySpread = ((wm.lineIndex % 5) - 2) * 32;
-
-        const isImpact = kinetic === 'IMPACT';
-        const x = isImpact ? cx : cx + xSpread;
-        const y = isImpact ? cy : cy + ySpread;
+        // Remove xSpread/ySpread — use pre-computed position instead
+        const pos = wordPositions[pre.wordMeta.indexOf(wm)];
+        const x = pos.x;
+        const y = pos.y;
 
         const color = wm.directive?.colorOverride
           ?? pre.lineColors[wm.lineIndex]
