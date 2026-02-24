@@ -799,8 +799,12 @@ export class LyricDancePlayer {
   }
 
   play(): void {
+    if (this.destroyed) return;
     this.playing = true;
     this.audio.play().catch(() => {});
+    // Restart the RAF loop — it stops when playing becomes false
+    if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
+    this.rafHandle = requestAnimationFrame(this.tick);
   }
 
   pause(): void {
