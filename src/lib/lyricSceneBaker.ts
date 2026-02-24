@@ -31,6 +31,7 @@ export type Keyframe = {
   timeMs: number;
   chunks: Array<{
     id: string;
+    text: string;
     x: number;
     y: number;
     alpha: number;
