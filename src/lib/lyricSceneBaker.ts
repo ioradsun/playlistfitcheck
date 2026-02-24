@@ -461,7 +461,6 @@ type PrebakedData = {
   manifestStagger: number | null;
   storyboard: StoryboardEntryLike[];
 };
-};
 
 function getLayoutForMode(
   mode: VisualMode,
