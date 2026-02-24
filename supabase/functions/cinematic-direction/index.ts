@@ -145,6 +145,16 @@ CONSTRAINTS:
 
 type LyricLine = { text: string; start?: number; end?: number };
 
+interface SceneContext {
+  scene: string;
+  label: string;
+  timeOfDay: string;
+  baseLuminance: 'dark' | 'medium' | 'light';
+  colorTemperature: string;
+  textStyle: 'light' | 'dark';
+  fluxPromptSuffix?: string;
+}
+
 interface AnalyzeRequest {
   title?: string;
   artist?: string;
@@ -153,6 +163,7 @@ interface AnalyzeRequest {
   beatGrid?: { bpm?: number; beats?: number[]; confidence?: number };
   lyricId?: string;
   id?: string;
+  scene_context?: SceneContext | null;
 }
 
 function clamp(n: unknown, min: number, max: number, fallback: number): number {
