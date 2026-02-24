@@ -2253,7 +2253,7 @@ export class LyricDancePlayer {
         else if (perSystem === 'intimate') sim.fire = new FireSim('ember', 0.25);
         return sim;
       });
-      console.log('[PLAYER] chapter sims built:', this.chapterSims.length);
+      
     } catch (err) {
       console.error('[PLAYER] chapter sim build failed:', err);
     }
