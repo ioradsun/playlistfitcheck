@@ -139,6 +139,38 @@ export function PublishLyricDanceButton({
       const url = `/${artistSlug}/${songSlug}/lyric-dance`;
       setPublishedUrl(url);
       toast.success("Lyric Dance page published!");
+
+      // Fire-and-forget: generate chapter background images
+      // Need the actual shareable dance ID for the edge function
+      const cinematicDir = songDna?.cinematicDirection ?? songDna?.cinematic_direction;
+      const chapters = cinematicDir?.chapters;
+      if (Array.isArray(chapters) && chapters.length > 0) {
+        // Fetch the dance ID we just upserted
+        supabase
+          .from("shareable_lyric_dances" as any)
+          .select("id")
+          .eq("artist_slug", artistSlug)
+          .eq("song_slug", songSlug)
+          .single()
+          .then(({ data: danceRow }: any) => {
+            if (!danceRow?.id) return;
+            supabase.functions.invoke("generate-chapter-images", {
+              body: {
+                lyric_dance_id: danceRow.id,
+                chapters: chapters.map((ch: any, i: number) => ({
+                  index: i,
+                  backgroundDirective: ch.backgroundDirective ?? ch.background ?? "",
+                  dominantColor: ch.dominantColor ?? "#333333",
+                  emotionalIntensity: ch.emotionalIntensity ?? 0.5,
+                })),
+              },
+            }).then(({ data: imgResult }) => {
+              console.log("[PUBLISH] Chapter images generated:", imgResult?.generated ?? 0);
+            }).catch((e: any) => {
+              console.warn("[PUBLISH] Chapter images failed (non-blocking):", e?.message);
+            });
+          });
+      }
     } catch (e: any) {
       console.error("Publish error:", e);
       toast.error(e.message || "Failed to publish lyric dance");
