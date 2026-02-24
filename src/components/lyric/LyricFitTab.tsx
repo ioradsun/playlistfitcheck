@@ -87,6 +87,12 @@ export function LyricFitTab({
   const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
 
   useEffect(() => {
+    if (!user) return;
+    supabase.from("profiles").select("display_name").eq("id", user.id).single()
+      .then(({ data }) => { if (data?.display_name) artistNameRef.current = data.display_name; });
+  }, [user]);
+
+  useEffect(() => {
     if (!detectedGrid || beatGrid) return;
     setBeatGrid(detectedGrid);
     setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
