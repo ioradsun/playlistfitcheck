@@ -154,6 +154,26 @@ const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
   drift: { entries: ['whisper', 'surface', 'drift-in', 'bloom'], behaviors: ['float', 'flicker', 'float', 'grow'], exits: ['evaporate', 'linger', 'sink'], entryDuration: 0.5, exitDuration: 0.6, behaviorIntensity: 0.4 },
   glitch: { entries: ['snap-in', 'cut-in', 'shatter-in'], behaviors: ['vibrate', 'flicker', 'vibrate', 'orbit'], exits: ['cut-out', 'snap-out', 'burn-out'], entryDuration: 0.05, exitDuration: 0.06, behaviorIntensity: 1.4 },
 };
+
+const TYPOGRAPHY_FONT_WEIGHTS: Record<string, number> = {
+  'bold-impact': 800,
+  'clean-modern': 600,
+  'elegant-serif': 500,
+  'raw-condensed': 600,
+  'whisper-soft': 400,
+  'tech-mono': 500,
+  'display-heavy': 800,
+  'editorial-light': 400,
+};
+
+function getTypographyFontWeight(payload: ScenePayload): number {
+  const typography = (payload.cinematic_direction as any)?.typography as string | undefined;
+  if (typography && typography in TYPOGRAPHY_FONT_WEIGHTS) {
+    return TYPOGRAPHY_FONT_WEIGHTS[typography];
+  }
+  return payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight ?? 700;
+}
+
 type VisualMode = 'intimate' | 'cinematic' | 'explosive';
 
 const INTIMATE_LAYOUTS: Record<number, Array<[number, number]>> = {
@@ -188,6 +208,17 @@ const getVisualMode = (payload: ScenePayload): VisualMode => {
   const manifestMode = (sceneManifest as any)?.visualMode;
   if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
   if (!payload.cinematic_direction) return 'cinematic';
+
+  // New prompt: derive from motion + texture
+  const motion = (payload.cinematic_direction as any)?.motion as string | undefined;
+  const texture = (payload.cinematic_direction as any)?.texture as string | undefined;
+  if (motion) {
+    if (motion === 'weighted' || motion === 'glitch' || texture === 'storm' || texture === 'fire') return 'explosive';
+    if (motion === 'drift' || texture === 'petals' || texture === 'snow') return 'intimate';
+    return 'cinematic';
+  }
+
+  // Fallback: old visualWorld path
   const physicsProfile = payload.cinematic_direction.visualWorld?.physicsProfile;
   const backgroundSystem = payload.cinematic_direction.visualWorld?.backgroundSystem ?? 'default';
   const heat = physicsProfile?.heat ?? 0.5;
@@ -202,6 +233,13 @@ const getVisualMode = (payload: ScenePayload): VisualMode => {
 
 
 function deriveMotionProfile(payload: ScenePayload): MotionProfile {
+  // New prompt returns motion directly as a top-level field
+  const directMotion = (payload.cinematic_direction as any)?.motion as string | undefined;
+  if (directMotion && directMotion in MOTION_DEFAULTS) {
+    return directMotion as MotionProfile;
+  }
+
+  // Fallback: old visualWorld path
   const physics = payload.cinematic_direction?.visualWorld?.physicsProfile;
   const heat = physics?.heat ?? 0.5;
   const beatResponse = physics?.beatResponse ?? 'pulse';
@@ -847,8 +885,14 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   const density = Number(physSpec?.density ?? 0.5);
   const storyboards = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
   const songDuration = Math.max(0.01, payload.songEnd - payload.songStart);
-  const beatResponse = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse ?? 'slam';
-  const heat = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat ?? 0.5;
+  // Derive heat/beatResponse from motion pick when visualWorld is absent
+  const motionPick = (payload.cinematic_direction as any)?.motion as string | undefined;
+  const heatFromMotion: Record<string, number> = { weighted: 0.8, elastic: 0.6, fluid: 0.45, glitch: 0.7, drift: 0.2 };
+  const beatFromMotion: Record<string, string> = { weighted: 'slam', elastic: 'pulse', fluid: 'pulse', glitch: 'snap', drift: 'pulse' };
+  const heat = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat
+    ?? (motionPick ? heatFromMotion[motionPick] ?? 0.5 : 0.5);
+  const beatResponse = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse
+    ?? (motionPick ? beatFromMotion[motionPick] ?? 'pulse' : 'slam');
 
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
   const chapterCount = Math.max(1, chapters.length || 4);
@@ -1179,7 +1223,7 @@ function bakeFrame(
             const baseColor = semanticColorOverride ?? manifestDirective?.color ?? wm.directive?.colorOverride ?? pre.lineColors[wm.lineIndex] ?? '#ffffff';
             const color = isAnchor ? baseColor : dimColor(baseColor, 0.65);
             const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0) : glow * 0.3) * semanticGlowMult;
-            const chapterFontWeight = semanticFontWeight ?? currentChapter?.typographyShift?.fontWeight ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight ?? 700;
+            const chapterFontWeight = semanticFontWeight ?? currentChapter?.typographyShift?.fontWeight ?? getTypographyFontWeight(payload);
 
             // Letter positioning: spread characters across word span, centered on pos.x
             const charW = isLetterSequence ? pos.fontSize * 0.6 : 0;
@@ -1323,9 +1367,8 @@ function bakeFrame(
             const soloWordBonus = pre.motionProfile === 'drift' || pre.motionProfile === 'fluid' ? 1.3 : 1.0;
             const fontSize = manifestDirective?.fontSize
               ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
-            const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
-              ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
-              ?? 700;
+          const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
+            ?? getTypographyFontWeight(payload);
 
             const wordGlow = manifestDirective?.glow
               ? glow * manifestDirective.glow
@@ -1463,8 +1506,7 @@ function bakeFrame(
         visible,
         fontSize: pre.lineFontSizes[idx] ?? 36,
         fontWeight: (currentChapterIdx >= 0 ? chapters[currentChapterIdx]?.typographyShift?.fontWeight : undefined)
-          ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
-          ?? 700,
+          ?? getTypographyFontWeight(payload),
         color: pre.lineColors[idx] ?? "#ffffff",
         isAnchor: lineActive,
         entryOffsetY,
@@ -1506,8 +1548,7 @@ function bakeFrame(
             visible,
             fontSize: pre.lineFontSizes[idx] ?? 36,
             fontWeight: (currentChapterIdx >= 0 ? chapters[currentChapterIdx]?.typographyShift?.fontWeight : undefined)
-              ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
-              ?? 700,
+              ?? getTypographyFontWeight(payload),
             color: pre.lineColors[idx] ?? "#ffffff",
             isAnchor: true,
             entryOffsetY,
@@ -1603,8 +1644,11 @@ export function bakeSceneChunked(
     const mp = deriveMotionProfile(payload);
     const md = MOTION_DEFAULTS[mp];
     const ps = payload.physics_spec as unknown as Record<string, unknown> | null;
-    const h = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat ?? 0.5;
-    const br = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse ?? 'slam';
+    const motionDiag = (payload.cinematic_direction as any)?.motion as string | undefined;
+    const heatMap: Record<string, number> = { weighted: 0.8, elastic: 0.6, fluid: 0.45, glitch: 0.7, drift: 0.2 };
+    const beatMap: Record<string, string> = { weighted: 'slam', elastic: 'pulse', fluid: 'pulse', glitch: 'snap', drift: 'pulse' };
+    const h = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat ?? heatMap[motionDiag ?? ''] ?? 0.5;
+    const br = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse ?? beatMap[motionDiag ?? ''] ?? 'slam';
     const ch = Number(ps?.chaos ?? 0);
     const ap = {
       linger: ({ weighted: 0.15, fluid: 0.55, elastic: 0.2, drift: 0.8, glitch: 0.05 } as Record<string, number>)[mp] ?? 0.4,
