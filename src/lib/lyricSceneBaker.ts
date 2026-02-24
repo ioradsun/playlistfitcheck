@@ -1178,6 +1178,7 @@ function bakeFrame(
             visible: finalAlpha > 0.01,
             fontSize,
             fontWeight: chapterFontWeight,
+            isAnchor: (wm.directive?.emphasisLevel ?? 0) >= 3,
             color,
             glow: wordGlow * (1 + finalGlowMult),
             entryOffsetY: 0,
