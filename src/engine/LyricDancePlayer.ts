@@ -1000,7 +1000,8 @@ export class LyricDancePlayer {
       this.ctx.fillStyle = halo;
       this.ctx.fillRect(drawX - haloR, drawY - haloR, haloR * 2, haloR * 2);
 
-      this.ctx.globalAlpha = chunk.alpha;
+      const drawAlpha = chunk.alpha < 0.1 ? chunk.alpha : Math.max(0.65, chunk.alpha);
+      this.ctx.globalAlpha = drawAlpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
       this.ctx.font = zoomedFont;
       if (chunk.glow > 0) {
@@ -1216,6 +1217,18 @@ export class LyricDancePlayer {
   // Per-chapter particle systems derived from cinematic direction
   public chapterParticleSystems: (string | null)[] = [];
 
+  private enforceDarkColor(hex: string): string {
+    const clean = (hex || '#0a0a0a').replace('#', '').padEnd(6, '0');
+    const r = parseInt(clean.slice(0, 2), 16) / 255;
+    const g = parseInt(clean.slice(2, 4), 16) / 255;
+    const b = parseInt(clean.slice(4, 6), 16) / 255;
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (lum <= 0.15) return hex;
+    const scale = 0.12 / lum;
+    const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255 * scale)));
+    return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
+  }
+
   private buildBgCache(): void {
     const chapters = this.payload?.cinematic_direction?.chapters ?? [];
     const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
@@ -1231,7 +1244,8 @@ export class LyricDancePlayer {
       const ctx = off.getContext('2d');
       if (!ctx) continue;
 
-      const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
+      let dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
+      dominantColor = this.enforceDarkColor(dominantColor);
       const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
       const particleDesc = chapter?.particles ?? '';
       this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));

@@ -308,19 +308,9 @@ function computeBehaviorState(style: BehaviorStyle, tSec: number, wordStart: num
 }
 
 const FILLER_WORDS = new Set([
-  'the', 'a', 'an', 'i', 'in', 'on', 'at', 'to', 'of', 'and', 'or', 'but',
-  'is', 'it', 'my', 'me', 'you', 'we', 'he', 'she', 'they', 'im', 'its',
-  'was', 'be', 'do', 'got', 'get', 'just', 'so', 'no', 'not', 'for', 'with',
-  'that', 'this', 'they', 'are', 'have', 'had', 'his', 'her', 'our', 'your',
-  'all', 'been', 'has', 'would', 'will', 'can', 'could', 'if', 'as', 'up',
+  'the', 'a', 'an', 'i', 'in', 'on', 'at', 'to', 'of', 'and', 'or', 'but', 'is', 'it',
+  'my', 'me', 'you', 'we', 'he', 'she', 'they', 'im', 'its', 'was', 'be', 'do',
 ]);
-
-const MIN_GROUP_DURATION = 0.4;
-const MAX_GROUP_SIZE = 5;
-
-function isFillerWord(word: string): boolean {
-  return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase());
-}
 
 type WordDirectiveLike = {
   word?: string;
@@ -367,23 +357,6 @@ type WordMetaEntry = WordEntry & {
   lineIndex: number;
   wordIndex: number;
 };
-
-interface PhraseGroup {
-  words: WordMetaEntry[];
-  start: number;
-  end: number;
-  anchorWordIdx: number;
-  lineIndex: number;
-  groupIndex: number;
-}
-
-interface GroupPosition {
-  x: number;
-  y: number;
-  fontSize: number;
-  isAnchor: boolean;
-  isFiller: boolean;
-}
 
 type TensionStageLike = {
   startRatio?: number;
@@ -468,203 +441,13 @@ function getWordFontSize(
   visualMode: VisualMode,
 ): number {
   const clean = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
-  if (isFillerWord(clean)) return Math.round(baseFontSize * 0.65);
+  if (FILLER_WORDS.has(clean)) return Math.round(baseFontSize * 0.65);
 
   const emphasisLevel = directive?.emphasisLevel ?? 2;
   const emphasisMultiplier = visualMode === 'explosive' ? 0.25
     : visualMode === 'cinematic' ? 0.18 : 0.12;
   const scale = 0.8 + (emphasisLevel - 1) * emphasisMultiplier;
   return Math.round(baseFontSize * scale);
-}
-
-function findAnchorWord(words: WordMetaEntry[]): number {
-  let maxScore = -1;
-  let maxIdx = words.length - 1;
-
-  for (let i = 0; i < words.length; i += 1) {
-    const emp = words[i].directive?.emphasisLevel ?? 1;
-    const isImpact = words[i].directive?.kineticClass === 'IMPACT';
-    const isRising = words[i].directive?.kineticClass === 'RISING';
-    const isFiller = isFillerWord(words[i].word);
-    const wordLen = words[i].clean.length;
-
-    const score = (emp * 2)
-      + (isImpact ? 6 : 0)
-      + (isRising ? 4 : 0)
-      - (isFiller ? 5 : 0)
-      + (wordLen > 5 ? 2 : 0)
-      + (wordLen > 8 ? 2 : 0);
-
-    if (score > maxScore) {
-      maxScore = score;
-      maxIdx = i;
-    }
-  }
-  return maxIdx;
-}
-
-function mergeShortGroups(groups: PhraseGroup[]): PhraseGroup[] {
-  const result: PhraseGroup[] = [];
-  let i = 0;
-
-  while (i < groups.length) {
-    const g = groups[i];
-    const duration = g.end - g.start;
-
-    if (duration < MIN_GROUP_DURATION && i < groups.length - 1) {
-      const next = groups[i + 1];
-      if (next.lineIndex === g.lineIndex && (g.words.length + next.words.length) <= MAX_GROUP_SIZE) {
-        const mergedWords = [...g.words, ...next.words];
-        const merged: PhraseGroup = {
-          words: mergedWords,
-          start: g.start,
-          end: next.end,
-          anchorWordIdx: findAnchorWord(mergedWords),
-          lineIndex: g.lineIndex,
-          groupIndex: g.groupIndex,
-        };
-        result.push(merged);
-        i += 2;
-        continue;
-      }
-    }
-
-    result.push(g);
-    i += 1;
-  }
-
-  return result;
-}
-
-function buildPhraseGroups(wordMeta: WordMetaEntry[]): PhraseGroup[] {
-  const lineMap = new Map<number, WordMetaEntry[]>();
-  for (const wm of wordMeta) {
-    if (!lineMap.has(wm.lineIndex)) lineMap.set(wm.lineIndex, []);
-    lineMap.get(wm.lineIndex)?.push(wm);
-  }
-
-  const groups: PhraseGroup[] = [];
-
-  for (const [lineIdx, words] of lineMap) {
-    let current: WordMetaEntry[] = [];
-    let groupIdx = 0;
-
-    const flushGroup = () => {
-      if (current.length === 0) return;
-      groups.push({
-        words: [...current],
-        start: current[0].start,
-        end: current[current.length - 1].end,
-        anchorWordIdx: findAnchorWord(current),
-        lineIndex: lineIdx,
-        groupIndex: groupIdx,
-      });
-      groupIdx += 1;
-      current = [];
-    };
-
-    for (let i = 0; i < words.length; i += 1) {
-      const wm = words[i];
-      current.push(wm);
-
-      const duration = current[current.length - 1].end - current[0].start;
-      const isNaturalBreak = /[,\.!?;]$/.test(wm.word);
-      const isMaxSize = current.length >= MAX_GROUP_SIZE;
-      const isLast = i === words.length - 1;
-
-      if (isLast) {
-        flushGroup();
-      } else if ((isNaturalBreak || isMaxSize) && duration >= MIN_GROUP_DURATION) {
-        flushGroup();
-      }
-    }
-  }
-
-  groups.sort((a, b) => a.start - b.start);
-  return mergeShortGroups(groups).map((group) => ({
-    ...group,
-    end: Math.max(group.end, group.start + MIN_GROUP_DURATION),
-  }));
-}
-
-function getGroupLayout(
-  group: PhraseGroup,
-  visualMode: VisualMode,
-  canvasW: number,
-  canvasH: number,
-  baseFontSize: number,
-): GroupPosition[] {
-  const count = group.words.length;
-  const anchorIdx = group.anchorWordIdx;
-  const cx = canvasW * 0.5;
-  const cy = canvasH * 0.5;
-
-  const MIN_FONT = 28;
-
-  if (count === 1) {
-    const isFiller = isFillerWord(group.words[0].word);
-    return [{
-      x: cx,
-      y: cy,
-      fontSize: Math.max(MIN_FONT, isFiller ? baseFontSize * 0.9 : baseFontSize * 1.2),
-      isAnchor: true,
-      isFiller,
-    }];
-  }
-
-  const positions: GroupPosition[] = [];
-  const spread = visualMode === 'explosive' ? 1.4
-    : visualMode === 'cinematic' ? 1.0 : 0.7;
-
-  for (let i = 0; i < count; i += 1) {
-    const wm = group.words[i];
-    const isFiller = isFillerWord(wm.word);
-    const isAnchor = i === anchorIdx;
-    const emp = wm.directive?.emphasisLevel ?? 1;
-
-    if (isAnchor) {
-      const anchorFontSize = Math.max(
-        MIN_FONT,
-        baseFontSize * (1.0 + (emp - 1) * 0.15),
-      );
-      positions.push({ x: cx, y: cy, fontSize: anchorFontSize, isAnchor: true, isFiller });
-    } else {
-      const relIdx = i - anchorIdx;
-      const xOff = relIdx * baseFontSize * 2.2 * spread;
-      const yOff = isFiller ? -baseFontSize * 1.1 : baseFontSize * 0.9;
-
-      const supportFontSize = Math.max(
-        MIN_FONT,
-        isFiller ? baseFontSize * 0.55 : baseFontSize * 0.75,
-      );
-
-      positions.push({
-        x: cx + xOff,
-        y: cy + yOff,
-        fontSize: supportFontSize,
-        isAnchor: false,
-        isFiller,
-      });
-    }
-  }
-
-  const margin = 60;
-  for (const pos of positions) {
-    pos.x = Math.max(margin, Math.min(canvasW - margin, pos.x));
-    pos.y = Math.max(margin, Math.min(canvasH - margin, pos.y));
-  }
-
-  return positions;
-}
-
-function dimColor(hex: string, factor: number): string {
-  const clean = hex.replace('#', '');
-  if (clean.length !== 6) return hex;
-  const r = Math.round(parseInt(clean.slice(0, 2), 16) * factor);
-  const g = Math.round(parseInt(clean.slice(2, 4), 16) * factor);
-  const b = Math.round(parseInt(clean.slice(4, 6), 16) * factor);
-  const clamp = (v: number) => Math.max(0, Math.min(255, v));
-  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
 }
 
 const findByRatio = <T extends { startRatio?: number; endRatio?: number }>(
@@ -910,211 +693,102 @@ function bakeFrame(
       drift: 0.8,
       glitch: 0.05,
     };
+    const wordLinger = WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4;
 
-    const animParams = {
-      linger: WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4,
-      stagger: manifestStagger ?? 0.05,
-      entryDuration: motionDefaults.entryDuration,
-      exitDuration: motionDefaults.exitDuration,
-    };
+    const wordChunks = pre.wordMeta
+      .filter((wm) => {
+        return tSec >= wm.start && tSec < (wm.end + wordLinger);
+      })
+      .map((wm) => {
+        const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
+        const totalWords = lineWords.length;
+        const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
+        const lineLayout = manifestLineLayouts[String(wm.lineIndex)] ?? null;
+        const position = manifestDirective?.position
+          ?? lineLayout?.positions?.[wm.wordIndex]
+          ?? getLayoutForMode(pre.visualMode, wm.wordIndex, totalWords, chapterEmotionalIntensity);
+        const [nx, ny] = position;
 
-    const phraseGroups = payload.words?.length > 0
-      ? buildPhraseGroups(pre.wordMeta)
-      : null;
+        const canvasX = nx * 960;
+        const canvasY = ny * 540;
+        const elapsed = tSec - wm.start;
 
-    const groupLayouts = new Map<string, GroupPosition[]>();
-    if (phraseGroups) {
-      for (const group of phraseGroups) {
-        const key = `${group.lineIndex}-${group.groupIndex}`;
-        const baseFontSize = pre.lineFontSizes[group.lineIndex] ?? 36;
-        groupLayouts.set(key, getGroupLayout(group, pre.visualMode, 960, 540, baseFontSize));
-      }
-    }
+        const stagger = wm.wordIndex * (manifestStagger ?? lineLayout?.stagger ?? 0);
+        const adjustedElapsed = Math.max(0, elapsed - stagger);
 
-    if (phraseGroups) {
-      for (const group of phraseGroups) {
-        const groupEnd = group.end + animParams.linger;
-        if (tSec < group.start - animParams.stagger * group.words.length) continue;
-        if (tSec > groupEnd) continue;
-
-        const groupKey = `${group.lineIndex}-${group.groupIndex}`;
-        const layout = groupLayouts.get(groupKey);
-        if (!layout) continue;
-
-        const anchorWord = group.words[group.anchorWordIdx];
-        const manifestAnchorDirective = manifestWordDirectives[anchorWord?.clean] ?? null;
         const { entry, behavior, exit } = assignWordAnimations(
-          anchorWord,
+          wm,
           motionDefaults,
           storyboard as StoryboardEntryLike[],
-          manifestAnchorDirective,
+          manifestDirective,
         );
 
-        for (let wi = 0; wi < group.words.length; wi += 1) {
-          const wm = group.words[wi];
-          const pos = layout[wi];
-          if (!pos) continue;
+        const entryProgress = Math.max(0, adjustedElapsed / motionDefaults.entryDuration);
+        const entryState = computeEntryState(entry, entryProgress, motionDefaults.behaviorIntensity);
 
-          const isAnchor = wi === group.anchorWordIdx;
-          const staggerDelay = isAnchor
-            ? 0
-            : Math.abs(wi - group.anchorWordIdx) * animParams.stagger;
+        const exitDuration = exit === 'linger' ? 0.05
+          : exit === 'evaporate' ? 0.8
+            : motionDefaults.exitDuration;
+        const exitProgress = Math.max(0, (tSec - wm.end) / exitDuration);
+        const exitState = computeExitState(exit, exitProgress, motionDefaults.behaviorIntensity);
 
-          const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay);
-          const entryProgress = adjustedElapsed / Math.max(0.01, animParams.entryDuration);
-          const exitProgress = Math.max(0, (tSec - group.end) / Math.max(0.01, animParams.exitDuration));
+        const beatPhase = beatIndex >= 0
+          ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
+          : 0;
+        const behaviorState = computeBehaviorState(
+          behavior,
+          tSec,
+          wm.start,
+          beatPhase,
+          motionDefaults.behaviorIntensity,
+        );
 
-          const entryState = computeEntryState(entry, entryProgress, motionDefaults.behaviorIntensity);
-          const exitState = computeExitState(exit, exitProgress, motionDefaults.behaviorIntensity);
-          const beatPhase = beatIndex >= 0
-            ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
-            : 0;
-          const behaviorState = computeBehaviorState(
-            behavior,
-            tSec,
-            group.start,
-            beatPhase,
-            motionDefaults.behaviorIntensity,
-          );
+        const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
+        const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
+        const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
+        const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
+        const finalAlpha = exitProgress > 0
+          ? exitState.alpha
+          : entryState.alpha * (behaviorState.alpha ?? 1);
+        const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
+        const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
 
-          const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
-          const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
-          const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
-          const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
-          const finalAlpha = exitProgress > 0
-            ? exitState.alpha
-            : entryState.alpha * (behaviorState.alpha ?? 1);
-          const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
-          const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
+        const color = manifestDirective?.color
+          ?? wm.directive?.colorOverride
+          ?? pre.lineColors[wm.lineIndex]
+          ?? '#ffffff';
 
-          const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
-          const baseColor = manifestDirective?.color
-            ?? wm.directive?.colorOverride
-            ?? pre.lineColors[wm.lineIndex]
-            ?? '#ffffff';
-          const color = isAnchor ? baseColor : dimColor(baseColor, 0.65);
-          const wordGlow = isAnchor
-            ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0)
-            : glow * 0.3;
+        const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
+        const soloWordBonus = motionProfile === 'drift' || motionProfile === 'fluid' ? 1.3 : 1.0;
+        const fontSize = manifestDirective?.fontSize
+          ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
 
-          chunks.push({
-            id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
-            x: pos.x + finalOffsetX,
-            y: pos.y + finalOffsetY,
-            alpha: Math.max(0, Math.min(1, finalAlpha)),
-            scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
-            scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
-            scale: 1,
-            visible: finalAlpha > 0.01,
-            fontSize: pos.fontSize,
-            color,
-            glow: wordGlow,
-            skewX: finalSkewX,
-            entryOffsetY: 0,
-            entryOffsetX: 0,
-            entryScale: 1,
-            exitOffsetY: 0,
-            exitScale: 1,
-          });
-        }
-      }
-    } else {
-      const wordLinger = WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4;
-      const wordChunks = pre.wordMeta
-        .filter((wm) => {
-          return tSec >= wm.start && tSec < (wm.end + wordLinger);
-        })
-        .map((wm) => {
-          const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
-          const totalWords = lineWords.length;
-          const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
-          const lineLayout = manifestLineLayouts[String(wm.lineIndex)] ?? null;
-          const position = manifestDirective?.position
-            ?? lineLayout?.positions?.[wm.wordIndex]
-            ?? getLayoutForMode(pre.visualMode, wm.wordIndex, totalWords, chapterEmotionalIntensity);
-          const [nx, ny] = position;
+        const wordGlow = manifestDirective?.glow
+          ? glow * manifestDirective.glow
+          : (wm.directive?.emphasisLevel ?? 0) >= 4 ? glow * 1.8 : glow * 0.6;
 
-          const canvasX = nx * 960;
-          const canvasY = ny * 540;
-          const elapsed = tSec - wm.start;
+        return {
+          id: `${wm.lineIndex}-${wm.wordIndex}`,
+          x: canvasX + finalOffsetX,
+          y: canvasY + finalOffsetY,
+          alpha: finalAlpha,
+          scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
+          scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
+          scale: 1,
+          visible: finalAlpha > 0.01,
+          fontSize,
+          color,
+          glow: wordGlow * (1 + finalGlowMult),
+          entryOffsetY: 0,
+          entryOffsetX: 0,
+          entryScale: 1,
+          exitOffsetY: 0,
+          exitScale: 1,
+          skewX: finalSkewX,
+        };
+      });
 
-          const stagger = wm.wordIndex * (manifestStagger ?? lineLayout?.stagger ?? 0);
-          const adjustedElapsed = Math.max(0, elapsed - stagger);
-
-          const { entry, behavior, exit } = assignWordAnimations(
-            wm,
-            motionDefaults,
-            storyboard as StoryboardEntryLike[],
-            manifestDirective,
-          );
-
-          const entryProgress = Math.max(0, adjustedElapsed / motionDefaults.entryDuration);
-          const entryState = computeEntryState(entry, entryProgress, motionDefaults.behaviorIntensity);
-
-          const exitDuration = exit === 'linger' ? 0.05
-            : exit === 'evaporate' ? 0.8
-              : motionDefaults.exitDuration;
-          const exitProgress = Math.max(0, (tSec - wm.end) / exitDuration);
-          const exitState = computeExitState(exit, exitProgress, motionDefaults.behaviorIntensity);
-
-          const beatPhase = beatIndex >= 0
-            ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
-            : 0;
-          const behaviorState = computeBehaviorState(
-            behavior,
-            tSec,
-            wm.start,
-            beatPhase,
-            motionDefaults.behaviorIntensity,
-          );
-
-          const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
-          const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
-          const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
-          const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
-          const finalAlpha = exitProgress > 0
-            ? exitState.alpha
-            : entryState.alpha * (behaviorState.alpha ?? 1);
-          const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
-          const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
-
-          const color = manifestDirective?.color
-            ?? wm.directive?.colorOverride
-            ?? pre.lineColors[wm.lineIndex]
-            ?? '#ffffff';
-
-          const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
-          const soloWordBonus = motionProfile === 'drift' || motionProfile === 'fluid' ? 1.3 : 1.0;
-          const fontSize = manifestDirective?.fontSize
-            ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
-
-          const wordGlow = manifestDirective?.glow
-            ? glow * manifestDirective.glow
-            : (wm.directive?.emphasisLevel ?? 0) >= 4 ? glow * 1.8 : glow * 0.6;
-
-          return {
-            id: `${wm.lineIndex}-${wm.wordIndex}`,
-            x: canvasX + finalOffsetX,
-            y: canvasY + finalOffsetY,
-            alpha: finalAlpha,
-            scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
-            scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
-            scale: 1,
-            visible: finalAlpha > 0.01,
-            fontSize,
-            color,
-            glow: wordGlow * (1 + finalGlowMult),
-            entryOffsetY: 0,
-            entryOffsetX: 0,
-            entryScale: 1,
-            exitOffsetY: 0,
-            exitScale: 1,
-            skewX: finalSkewX,
-          };
-        });
-
-      chunks.push(...wordChunks);
-    }
+    chunks.push(...wordChunks);
   } else {
 
 
