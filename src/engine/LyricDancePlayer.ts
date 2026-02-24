@@ -928,7 +928,7 @@ export class LyricDancePlayer {
     ctx.fillRect(0, 0, w, h);
   }
 
-  private drawBackground(frame: Keyframe): void {
+  private drawBackground(frame: ScaledKeyframe): void {
     if (this.bgCaches.length === 0) return;
 
     const bgBlend = frame.bgBlend ?? 0;
