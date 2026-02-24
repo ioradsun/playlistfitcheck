@@ -173,6 +173,7 @@ export function drawIcon(
   style: IconStyle = "outline",
   opacity: number = 1,
 ): void {
+  return; // DISABLED — icons phase 2
   const char = EMOJI_MAP[glyph] ?? glyph;
 
   ctx.save();
