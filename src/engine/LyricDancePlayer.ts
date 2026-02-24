@@ -39,6 +39,7 @@ export interface LyricDanceData {
   seed: string;
   scene_manifest: any;
   cinematic_direction: CinematicDirection | null;
+  chapter_images?: string[];
 }
 
 export interface LiveDebugState {
