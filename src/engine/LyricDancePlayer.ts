@@ -254,6 +254,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     skewX?: number;
     fontSize?: number;
     fontWeight?: number;
+    isAnchor?: boolean;
     color?: string;
     visible: boolean;
     entryOffsetY?: number;
