@@ -612,8 +612,9 @@ export function LyricFitTab({
       )}
 
       {activeTab === "lyrics" ? (
-        <div className="flex flex-col flex-1">
+        <div className="flex flex-col flex-1 overflow-y-auto">
           {sceneInputNode}
+          <div className="flex-1 flex flex-col">
           <LyricsTab
             lyricData={lyricData}
             setLyricData={setLyricData}
