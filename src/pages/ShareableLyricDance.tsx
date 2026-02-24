@@ -503,6 +503,43 @@ export default function ShareableLyricDance() {
       <LiveDebugHUD player={playerInstance} />
       <LyricDanceDebugPanel
         player={playerInstance}
+        onRegenerateSong={() => {
+          toast.info("Re-analyzing song DNA…");
+          if (!data) return;
+          const lyricsText = (data.lyrics as any[])
+            .filter((l: any) => l.tag !== "adlib")
+            .map((l: any) => l.text)
+            .join("\n");
+          supabase.functions.invoke("lyric-analyze", {
+            body: {
+              title: data.song_name,
+              artist: data.artist_name,
+              lyrics: lyricsText,
+              includeHooks: true,
+            },
+          }).then(({ data: dnaResult, error }) => {
+            if (error) { toast.error("Song DNA failed"); return; }
+            // Update the dance row with new physics_spec
+            const newSpec = {
+              mood: dnaResult?.mood,
+              description: dnaResult?.description,
+              meaning: dnaResult?.meaning,
+              physicsSpec: dnaResult?.physics_spec,
+              scene_manifest: dnaResult?.scene_manifest || dnaResult?.sceneManifest,
+            };
+            supabase.from("shareable_lyric_dances" as any)
+              .update({ physics_spec: newSpec, scene_manifest: newSpec.scene_manifest, updated_at: new Date().toISOString() } as any)
+              .eq("id", data.id)
+              .then(() => {
+                toast.success("Song DNA updated — reloading…");
+                setTimeout(() => window.location.reload(), 1000);
+              });
+          });
+        }}
+        onRegenerateDance={() => {
+          toast.info("Reloading dance…");
+          window.location.reload();
+        }}
         data={{
           songDna: {
             mood: (data.physics_spec as any)?.mood, description: (data.physics_spec as any)?.description,
