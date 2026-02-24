@@ -740,12 +740,20 @@ export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, on
                 >
                   DATA · Received
                 </button>
+                <button
+                  onClick={() => setTab("prompt")}
+                  className={`flex-1 py-2 text-[10px] font-mono font-bold uppercase tracking-widest transition-colors ${
+                    tab === "prompt" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  PROMPT
+                </button>
               </div>
             </div>
 
             {/* Content */}
             <div className="p-3">
-              {tab === "hud" ? <HudTab player={player} /> : <DataTab data={data} />}
+              {tab === "hud" ? <HudTab player={player} /> : tab === "prompt" ? <PromptTab data={data} /> : <DataTab data={data} />}
             </div>
           </motion.aside>
         )}
