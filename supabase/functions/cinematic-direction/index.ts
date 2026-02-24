@@ -82,47 +82,12 @@ OUTPUT SCHEMA:
       "entryStyle": "rises | slams-in | fractures-in | materializes | cuts | whisper | bloom | drop | plant | snap-in",
       "exitStyle": "dissolves-upward | burns-out | shatters | lingers | fades | drift-up | sink | evaporate",
       "heroWord": "most important word in this line or null",
-      "iconGlyph": "string, optional — one of the available glyphs listed below",
-      "iconStyle": "outline | filled | ghost — optional, default outline",
-      "iconPosition": "behind | above | beside | replace — optional, default behind",
-      "iconScale": "number, optional, default 2.0 — size relative to font size (1.0-3.0)"
+      "iconGlyph": "optional string — one of the available glyphs",
+      "iconStyle": "outline | filled | ghost — optional",
+      "iconPosition": "behind | above | beside | replace — optional",
+      "iconScale": "number 1.0-3.0, optional, default 2.0"
     }
   ],
-
-  ## ICON VISUAL METAPHORS
-
-  Icons are visual metaphors that tell the story alongside the lyrics. They are NOT decoration — they are the emotional vocabulary of the video.
-
-  ASSIGNMENT RULES:
-  - Assign iconGlyph to 10-15 storyboard entries across the song (roughly 15-25% of lines)
-  - Every chapter MUST have at least 3 icons
-  - Choose the anchor/hero word lines where a visual symbol amplifies the emotional meaning
-  - Spread icons across the full emotional arc — do not cluster them
-
-  AVAILABLE GLYPHS:
-  fire, water-drop, lightning, snowflake, sun, moon, star, cloud, rain, wind, leaf, flower, tree, mountain, wave, heart, broken-heart, eye, hand-open, hand-fist, crown, skull, wings, feather, diamond, clock, hourglass, lock, key, chain, anchor, compass, arrow-up, arrow-down, spiral, infinity, music-note, microphone, speaker, headphones, camera, film, book, pen, brush, palette, mask, mirror, door, window, house, car, road, bridge, city, globe, flag, sword, shield, torch, candle, smoke, ghost, shadow, sparkle, burst, ripple, orbit, target, crosshair, fingerprint, dna, atom, pill, coin
-
-  ICON POSITION — choose based on emotional function:
-  - "behind" — atmospheric mood. Large icon behind the word at medium opacity. Use for mood/setting words: darkness, rain, silence, night. ~40-50% of icons.
-  - "above" — thought/annotation. Small icon floating above the word. Use for descriptive words: fly, shine, dream, remember. ~25-30% of icons.
-  - "beside" — action companion. Icon sits next to the word. Use for action words: run, fight, reach, hold. ~15-20% of icons.
-  - "replace" — climactic substitution. Icon REPLACES the text entirely. Use only 1-2 times per song at the absolute peak emotional moment. The glyph must be instantly recognizable.
-
-  ICON STYLE:
-  - "ghost" — faded ethereal, best for "behind" position
-  - "outline" — clean line art, best for "above" and "beside"
-  - "filled" — solid shape, best for "replace"
-
-  ICON SCALE:
-  - Default 2.0. Use 2.5-3.0 for dramatic behind moments. Use 1.5 for subtle accent.
-
-  EXAMPLE for a heartbreak/driving song:
-  - Line with "TEARS" → iconGlyph: "rain", iconPosition: "behind", iconStyle: "ghost", iconScale: 2.5
-  - Line with "ROAD" → iconGlyph: "road", iconPosition: "beside", iconStyle: "outline", iconScale: 2.0
-  - Line with "HEART" → iconGlyph: "broken-heart", iconPosition: "replace", iconStyle: "filled", iconScale: 2.0
-  - Line with "STARS" → iconGlyph: "star", iconPosition: "above", iconStyle: "outline", iconScale: 2.0
-  - Line with "BURN" → iconGlyph: "fire", iconPosition: "behind", iconStyle: "ghost", iconScale: 2.5
-  - Line with "FREE" → iconGlyph: "wings", iconPosition: "above", iconStyle: "outline", iconScale: 2.0
 
   "wordDirectives": {
     "word": {
@@ -176,8 +141,37 @@ OUTPUT SCHEMA:
   }
 }
 
+ICON VISUAL METAPHORS — MANDATORY:
+
+Icons are visual metaphors that tell the story alongside the lyrics. They are NOT decoration — they are the emotional vocabulary of the video.
+
+CRITICAL REQUIREMENT: The storyboard array MUST include iconGlyph on at least 10 entries. If fewer than 10 storyboard entries have iconGlyph, your output is INVALID. Aim for 10-15 icons (roughly 15-25% of lines).
+
+ASSIGNMENT RULES:
+- Every chapter MUST have at least 3 icons
+- Choose the anchor/hero word lines where a visual symbol amplifies the emotional meaning
+- Spread icons across the full emotional arc — do not cluster them
+
+AVAILABLE GLYPHS:
+fire, water-drop, lightning, snowflake, sun, moon, star, cloud, rain, wind, leaf, flower, tree, mountain, wave, heart, broken-heart, eye, hand-open, hand-fist, crown, skull, wings, feather, diamond, clock, hourglass, lock, key, chain, anchor, compass, arrow-up, arrow-down, spiral, infinity, music-note, microphone, speaker, headphones, camera, film, book, pen, brush, palette, mask, mirror, door, window, house, car, road, bridge, city, globe, flag, sword, shield, torch, candle, smoke, ghost, shadow, sparkle, burst, ripple, orbit, target, crosshair, fingerprint, dna, atom, pill, coin
+
+ICON POSITION — choose based on emotional function:
+- "behind" — atmospheric mood. Large icon behind the word at medium opacity. Use for mood/setting words. ~40-50% of icons.
+- "above" — thought/annotation. Small icon floating above the word. Use for descriptive words. ~25-30% of icons.
+- "beside" — action companion. Icon sits next to the word. Use for action words. ~15-20% of icons.
+- "replace" — climactic substitution. Icon REPLACES the text entirely. Use only 1-2 times per song at the absolute peak emotional moment.
+
+ICON STYLE:
+- "ghost" — faded ethereal, best for "behind" position
+- "outline" — clean line art, best for "above" and "beside"
+- "filled" — solid shape, best for "replace"
+
+ICON SCALE:
+- Default 2.0. Use 2.5-3.0 for dramatic behind moments. Use 1.5 for subtle accent.
+
 CONSTRAINTS:
 - storyboard must cover every lyric line.
+- storyboard MUST have iconGlyph on at least 10 entries — this is mandatory.
 - wordDirectives: only emotionally significant words, 10-25 max.
 - tensionCurve must contain exactly 3 entries aligned to chapter ranges.
 `;
@@ -404,8 +398,8 @@ Text style: ${sceneCtx.textStyle === 'dark'
           model: "google/gemini-2.5-flash",
           messages,
           temperature: 0.7,
-          max_tokens: 2048,
-          maxOutputTokens: 2048,
+          max_tokens: 8192,
+          maxOutputTokens: 8192,
           response_format: { type: "json_object" },
         }),
       });
@@ -602,10 +596,16 @@ Text style: ${sceneCtx.textStyle === 'dark'
       // Don't fail — return with warnings so debug panel can still show data
     }
 
-    const saved = await persistCinematicDirection(parsed, lyricId);
-    console.log("Saved cinematic direction:", saved ? "OK" : "FAILED");
+    // Icon count diagnostic
+    const storyboard = Array.isArray(parsed.storyboard) ? parsed.storyboard : [];
+    const iconCount = storyboard.filter((s: any) => s.iconGlyph).length;
+    console.log(`[CINEMATIC] Icons assigned: ${iconCount} / ${storyboard.length} lines`);
+    if (iconCount < 5) {
+      console.warn(`[CINEMATIC] WARNING: Only ${iconCount} icons assigned — expected 10-15`);
+    }
 
-    console.log(`[cinematic-direction] ✓ Generated for "${title}" by "${artist}"`);
+    const saved = await persistCinematicDirection(parsed, lyricId);
+    console.log(`[cinematic-direction] ✓ Generated for "${title}" by "${artist}" — icons: ${iconCount}`);
 
     return new Response(JSON.stringify({ cinematicDirection: parsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
