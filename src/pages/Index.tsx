@@ -468,10 +468,11 @@ const Index = () => {
 
   const handleSidebarTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
-    // NOTE: Do NOT null loadedLyric here — that causes LyricFitTab to remount
-    // and lose all in-memory state (pipeline results, audio, etc.).
-    // The "New Project" flow is handled by handleNewLyric instead.
-  }, [setActiveTab]);
+    // Reset loaded project for the clicked tool so it opens fresh/new
+    if (tab === "lyric") { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }
+    else if (tab === "mix") { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }
+    else if (tab === "hitfit") { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }
+  }, [setActiveTab, navigate]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
     // Only reset state for the tool being loaded — don't touch other tools'
