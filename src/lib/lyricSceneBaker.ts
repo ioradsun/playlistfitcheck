@@ -449,6 +449,17 @@ type PrebakedData = {
   wordMeta: WordMetaEntry[];
   visualMode: VisualMode;
   heat: number;
+  // Pre-computed once (was previously rebuilt every frame)
+  phraseGroups: PhraseGroup[] | null;
+  groupLayouts: Map<string, GroupPosition[]>;
+  motionProfile: MotionProfile;
+  motionDefaults: MotionDefaults;
+  animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number };
+  manifestWordDirectives: Record<string, ManifestWordDirective>;
+  manifestLineLayouts: Record<string, ManifestLineLayout>;
+  manifestChapters: ManifestChapter[];
+  manifestStagger: number | null;
+  storyboard: StoryboardEntryLike[];
 };
 
 function getLayoutForMode(
@@ -809,6 +820,37 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
       }
     }
   }
+  // Pre-compute phrase groups, motion profile, and layouts ONCE
+  const sceneManifest = (payload.scene_manifest ?? null) as unknown as Record<string, unknown> | null;
+  const manifestWordDirectives = (sceneManifest?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
+  const manifestLineLayouts = (sceneManifest?.lineLayouts ?? {}) as Record<string, ManifestLineLayout>;
+  const manifestChapters = (sceneManifest?.chapters ?? []) as ManifestChapter[];
+  const manifestStagger = typeof sceneManifest?.stagger === 'number' ? sceneManifest.stagger : null;
+  const storyboard = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
+
+  const motionProfile = deriveMotionProfile(payload);
+  const motionDefaults = MOTION_DEFAULTS[motionProfile];
+
+  const WORD_LINGER_BY_PROFILE: Record<string, number> = {
+    weighted: 0.15, fluid: 0.55, elastic: 0.2, drift: 0.8, glitch: 0.05,
+  };
+  const animParams = {
+    linger: WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4,
+    stagger: manifestStagger ?? 0.05,
+    entryDuration: motionDefaults.entryDuration,
+    exitDuration: motionDefaults.exitDuration,
+  };
+
+  const phraseGroups = words.length > 0 ? buildPhraseGroups(wordMeta) : null;
+
+  const groupLayouts = new Map<string, GroupPosition[]>();
+  if (phraseGroups) {
+    for (const group of phraseGroups) {
+      const key = `${group.lineIndex}-${group.groupIndex}`;
+      const baseFontSize = lineFontSizes[group.lineIndex] ?? 36;
+      groupLayouts.set(key, getGroupLayout(group, visualMode, 960, 540, baseFontSize));
+    }
+  }
 
   return {
     chapters,
@@ -825,6 +867,16 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     wordMeta,
     visualMode,
     heat,
+    phraseGroups,
+    groupLayouts,
+    motionProfile,
+    motionDefaults,
+    animParams,
+    manifestWordDirectives,
+    manifestLineLayouts,
+    manifestChapters,
+    manifestStagger,
+    storyboard,
   };
 }
 
@@ -875,11 +927,8 @@ function bakeFrame(
   const tensionMotion = pre.tensionMotionByFrame[frameIndex] ?? 0.5;
 
   const chapters = pre.chapters;
-  const sceneManifest = (payload.scene_manifest ?? null) as unknown as Record<string, unknown> | null;
-  const manifestWordDirectives = (sceneManifest?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
-  const manifestLineLayouts = (sceneManifest?.lineLayouts ?? {}) as Record<string, ManifestLineLayout>;
-  const manifestChapters = (sceneManifest?.chapters ?? []) as ManifestChapter[];
-  const manifestStagger = typeof sceneManifest?.stagger === 'number' ? sceneManifest.stagger : null;
+  const manifestWordDirectives = pre.manifestWordDirectives;
+  const manifestChapters = pre.manifestChapters;
   const distanceToZoom: Record<string, number> = {
     'Wide': 0.82,
     'Medium': 1.0,
@@ -905,38 +954,12 @@ function bakeFrame(
   if (pre.wordMeta.length > 0) {
     const currentChapter = findByRatio(chapters, songProgress);
     const chapterEmotionalIntensity = currentChapter?.emotionalIntensity ?? pre.heat;
-    const motionProfile = deriveMotionProfile(payload);
-    const motionDefaults = MOTION_DEFAULTS[motionProfile];
-    const storyboard = payload.cinematic_direction?.storyboard ?? [];
+    const motionDefaults = pre.motionDefaults;
+    const storyboard = pre.storyboard;
     const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
-
-    const WORD_LINGER_BY_PROFILE: Record<string, number> = {
-      weighted: 0.15,
-      fluid: 0.55,
-      elastic: 0.2,
-      drift: 0.8,
-      glitch: 0.05,
-    };
-
-    const animParams = {
-      linger: WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4,
-      stagger: manifestStagger ?? 0.05,
-      entryDuration: motionDefaults.entryDuration,
-      exitDuration: motionDefaults.exitDuration,
-    };
-
-    const phraseGroups = payload.words?.length > 0
-      ? buildPhraseGroups(pre.wordMeta)
-      : null;
-
-    const groupLayouts = new Map<string, GroupPosition[]>();
-    if (phraseGroups) {
-      for (const group of phraseGroups) {
-        const key = `${group.lineIndex}-${group.groupIndex}`;
-        const baseFontSize = pre.lineFontSizes[group.lineIndex] ?? 36;
-        groupLayouts.set(key, getGroupLayout(group, pre.visualMode, 960, 540, baseFontSize));
-      }
-    }
+    const animParams = pre.animParams;
+    const phraseGroups = pre.phraseGroups;
+    const groupLayouts = pre.groupLayouts;
 
     if (phraseGroups) {
       for (const group of phraseGroups) {
@@ -1042,7 +1065,7 @@ function bakeFrame(
         }
       }
     } else {
-      const wordLinger = WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4;
+      const wordLinger = pre.animParams.linger;
       const wordChunks = pre.wordMeta
         .filter((wm) => {
           return tSec >= wm.start && tSec < (wm.end + wordLinger);
@@ -1051,7 +1074,7 @@ function bakeFrame(
           const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
           const totalWords = lineWords.length;
           const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
-          const lineLayout = manifestLineLayouts[String(wm.lineIndex)] ?? null;
+          const lineLayout = pre.manifestLineLayouts[String(wm.lineIndex)] ?? null;
           const position = manifestDirective?.position
             ?? lineLayout?.positions?.[wm.wordIndex]
             ?? getLayoutForMode(pre.visualMode, wm.wordIndex, totalWords, chapterEmotionalIntensity);
@@ -1061,7 +1084,7 @@ function bakeFrame(
           const canvasY = ny * 540;
           const elapsed = tSec - wm.start;
 
-          const stagger = wm.wordIndex * (manifestStagger ?? lineLayout?.stagger ?? 0);
+          const stagger = wm.wordIndex * (pre.manifestStagger ?? lineLayout?.stagger ?? 0);
           const adjustedElapsed = Math.max(0, elapsed - stagger);
 
           const { entry, behavior, exit } = assignWordAnimations(
@@ -1107,7 +1130,7 @@ function bakeFrame(
             ?? '#ffffff';
 
           const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
-          const soloWordBonus = motionProfile === 'drift' || motionProfile === 'fluid' ? 1.3 : 1.0;
+          const soloWordBonus = pre.motionProfile === 'drift' || pre.motionProfile === 'fluid' ? 1.3 : 1.0;
           const fontSize = manifestDirective?.fontSize
             ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
 

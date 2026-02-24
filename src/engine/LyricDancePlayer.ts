@@ -900,8 +900,12 @@ export class LyricDancePlayer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
 
-    this.update(deltaMs);
-    this.draw(this.audio.currentTime);
+    try {
+      this.update(deltaMs);
+      this.draw(this.audio.currentTime);
+    } catch (err) {
+      console.error('[PLAYER] render crash caught:', err);
+    }
 
     this.rafHandle = requestAnimationFrame(this.tick);
   };
@@ -1044,13 +1048,14 @@ export class LyricDancePlayer {
       const sx = chunk.scaleX ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
       const sy = chunk.scaleY ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
 
-      // Behind each word — subtle dark halo for legibility
+      // Behind each word — simple dark halo for legibility (no gradient allocation)
       const haloR = fontSize * 2.2;
-      const halo = this.ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, haloR);
-      halo.addColorStop(0, 'rgba(0,0,0,0.45)');
-      halo.addColorStop(1, 'transparent');
-      this.ctx.fillStyle = halo;
-      this.ctx.fillRect(drawX - haloR, drawY - haloR, haloR * 2, haloR * 2);
+      this.ctx.globalAlpha = 0.35;
+      this.ctx.fillStyle = '#000000';
+      this.ctx.beginPath();
+      this.ctx.arc(drawX, drawY, haloR, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.globalAlpha = 1;
 
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
