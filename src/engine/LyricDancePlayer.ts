@@ -1148,29 +1148,60 @@ export class LyricDancePlayer {
     const lines = payload.lines ?? [];
 
     if (words.length > 0) {
-      const lineWordCounters: Record<number, number> = {};
+      // Replicate the baker's phrase-grouping to generate matching 3-part keys:
+      // ${lineIndex}-${groupIndex}-${wordIndex}
+      const MAX_GROUP_SIZE = 5;
+      const MIN_GROUP_DURATION = 0.3;
 
+      const lineMap = new Map<number, Array<{ word: string; start: number; end: number }>>();
       for (const w of words) {
         const lineIndex = lines.findIndex(
           (l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999),
         );
         const li = Math.max(0, lineIndex);
-        const wi = lineWordCounters[li] ?? 0;
-        lineWordCounters[li] = wi + 1;
-
-        const key = `${li}-${wi}`;
-        const displayWord = textTransform === 'uppercase'
-          ? w.word.toUpperCase()
-          : w.word;
-
-        this.chunks.set(key, {
-          id: key,
-          text: displayWord,
-          color: '#ffffff',
-          font,
-          width: measureCtx.measureText(displayWord).width,
-        });
+        if (!lineMap.has(li)) lineMap.set(li, []);
+        lineMap.get(li)!.push(w);
       }
+
+      for (const [lineIdx, lineWords] of lineMap) {
+        let groupIdx = 0;
+        let current: Array<{ word: string; start: number; end: number }> = [];
+
+        const flushGroup = () => {
+          if (current.length === 0) return;
+          for (let wi = 0; wi < current.length; wi++) {
+            const key = `${lineIdx}-${groupIdx}-${wi}`;
+            const displayWord = textTransform === 'uppercase'
+              ? current[wi].word.toUpperCase()
+              : current[wi].word;
+            this.chunks.set(key, {
+              id: key,
+              text: displayWord,
+              color: '#ffffff',
+              font,
+              width: measureCtx.measureText(displayWord).width,
+            });
+          }
+          groupIdx += 1;
+          current = [];
+        };
+
+        for (let i = 0; i < lineWords.length; i++) {
+          current.push(lineWords[i]);
+          const duration = current[current.length - 1].end - current[0].start;
+          const isNaturalBreak = /[,\.!?;]$/.test(lineWords[i].word);
+          const isMaxSize = current.length >= MAX_GROUP_SIZE;
+          const isLast = i === lineWords.length - 1;
+
+          if (isLast) {
+            flushGroup();
+          } else if ((isNaturalBreak || isMaxSize) && duration >= MIN_GROUP_DURATION) {
+            flushGroup();
+          }
+        }
+      }
+
+      console.log('[PLAYER] chunk keys sample:', [...this.chunks.keys()].slice(0, 5));
       return;
     }
 
