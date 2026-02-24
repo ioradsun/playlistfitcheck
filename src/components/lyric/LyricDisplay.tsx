@@ -201,7 +201,7 @@ function toLRC(data: LyricData): string {
   const mainLines = data.lines.filter((l) => l.tag !== "adlib");
   return [
     `[ti:${data.title}]`,
-    `[ar:${data.artist}]`,
+    ...(data.artist ? [`[ar:${data.artist}]`] : []),
     "",
     ...mainLines.map((l) => `[${formatTimeLRC(l.start)}]${l.text}`),
   ].join("\n");
