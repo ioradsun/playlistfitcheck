@@ -768,6 +768,36 @@ export default function ShareableLyricDance() {
             toast.error(e.message || "Failed to generate scene manifest");
           }
         }}
+        onRunCustomPrompt={async (systemPrompt: string) => {
+          if (!data) return;
+          toast.info("Running cinematic-direction with custom prompt…");
+          try {
+            const lyricsForDirection = (data.lyrics as any[])
+              .filter((l: any) => l.tag !== "adlib")
+              .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+            const { data: dirResult, error } = await supabase.functions.invoke("cinematic-direction", {
+              body: {
+                title: data.song_name,
+                artist: data.artist_name,
+                lines: lyricsForDirection,
+                beatGrid: data.beat_grid ? { bpm: (data.beat_grid as any).bpm } : undefined,
+                lyricId: data.id,
+                scene_context: data.scene_context ?? null,
+                systemPromptOverride: systemPrompt,
+              },
+            });
+            if (error) throw error;
+            if (dirResult?.cinematicDirection) {
+              toast.success("Custom prompt result received — reloading…");
+              setTimeout(() => window.location.reload(), 800);
+            } else {
+              toast.error("No cinematic direction returned");
+            }
+          } catch (e: any) {
+            console.error("[DEBUG] Custom prompt error:", e);
+            toast.error(e.message || "Failed to run custom prompt");
+          }
+        }}
         data={{
           songDna: {
             mood: (data.physics_spec as any)?.mood, description: (data.physics_spec as any)?.description,

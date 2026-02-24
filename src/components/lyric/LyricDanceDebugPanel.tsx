@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bug, ChevronDown, ChevronRight, Copy, X, RefreshCw, Sparkles, Clapperboard } from "lucide-react";
+import { Bug, ChevronDown, ChevronRight, Copy, X, RefreshCw, Sparkles, Clapperboard, Play, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import type { SceneManifest } from "@/engine/SceneManifest";
@@ -546,7 +546,7 @@ function DataTab({ data }: { data: DebugData }) {
 
 // ─── PROMPT Tab (shows the exact prompt sent to AI) ─────────────────
 
-function PromptTab({ data }: { data: DebugData }) {
+function PromptTab({ data, onRunCustomPrompt, isRunning }: { data: DebugData; onRunCustomPrompt?: (systemPrompt: string) => void; isRunning?: boolean }) {
   const { lines, title, artist } = data;
   const direction = data.songDna?.cinematic_direction;
 
@@ -560,7 +560,21 @@ Color temperature: ${sceneCtx.colorTemperature ?? "unknown"}
 Text style: ${sceneCtx.textStyle ?? "light"}`
     : "SCENE CONTEXT — not specified. Default to dark cinematic.";
 
-  const systemPrompt = scenePrefix + "\n\n" + CINEMATIC_PROMPT_PREVIEW;
+  const [editedPrompt, setEditedPrompt] = useState(CINEMATIC_PROMPT_PREVIEW);
+  const [isEdited, setIsEdited] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleReset = () => {
+    setEditedPrompt(CINEMATIC_PROMPT_PREVIEW);
+    setIsEdited(false);
+  };
+
+  const handleChange = (val: string) => {
+    setEditedPrompt(val);
+    setIsEdited(val !== CINEMATIC_PROMPT_PREVIEW);
+  };
+
+  const fullSystemPrompt = scenePrefix + "\n\n" + editedPrompt;
 
   const userPrompt = `Song: ${artist} — ${title}
 Lyrics (${lines.length} lines):
@@ -584,16 +598,48 @@ REMINDER: You MUST assign iconGlyph to at least 10 storyboard entries spread acr
       </CollapsibleSection>
 
       <CollapsibleSection title="System Prompt" defaultOpen>
-        <div className="relative group">
-          <pre className="text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap break-all bg-background/50 rounded p-2 max-h-[400px] overflow-auto">
-            {systemPrompt}
-          </pre>
-          <button
-            onClick={() => { navigator.clipboard.writeText(systemPrompt); toast.success("System prompt copied"); }}
-            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-background/80 text-muted-foreground hover:text-foreground"
-          >
-            <Copy size={10} />
-          </button>
+        <div className="space-y-2">
+          {/* Action bar */}
+          <div className="flex items-center gap-1.5">
+            {onRunCustomPrompt && (
+              <button
+                onClick={() => onRunCustomPrompt(editedPrompt)}
+                disabled={isRunning}
+                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Run cinematic-direction with this prompt (not saved)"
+              >
+                {isRunning ? <RefreshCw size={10} className="animate-spin" /> : <Play size={10} />}
+                {isRunning ? "Running…" : "Run"}
+              </button>
+            )}
+            {isEdited && (
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-bold text-orange-400 hover:bg-orange-400/10 transition-colors"
+                title="Reset to production prompt"
+              >
+                <RotateCcw size={10} />
+                Reset
+              </button>
+            )}
+            <button
+              onClick={() => { navigator.clipboard.writeText(fullSystemPrompt); toast.success("System prompt copied"); }}
+              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors ml-auto"
+            >
+              <Copy size={10} />
+            </button>
+            {isEdited && (
+              <span className="text-[9px] font-mono text-orange-400">MODIFIED</span>
+            )}
+          </div>
+          {/* Editable prompt */}
+          <textarea
+            ref={textareaRef}
+            value={editedPrompt}
+            onChange={(e) => handleChange(e.target.value)}
+            className="w-full text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap break-all bg-background/50 rounded p-2 min-h-[300px] max-h-[500px] overflow-auto border border-border/30 focus:border-primary/50 focus:outline-none resize-y"
+            spellCheck={false}
+          />
         </div>
       </CollapsibleSection>
 
@@ -618,7 +664,7 @@ REMINDER: You MUST assign iconGlyph to at least 10 storyboard entries spread acr
           max_tokens: 8192,
           response_format: { type: "json_object" },
           messages: [
-            { role: "system", content: systemPrompt },
+            { role: "system", content: fullSystemPrompt },
             { role: "user", content: userPrompt },
           ],
         }} />
@@ -819,12 +865,24 @@ interface Props {
   onRegenerateSong?: () => void;
   onRegenerateDance?: () => void;
   onRegenerateDirector?: () => void;
+  onRunCustomPrompt?: (systemPrompt: string) => Promise<void>;
 }
 
-export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance, onRegenerateDirector }: Props) {
+export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance, onRegenerateDirector, onRunCustomPrompt }: Props) {
   const [open, setOpen] = useState(false);
+  const [customPromptRunning, setCustomPromptRunning] = useState(false);
   const hasPlayer = player != null;
   const [tab, setTab] = useState<"hud" | "data" | "prompt">(hasPlayer ? "hud" : "data");
+
+  const handleRunCustomPrompt = async (systemPrompt: string) => {
+    if (!onRunCustomPrompt || customPromptRunning) return;
+    setCustomPromptRunning(true);
+    try {
+      await onRunCustomPrompt(systemPrompt);
+    } finally {
+      setCustomPromptRunning(false);
+    }
+  };
 
   const copyAll = () => {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
@@ -920,7 +978,7 @@ export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, on
 
             {/* Content */}
             <div className="p-3">
-              {tab === "hud" ? <HudTab player={player} /> : tab === "prompt" ? <PromptTab data={data} /> : <DataTab data={data} />}
+              {tab === "hud" ? <HudTab player={player} /> : tab === "prompt" ? <PromptTab data={data} onRunCustomPrompt={onRunCustomPrompt ? handleRunCustomPrompt : undefined} isRunning={customPromptRunning} /> : <DataTab data={data} />}
             </div>
           </motion.aside>
         )}
