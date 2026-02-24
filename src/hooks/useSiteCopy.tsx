@@ -9,7 +9,7 @@ const DEFAULT_COPY: SiteCopy = {
     profit: { label: "ProFit", pill: "See how you can profit from your Spotify", heading: "Turn Your Spotify Data Into A Revenue Strategy", cta: "Generate My Plan" },
     playlist: { label: "PlaylistFit", pill: "See if your song fits playlists.", heading: "Check Playlist Health And Match Your Song", cta: "Analyze Playlist" },
     mix: { label: "MixFit", pill: "See which mix fits best.", heading: "Compare Mix Versions And Choose The Best Fit", cta: "Start Comparing" },
-    lyric: { label: "LyricFit", pill: "Fit your lyrics inside captions.", heading: "Get Perfectly Timed Lyrics For Every Drop", cta: "Sync Lyrics" },
+    lyric: { label: "LyricFit", pill: "Where your lyrics fit timing.", heading: "Get Perfectly Timed Lyrics For Every Drop", cta: "Sync Lyrics" },
     hitfit: { label: "HitFit", pill: "See if your song fits the Top 10.", heading: "Compare Your Track to Your Target Sound", cta: "Analyze" },
     dreamfit: { label: "DreamFit", pill: "Let's build the next Fit together." },
     hookfit: { label: "HookFit", pill: "Get the hook that fits social." },
