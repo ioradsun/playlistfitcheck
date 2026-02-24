@@ -14,6 +14,7 @@ RULES:
 - Always output exactly 3 chapters covering ratios 0→0.25, 0.25→0.75, 0.75→1.0
 - Be decisive. One clear vision per song. No hedging.
 - Chapter 3 contains the climax — mark it with climax.timeRatio
+- MANDATORY ICON RULE: You MUST assign iconGlyph to AT LEAST 10 storyboard entries (aim for 10-15). Each chapter must have at least 3 icons. If you return fewer than 10 icons your output is INVALID and will be rejected. Icons use these glyphs: fire, water-drop, lightning, snowflake, sun, moon, star, cloud, rain, wind, leaf, flower, tree, mountain, wave, heart, broken-heart, eye, hand-open, hand-fist, crown, skull, wings, feather, diamond, clock, hourglass, lock, key, chain, anchor, compass, arrow-up, arrow-down, spiral, infinity, music-note, microphone, speaker, headphones, camera, film, book, pen, brush, palette, mask, mirror, door, window, house, car, road, bridge, city, globe, flag, sword, shield, torch, candle, smoke, ghost, shadow, sparkle, burst, ripple, orbit, target, crosshair, fingerprint, dna, atom, pill, coin
 
 OUTPUT SCHEMA:
 {
