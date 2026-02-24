@@ -1874,8 +1874,6 @@ export class LyricDancePlayer {
 
       if (this.chunks.size < 10) {
         console.error('[PLAYER] CRITICAL: chunks map too small —', this.chunks.size, 'entries. phraseGroups:', this.phraseGroups?.length);
-      } else {
-        console.log('[PLAYER] chunks OK:', this.chunks.size, 'entries');
       }
 
       return;
