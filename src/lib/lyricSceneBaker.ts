@@ -1180,6 +1180,7 @@ function bakeFrame(
 
             chunks.push({
               id: isLetterSequence ? `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}` : `${group.lineIndex}-${group.groupIndex}-${wi}`,
+              text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
               x: pos.x + finalOffsetX,
               y: pos.y + finalOffsetY,
               alpha: Math.max(0, Math.min(1, finalAlpha)),
