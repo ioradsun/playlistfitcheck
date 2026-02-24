@@ -535,13 +535,19 @@ export function LyricFitTab({
     setSceneManifest(null);
     setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
     pipelineTriggeredRef.current = false;
+
+    // Also clear cinematicDirection from DB so it doesn't get reloaded
+    if (savedIdRef.current) {
+      persistSongDna(savedIdRef.current, { cinematicDirection: null });
+    }
+
     // Delay to let state clear before re-triggering
     setTimeout(() => {
       startBeatAnalysis(audioFile);
       startLyricAnalyze(lines, audioFile);
       startCinematicDirection(lines, true);
-    }, 100);
-  }, [audioFile, lines, startBeatAnalysis, startLyricAnalyze, startCinematicDirection]);
+    }, 300);
+  }, [audioFile, lines, startBeatAnalysis, startLyricAnalyze, startCinematicDirection, persistSongDna]);
 
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
