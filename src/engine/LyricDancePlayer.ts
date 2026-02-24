@@ -650,6 +650,11 @@ export class LyricDancePlayer {
   private lastHealthCheck = 0;
   private currentTSec = 0;
 
+  // Stall detection
+  private _lastLoggedTSec = 0;
+  private _stalledFrames = 0;
+  private _lastSimChapterIdx = -1;
+
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
 
@@ -1129,6 +1134,23 @@ export class LyricDancePlayer {
   private _draw(tSec: number): void {
     this.currentTSec = tSec;
     this.frameCount++;
+
+    // Stall detection — log when audio time stops advancing
+    if (this._lastLoggedTSec === tSec && tSec > 0) {
+      this._stalledFrames = (this._stalledFrames ?? 0) + 1;
+      if (this._stalledFrames > 10) {
+        console.error('[PLAYER] audio stalled at tSec:', tSec, {
+          audioCurrentTime: this.audio?.currentTime,
+          audioPaused: this.audio?.paused,
+          audioReadyState: this.audio?.readyState,
+        });
+        this._stalledFrames = 0;
+      }
+    } else {
+      this._stalledFrames = 0;
+    }
+    this._lastLoggedTSec = tSec;
+
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
 
@@ -2017,32 +2039,38 @@ export class LyricDancePlayer {
   }
 
   private buildBgCache(): void {
-    const chapters = this.payload?.cinematic_direction?.chapters ?? [];
-    const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
-    const count = Math.max(1, chapters.length);
-    this.bgCaches = [];
-    this.chapterParticleSystems = [];
+    console.log('[PLAYER] building bgCache...');
+    try {
+      const chapters = this.payload?.cinematic_direction?.chapters ?? [];
+      const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
+      const count = Math.max(1, chapters.length);
+      this.bgCaches = [];
+      this.chapterParticleSystems = [];
 
-    for (let ci = 0; ci < count; ci++) {
-      const chapter = chapters[ci] as any;
-      const off = document.createElement('canvas');
-      off.width = this.width;
-      off.height = this.height;
-      const ctx = off.getContext('2d');
-      if (!ctx) continue;
+      for (let ci = 0; ci < count; ci++) {
+        const chapter = chapters[ci] as any;
+        const off = document.createElement('canvas');
+        off.width = this.width;
+        off.height = this.height;
+        const ctx = off.getContext('2d');
+        if (!ctx) continue;
 
-      const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
-      const bgColor = this.tintedDarkBackground(dominantColor);
-      const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
-      const particleDesc = chapter?.particles ?? '';
-      this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
+        const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
+        const bgColor = this.tintedDarkBackground(dominantColor);
+        const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
+        const particleDesc = chapter?.particles ?? '';
+        this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
 
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, off.width, off.height);
-      this.bgCaches.push(off);
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, off.width, off.height);
+        this.bgCaches.push(off);
+      }
+
+      this.bgCacheCount = this.bgCaches.length;
+      console.log('[PLAYER] bgCache built:', this.bgCaches?.length);
+    } catch (err) {
+      console.error('[PLAYER] bgCache build failed:', err);
     }
-
-    this.bgCacheCount = this.bgCaches.length;
   }
 
   private drawRadialGlow(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
@@ -2162,23 +2190,29 @@ export class LyricDancePlayer {
   }
 
   private buildChapterSims(): void {
-    const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
-    const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? ['#111111', '#FFD700'];
-    const accentColor = palette[1] ?? '#FFD700';
-    const bgSystem = this.backgroundSystem;
-    this.chapterSims = chapters.map((chapter: any, ci: number) => {
-      const dominant = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#111111';
-      const bgDesc = (chapter?.backgroundDirective ?? chapter?.background ?? '').toLowerCase();
-      const perSystem = this.mapBackgroundSystem(`${bgDesc} ${bgSystem}`);
-      const sim: { fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim } = {};
-      if (perSystem === 'fire') sim.fire = new FireSim('fire', 0.08 + (chapter?.emotionalIntensity ?? 0.5) * 0.1);
-      else if (perSystem === 'storm') sim.fire = new FireSim('smoke', 0.18);
-      else if (perSystem === 'ocean') sim.water = new WaterSim(dominant, accentColor);
-      else if (perSystem === 'aurora') sim.aurora = new AuroraSim(dominant, accentColor);
-      else if (perSystem === 'urban') sim.rain = new RainSim(accentColor);
-      else if (perSystem === 'intimate') sim.fire = new FireSim('ember', 0.25);
-      return sim;
-    });
+    console.log('[PLAYER] building chapter sims...');
+    try {
+      const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
+      const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? ['#111111', '#FFD700'];
+      const accentColor = palette[1] ?? '#FFD700';
+      const bgSystem = this.backgroundSystem;
+      this.chapterSims = chapters.map((chapter: any, ci: number) => {
+        const dominant = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#111111';
+        const bgDesc = (chapter?.backgroundDirective ?? chapter?.background ?? '').toLowerCase();
+        const perSystem = this.mapBackgroundSystem(`${bgDesc} ${bgSystem}`);
+        const sim: { fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim } = {};
+        if (perSystem === 'fire') sim.fire = new FireSim('fire', 0.08 + (chapter?.emotionalIntensity ?? 0.5) * 0.1);
+        else if (perSystem === 'storm') sim.fire = new FireSim('smoke', 0.18);
+        else if (perSystem === 'ocean') sim.water = new WaterSim(dominant, accentColor);
+        else if (perSystem === 'aurora') sim.aurora = new AuroraSim(dominant, accentColor);
+        else if (perSystem === 'urban') sim.rain = new RainSim(accentColor);
+        else if (perSystem === 'intimate') sim.fire = new FireSim('ember', 0.25);
+        return sim;
+      });
+      console.log('[PLAYER] chapter sims built:', this.chapterSims.length);
+    } catch (err) {
+      console.error('[PLAYER] chapter sim build failed:', err);
+    }
   }
 
   private buildEmotionalEvents(): void {
@@ -2196,24 +2230,35 @@ export class LyricDancePlayer {
   }
 
   private updateSims(tSec: number, frame: ScaledKeyframe): void {
-    const simFrame = Math.floor(tSec * 24);
-    if (simFrame === this.lastSimFrame) return;
-    this.lastSimFrame = simFrame;
-    const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
-    const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
-    const chapterIdxRaw = chapters.findIndex((ch: any) => songProgress < (ch.endRatio ?? 1));
-    const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
-    const ci = Math.max(0, chapterIdx);
-    const chapter = chapters[ci] ?? {};
-    const intensity = (chapter as any)?.emotionalIntensity ?? 0.5;
-    const pulse = (frame as any).beatPulse ?? (frame.beatIndex ? (frame.beatIndex % 2 ? 0.2 : 0.7) : 0);
-    const sim = this.chapterSims[ci];
-    this.currentSimCanvases = [];
-    if (!sim) return;
-    if (sim.fire) { sim.fire.update(intensity, pulse); this.currentSimCanvases.push(sim.fire.canvas); }
-    if (sim.water) { sim.water.update(tSec, pulse, intensity); this.currentSimCanvases.push(sim.water.canvas); }
-    if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
-    if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
+    try {
+      const simFrame = Math.floor(tSec * 24);
+      if (simFrame === this.lastSimFrame) return;
+      this.lastSimFrame = simFrame;
+      const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
+      const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
+      const chapterIdxRaw = chapters.findIndex((ch: any) => songProgress < (ch.endRatio ?? 1));
+      const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
+      const ci = Math.max(0, chapterIdx);
+
+      // Log chapter transitions
+      if (ci !== this._lastSimChapterIdx) {
+        console.log('[PLAYER] chapter change:', this._lastSimChapterIdx, '→', ci, 'at tSec:', tSec.toFixed(2));
+        this._lastSimChapterIdx = ci;
+      }
+
+      const chapter = chapters[ci] ?? {};
+      const intensity = (chapter as any)?.emotionalIntensity ?? 0.5;
+      const pulse = (frame as any).beatPulse ?? (frame.beatIndex ? (frame.beatIndex % 2 ? 0.2 : 0.7) : 0);
+      const sim = this.chapterSims[ci];
+      this.currentSimCanvases = [];
+      if (!sim) return;
+      if (sim.fire) { sim.fire.update(intensity, pulse); this.currentSimCanvases.push(sim.fire.canvas); }
+      if (sim.water) { sim.water.update(tSec, pulse, intensity); this.currentSimCanvases.push(sim.water.canvas); }
+      if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
+      if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
+    } catch (err) {
+      console.error('[PLAYER] sim update crashed at tSec:', tSec, err);
+    }
   }
 
   private drawSimLayer(_frame: ScaledKeyframe): void {
