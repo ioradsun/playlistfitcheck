@@ -1054,8 +1054,8 @@ export class LyricDancePlayer {
     for (let i = 0; i < beamCount; i++) {
       const x = w * (0.2 + (i / beamCount) * 0.6);
       const beam = ctx.createLinearGradient(x, 0, x + w * 0.05, h);
-      beam.addColorStop(0, `${accent}25`);
-      beam.addColorStop(0.4, `${accent}10`);
+      beam.addColorStop(0, `${accent}12`);
+      beam.addColorStop(0.4, `${accent}08`);
       beam.addColorStop(1, 'transparent');
       ctx.fillStyle = beam;
       ctx.fillRect(x - w * 0.05, 0, w * 0.15, h);
