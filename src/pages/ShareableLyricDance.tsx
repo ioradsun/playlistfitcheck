@@ -367,6 +367,7 @@ export default function ShareableLyricDance() {
       const entry = entries[0];
       if (!entry) return;
       const { width, height } = entry.contentRect;
+      console.log('[RESIZE]', width, height, window.innerWidth, window.innerHeight);
       if (width > 0 && height > 0) {
         player.resize(width, height);
       }
