@@ -263,11 +263,16 @@ export function LyricFitTab({
   }, []);
 
   // Persist song_dna whenever we have both a saved project and computed DNA
+  // Only persist when songDna changes (not cinematicDirection alone — that's handled in startCinematicDirection)
   useEffect(() => {
     if (savedIdRef.current && songDna) {
-      persistSongDna(savedIdRef.current, { ...songDna, cinematicDirection });
+      const payload = { ...songDna };
+      // Only include cinematicDirection if it's not null (avoid overwriting a deliberate clear)
+      if (cinematicDirection) payload.cinematicDirection = cinematicDirection;
+      persistSongDna(savedIdRef.current, payload);
     }
-  }, [savedId, songDna, cinematicDirection, persistSongDna]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedId, songDna, persistSongDna]);
 
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
     if (!targetAudioFile || !hasRealAudio || targetAudioFile.size === 0) return;
