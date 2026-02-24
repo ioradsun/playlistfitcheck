@@ -17,6 +17,7 @@ import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest"
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
+import { SCENE_CONTEXTS, type SceneId } from "@/lib/sceneContexts";
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 export type GenerationJobStatus = "idle" | "running" | "done" | "error";
