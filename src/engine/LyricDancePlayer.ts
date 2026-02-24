@@ -925,7 +925,7 @@ export class LyricDancePlayer {
   }
 
   updateSceneContext(sceneCtx: SceneContext): void {
-    console.log('[PLAYER] hot-updating scene context');
+    
     this.data = { ...this.data, scene_context: sceneCtx };
   }
 
