@@ -616,6 +616,7 @@ export class LyricDancePlayer {
   private songEndSec = 0;
   private playing = false;
   private destroyed = false;
+  private _textDrawLogged = false;
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
 
 
