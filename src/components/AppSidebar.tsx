@@ -194,7 +194,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       lyrics.forEach((l: any) => {
         items.push({
           id: l.id,
-          label: `${l.title || "Untitled"} – ${l.artist || "Unknown"}`,
+          label: l.title || "Untitled",
           meta: formatDistanceToNow(new Date(l.updated_at), { addSuffix: true }),
           type: "lyric",
           rawData: l,
