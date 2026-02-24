@@ -541,18 +541,33 @@ export default function ShareableLyricDance() {
           if (!data) return;
           toast.info("Syncing words from saved project…");
           try {
+            // Check current auth state
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            console.log("[DEBUG] current auth user:", currentUser?.id, "dance owner:", data.user_id, "match:", currentUser?.id === data.user_id);
+
             // Find the saved_lyrics row that matches this song by user_id + title
-            const { data: lyricRow } = await supabase
+            const { data: lyricRow, error: fetchErr } = await supabase
               .from("saved_lyrics")
-              .select("words")
+              .select("id, words")
               .eq("user_id", data.user_id)
               .eq("title", data.song_name)
               .order("updated_at", { ascending: false })
               .limit(1)
               .maybeSingle();
 
+            console.log("[DEBUG] saved_lyrics query:", { lyricRow: lyricRow?.id, fetchErr, hasWords: !!lyricRow?.words, wordsLen: Array.isArray(lyricRow?.words) ? (lyricRow.words as any[]).length : 0 });
+
+            if (fetchErr) {
+              toast.error("Can't read saved lyrics — are you logged in as the song owner?");
+              return;
+            }
+
             const wordsPayload = lyricRow?.words ?? null;
-            console.log("[DEBUG] words from saved_lyrics:", Array.isArray(wordsPayload) ? wordsPayload.length : wordsPayload);
+
+            if (!wordsPayload || (Array.isArray(wordsPayload) && wordsPayload.length === 0)) {
+              toast.error("No words found in saved project — re-transcribe first");
+              return;
+            }
 
             // Update the shareable dance row with fresh words
             const { error } = await supabase
