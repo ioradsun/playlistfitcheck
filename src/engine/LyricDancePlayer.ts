@@ -931,6 +931,48 @@ export class LyricDancePlayer {
       this.stopExport();
     }
 
+  private drawWordHalo(
+    x: number,
+    y: number,
+    fontSize: number,
+    isAnchor: boolean,
+    chapterColor: string,
+    alpha: number
+  ): void {
+    const baseRadius = fontSize * (isAnchor ? 1.8 : 1.2);
+    const innerAlpha = isAnchor ? 0.72 : 0.45;
+    const innerColor = isAnchor
+      ? this.blendWithBlack(chapterColor, 0.85)
+      : '#000000';
+
+    const halo = this.ctx.createRadialGradient(x, y, 0, x, y, baseRadius);
+    halo.addColorStop(0, this.hexWithAlpha(innerColor, innerAlpha * alpha));
+    halo.addColorStop(0.6, this.hexWithAlpha(innerColor, innerAlpha * alpha * 0.6));
+    halo.addColorStop(1, this.hexWithAlpha(innerColor, 0));
+
+    this.ctx.fillStyle = halo;
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, baseRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+
+  private blendWithBlack(hex: string, blackAmount: number): string {
+    const clean = hex.replace('#', '');
+    if (clean.length !== 6) return '#000000';
+    const r = Math.round(parseInt(clean.slice(0, 2), 16) * (1 - blackAmount));
+    const g = Math.round(parseInt(clean.slice(2, 4), 16) * (1 - blackAmount));
+    const b = Math.round(parseInt(clean.slice(4, 6), 16) * (1 - blackAmount));
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+
+  private hexWithAlpha(hex: string, alpha: number): string {
+    const clean = hex.replace('#', '');
+    if (clean.length !== 6) return `rgba(0,0,0,${alpha})`;
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
+  }
 
     this.fpsAccum.t += deltaMs;
     this.fpsAccum.frames += 1;
