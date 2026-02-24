@@ -513,39 +513,7 @@ export default function ShareableLyricDance() {
           />
         )}
 
-        {!showCover && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-20">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleExport("9:16");
-              }}
-              disabled={!!exporting}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-mono bg-black/70 border border-white/20 text-white hover:bg-black/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {exporting === "9:16" ? (
-                <span className="animate-pulse">Recording 9:16...</span>
-              ) : (
-                <>↓ <span className="text-[#00FF87]">9:16</span> TikTok</>
-              )}
-            </button>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleExport("16:9");
-              }}
-              disabled={!!exporting}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-mono bg-black/70 border border-white/20 text-white hover:bg-black/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {exporting === "16:9" ? (
-                <span className="animate-pulse">Recording 16:9...</span>
-              ) : (
-                <>↓ <span className="text-[#00FF87]">16:9</span> YouTube</>
-              )}
-            </button>
-          </div>
-        )}
+        {/* Export buttons removed from canvas — moved to bottom bar */}
       </div>
 
       {/* Comment input */}
