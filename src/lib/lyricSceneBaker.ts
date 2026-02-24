@@ -42,6 +42,7 @@ export type Keyframe = {
     visible: boolean;
     fontSize: number;
     fontWeight: number;
+    fontFamily?: string;
     isAnchor: boolean;
     color: string;
     emitterType?: WordEmitterType;
@@ -83,7 +84,10 @@ export type Keyframe = {
     y: number;
     size: number;
     alpha: number;
+    shape?: 'circle' | 'line' | 'diamond' | 'glow';
   }>;
+  particleColor?: string;
+  atmosphere?: AtmosphereConfig;
 };
 
 export type BakedTimeline = Keyframe[];
@@ -140,6 +144,34 @@ interface MotionDefaults {
   behaviorIntensity: number;
 }
 
+interface TypographyProfile {
+  fontFamily: string;
+  fontWeight: number;
+  textTransform: 'none' | 'uppercase';
+  letterSpacing: number;
+  heroWeight: number;
+}
+
+type SceneTone = 'dark' | 'light' | 'mixed-dawn' | 'mixed-dusk' | 'mixed-pulse';
+
+interface AtmosphereConfig {
+  vignetteStrength: number;
+  blurAmount: number;
+  grainOpacity: number;
+  tintStrength: number;
+  overlayType: 'none' | 'frost' | 'gradient-wash' | 'split-mask';
+}
+
+interface TextureConfig {
+  particleCount: number;
+  particleColor: 'accent' | 'text' | 'glow' | 'dim';
+  speed: number;
+  size: [number, number];
+  direction: 'up' | 'down' | 'radial' | 'swirl' | 'random';
+  opacity: [number, number];
+  shape: 'circle' | 'line' | 'diamond' | 'glow';
+}
+
 interface AnimState {
   offsetX: number;
   offsetY: number;
@@ -177,6 +209,75 @@ const TYPOGRAPHY_FONT_WEIGHTS: Record<string, number> = {
   'tech-mono': 500,
   'display-heavy': 800,
   'editorial-light': 400,
+};
+
+const PALETTE_COLORS: Record<string, string[]> = {
+  'cold-gold': ['#0A0A0F', '#C9A96E', '#F0ECE2', '#FFD700', '#2A2520'],
+  'warm-ember': ['#1A0A05', '#E8632B', '#FFF0E6', '#FF6B35', '#3D1A0A'],
+  'ice-blue': ['#050A14', '#4FA4D4', '#E8F4F8', '#00BFFF', '#0A1F33'],
+  'midnight-rose': ['#0F0510', '#C74B7A', '#F5E6EE', '#FF69B4', '#2D0A1A'],
+  'neon-green': ['#050F05', '#39FF14', '#E6FFE6', '#00FF41', '#0A2A0A'],
+  'storm-grey': ['#0E0E12', '#8A8D93', '#E8E8EC', '#A0A4AC', '#1E1E25'],
+  'blood-red': ['#120505', '#C41E1E', '#FFE6E6', '#FF2020', '#2D0A0A'],
+  'lavender-dream': ['#0A0510', '#9B72CF', '#F0E6FF', '#B088F9', '#1E0A33'],
+  'earth-brown': ['#0F0A05', '#8B6D4E', '#F5EDE2', '#A0845C', '#2D200A'],
+  'pure-white': ['#F8F8FA', '#1A1A2E', '#111111', '#4444FF', '#D0D0D8'],
+  'soft-cream': ['#FFF8F0', '#5C4033', '#1A1008', '#C49A6C', '#E8DDD0'],
+  'sky-blue': ['#EEF5FF', '#1E3A5F', '#0A1A30', '#3B82F6', '#C8DAF0'],
+  'sunset-pink': ['#FFF0F0', '#8B2252', '#1A0510', '#FF6B9D', '#E8C8D0'],
+  'spring-green': ['#F0FFF0', '#1A5C2E', '#0A200F', '#34D058', '#C0E8C8'],
+};
+
+const TYPOGRAPHY_PROFILES: Record<string, TypographyProfile> = {
+  'bold-impact': { fontFamily: '"Oswald", sans-serif', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.05, heroWeight: 900 },
+  'clean-modern': { fontFamily: '"Montserrat", sans-serif', fontWeight: 600, textTransform: 'none', letterSpacing: 0.02, heroWeight: 800 },
+  'elegant-serif': { fontFamily: '"Playfair Display", serif', fontWeight: 500, textTransform: 'none', letterSpacing: 0.01, heroWeight: 700 },
+  'raw-condensed': { fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.04, heroWeight: 800 },
+  'whisper-soft': { fontFamily: '"Nunito", sans-serif', fontWeight: 400, textTransform: 'none', letterSpacing: 0.03, heroWeight: 600 },
+  'tech-mono': { fontFamily: '"JetBrains Mono", monospace', fontWeight: 500, textTransform: 'none', letterSpacing: 0.06, heroWeight: 700 },
+  'display-heavy': { fontFamily: '"Bebas Neue", sans-serif', fontWeight: 400, textTransform: 'uppercase', letterSpacing: 0.08, heroWeight: 400 },
+  'editorial-light': { fontFamily: '"Cormorant Garamond", serif', fontWeight: 400, textTransform: 'none', letterSpacing: 0.01, heroWeight: 600 },
+};
+
+const SCENE_TONE_LUMINANCE: Record<SceneTone, [number, number, number]> = {
+  dark: [0.04, 0.06, 0.08],
+  light: [0.90, 0.92, 0.95],
+  'mixed-dawn': [0.05, 0.06, 0.85],
+  'mixed-dusk': [0.80, 0.75, 0.06],
+  'mixed-pulse': [0.05, 0.80, 0.06],
+};
+
+const ATMOSPHERE_CONFIGS: Record<string, AtmosphereConfig> = {
+  void: { vignetteStrength: 0, blurAmount: 0, grainOpacity: 0, tintStrength: 0, overlayType: 'none' },
+  cinematic: { vignetteStrength: 0.6, blurAmount: 0.3, grainOpacity: 0.08, tintStrength: 0.15, overlayType: 'none' },
+  haze: { vignetteStrength: 0.3, blurAmount: 0.7, grainOpacity: 0.05, tintStrength: 0.3, overlayType: 'gradient-wash' },
+  split: { vignetteStrength: 0.2, blurAmount: 0.4, grainOpacity: 0, tintStrength: 0.5, overlayType: 'split-mask' },
+  grain: { vignetteStrength: 0.4, blurAmount: 0.1, grainOpacity: 0.25, tintStrength: 0.1, overlayType: 'none' },
+  wash: { vignetteStrength: 0.3, blurAmount: 0.5, grainOpacity: 0.05, tintStrength: 0.7, overlayType: 'gradient-wash' },
+  glass: { vignetteStrength: 0.1, blurAmount: 0.85, grainOpacity: 0, tintStrength: 0.2, overlayType: 'frost' },
+  clean: { vignetteStrength: 0.1, blurAmount: 0, grainOpacity: 0, tintStrength: 0, overlayType: 'none' },
+};
+
+const TEXTURE_CONFIGS: Record<string, TextureConfig> = {
+  fire: { particleCount: 40, particleColor: 'accent', speed: 1.5, size: [2, 6], direction: 'up', opacity: [0.2, 0.6], shape: 'glow' },
+  rain: { particleCount: 60, particleColor: 'text', speed: 3.0, size: [1, 3], direction: 'down', opacity: [0.1, 0.3], shape: 'line' },
+  snow: { particleCount: 35, particleColor: 'text', speed: 0.5, size: [2, 4], direction: 'down', opacity: [0.3, 0.6], shape: 'circle' },
+  aurora: { particleCount: 20, particleColor: 'glow', speed: 0.3, size: [8, 20], direction: 'swirl', opacity: [0.05, 0.15], shape: 'glow' },
+  smoke: { particleCount: 25, particleColor: 'dim', speed: 0.4, size: [10, 25], direction: 'up', opacity: [0.03, 0.1], shape: 'glow' },
+  storm: { particleCount: 80, particleColor: 'text', speed: 4.0, size: [1, 2], direction: 'down', opacity: [0.15, 0.4], shape: 'line' },
+  dust: { particleCount: 30, particleColor: 'dim', speed: 0.2, size: [1, 3], direction: 'random', opacity: [0.1, 0.25], shape: 'circle' },
+  void: { particleCount: 5, particleColor: 'dim', speed: 0.1, size: [1, 2], direction: 'random', opacity: [0.02, 0.06], shape: 'circle' },
+  stars: { particleCount: 50, particleColor: 'text', speed: 0, size: [1, 3], direction: 'random', opacity: [0.2, 0.8], shape: 'diamond' },
+  petals: { particleCount: 20, particleColor: 'accent', speed: 0.8, size: [4, 8], direction: 'down', opacity: [0.15, 0.35], shape: 'circle' },
+};
+
+const ARC_CURVES: Record<string, (t: number) => number> = {
+  'slow-burn': (t) => (t < 0.6 ? t * 0.5 : 0.3 + (t - 0.6) * 1.75),
+  surge: (t) => (t < 0.3 ? 0.3 + t * 1.5 : 0.75 + (t - 0.3) * 0.36),
+  collapse: (t) => 1.0 - t * 0.8,
+  dawn: (t) => t * t,
+  flatline: () => 0.5,
+  eruption: (t) => (t < 0.25 ? 0.15 : t < 0.5 ? 0.15 + (t - 0.25) * 3.4 : 1.0),
 };
 
 const HEAT_FROM_MOTION: Record<string, number> = {
@@ -674,6 +775,12 @@ type ChapterLike = {
   texture?: string;
   typography?: string;
   atmosphere?: string;
+  overrides?: {
+    motion?: string;
+    texture?: string;
+    typography?: string;
+    atmosphere?: string;
+  };
 };
 
 type CameraDistanceLike = {
@@ -700,6 +807,11 @@ type PrebakedData = {
   lineHeroWords: Array<string | null>;
   lineFontSizes: number[];
   lineColors: string[];
+  resolvedPalette: string[];
+  fontFamily: string;
+  textTransform: 'none' | 'uppercase';
+  letterSpacing: number;
+  chapterLuminance: number[];
   springInitialVelocity: number;
   glowMax: number;
   energy: number;
@@ -714,6 +826,9 @@ type PrebakedData = {
   motionDefaults: MotionDefaults;
   chapterMotionProfiles: MotionProfile[];
   chapterMotionDefaults: MotionDefaults[];
+  chapterAtmosphere: AtmosphereConfig[];
+  chapterTexture: TextureConfig[];
+  chapterTypography: TypographyProfile[];
   chapterFontWeights: number[];
   animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number };
   manifestWordDirectives: Record<string, ManifestWordDirective>;
@@ -721,6 +836,7 @@ type PrebakedData = {
   manifestChapters: ManifestChapter[];
   manifestStagger: number | null;
   storyboard: StoryboardEntryLike[];
+  emotionalArc: string;
 };
 
 function getLayoutForMode(
@@ -983,8 +1099,68 @@ export function blendWithWhite(hex: string, whiteFraction: number): string {
   return `#${br.toString(16).padStart(2, "0")}${bg.toString(16).padStart(2, "0")}${bb.toString(16).padStart(2, "0")}`;
 }
 
+function resolveWorldDefaults(payload: ScenePayload, chapters: ChapterLike[]) {
+  const cd = payload.cinematic_direction as (CinematicDirection & Record<string, unknown>) | null;
+  const paletteName = (cd?.palette as string | undefined) ?? undefined;
+  const resolvedPalette = (paletteName && PALETTE_COLORS[paletteName])
+    ? PALETTE_COLORS[paletteName]
+    : (payload.palette?.length ? payload.palette : ['#0A0A0F', '#FFD700', '#F0F0F0', '#FFD700', '#2A2520']);
+
+  const typographyName = (cd?.typography as string | undefined) ?? 'clean-modern';
+  const baseTypography = TYPOGRAPHY_PROFILES[typographyName] ?? TYPOGRAPHY_PROFILES['clean-modern'];
+
+  const motionProfile: MotionProfile = ((cd?.motion as MotionProfile | undefined) && MOTION_DEFAULTS[cd.motion as MotionProfile])
+    ? (cd.motion as MotionProfile)
+    : ((payload.scene_manifest as any)?.motionProfile as MotionProfile | undefined) ?? 'fluid';
+
+  const sceneTone = (cd?.sceneTone as SceneTone | undefined) ?? 'dark';
+  const luminanceTriplet = SCENE_TONE_LUMINANCE[sceneTone] ?? SCENE_TONE_LUMINANCE.dark;
+  const chapterLuminance = chapters.map((_, idx) => luminanceTriplet[Math.min(2, idx)] ?? luminanceTriplet[2]);
+
+  const atmosphereName = (cd?.atmosphere as string | undefined) ?? 'cinematic';
+  const baseAtmosphere = ATMOSPHERE_CONFIGS[atmosphereName] ?? ATMOSPHERE_CONFIGS.cinematic;
+
+  const textureName = (cd?.texture as string | undefined) ?? 'smoke';
+  const baseTexture = TEXTURE_CONFIGS[textureName] ?? TEXTURE_CONFIGS.smoke;
+
+  const chapterMotionProfiles: MotionProfile[] = chapters.map((chapter) => {
+    const chapterMotion = (chapter.overrides?.motion ?? chapter.motion ?? cd?.motion) as MotionProfile | undefined;
+    if (chapterMotion && chapterMotion in MOTION_DEFAULTS) return chapterMotion;
+    return motionProfile;
+  });
+  const chapterMotionDefaults: MotionDefaults[] = chapterMotionProfiles.map((mp) => MOTION_DEFAULTS[mp]);
+  const chapterAtmosphere: AtmosphereConfig[] = chapters.map((chapter) => {
+    const key = chapter.overrides?.atmosphere ?? chapter.atmosphere;
+    return (key && ATMOSPHERE_CONFIGS[key]) ? ATMOSPHERE_CONFIGS[key] : baseAtmosphere;
+  });
+  const chapterTexture: TextureConfig[] = chapters.map((chapter) => {
+    const key = chapter.overrides?.texture ?? chapter.texture;
+    return (key && TEXTURE_CONFIGS[key]) ? TEXTURE_CONFIGS[key] : baseTexture;
+  });
+  const chapterTypography: TypographyProfile[] = chapters.map((chapter) => {
+    const key = chapter.overrides?.typography ?? chapter.typography;
+    return (key && TYPOGRAPHY_PROFILES[key]) ? TYPOGRAPHY_PROFILES[key] : baseTypography;
+  });
+
+  return {
+    resolvedPalette,
+    baseTypography,
+    motionProfile,
+    chapterMotionProfiles,
+    chapterMotionDefaults,
+    chapterLuminance,
+    baseAtmosphere,
+    chapterAtmosphere,
+    baseTexture,
+    chapterTexture,
+    chapterTypography,
+    emotionalArc: (cd?.emotionalArc as string | undefined) ?? 'slow-burn',
+  };
+}
+
 function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMode: VisualMode): PrebakedData {
   const chapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
+  const resolved = resolveWorldDefaults(payload, chapters);
   const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
   const tensionCurve = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
   const physSpec = payload.physics_spec as unknown as Record<string, unknown> | null;
@@ -993,25 +1169,15 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   const storyboards = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
   const songDuration = Math.max(0.01, payload.songEnd - payload.songStart);
   // Global heat/beatResponse from motion pick or old path
-  const globalMotion = (payload.cinematic_direction as any)?.motion as string | undefined;
-  const globalTypography = (payload.cinematic_direction as any)?.typography as string | undefined;
+  const globalMotion = resolved.motionProfile;
   const heat = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat
-    ?? HEAT_FROM_MOTION[globalMotion ?? ''] ?? 0.5;
+    ?? HEAT_FROM_MOTION[globalMotion] ?? 0.5;
   const beatResponse = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse
-    ?? BEAT_FROM_MOTION[globalMotion ?? ''] ?? 'slam';
+    ?? BEAT_FROM_MOTION[globalMotion] ?? 'slam';
 
-  // Per-chapter motion profiles and font weights
-  const chapterMotionProfiles: MotionProfile[] = chapters.map((ch) => {
-    const chapterMotion = ch.motion ?? globalMotion;
-    return resolveMotionProfile(chapterMotion, payload);
-  });
-  const chapterMotionDefaults: MotionDefaults[] = chapterMotionProfiles.map((mp) => MOTION_DEFAULTS[mp]);
-  const globalFontWeight = resolveTypographyFontWeight(globalTypography, payload);
-  const chapterFontWeights: number[] = chapters.map((ch) => {
-    return ch.typography
-      ? (TYPOGRAPHY_FONT_WEIGHTS[ch.typography] ?? globalFontWeight)
-      : globalFontWeight;
-  });
+  const chapterMotionProfiles = resolved.chapterMotionProfiles;
+  const chapterMotionDefaults = resolved.chapterMotionDefaults;
+  const chapterFontWeights: number[] = resolved.chapterTypography.map((typo) => typo.fontWeight);
 
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
   const chapterCount = Math.max(1, chapters.length || 4);
@@ -1064,8 +1230,8 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     const colorOverride = chapter?.typographyShift?.colorOverride;
     if (colorOverride) return colorOverride;
 
-    const textColor = payload.palette?.[2] ?? '#F0F0F0';
-    const accentColor = payload.palette?.[1] ?? '#FFD700';
+    const textColor = resolved.resolvedPalette?.[2] ?? '#F0F0F0';
+    const accentColor = resolved.resolvedPalette?.[1] ?? '#FFD700';
     const baseColor = chapterIndex >= 2 ? accentColor : textColor;
     return blendWithWhite(baseColor, 0.55);
   });
@@ -1121,7 +1287,7 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   const manifestStagger = typeof sceneManifest?.stagger === 'number' ? sceneManifest.stagger : null;
   const storyboard = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
 
-  const motionProfile = deriveMotionProfile(payload);
+  const motionProfile = resolved.motionProfile;
   const motionDefaults = MOTION_DEFAULTS[motionProfile];
 
   const WORD_LINGER_BY_PROFILE: Record<string, number> = {
@@ -1153,6 +1319,11 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     lineHeroWords,
     lineFontSizes,
     lineColors,
+    resolvedPalette: resolved.resolvedPalette,
+    fontFamily: resolved.baseTypography.fontFamily,
+    textTransform: resolved.baseTypography.textTransform,
+    letterSpacing: resolved.baseTypography.letterSpacing,
+    chapterLuminance: resolved.chapterLuminance,
     springInitialVelocity: beatResponse === 'slam' ? 1.8 * heat : 0.8 * heat,
     glowMax: beatResponse === 'slam' ? 1.2 * heat : 0.6 * heat,
     energy,
@@ -1166,6 +1337,9 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     motionDefaults,
     chapterMotionProfiles,
     chapterMotionDefaults,
+    chapterAtmosphere: resolved.chapterAtmosphere,
+    chapterTexture: resolved.chapterTexture,
+    chapterTypography: resolved.chapterTypography,
     chapterFontWeights,
     animParams,
     manifestWordDirectives,
@@ -1173,6 +1347,7 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     manifestChapters,
     manifestStagger,
     storyboard,
+    emotionalArc: resolved.emotionalArc,
   };
 }
 
@@ -1201,6 +1376,10 @@ function bakeFrame(
   const timeMs = frameIndex * FRAME_STEP_MS;
   const tSec = payload.songStart + timeMs / 1000;
   const songProgress = Math.min(1, timeMs / durationMs);
+  const arcFn = ARC_CURVES[pre.emotionalArc] ?? ARC_CURVES['slow-burn'];
+  const intensity = Math.max(0, Math.min(1, arcFn(songProgress)));
+  const intensityGlowMult = 0.5 + intensity * 1.0;
+  const intensityScaleMult = 0.95 + intensity * 0.1;
   const activeLineIndex = pre.activeLineByFrame[frameIndex] ?? -1;
   const beatIndex = getBeatIndex(tSec, state);
 
@@ -1349,8 +1528,16 @@ function bakeFrame(
 
             const baseColor = semanticColorOverride ?? manifestDirective?.color ?? wm.directive?.colorOverride ?? pre.lineColors[wm.lineIndex] ?? '#ffffff';
             const color = isAnchor ? baseColor : dimColor(baseColor, 0.65);
-            const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0) : glow * 0.3) * semanticGlowMult;
-            const chapterFontWeight = semanticFontWeight ?? currentChapter?.typographyShift?.fontWeight ?? pre.chapterFontWeights[activeChapterIdx] ?? 700;
+            const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0) : glow * 0.3) * semanticGlowMult * intensityGlowMult;
+            const chapterTypography = pre.chapterTypography[activeChapterIdx] ?? pre.chapterTypography[0];
+            const chapterFontWeight = semanticFontWeight
+              ?? currentChapter?.typographyShift?.fontWeight
+              ?? (isAnchor ? chapterTypography?.heroWeight : chapterTypography?.fontWeight)
+              ?? pre.chapterFontWeights[activeChapterIdx]
+              ?? 700;
+            const chunkText = isLetterSequence
+              ? (wm.word[li] ?? '')
+              : (chapterTypography?.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word);
 
             // Letter positioning: spread characters across word span, centered on pos.x
             const charW = isLetterSequence ? pos.fontSize * 0.6 : 0;
@@ -1361,16 +1548,17 @@ function bakeFrame(
 
             chunks.push({
               id: isLetterSequence ? `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}` : `${group.lineIndex}-${group.groupIndex}-${wi}`,
-              text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
+              text: chunkText,
               x: pos.x + finalOffsetX + letterOffsetX,
               y: pos.y + finalOffsetY,
               alpha: Math.max(0, Math.min(1, finalAlpha)),
-              scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
-              scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
+              scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1) * intensityScaleMult,
+              scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1) * intensityScaleMult,
               scale: 1,
               visible: finalAlpha > 0.01,
               fontSize: pos.fontSize,
               fontWeight: chapterFontWeight,
+              fontFamily: chapterTypography?.fontFamily ?? pre.fontFamily,
               isAnchor,
               color,
               glow: wordGlow,
@@ -1694,20 +1882,38 @@ function bakeFrame(
   }
 
   const chapterIdx = pre.chapterIndexByFrame[frameIndex] ?? -1;
-  const bgBlend = chapterIdx >= 0 ? (chapterIdx / Math.max(1, pre.chapters.length - 1)) : 0;
+  const activeChapterIdx = chapterIdx >= 0 ? chapterIdx : 0;
+  const bgBlend = pre.chapterLuminance[activeChapterIdx] ?? 0.05;
 
-  const particleCount = Math.floor(pre.energy * 12 + (state.glowBudget / 13) * 20);
+  const chapterTexture = pre.chapterTexture[activeChapterIdx] ?? pre.chapterTexture[0] ?? TEXTURE_CONFIGS.smoke;
+  const particleCount = Math.max(0, Math.floor(chapterTexture.particleCount * (0.6 + (state.glowBudget / 13) * 0.6)));
+  const speed = chapterTexture.speed;
   const particles: Keyframe["particles"] = Array.from({ length: particleCount }, (_, i) => {
     const seed = (i * 0.618033) % 1;
     const seed2 = (i * 0.381966) % 1;
-    const drift = (tSec * 0.03 * (0.5 + seed * 0.5)) % 1;
+    const drift = (tSec * 0.03 * Math.max(0.05, speed) * (0.5 + seed * 0.5)) % 1;
+    const [minSize, maxSize] = chapterTexture.size;
+    const [minAlpha, maxAlpha] = chapterTexture.opacity;
+    const size = minSize + (maxSize - minSize) * seed;
+    const alpha = (minAlpha + (maxAlpha - minAlpha) * seed2) * (0.4 + (state.glowBudget / 13) * 0.6);
     return {
       x: 0.1 + (seed * 0.8),
       y: ((0.1 + seed2 * 0.8) - drift + 1) % 1,
-      size: 0.8 + seed * 2.5,
-      alpha: (0.04 + (state.glowBudget / 13) * 0.15) * (0.4 + seed * 0.6),
+      size,
+      alpha,
+      shape: chapterTexture.shape,
     };
   });
+
+  const textureColorMap: Record<TextureConfig['particleColor'], number> = {
+    accent: 1,
+    text: 2,
+    glow: 3,
+    dim: 4,
+  };
+  const particleColor = pre.resolvedPalette[textureColorMap[chapterTexture.particleColor]] ?? pre.resolvedPalette[2] ?? '#ffffff';
+
+  const chapterAtmosphere = pre.chapterAtmosphere[activeChapterIdx] ?? pre.chapterAtmosphere[0] ?? ATMOSPHERE_CONFIGS.cinematic;
 
   return {
     timeMs,
@@ -1718,6 +1924,8 @@ function bakeFrame(
     beatIndex,
     bgBlend,
     particles,
+    particleColor,
+    atmosphere: chapterAtmosphere,
   };
 }
 
