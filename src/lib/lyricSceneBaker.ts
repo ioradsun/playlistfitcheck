@@ -448,7 +448,6 @@ type WordDirectiveLike = {
   letterSequence?: boolean;
   trail?: string;
   entry?: string;
-  behavior?: string;
   exit?: string;
 };
 
