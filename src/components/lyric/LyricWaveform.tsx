@@ -167,15 +167,15 @@ export const LyricWaveform = forwardRef<HTMLDivElement, LyricWaveformProps>(func
 
   if (!waveform) {
     return (
-      <div className="h-16 rounded-lg bg-muted/30 animate-pulse flex items-center justify-center">
+      <div className="h-[88px] rounded-lg bg-muted/30 animate-pulse flex items-center justify-center">
         <span className="text-xs text-muted-foreground">Loading waveform…</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2">
+    <div className="space-y-1 min-h-[88px]">
+      <div className="flex items-center gap-2 h-14">
         <Button
           variant={isPlaying ? "default" : "outline"}
           size="sm"
@@ -186,7 +186,7 @@ export const LyricWaveform = forwardRef<HTMLDivElement, LyricWaveformProps>(func
         </Button>
         <div
           ref={containerRef}
-          className="relative flex-1 cursor-pointer select-none"
+          className="relative flex-1 cursor-pointer select-none h-14"
           onClick={handleClick}
         >
           <canvas ref={canvasRef} className="w-full h-14 rounded" />

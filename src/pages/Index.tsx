@@ -65,48 +65,6 @@ const TabChunkFallback = () => (
   </div>
 );
 
-/** Contextual skeleton shown during project transitions — prevents blank flash */
-const ProjectTransitionSkeleton = ({ tool }: { tool: string }) => {
-  if (tool === "lyric") {
-    return (
-      <div className="flex-1 flex flex-col min-h-0 animate-pulse">
-        {/* Toggle bar */}
-        <div className="border-b border-border/40 h-11 flex items-center justify-center gap-8">
-          <div className="h-3 w-12 rounded bg-muted" />
-          <div className="h-3 w-8 rounded bg-muted/60" />
-        </div>
-        {/* Waveform area */}
-        <div className="h-16 mx-4 mt-4 rounded-lg bg-muted/30" />
-        {/* Lyrics lines */}
-        <div className="flex-1 px-4 py-6 space-y-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-4 rounded bg-muted/20" style={{ width: `${60 + Math.random() * 30}%` }} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (tool === "mix") {
-    return (
-      <div className="flex-1 flex flex-col min-h-0 animate-pulse px-4 py-6 space-y-4">
-        <div className="h-8 w-48 rounded bg-muted/30" />
-        <div className="h-32 rounded-lg bg-muted/20" />
-        <div className="h-32 rounded-lg bg-muted/20" />
-      </div>
-    );
-  }
-  if (tool === "hitfit") {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center animate-pulse px-4 py-6 space-y-4">
-        <div className="w-20 h-20 rounded-full bg-muted/20" />
-        <div className="h-4 w-40 rounded bg-muted/30" />
-        <div className="h-3 w-56 rounded bg-muted/20" />
-      </div>
-    );
-  }
-  return <TabChunkFallback />;
-};
-
 const PATH_TO_TAB: Record<string, string> = {
   "/CrowdFit": "songfit",
   "/HookFit": "hookfit",
@@ -508,46 +466,13 @@ const Index = () => {
   const handleNewMix = useCallback(() => { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }, [navigate]);
   const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }, [navigate]);
 
-  // Track if a project transition is in progress for smooth skeleton display
-  const [transitionTool, setTransitionTool] = useState<string | null>(null);
-
   const handleSidebarTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
-    setHeaderProject(null);
     // Reset loaded project for the clicked tool so it opens fresh/new
-    // but only if we actually have a loaded project (avoid no-op remounts)
-    if (tab === "lyric" && loadedLyric) {
-      setTransitionTool("lyric");
-      setLoadedLyric(null);
-      navigate("/LyricFit", { replace: true });
-      // Clear transition after React re-renders with new key
-      requestAnimationFrame(() => setTransitionTool(null));
-    } else if (tab === "mix" && loadedMixProject) {
-      setTransitionTool("mix");
-      setLoadedMixProject(null);
-      navigate("/MixFit", { replace: true });
-      requestAnimationFrame(() => setTransitionTool(null));
-    } else if (tab === "hitfit" && loadedHitFitAnalysis) {
-      setTransitionTool("hitfit");
-      setLoadedHitFitAnalysis(null);
-      navigate("/HitFit", { replace: true });
-      requestAnimationFrame(() => setTransitionTool(null));
-    } else if (tab === "profit") {
-      setProfitArtistUrl(null);
-      setProfitSavedReport(null);
-      setProfitLoadKey(k => k + 1);
-      navigate("/ProFit", { replace: true });
-    } else if (tab === "vibefit") {
-      setLoadedVibeFitResult(null);
-      setVibeFitLoadKey(k => k + 1);
-      navigate("/VibeFit", { replace: true });
-    } else if (tab === "playlist") {
-      setResult(null);
-      setVibeAnalysis(null);
-      setSongFitAnalysis(null);
-      navigate("/PlaylistFit", { replace: true });
-    }
-  }, [setActiveTab, navigate, loadedLyric, loadedMixProject, loadedHitFitAnalysis]);
+    if (tab === "lyric") { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }
+    else if (tab === "mix") { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }
+    else if (tab === "hitfit") { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }
+  }, [setActiveTab, navigate]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
     // Only reset state for the tool being loaded — don't touch other tools'
@@ -741,29 +666,21 @@ const Index = () => {
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("lyric") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
-              {transitionTool === "lyric"
-                ? <ProjectTransitionSkeleton tool="lyric" />
-                : <Suspense fallback={<ProjectTransitionSkeleton tool="lyric" />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} /></Suspense>
-              }
+              <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} /></Suspense>
             </div>
           )}
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("mix") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "mix" ? "" : "hidden"}`}>
-              {transitionTool === "mix"
-                ? <ProjectTransitionSkeleton tool="mix" />
-                : <Suspense fallback={<ProjectTransitionSkeleton tool="mix" />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
-              }
+              <Suspense fallback={<TabChunkFallback />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
             </div>
           )}
           {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("hitfit") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
-              {transitionTool === "hitfit"
-                ? <ProjectTransitionSkeleton tool="hitfit" />
-                : loadedHitFitAnalysis
-                  ? <Suspense fallback={<ProjectTransitionSkeleton tool="hitfit" />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
-                  : <Suspense fallback={<ProjectTransitionSkeleton tool="hitfit" />}><HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+              {loadedHitFitAnalysis
+                ? <Suspense fallback={<TabChunkFallback />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+                : <Suspense fallback={<TabChunkFallback />}><HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
               }
             </div>
           )}
