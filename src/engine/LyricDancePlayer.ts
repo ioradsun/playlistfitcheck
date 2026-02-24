@@ -1207,6 +1207,9 @@ export class LyricDancePlayer {
     // Comment comets — after text, before watermark
     this.drawComments(performance.now() / 1000);
 
+    // Word-local particle emitters
+    this.drawWordEmitters(performance.now() / 1000);
+
     this.drawWatermark();
     this.debugState = { ...this.debugState, drawCalls };
   }
