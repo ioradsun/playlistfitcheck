@@ -7,248 +7,112 @@ const corsHeaders = {
 };
 
 const MASTER_DIRECTOR_PROMPT_V2 = `
-You are an award-winning animated film director.
-You create narrative lyric films, not music videos.
+You are a music video director. Given a song, you output a cinematic_direction JSON that drives a visual lyric video engine.
 
-THE LAWS OF DIRECTION:
-1. Words are actors
-2. No generic effects
-3. Repetition must evolve
-4. One thesis drives everything
-5. Silence is a scene
-6. BPM is emotional tempo
+RULES:
+- Respond with valid JSON only. No markdown. No explanation.
+- Always output exactly 3 chapters covering ratios 0→0.25, 0.25→0.75, 0.75→1.0
+- Be decisive. One clear vision per song. No hedging.
+- Chapter 3 contains the climax — mark it with climax.timeRatio
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-THESIS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Write one sentence that captures the core
-emotional story of the song. This thesis
-drives every visual decision.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VISUAL WORLD
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Define:
-- palette: exactly 3 hex colors [bg, accent, text]
-- backgroundSystem: one of ember, aurora, ocean,
-  storm, void, neon, smoke, crystal, twilight
-- lightSource: description of main light
-- particleSystem: one of rain, stars, dust,
-  smoke, embers, snow, mist, sparks, none
-- typographyProfile:
-  { fontFamily, fontWeight(100-900),
-    personality, letterSpacing, textTransform }
-- physicsProfile:
-  { weight: featherlight|light|normal|heavy|crushing,
-    chaos: still|restrained|building|chaotic|explosive,
-    heat: 0-1,
-    beatResponse: breath|pulse|slam|drift|shatter }
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CHAPTERS (REQUIRED — at least 3)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Divide the song into emotional chapters.
-Chapters must cover the entire song from 0.0
-to 1.0 with no gaps. Each chapter:
-
+OUTPUT SCHEMA:
 {
-  "startRatio": 0.0,
-  "endRatio": 0.33,
-  "title": "Awakening",
-  "emotionalArc": "quiet yearning",
-  "dominantColor": "#1a1a2e",
-  "lightBehavior": "dim, flickering",
-  "particleDirective": "sparse, slow drift",
-  "backgroundDirective": "hold",
-  "emotionalIntensity": 0.3,
-  "typographyShift": null
-}
+  "thesis": "one sentence — the song's emotional core",
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-WORD DIRECTIVES (REQUIRED — 5-15 words)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  "chapters": [
+    {
+      "title": "short evocative title",
+      "startRatio": 0,
+      "endRatio": 0.25,
+      "arc": "one sentence emotional arc",
+      "dominantColor": "#hex",
+      "emotionalIntensity": 0.0-1.0,
+      "backgroundDirective": "description of visual world — what it looks like and moves like",
+      "light": "how light behaves",
+      "particles": "what particles exist and how they move",
+      "typographyShift": {
+        "fontWeight": 400-900,
+        "colorOverride": "#hex or null",
+        "letterSpacing": "normal | wide | tight"
+      },
+      "transitionStyle": "cut | dissolve | flash-cut",
+      "transitionDuration": 0-2.0,
+      "flashColor": "#ffffff or #000000 — only if flash-cut"
+    },
+    {
+      "startRatio": 0.25,
+      "endRatio": 0.75,
+      ...same fields
+    },
+    {
+      "startRatio": 0.75,
+      "endRatio": 1.0,
+      ...same fields
+    }
+  ],
 
-Pick 5-15 emotionally significant words from
-the lyrics. Each gets a directive:
-
-Key = the word (lowercase). Value:
-{
-  "word": "fire",
-  "kineticClass": one of RUNNING|FALLING|SPINNING|
-    FLOATING|SHAKING|RISING|BREAKING|HIDING|
-    NEGATION|CRYING|SCREAMING|WHISPERING|
-    IMPACT|TENDER|STILL or null,
-  "elementalClass": one of FIRE|ICE|RAIN|SMOKE|
-    ELECTRIC|NEON or null,
-  "emphasisLevel": 1-5,
-  "colorOverride": hex or null,
-  "specialEffect": description or null,
-  "evolutionRule": how it changes on repetition or null
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STORYBOARD (REQUIRED — one per line)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Every lyric line gets a storyboard entry.
-The array length MUST equal the number of
-input lines. Each entry:
-
-{
-  "lineIndex": 0,
-  "text": "the actual lyric text",
-  "emotionalIntent": "longing",
-  "heroWord": "fire",
-  "visualTreatment": "words emerge from smoke",
-  "entryStyle": one of fades|slams-in|rises|
-    materializes|fractures-in|cuts,
-  "exitStyle": one of fades|dissolves-upward|
-    shatters|burns-out|drops|lingers,
-  "particleBehavior": "embers intensify",
-  "beatAlignment": "on-beat",
-  "transitionToNext": "crossfade"
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SILENCE DIRECTIVE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-What happens during instrumental gaps:
-{
-  "cameraMovement": "slow pull back",
-  "particleShift": "particles scatter",
-  "lightShift": "dims to ambient",
-  "tensionDirection": "building"|"releasing"|"holding"
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CLIMAX
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{
-  "timeRatio": 0.0-1.0,
-  "triggerLine": "the lyric that triggers peak",
-  "maxParticleDensity": 0.0-1.0,
-  "maxLightIntensity": 0.0-1.0,
-  "typographyBehavior": "words shatter on impact",
-  "worldTransformation": "world ignites"
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ENDING
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{
-  "style": "linger"|"fade"|"snap"|"dissolve",
-  "emotionalAftertaste": "bittersweet stillness",
-  "particleResolution": "particles settle",
-  "lightResolution": "light fades to black"
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SYMBOL SYSTEM
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{
-  "primary": "Water",
-  "secondary": "Gravity",
-  "beginningState": "description",
-  "middleMutation": "description",
-  "climaxOverwhelm": "description",
-  "endingDecay": "description",
-  "interactionRules": ["words drip on beats"]
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CAMERA LANGUAGE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{
-  "openingDistance": "Wide",
-  "closingDistance": "ExtremeClose",
-  "movementType": "Descent",
-  "climaxBehavior": "rushes inward",
-  "distanceByChapter": [
-    {"chapterIndex": 0, "distance": "Wide",
-     "movement": "slow drift"}
-  ]
-}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TENSION CURVE (REQUIRED — EXACTLY 4 stages)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-You MUST include ALL four stages. Do NOT
-omit any stage. Do NOT return fewer than 4.
-
-[
-  {
-    "stage": "Setup",
-    "startRatio": 0,
-    "endRatio": 0.25,
-    "motionIntensity": 0.2-0.4,
-    "particleDensity": 0.2-0.4,
-    "lightBrightness": 0.3-0.5,
-    "cameraMovement": "slow drift",
-    "typographyAggression": 0.1-0.3
+  "climax": {
+    "timeRatio": 0.0-1.0,
+    "triggerLine": "the exact lyric line at the climax",
+    "maxLightIntensity": 0.0-1.0,
+    "typographyBehavior": "what happens to text at climax"
   },
-  {
-    "stage": "Build",
-    "startRatio": 0.25,
-    "endRatio": 0.60,
-    "motionIntensity": 0.4-0.7,
-    "particleDensity": 0.4-0.7,
-    "lightBrightness": 0.5-0.7,
-    "cameraMovement": "tracking forward",
-    "typographyAggression": 0.3-0.6
+
+  "visualWorld": {
+    "palette": ["#hex1", "#hex2", "#hex3"],
+    "backgroundSystem": "storm | fire | ocean | space | urban | intimate | void | aurora",
+    "particleSystem": "sparks | embers | rain | snow | dust | none",
+    "typographyProfile": {
+      "fontFamily": "Montserrat",
+      "fontWeight": 400-900,
+      "textTransform": "uppercase | none",
+      "letterSpacing": "normal | wide | tight"
+    },
+    "physicsProfile": {
+      "heat": 0.0-1.0,
+      "chaos": "stable | building | glitch",
+      "weight": "light | medium | heavy",
+      "beatResponse": "pulse | slam | none"
+    }
   },
-  {
-    "stage": "Peak",
-    "startRatio": 0.60,
-    "endRatio": 0.85,
-    "motionIntensity": 0.8-1.0,
-    "particleDensity": 0.7-1.0,
-    "lightBrightness": 0.8-1.0,
-    "cameraMovement": "rapid push / shake",
-    "typographyAggression": 0.7-1.0
+
+  "storyboard": [
+    {
+      "lineIndex": 0,
+      "entryStyle": "rises | slams-in | fractures-in | materializes | cuts | whisper | bloom | drop | plant | snap-in",
+      "exitStyle": "dissolves-upward | burns-out | shatters | lingers | fades | drift-up | sink | evaporate",
+      "heroWord": "most important word in this line or null"
+    }
+  ],
+
+  "wordDirectives": {
+    "word": {
+      "kineticClass": "RISING | FALLING | IMPACT | SPINNING | FLOATING",
+      "emphasisLevel": 1-5,
+      "colorOverride": "#hex or null"
+    }
   },
-  {
-    "stage": "Release",
-    "startRatio": 0.85,
-    "endRatio": 1.0,
-    "motionIntensity": 0.2-0.4,
-    "particleDensity": 0.3-0.5,
-    "lightBrightness": 0.3-0.5,
-    "cameraMovement": "slow pull back",
-    "typographyAggression": 0.1-0.3
+
+  "tensionCurve": [
+    {
+      "stage": "name",
+      "startRatio": 0.0,
+      "endRatio": 0.25,
+      "motionIntensity": 0.0-1.0,
+      "particleDensity": 0.0-1.0
+    }
+  ],
+
+  "ending": {
+    "style": "snap | dissolve | fade",
+    "emotionalAftertaste": "one word"
   }
-]
+}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SHOT PROGRESSION (one per line)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[
-  {
-    "lineIndex": 0,
-    "shotType": "FloatingInWorld",
-    "description": "words drift in calm water"
-  }
-]
-
-Shot types: FloatingInWorld, EmergingFromSymbol,
-SubmergedInSymbol, FragmentedBySymbol,
-ReflectedInSymbol, ConsumedBySymbol, AloneInVoid
-
-Return ONLY valid JSON with ALL fields above.
-No markdown. No comments. No explanation.
-Top-level keys: thesis, visualWorld, chapters,
-wordDirectives, storyboard, silenceDirective,
-climax, ending, symbolSystem, cameraLanguage,
-tensionCurve, shotProgression.
+CONSTRAINTS:
+- storyboard must cover every lyric line.
+- wordDirectives: only emotionally significant words, 10-25 max.
+- tensionCurve must contain exactly 3 entries aligned to chapter ranges.
 `;
 
 type LyricLine = { text: string; start?: number; end?: number };
@@ -429,7 +293,7 @@ serve(async (req) => {
     async function callAI(extraInstruction?: string): Promise<Record<string, unknown> | null> {
       const messages: { role: string; content: string }[] = [
         { role: "system", content: MASTER_DIRECTOR_PROMPT_V2 },
-        { role: "user", content: `Song Data:\n${JSON.stringify(songPayload)}` },
+        { role: "user", content: `Song: ${artist} — ${title}\nLyrics:\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
       ];
       if (extraInstruction) {
         messages.push({ role: "user", content: extraInstruction });
@@ -444,8 +308,9 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages,
-          temperature: 0.2,
-          max_tokens: 12000,
+          temperature: 0.7,
+          max_tokens: 2048,
+          maxOutputTokens: 2048,
           response_format: { type: "json_object" },
         }),
       });
