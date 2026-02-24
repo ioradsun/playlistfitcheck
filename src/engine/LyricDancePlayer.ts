@@ -1072,7 +1072,9 @@ export class LyricDancePlayer {
     this.checkEmotionalEvents(tSec, songProgress);
     this.drawEmotionalEvents(tSec);
 
-    this.ctx.translate(frame.cameraX ?? 0, frame.cameraY ?? 0);
+    const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
+    const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
+    this.ctx.translate(safeCameraX, safeCameraY);
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
 
@@ -1094,14 +1096,17 @@ export class LyricDancePlayer {
       }
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
-      const drawX = chunk.x;
-      const drawY = chunk.y;
-      const zoom = frame.cameraZoom ?? 1.0;
-      const fontSize = chunk.fontSize ?? 36;
+      const drawX = Number.isFinite(chunk.x) ? chunk.x : 0;
+      const drawY = Number.isFinite(chunk.y) ? chunk.y : 0;
+      const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
+      const fontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
       const fontWeight = chunk.fontWeight ?? 700;
       const safeFontSize = Math.max(12, Math.round(fontSize * zoom) || 36);
-      const sx = chunk.scaleX ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
-      const sy = chunk.scaleY ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
+      const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
+      const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
+      const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
+      const sx = Number.isFinite(sxRaw) ? sxRaw : 1;
+      const sy = Number.isFinite(syRaw) ? syRaw : 1;
 
       // Hierarchical halo — anchor vs supporting
       const isAnchor = chunk.isAnchor ?? false;
@@ -1112,7 +1117,7 @@ export class LyricDancePlayer {
       const chapterColor = (chIdx >= 0 ? chapters[chIdx]?.dominantColor : null) ?? '#FFD700';
       this.drawWordHalo(drawX, drawY, fontSize, isAnchor, chapterColor, chunk.alpha);
 
-      this.ctx.globalAlpha = chunk.alpha;
+      this.ctx.globalAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
       this.ctx.fillStyle = chunk.color ?? obj.color;
       this.ctx.font = `${fontWeight} ${safeFontSize}px "Montserrat", sans-serif`;
       // Safety: if font assignment failed silently
