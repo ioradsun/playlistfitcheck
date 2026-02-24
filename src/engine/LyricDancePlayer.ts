@@ -665,7 +665,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
   ) {
     // Invalidate cache if song changed (survives HMR)
-    const sessionKey = `v12-${data.id}-${data.words?.length ?? 0}`;
+    const sessionKey = `v12-${data.id}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;

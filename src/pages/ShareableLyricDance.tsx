@@ -241,8 +241,53 @@ export default function ShareableLyricDance() {
           const rawDir = (dirRow as any)?.cinematic_direction;
           const dir = rawDir && !Array.isArray(rawDir) ? rawDir : null;
           if (dir) setData(prev => prev ? { ...prev, cinematic_direction: dir } : prev);
-        }).catch(() => {}).finally(() => {
-          if (d.cinematic_direction) return;
+        }).catch(() => {}).finally(async () => {
+          // Check if cinematic_direction already exists in DB
+          const { data: existingRow } = await supabase
+            .from("shareable_lyric_dances" as any)
+            .select("cinematic_direction, chapter_images")
+            .eq("id", d.id)
+            .maybeSingle();
+          const existingDir = (existingRow as any)?.cinematic_direction;
+          const existingImages = (existingRow as any)?.chapter_images;
+
+          if (existingDir && !Array.isArray(existingDir) && existingDir.chapters?.length > 0) {
+            // Use cached direction — skip generation
+            setData(prev => prev ? { ...prev, cinematic_direction: existingDir } : prev);
+
+            // Check if chapter images also already exist
+            const imagesAlreadyExist =
+              Array.isArray(existingImages) &&
+              existingImages.length >= 3 &&
+              existingImages.every((url: string) => !!url);
+
+            if (imagesAlreadyExist) {
+              setData(prev => prev ? { ...prev, chapter_images: existingImages } : prev);
+            } else {
+              // Generate chapter images from existing direction
+              const chapters = existingDir.chapters;
+              if (Array.isArray(chapters) && chapters.length > 0) {
+                supabase.functions.invoke("generate-chapter-images", {
+                  body: {
+                    lyric_dance_id: d.id,
+                    chapters: chapters.map((ch: any, i: number) => ({
+                      index: i,
+                      backgroundDirective: ch.backgroundDirective ?? ch.background ?? "",
+                      dominantColor: ch.dominantColor ?? "#333333",
+                      emotionalIntensity: ch.emotionalIntensity ?? 0.5,
+                    })),
+                  },
+                }).then(({ data: imgResult }) => {
+                  if (imgResult?.chapter_images) {
+                    setData(prev => prev ? { ...prev, chapter_images: imgResult.chapter_images } : prev);
+                  }
+                }).catch(() => {});
+              }
+            }
+            return;
+          }
+
+          // No cached direction — generate fresh
           if (d.lyrics?.length > 0) {
             const linesForDir = (d.lyrics as any[]).filter((l: any) => l.tag !== "adlib").map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
             supabase.functions.invoke("cinematic-direction", {
