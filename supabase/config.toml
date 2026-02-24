@@ -68,3 +68,15 @@ verify_jwt = false
 
 [functions.artist-fingerprint]
 verify_jwt = false
+
+[functions.generate-scene-manifest]
+verify_jwt = false
+
+[functions.sync-dance-words]
+verify_jwt = false
+
+[functions.convert-invite]
+verify_jwt = false
+
+[functions.update-submission-statuses]
+verify_jwt = false
