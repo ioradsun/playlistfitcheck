@@ -2038,32 +2038,38 @@ export class LyricDancePlayer {
   }
 
   private buildBgCache(): void {
-    const chapters = this.payload?.cinematic_direction?.chapters ?? [];
-    const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
-    const count = Math.max(1, chapters.length);
-    this.bgCaches = [];
-    this.chapterParticleSystems = [];
+    console.log('[PLAYER] building bgCache...');
+    try {
+      const chapters = this.payload?.cinematic_direction?.chapters ?? [];
+      const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? this.payload?.palette ?? ['#0a0a0a', '#111827'];
+      const count = Math.max(1, chapters.length);
+      this.bgCaches = [];
+      this.chapterParticleSystems = [];
 
-    for (let ci = 0; ci < count; ci++) {
-      const chapter = chapters[ci] as any;
-      const off = document.createElement('canvas');
-      off.width = this.width;
-      off.height = this.height;
-      const ctx = off.getContext('2d');
-      if (!ctx) continue;
+      for (let ci = 0; ci < count; ci++) {
+        const chapter = chapters[ci] as any;
+        const off = document.createElement('canvas');
+        off.width = this.width;
+        off.height = this.height;
+        const ctx = off.getContext('2d');
+        if (!ctx) continue;
 
-      const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
-      const bgColor = this.tintedDarkBackground(dominantColor);
-      const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
-      const particleDesc = chapter?.particles ?? '';
-      this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
+        const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
+        const bgColor = this.tintedDarkBackground(dominantColor);
+        const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
+        const particleDesc = chapter?.particles ?? '';
+        this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
 
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, off.width, off.height);
-      this.bgCaches.push(off);
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, off.width, off.height);
+        this.bgCaches.push(off);
+      }
+
+      this.bgCacheCount = this.bgCaches.length;
+      console.log('[PLAYER] bgCache built:', this.bgCaches?.length);
+    } catch (err) {
+      console.error('[PLAYER] bgCache build failed:', err);
     }
-
-    this.bgCacheCount = this.bgCaches.length;
   }
 
   private drawRadialGlow(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
