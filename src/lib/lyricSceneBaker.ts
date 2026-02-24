@@ -1498,10 +1498,6 @@ export function bakeSceneChunked(
       entryDuration: md.entryDuration,
       exitDuration: md.exitDuration,
     };
-    console.log('[BAKER ANIM] motionProfile:', mp);
-    console.log('[BAKER ANIM] visualMode:', visualMode);
-    console.log('[BAKER ANIM] heat:', h, 'beatResponse:', br, 'chaos:', ch);
-    console.log('[BAKER ANIM] animParams:', ap);
 
     const pg = payload.words?.length > 0 ? buildPhraseGroups(pre.wordMeta) : null;
     const sb = payload.cinematic_direction?.storyboard ?? [];
