@@ -1261,42 +1261,67 @@ export class LyricDancePlayer {
       this.drawWordHalo(drawX, drawY, fontSize, isAnchor, chapterColor, chunk.alpha);
 
       const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
-      const iconBaseSize = (chunk.fontSize ?? 36) * (chunk.iconScale ?? 2.0);
+      const iconScaleMult = chunk.iconScale ?? 2.0;
+      const positionScaleOverride: Record<string, number> = {
+        behind: iconScaleMult,
+        above: iconScaleMult * 0.55,
+        beside: iconScaleMult * 0.5,
+        replace: iconScaleMult * 0.9,
+      };
+      const effectiveScale = positionScaleOverride[chunk.iconPosition ?? 'behind'] ?? iconScaleMult;
+      const iconBaseSize = (chunk.fontSize ?? 36) * effectiveScale;
       const iconColor = chunk.color ?? chapterColor;
-      const iconPulse = chunk.iconPosition === 'behind' && chunk.behavior === 'pulse'
-        ? 1.0 + Math.sin(performance.now() / 1000 * 2) * 0.03
-        : 1.0;
+      const now = performance.now() / 1000;
+      let iconPulse = 1.0;
+      if (chunk.iconPosition === 'behind') {
+        iconPulse = 1.0 + Math.sin(now * 1.5) * 0.08;
+      } else if (chunk.behavior === 'pulse') {
+        iconPulse = 1.0 + Math.sin(now * 3) * 0.04;
+      }
       const iconSize = iconBaseSize * iconPulse;
       let iconX = drawX;
       let iconY = drawY;
-      let iconOpacity = drawAlpha * 0.18;
+      let iconOpacity = drawAlpha * 0.45;
+      let iconGlow = 0;
 
       switch (chunk.iconPosition) {
         case 'behind':
           iconX = drawX;
           iconY = drawY;
-          iconOpacity = drawAlpha * 0.15;
+          iconOpacity = drawAlpha * 0.45;
+          iconGlow = 12;
           break;
         case 'above':
           iconX = drawX;
-          iconY = drawY - (chunk.fontSize ?? 36) * 1.5;
-          iconOpacity = drawAlpha * 0.6;
+          iconY = drawY - (chunk.fontSize ?? 36) * 1.3;
+          iconOpacity = drawAlpha * 0.85;
+          iconGlow = 6;
           break;
         case 'beside':
-          iconX = drawX - iconSize * 0.8;
+          iconX = drawX - iconSize * 0.7;
           iconY = drawY;
-          iconOpacity = drawAlpha * 0.7;
+          iconOpacity = drawAlpha * 0.9;
+          iconGlow = 6;
           break;
         case 'replace':
           iconX = drawX;
           iconY = drawY;
-          iconOpacity = drawAlpha * 0.9;
+          iconOpacity = drawAlpha * 1.0;
+          iconGlow = 16;
           break;
       }
 
       const drawBefore = chunk.iconPosition === 'behind' || chunk.iconPosition === 'replace';
       if (chunk.iconGlyph && chunk.visible && drawBefore) {
+        if (iconGlow > 0) {
+          this.ctx.save();
+          this.ctx.shadowColor = iconColor;
+          this.ctx.shadowBlur = iconGlow;
+        }
         drawIcon(this.ctx, chunk.iconGlyph as IconGlyph, iconX, iconY, iconSize, iconColor, (chunk.iconStyle as IconStyle) ?? 'ghost', iconOpacity);
+        if (iconGlow > 0) {
+          this.ctx.restore();
+        }
       }
 
       if (chunk.iconPosition !== 'replace') {
@@ -1321,7 +1346,15 @@ export class LyricDancePlayer {
       }
 
       if (chunk.iconGlyph && chunk.visible && !drawBefore) {
+        if (iconGlow > 0) {
+          this.ctx.save();
+          this.ctx.shadowColor = iconColor;
+          this.ctx.shadowBlur = iconGlow;
+        }
         drawIcon(this.ctx, chunk.iconGlyph as IconGlyph, iconX, iconY, iconSize, iconColor, (chunk.iconStyle as IconStyle) ?? 'outline', iconOpacity);
+        if (iconGlow > 0) {
+          this.ctx.restore();
+        }
       }
       this.ctx.shadowBlur = 0;
       this.ctx.globalAlpha = 1;
