@@ -234,7 +234,7 @@ export function FitTab({
       let backgroundUrl: string | null = null;
       try {
         const { data: bgResult } = await supabase.functions.invoke("lyric-video-bg", {
-          body: { manifest: sceneManifest, userDirection: `Song: ${lyricData.title} by ${lyricData.artist}` },
+          body: { manifest: sceneManifest, userDirection: `Song: ${lyricData.title}` },
         });
         backgroundUrl = bgResult?.imageUrl ?? null;
         setBgImageUrl(backgroundUrl);

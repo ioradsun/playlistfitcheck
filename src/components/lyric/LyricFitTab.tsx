@@ -129,7 +129,6 @@ export function LyricFitTab({
       const filename = initialLyric.filename || "saved-lyrics.mp3";
       const newData: LyricData = {
         title: resolveProjectTitle(initialLyric.title, filename),
-        artist: initialLyric.artist,
         lines: initialLyric.lines as any[],
       };
       setLyricData(newData);
@@ -304,7 +303,6 @@ export function LyricFitTab({
     const { data: dnaResult, error: dnaError } = await supabase.functions.invoke("lyric-analyze", {
       body: {
         title: lyricData.title,
-        artist: lyricData.artist,
         lyrics: lyricsText,
         audioBase64,
         format,
@@ -391,7 +389,6 @@ export function LyricFitTab({
       const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
         body: {
           title: lyricData.title,
-          artist: lyricData.artist,
           lines: lyricsForDirection,
           beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
           lyricId: savedIdRef.current || undefined,

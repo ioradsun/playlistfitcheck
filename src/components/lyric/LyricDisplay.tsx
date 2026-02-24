@@ -113,7 +113,7 @@ export interface LyricMetadata {
 
 export interface LyricData {
   title: string;
-  artist: string;
+  artist?: string; // Transcription-detected song artist — display only, NOT user identity
   lines: LyricLine[];
   hooks?: LyricHook[];
   metadata?: LyricMetadata;
@@ -201,7 +201,7 @@ function toLRC(data: LyricData): string {
   const mainLines = data.lines.filter((l) => l.tag !== "adlib");
   return [
     `[ti:${data.title}]`,
-    `[ar:${data.artist}]`,
+    ...(data.artist ? [`[ar:${data.artist}]`] : []),
     "",
     ...mainLines.map((l) => `[${formatTimeLRC(l.start)}]${l.text}`),
   ].join("\n");
@@ -447,17 +447,21 @@ export function LyricDisplay({
   const [showDirectorsCutTooltip, setShowDirectorsCutTooltip] = useState(false);
 
 
-  // Load fingerprint from profile
+  // Load fingerprint + display name from profile
+  const [profileDisplayName, setProfileDisplayName] = useState<string>("—");
   useEffect(() => {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("artist_fingerprint")
+      .select("artist_fingerprint, display_name")
       .eq("id", user.id)
       .single()
       .then(({ data }) => {
         if (data?.artist_fingerprint) {
           setArtistFingerprint(data.artist_fingerprint as unknown as ArtistDNA);
+        }
+        if (data?.display_name) {
+          setProfileDisplayName(data.display_name);
         }
       });
   }, [user]);
@@ -600,7 +604,6 @@ export function LyricDisplay({
       const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
         body: {
           title: data.title,
-          artist: data.artist,
           lyrics: lyricsText,
           userSceneDirection: direction.trim(),
           includeHooks: false,
@@ -629,7 +632,7 @@ export function LyricDisplay({
     } finally {
       setDirectorsCutRegenerating(false);
     }
-  }, [songDna, directorsCutRegenerating, data.title, data.artist, data.lines, getManifestDiff]);
+  }, [songDna, directorsCutRegenerating, data.title, data.lines, getManifestDiff]);
 
   const currentManifest = useMemo<FullSceneManifest | null>(() => {
     if (manifest) return manifest;
@@ -881,7 +884,6 @@ export function LyricDisplay({
 
       const payload: Record<string, any> = {
         title: data.title,
-        artist: data.artist,
         lines: explicitLines as any,
         fmly_lines: (fmlyLines as any) ?? null,
         version_meta: {
@@ -2366,7 +2368,7 @@ export function LyricDisplay({
         hook={hooks[0] ?? null}
         metadata={data.metadata}
         title={data.title}
-        artist={data.artist}
+        artist={profileDisplayName}
         audioFile={audioFile}
       />
 
@@ -2402,13 +2404,7 @@ export function LyricDisplay({
               ? data.title
               : audioFile.name.replace(/\.[^.]+$/, "")
           }
-          artist={
-            data.artist &&
-            data.artist !== "Unknown" &&
-            data.artist !== "UNKNOWN"
-              ? data.artist
-              : "—"
-          }
+          artist={profileDisplayName}
           audioFile={audioFile}
           seed={`${data.title}-${songDna.hook.start.toFixed(3)}`}
         />
@@ -2446,13 +2442,7 @@ export function LyricDisplay({
               ? data.title
               : audioFile.name.replace(/\.[^.]+$/, "")
           }
-          artist={
-            data.artist &&
-            data.artist !== "Unknown" &&
-            data.artist !== "UNKNOWN"
-              ? data.artist
-              : "—"
-          }
+          artist={profileDisplayName}
           audioFile={audioFile}
           seed={`${data.title}-lyric-dance`}
           mood={songDna.mood}
@@ -2469,7 +2459,7 @@ export function LyricDisplay({
           beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : null,
           lines: data.lines,
           title: data.title,
-          artist: data.artist,
+          artist: profileDisplayName,
           overrides: hookDanceOverrides as unknown as Record<string, unknown>,
           fingerprint: artistFingerprint,
         }}

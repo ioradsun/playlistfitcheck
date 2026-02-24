@@ -202,7 +202,6 @@ export function LyricsTab({
             id: projectId,
             user_id: user.id,
             title: resolveProjectTitle(data.title, file.name),
-            artist: data.artist || "Unknown",
             lines: data.lines,
             words: data.words ?? null,
             filename: file.name,
@@ -215,7 +214,7 @@ export function LyricsTab({
 
         const newLyricData: LyricData = {
           title: resolveProjectTitle(data.title, file.name),
-          artist: data.artist || "Unknown",
+          artist: data.artist || undefined,
           lines: data.lines,
           hooks: data.hooks,
           metadata: data.metadata,
