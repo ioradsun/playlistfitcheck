@@ -686,9 +686,18 @@ function bakeFrame(
     const storyboard = payload.cinematic_direction?.storyboard ?? [];
     const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
 
+    const WORD_LINGER_BY_PROFILE: Record<string, number> = {
+      weighted: 0.15,
+      fluid: 0.55,
+      elastic: 0.2,
+      drift: 0.8,
+      glitch: 0.05,
+    };
+    const wordLinger = WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4;
+
     const wordChunks = pre.wordMeta
       .filter((wm) => {
-        return tSec >= wm.start && tSec < (wm.end + 0.85);
+        return tSec >= wm.start && tSec < (wm.end + wordLinger);
       })
       .map((wm) => {
         const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
@@ -750,8 +759,9 @@ function bakeFrame(
           ?? '#ffffff';
 
         const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
+        const soloWordBonus = motionProfile === 'drift' || motionProfile === 'fluid' ? 1.3 : 1.0;
         const fontSize = manifestDirective?.fontSize
-          ?? getWordFontSize(wm.word, wm.directive, baseFontSize, pre.visualMode);
+          ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
 
         const wordGlow = manifestDirective?.glow
           ? glow * manifestDirective.glow
