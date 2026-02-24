@@ -914,6 +914,17 @@ export class LyricDancePlayer {
     this.buildEmotionalEvents();
   }
 
+  updateChapterImages(urls: string[]): void {
+    console.log('[PLAYER] hot-updating chapter images:', urls.length);
+    this.data = { ...this.data, chapter_images: urls };
+    this.loadChapterImages();
+  }
+
+  updateSceneContext(sceneCtx: SceneContext): void {
+    console.log('[PLAYER] hot-updating scene context');
+    this.data = { ...this.data, scene_context: sceneCtx };
+  }
+
   destroy(): void {
     this.destroyed = true;
     this.stopHealthMonitor();
