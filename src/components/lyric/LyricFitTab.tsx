@@ -573,6 +573,7 @@ export function LyricFitTab({
           bgImageUrl={bgImageUrl}
           setBgImageUrl={setBgImageUrl}
           generationStatus={generationStatus}
+          words={words}
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
           onBack={() => handleViewChange("lyrics")}
