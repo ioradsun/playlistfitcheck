@@ -457,7 +457,7 @@ function createBakeState(payload: ScenePayload): BakeState {
     springOffset: 0,
     springVelocity: 0,
     currentZoom: 1.0,
-    hasLoggedAnim: false,
+    
   };
 }
 
