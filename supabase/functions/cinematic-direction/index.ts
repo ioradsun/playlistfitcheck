@@ -355,6 +355,7 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
       "beatAlignment", "emotionalIntent", "visualTreatment",
       "particleBehavior", "transitionToNext", "dominantColor",
       "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "text",
+      "iconGlyph", "iconStyle", "iconPosition", "iconScale",
     ];
 
     for (const entry of raw.storyboard) {
