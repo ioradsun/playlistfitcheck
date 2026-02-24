@@ -2189,23 +2189,29 @@ export class LyricDancePlayer {
   }
 
   private buildChapterSims(): void {
-    const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
-    const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? ['#111111', '#FFD700'];
-    const accentColor = palette[1] ?? '#FFD700';
-    const bgSystem = this.backgroundSystem;
-    this.chapterSims = chapters.map((chapter: any, ci: number) => {
-      const dominant = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#111111';
-      const bgDesc = (chapter?.backgroundDirective ?? chapter?.background ?? '').toLowerCase();
-      const perSystem = this.mapBackgroundSystem(`${bgDesc} ${bgSystem}`);
-      const sim: { fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim } = {};
-      if (perSystem === 'fire') sim.fire = new FireSim('fire', 0.08 + (chapter?.emotionalIntensity ?? 0.5) * 0.1);
-      else if (perSystem === 'storm') sim.fire = new FireSim('smoke', 0.18);
-      else if (perSystem === 'ocean') sim.water = new WaterSim(dominant, accentColor);
-      else if (perSystem === 'aurora') sim.aurora = new AuroraSim(dominant, accentColor);
-      else if (perSystem === 'urban') sim.rain = new RainSim(accentColor);
-      else if (perSystem === 'intimate') sim.fire = new FireSim('ember', 0.25);
-      return sim;
-    });
+    console.log('[PLAYER] building chapter sims...');
+    try {
+      const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
+      const palette = this.payload?.cinematic_direction?.visualWorld?.palette ?? ['#111111', '#FFD700'];
+      const accentColor = palette[1] ?? '#FFD700';
+      const bgSystem = this.backgroundSystem;
+      this.chapterSims = chapters.map((chapter: any, ci: number) => {
+        const dominant = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#111111';
+        const bgDesc = (chapter?.backgroundDirective ?? chapter?.background ?? '').toLowerCase();
+        const perSystem = this.mapBackgroundSystem(`${bgDesc} ${bgSystem}`);
+        const sim: { fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim } = {};
+        if (perSystem === 'fire') sim.fire = new FireSim('fire', 0.08 + (chapter?.emotionalIntensity ?? 0.5) * 0.1);
+        else if (perSystem === 'storm') sim.fire = new FireSim('smoke', 0.18);
+        else if (perSystem === 'ocean') sim.water = new WaterSim(dominant, accentColor);
+        else if (perSystem === 'aurora') sim.aurora = new AuroraSim(dominant, accentColor);
+        else if (perSystem === 'urban') sim.rain = new RainSim(accentColor);
+        else if (perSystem === 'intimate') sim.fire = new FireSim('ember', 0.25);
+        return sim;
+      });
+      console.log('[PLAYER] chapter sims built:', this.chapterSims.length);
+    } catch (err) {
+      console.error('[PLAYER] chapter sim build failed:', err);
+    }
   }
 
   private buildEmotionalEvents(): void {
