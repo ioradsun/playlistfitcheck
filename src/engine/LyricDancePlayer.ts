@@ -667,6 +667,14 @@ export class LyricDancePlayer {
 
   // Compatibility with existing React shell
   async init(): Promise<void> {
+    // Preload Montserrat at required weights for canvas rendering
+    await Promise.all([
+      document.fonts.load('400 16px Montserrat'),
+      document.fonts.load('700 16px Montserrat'),
+      document.fonts.load('800 16px Montserrat'),
+      document.fonts.load('900 16px Montserrat'),
+    ]).catch(() => { /* font preload best-effort */ });
+
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
     this.displayWidth = this.width;
     this.displayHeight = this.height;
