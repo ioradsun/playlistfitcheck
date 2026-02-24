@@ -155,6 +155,27 @@ serve(async (req) => {
 
     const supabase = createClient(sbUrl, sbKey);
 
+    // Check if images already exist — skip generation if so
+    const { data: existingRow } = await supabase
+      .from("shareable_lyric_dances")
+      .select("chapter_images")
+      .eq("id", lyric_dance_id)
+      .maybeSingle();
+
+    const existingImages = existingRow?.chapter_images;
+    const alreadyGenerated =
+      Array.isArray(existingImages) &&
+      existingImages.length >= 3 &&
+      existingImages.every((url: string) => !!url);
+
+    if (alreadyGenerated) {
+      console.log(`[chapter-images] Images already exist for ${lyric_dance_id} — returning cached`);
+      return new Response(
+        JSON.stringify({ success: true, cached: true, chapter_images: existingImages }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     console.log(`[chapter-images] Generating ${chapters.length} images for dance ${lyric_dance_id}`);
 
     // Generate all images in parallel
