@@ -1231,7 +1231,8 @@ export class LyricDancePlayer {
       const ctx = off.getContext('2d');
       if (!ctx) continue;
 
-      const dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
+      let dominantColor = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#0a0a0a';
+      dominantColor = this.enforceDarkColor(dominantColor);
       const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
       const particleDesc = chapter?.particles ?? '';
       this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
