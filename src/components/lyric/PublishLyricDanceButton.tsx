@@ -170,6 +170,7 @@ export function PublishLyricDanceButton({
               console.warn("[PUBLISH] Chapter images failed (non-blocking):", e?.message);
             });
           });
+      }
     } catch (e: any) {
       console.error("Publish error:", e);
       toast.error(e.message || "Failed to publish lyric dance");
