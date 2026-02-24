@@ -1164,7 +1164,7 @@ export class LyricDancePlayer {
     try {
       this.updateSims(tSec, frame);
     } catch (e) {
-      console.error('[PLAYER] sim update crash:', e);
+      // sim crash — silently continue
     }
 
     // Background: static bg cache first, then chapter images on top
