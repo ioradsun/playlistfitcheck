@@ -487,6 +487,8 @@ export function bakeScene(
   payload: ScenePayload,
   onProgress?: (progress: number) => void,
 ): BakedTimeline {
+  console.log('[BAKER] words sample:', payload.words?.slice(0, 5));
+  console.log('[BAKER] words total:', payload.words?.length);
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const frames: BakedTimeline = [];
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
