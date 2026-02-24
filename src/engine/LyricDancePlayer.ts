@@ -2284,9 +2284,7 @@ export class LyricDancePlayer {
       const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
 
-      // Log chapter transitions
       if (ci !== this._lastSimChapterIdx) {
-        console.log('[PLAYER] chapter change:', this._lastSimChapterIdx, '→', ci, 'at tSec:', tSec.toFixed(2));
         this._lastSimChapterIdx = ci;
       }
 
