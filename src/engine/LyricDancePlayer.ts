@@ -583,6 +583,7 @@ export class LyricDancePlayer {
   private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim }> = [];
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
+  private chapterImages: HTMLImageElement[] = [];
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
