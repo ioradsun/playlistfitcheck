@@ -1004,7 +1004,8 @@ function bakeFrame(
             ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0)
             : glow * 0.3;
 
-          if (chunks.length === 0) {
+          if (!_bakerDebugLogged) {
+            _bakerDebugLogged = true;
             console.log('[BAKER] first chunk animation:', {
               entry,
               behavior,
