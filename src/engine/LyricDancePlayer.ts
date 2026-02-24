@@ -735,8 +735,38 @@ export class LyricDancePlayer {
     const font = `${fontWeight} ${baseFontPx}px ${fontFamily}`;
     measureCtx.font = font;
 
-    for (let i = 0; i < payload.lines.length; i++) {
-      const rawText = payload.lines[i]?.text ?? '';
+    const words = payload.words ?? [];
+    const lines = payload.lines ?? [];
+
+    if (words.length > 0) {
+      const lineWordCounters: Record<number, number> = {};
+
+      for (const w of words) {
+        const lineIndex = lines.findIndex(
+          (l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999),
+        );
+        const li = Math.max(0, lineIndex);
+        const wi = lineWordCounters[li] ?? 0;
+        lineWordCounters[li] = wi + 1;
+
+        const key = `${li}-${wi}`;
+        const displayWord = textTransform === 'uppercase'
+          ? w.word.toUpperCase()
+          : w.word;
+
+        this.chunks.set(key, {
+          id: key,
+          text: displayWord,
+          color: '#ffffff',
+          font,
+          width: measureCtx.measureText(displayWord).width,
+        });
+      }
+      return;
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const rawText = lines[i]?.text ?? '';
       const text = textTransform === 'uppercase'
         ? rawText.toUpperCase()
         : rawText;
