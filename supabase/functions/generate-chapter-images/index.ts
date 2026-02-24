@@ -160,7 +160,7 @@ serve(async (req) => {
     // Generate all images in parallel
     const prompts = chapters
       .sort((a, b) => a.index - b.index)
-      .map((ch) => buildImagePrompt(ch));
+      .map((ch) => buildImagePrompt(ch, scene_context));
 
     const imageResults = await Promise.all(
       prompts.map((prompt) => generateImage(prompt, apiKey)),

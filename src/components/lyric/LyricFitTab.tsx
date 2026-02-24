@@ -537,6 +537,38 @@ export function LyricFitTab({
 
   return (
     <div className="flex flex-col flex-1">
+      {!lyricData && (
+        <div className="w-full max-w-2xl mx-auto mb-6">
+          <p className="text-sm text-white/60 mb-3 font-mono tracking-widest uppercase">
+            Where does this song live?
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {Object.values(SCENE_CONTEXTS).map(scene => (
+              <button
+                key={scene.scene}
+                onClick={() => setSelectedScene(
+                  selectedScene === scene.scene ? null : scene.scene
+                )}
+                className={`
+                  flex flex-col items-center gap-1 p-3 rounded-lg border transition-all
+                  font-mono text-xs
+                  ${selectedScene === scene.scene
+                    ? 'border-[#00FF87] bg-[#00FF87]/10 text-white'
+                    : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white/80'
+                  }
+                `}
+              >
+                <span className="text-xl">{scene.emoji}</span>
+                <span className="text-center leading-tight">{scene.label}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-white/25 mt-2 font-mono">
+            {selectedScene ? `${SCENE_CONTEXTS[selectedScene].emoji} ${SCENE_CONTEXTS[selectedScene].label} selected` : 'Skip to let AI decide'}
+          </p>
+        </div>
+      )}
+
       {lyricData && (
         <LyricFitToggle
           view={activeTab}

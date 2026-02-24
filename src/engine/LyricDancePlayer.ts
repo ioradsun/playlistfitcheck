@@ -976,6 +976,22 @@ export class LyricDancePlayer {
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
 
+  private getTextColor(chunkColor: string): string {
+    if (this.data.scene_context?.textStyle === 'dark') {
+      return this.darkenColor(chunkColor, 0.4);
+    }
+    return chunkColor;
+  }
+
+  private darkenColor(hex: string, amount: number): string {
+    const clean = hex.replace('#', '');
+    if (clean.length !== 6) return hex;
+    const r = Math.round(parseInt(clean.slice(0, 2), 16) * (1 - amount));
+    const g = Math.round(parseInt(clean.slice(2, 4), 16) * (1 - amount));
+    const b = Math.round(parseInt(clean.slice(4, 6), 16) * (1 - amount));
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+
   private hexWithAlpha(hex: string, alpha: number): string {
     const clean = hex.replace('#', '');
     if (clean.length !== 6) return `rgba(0,0,0,${alpha})`;
