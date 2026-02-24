@@ -641,9 +641,14 @@ export class LyricDancePlayer {
   private songEndSec = 0;
   private playing = false;
   private destroyed = false;
-  private _textDrawLogged = false;
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
 
+
+  // Health monitor
+  private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private frameCount = 0;
+  private lastHealthCheck = 0;
+  private currentTSec = 0;
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
@@ -755,6 +760,7 @@ export class LyricDancePlayer {
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
     this.playing = true;
+    this.startHealthMonitor();
     this.rafHandle = requestAnimationFrame(this.tick);
   }
 
@@ -834,7 +840,6 @@ export class LyricDancePlayer {
     };
 
     const onAudioEnded = () => {
-      console.log('[EXPORT] audio ended event — stopping export');
       this.stopExport();
     };
     this.audio.addEventListener("ended", onAudioEnded, { once: true });
@@ -906,6 +911,7 @@ export class LyricDancePlayer {
 
   destroy(): void {
     this.destroyed = true;
+    this.stopHealthMonitor();
     cancelAnimationFrame(this.rafHandle);
 
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -927,6 +933,33 @@ export class LyricDancePlayer {
   // ────────────────────────────────────────────────────────────
   // RAF loop
   // ────────────────────────────────────────────────────────────
+
+  private startHealthMonitor(): void {
+    this.healthCheckInterval = setInterval(() => {
+      const fps = this.frameCount / 5;
+      this.frameCount = 0;
+
+      const mem = (performance as any).memory;
+      console.warn('[HEALTH]', {
+        tSec: this.currentTSec?.toFixed(1),
+        fps: fps.toFixed(1),
+        wordEmitters: this.wordEmitters?.length ?? 0,
+        firedEmitters: this.firedEmitters?.size ?? 0,
+        activeEvents: this.activeEvents?.length ?? 0,
+        activeComments: this.activeComments?.length ?? 0,
+        chapterSims: this.chapterSims?.length ?? 0,
+        heapMB: mem ? (mem.usedJSHeapSize / 1048576).toFixed(1) : 'n/a',
+        heapLimitMB: mem ? (mem.jsHeapSizeLimit / 1048576).toFixed(1) : 'n/a',
+      });
+    }, 5000);
+  }
+
+  private stopHealthMonitor(): void {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+  }
 
   private tick = (timestamp: number): void => {
     if (this.destroyed) return;
@@ -1085,12 +1118,19 @@ export class LyricDancePlayer {
   }
 
   private draw(tSec: number): void {
+    try {
+      this._draw(tSec);
+    } catch (err) {
+      console.error('[PLAYER CRASH] at tSec:', tSec, err);
+      this.stopHealthMonitor();
+    }
+  }
+
+  private _draw(tSec: number): void {
+    this.currentTSec = tSec;
+    this.frameCount++;
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
-    if (this.fpsAccum.frames === 1) {
-      console.log('[PLAYER] chunk keys sample:', [...this.chunks.keys()].slice(0, 5));
-      console.log('[PLAYER] frame chunk ids sample:', frame.chunks.slice(0, 5).map(c => c.id));
-    }
 
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
@@ -1148,19 +1188,6 @@ export class LyricDancePlayer {
             intensity: chunk.glow ?? 1.0,
           });
         }
-      }
-      // One-time debug for first visible chunk
-      if (chunk.visible && !(this as any)._debuggedChunk) {
-        (this as any)._debuggedChunk = true;
-        console.log('[PLAYER] drawing chunk:', {
-          id: chunk.id,
-          scaleX: chunk.scaleX,
-          scaleY: chunk.scaleY,
-          skewX: chunk.skewX,
-          alpha: chunk.alpha,
-          glow: chunk.glow,
-          fontSize: chunk.fontSize,
-        });
       }
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
@@ -1231,10 +1258,6 @@ export class LyricDancePlayer {
         // Safety: if font assignment failed silently
         if (!this.ctx.font.includes('px')) {
           this.ctx.font = `700 36px "Montserrat", sans-serif`;
-        }
-        if (!this._textDrawLogged) {
-          this._textDrawLogged = true;
-          console.log('[PLAYER] drawing text:', obj.text, 'font:', this.ctx.font, 'alpha:', chunk.alpha);
         }
         if (chunk.glow > 0) {
           this.ctx.shadowColor = chunk.color ?? '#ffffff';
@@ -1851,8 +1874,6 @@ export class LyricDancePlayer {
 
       if (this.chunks.size < 10) {
         console.error('[PLAYER] CRITICAL: chunks map too small —', this.chunks.size, 'entries. phraseGroups:', this.phraseGroups?.length);
-      } else {
-        console.log('[PLAYER] chunks OK:', this.chunks.size, 'entries');
       }
 
       return;
@@ -1900,7 +1921,6 @@ export class LyricDancePlayer {
         img.src = url;
       }))
     );
-    console.log(`[PLAYER] Loaded ${this.chapterImages.filter(i => i.complete && i.naturalWidth > 0).length}/${urls.length} chapter images`);
   }
 
   private drawChapterImage(chapterIdx: number, nextChapterIdx: number, blend: number): void {

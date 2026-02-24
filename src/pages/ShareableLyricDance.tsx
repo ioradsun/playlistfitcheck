@@ -238,9 +238,6 @@ export default function ShareableLyricDance() {
           supabase.from("shareable_lyric_dances" as any).select(DIRECTION_COLUMNS).eq("id", d.id).maybeSingle()
         ).then(({ data: dirRow }) => {
           const rawDir = (dirRow as any)?.cinematic_direction;
-          console.log('[DATA] cinematic_direction raw:', rawDir,
-            'type:', typeof rawDir,
-            'is array:', Array.isArray(rawDir));
           const dir = rawDir && !Array.isArray(rawDir) ? rawDir : null;
           if (dir) setData(prev => prev ? { ...prev, cinematic_direction: dir } : prev);
         }).catch(() => {}).finally(() => {
@@ -306,9 +303,6 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     if (!fontsReady || !data || !bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
-
-    console.log('[PLAYER INIT] data keys:', Object.keys(data ?? {}));
-    console.log('[PLAYER INIT] cinematic_direction:', !!data?.cinematic_direction, 'type:', typeof data?.cinematic_direction, 'isArray:', Array.isArray(data?.cinematic_direction));
 
     let destroyed = false;
     const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, containerRef.current);
@@ -724,6 +718,9 @@ export default function ShareableLyricDance() {
           beatGrid: data.beat_grid as any, lines: data.lyrics,
           title: data.song_name, artist: data.artist_name,
           overrides: {}, fingerprint: data.artist_dna,
+          scene_context: data.scene_context as any,
+          chapter_images: data.chapter_images,
+          words: data.words,
         }}
       />
     </div>
