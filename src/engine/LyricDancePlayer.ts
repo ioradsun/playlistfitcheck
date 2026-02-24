@@ -1118,12 +1118,19 @@ export class LyricDancePlayer {
   }
 
   private draw(tSec: number): void {
+    try {
+      this._draw(tSec);
+    } catch (err) {
+      console.error('[PLAYER CRASH] at tSec:', tSec, err);
+      this.stopHealthMonitor();
+    }
+  }
+
+  private _draw(tSec: number): void {
+    this.currentTSec = tSec;
+    this.frameCount++;
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
-    if (this.fpsAccum.frames === 1) {
-      console.log('[PLAYER] chunk keys sample:', [...this.chunks.keys()].slice(0, 5));
-      console.log('[PLAYER] frame chunk ids sample:', frame.chunks.slice(0, 5).map(c => c.id));
-    }
 
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
