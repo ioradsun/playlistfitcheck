@@ -1462,6 +1462,7 @@ function bakeFrame(
 
           chunks.push({
             id: `${idx}-hero`,
+            text: directiveWord.toUpperCase(),
             x: x + preOffset + heroOffset,
             y,
             alpha: Math.min(1, alpha + ((entryStyle as string) === 'punch' ? 0.2 : 0.15)),
