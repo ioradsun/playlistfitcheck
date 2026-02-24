@@ -1074,7 +1074,7 @@ function bakeFrame(
           const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
           const totalWords = lineWords.length;
           const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
-          const lineLayout = manifestLineLayouts[String(wm.lineIndex)] ?? null;
+          const lineLayout = pre.manifestLineLayouts[String(wm.lineIndex)] ?? null;
           const position = manifestDirective?.position
             ?? lineLayout?.positions?.[wm.wordIndex]
             ?? getLayoutForMode(pre.visualMode, wm.wordIndex, totalWords, chapterEmotionalIntensity);
