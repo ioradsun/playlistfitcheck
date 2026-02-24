@@ -694,6 +694,7 @@ export class LyricDancePlayer {
     this.deriveVisualSystems();
     this.buildChapterSims();
     this.buildEmotionalEvents();
+    await this.loadChapterImages();
 
     this.audio.currentTime = this.songStartSec;
     this.audio.play().catch(() => {});
