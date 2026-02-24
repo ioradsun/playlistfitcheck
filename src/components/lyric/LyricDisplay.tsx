@@ -2368,7 +2368,7 @@ export function LyricDisplay({
         hook={hooks[0] ?? null}
         metadata={data.metadata}
         title={data.title}
-        artist={data.artist}
+        artist={profileDisplayName}
         audioFile={audioFile}
       />
 
