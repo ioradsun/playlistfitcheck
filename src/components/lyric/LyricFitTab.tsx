@@ -412,25 +412,7 @@ export function LyricFitTab({
           : dirResult.cinematicDirection;
         setCinematicDirection(enrichedDirection);
 
-        // Fire-and-forget: generate chapter background images
-        const chapters = enrichedDirection?.chapters;
-        if (Array.isArray(chapters) && chapters.length > 0 && savedIdRef.current) {
-          supabase.functions.invoke("generate-chapter-images", {
-            body: {
-              lyric_dance_id: savedIdRef.current,
-              chapters: chapters.map((ch: any, i: number) => ({
-                index: i,
-                backgroundDirective: ch.backgroundDirective ?? ch.background ?? "",
-                dominantColor: ch.dominantColor ?? "#333333",
-                emotionalIntensity: ch.emotionalIntensity ?? 0.5,
-              })),
-            },
-          }).then(({ data: imgResult }) => {
-            console.log("[PIPELINE] Chapter images generated:", imgResult?.generated ?? 0);
-          }).catch((e: any) => {
-            console.warn("[PIPELINE] Chapter images failed (non-blocking):", e?.message);
-          });
-        }
+        // Chapter images are generated after dance publish (PublishLyricDanceButton)
 
         const sceneManifestRes = await supabase.functions.invoke("generate-scene-manifest", {
           body: {
