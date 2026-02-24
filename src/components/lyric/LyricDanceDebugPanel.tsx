@@ -450,9 +450,11 @@ function DataTab({ data }: { data: DebugData }) {
 interface Props {
   data: DebugData;
   player?: LyricDancePlayer | null;
+  onRegenerateSong?: () => void;
+  onRegenerateDance?: () => void;
 }
 
-export function LyricDanceDebugPanel({ data, player = null }: Props) {
+export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance }: Props) {
   const [open, setOpen] = useState(false);
   const hasPlayer = player != null;
   const [tab, setTab] = useState<"hud" | "data">(hasPlayer ? "hud" : "data");
