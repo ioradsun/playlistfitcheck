@@ -2404,13 +2404,7 @@ export function LyricDisplay({
               ? data.title
               : audioFile.name.replace(/\.[^.]+$/, "")
           }
-          artist={
-            data.artist &&
-            data.artist !== "Unknown" &&
-            data.artist !== "UNKNOWN"
-              ? data.artist
-              : "—"
-          }
+          artist={profileDisplayName}
           audioFile={audioFile}
           seed={`${data.title}-${songDna.hook.start.toFixed(3)}`}
         />
