@@ -184,6 +184,14 @@ export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
 
+  // ── Unmount detection ──────────────────────────────────────────────
+  useEffect(() => {
+    console.log('[PAGE] ShareableLyricDance MOUNTED');
+    return () => {
+      console.log('[PAGE] ShareableLyricDance UNMOUNTED — stack:', new Error().stack);
+    };
+  }, []);
+
   const [data, setData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -217,6 +225,15 @@ export default function ShareableLyricDance() {
   }, []);
 
   // ── Data fetch ──────────────────────────────────────────────────────
+
+  // ── Data change tracking ───────────────────────────────────────────
+  useEffect(() => {
+    console.log('[PAGE] data id changed:', data?.id);
+  }, [data?.id]);
+
+  useEffect(() => {
+    console.log('[PAGE] full data object changed — keys:', Object.keys(data ?? {}));
+  }, [data]);
 
   useEffect(() => {
     if (!artistSlug || !songSlug) return;
