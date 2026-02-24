@@ -155,6 +155,14 @@ const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
   glitch: { entries: ['snap-in', 'cut-in', 'shatter-in'], behaviors: ['vibrate', 'flicker', 'vibrate', 'orbit'], exits: ['cut-out', 'snap-out', 'burn-out'], entryDuration: 0.05, exitDuration: 0.06, behaviorIntensity: 1.4 },
 };
 
+const EMPHASIS_CURVE: Record<number, number> = {
+  1: 0.90,
+  2: 1.00,
+  3: 1.20,
+  4: 1.45,
+  5: 1.75,
+};
+
 const TYPOGRAPHY_FONT_WEIGHTS: Record<string, number> = {
   'bold-impact': 800,
   'clean-modern': 600,
@@ -651,14 +659,6 @@ function getLayoutForMode(
   return template[wordIndex % template.length];
 }
 
-const EMPHASIS_CURVE: Record<number, number> = {
-  1: 0.90,
-  2: 1.00,
-  3: 1.20,
-  4: 1.45,
-  5: 1.75,
-};
-
 function getWordFontSize(
   word: string,
   directive: WordDirectiveLike | null,
@@ -672,7 +672,10 @@ function getWordFontSize(
   const scale = EMPHASIS_CURVE[emphasisLevel] ?? 1.0;
   // Clamp: hero word never exceeds 32% of reference canvas height (540)
   const maxFontSize = 540 * 0.32; // 172.8px at reference
-  return Math.min(Math.round(baseFontSize * scale), maxFontSize);
+  const sized = Math.min(Math.round(baseFontSize * scale), maxFontSize);
+  // Filler words are always subordinate — cap at base regardless of emphasis
+  if (isFillerWord(clean)) return Math.min(sized, Math.round(baseFontSize * 0.60));
+  return sized;
 }
 
 function findAnchorWord(words: WordMetaEntry[]): number {
