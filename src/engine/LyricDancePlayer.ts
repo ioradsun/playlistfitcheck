@@ -986,6 +986,19 @@ export class LyricDancePlayer {
     let drawCalls = 0;
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
+      // One-time debug for first visible chunk
+      if (chunk.visible && !(this as any)._debuggedChunk) {
+        (this as any)._debuggedChunk = true;
+        console.log('[PLAYER] drawing chunk:', {
+          id: chunk.id,
+          scaleX: chunk.scaleX,
+          scaleY: chunk.scaleY,
+          skewX: chunk.skewX,
+          alpha: chunk.alpha,
+          glow: chunk.glow,
+          fontSize: chunk.fontSize,
+        });
+      }
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
       const drawX = chunk.x;
