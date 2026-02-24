@@ -558,21 +558,30 @@ serve(async (req) => {
     if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
 
     const sceneCtx = body.scene_context;
+    const luminanceToTone: Record<string, string> = {
+      dark: 'sceneTone should be "dark" or "mixed-dawn". palette must be from the Dark list.',
+      medium: 'sceneTone can be "mixed-dawn", "mixed-dusk", or "mixed-pulse". palette can be from either list.',
+      light: 'sceneTone should be "light". palette must be from the Light list. texture should NOT be "fire" or "storm".',
+    };
+    const temperatureToTexture: Record<string, string> = {
+      warm: 'Prefer warm textures: "fire", "aurora", "dust", "smoke".',
+      cool: 'Prefer cool textures: "rain", "snow", "storm", "stars".',
+      neutral: 'Texture is open — pick what fits the scene.',
+    };
     const scenePrefix = sceneCtx ? `
-SCENE CONTEXT — foundational visual world. All chapters must honor this.
-Scene: ${sceneCtx.scene} (${sceneCtx.label})
+SCENE CONTEXT — the user described WHERE they experience this song.
+Ground ALL visual choices in this world. This is the film's LOCATION.
+
+"${sceneCtx.label}" — ${sceneCtx.scene}
 Time of day: ${sceneCtx.timeOfDay}
-Luminance: ${sceneCtx.baseLuminance}
-${sceneCtx.baseLuminance === 'light'
-  ? 'USE BRIGHT COLORS. dominantColor must be light and vibrant. Backgrounds are luminous not dark.'
-  : sceneCtx.baseLuminance === 'medium'
-    ? 'Mix of light and dark. Some chapters bright, some shadowed.'
-    : 'USE DARK COLORS. dominantColor must be deep and shadowed.'}
-Color temperature: ${sceneCtx.colorTemperature}
-Text style: ${sceneCtx.textStyle === 'dark'
-  ? 'DARK TEXT — background is bright, text must be dark and saturated'
-  : 'LIGHT TEXT — background is dark, text should be white or light'}
-` : 'SCENE CONTEXT — not specified. Default to dark cinematic.\n';
+
+RULES FROM SCENE:
+- ${luminanceToTone[sceneCtx.baseLuminance] ?? luminanceToTone.dark}
+- ${temperatureToTexture[sceneCtx.colorTemperature] ?? temperatureToTexture.neutral}
+- Chapter descriptions MUST place us IN this scene. If the user said "beach at sunset",
+  your chapters describe the sand, the water, the sky — not abstract "moody atmosphere".
+- atmosphere should match the scene's visual quality (outdoor haze → "haze", night city → "cinematic", bright day → "clean")
+` : 'SCENE CONTEXT — not specified. Use the lyrics to infer the visual world.\n';
 
     console.log(`[cinematic-direction] title="${title}" artist="${artist}" lines=${lines.length} scene=${sceneCtx?.scene ?? 'none'}`);
 
