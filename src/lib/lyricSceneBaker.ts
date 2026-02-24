@@ -108,8 +108,9 @@ type EntryStyle =
   | 'rise' | 'materialize' | 'breathe-in' | 'drift-in' | 'surface'
   | 'drop' | 'plant' | 'stomp' | 'cut-in'
   | 'whisper' | 'bloom' | 'melt-in' | 'ink-drop'
-  | 'focus-in' | 'spin-in' | 'tumble-in'
-  | 'fades';
+  | 'fades'
+  // Previously phantom (now implemented)
+  | 'focus-in' | 'spin-in' | 'tumble-in';
 
 type BehaviorStyle =
   | 'pulse' | 'vibrate' | 'float' | 'grow' | 'contract'
@@ -120,9 +121,13 @@ type ExitStyle =
   | 'dissolve' | 'drift-up' | 'exhale' | 'sink'
   | 'drop-out' | 'cut-out' | 'vanish'
   | 'linger' | 'evaporate' | 'whisper-out'
-  | 'blur-out' | 'spin-out' | 'scatter-letters'
-  | 'peel-off' | 'peel-reverse' | 'cascade-down' | 'cascade-up'
-  | 'fades';
+  | 'fades'
+  // Semantic exits (Fix 10)
+  | 'gravity-fall' | 'soar' | 'launch' | 'scatter-fly'
+  | 'melt' | 'freeze-crack'
+  // Previously phantom (now implemented)
+  | 'scatter-letters' | 'cascade-down' | 'cascade-up'
+  | 'blur-out' | 'spin-out' | 'peel-off' | 'peel-reverse';
 
 type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
 
@@ -355,9 +360,22 @@ function computeEntryState(style: EntryStyle, progress: number, intensity: numbe
     case 'melt-in': return { offsetX: 0, offsetY: (1 - ep) * 15, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 1.8)), skewX: (1 - ep) * 2, glowMult: 0, blur: 0, rotation: 0 };
     case 'ink-drop': return { offsetX: 0, offsetY: 0, scaleX: ep < 0.5 ? ep * 2 : 1, scaleY: ep < 0.5 ? ep * 2 : 1, alpha: Math.min(1, progress * 3), skewX: 0, glowMult: (1 - ep) * 0.5, blur: 0, rotation: 0 };
     case 'shatter-in': return { offsetX: (1 - ep) * (Math.random() > 0.5 ? 30 : -30), offsetY: (1 - ep) * (Math.random() > 0.5 ? -20 : 20), scaleX: 0.8 + ep * 0.2, scaleY: 0.8 + ep * 0.2, alpha: Math.min(1, progress * 4), skewX: (1 - ep) * 5, glowMult: 0, blur: 0, rotation: 0 };
-    case 'focus-in': return { offsetX: 0, offsetY: 0, scaleX: 1.05 - ep * 0.05, scaleY: 1.05 - ep * 0.05, alpha: Math.min(1, progress * 1.5), skewX: 0, glowMult: (1 - ep) * 1.5, blur: (1 - ep) * 1.0, rotation: 0 };
-    case 'spin-in': return { offsetX: 0, offsetY: 0, scaleX: 0.5 + ep * 0.5, scaleY: 0.5 + ep * 0.5, alpha: Math.min(1, progress * 3), skewX: 0, glowMult: (1 - ep) * 1.0, blur: 0, rotation: (1 - ep) * Math.PI * 2 };
-    case 'tumble-in': return { offsetX: 0, offsetY: -(1 - ep) * 60, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 4), skewX: 0, glowMult: 0, blur: 0, rotation: (1 - ep) * Math.PI };
+    case 'focus-in': {
+      // Starts blurred/large, snaps to sharp focus
+      const focusScale = 1 + (1 - ep) * 0.6;
+      return { offsetX: 0, offsetY: 0, scaleX: focusScale, scaleY: focusScale, alpha: easeOut(Math.min(1, progress * 1.5)), skewX: 0, glowMult: (1 - ep) * 2, blur: (1 - ep) * 1.0, rotation: 0 };
+    }
+    case 'spin-in': {
+      // Rotates in from offscreen with skew suggesting rotation
+      const spin = (1 - ep) * 25;
+      return { offsetX: (1 - ep) * -60, offsetY: 0, scaleX: 0.6 + ep * 0.4, scaleY: 0.6 + ep * 0.4, alpha: easeOut(Math.min(1, progress * 2)), skewX: spin, glowMult: 0, blur: 0, rotation: (1 - ep) * Math.PI * 2 };
+    }
+    case 'tumble-in': {
+      // Falls in from above with rotation, bounces at landing
+      const fallY = (1 - eb) * -80;
+      const tumble = (1 - ep) * 20;
+      return { offsetX: (1 - ep) * 30, offsetY: fallY, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2.5)), skewX: tumble, glowMult: 0, blur: 0, rotation: (1 - ep) * Math.PI };
+    }
     default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
   }
 }
@@ -380,17 +398,80 @@ function computeExitState(style: ExitStyle, progress: number, intensity: number,
     case 'linger': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 0.28, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
     case 'evaporate': return { offsetX: 0, offsetY: -ep * 12, scaleX: 1, scaleY: 1, alpha: 1 - easeIn(Math.min(1, progress * 0.7)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
     case 'whisper-out': return { offsetX: 0, offsetY: 0, scaleX: 1 - ep * 0.08, scaleY: 1 - ep * 0.08, alpha: 1 - easeIn(Math.min(1, progress * 0.9)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-    case 'blur-out': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ep * 0.3, skewX: 0, glowMult: 0, blur: ep * 1.0, rotation: 0 };
-    case 'spin-out': return { offsetX: 0, offsetY: 0, scaleX: 1 - ei * 0.5, scaleY: 1 - ei * 0.5, alpha: 1 - ei, skewX: 0, glowMult: 0, blur: 0, rotation: ep * Math.PI * 2 };
-    case 'scatter-letters': {
-      const angle = (letterIndex / Math.max(1, letterTotal)) * Math.PI * 2;
-      const dist = ep * 120;
-      return { offsetX: Math.cos(angle) * dist, offsetY: Math.sin(angle) * dist, scaleX: 1 - ei * 0.5, scaleY: 1 - ei * 0.5, alpha: 1 - ei, skewX: 0, glowMult: 0, blur: 0, rotation: ep * (angle > Math.PI ? 0.5 : -0.5) };
+    // ═══ SEMANTIC EXITS (new) ═══
+    case 'gravity-fall': {
+      // Each letter falls like a raindrop — cubic acceleration
+      // Best paired with letterSequence: true
+      const gravity = ep * ep * ep;
+      return { offsetX: Math.sin(progress * 3) * 4, offsetY: gravity * 600, scaleX: 1, scaleY: 1 + ep * 0.15, alpha: 1 - easeIn(Math.min(1, progress * 1.2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
     }
-    case 'peel-off': return { offsetX: ep * 30, offsetY: ep * -20, scaleX: 1 - ep * 0.3, scaleY: 1 - ep * 0.3, alpha: 1 - ep, skewX: ep * 5, glowMult: 0, blur: 0, rotation: 0 };
-    case 'peel-reverse': return { offsetX: ep * -30, offsetY: ep * -20, scaleX: 1 - ep * 0.3, scaleY: 1 - ep * 0.3, alpha: 1 - ep, skewX: ep * -5, glowMult: 0, blur: 0, rotation: 0 };
-    case 'cascade-down': return { offsetX: 0, offsetY: ep * ep * 200, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-    case 'cascade-up': return { offsetX: 0, offsetY: -(ep * ep * 200), scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'soar': {
+      // Flight arc — accelerates up and to the right
+      // For: bird, fly, wings, free, soaring
+      const arc = easeIn(ep);
+      return { offsetX: arc * 150, offsetY: -arc * 250, scaleX: 1 - ep * 0.3, scaleY: 1 - ep * 0.3, alpha: 1 - easeIn(Math.min(1, progress * 1.5)), skewX: -arc * 8, glowMult: 0, blur: 0, rotation: 0 };
+    }
+    case 'launch': {
+      // Rockets upward with exponential acceleration
+      // For: rise, escape, blast, rocket, up
+      const thrust = ep * ep;
+      return { offsetX: Math.sin(progress * 12) * 3, offsetY: -thrust * 400, scaleX: 1, scaleY: 1 + ep * 0.2, alpha: 1 - easeIn(Math.min(1, progress * 2)), skewX: 0, glowMult: ep * 0.5, blur: 0, rotation: 0 };
+    }
+    case 'scatter-fly': {
+      // Letters arc in different directions like a flock dispersing
+      // For: break, scatter, flock, apart, release
+      const arc = easeIn(ep);
+      return { offsetX: Math.sin(progress * 4) * 80 * arc, offsetY: -arc * 200, scaleX: 1 - ep * 0.5, scaleY: 1 - ep * 0.5, alpha: 1 - ep, skewX: Math.sin(progress * 6) * 12, glowMult: 0, blur: 0, rotation: 0 };
+    }
+    case 'melt': {
+      // Drips downward, losing shape — widens and squishes
+      // For: melt, drip, candle, wax, dissolving
+      const drip = easeIn(ep);
+      return { offsetX: Math.sin(progress * 2) * 3, offsetY: drip * 120, scaleX: 1 + ep * 0.3, scaleY: 1 - ep * 0.4, alpha: 1 - easeIn(Math.min(1, progress * 0.9)), skewX: progress * 6, glowMult: 0, blur: 0, rotation: 0 };
+    }
+    case 'freeze-crack': {
+      // Holds completely still, then cracks apart suddenly at 70%
+      // For: freeze, ice, stuck, numb, shatter after stillness
+      const hold = progress < 0.7;
+      const breakProgress = hold ? 0 : (progress - 0.7) / 0.3;
+      const bp = easeIn(Math.min(1, breakProgress));
+      return { offsetX: hold ? 0 : bp * 60 * (progress % 2 < 1 ? 1 : -1), offsetY: hold ? 0 : bp * 40, scaleX: 1, scaleY: 1, alpha: hold ? 1.0 : 1 - bp, skewX: hold ? 0 : bp * 15, glowMult: 0, blur: 0, rotation: 0 };
+    }
+
+    // ═══ PREVIOUSLY PHANTOM EXITS (now implemented) ═══
+    case 'scatter-letters': {
+      // Individual letters explode outward in random directions
+      // Deterministic using progress to avoid random jitter
+      const burst = easeIn(ep);
+      const angle = (progress * 7.3) % (Math.PI * 2);
+      return { offsetX: Math.cos(angle) * burst * 100, offsetY: Math.sin(angle) * burst * 80 + burst * 40, scaleX: 1 - ep * 0.3, scaleY: 1 - ep * 0.3, alpha: 1 - ei, skewX: burst * 20 * Math.sin(angle), glowMult: 0, blur: 0, rotation: ep * (angle > Math.PI ? 0.5 : -0.5) };
+    }
+    case 'cascade-down': {
+      // Falls straight down with stagger — waterfall effect
+      const fall = easeIn(ep);
+      return { offsetX: 0, offsetY: fall * 300, scaleX: 1, scaleY: 1, alpha: 1 - easeIn(Math.min(1, progress * 1.5)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    }
+    case 'cascade-up': {
+      // Rises upward with stagger — reverse waterfall
+      const rise = easeIn(ep);
+      return { offsetX: 0, offsetY: -rise * 300, scaleX: 1, scaleY: 1, alpha: 1 - easeIn(Math.min(1, progress * 1.5)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    }
+    case 'blur-out': {
+      // Scales up slightly while fading — simulates defocus
+      return { offsetX: 0, offsetY: 0, scaleX: 1 + ep * 0.25, scaleY: 1 + ep * 0.25, alpha: 1 - ep, skewX: 0, glowMult: ep * 2, blur: ep * 1.0, rotation: 0 };
+    }
+    case 'spin-out': {
+      // Rotates away via increasing skew
+      return { offsetX: ep * 80, offsetY: 0, scaleX: 1 - ep * 0.4, scaleY: 1 - ep * 0.4, alpha: 1 - ei, skewX: ep * 30, glowMult: 0, blur: 0, rotation: ep * Math.PI * 2 };
+    }
+    case 'peel-off': {
+      // Peels away to the right like a sticker
+      return { offsetX: ep * 120, offsetY: ep * -20, scaleX: 1 - ep * 0.2, scaleY: 1, alpha: 1 - ei, skewX: ep * 15, glowMult: 0, blur: 0, rotation: 0 };
+    }
+    case 'peel-reverse': {
+      // Peels away to the left
+      return { offsetX: -ep * 120, offsetY: ep * -20, scaleX: 1 - ep * 0.2, scaleY: 1, alpha: 1 - ei, skewX: -ep * 15, glowMult: 0, blur: 0, rotation: 0 };
+    }
     default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
   }
 }
