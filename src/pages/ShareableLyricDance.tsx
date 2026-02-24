@@ -250,8 +250,25 @@ export default function ShareableLyricDance() {
             supabase.functions.invoke("cinematic-direction", {
               body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
             }).then(({ data: dirResult }) => {
-              if (dirResult?.cinematicDirection) setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
-            }).catch(() => {});
+              if (dirResult?.cinematicDirection) {
+                setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+
+                // Fire-and-forget: generate chapter background images
+                const chapters = dirResult.cinematicDirection?.chapters;
+                if (Array.isArray(chapters) && chapters.length > 0) {
+                  supabase.functions.invoke("generate-chapter-images", {
+                    body: {
+                      lyric_dance_id: d.id,
+                      chapters: chapters.map((ch: any, i: number) => ({
+                        index: i,
+                        backgroundDirective: ch.backgroundDirective ?? ch.background ?? "",
+                        dominantColor: ch.dominantColor ?? "#333333",
+                        emotionalIntensity: ch.emotionalIntensity ?? 0.5,
+                      })),
+                    },
+                  }).catch(() => {});
+                }
+              }
           }
         });
 
