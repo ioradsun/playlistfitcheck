@@ -438,6 +438,101 @@ function DataTab({ data }: { data: DebugData }) {
         </div>
       </CollapsibleSection>
 
+      {/* Scene Context */}
+      <CollapsibleSection title="Scene Context">
+        {data.scene_context ? (
+          <div className="space-y-0.5">
+            <KV label="Source" value={`"${data.scene_context.sourceDescription}"`} />
+            <KV label="Luminance" value={data.scene_context.baseLuminance} />
+            <KV label="Temp" value={data.scene_context.colorTemperature} />
+            <KV label="Time" value={data.scene_context.timeOfDay} />
+            <KV label="Text" value={data.scene_context.textStyle} />
+            <KV label="Mood" value={data.scene_context.moodSummary} />
+          </div>
+        ) : (
+          <p className="text-[10px] text-muted-foreground">not set — AI default</p>
+        )}
+      </CollapsibleSection>
+
+      {/* Chapter Images */}
+      <CollapsibleSection title="Chapter Images">
+        <div className="space-y-0.5">
+          <KV label="Loaded" value={`${data.chapter_images?.length ?? 0}/3`} />
+          {data.chapter_images?.map((url: string, i: number) => (
+            <p key={i} className="font-mono text-[10px] text-muted-foreground/60 truncate">
+              ch{i + 1}: {url ? '✓ ' + url.split('/').pop() : '✗ missing'}
+            </p>
+          ))}
+        </div>
+      </CollapsibleSection>
+
+      {/* Cinematic Direction Summary */}
+      <CollapsibleSection title="Cinematic Direction Summary">
+        {direction ? (
+          <div className="space-y-0.5">
+            <KV label="Thesis" value={direction.thesis} />
+            <KV label="Acts" value={direction.chapters?.length ?? 0} />
+            {direction.chapters?.map((ch: any, i: number) => (
+              <p key={i} className="font-mono text-[10px] text-muted-foreground/60">
+                act{i + 1}: {ch.title} — {ch.dominantColor}{' '}
+                [{Math.round((ch.startRatio ?? 0) * 100)}%→{Math.round((ch.endRatio ?? 1) * 100)}%]
+                {ch.transitionStyle ? ` | ${ch.transitionStyle}` : ''}
+              </p>
+            ))}
+            <KV label="Climax" value={`${((direction.climax?.timeRatio ?? 0) * 100).toFixed(0)}% — "${direction.climax?.triggerLine ?? ''}"`} />
+            <KV label="Word Directives" value={`${Object.keys(direction.wordDirectives ?? {}).length} words`} />
+            <KV label="Metaphors" value={`${Object.values(direction.wordDirectives ?? {}).filter((w: any) => w.visualMetaphor).length} assigned`} />
+          </div>
+        ) : (
+          <p className="text-[10px] text-muted-foreground">not generated</p>
+        )}
+      </CollapsibleSection>
+
+      {/* Storyboard Icons */}
+      <CollapsibleSection title="Line Art Icons">
+        {direction?.storyboard ? (
+          <div className="space-y-0.5">
+            <KV label="Icons" value={`${direction.storyboard.filter((s: any) => s.iconGlyph).length} assigned / ${direction.storyboard.length} lines`} />
+            {direction.storyboard
+              .filter((s: any) => s.iconGlyph)
+              .slice(0, 8)
+              .map((s: any, i: number) => (
+                <p key={i} className="font-mono text-[10px] text-muted-foreground/60">
+                  line {s.lineIndex}: {s.iconGlyph} ({s.iconPosition}) ×{s.iconScale}
+                </p>
+              ))}
+          </div>
+        ) : (
+          <p className="text-[10px] text-muted-foreground">no storyboard</p>
+        )}
+      </CollapsibleSection>
+
+      {/* Visual Metaphors */}
+      <CollapsibleSection title="Visual Metaphors">
+        {direction?.wordDirectives ? (
+          <div className="space-y-0.5">
+            {Object.entries(direction.wordDirectives)
+              .filter(([_, v]: any) => v.visualMetaphor)
+              .slice(0, 8)
+              .map(([word, v]: any) => (
+                <p key={word} className="font-mono text-[10px] text-muted-foreground/60">
+                  "{word}": {v.visualMetaphor} (emp:{v.emphasisLevel})
+                </p>
+              ))}
+          </div>
+        ) : (
+          <p className="text-[10px] text-muted-foreground">none</p>
+        )}
+      </CollapsibleSection>
+
+      {/* Word Count & Phrases */}
+      <CollapsibleSection title="Words & Phrases">
+        <div className="space-y-0.5">
+          <KV label="Words" value={data.words?.length ?? 0} />
+          <p className="font-mono text-[10px] text-muted-foreground/60">chunks registered: shown in health log</p>
+        </div>
+      </CollapsibleSection>
+
       {/* Raw dumps */}
       <CollapsibleSection title="Raw Cinematic Direction">
         {direction ? <JsonBlock value={direction} /> : <p className="text-[10px] text-muted-foreground">No cinematic direction data</p>}
