@@ -107,21 +107,19 @@ export function FitTab({
   // Check for existing published dance on load
   useEffect(() => {
     if (!user || !lyricData) return;
-    const artistSlug = slugify(lyricData.artist || "artist");
     const songSlug = slugify(lyricData.title || "untitled");
-    if (!artistSlug || !songSlug) return;
+    if (!songSlug) return;
 
+    // Look up by user_id + song_slug (artist_slug may differ between artist name and display_name)
     supabase
       .from("shareable_lyric_dances" as any)
       .select("artist_slug, song_slug, lyrics")
       .eq("user_id", user.id)
-      .eq("artist_slug", artistSlug)
       .eq("song_slug", songSlug)
       .maybeSingle()
       .then(({ data }: any) => {
         if (data) {
           setPublishedUrl(`/${data.artist_slug}/${data.song_slug}/lyric-dance`);
-          // Hash the published lyrics to compare against current
           const pubLines = Array.isArray(data.lyrics) ? data.lyrics : [];
           setPublishedLyricsHash(computeLyricsHash(pubLines));
         }
