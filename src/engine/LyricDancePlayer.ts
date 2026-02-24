@@ -502,7 +502,14 @@ export class LyricDancePlayer {
       if (e.data.size > 0) chunks.push(e.data);
     };
 
+    const onAudioEnded = () => {
+      console.log('[EXPORT] audio ended event — stopping export');
+      this.stopExport();
+    };
+    this.audio.addEventListener("ended", onAudioEnded, { once: true });
+
     this.mediaRecorder.onstop = () => {
+      this.audio.removeEventListener("ended", onAudioEnded);
       const blob = new Blob(chunks, { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
