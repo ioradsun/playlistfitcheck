@@ -960,18 +960,7 @@ export class LyricDancePlayer {
       const fps = this.frameCount / 5;
       this.frameCount = 0;
 
-      const mem = (performance as any).memory;
-      console.warn('[HEALTH]', {
-        tSec: this.currentTSec?.toFixed(1),
-        fps: fps.toFixed(1),
-        wordEmitters: this.wordEmitters?.length ?? 0,
-        firedEmitters: this.firedEmitters?.size ?? 0,
-        activeEvents: this.activeEvents?.length ?? 0,
-        activeComments: this.activeComments?.length ?? 0,
-        chapterSims: this.chapterSims?.length ?? 0,
-        heapMB: mem ? (mem.usedJSHeapSize / 1048576).toFixed(1) : 'n/a',
-        heapLimitMB: mem ? (mem.jsHeapSizeLimit / 1048576).toFixed(1) : 'n/a',
-      });
+      // Health check — silent (no logging)
     }, 5000);
   }
 
