@@ -447,17 +447,21 @@ export function LyricDisplay({
   const [showDirectorsCutTooltip, setShowDirectorsCutTooltip] = useState(false);
 
 
-  // Load fingerprint from profile
+  // Load fingerprint + display name from profile
+  const [profileDisplayName, setProfileDisplayName] = useState<string>("—");
   useEffect(() => {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("artist_fingerprint")
+      .select("artist_fingerprint, display_name")
       .eq("id", user.id)
       .single()
       .then(({ data }) => {
         if (data?.artist_fingerprint) {
           setArtistFingerprint(data.artist_fingerprint as unknown as ArtistDNA);
+        }
+        if (data?.display_name) {
+          setProfileDisplayName(data.display_name);
         }
       });
   }, [user]);
