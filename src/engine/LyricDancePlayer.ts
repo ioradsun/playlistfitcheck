@@ -964,6 +964,10 @@ export class LyricDancePlayer {
   private draw(tSec: number): void {
     const frame = this.getFrame(this.currentTimeMs);
     if (!frame) return;
+    if (this.fpsAccum.frames === 1) {
+      console.log('[PLAYER] chunk keys sample:', [...this.chunks.keys()].slice(0, 5));
+      console.log('[PLAYER] frame chunk ids sample:', frame.chunks.slice(0, 5).map(c => c.id));
+    }
 
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
