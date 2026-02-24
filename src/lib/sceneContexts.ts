@@ -25,6 +25,18 @@ export interface SceneContext {
   fluxPromptSuffix: string;
 }
 
+export interface SceneContextResult {
+  baseLuminance: 'light' | 'dark' | 'medium';
+  colorTemperature: 'warm' | 'cool' | 'neutral';
+  timeOfDay: 'dawn' | 'morning' | 'afternoon' | 'dusk' | 'night';
+  backgroundOpacity: number;
+  crushOpacity: number;
+  textStyle: 'light' | 'dark';
+  fluxPromptSuffix: string;
+  moodSummary: string;
+  sourceDescription: string;
+}
+
 export const SCENE_CONTEXTS: Record<SceneId, SceneContext> = {
   'midnight-city': {
     scene: 'midnight-city',

@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.generate-chapter-images]
 verify_jwt = false
+
+[functions.resolve-scene-context]
+verify_jwt = false
