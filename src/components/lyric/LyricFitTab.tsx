@@ -6,6 +6,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { safeManifest } from "@/engine/validateManifest";
 import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
