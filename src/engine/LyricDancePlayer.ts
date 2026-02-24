@@ -922,15 +922,6 @@ export class LyricDancePlayer {
     this.rafHandle = requestAnimationFrame(this.tick);
   };
 
-  private update(deltaMs: number): void {
-    const t = this.audio.currentTime;
-    const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
-    this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
-
-    if (this.isExporting && clamped >= this.songEndSec) {
-      this.stopExport();
-    }
-
   private drawWordHalo(
     x: number,
     y: number,
@@ -973,6 +964,15 @@ export class LyricDancePlayer {
     const b = parseInt(clean.slice(4, 6), 16);
     return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
   }
+
+  private update(deltaMs: number): void {
+    const t = this.audio.currentTime;
+    const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
+    this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
+
+    if (this.isExporting && clamped >= this.songEndSec) {
+      this.stopExport();
+    }
 
     this.fpsAccum.t += deltaMs;
     this.fpsAccum.frames += 1;
