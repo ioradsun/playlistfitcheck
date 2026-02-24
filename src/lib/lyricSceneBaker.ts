@@ -49,6 +49,7 @@ export type Keyframe = {
     exitOffsetY: number;
     exitScale: number;
     skewX: number;
+    emitterType?: WordEmitterType;
   }>;
   cameraX: number;
   cameraY: number;
@@ -98,6 +99,55 @@ type ExitStyle =
   | 'drop-out' | 'cut-out' | 'vanish'
   | 'linger' | 'evaporate' | 'whisper-out'
   | 'fades';
+
+type VisualMetaphor =
+  | 'ember-burst' | 'frost-form' | 'lens-focus' | 'gravity-drop'
+  | 'ascent' | 'fracture' | 'heartbeat' | 'pain-weight' | 'isolation'
+  | 'convergence' | 'shockwave' | 'void-absorb' | 'radiance' | 'gold-rain'
+  | 'speed-blur' | 'slow-drift' | 'power-surge' | 'dream-float'
+  | 'truth-snap' | 'motion-streak';
+
+type WordEmitterType =
+  | 'ember' | 'frost' | 'spark-burst' | 'dust-impact' | 'light-rays'
+  | 'converge' | 'shockwave-ring' | 'gold-coins' | 'memory-orbs'
+  | 'motion-trail' | 'dark-absorb' | 'none';
+
+interface SemanticEffect {
+  entry: EntryStyle;
+  behavior: BehaviorStyle;
+  exit: ExitStyle;
+  colorOverride: string | null;
+  glowMultiplier: number;
+  scaleX: number;
+  scaleY: number;
+  emitterType: WordEmitterType;
+  alphaMax: number;
+  entryDurationMult: number;
+  fontWeight: number;
+}
+
+const SEMANTIC_EFFECTS: Record<VisualMetaphor, SemanticEffect> = {
+  'ember-burst': { entry: 'rise', behavior: 'float', exit: 'burn-out', colorOverride: '#FF8C00', glowMultiplier: 2.0, scaleX: 1.0, scaleY: 1.15, emitterType: 'ember', alphaMax: 1.0, entryDurationMult: 0.8, fontWeight: 800 },
+  'frost-form': { entry: 'materialize', behavior: 'flicker', exit: 'dissolve', colorOverride: '#A8D8EA', glowMultiplier: 0.8, scaleX: 1.0, scaleY: 1.0, emitterType: 'frost', alphaMax: 0.9, entryDurationMult: 1.4, fontWeight: 400 },
+  'lens-focus': { entry: 'surface', behavior: 'none', exit: 'dissolve', colorOverride: '#FFFFFF', glowMultiplier: 1.2, scaleX: 1.0, scaleY: 1.0, emitterType: 'none', alphaMax: 1.0, entryDurationMult: 1.6, fontWeight: 700 },
+  'gravity-drop': { entry: 'slam-down', behavior: 'none', exit: 'sink', colorOverride: null, glowMultiplier: 0.5, scaleX: 1.3, scaleY: 0.7, emitterType: 'dust-impact', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 900 },
+  ascent: { entry: 'rise', behavior: 'float', exit: 'drift-up', colorOverride: null, glowMultiplier: 1.3, scaleX: 1.0, scaleY: 1.15, emitterType: 'light-rays', alphaMax: 1.0, entryDurationMult: 1.0, fontWeight: 700 },
+  fracture: { entry: 'shatter-in', behavior: 'vibrate', exit: 'shatter', colorOverride: '#CCCCCC', glowMultiplier: 0.6, scaleX: 1.0, scaleY: 1.0, emitterType: 'spark-burst', alphaMax: 0.9, entryDurationMult: 0.7, fontWeight: 700 },
+  heartbeat: { entry: 'bloom', behavior: 'pulse', exit: 'exhale', colorOverride: '#FFB4B4', glowMultiplier: 1.5, scaleX: 1.0, scaleY: 1.0, emitterType: 'memory-orbs', alphaMax: 1.0, entryDurationMult: 1.2, fontWeight: 700 },
+  'pain-weight': { entry: 'plant', behavior: 'flicker', exit: 'linger', colorOverride: '#8B0000', glowMultiplier: 0.4, scaleX: 1.0, scaleY: 0.9, emitterType: 'none', alphaMax: 0.85, entryDurationMult: 0.8, fontWeight: 800 },
+  isolation: { entry: 'whisper', behavior: 'float', exit: 'evaporate', colorOverride: '#888888', glowMultiplier: 0.2, scaleX: 1.0, scaleY: 1.0, emitterType: 'none', alphaMax: 0.7, entryDurationMult: 2.0, fontWeight: 400 },
+  convergence: { entry: 'breathe-in', behavior: 'pulse', exit: 'linger', colorOverride: '#FFF5E4', glowMultiplier: 1.4, scaleX: 1.05, scaleY: 1.0, emitterType: 'converge', alphaMax: 1.0, entryDurationMult: 1.1, fontWeight: 700 },
+  shockwave: { entry: 'explode-in', behavior: 'vibrate', exit: 'shatter', colorOverride: '#FFFFFF', glowMultiplier: 2.5, scaleX: 1.6, scaleY: 0.65, emitterType: 'shockwave-ring', alphaMax: 1.0, entryDurationMult: 0.4, fontWeight: 900 },
+  'void-absorb': { entry: 'surface', behavior: 'flicker', exit: 'snap-out', colorOverride: '#1a1a1a', glowMultiplier: 0.0, scaleX: 1.0, scaleY: 1.0, emitterType: 'dark-absorb', alphaMax: 0.95, entryDurationMult: 1.0, fontWeight: 700 },
+  radiance: { entry: 'bloom', behavior: 'pulse', exit: 'burn-out', colorOverride: '#FFD700', glowMultiplier: 3.0, scaleX: 1.1, scaleY: 1.0, emitterType: 'light-rays', alphaMax: 1.0, entryDurationMult: 0.9, fontWeight: 800 },
+  'gold-rain': { entry: 'cut-in', behavior: 'grow', exit: 'punch-out', colorOverride: '#FFD700', glowMultiplier: 1.8, scaleX: 1.0, scaleY: 1.0, emitterType: 'gold-coins', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 900 },
+  'speed-blur': { entry: 'punch-in', behavior: 'lean', exit: 'punch-out', colorOverride: null, glowMultiplier: 1.0, scaleX: 1.2, scaleY: 0.85, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.5, fontWeight: 700 },
+  'slow-drift': { entry: 'whisper', behavior: 'float', exit: 'evaporate', colorOverride: '#CCCCCC', glowMultiplier: 0.3, scaleX: 1.0, scaleY: 1.0, emitterType: 'none', alphaMax: 0.8, entryDurationMult: 2.5, fontWeight: 400 },
+  'power-surge': { entry: 'slam-down', behavior: 'pulse', exit: 'burn-out', colorOverride: null, glowMultiplier: 2.0, scaleX: 1.1, scaleY: 1.1, emitterType: 'spark-burst', alphaMax: 1.0, entryDurationMult: 0.5, fontWeight: 900 },
+  'dream-float': { entry: 'materialize', behavior: 'float', exit: 'dissolve', colorOverride: null, glowMultiplier: 0.9, scaleX: 1.0, scaleY: 1.0, emitterType: 'memory-orbs', alphaMax: 0.8, entryDurationMult: 1.8, fontWeight: 400 },
+  'truth-snap': { entry: 'snap-in', behavior: 'none', exit: 'snap-out', colorOverride: '#FFFFFF', glowMultiplier: 0.0, scaleX: 1.0, scaleY: 1.0, emitterType: 'none', alphaMax: 1.0, entryDurationMult: 1.0, fontWeight: 700 },
+  'motion-streak': { entry: 'punch-in', behavior: 'lean', exit: 'cut-out', colorOverride: null, glowMultiplier: 1.2, scaleX: 1.15, scaleY: 0.9, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 700 },
+};
 
 type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
 
@@ -336,6 +386,7 @@ type WordDirectiveLike = {
   kineticClass?: string;
   colorOverride?: string;
   emphasisLevel?: number;
+  visualMetaphor?: VisualMetaphor;
 };
 
 
@@ -1004,17 +1055,35 @@ function bakeFrame(
             : Math.abs(wi - group.anchorWordIdx) * animParams.stagger;
 
           const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay);
-          const rawEntryProgress = adjustedElapsed / Math.max(0.01, animParams.entryDuration);
+          const metaphor = wm.directive?.visualMetaphor as VisualMetaphor | undefined;
+          const semanticEffect = metaphor ? SEMANTIC_EFFECTS[metaphor] : null;
+
+          // Semantic effect overrides everything else for this word
+          const assignedEntry = entry;
+          const assignedBehavior = behavior;
+          const assignedExit = exit;
+          const wordEntry = semanticEffect?.entry ?? assignedEntry;
+          const wordBehavior = semanticEffect?.behavior ?? assignedBehavior;
+          const wordExit = semanticEffect?.exit ?? assignedExit;
+          const glowMult = semanticEffect?.glowMultiplier ?? 1.0;
+          const scaleXOverride = semanticEffect?.scaleX ?? 1.0;
+          const scaleYOverride = semanticEffect?.scaleY ?? 1.0;
+          const alphaMax = semanticEffect?.alphaMax ?? 1.0;
+          const entryDurationMult = semanticEffect?.entryDurationMult ?? 1.0;
+
+          // Apply entry duration multiplier
+          const effectiveEntryDuration = animParams.entryDuration * entryDurationMult;
+          const rawEntryProgress = adjustedElapsed / Math.max(0.01, effectiveEntryDuration);
           const entryProgress = Math.min(1, Math.max(0, rawEntryProgress));
           const exitProgress = Math.max(0, (tSec - group.end) / Math.max(0.01, animParams.exitDuration));
 
-          const entryState = computeEntryState(entry, entryProgress, motionDefaults.behaviorIntensity);
-          const exitState = computeExitState(exit, exitProgress, motionDefaults.behaviorIntensity);
+          const entryState = computeEntryState(wordEntry, entryProgress, motionDefaults.behaviorIntensity);
+          const exitState = computeExitState(wordExit, exitProgress, motionDefaults.behaviorIntensity);
           const beatPhase = beatIndex >= 0
             ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
             : 0;
           const behaviorState = computeBehaviorState(
-            behavior,
+            wordBehavior,
             tSec,
             group.start,
             beatPhase,
@@ -1027,11 +1096,13 @@ function bakeFrame(
           const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
           const isEntryComplete = entryProgress >= 1.0;
           const isExiting = exitProgress > 0;
-          const finalAlpha = isExiting
+          const rawFinalAlpha = isExiting
             ? Math.max(0, exitState.alpha)
             : isEntryComplete
               ? 1.0 * (behaviorState.alpha ?? 1)
               : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
+          // Cap alpha at semantic max
+          const finalAlpha = Math.min(alphaMax, rawFinalAlpha);
           const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
           const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
 
@@ -1040,19 +1111,23 @@ function bakeFrame(
             ?? wm.directive?.colorOverride
             ?? pre.lineColors[wm.lineIndex]
             ?? '#ffffff';
-          const color = isAnchor ? baseColor : dimColor(baseColor, 0.65);
-          const wordGlow = isAnchor
+          const semanticColor = semanticEffect?.colorOverride ?? baseColor;
+          const color = isAnchor ? semanticColor : dimColor(semanticColor, 0.65);
+          const baseGlow = isAnchor
             ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0)
             : glow * 0.3;
+          const wordGlow = baseGlow * glowMult;
           const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
             ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
             ?? 700;
+          const semanticFontWeight = semanticEffect?.fontWeight ?? chapterFontWeight;
+          const emitterType = semanticEffect?.emitterType ?? 'none';
 
           if (!_bakerDebugLogged) {
             _bakerDebugLogged = true;
             console.log('[BAKER] first chunk animation:', {
               entry,
-              behavior,
+              wordBehavior,
               exit,
               entryProgress: entryProgress.toFixed(2),
               entryState,
@@ -1068,16 +1143,17 @@ function bakeFrame(
             x: pos.x + finalOffsetX,
             y: pos.y + finalOffsetY,
             alpha: Math.max(0, Math.min(1, finalAlpha)),
-            scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
-            scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
             scale: 1,
             visible: finalAlpha > 0.01,
             fontSize: pos.fontSize,
-            fontWeight: chapterFontWeight,
-            isAnchor,
+            fontWeight: semanticFontWeight,
+            isAnchor: wi === group.anchorWordIdx,
             color,
             glow: wordGlow,
             skewX: finalSkewX,
+            scaleX: finalScaleX * scaleXOverride * (manifestDirective?.scaleX ?? 1),
+            scaleY: finalScaleY * scaleYOverride * (manifestDirective?.scaleY ?? 1),
+            emitterType,
             entryOffsetY: 0,
             entryOffsetX: 0,
             entryScale: 1,
@@ -1115,21 +1191,38 @@ function bakeFrame(
             storyboard as StoryboardEntryLike[],
             manifestDirective,
           );
+          const metaphor = wm.directive?.visualMetaphor as VisualMetaphor | undefined;
+          const semanticEffect = metaphor ? SEMANTIC_EFFECTS[metaphor] : null;
 
-          const entryProgress = Math.max(0, adjustedElapsed / motionDefaults.entryDuration);
-          const entryState = computeEntryState(entry, entryProgress, motionDefaults.behaviorIntensity);
+          // Semantic effect overrides everything else for this word
+          const assignedEntry = entry;
+          const assignedBehavior = behavior;
+          const assignedExit = exit;
+          const wordEntry = semanticEffect?.entry ?? assignedEntry;
+          const wordBehavior = semanticEffect?.behavior ?? assignedBehavior;
+          const wordExit = semanticEffect?.exit ?? assignedExit;
+          const glowMult = semanticEffect?.glowMultiplier ?? 1.0;
+          const scaleXOverride = semanticEffect?.scaleX ?? 1.0;
+          const scaleYOverride = semanticEffect?.scaleY ?? 1.0;
+          const alphaMax = semanticEffect?.alphaMax ?? 1.0;
+          const entryDurationMult = semanticEffect?.entryDurationMult ?? 1.0;
+          const emitterType = semanticEffect?.emitterType ?? 'none';
 
-          const exitDuration = exit === 'linger' ? 0.05
-            : exit === 'evaporate' ? 0.8
+          const effectiveEntryDuration = motionDefaults.entryDuration * entryDurationMult;
+          const entryProgress = Math.max(0, adjustedElapsed / effectiveEntryDuration);
+          const entryState = computeEntryState(wordEntry, entryProgress, motionDefaults.behaviorIntensity);
+
+          const exitDuration = wordExit === 'linger' ? 0.05
+            : wordExit === 'evaporate' ? 0.8
               : motionDefaults.exitDuration;
           const exitProgress = Math.max(0, (tSec - wm.end) / exitDuration);
-          const exitState = computeExitState(exit, exitProgress, motionDefaults.behaviorIntensity);
+          const exitState = computeExitState(wordExit, exitProgress, motionDefaults.behaviorIntensity);
 
           const beatPhase = beatIndex >= 0
             ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
             : 0;
           const behaviorState = computeBehaviorState(
-            behavior,
+            wordBehavior,
             tSec,
             wm.start,
             beatPhase,
@@ -1142,18 +1235,20 @@ function bakeFrame(
           const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
           const isEntryComplete2 = entryProgress >= 1.0;
           const isExiting2 = exitProgress > 0;
-          const finalAlpha = isExiting2
+          const rawFinalAlpha = isExiting2
             ? Math.max(0, exitState.alpha)
             : isEntryComplete2
               ? 1.0 * (behaviorState.alpha ?? 1)
               : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
+          const finalAlpha = Math.min(alphaMax, rawFinalAlpha);
           const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
           const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
 
-          const color = manifestDirective?.color
+          const baseColor = manifestDirective?.color
             ?? wm.directive?.colorOverride
             ?? pre.lineColors[wm.lineIndex]
             ?? '#ffffff';
+          const color = semanticEffect?.colorOverride ?? baseColor;
 
           const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
           const soloWordBonus = pre.motionProfile === 'drift' || pre.motionProfile === 'fluid' ? 1.3 : 1.0;
@@ -1162,22 +1257,24 @@ function bakeFrame(
           const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
             ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
             ?? 700;
+          const semanticFontWeight = semanticEffect?.fontWeight ?? chapterFontWeight;
 
-          const wordGlow = manifestDirective?.glow
+          const baseGlow = manifestDirective?.glow
             ? glow * manifestDirective.glow
             : (wm.directive?.emphasisLevel ?? 0) >= 4 ? glow * 1.8 : glow * 0.6;
+          const wordGlow = baseGlow * glowMult;
 
           return {
             id: `${wm.lineIndex}-${wm.wordIndex}`,
             x: canvasX + finalOffsetX,
             y: canvasY + finalOffsetY,
             alpha: finalAlpha,
-            scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
-            scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
+            scaleX: finalScaleX * scaleXOverride * (manifestDirective?.scaleX ?? 1),
+            scaleY: finalScaleY * scaleYOverride * (manifestDirective?.scaleY ?? 1),
             scale: 1,
             visible: finalAlpha > 0.01,
             fontSize,
-            fontWeight: chapterFontWeight,
+            fontWeight: semanticFontWeight,
             isAnchor: (wm.directive?.emphasisLevel ?? 0) >= 3,
             color,
             glow: wordGlow * (1 + finalGlowMult),
@@ -1187,6 +1284,7 @@ function bakeFrame(
             exitOffsetY: 0,
             exitScale: 1,
             skewX: finalSkewX,
+            emitterType,
           };
         });
 

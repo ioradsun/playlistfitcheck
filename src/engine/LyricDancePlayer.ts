@@ -239,6 +239,21 @@ type ChunkState = {
   width: number;
 };
 
+type WordEmitterType =
+  | 'ember' | 'frost' | 'spark-burst' | 'dust-impact' | 'light-rays'
+  | 'converge' | 'shockwave-ring' | 'gold-coins' | 'memory-orbs'
+  | 'motion-trail' | 'dark-absorb' | 'none';
+
+interface WordEmitter {
+  type: WordEmitterType;
+  x: number;
+  y: number;
+  color: string;
+  startTime: number;
+  duration: number;
+  intensity: number;
+}
+
 type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
   cameraX: number;
   cameraY: number;
@@ -262,6 +277,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     entryScale?: number;
     exitOffsetY?: number;
     exitScale?: number;
+    emitterType?: WordEmitterType;
   }>;
 };
 
@@ -608,6 +624,8 @@ export class LyricDancePlayer {
   private activeComments: CommentChunk[] = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
   private commentColorIdx = 0;
+  private wordEmitters: WordEmitter[] = [];
+  private firedEmitters = new Set<string>();
 
   // Playback
   private rafHandle = 0;
@@ -618,6 +636,7 @@ export class LyricDancePlayer {
   private playing = false;
   private destroyed = false;
   private _textDrawLogged = false;
+  private lastAudioTime = 0;
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
 
 
@@ -631,7 +650,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
   ) {
     // Invalidate cache if song changed (survives HMR)
-    const sessionKey = `v9-${data.id}-${data.words?.length ?? 0}`;
+    const sessionKey = `v10-${data.id}-${data.words?.length ?? 0}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;
@@ -781,6 +800,8 @@ export class LyricDancePlayer {
 
   seekTo(timeSec: number): void {
     this.seek(timeSec);
+    this.firedEmitters.clear();
+    this.wordEmitters = [];
   }
 
   async startExport(ratio: "16:9" | "9:16"): Promise<void> {
@@ -967,6 +988,11 @@ export class LyricDancePlayer {
 
   private update(deltaMs: number): void {
     const t = this.audio.currentTime;
+    if (t + 0.05 < this.lastAudioTime) {
+      this.firedEmitters.clear();
+      this.wordEmitters = [];
+    }
+    this.lastAudioTime = t;
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
@@ -1142,7 +1168,27 @@ export class LyricDancePlayer {
       this.ctx.shadowBlur = 0;
       this.ctx.globalAlpha = 1;
       drawCalls += 1;
+
+      if (chunk.visible && chunk.emitterType && chunk.emitterType !== 'none') {
+        const emitterKey = chunk.id;
+        if (!this.firedEmitters.has(emitterKey)) {
+          this.firedEmitters.add(emitterKey);
+          const chapterColor = chapters[chIdx]?.dominantColor ?? '#FFD700';
+          this.wordEmitters.push({
+            type: chunk.emitterType as WordEmitterType,
+            x: chunk.x,
+            y: chunk.y,
+            color: chunk.color ?? chapterColor,
+            startTime: performance.now() / 1000,
+            duration: 1.8,
+            intensity: chunk.glow ?? 1.0,
+          });
+        }
+      }
     }
+
+    const nowSec = performance.now() / 1000;
+    this.wordEmitters = this.wordEmitters.filter((e) => nowSec - e.startTime < e.duration + 0.2);
 
     if (frame.particles?.length) {
       for (const p of frame.particles) {
@@ -1162,9 +1208,237 @@ export class LyricDancePlayer {
 
     // Comment comets — after text, before watermark
     this.drawComments(performance.now() / 1000);
+    this.drawWordEmitters(performance.now() / 1000);
 
     this.drawWatermark();
     this.debugState = { ...this.debugState, drawCalls };
+  }
+
+
+  private drawWordEmitters(nowSec: number): void {
+    for (const em of this.wordEmitters) {
+      const elapsed = nowSec - em.startTime;
+      const progress = Math.min(1, elapsed / em.duration);
+      if (progress >= 1) continue;
+
+      const ep = 1 - progress;
+
+      switch (em.type) {
+        case 'ember': {
+          const count = Math.floor(8 + em.intensity * 6);
+          for (let i = 0; i < count; i++) {
+            const seed = (i * 0.618033) % 1;
+            const seed2 = (i * 0.381966) % 1;
+            const drift = (elapsed * 0.12 * (0.5 + seed)) % 1;
+            const wobble = Math.sin(elapsed * 3 + i * 2) * 15;
+            const px = em.x + (seed - 0.5) * 60 + wobble;
+            const py = em.y - drift * 120;
+            const alpha = (1 - drift) * ep * 0.8;
+            if (alpha <= 0) continue;
+            this.ctx.globalAlpha = alpha;
+            this.ctx.fillStyle = seed < 0.5 ? em.color : '#FF8C00';
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 1 + seed2 * 2.5, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'frost': {
+          const count = 8;
+          for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const dist = progress * 50;
+            const px = em.x + Math.cos(angle) * dist;
+            const py = em.y + Math.sin(angle) * dist;
+            this.ctx.globalAlpha = ep * 0.7;
+            this.ctx.strokeStyle = '#A8D8EA';
+            this.ctx.lineWidth = 1;
+            this.ctx.beginPath();
+            this.ctx.moveTo(em.x + Math.cos(angle) * 5, em.y + Math.sin(angle) * 5);
+            this.ctx.lineTo(px, py);
+            this.ctx.stroke();
+            this.ctx.fillStyle = '#E8F4FF';
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'spark-burst': {
+          const count = 12;
+          for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const speed = 80 + ((i * 0.618033) % 1) * 60;
+            const dist = progress * speed;
+            const alpha = ep * (1 - progress * 0.5) * 0.9;
+            const px = em.x + Math.cos(angle) * dist;
+            const py = em.y + Math.sin(angle) * dist;
+            this.ctx.globalAlpha = alpha;
+            this.ctx.fillStyle = em.color;
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 1.5 + (1 - progress) * 2, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'dust-impact': {
+          const count = 10;
+          for (let i = 0; i < count; i++) {
+            const seed = (i * 0.618033) % 1;
+            const angle = (seed - 0.5) * Math.PI;
+            const dist = progress * 40 * (0.5 + seed);
+            const px = em.x + Math.cos(angle) * dist;
+            const py = em.y + Math.sin(angle) * dist * 0.3;
+            this.ctx.globalAlpha = ep * 0.5;
+            this.ctx.fillStyle = '#888888';
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 2 + seed * 4, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'light-rays': {
+          const rayCount = 6;
+          for (let i = 0; i < rayCount; i++) {
+            const angle = (i / rayCount) * Math.PI * 2;
+            const rayLen = progress * 80 * em.intensity;
+            const alphaHex = Math.floor(ep * 0.4 * 255).toString(16).padStart(2, '0');
+            const grad = this.ctx.createLinearGradient(em.x, em.y, em.x + Math.cos(angle) * rayLen, em.y + Math.sin(angle) * rayLen);
+            grad.addColorStop(0, `${em.color}${alphaHex}`);
+            grad.addColorStop(1, 'transparent');
+            this.ctx.strokeStyle = grad;
+            this.ctx.lineWidth = 2;
+            this.ctx.globalAlpha = 1;
+            this.ctx.beginPath();
+            this.ctx.moveTo(em.x, em.y);
+            this.ctx.lineTo(em.x + Math.cos(angle) * rayLen, em.y + Math.sin(angle) * rayLen);
+            this.ctx.stroke();
+          }
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'shockwave-ring': {
+          const radius = progress * this.width * 0.3;
+          this.ctx.globalAlpha = ep * 0.8;
+          this.ctx.strokeStyle = em.color;
+          this.ctx.lineWidth = 3 * ep;
+          this.ctx.beginPath();
+          this.ctx.arc(em.x, em.y, radius, 0, Math.PI * 2);
+          this.ctx.stroke();
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'gold-coins': {
+          const count = 12;
+          for (let i = 0; i < count; i++) {
+            const seed = (i * 0.618033) % 1;
+            const seed2 = (i * 0.381966) % 1;
+            const fallSpeed = 0.3 + seed * 0.4;
+            const px = em.x + (seed - 0.5) * 80;
+            const py = em.y + elapsed * fallSpeed * 100 * seed2;
+            const alpha = Math.max(0, ep - seed2 * 0.3) * 0.9;
+            this.ctx.globalAlpha = alpha;
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 2 + seed * 2, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'memory-orbs': {
+          const count = 6;
+          for (let i = 0; i < count; i++) {
+            const seed = (i * 0.618033) % 1;
+            const angle = seed * Math.PI * 2;
+            const dist = progress * 40 * (0.5 + seed);
+            const px = em.x + Math.cos(angle) * dist;
+            const py = em.y + Math.sin(angle) * dist;
+            this.ctx.globalAlpha = ep * 0.5;
+            this.ctx.fillStyle = em.color;
+            this.ctx.shadowColor = em.color;
+            this.ctx.shadowBlur = 8;
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 3 + seed * 3, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.shadowBlur = 0;
+          }
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          this.ctx.shadowBlur = 0;
+          break;
+        }
+        case 'motion-trail': {
+          const trailLen = progress * 60;
+          const alphaHex = Math.floor(ep * 120).toString(16).padStart(2, '0');
+          const grad = this.ctx.createLinearGradient(em.x - trailLen, em.y, em.x, em.y);
+          grad.addColorStop(0, 'transparent');
+          grad.addColorStop(1, `${em.color}${alphaHex}`);
+          this.ctx.strokeStyle = grad;
+          this.ctx.lineWidth = 4 * ep;
+          this.ctx.beginPath();
+          this.ctx.moveTo(em.x - trailLen, em.y);
+          this.ctx.lineTo(em.x, em.y);
+          this.ctx.stroke();
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'converge': {
+          const count = 8;
+          for (let i = 0; i < count; i++) {
+            const seed = (i * 0.618033) % 1;
+            const fromLeft = i < count / 2;
+            const startX = fromLeft ? em.x - 100 : em.x + 100;
+            const px = startX + (em.x - startX) * progress;
+            const py = em.y + (seed - 0.5) * 20 * (1 - progress);
+            this.ctx.globalAlpha = progress * ep * 0.7;
+            this.ctx.fillStyle = em.color;
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 1.5 + seed, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'dark-absorb': {
+          const count = 8;
+          for (let i = 0; i < count; i++) {
+            const seed = (i * 0.618033) % 1;
+            const angle = seed * Math.PI * 2 + elapsed * 2;
+            const dist = 60 * (1 - progress);
+            const px = em.x + Math.cos(angle) * dist;
+            const py = em.y + Math.sin(angle) * dist;
+            this.ctx.globalAlpha = progress * 0.6;
+            this.ctx.fillStyle = '#000000';
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 2 + seed * 2, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+        }
+        case 'none':
+          this.ctx.globalAlpha = 1;
+          this.ctx.lineWidth = 1;
+          break;
+      }
+      this.ctx.globalAlpha = 1;
+      this.ctx.lineWidth = 1;
+    }
   }
 
   private drawWatermark(): void {
