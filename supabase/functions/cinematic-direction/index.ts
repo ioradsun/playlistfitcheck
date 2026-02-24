@@ -383,7 +383,7 @@ Text style: ${sceneCtx.textStyle === 'dark'
     async function callAI(extraInstruction?: string): Promise<Record<string, unknown> | null> {
       const messages: { role: string; content: string }[] = [
         { role: "system", content: scenePrefix + MASTER_DIRECTOR_PROMPT_V2 },
-        { role: "user", content: `Song: ${artist} — ${title}\nLyrics:\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
+        { role: "user", content: `Song: ${artist} — ${title}\nLyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.\n\nREMINDER: You MUST assign iconGlyph to at least 10 storyboard entries spread across all 3 chapters. Each chapter needs at least 3 icons. Use position "behind"/"above"/"beside"/"replace" and style "ghost"/"outline"/"filled". This is mandatory.` },
       ];
       if (extraInstruction) {
         messages.push({ role: "user", content: extraInstruction });
