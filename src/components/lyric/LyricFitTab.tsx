@@ -539,7 +539,7 @@ export function LyricFitTab({
     setTimeout(() => {
       startBeatAnalysis(audioFile);
       startLyricAnalyze(lines, audioFile);
-      startCinematicDirection(lines);
+      startCinematicDirection(lines, true);
     }, 100);
   }, [audioFile, lines, startBeatAnalysis, startLyricAnalyze, startCinematicDirection]);
 
