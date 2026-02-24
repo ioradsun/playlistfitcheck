@@ -919,7 +919,7 @@ export class LyricDancePlayer {
   }
 
   updateChapterImages(urls: string[]): void {
-    console.log('[PLAYER] hot-updating chapter images:', urls.length);
+    
     this.data = { ...this.data, chapter_images: urls };
     this.loadChapterImages();
   }
