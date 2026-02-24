@@ -1454,54 +1454,12 @@ export function bakeScene(
   payload: ScenePayload,
   onProgress?: (progress: number) => void,
 ): BakedTimeline {
-  _bakerDebugLogged = false;
   const durationMs = Math.max(1, (payload.songEnd - payload.songStart) * 1000);
   const frames: BakedTimeline = [];
   const totalFrames = Math.ceil(durationMs / FRAME_STEP_MS);
   const visualMode = getVisualMode(payload);
   const state = createBakeState(payload);
   const pre = createPrebakedData(payload, totalFrames, visualMode);
-
-  // --- Diagnostic logs (once per bake) ---
-  const _motionProfile = deriveMotionProfile(payload);
-  const _motionDefaults = MOTION_DEFAULTS[_motionProfile];
-  const _physSpec = payload.physics_spec as unknown as Record<string, unknown> | null;
-  const _heat = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat ?? 0.5;
-  const _beatResponse = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse ?? 'slam';
-  const _chaos = Number(_physSpec?.chaos ?? 0);
-  const _animParams = {
-    linger: ({ weighted: 0.15, fluid: 0.55, elastic: 0.2, drift: 0.8, glitch: 0.05 } as Record<string, number>)[_motionProfile] ?? 0.4,
-    stagger: 0.05,
-    entryDuration: _motionDefaults.entryDuration,
-    exitDuration: _motionDefaults.exitDuration,
-  };
-  console.log('[BAKER ANIM] motionProfile:', _motionProfile);
-  console.log('[BAKER ANIM] visualMode:', visualMode);
-  console.log('[BAKER ANIM] heat:', _heat, 'beatResponse:', _beatResponse, 'chaos:', _chaos);
-  console.log('[BAKER ANIM] animParams:', _animParams);
-
-  const _phraseGroups = payload.words?.length > 0 ? buildPhraseGroups(pre.wordMeta) : null;
-  const _storyboard = payload.cinematic_direction?.storyboard ?? [];
-  const _sceneManifest = (payload.scene_manifest ?? null) as unknown as Record<string, unknown> | null;
-  const _manifestWordDirectives = (_sceneManifest?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
-  _phraseGroups?.slice(0, 5).forEach((group, i) => {
-    const anchor = group.words[group.anchorWordIdx];
-    const { entry, behavior, exit } = assignWordAnimations(
-      anchor, _motionDefaults,
-      _storyboard as StoryboardEntryLike[],
-      _manifestWordDirectives[anchor?.clean] ?? null,
-    );
-    console.log(`[BAKER ANIM] group ${i}:`, {
-      words: group.words.map(w => w.word).join(' '),
-      anchor: anchor?.word,
-      entry,
-      behavior,
-      exit,
-      kinetic: anchor?.directive?.kineticClass,
-      emphasis: anchor?.directive?.emphasisLevel,
-    });
-  });
-  // --- End diagnostic logs ---
 
   for (let frameIndex = 0; frameIndex <= totalFrames; frameIndex += 1) {
     frames.push(bakeFrame(frameIndex, payload, durationMs, state, pre));
