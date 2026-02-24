@@ -50,6 +50,8 @@ export function LyricFitTab({
   onHeaderProject,
   onSavedId,
 }: Props) {
+  const { user } = useAuth();
+  const artistNameRef = useRef<string>("artist");
   const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
   const [fitUnlocked, setFitUnlocked] = useState(false);
   const [lyricData, setLyricData] = useState<LyricData | null>(null);
