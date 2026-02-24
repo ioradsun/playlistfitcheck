@@ -40,6 +40,7 @@ export type Keyframe = {
     scaleY: number;
     visible: boolean;
     fontSize: number;
+    fontWeight: number;
     color: string;
     entryOffsetY: number;
     entryOffsetX: number;
@@ -614,16 +615,27 @@ function getGroupLayout(
 ): GroupPosition[] {
   const count = group.words.length;
   const anchorIdx = group.anchorWordIdx;
-  const cx = canvasW * 0.5;
-  const cy = canvasH * 0.5;
+  const anchorPositions: Array<[number, number]> = [
+    [0.5, 0.5],
+    [0.5, 0.38],
+    [0.5, 0.62],
+    [0.42, 0.5],
+    [0.58, 0.5],
+    [0.5, 0.45],
+    [0.5, 0.55],
+  ];
+  const posVariant = anchorPositions[group.lineIndex % anchorPositions.length];
+  const deterministicSpread = ((group.lineIndex * 0.618033) % 0.2) - 0.1;
+  const cx = canvasW * (posVariant[0] + (visualMode === 'explosive' ? deterministicSpread : 0));
+  const cy = canvasH * (posVariant[1] + (visualMode === 'explosive' ? deterministicSpread : 0));
 
   const MIN_FONT = 28;
 
   if (count === 1) {
     const isFiller = isFillerWord(group.words[0].word);
     return [{
-      x: cx,
-      y: cy,
+      x: Math.max(80, Math.min(canvasW - 80, cx)),
+      y: Math.max(80, Math.min(canvasH - 80, cy)),
       fontSize: Math.max(MIN_FONT, isFiller ? baseFontSize * 0.9 : baseFontSize * 1.2),
       isAnchor: true,
       isFiller,
@@ -666,7 +678,7 @@ function getGroupLayout(
     }
   }
 
-  const margin = 60;
+  const margin = 80;
   for (const pos of positions) {
     pos.x = Math.max(margin, Math.min(canvasW - margin, pos.x));
     pos.y = Math.max(margin, Math.min(canvasH - margin, pos.y));
@@ -674,6 +686,7 @@ function getGroupLayout(
 
   return positions;
 }
+
 
 function dimColor(hex: string, factor: number): string {
   const clean = hex.replace('#', '');
@@ -742,11 +755,8 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     const shot = lineShotTypes[idx];
     const lineProgress = ((line.start ?? 0) - payload.songStart) / songDuration;
     const currentChapter = findByRatio(chapters, lineProgress);
-    const typoShift = currentChapter?.typographyShift;
-    const fontWeight = typoShift?.fontWeight
-      ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
-      ?? 700;
-    const weightScale = fontWeight >= 800 ? 1.06 : 1;
+    const actIdx = Math.max(0, chapters.indexOf(currentChapter as ChapterLike));
+    const actSizeMultiplier = actIdx === 0 ? 0.85 : actIdx === 1 ? 1.0 : 1.2;
 
     const shotFontSizes: Record<string, number> = {
       Wide: 22,
@@ -757,7 +767,9 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
       FloatingInWorld: 30,
     };
 
-    return Math.round((shotFontSizes[shot] ?? 36) * weightScale);
+    const baseFontSize = shotFontSizes[shot] ?? 36;
+    const actBaseFontSize = baseFontSize * actSizeMultiplier;
+    return Math.round(actBaseFontSize);
   });
 
 
@@ -1027,6 +1039,9 @@ function bakeFrame(
           const wordGlow = isAnchor
             ? glow * (1 + finalGlowMult) * (pos.isFiller ? 0.5 : 1.0)
             : glow * 0.3;
+          const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
+            ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
+            ?? 700;
 
           if (!_bakerDebugLogged) {
             _bakerDebugLogged = true;
@@ -1053,6 +1068,7 @@ function bakeFrame(
             scale: 1,
             visible: finalAlpha > 0.01,
             fontSize: pos.fontSize,
+            fontWeight: chapterFontWeight,
             color,
             glow: wordGlow,
             skewX: finalSkewX,
@@ -1133,6 +1149,9 @@ function bakeFrame(
           const soloWordBonus = pre.motionProfile === 'drift' || pre.motionProfile === 'fluid' ? 1.3 : 1.0;
           const fontSize = manifestDirective?.fontSize
             ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
+          const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
+            ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
+            ?? 700;
 
           const wordGlow = manifestDirective?.glow
             ? glow * manifestDirective.glow
@@ -1148,6 +1167,7 @@ function bakeFrame(
             scale: 1,
             visible: finalAlpha > 0.01,
             fontSize,
+            fontWeight: chapterFontWeight,
             color,
             glow: wordGlow * (1 + finalGlowMult),
             entryOffsetY: 0,
@@ -1241,6 +1261,9 @@ function bakeFrame(
         scaleY: chunkScale,
         visible,
         fontSize: pre.lineFontSizes[idx] ?? 36,
+        fontWeight: currentChapter?.typographyShift?.fontWeight
+          ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
+          ?? 700,
         color: pre.lineColors[idx] ?? "#ffffff",
         entryOffsetY,
         entryOffsetX,
@@ -1279,6 +1302,9 @@ function bakeFrame(
             scaleY: Math.min(chunkScale * ((exitStyle as string) === 'snap' ? 1.2 : 1.15), 1.25),
             visible,
             fontSize: pre.lineFontSizes[idx] ?? 36,
+            fontWeight: currentChapter?.typographyShift?.fontWeight
+              ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
+              ?? 700,
             color: pre.lineColors[idx] ?? "#ffffff",
             entryOffsetY,
             entryOffsetX,

@@ -253,6 +253,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     scaleY?: number;
     skewX?: number;
     fontSize?: number;
+    fontWeight?: number;
     color?: string;
     visible: boolean;
     entryOffsetY?: number;
@@ -598,6 +599,7 @@ export class LyricDancePlayer {
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
   private chapterImages: HTMLImageElement[] = [];
+  private chapterImageLuminance = new WeakMap<HTMLImageElement, number>();
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
@@ -627,7 +629,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
   ) {
     // Invalidate cache if song changed (survives HMR)
-    const sessionKey = `v6-${data.id}-${data.words?.length ?? 0}`;
+    const sessionKey = `v9-${data.id}-${data.words?.length ?? 0}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;
@@ -1045,6 +1047,7 @@ export class LyricDancePlayer {
       const zoom = frame.cameraZoom ?? 1.0;
       const fontSize = chunk.fontSize ?? 36;
       const zoomedFont = obj.font.replace(/(\d+(\.\d+)?)px/, `${Math.round(fontSize * zoom)}px`);
+      const fontWeight = chunk.fontWeight ?? 700;
       const sx = chunk.scaleX ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
       const sy = chunk.scaleY ?? chunk.scale ?? (chunk.entryScale ?? 1) * (chunk.exitScale ?? 1);
 
@@ -1059,7 +1062,7 @@ export class LyricDancePlayer {
 
       this.ctx.globalAlpha = chunk.alpha;
       this.ctx.fillStyle = chunk.color ?? obj.color;
-      this.ctx.font = zoomedFont;
+      this.ctx.font = zoomedFont.replace(/^\d+/, `${fontWeight}`);
       if (chunk.glow > 0) {
         this.ctx.shadowColor = chunk.color ?? '#ffffff';
         this.ctx.shadowBlur = chunk.glow * 32;
@@ -1518,27 +1521,68 @@ export class LyricDancePlayer {
 
     const current = this.chapterImages[chapterIdx];
     const next = this.chapterImages[nextChapterIdx];
+    const chapterProgress = this.getSongProgress();
+    const currentChapter = findChapter(this.payload?.cinematic_direction?.chapters as any[] | undefined, chapterProgress);
 
+    const imageOpacity = 0.32;
     if (current?.complete && current.naturalWidth > 0) {
-      this.ctx.globalAlpha = 0.22;
+      this.ctx.globalAlpha = Math.min(0.35, imageOpacity);
       this.ctx.drawImage(current, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
     }
 
     // Crossfade to next chapter image during transition
     if (next?.complete && next.naturalWidth > 0 && blend > 0) {
-      this.ctx.globalAlpha = blend * 0.22;
+      this.ctx.globalAlpha = Math.min(0.35, blend * imageOpacity);
       this.ctx.drawImage(next, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
     }
 
     // Dark crush overlay — always on top of image
+    const intensity = currentChapter?.emotionalIntensity ?? 0.5;
+    const baseCrushAlpha = Math.max(0.65, 0.72 - intensity * 0.15);
+    const currentLum = this.getAverageLuminance(current);
+    const nextLum = blend > 0 ? this.getAverageLuminance(next) : null;
+    const blendLum = currentLum != null && nextLum != null
+      ? currentLum * (1 - blend) + nextLum * blend
+      : currentLum ?? nextLum;
+    const luminanceCrushAlpha = blendLum != null && blendLum > 0.72 ? 0.78 : baseCrushAlpha;
+    const crushAlpha = Math.max(0.65, luminanceCrushAlpha);
+
     const crush = this.ctx.createLinearGradient(0, 0, 0, this.height);
-    crush.addColorStop(0, 'rgba(0,0,0,0.78)');
-    crush.addColorStop(0.5, 'rgba(0,0,0,0.68)');
-    crush.addColorStop(1, 'rgba(0,0,0,0.75)');
+    crush.addColorStop(0, `rgba(0,0,0,${crushAlpha})`);
+    crush.addColorStop(0.5, `rgba(0,0,0,${Math.max(0.65, crushAlpha - 0.06)})`);
+    crush.addColorStop(1, `rgba(0,0,0,${crushAlpha})`);
     this.ctx.fillStyle = crush;
     this.ctx.fillRect(0, 0, this.width, this.height);
+  }
+
+  private getAverageLuminance(img: HTMLImageElement | undefined): number | null {
+    if (!img || !img.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) return null;
+    const cached = this.chapterImageLuminance.get(img);
+    if (cached != null) return cached;
+
+    try {
+      const sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = 16;
+      sampleCanvas.height = 16;
+      const sampleCtx = sampleCanvas.getContext('2d');
+      if (!sampleCtx) return null;
+      sampleCtx.drawImage(img, 0, 0, 16, 16);
+      const { data } = sampleCtx.getImageData(0, 0, 16, 16);
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        sum += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      }
+      const luminance = sum / (data.length / 4);
+      this.chapterImageLuminance.set(img, luminance);
+      return luminance;
+    } catch {
+      return null;
+    }
   }
 
   private tintedDarkBackground(hex: string): string {
