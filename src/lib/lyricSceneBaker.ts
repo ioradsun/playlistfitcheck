@@ -1084,7 +1084,7 @@ function bakeFrame(
           const canvasY = ny * 540;
           const elapsed = tSec - wm.start;
 
-          const stagger = wm.wordIndex * (manifestStagger ?? lineLayout?.stagger ?? 0);
+          const stagger = wm.wordIndex * (pre.manifestStagger ?? lineLayout?.stagger ?? 0);
           const adjustedElapsed = Math.max(0, elapsed - stagger);
 
           const { entry, behavior, exit } = assignWordAnimations(
