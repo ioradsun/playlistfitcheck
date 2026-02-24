@@ -297,7 +297,10 @@ export function FitTab({
     generationStatus.cinematicDirection === "done";
   const hasErrors = Object.values(generationStatus).includes("error");
   const danceDisabled = !sceneManifest || publishing || !allReady;
-  const republishDisabled = publishing || !allReady;
+  // Republish only needs auth + not currently publishing (data already exists on server)
+  const republishDisabled = publishing;
+
+  console.log("[FitTab] allReady:", allReady, "sceneManifest:", !!sceneManifest, "generationStatus:", generationStatus, "publishedUrl:", publishedUrl, "danceNeedsRegeneration:", danceNeedsRegeneration);
 
   // ── Sections derived from songDna ─────────────────────────────────────
   const physicsSpec = songDna?.physicsSpec;
