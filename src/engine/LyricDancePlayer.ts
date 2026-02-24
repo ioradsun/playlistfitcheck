@@ -1189,19 +1189,6 @@ export class LyricDancePlayer {
           });
         }
       }
-      // One-time debug for first visible chunk
-      if (chunk.visible && !(this as any)._debuggedChunk) {
-        (this as any)._debuggedChunk = true;
-        console.log('[PLAYER] drawing chunk:', {
-          id: chunk.id,
-          scaleX: chunk.scaleX,
-          scaleY: chunk.scaleY,
-          skewX: chunk.skewX,
-          alpha: chunk.alpha,
-          glow: chunk.glow,
-          fontSize: chunk.fontSize,
-        });
-      }
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
       const drawX = Number.isFinite(chunk.x) ? chunk.x : 0;
