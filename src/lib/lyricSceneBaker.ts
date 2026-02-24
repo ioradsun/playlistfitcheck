@@ -1377,6 +1377,49 @@ export function bakeSceneChunked(
   const state = createBakeState(payload);
   const pre = createPrebakedData(payload, totalFrames, visualMode);
 
+  // --- Diagnostic logs (once per bake) ---
+  {
+    const mp = deriveMotionProfile(payload);
+    const md = MOTION_DEFAULTS[mp];
+    const ps = payload.physics_spec as unknown as Record<string, unknown> | null;
+    const h = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat ?? 0.5;
+    const br = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse ?? 'slam';
+    const ch = Number(ps?.chaos ?? 0);
+    const ap = {
+      linger: ({ weighted: 0.15, fluid: 0.55, elastic: 0.2, drift: 0.8, glitch: 0.05 } as Record<string, number>)[mp] ?? 0.4,
+      stagger: 0.05,
+      entryDuration: md.entryDuration,
+      exitDuration: md.exitDuration,
+    };
+    console.log('[BAKER ANIM] motionProfile:', mp);
+    console.log('[BAKER ANIM] visualMode:', visualMode);
+    console.log('[BAKER ANIM] heat:', h, 'beatResponse:', br, 'chaos:', ch);
+    console.log('[BAKER ANIM] animParams:', ap);
+
+    const pg = payload.words?.length > 0 ? buildPhraseGroups(pre.wordMeta) : null;
+    const sb = payload.cinematic_direction?.storyboard ?? [];
+    const sm = (payload.scene_manifest ?? null) as unknown as Record<string, unknown> | null;
+    const mwd = (sm?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
+    pg?.slice(0, 5).forEach((group, i) => {
+      const anchor = group.words[group.anchorWordIdx];
+      const { entry, behavior, exit } = assignWordAnimations(
+        anchor, md,
+        sb as StoryboardEntryLike[],
+        mwd[anchor?.clean] ?? null,
+      );
+      console.log(`[BAKER ANIM] group ${i}:`, {
+        words: group.words.map(w => w.word).join(' '),
+        anchor: anchor?.word,
+        entry,
+        behavior,
+        exit,
+        kinetic: anchor?.directive?.kineticClass,
+        emphasis: anchor?.directive?.emphasisLevel,
+      });
+    });
+  }
+  // --- End diagnostic logs ---
+
   const frames: BakedTimeline = [];
   let frameIndex = 0;
 
