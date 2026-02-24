@@ -440,6 +440,7 @@ type WordDirectiveLike = {
   colorOverride?: string;
   emphasisLevel?: number;
   visualMetaphor?: string;
+  behavior?: string;
   ghostTrail?: boolean;
   ghostCount?: number;
   ghostSpacing?: number;
@@ -1137,7 +1138,7 @@ function bakeFrame(
           const semanticColorOverride = semanticEffect?.colorOverride ?? null;
           const emitterType = semanticEffect?.emitterType ?? 'none';
 
-          const isLetterSequence = isAnchor && wm.directive?.letterSequence === true;
+          const isLetterSequence = wm.directive?.letterSequence === true;
           const letterTotal = isLetterSequence ? wm.word.length : 1;
           const splitExitStyles: ExitStyle[] = ['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up'];
 
@@ -1203,7 +1204,7 @@ function bakeFrame(
               iconStyle: isAnchor && iconGlyph && !isLetterSequence ? iconStyle : undefined,
               iconPosition: isAnchor && iconGlyph && !isLetterSequence ? iconPosition : undefined,
               iconScale: isAnchor && iconGlyph && !isLetterSequence ? iconScale : undefined,
-              behavior: effectiveBehavior,
+              behavior: (wm.directive?.behavior as BehaviorStyle | undefined) ?? effectiveBehavior,
               skewX: finalSkewX,
               blur: Math.max(0, Math.min(1, finalBlur)),
               rotation: finalRotation,
@@ -1231,7 +1232,7 @@ function bakeFrame(
         .filter((wm) => {
           return tSec >= wm.start && tSec < (wm.end + wordLinger);
         })
-        .map((wm) => {
+        .flatMap((wm) => {
           const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
           const totalWords = lineWords.length;
           const manifestDirective = manifestWordDirectives[wm.clean] ?? null;
@@ -1246,7 +1247,6 @@ function bakeFrame(
           const elapsed = tSec - wm.start;
 
           const stagger = wm.wordIndex * (pre.manifestStagger ?? lineLayout?.stagger ?? 0);
-          const adjustedElapsed = Math.max(0, elapsed - stagger);
 
           const { entry, behavior, exit } = assignWordAnimations(
             wm,
@@ -1255,97 +1255,111 @@ function bakeFrame(
             manifestDirective,
           );
 
-          const entryProgress = Math.max(0, adjustedElapsed / motionDefaults.entryDuration);
-          const entryState = computeEntryState(entry, entryProgress, motionDefaults.behaviorIntensity);
+          const splitExitStyles: ExitStyle[] = ['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up'];
+          const isLetterSequence = wm.directive?.letterSequence === true;
+          const letterTotal = isLetterSequence ? wm.word.length : 1;
 
-          const exitDuration = exit === 'linger' ? 0.05
-            : exit === 'evaporate' ? 0.8
-              : motionDefaults.exitDuration;
-          const exitProgress = Math.max(0, (tSec - wm.end) / exitDuration);
-          const exitState = computeExitState(exit, exitProgress, motionDefaults.behaviorIntensity);
+          return Array.from({ length: letterTotal }, (_, li) => {
+            const letterDelay = isLetterSequence ? li * 0.06 : 0;
+            const adjustedElapsed = Math.max(0, elapsed - stagger - letterDelay);
 
-          const beatPhase = beatIndex >= 0
-            ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
-            : 0;
-          const behaviorState = computeBehaviorState(
-            behavior,
-            tSec,
-            wm.start,
-            beatPhase,
-            motionDefaults.behaviorIntensity,
-          );
+            const entryProgress = Math.max(0, adjustedElapsed / motionDefaults.entryDuration);
+            const entryState = computeEntryState(entry, entryProgress, motionDefaults.behaviorIntensity);
 
-          const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
-          const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
-          const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
-          const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
-          const isEntryComplete2 = entryProgress >= 1.0;
-          const isExiting2 = exitProgress > 0;
-          const finalAlpha = isExiting2
-            ? Math.max(0, exitState.alpha)
-            : isEntryComplete2
-              ? 1.0 * (behaviorState.alpha ?? 1)
-              : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
-          const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
-          const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
-          const finalBlur = (entryState.blur ?? 0) + (exitState.blur ?? 0) + (behaviorState.blur ?? 0);
-          const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
-          const isFrozen = behavior === 'freeze' && (tSec - wm.start) > 0.3;
+            const exitDuration = exit === 'linger' ? 0.05
+              : exit === 'evaporate' ? 0.8
+                : motionDefaults.exitDuration;
+            const exitDelay = isLetterSequence && splitExitStyles.includes(exit) ? letterDelay : 0;
+            const exitProgress = Math.max(0, (tSec - wm.end - exitDelay) / exitDuration);
+            const exitState = computeExitState(exit, exitProgress, motionDefaults.behaviorIntensity, li, letterTotal);
 
-          const color = manifestDirective?.color
-            ?? wm.directive?.colorOverride
-            ?? pre.lineColors[wm.lineIndex]
-            ?? '#ffffff';
+            const beatPhase = beatIndex >= 0
+              ? ((tSec - (state.beats[beatIndex] ?? 0)) / (60 / (bpm ?? 120))) % 1
+              : 0;
+            const effectiveBehavior = (wm.directive?.behavior as BehaviorStyle | undefined) ?? behavior;
+            const behaviorState = computeBehaviorState(
+              effectiveBehavior,
+              tSec,
+              wm.start,
+              beatPhase,
+              motionDefaults.behaviorIntensity,
+            );
 
-          const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
-          const soloWordBonus = pre.motionProfile === 'drift' || pre.motionProfile === 'fluid' ? 1.3 : 1.0;
-          const fontSize = manifestDirective?.fontSize
-            ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
-          const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
-            ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
-            ?? 700;
+            const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
+            const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
+            const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1);
+            const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1);
+            const isEntryComplete2 = entryProgress >= 1.0;
+            const isExiting2 = exitProgress > 0;
+            const finalAlpha = isExiting2
+              ? Math.max(0, exitState.alpha)
+              : isEntryComplete2
+                ? 1.0 * (behaviorState.alpha ?? 1)
+                : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
+            const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
+            const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
+            const finalBlur = (entryState.blur ?? 0) + (exitState.blur ?? 0) + (behaviorState.blur ?? 0);
+            const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
+            const isFrozen = effectiveBehavior === 'freeze' && (tSec - wm.start) > 0.3;
 
-          const wordGlow = manifestDirective?.glow
-            ? glow * manifestDirective.glow
-            : (wm.directive?.emphasisLevel ?? 0) >= 4 ? glow * 1.8 : glow * 0.6;
+            const color = manifestDirective?.color
+              ?? wm.directive?.colorOverride
+              ?? pre.lineColors[wm.lineIndex]
+              ?? '#ffffff';
 
-          return {
-            id: `${wm.lineIndex}-${wm.wordIndex}`,
-            text: wm.word,
-            x: canvasX + finalOffsetX,
-            y: canvasY + finalOffsetY,
-            alpha: finalAlpha,
-            scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
-            scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
-            scale: 1,
-            visible: finalAlpha > 0.01,
-            fontSize,
-            fontWeight: chapterFontWeight,
-            isAnchor: (wm.directive?.emphasisLevel ?? 0) >= 3,
-            color,
-            glow: wordGlow * (1 + finalGlowMult),
-            entryOffsetY: 0,
-            entryOffsetX: 0,
-            entryScale: 1,
-            exitOffsetY: 0,
-            exitScale: 1,
-            skewX: finalSkewX,
-            behavior,
-            blur: Math.max(0, Math.min(1, finalBlur)),
-            rotation: finalRotation,
-            ghostTrail: wm.directive?.ghostTrail,
-            ghostCount: wm.directive?.ghostCount,
-            ghostSpacing: wm.directive?.ghostSpacing,
-            ghostDirection: wm.directive?.ghostDirection,
-            frozen: isFrozen,
-            trail: wm.directive?.trail ?? 'none',
-            entryStyle: (wm.directive?.entry as string | undefined) ?? entry,
-            exitStyle: (wm.directive?.exit as string | undefined) ?? exit,
-            emphasisLevel: wm.directive?.emphasisLevel ?? 3,
-            entryProgress: Math.min(1, entryProgress),
-          };
+            const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
+            const soloWordBonus = pre.motionProfile === 'drift' || pre.motionProfile === 'fluid' ? 1.3 : 1.0;
+            const fontSize = manifestDirective?.fontSize
+              ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
+            const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
+              ?? payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight
+              ?? 700;
+
+            const wordGlow = manifestDirective?.glow
+              ? glow * manifestDirective.glow
+              : (wm.directive?.emphasisLevel ?? 0) >= 4 ? glow * 1.8 : glow * 0.6;
+
+            return {
+              id: isLetterSequence ? `${wm.lineIndex}-${wm.wordIndex}-L${li}` : `${wm.lineIndex}-${wm.wordIndex}`,
+              text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
+              x: canvasX + finalOffsetX,
+              y: canvasY + finalOffsetY,
+              alpha: finalAlpha,
+              scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
+              scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
+              scale: 1,
+              visible: finalAlpha > 0.01,
+              fontSize,
+              fontWeight: chapterFontWeight,
+              isAnchor: (wm.directive?.emphasisLevel ?? 0) >= 3,
+              color,
+              glow: wordGlow * (1 + finalGlowMult),
+              entryOffsetY: 0,
+              entryOffsetX: 0,
+              entryScale: 1,
+              exitOffsetY: 0,
+              exitScale: 1,
+              skewX: finalSkewX,
+              behavior: effectiveBehavior,
+              blur: Math.max(0, Math.min(1, finalBlur)),
+              rotation: finalRotation,
+              ghostTrail: wm.directive?.ghostTrail,
+              ghostCount: wm.directive?.ghostCount,
+              ghostSpacing: wm.directive?.ghostSpacing,
+              ghostDirection: wm.directive?.ghostDirection,
+              letterIndex: isLetterSequence ? li : undefined,
+              letterTotal: isLetterSequence ? letterTotal : undefined,
+              letterDelay,
+              isLetterChunk: isLetterSequence || undefined,
+              frozen: isFrozen,
+              trail: wm.directive?.trail ?? 'none',
+              entryStyle: (wm.directive?.entry as string | undefined) ?? entry,
+              exitStyle: (wm.directive?.exit as string | undefined) ?? exit,
+              emphasisLevel: wm.directive?.emphasisLevel ?? 3,
+              entryProgress: Math.min(1, entryProgress),
+            };
+          });
         });
-
       chunks.push(...wordChunks);
     }
   } else {
