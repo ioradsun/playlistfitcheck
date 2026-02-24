@@ -865,7 +865,7 @@ export class LyricDancePlayer {
     const fontFamily = typo?.fontFamily?.trim() || 'Montserrat';
     const fontWeight = typo?.fontWeight || 800;
     const textTransform = typo?.textTransform || 'uppercase';
-    const baseFontPx = 36;
+    const baseFontPx = 42;
     const font = `${fontWeight} ${baseFontPx}px ${fontFamily}`;
     measureCtx.font = font;
 
