@@ -63,6 +63,7 @@ export type Keyframe = {
 
 export type BakedTimeline = Keyframe[];
 
+let _bakerDebugLogged = false;
 const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
