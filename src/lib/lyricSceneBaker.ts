@@ -383,18 +383,6 @@ function bakeFrame(
       exitScale,
     });
 
-    if (!state.hasLoggedAnim && visible) {
-      state.hasLoggedAnim = true;
-      console.log('[ANIM] first visible chunk:', {
-        entryStyle: storyboardEntry?.entryStyle,
-        entryOffsetY,
-        entryOffsetX,
-        entryScale,
-        exitScale,
-        entryProgress: entryProgress?.toFixed(3),
-        ep: ep?.toFixed(3),
-      });
-    }
 
     if (lineActive) {
       const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
