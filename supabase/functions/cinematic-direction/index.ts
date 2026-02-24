@@ -504,10 +504,8 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
     raw.palette = "soft-cream";
   }
 
-  if (raw.sceneTone === "light" && ["fire", "storm"].includes(raw.texture)) {
-    console.warn(`[CINEMATIC] Texture "${raw.texture}" incompatible with light tone — falling back to "dust"`);
-    raw.texture = "dust";
-  }
+
+
 
   const storyboard = raw.storyboard ?? [];
   const wordCount = Object.keys(raw.wordDirectives ?? {}).length;
