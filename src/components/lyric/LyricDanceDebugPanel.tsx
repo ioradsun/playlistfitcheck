@@ -811,7 +811,8 @@ ENTRY STYLES:
 EXIT STYLES:
   shatter, snap-out, burn-out, dissolve, drift-up, sink, cut-out,
   vanish, linger, evaporate, blur-out, spin-out,
-  scatter-letters, peel-off, peel-reverse, cascade-down, cascade-up
+  scatter-letters, peel-off, peel-reverse, cascade-down, cascade-up,
+  gravity-fall, soar, launch, scatter-fly, melt, freeze-crack
 
 ═══════════════════════════════════════
 SECTION 4 — WORD DIRECTIVES (semantic animation)
@@ -830,6 +831,27 @@ If the word means frozen → it should stop dead.
 
 Let the word tell you what it needs.
 
+EXIT SELECTION RULES — match the exit to what the word DOES:
+  rain, fall, drop, tears, gravity    → gravity-fall + letterSequence
+  bird, fly, wings, free, soaring     → soar
+  rise, escape, blast, rocket, launch → launch
+  break, apart, scatter, flock        → scatter-fly + letterSequence
+  melt, drip, candle, wax, dissolving → melt
+  freeze, ice, stuck, numb, trapped   → freeze-crack
+  crash, shatter, break, smash        → shatter or scatter-letters + letterSequence
+  float, breath, smoke, whisper       → drift-up or evaporate (gentle)
+  sink, drown, fall, weight, heavy    → sink or cascade-down
+
+  DO NOT use drift-up for words with strong upward energy.
+  drift-up is for gentle fading (smoke, breath, whisper).
+  Use soar or launch for words that mean flight or escape.
+
+  DO NOT use dissolve as a default. Match the exit to meaning.
+  If the word is violent → shatter, scatter-letters, scatter-fly
+  If the word is cold → freeze-crack, melt
+  If the word is upward → soar, launch, cascade-up
+  If the word is downward → gravity-fall, sink, cascade-down
+
 Each word directive has:
 - "word": the word (lowercase)
 - "emphasisLevel": 1-5 (1=subtle, 5=showstopper)
@@ -842,6 +864,11 @@ OPTIONAL per word:
 - "ghostTrail": true — leaves fading echo copies (2-4 per song)
 - "ghostDirection": "up" | "down" | "left" | "right" | "radial"
 - "letterSequence": true — letters animate individually (3-5 per song)
+  PAIR letterSequence with semantic exits for maximum impact:
+    "rain" + gravity-fall + letterSequence = each letter falls like a raindrop
+    "breaking" + scatter-fly + letterSequence = letters fly apart like shrapnel
+    "change" + scatter-letters + letterSequence = letters rearrange/scatter
+  letterSequence without a semantic exit wastes the effect.
 - "visualMetaphor": freeform string describing the intended visual
 
 BEHAVIORS:
