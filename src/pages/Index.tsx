@@ -741,21 +741,29 @@ const Index = () => {
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("lyric") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
-              <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} /></Suspense>
+              {transitionTool === "lyric"
+                ? <ProjectTransitionSkeleton tool="lyric" />
+                : <Suspense fallback={<ProjectTransitionSkeleton tool="lyric" />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} /></Suspense>
+              }
             </div>
           )}
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("mix") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "mix" ? "" : "hidden"}`}>
-              <Suspense fallback={<TabChunkFallback />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
+              {transitionTool === "mix"
+                ? <ProjectTransitionSkeleton tool="mix" />
+                : <Suspense fallback={<ProjectTransitionSkeleton tool="mix" />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
+              }
             </div>
           )}
           {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("hitfit") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
-              {loadedHitFitAnalysis
-                ? <Suspense fallback={<TabChunkFallback />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
-                : <Suspense fallback={<TabChunkFallback />}><HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+              {transitionTool === "hitfit"
+                ? <ProjectTransitionSkeleton tool="hitfit" />
+                : loadedHitFitAnalysis
+                  ? <Suspense fallback={<ProjectTransitionSkeleton tool="hitfit" />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+                  : <Suspense fallback={<ProjectTransitionSkeleton tool="hitfit" />}><HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
               }
             </div>
           )}
