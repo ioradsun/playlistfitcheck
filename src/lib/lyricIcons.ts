@@ -3,12 +3,162 @@
  */
 
 export type IconGlyph =
-  | "heart" | "star" | "fire" | "lightning" | "moon"
-  | "sun" | "cloud" | "rain" | "snow" | "wind"
-  | "diamond" | "crown" | "skull" | "rose" | "eye"
+  | "fire"
+  | "water-drop"
+  | "lightning"
+  | "snowflake"
+  | "sun"
+  | "moon"
+  | "star"
+  | "cloud"
+  | "rain"
+  | "wind"
+  | "leaf"
+  | "flower"
+  | "tree"
+  | "mountain"
+  | "wave"
+  | "heart"
+  | "broken-heart"
+  | "eye"
+  | "hand-open"
+  | "hand-fist"
+  | "crown"
+  | "skull"
+  | "wings"
+  | "feather"
+  | "diamond"
+  | "clock"
+  | "hourglass"
+  | "lock"
+  | "key"
+  | "chain"
+  | "anchor"
+  | "compass"
+  | "arrow-up"
+  | "arrow-down"
+  | "spiral"
+  | "infinity"
+  | "music-note"
+  | "microphone"
+  | "speaker"
+  | "headphones"
+  | "camera"
+  | "film"
+  | "book"
+  | "pen"
+  | "brush"
+  | "palette"
+  | "mask"
+  | "mirror"
+  | "door"
+  | "window"
+  | "house"
+  | "car"
+  | "road"
+  | "bridge"
+  | "city"
+  | "globe"
+  | "flag"
+  | "sword"
+  | "shield"
+  | "torch"
+  | "candle"
+  | "smoke"
+  | "ghost"
+  | "shadow"
+  | "sparkle"
+  | "burst"
+  | "ripple"
+  | "orbit"
+  | "target"
+  | "crosshair"
+  | "fingerprint"
+  | "dna"
+  | "atom"
+  | "pill"
+  | "coin"
   | string;
 
 export type IconStyle = "outline" | "filled" | "ghost";
+
+const EMOJI_MAP: Record<string, string> = {
+  fire: "🔥",
+  "water-drop": "💧",
+  lightning: "⚡",
+  snowflake: "❄",
+  sun: "☀",
+  moon: "☽",
+  star: "★",
+  cloud: "☁",
+  rain: "☂",
+  wind: "〰",
+  leaf: "🍃",
+  flower: "✿",
+  tree: "🌳",
+  mountain: "▲",
+  wave: "〜",
+  heart: "♥",
+  "broken-heart": "💔",
+  eye: "◉",
+  "hand-open": "✋",
+  "hand-fist": "✊",
+  crown: "♛",
+  skull: "💀",
+  wings: "𐦋",
+  feather: "𐦋",
+  diamond: "◆",
+  clock: "⏱",
+  hourglass: "⏳",
+  lock: "🔒",
+  key: "🔑",
+  chain: "⛓",
+  anchor: "⚓",
+  compass: "◎",
+  "arrow-up": "↑",
+  "arrow-down": "↓",
+  spiral: "🌀",
+  infinity: "∞",
+  "music-note": "♪",
+  microphone: "🎤",
+  speaker: "🔊",
+  headphones: "🎧",
+  camera: "📷",
+  film: "🎬",
+  book: "📖",
+  pen: "✎",
+  brush: "🖌",
+  palette: "🎨",
+  mask: "🎭",
+  mirror: "◇",
+  door: "▯",
+  window: "▢",
+  house: "⌂",
+  car: "🚗",
+  road: "═",
+  bridge: "⌒",
+  city: "🏙",
+  globe: "🌍",
+  flag: "⚑",
+  sword: "⚔",
+  shield: "🛡",
+  torch: "🔥",
+  candle: "🕯",
+  smoke: "░",
+  ghost: "👻",
+  shadow: "▓",
+  sparkle: "✦",
+  burst: "✸",
+  ripple: "◎",
+  orbit: "◯",
+  target: "◎",
+  crosshair: "⊕",
+  fingerprint: "⊛",
+  dna: "⧖",
+  atom: "⚛",
+  pill: "💊",
+  coin: "●",
+};
 
 /**
  * Draw an icon glyph onto a 2D canvas context using emoji/text rendering.
@@ -23,43 +173,35 @@ export function drawIcon(
   style: IconStyle = "outline",
   opacity: number = 1,
 ): void {
-  const emojiMap: Record<string, string> = {
-    heart: "♥",
-    star: "★",
-    fire: "🔥",
-    lightning: "⚡",
-    moon: "☽",
-    sun: "☀",
-    cloud: "☁",
-    rain: "☂",
-    snow: "❄",
-    wind: "〰",
-    diamond: "◆",
-    crown: "♛",
-    skull: "☠",
-    rose: "✿",
-    eye: "◉",
-  };
-
-  const char = emojiMap[glyph] ?? glyph;
+  const char = EMOJI_MAP[glyph] ?? glyph;
 
   ctx.save();
-  ctx.globalAlpha = style === "ghost" ? opacity * 0.35 : opacity;
   ctx.font = `${size}px sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  if (style === "outline") {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1, size * 0.04);
-    ctx.strokeText(char, x, y);
-    ctx.fillStyle = "transparent";
-  } else {
-    ctx.fillStyle = color;
-  }
+  switch (style) {
+    case "filled":
+      ctx.globalAlpha = opacity;
+      ctx.fillStyle = color;
+      ctx.fillText(char, x, y);
+      break;
 
-  if (style !== "outline") {
-    ctx.fillText(char, x, y);
+    case "outline":
+      ctx.globalAlpha = opacity * 0.85;
+      ctx.fillStyle = color;
+      ctx.fillText(char, x, y);
+      ctx.globalAlpha = opacity;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1.5, size * 0.03);
+      ctx.strokeText(char, x, y);
+      break;
+
+    case "ghost":
+      ctx.globalAlpha = opacity * 0.7;
+      ctx.fillStyle = color;
+      ctx.fillText(char, x, y);
+      break;
   }
 
   ctx.restore();
