@@ -398,8 +398,8 @@ Text style: ${sceneCtx.textStyle === 'dark'
           model: "google/gemini-2.5-flash",
           messages,
           temperature: 0.7,
-          max_tokens: 2048,
-          maxOutputTokens: 2048,
+          max_tokens: 8192,
+          maxOutputTokens: 8192,
           response_format: { type: "json_object" },
         }),
       });
