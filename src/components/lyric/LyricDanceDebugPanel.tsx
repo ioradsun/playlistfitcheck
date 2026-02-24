@@ -452,9 +452,10 @@ interface Props {
   player?: LyricDancePlayer | null;
   onRegenerateSong?: () => void;
   onRegenerateDance?: () => void;
+  onRegenerateDirector?: () => void;
 }
 
-export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance }: Props) {
+export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, onRegenerateDance, onRegenerateDirector }: Props) {
   const [open, setOpen] = useState(false);
   const hasPlayer = player != null;
   const [tab, setTab] = useState<"hud" | "data">(hasPlayer ? "hud" : "data");
