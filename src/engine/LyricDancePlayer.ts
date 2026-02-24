@@ -725,13 +725,19 @@ export class LyricDancePlayer {
     measureCanvas.height = 540;
     const measureCtx = measureCanvas.getContext('2d')!;
 
-    const fontFamily = payload.cinematic_direction?.visualWorld?.typographyProfile?.fontFamily?.trim() || 'Montserrat';
+    const typo = payload.cinematic_direction?.visualWorld?.typographyProfile;
+    const fontFamily = typo?.fontFamily?.trim() || 'Montserrat';
+    const fontWeight = typo?.fontWeight || 800;
+    const textTransform = typo?.textTransform || 'uppercase';
     const baseFontPx = 36;
-    const font = `${baseFontPx}px ${fontFamily}`;
+    const font = `${fontWeight} ${baseFontPx}px ${fontFamily}`;
     measureCtx.font = font;
 
     for (let i = 0; i < payload.lines.length; i++) {
-      const text = payload.lines[i]?.text ?? '';
+      const rawText = payload.lines[i]?.text ?? '';
+      const text = textTransform === 'uppercase'
+        ? rawText.toUpperCase()
+        : rawText;
       const color = payload.palette?.[2] ?? '#ffffff';
       const width = measureCtx.measureText(text).width;
 

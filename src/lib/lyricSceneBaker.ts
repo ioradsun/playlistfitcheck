@@ -88,6 +88,7 @@ type ChapterLike = {
   dominantColor?: string;
   typographyShift?: {
     fontWeight?: number;
+    colorOverride?: string;
   };
 };
 
@@ -115,6 +116,8 @@ type PrebakedData = {
   lineHeroWords: Array<string | null>;
   lineFontSizes: number[];
   lineColors: string[];
+  springInitialVelocity: number;
+  glowMax: number;
   energy: number;
   density: number;
 };
@@ -134,9 +137,10 @@ export function blendWithWhite(hex: string, whiteFraction: number): string {
   const g = parseInt(clean.slice(2, 4), 16);
   const b = parseInt(clean.slice(4, 6), 16);
   if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return "#cccccc";
-  const br = Math.round(r + (255 - r) * whiteFraction);
-  const bg = Math.round(g + (255 - g) * whiteFraction);
-  const bb = Math.round(b + (255 - b) * whiteFraction);
+  const minChannel = 170;
+  const br = Math.max(minChannel, Math.round(r + (255 - r) * whiteFraction));
+  const bg = Math.max(minChannel, Math.round(g + (255 - g) * whiteFraction));
+  const bb = Math.max(minChannel, Math.round(b + (255 - b) * whiteFraction));
   return `#${br.toString(16).padStart(2, "0")}${bg.toString(16).padStart(2, "0")}${bb.toString(16).padStart(2, "0")}`;
 }
 
@@ -149,6 +153,8 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
   const density = Number(physSpec?.density ?? 0.5);
   const storyboards = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
   const songDuration = Math.max(0.01, payload.songEnd - payload.songStart);
+  const beatResponse = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse ?? 'slam';
+  const heat = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat ?? 0.5;
 
   const shotCycle = ['Medium', 'CloseUp', 'Wide', 'CloseUp', 'Medium', 'Wide'];
   const chapterCount = Math.max(1, chapters.length || 4);
@@ -179,9 +185,16 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
       ?? 700;
     const weightScale = fontWeight >= 800 ? 1.06 : 1;
 
-    if (shot === "CloseUp") return Math.round(48 * weightScale);
-    if (shot === "Wide") return Math.round(24 * weightScale);
-    return Math.round(36 * weightScale);
+    const shotFontSizes: Record<string, number> = {
+      Wide: 22,
+      Medium: 36,
+      Close: 48,
+      CloseUp: 52,
+      ExtremeClose: 64,
+      FloatingInWorld: 30,
+    };
+
+    return Math.round((shotFontSizes[shot] ?? 36) * weightScale);
   });
 
 
@@ -190,11 +203,15 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
     const lineProgress = songDuration > 0
       ? ((line.start ?? 0) - (payload.songStart ?? 0)) / songDuration
       : 0;
-    const chapter = chapters.find((ch) =>
-      lineProgress >= (ch.startRatio ?? 0) && lineProgress < (ch.endRatio ?? 1),
-    );
-    const color = chapter?.dominantColor ?? payload.palette?.[0] ?? '#ffffff';
-    return blendWithWhite(color, 0.55);
+    const chapter = findByRatio(chapters, lineProgress);
+    const chapterIndex = chapters.indexOf(chapter as ChapterLike);
+    const colorOverride = chapter?.typographyShift?.colorOverride;
+    if (colorOverride) return colorOverride;
+
+    const textColor = payload.palette?.[2] ?? '#F0F0F0';
+    const accentColor = payload.palette?.[1] ?? '#FFD700';
+    const baseColor = chapterIndex >= 2 ? accentColor : textColor;
+    return blendWithWhite(baseColor, 0.55);
   });
 
   const chapterIndexByFrame = new Array<number>(totalFrames + 1).fill(-1);
@@ -228,6 +245,8 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number): Prebake
     lineHeroWords,
     lineFontSizes,
     lineColors,
+    springInitialVelocity: beatResponse === 'slam' ? 1.8 * heat : 0.8 * heat,
+    glowMax: beatResponse === 'slam' ? 1.2 * heat : 0.6 * heat,
     energy,
     density,
   };
@@ -263,7 +282,7 @@ function bakeFrame(
   if (beatIndex !== state.lastBeatIndex) {
     state.lastBeatIndex = beatIndex;
     state.glowBudget = 13;
-    state.springVelocity = 1.2;
+    state.springVelocity = pre.springInitialVelocity;
   }
   if (state.glowBudget > 0) state.glowBudget -= 1;
   const glowProgress = state.glowBudget / 13;
@@ -362,7 +381,7 @@ function bakeFrame(
       }
     }
 
-    const chunkGlow = lineActive && visible ? glow * 0.9 : 0;
+    const chunkGlow = lineActive && visible ? glow * pre.glowMax : 0;
     const chunkScale = lineActive && visible ? scale : 1.0;
 
 
