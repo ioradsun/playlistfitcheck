@@ -1252,6 +1252,7 @@ export type Database = {
           system_type: string
           updated_at: string
           user_id: string
+          words: Json | null
         }
         Insert: {
           artist_dna?: Json | null
@@ -1274,6 +1275,7 @@ export type Database = {
           system_type?: string
           updated_at?: string
           user_id: string
+          words?: Json | null
         }
         Update: {
           artist_dna?: Json | null
@@ -1296,6 +1298,7 @@ export type Database = {
           system_type?: string
           updated_at?: string
           user_id?: string
+          words?: Json | null
         }
         Relationships: [
           {
