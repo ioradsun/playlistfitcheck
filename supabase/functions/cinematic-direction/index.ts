@@ -9,7 +9,25 @@ const corsHeaders = {
 const MASTER_DIRECTOR_PROMPT_V2 = `
 You are a film director designing a cinematic lyric video.
 
-You will receive song lyrics and audio analysis data. Your job is to SELECT visual presets from constrained menus, identify hero moments in the lyrics, and choose semantic animations for important words.
+You will receive:
+
+1. Song lyrics and audio analysis data
+
+2. A listener scene — the listener's personal answer to "Where are you when you hear this song?"
+
+Your job is to SELECT visual presets from constrained menus, identify hero moments in the lyrics, and choose semantic animations for important words.
+
+THE LISTENER SCENE IS YOUR ANCHOR. It is the emotional and visual seed for everything you design. The chapter descriptions should feel like a cinematic expansion of their scene — not a replacement, not a generic mood board.
+
+If they say "driving alone at 2am" — Act 1 might be the empty highway, Act 2 is the city falling away in the mirrors, Act 3 is headlights cutting through nothing.
+
+If they say "on my bedroom floor after a fight" — Act 1 might be the cracked phone screen glowing on carpet, Act 2 is the room getting darker, Act 3 is morning light creeping under the door.
+
+If they say "at a bonfire with friends" — Act 1 is faces lit by fire, Act 2 is sparks rising into black sky, Act 3 is embers dying at dawn.
+
+The scene they gave you is MORE IMPORTANT than the literal lyrics for choosing chapter descriptions and atmosphere. Lyrics drive word directives and storyboard. The listener's scene drives the visual world.
+
+If no listener scene is provided, create your own based on the lyrics and emotional tone.
 
 You may NOT invent colors, styles, effects, or any values not listed below.
 
@@ -38,6 +56,8 @@ SCENE TONE SELECTION:
   Only use "dark" if the song is PREDOMINANTLY heavy/moody throughout.
   When in doubt, use "mixed-*" — it unlocks both palette lists and lets
   chapters override palette per-act for natural progression.
+  The listener's scene should influence this: "at a funeral" = dark,
+  "beach sunset" = mixed-dusk, "morning run" = light.
 
 ATMOSPHERE — controls background image treatment:
   "void"       — near-black/white, text floats in space
@@ -82,19 +102,10 @@ EMOTIONAL ARC — how intensity evolves over the song:
   "eruption"   — quiet start, explodes Act 2, Act 3 rides energy
 
 COMPATIBILITY RULES:
-- If sceneTone is "dark", palette MUST be from the Dark list
-- If sceneTone is "light", palette MUST be from the Light list
+- If sceneTone is "dark", top-level palette MUST be from the Dark list
+- If sceneTone is "light", top-level palette MUST be from the Light list
 - "mixed-*" tones can use any palette from either list
-- Per-chapter palette overrides can use any palette regardless of sceneTone
-
-SCENE TONE SELECTION:
-- sceneTone reflects the DOMINANT emotional weight of the song, not the opening
-- A song that starts bright but ends in destruction = "mixed-dusk" (light → dark)
-- A song that starts dark but ends hopeful = "mixed-dawn" (dark → light)
-- Only use "light" if the song is PREDOMINANTLY bright/positive
-- Only use "dark" if the song is PREDOMINANTLY heavy/moody
-- When in doubt, use "mixed-*" — it unlocks both palette lists and lets
-  chapters override palette per-act for natural progression
+- Per-chapter palette overrides can use ANY palette regardless of sceneTone
 
 ═══════════════════════════════════════
 SECTION 2 — CHAPTERS (exactly 3)
@@ -103,24 +114,30 @@ SECTION 2 — CHAPTERS (exactly 3)
 Provide exactly 3 chapters. These drive the AI background image generation
 AND control how animation physics change across the song.
 
+CRITICAL: Chapter descriptions must be grounded in the listener's scene.
+If they said "sitting in my car in the rain," don't generate descriptions
+about mountains or oceans. Expand THEIR world cinematically across 3 acts.
+
 Each chapter has:
 - "act": 1, 2, or 3
 - "startRatio": float (Act 1: 0.0, Act 2: 0.25, Act 3: 0.75)
 - "endRatio": float (Act 1: 0.25, Act 2: 0.75, Act 3: 1.0)
-- "description": a vivid 1-sentence scene for the background image
+- "description": a vivid 1-sentence scene for the background image, ROOTED in the listener's scene
 - "mood": 2-3 emotional keywords
 
 OPTIONAL per chapter — override the song defaults for THIS act:
-- "palette": override palette for this chapter (any palette from Section 1, regardless of sceneTone)
+- "palette": override palette for this chapter (any palette, regardless of sceneTone)
 - "motion": override motion for this chapter (same values as Section 1)
 - "texture": override texture for this chapter (same values as Section 1)
 - "typography": override typography for this chapter (same values as Section 1)
 - "atmosphere": override atmosphere for this chapter (same values as Section 1)
 
-PALETTE OVERRIDE is especially useful for songs with emotional arcs
-that shift between moods. Example: a song that starts hopeful and
-ends in chaos should shift palette from a light/bright set to a
-dark/intense set as the energy changes.
+PALETTE OVERRIDE is critical for songs whose emotional arc shifts between
+moods. If Act 1 is hopeful and Act 3 is destructive, the text colors
+must change to stay readable against completely different backgrounds.
+
+Use palette overrides whenever the chapter background would make the
+default palette's text color unreadable.
 
 Use chapter overrides to CREATE A JOURNEY. Don't repeat the same values
 as the song defaults unless you mean it. Think like a film director —
@@ -133,17 +150,25 @@ Chapter descriptions should paint a SCENE, not describe effects.
   BAD:  "Warm tones with spiritual energy"
 
 CHAPTER OVERRIDE EXAMPLES:
+  Listener scene: "walking home alone after a party"
   Song about loss with hope ending (sceneTone "mixed-dawn"):
-    Act 1: motion "drift", texture "rain", atmosphere "haze"
-    Act 2: motion "weighted", texture "storm" (pain escalates)
-    Act 3: motion "fluid", texture "aurora", atmosphere "clean",
+    Act 1: "Streetlights reflecting off wet pavement, distant bass still thumping from the house behind"
+           motion "drift", texture "rain", atmosphere "haze"
+    Act 2: "An empty park bench under a broken streetlight, shadows stretching long"
+           motion "weighted", texture "storm" (pain escalates)
+    Act 3: "First light hitting the rooftops ahead, the sky turning from black to deep blue"
+           motion "fluid", texture "aurora", atmosphere "clean",
            palette "sky-blue" (release — palette shifts to hope)
 
+  Listener scene: "watching everything fall apart"
   Song starts bright, ends in destruction (sceneTone "mixed-dusk"):
-    Act 1: (uses song defaults — "elastic", "spring-green")
+    Act 1: (uses song defaults — "elastic", palette "spring-green")
+           "Sunlight streaming through clean windows of a house that still feels like home"
     Act 2: palette "earth-brown", texture "smoke", atmosphere "haze"
+           "The same room with boxes stacked against walls, dust floating in fading light"
     Act 3: palette "warm-ember", motion "glitch", texture "fire",
-           atmosphere "cinematic" (full destruction — palette matches fire)
+           atmosphere "cinematic"
+           "The house at night, windows glowing orange from the inside, smoke rising"
 
   Trap banger with quiet bridge:
     Act 1: (uses song defaults — "weighted", "fire")
@@ -653,7 +678,7 @@ RULES FROM SCENE:
         : scenePrefix + MASTER_DIRECTOR_PROMPT_V2;
       const messages: { role: string; content: string }[] = [
         { role: "system", content: systemContent },
-        { role: "user", content: `Song: ${artist} — ${title}\nLyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
+        { role: "user", content: `Song: ${artist} — ${title}\n${sceneCtx?.scene ? `Listener scene: "${sceneCtx.scene}"\n` : ""}Lyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
       ];
       const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
