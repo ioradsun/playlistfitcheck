@@ -71,7 +71,7 @@ export function PublishLyricDanceButton({
         .eq("id", user.id)
         .single();
 
-      const displayName = profile?.display_name || artistName || "artist";
+      const displayName = profile?.display_name || "artist";
       const artistSlug = slugify(displayName);
       const songSlug = slugify(songTitle || "untitled");
 
