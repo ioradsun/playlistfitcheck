@@ -152,7 +152,7 @@ export function PublishLyricDanceButton({
           .eq("artist_slug", artistSlug)
           .eq("song_slug", songSlug)
           .single()
-          .then(({ data: danceRow }) => {
+          .then(({ data: danceRow }: any) => {
             if (!danceRow?.id) return;
             supabase.functions.invoke("generate-chapter-images", {
               body: {
