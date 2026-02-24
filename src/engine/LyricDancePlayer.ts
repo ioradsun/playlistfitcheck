@@ -911,20 +911,9 @@ export class LyricDancePlayer {
 
   destroy(): void {
     this.destroyed = true;
+    this.stopHealthMonitor();
     cancelAnimationFrame(this.rafHandle);
-
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    const tctx = this.textCanvas.getContext("2d", { alpha: true });
-    if (tctx) tctx.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
-
-    // Only clear local reference, not the global cache
-    this.chunks = new Map();
-    this.timeline = [];
-    this.bgCaches = [];
-    this.bgCacheCount = 0;
-
+...
     this.audio.pause();
     this.audio.src = "";
   }
