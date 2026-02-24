@@ -1311,6 +1311,7 @@ function bakeFrame(
 
           return {
             id: `${wm.lineIndex}-${wm.wordIndex}`,
+            text: wm.word,
             x: canvasX + finalOffsetX,
             y: canvasY + finalOffsetY,
             alpha: finalAlpha,
