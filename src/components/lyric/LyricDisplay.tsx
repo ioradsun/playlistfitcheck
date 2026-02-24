@@ -113,7 +113,7 @@ export interface LyricMetadata {
 
 export interface LyricData {
   title: string;
-  artist: string;
+  artist?: string; // Transcription-detected song artist — display only, NOT user identity
   lines: LyricLine[];
   hooks?: LyricHook[];
   metadata?: LyricMetadata;
