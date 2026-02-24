@@ -96,6 +96,25 @@ export function LyricFitTab({
       .then(({ data }) => { if (data?.display_name) artistNameRef.current = data.display_name; });
   }, [user]);
 
+  // Debounced scene resolution
+  useEffect(() => {
+    if (!sceneDescription.trim() || sceneDescription.length < 10) return;
+    const timer = setTimeout(async () => {
+      setResolvingScene(true);
+      try {
+        const { data } = await supabase.functions.invoke('resolve-scene-context', {
+          body: { description: sceneDescription.trim() },
+        });
+        if (data && !data.error) setResolvedScene(data);
+      } catch (e) {
+        console.error('Scene resolve failed:', e);
+      } finally {
+        setResolvingScene(false);
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [sceneDescription]);
+
   useEffect(() => {
     if (!detectedGrid || beatGrid) return;
     setBeatGrid(detectedGrid);
