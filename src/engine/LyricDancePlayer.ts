@@ -1183,7 +1183,7 @@ export class LyricDancePlayer {
   }
 
   private getResolvedFont(): string {
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const typoKey = cd?.typography as string | undefined;
     if (typoKey && LyricDancePlayer.TYPOGRAPHY_FONTS[typoKey]) {
       return LyricDancePlayer.TYPOGRAPHY_FONTS[typoKey];
@@ -1210,7 +1210,7 @@ export class LyricDancePlayer {
   }
 
   private async preloadFonts(): Promise<void> {
-    const cd = this.payload?.cinematic_direction as Record<string, unknown> | null;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const typoKey = cd?.typography as string;
     const fontMap: Record<string, string> = {
       'bold-impact': 'Oswald',
