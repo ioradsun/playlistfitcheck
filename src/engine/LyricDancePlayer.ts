@@ -1180,12 +1180,22 @@ export class LyricDancePlayer {
     const lines = payload.lines ?? [];
 
     if (words.length > 0) {
-      // Replicate the baker's phrase-grouping to generate matching 3-part keys:
-      // ${lineIndex}-${groupIndex}-${wordIndex}
+      // Replicate the baker's exact phrase-grouping (including mergeShortGroups)
+      // to generate matching 3-part keys: ${lineIndex}-${groupIndex}-${wordIndex}
       const MAX_GROUP_SIZE = 5;
-      const MIN_GROUP_DURATION = 0.3;
+      const MIN_GROUP_DURATION = 0.4; // must match baker
 
-      const lineMap = new Map<number, Array<{ word: string; start: number; end: number }>>();
+      type WordEntry = { word: string; start: number; end: number };
+      type PhraseGroup = {
+        words: WordEntry[];
+        start: number;
+        end: number;
+        lineIndex: number;
+        groupIndex: number;
+      };
+
+      // Step 1: Assign each word to a line (same logic as baker)
+      const lineMap = new Map<number, WordEntry[]>();
       for (const w of words) {
         const lineIndex = lines.findIndex(
           (l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999),
@@ -1195,25 +1205,21 @@ export class LyricDancePlayer {
         lineMap.get(li)!.push(w);
       }
 
+      // Step 2: Build phrase groups per line (same as baker's buildPhraseGroups)
+      const allGroups: PhraseGroup[] = [];
       for (const [lineIdx, lineWords] of lineMap) {
+        let current: WordEntry[] = [];
         let groupIdx = 0;
-        let current: Array<{ word: string; start: number; end: number }> = [];
 
         const flushGroup = () => {
           if (current.length === 0) return;
-          for (let wi = 0; wi < current.length; wi++) {
-            const key = `${lineIdx}-${groupIdx}-${wi}`;
-            const displayWord = textTransform === 'uppercase'
-              ? current[wi].word.toUpperCase()
-              : current[wi].word;
-            this.chunks.set(key, {
-              id: key,
-              text: displayWord,
-              color: '#ffffff',
-              font,
-              width: measureCtx.measureText(displayWord).width,
-            });
-          }
+          allGroups.push({
+            words: [...current],
+            start: current[0].start,
+            end: current[current.length - 1].end,
+            lineIndex: lineIdx,
+            groupIndex: groupIdx,
+          });
           groupIdx += 1;
           current = [];
         };
@@ -1233,7 +1239,56 @@ export class LyricDancePlayer {
         }
       }
 
-      console.log('[PLAYER] chunk keys sample:', [...this.chunks.keys()].slice(0, 5));
+      // Sort by start time (same as baker)
+      allGroups.sort((a, b) => a.start - b.start);
+
+      // Step 3: Merge short groups (same as baker's mergeShortGroups)
+      const merged: PhraseGroup[] = [];
+      let gi = 0;
+      while (gi < allGroups.length) {
+        const g = allGroups[gi];
+        const duration = g.end - g.start;
+        if (duration < MIN_GROUP_DURATION && gi < allGroups.length - 1) {
+          const next = allGroups[gi + 1];
+          if (next.lineIndex === g.lineIndex && (g.words.length + next.words.length) <= MAX_GROUP_SIZE) {
+            merged.push({
+              words: [...g.words, ...next.words],
+              start: g.start,
+              end: next.end,
+              lineIndex: g.lineIndex,
+              groupIndex: g.groupIndex,
+            });
+            gi += 2;
+            continue;
+          }
+        }
+        merged.push(g);
+        gi += 1;
+      }
+
+      // Step 4: Enforce min duration (same as baker)
+      const finalGroups = merged.map((g) => ({
+        ...g,
+        end: Math.max(g.end, g.start + MIN_GROUP_DURATION),
+      }));
+
+      // Step 5: Register every word in every group
+      for (const group of finalGroups) {
+        for (let wi = 0; wi < group.words.length; wi++) {
+          const key = `${group.lineIndex}-${group.groupIndex}-${wi}`;
+          const displayWord = textTransform === 'uppercase'
+            ? group.words[wi].word.toUpperCase()
+            : group.words[wi].word;
+          this.chunks.set(key, {
+            id: key,
+            text: displayWord,
+            color: '#ffffff',
+            font,
+            width: measureCtx.measureText(displayWord).width,
+          });
+        }
+      }
+
       return;
     }
 
