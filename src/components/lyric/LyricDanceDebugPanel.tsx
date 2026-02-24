@@ -675,9 +675,10 @@ REMINDER: You MUST assign iconGlyph to at least 10 storyboard entries spread acr
 
 const CINEMATIC_PROMPT_PREVIEW = `You are a film director designing a cinematic lyric video.
 
-You will receive song lyrics and audio analysis data. Your job is to SELECT visual presets from constrained menus, assign icons to key lyric lines, and choose semantic animations for important words.
+You will receive song lyrics and audio analysis data. Your job is to SELECT visual presets from constrained menus, identify hero moments in the lyrics, and choose semantic animations for important words.
 
-You may NOT invent colors, styles, effects, glyph names, or any values not listed below.
+You may NOT invent colors, styles, effects, or any values not listed below.
+
 Return ONLY valid JSON. No markdown. No explanation. No preamble.
 
 ═══════════════════════════════════════
@@ -759,10 +760,10 @@ Chapter descriptions should paint a SCENE, not describe effects.
   BAD:  "Dark moody atmosphere with particles"
 
 ═══════════════════════════════════════
-SECTION 3 — STORYBOARD (sparse, icons only)
+SECTION 3 — STORYBOARD (sparse)
 ═══════════════════════════════════════
 
-The storyboard is SPARSE. Only include entries for lines that need an icon OR a special heroWord callout. Do NOT include an entry for every lyric line.
+The storyboard is SPARSE. Only include entries for lines that have a strong emotional or visual moment. Do NOT include an entry for every lyric line.
 
 Target: 15-25 storyboard entries out of all lyric lines.
 
@@ -771,12 +772,6 @@ Each storyboard entry has:
 - "heroWord": the most emotionally significant word on that line (UPPERCASE)
 - "entryStyle": pick from entries list below
 - "exitStyle": pick from exits list below
-
-OPTIONAL per entry (include when assigning an icon):
-- "iconGlyph": pick from glyphs list below
-- "iconStyle": "ghost" | "outline" | "filled"
-- "iconPosition": "behind" | "above" | "beside" | "replace"
-- "iconScale": number (default 2.0, range 1.5-3.0)
 
 ENTRY STYLES:
   slam-down, punch-in, explode-in, snap-in, rise, materialize,
@@ -788,31 +783,6 @@ EXIT STYLES:
   vanish, linger, evaporate, blur-out, spin-out,
   scatter-letters, peel-off, peel-reverse, cascade-down, cascade-up
 
-——— ICON RULES ———
-
-Assign iconGlyph to 10-15 storyboard entries spread across the song.
-
-AVAILABLE GLYPHS:
-  fire, water-drop, lightning, snowflake, sun, moon, star, cloud,
-  rain, wind, leaf, flower, tree, mountain, wave, heart, broken-heart,
-  eye, hand-open, hand-fist, crown, skull, wings, feather, diamond,
-  clock, hourglass, lock, key, chain, anchor, compass, arrow-up,
-  arrow-down, spiral, infinity, music-note, microphone, speaker,
-  headphones, camera, film, book, pen, brush, palette, mask, mirror,
-  door, window, house, car, road, bridge, city, globe, flag, sword,
-  shield, torch, candle, smoke, ghost, shadow, sparkle, burst, ripple,
-  orbit, target, crosshair, fingerprint, dna, atom, pill, coin
-
-ICON POSITION DISTRIBUTION:
-- "behind" — atmospheric mood icon behind the word. ~45% of icons.
-- "above" — annotation floating above the word. ~28% of icons.
-- "beside" — companion next to the word. ~17% of icons.
-- "replace" — icon REPLACES text entirely. 1-2 max per song.
-
-ICON COVERAGE:
-- Every act MUST have at least 3 icons
-- Spread icons across the full song — do not cluster them
-
 ═══════════════════════════════════════
 SECTION 4 — WORD DIRECTIVES (semantic animation)
 ═══════════════════════════════════════
@@ -820,9 +790,19 @@ SECTION 4 — WORD DIRECTIVES (semantic animation)
 For 15-25 emotionally or visually significant words across the song,
 choose animations that make the word's LITERAL MEANING visible.
 
+If the word means upward motion → it should move up.
+If the word means destruction → it should break apart.
+If the word means cold → it should trail frost.
+If the word means clarity → it should sharpen from blur.
+If the word means spinning → it should rotate.
+If the word means echo → it should leave ghost copies.
+If the word means frozen → it should stop dead.
+
+Let the word tell you what it needs.
+
 Each word directive has:
 - "word": the word (lowercase)
-- "emphasisLevel": 1-5
+- "emphasisLevel": 1-5 (1=subtle, 5=showstopper)
 - "entry": pick from entry styles list above
 - "behavior": pick from behaviors list below
 - "exit": pick from exit styles list above
@@ -830,6 +810,7 @@ Each word directive has:
 OPTIONAL per word:
 - "trail": particle trail effect (see list below)
 - "ghostTrail": true — leaves fading echo copies (2-4 per song)
+- "ghostDirection": "up" | "down" | "left" | "right" | "radial"
 - "letterSequence": true — letters animate individually (3-5 per song)
 - "visualMetaphor": freeform string describing the intended visual
 
@@ -841,6 +822,15 @@ TRAILS:
   ember, frost, spark-burst, dust-impact, light-rays, gold-coins,
   dark-absorb, motion-trail, memory-orbs, none
 
+MODIFIER RULES:
+- ghostTrail: for echo, repeat, reverb, haunt, voices, forever, again (2-4 per song)
+- letterSequence: for break, shatter, split, count, crumble, apart, scatter (3-5 per song)
+- freeze behavior: for freeze, stop, still, stuck, trapped, numb (1-2 per song)
+- Choose animations by what the word MEANS, not how loud it is
+- Abstract emotional words (love, truth, hope) → use emphasisLevel + visualMetaphor
+- Concrete action words (fly, crash, burn, freeze) → use semantic entry/exit/trail
+- Not every word needs a trail. Most need "none" or omit the field.
+
 ═══════════════════════════════════════
 SECTION 5 — OUTPUT SCHEMA
 ═══════════════════════════════════════
@@ -850,10 +840,10 @@ Return this exact JSON structure. All top-level keys are required.
 VALIDATION:
 - sceneTone, atmosphere, palette, motion, typography, texture, emotionalArc are ALL required strings
 - chapters array MUST have exactly 3 entries
-- storyboard array MUST have 15-25 entries with iconGlyph on at least 10
+- storyboard array MUST have 15-25 entries
 - wordDirectives MUST have 15-25 entries
 - All enum values MUST be from the lists above — do NOT invent values
-- Do NOT include forbidden fields: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve
+- Do NOT include forbidden fields: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve, iconGlyph, iconStyle, iconPosition, iconScale
 
 Return JSON only. No markdown fences. No explanation.`;
 

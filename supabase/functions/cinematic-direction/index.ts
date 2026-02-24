@@ -9,9 +9,10 @@ const corsHeaders = {
 const MASTER_DIRECTOR_PROMPT_V2 = `
 You are a film director designing a cinematic lyric video.
 
-You will receive song lyrics and audio analysis data. Your job is to SELECT visual presets from constrained menus, assign icons to key lyric lines, and choose semantic animations for important words.
+You will receive song lyrics and audio analysis data. Your job is to SELECT visual presets from constrained menus, identify hero moments in the lyrics, and choose semantic animations for important words.
 
-You may NOT invent colors, styles, effects, glyph names, or any values not listed below.
+You may NOT invent colors, styles, effects, or any values not listed below.
+
 Return ONLY valid JSON. No markdown. No explanation. No preamble.
 
 ═══════════════════════════════════════
@@ -95,10 +96,10 @@ Chapter descriptions should paint a SCENE, not describe effects.
   BAD:  "Warm tones with spiritual energy"
 
 ═══════════════════════════════════════
-SECTION 3 — STORYBOARD (sparse, icons only)
+SECTION 3 — STORYBOARD (sparse)
 ═══════════════════════════════════════
 
-The storyboard is SPARSE. Only include entries for lines that need an icon OR a special heroWord callout. Do NOT include an entry for every lyric line.
+The storyboard is SPARSE. Only include entries for lines that have a strong emotional or visual moment. Do NOT include an entry for every lyric line.
 
 Target: 15-25 storyboard entries out of all lyric lines.
 
@@ -107,12 +108,6 @@ Each storyboard entry has:
 - "heroWord": the most emotionally significant word on that line (UPPERCASE)
 - "entryStyle": pick from entries list below
 - "exitStyle": pick from exits list below
-
-OPTIONAL per entry (include when assigning an icon):
-- "iconGlyph": pick from glyphs list below
-- "iconStyle": "ghost" | "outline" | "filled"
-- "iconPosition": "behind" | "above" | "beside" | "replace"
-- "iconScale": number (default 2.0, range 1.5-3.0)
 
 ENTRY STYLES:
   slam-down, punch-in, explode-in, snap-in, rise, materialize,
@@ -123,41 +118,6 @@ EXIT STYLES:
   shatter, snap-out, burn-out, dissolve, drift-up, sink, cut-out,
   vanish, linger, evaporate, blur-out, spin-out,
   scatter-letters, peel-off, peel-reverse, cascade-down, cascade-up
-
-——— ICON RULES ———
-
-Assign iconGlyph to 10-15 storyboard entries spread across the song.
-Icons are visual metaphors — they tell the story alongside the lyrics.
-
-AVAILABLE GLYPHS (use ONLY these names):
-  fire, water-drop, lightning, snowflake, sun, moon, star, cloud,
-  rain, wind, leaf, flower, tree, mountain, wave, heart, broken-heart,
-  eye, hand-open, hand-fist, crown, skull, wings, feather, diamond,
-  clock, hourglass, lock, key, chain, anchor, compass, arrow-up,
-  arrow-down, spiral, infinity, music-note, microphone, speaker,
-  headphones, camera, film, book, pen, brush, palette, mask, mirror,
-  door, window, house, car, road, bridge, city, globe, flag, sword,
-  shield, torch, candle, smoke, ghost, shadow, sparkle, burst, ripple,
-  orbit, target, crosshair, fingerprint, dna, atom, pill, coin
-
-Do NOT invent glyph names. Any name not in this list will fail to render.
-
-ICON POSITION DISTRIBUTION:
-- "behind" — atmospheric mood icon behind the word. ~45% of icons.
-  Use iconStyle: "ghost", iconScale: 2.0-3.0
-- "above" — annotation floating above the word. ~28% of icons.
-  Use iconStyle: "outline", iconScale: 1.5-2.0
-- "beside" — companion next to the word. ~17% of icons.
-  Use iconStyle: "outline", iconScale: 1.5-2.0
-- "replace" — icon REPLACES text entirely. 1-2 max per song.
-  Use iconStyle: "filled", iconScale: 2.0-2.5
-
-ICON COVERAGE:
-- Every act MUST have at least 3 icons
-- Spread icons across the full song — do not cluster them
-- Choose lines where a visual symbol amplifies emotional meaning
-- If the song has fewer than 30 lines, aim for 10 icons minimum
-- If the song has 30+ lines, aim for 12-15 icons
 
 ═══════════════════════════════════════
 SECTION 4 — WORD DIRECTIVES (semantic animation)
@@ -251,21 +211,13 @@ Return this exact JSON structure. All top-level keys are required.
       "lineIndex": 0,
       "heroWord": "RAIN",
       "entryStyle": "rise",
-      "exitStyle": "dissolve",
-      "iconGlyph": "rain",
-      "iconStyle": "ghost",
-      "iconPosition": "behind",
-      "iconScale": 2.5
+      "exitStyle": "dissolve"
     },
     {
       "lineIndex": 5,
       "heroWord": "ROAD",
       "entryStyle": "drift-in",
-      "exitStyle": "evaporate",
-      "iconGlyph": "road",
-      "iconPosition": "beside",
-      "iconStyle": "outline",
-      "iconScale": 2.0
+      "exitStyle": "evaporate"
     },
     {
       "lineIndex": 12,
@@ -311,10 +263,9 @@ VALIDATION:
 - sceneTone, atmosphere, palette, motion, typography, texture, emotionalArc are ALL required strings
 - chapters array MUST have exactly 3 entries
 - storyboard array MUST have 15-25 entries
-- storyboard MUST include iconGlyph on at least 10 entries
 - wordDirectives MUST have 15-25 entries
 - All enum values MUST be from the lists above — do NOT invent values
-- Do NOT include fields named: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve
+- Do NOT include fields named: beatAlignment, emotionalIntent, visualTreatment, particleBehavior, transitionToNext, dominantColor, colorHex, physicsProfile, cameraLanguage, tensionCurve, iconGlyph, iconStyle, iconPosition, iconScale
 - If you include ANY of those forbidden fields, the output is INVALID
 
 Return JSON only. No markdown fences. No explanation.
@@ -404,6 +355,7 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
       "beatAlignment", "emotionalIntent", "visualTreatment",
       "particleBehavior", "transitionToNext", "dominantColor",
       "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "text",
+      "iconGlyph", "iconStyle", "iconPosition", "iconScale",
     ];
 
     for (const entry of raw.storyboard) {
@@ -464,37 +416,9 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
     raw.texture = "dust";
   }
 
-  const VALID_GLYPHS = new Set([
-    "fire", "water-drop", "lightning", "snowflake", "sun", "moon", "star", "cloud",
-    "rain", "wind", "leaf", "flower", "tree", "mountain", "wave", "heart", "broken-heart",
-    "eye", "hand-open", "hand-fist", "crown", "skull", "wings", "feather", "diamond",
-    "clock", "hourglass", "lock", "key", "chain", "anchor", "compass", "arrow-up",
-    "arrow-down", "spiral", "infinity", "music-note", "microphone", "speaker",
-    "headphones", "camera", "film", "book", "pen", "brush", "palette", "mask", "mirror",
-    "door", "window", "house", "car", "road", "bridge", "city", "globe", "flag", "sword",
-    "shield", "torch", "candle", "smoke", "ghost", "shadow", "sparkle", "burst", "ripple",
-    "orbit", "target", "crosshair", "fingerprint", "dna", "atom", "pill", "coin",
-  ]);
-
-  if (Array.isArray(raw.storyboard)) {
-    for (const entry of raw.storyboard) {
-      if (entry.iconGlyph && !VALID_GLYPHS.has(entry.iconGlyph)) {
-        console.warn(`[CINEMATIC] Invalid iconGlyph: "${entry.iconGlyph}" on line ${entry.lineIndex} — removing`);
-        delete entry.iconGlyph;
-        delete entry.iconStyle;
-        delete entry.iconPosition;
-        delete entry.iconScale;
-      }
-    }
-  }
-
   const storyboard = raw.storyboard ?? [];
-  const iconCount = storyboard.filter((s: any) => s.iconGlyph).length;
   const wordCount = Object.keys(raw.wordDirectives ?? {}).length;
-  console.log(`[CINEMATIC] Storyboard: ${storyboard.length} entries, ${iconCount} icons, ${wordCount} word directives`);
-  if (iconCount < 5) {
-    console.warn(`[CINEMATIC] WARNING: Only ${iconCount} icons — expected 10-15`);
-  }
+  console.log(`[CINEMATIC] Storyboard: ${storyboard.length} entries, ${wordCount} word directives`);
 
   return raw;
 }
@@ -622,7 +546,7 @@ Text style: ${sceneCtx.textStyle === 'dark'
         : scenePrefix + MASTER_DIRECTOR_PROMPT_V2;
       const messages: { role: string; content: string }[] = [
         { role: "system", content: systemContent },
-        { role: "user", content: `Song: ${artist} — ${title}\nLyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.\n\nREMINDER: You MUST assign iconGlyph to at least 10 storyboard entries spread across all 3 chapters. Each chapter needs at least 3 icons. Use position "behind"/"above"/"beside"/"replace" and style "ghost"/"outline"/"filled". This is mandatory.` },
+        { role: "user", content: `Song: ${artist} — ${title}\nLyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
       ];
       const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -696,16 +620,8 @@ Text style: ${sceneCtx.textStyle === 'dark'
       // Don't fail — return with warnings so debug panel can still show data
     }
 
-    // Icon count diagnostic
-    const storyboard = Array.isArray(parsed.storyboard) ? parsed.storyboard : [];
-    const iconCount = storyboard.filter((s: any) => s.iconGlyph).length;
-    console.log(`[CINEMATIC] Icons assigned: ${iconCount} / ${storyboard.length} lines`);
-    if (iconCount < 5) {
-      console.warn(`[CINEMATIC] WARNING: Only ${iconCount} icons assigned — expected 10-15`);
-    }
-
     const saved = await persistCinematicDirection(parsed, lyricId);
-    console.log(`[cinematic-direction] ✓ Generated for "${title}" by "${artist}" — icons: ${iconCount}`);
+    console.log(`[cinematic-direction] ✓ Generated for "${title}" by "${artist}"`);
 
     return new Response(JSON.stringify({ cinematicDirection: parsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
