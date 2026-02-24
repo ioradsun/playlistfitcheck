@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
+import { Download } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import { getSessionId } from "@/lib/sessionId";
@@ -513,61 +515,71 @@ export default function ShareableLyricDance() {
           />
         )}
 
-        {!showCover && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-20">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleExport("9:16");
-              }}
-              disabled={!!exporting}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-mono bg-black/70 border border-white/20 text-white hover:bg-black/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {exporting === "9:16" ? (
-                <span className="animate-pulse">Recording 9:16...</span>
-              ) : (
-                <>↓ <span className="text-[#00FF87]">9:16</span> TikTok</>
-              )}
-            </button>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleExport("16:9");
-              }}
-              disabled={!!exporting}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-mono bg-black/70 border border-white/20 text-white hover:bg-black/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {exporting === "16:9" ? (
-                <span className="animate-pulse">Recording 16:9...</span>
-              ) : (
-                <>↓ <span className="text-[#00FF87]">16:9</span> YouTube</>
-              )}
-            </button>
-          </div>
-        )}
+        {/* Export buttons removed from canvas — moved to bottom bar */}
       </div>
 
-      {/* Comment input */}
+      {/* Bottom action bar */}
       <div className="w-full" style={{ background: "#0a0a0a" }}>
         <div className="max-w-[480px] mx-auto px-5 py-4 space-y-3">
-          <AnimatePresence mode="wait">
-            {hasSubmitted ? (
-              <motion.p key="notified" initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}
-                onAnimationComplete={() => { setTimeout(() => setHasSubmitted(false), 2500); }}
-                className="text-center text-sm text-white/30">FMLY Notified</motion.p>
-            ) : (
-              <motion.div key="input" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="relative">
-                <input
-                  type="text" value={inputText} onChange={e => setInputText(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
-                  placeholder="DROP YOUR TAKE LIVE" maxLength={200}
-                  className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 pr-20 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/20 pointer-events-none">Press Enter</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className="flex items-center gap-3">
+            {/* Download button */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  disabled={!!exporting}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  aria-label="Download video"
+                >
+                  {exporting ? (
+                    <span className="text-[9px] font-mono animate-pulse text-white/50">REC</span>
+                  ) : (
+                    <Download size={16} />
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="w-auto min-w-[180px] p-1 bg-[#1a1a1a] border-white/10">
+                <button
+                  onClick={() => handleExport("9:16")}
+                  disabled={!!exporting}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
+                >
+                  <span className="text-white/30">9:16</span>
+                  <span className="text-white/50">·</span>
+                  <span>TikTok / Reels</span>
+                </button>
+                <button
+                  onClick={() => handleExport("16:9")}
+                  disabled={!!exporting}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
+                >
+                  <span className="text-white/30">16:9</span>
+                  <span className="text-white/50">·</span>
+                  <span>YouTube</span>
+                </button>
+              </PopoverContent>
+            </Popover>
+
+            {/* Comment input */}
+            <div className="flex-1">
+              <AnimatePresence mode="wait">
+                {hasSubmitted ? (
+                  <motion.p key="notified" initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}
+                    onAnimationComplete={() => { setTimeout(() => setHasSubmitted(false), 2500); }}
+                    className="text-center text-sm text-white/30">FMLY Notified</motion.p>
+                ) : (
+                  <motion.div key="input" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="relative">
+                    <input
+                      type="text" value={inputText} onChange={e => setInputText(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
+                      placeholder="DROP YOUR TAKE LIVE" maxLength={200}
+                      className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 pr-20 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/20 pointer-events-none">Press Enter</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
       </div>
 
