@@ -41,6 +41,7 @@ interface Props {
   versionMeta: any | null;
   setVersionMeta: (v: any | null) => void;
   beatGrid?: BeatGridData | null;
+  setWords?: (w: Array<{ word: string; start: number; end: number }> | null) => void;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;

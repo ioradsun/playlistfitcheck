@@ -56,6 +56,7 @@ interface Props {
   bgImageUrl: string | null;
   setBgImageUrl: (u: string | null) => void;
   generationStatus: GenerationStatus;
+  words?: Array<{ word: string; start: number; end: number }> | null;
   onRetry?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
