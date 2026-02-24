@@ -103,6 +103,7 @@ Each chapter has:
 
 OPTIONAL per chapter — override the song defaults for THIS act:
 - "palette": override palette for this chapter (any palette, regardless of sceneTone)
+- "palette": override palette for this chapter (any palette, regardless of sceneTone)
 - "motion": override motion for this chapter (same values as Section 1)
 - "texture": override texture for this chapter (same values as Section 1)
 - "typography": override typography for this chapter (same values as Section 1)
