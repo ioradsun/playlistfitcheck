@@ -537,9 +537,36 @@ export default function ShareableLyricDance() {
               });
           });
         }}
-        onRegenerateDance={() => {
-          toast.info("Reloading dance…");
-          window.location.reload();
+        onRegenerateDance={async () => {
+          if (!data) return;
+          toast.info("Syncing words from saved project…");
+          try {
+            // Find the saved_lyrics row that matches this song by user_id + title
+            const { data: lyricRow } = await supabase
+              .from("saved_lyrics")
+              .select("words")
+              .eq("user_id", data.user_id)
+              .eq("title", data.song_name)
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const wordsPayload = lyricRow?.words ?? null;
+            console.log("[DEBUG] words from saved_lyrics:", Array.isArray(wordsPayload) ? wordsPayload.length : wordsPayload);
+
+            // Update the shareable dance row with fresh words
+            const { error } = await supabase
+              .from("shareable_lyric_dances" as any)
+              .update({ words: wordsPayload, updated_at: new Date().toISOString() } as any)
+              .eq("id", data.id);
+
+            if (error) throw error;
+            toast.success(`Synced ${Array.isArray(wordsPayload) ? wordsPayload.length : 0} words — reloading…`);
+            setTimeout(() => window.location.reload(), 800);
+          } catch (e: any) {
+            console.error("[DEBUG] Dance sync error:", e);
+            toast.error(e.message || "Failed to sync words");
+          }
         }}
         data={{
           songDna: {
