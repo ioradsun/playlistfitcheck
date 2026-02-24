@@ -483,6 +483,7 @@ Text style: ${sceneCtx.textStyle === 'dark'
       } catch (e) {
         console.warn("[cinematic-direction] Icon retry failed, using original");
       }
+    }
 
     // Enforce numeric ranges
     const visualWorld = (parsed.visualWorld ?? {}) as Record<string, unknown>;
