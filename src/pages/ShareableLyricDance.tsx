@@ -333,6 +333,31 @@ export default function ShareableLyricDance() {
 
   // cinematic_direction gate ensures player always has it at construction — no late update needed
 
+  // ── Realtime comment comets ─────────────────────────────────────────
+  useEffect(() => {
+    if (!data?.id) return;
+    const channel = supabase
+      .channel(`dance-comments-${data.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'lyric_dance_comments',
+          filter: `dance_id=eq.${data.id}`,
+        },
+        (payload: any) => {
+          const text = payload.new?.text;
+          if (text && playerRef.current) {
+            playerRef.current.fireComment(text);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [data?.id]);
+
   // ── Mute toggle ─────────────────────────────────────────────────────
 
   const handleMuteToggle = useCallback(() => {
