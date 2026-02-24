@@ -1921,7 +1921,6 @@ export class LyricDancePlayer {
         img.src = url;
       }))
     );
-    console.log(`[PLAYER] Loaded ${this.chapterImages.filter(i => i.complete && i.naturalWidth > 0).length}/${urls.length} chapter images`);
   }
 
   private drawChapterImage(chapterIdx: number, nextChapterIdx: number, blend: number): void {
