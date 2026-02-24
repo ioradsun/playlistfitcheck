@@ -10,6 +10,7 @@
 import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
+import type { SceneContext } from "@/lib/sceneContexts";
 import {
   bakeSceneChunked,
   type BakedTimeline,
