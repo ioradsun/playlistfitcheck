@@ -1,7 +1,7 @@
 /**
  * FitTab — Displays analysis results with waveform + beat markers.
- * No auto-triggering; pipeline runs in LyricFitTab parent.
- * "Test Again" button to re-run analysis.
+ * Centered single-column layout for readability.
+ * Pipeline runs in LyricFitTab parent.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
