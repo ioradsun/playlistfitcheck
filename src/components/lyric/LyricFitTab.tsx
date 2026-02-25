@@ -425,7 +425,18 @@ export function LyricFitTab({
         // Section images are generated after dance publish (PublishLyricDanceButton)
 
         const derivedPreset = (enrichedDirection as any)?.presetDerivation ?? null;
-        if (derivedPreset) setSceneManifest(derivedPreset);
+        if (derivedPreset) {
+          setSceneManifest(derivedPreset);
+        } else {
+          // Derive a scene manifest from available physics spec / song DNA
+          const { buildManifestFromDna } = await import("@/engine/buildManifestFromDna");
+          const builtManifest = buildManifestFromDna({
+            ...(songDna || {}),
+            physicsSpec: songDna?.physicsSpec || {},
+            cinematicDirection: enrichedDirection,
+          });
+          if (builtManifest) setSceneManifest(builtManifest);
+        }
 
         // Persist cinematic direction back to song_dna in DB
         if (savedIdRef.current) {
