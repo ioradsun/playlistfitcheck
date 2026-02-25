@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
-import { AppSidebar } from "@/components/AppSidebar";
 
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Music, ChevronRight, ArrowLeft } from "lucide-react";
@@ -27,6 +26,7 @@ const SongFitTab = lazy(() => import("@/components/songfit/SongFitTab").then((mo
 const HookFitTab = lazy(() => import("@/components/hookfit/HookFitTab").then((module) => ({ default: module.HookFitTab })));
 const DreamFitTab = lazy(() => import("@/components/dreamfit/DreamFitTab").then((module) => ({ default: module.DreamFitTab })));
 const VibeFitTab = lazy(() => import("@/components/vibefit/VibeFitTab").then((module) => ({ default: module.VibeFitTab })));
+const AppSidebar = lazy(() => import("@/components/AppSidebar").then((module) => ({ default: module.AppSidebar })));
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -95,7 +95,6 @@ const Index = () => {
   const navigate = useNavigate();
   const autoRunRef = useRef(false);
   const profitAutoRef = useRef(false);
-  const playlistQuota = useUsageQuota("playlist");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   
   // Derive active tab from URL path (strip /:projectId suffix)
@@ -104,6 +103,7 @@ const Index = () => {
   const tabFromPath = !hookfitEnabled && rawTabFromPath === "hookfit" ? "songfit" : rawTabFromPath;
   const [activeTab, setActiveTabState] = useState(tabFromPath);
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([tabFromPath]));
+  const playlistQuota = useUsageQuota("playlist", { enabled: activeTab === "playlist" });
   
   // Sync tab when path changes (e.g. browser back/forward)
   useEffect(() => {
@@ -245,6 +245,12 @@ const Index = () => {
   const savedSearchIdRef = useRef<string | null>(null);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const refreshSidebar = useCallback(() => setSidebarRefreshKey(k => k + 1), []);
+  const [deferSidebarReady, setDeferSidebarReady] = useState(false);
+
+  useEffect(() => {
+    const idle = window.setTimeout(() => setDeferSidebarReady(true), 250);
+    return () => window.clearTimeout(idle);
+  }, []);
 
   const isFullyLoaded = useMemo(() => {
     if (!result) return false;
@@ -622,7 +628,11 @@ const Index = () => {
 
   return (
     <>
-      <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} refreshKey={sidebarRefreshKey} />
+      {deferSidebarReady && (
+        <Suspense fallback={null}>
+          <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} refreshKey={sidebarRefreshKey} />
+        </Suspense>
+      )}
       <SidebarInset className="h-svh !min-h-0 overflow-hidden">
         {/* Minimal top header with pill badge */}
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
