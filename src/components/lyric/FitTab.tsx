@@ -521,29 +521,34 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
       const url = `/${artistSlug}/${songSlug}/lyric-dance`;
       setPublishedUrl(url);
       setPublishedLyricsHash(currentLyricsHash);
+      // ── Generate section images (blocking – the dance video needs them) ──
+      setPublishStatus("Generating scene images…");
+      const { data: danceRow }: any = await supabase
+        .from("shareable_lyric_dances" as any)
+        .select("id")
+        .eq("artist_slug", artistSlug)
+        .eq("song_slug", songSlug)
+        .single();
+
+      if (danceRow?.id) {
+        const danceId = danceRow.id;
+        try {
+          const { data: imgResult } = await supabase.functions.invoke("generate-section-images", {
+            body: { lyric_dance_id: danceId, force: true },
+          });
+          console.log("[FitTab] Section images generated:", imgResult?.generated ?? 0);
+        } catch (e: any) {
+          console.warn("[FitTab] Section images failed (non-blocking):", e?.message);
+        }
+      }
+
       toast.success("Lyric Dance page published!");
 
-      // ── Auto-post to CrowdFit + generate section images (fire-and-forget) ──
+      // ── Auto-post to CrowdFit (fire-and-forget) ──
       (async () => {
         try {
-          const { data: danceRow }: any = await supabase
-            .from("shareable_lyric_dances" as any)
-            .select("id")
-            .eq("artist_slug", artistSlug)
-            .eq("song_slug", songSlug)
-            .single();
-
           if (!danceRow?.id) return;
           const danceId = danceRow.id;
-
-          // Generate section images
-          supabase.functions.invoke("generate-section-images", {
-            body: { lyric_dance_id: danceId, force: true },
-          }).then(({ data: imgResult }) => {
-            console.log("[FitTab] Section images generated:", imgResult?.generated ?? 0);
-          }).catch((e: any) => {
-            console.warn("[FitTab] Section images failed (non-blocking):", e?.message);
-          });
 
           const { data: existing }: any = await supabase
             .from("songfit_posts" as any)
