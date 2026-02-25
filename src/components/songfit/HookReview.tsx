@@ -20,6 +20,7 @@ interface Props {
   artistsJson?: any[];
   onScored?: () => void;
   onUnscored?: () => void;
+  isBattle?: boolean;
   // Billboard pre-resolved mode
   showPreResolved?: boolean;
   preResolved?: { total: number; replay_yes: number; saves_count?: number };
@@ -44,7 +45,10 @@ function incrementSessionReviewCount(): number {
   return next;
 }
 
-export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, onScored, onUnscored, showPreResolved, preResolved, rank }: Props) {
+export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, onScored, onUnscored, isBattle, showPreResolved, preResolved, rank }: Props) {
+  const leftLabel = isBattle ? "LEFT HOOK" : "Run it back";
+  const rightLabel = isBattle ? "RIGHT HOOK" : "Skip";
+  const fitLabel = isBattle ? "LEFT HOOK" : "REPLAY FIT";
   const { user } = useAuth();
   const sessionId = getSessionId();
   const navigate = useNavigate();
@@ -176,13 +180,13 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
             onClick={() => handleVoteClick(true)}
             className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Run it back</span>
+            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{leftLabel}</span>
           </button>
           <button
             onClick={() => handleVoteClick(false)}
             className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Skip</span>
+            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{rightLabel}</span>
           </button>
         </div>
       </div>
@@ -213,9 +217,9 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               </div>
               {/* Bottom row: % + fit label (left) + clickable tally (right) */}
               <div className="flex items-center justify-between gap-3">
-                <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
-                  {hasSignals ? `${pct}% REPLAY FIT` : "CALIBRATING"}
-                </p>
+                 <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
+                   {hasSignals ? `${pct}% ${fitLabel}` : "CALIBRATING"}
+                 </p>
                 {hasSignals && onOpenReviews ? (
                   <button
                     onClick={onOpenReviews}
@@ -244,13 +248,13 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               onClick={() => handleVoteClick(true)}
               className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
             >
-              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Run it back</span>
+              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{leftLabel}</span>
             </button>
             <button
               onClick={() => handleVoteClick(false)}
               className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
             >
-              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">Skip</span>
+              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{rightLabel}</span>
             </button>
           </div>
         </div>
@@ -263,7 +267,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
           <div className="px-3 py-2.5 space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="flex gap-2 flex-wrap">
-                {artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
+                {!isBattle && artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
                   <a
                     href={artistsJson[0].spotifyUrl}
                     target="_blank"
@@ -273,7 +277,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                     Follow {artistsJson[0].name}
                   </a>
                 )}
-                {spotifyTrackUrl && (
+                {!isBattle && spotifyTrackUrl && (
                   <a
                     href={spotifyTrackUrl}
                     target="_blank"
@@ -298,7 +302,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 value={contextNote}
                 onChange={e => setContextNote(e.target.value)}
                 onKeyDown={handleContextKeyDown}
-                placeholder="What hit? (Optional but helpful)"
+                placeholder={isBattle ? "Why this hook? (Optional)" : "What hit? (Optional but helpful)"}
                 rows={2}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
               />
@@ -320,7 +324,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
           <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
           <div className="px-3 py-2.5 space-y-2.5">
             <div className="flex items-center justify-between">
-              <p className="font-mono text-[11px] text-muted-foreground tracking-wide uppercase">Real talk: What's missing?</p>
+              <p className="font-mono text-[11px] text-muted-foreground tracking-wide uppercase">{isBattle ? "What sealed it?" : "Real talk: What's missing?"}</p>
               <button
                 onClick={() => setStep(2)}
                 className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
@@ -335,7 +339,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 value={contextNote}
                 onChange={e => setContextNote(e.target.value)}
                 onKeyDown={handleContextKeyDown}
-                placeholder="The missing piece... (Optional but helpful)"
+                placeholder={isBattle ? "What made it hit? (Optional)" : "The missing piece... (Optional but helpful)"}
                 rows={2}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
               />

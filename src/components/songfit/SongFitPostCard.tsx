@@ -454,13 +454,14 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       {/* Hook Review — after caption */}
       {crowdfitMode === "hook_review" && (
         <>
-          <HookReview
+           <HookReview
             key={hookReviewKey}
             postId={post.id}
             isOwner={isOwnPost}
             onOpenReviews={() => setReviewsSheetPostId(post.id)}
             spotifyTrackUrl={post.spotify_track_url}
             artistsJson={post.track_artists_json as any[]}
+            isBattle={!!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id)}
             showPreResolved={isBillboard && !!signalData}
             preResolved={signalData}
             rank={rank}
