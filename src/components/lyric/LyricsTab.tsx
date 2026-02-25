@@ -150,12 +150,19 @@ export function LyricsTab({
           uploadFile = file;
         }
 
-        // Upload stage
+        // Run all stage timers as one continuous sequence — don't wait for fetch
         setProgressStage("uploading");
-        const uploadTimers: ReturnType<typeof setTimeout>[] = [];
-        uploadTimers.push(setTimeout(() => setProgressStage("buffering"), 3000));
-        uploadTimers.push(setTimeout(() => setProgressStage("transmitting"), 6000));
-        uploadTimers.push(setTimeout(() => setProgressStage("handshaking"), 9000));
+        const allTimers: ReturnType<typeof setTimeout>[] = [];
+        allTimers.push(setTimeout(() => setProgressStage("buffering"), 3000));
+        allTimers.push(setTimeout(() => setProgressStage("transmitting"), 6000));
+        allTimers.push(setTimeout(() => setProgressStage("handshaking"), 9000));
+        allTimers.push(setTimeout(() => setProgressStage("receiving"), 12000));
+        allTimers.push(setTimeout(() => setProgressStage("transcribing"), 15000));
+        allTimers.push(setTimeout(() => setProgressStage("separating"), 20000));
+        allTimers.push(setTimeout(() => setProgressStage("analyzing"), 26000));
+        allTimers.push(setTimeout(() => setProgressStage("detecting_hook"), 33000));
+        allTimers.push(setTimeout(() => setProgressStage("aligning"), 40000));
+        // Don't auto-advance to "finalizing" — reserve that for when the response actually arrives
 
         const formData = new FormData();
         formData.append("audio", uploadFile, uploadFile.name);
@@ -177,26 +184,15 @@ export function LyricsTab({
           },
         );
 
-        uploadTimers.forEach(clearTimeout);
-
-        setProgressStage("receiving");
-        const timers: ReturnType<typeof setTimeout>[] = [];
-        timers.push(setTimeout(() => setProgressStage("transcribing"), 3000));
-        timers.push(setTimeout(() => setProgressStage("separating"), 7000));
-        timers.push(setTimeout(() => setProgressStage("analyzing"), 11000));
-        timers.push(setTimeout(() => setProgressStage("detecting_hook"), 15000));
-        timers.push(setTimeout(() => setProgressStage("aligning"), 19000));
-        timers.push(setTimeout(() => setProgressStage("finalizing"), 23000));
+        allTimers.forEach(clearTimeout);
 
         if (!response.ok) {
-          timers.forEach(clearTimeout);
           const err = await response.json().catch(() => ({ error: "Transcription failed" }));
           throw new Error(err.error || `Error ${response.status}`);
         }
 
-        const data = await response.json();
-        timers.forEach(clearTimeout);
         setProgressStage("finalizing");
+        const data = await response.json();
 
         if (data.error) throw new Error(data.error);
         if (!data.lines) throw new Error("Invalid response format");
