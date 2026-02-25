@@ -16,6 +16,7 @@ export interface SongSignature {
   zeroCrossingRate: number;
   spectralCentroidHz: number;
   lyricDensity: number | null;
+  energyCurve: Float32Array;
   analysisVersion: 1;
 }
 
@@ -138,6 +139,41 @@ function computeFrameFeatures(signal: Float32Array, sampleRate: number): {
   };
 }
 
+function computeEnergyCurve(signal: Float32Array, sampleRate: number, windowSec = 0.5): Float32Array {
+  const windowSize = Math.max(1, Math.floor(sampleRate * windowSec));
+  const windows = Math.max(1, Math.ceil(signal.length / windowSize));
+  const rmsValues = new Float32Array(windows);
+
+  let minRms = Number.POSITIVE_INFINITY;
+  let maxRms = Number.NEGATIVE_INFINITY;
+
+  for (let windowIndex = 0; windowIndex < windows; windowIndex += 1) {
+    const start = windowIndex * windowSize;
+    const end = Math.min(signal.length, start + windowSize);
+    let power = 0;
+    for (let i = start; i < end; i += 1) {
+      const sample = signal[i];
+      power += sample * sample;
+    }
+    const count = Math.max(1, end - start);
+    const rms = Math.sqrt(power / count);
+    rmsValues[windowIndex] = rms;
+    if (rms < minRms) minRms = rms;
+    if (rms > maxRms) maxRms = rms;
+  }
+
+  const range = maxRms - minRms;
+  if (range <= 1e-6) {
+    return new Float32Array(windows);
+  }
+
+  const normalized = new Float32Array(windows);
+  for (let i = 0; i < windows; i += 1) {
+    normalized[i] = clamp01((rmsValues[i] - minRms) / range);
+  }
+  return normalized;
+}
+
 export const songSignatureAnalyzer = {
   async analyze(
     audioBuffer: AudioBuffer,
@@ -147,6 +183,7 @@ export const songSignatureAnalyzer = {
   ): Promise<SongSignature> {
     const signal = toMonoBuffer(audioBuffer);
     const frameFeatures = computeFrameFeatures(signal, audioBuffer.sampleRate);
+    const energyCurve = computeEnergyCurve(signal, audioBuffer.sampleRate, 0.5);
     const lyricWordCount = (lyrics || "")
       .trim()
       .split(/\s+/)
@@ -168,6 +205,7 @@ export const songSignatureAnalyzer = {
         lyricWordCount > 0 && effectiveDuration > 0
           ? lyricWordCount / effectiveDuration
           : null,
+      energyCurve,
       analysisVersion: 1,
     };
   },

@@ -33,6 +33,11 @@ You may NOT invent colors, styles, effects, or any values not listed below.
 
 Return ONLY valid JSON. No markdown. No explanation. No preamble.
 
+AUDIO SECTION CONTRACT:
+- If audioSections are provided, you must preserve their timing exactly.
+- Do not split, merge, retime, reorder, or invent sections.
+- Chapters must be groupings of adjacent provided sections only.
+
 ═══════════════════════════════════════
 SECTION 1 — WORLD DEFAULTS (6 picks)
 ═══════════════════════════════════════
@@ -386,12 +391,38 @@ interface SceneContext {
   fluxPromptSuffix?: string;
 }
 
+interface AudioSectionInput {
+  index: number;
+  startSec: number;
+  endSec: number;
+  durationSec?: number;
+  avgEnergy?: number;
+  peakEnergy?: number;
+  energyDelta?: number;
+  spectralCharacter?: string;
+  beatDensity?: number;
+  role?: string;
+  lyrics?: Array<{ text?: string; startSec?: number; endSec?: number; lineIndex?: number }>;
+  hasLyricRepetition?: boolean;
+}
+
 interface AnalyzeRequest {
   title?: string;
   artist?: string;
   lines?: LyricLine[];
   lyrics?: string;
   beatGrid?: { bpm?: number; beats?: number[]; confidence?: number };
+  beatGridSummary?: { bpm?: number; confidence?: number; totalBeats?: number };
+  songSignature?: {
+    bpm?: number;
+    durationSec?: number;
+    tempoStability?: number;
+    rmsMean?: number;
+    rmsVariance?: number;
+    spectralCentroidHz?: number;
+    lyricDensity?: number | null;
+  };
+  audioSections?: AudioSectionInput[];
   lyricId?: string;
   id?: string;
   scene_context?: SceneContext | null;
@@ -530,6 +561,65 @@ function validateCinematicDirection(value: Record<string, unknown>): string[] {
   return errors;
 }
 
+
+function groupSectionsToChapters(cinematicDirection: Record<string, unknown>, sections: AudioSectionInput[], durationSec: number): void {
+  const rawChapters = Array.isArray(cinematicDirection.chapters) ? cinematicDirection.chapters as Record<string, unknown>[] : [];
+  if (!rawChapters.length || !sections.length) return;
+
+  const sortedSections = [...sections]
+    .filter((section) => Number.isFinite(section.startSec) && Number.isFinite(section.endSec))
+    .sort((a, b) => a.startSec - b.startSec);
+  if (!sortedSections.length) return;
+
+  const chapterCount = rawChapters.length;
+  const byIndex = new Map(sortedSections.map((section) => [section.index, section] as const));
+  const grouped = rawChapters.map((chapter, chapterIndex) => {
+    const requested = Array.isArray((chapter as any).sectionIndices)
+      ? ((chapter as any).sectionIndices as number[]).filter((n) => Number.isFinite(n))
+      : [];
+
+    let sectionSlice: AudioSectionInput[];
+    if (requested.length > 0) {
+      const resolved = requested
+        .map((idx) => byIndex.get(idx))
+        .filter((section): section is AudioSectionInput => Boolean(section))
+        .sort((a, b) => a.startSec - b.startSec);
+      const contiguous = resolved.every((section, idx) => idx === 0 || (resolved[idx - 1].index + 1 === section.index));
+      sectionSlice = contiguous && resolved.length > 0 ? resolved : [];
+    } else {
+      sectionSlice = [];
+    }
+
+    if (sectionSlice.length === 0) {
+      const startIdx = Math.floor((chapterIndex * sortedSections.length) / chapterCount);
+      const endExclusive = Math.floor(((chapterIndex + 1) * sortedSections.length) / chapterCount);
+      sectionSlice = sortedSections.slice(startIdx, Math.max(startIdx + 1, endExclusive));
+    }
+
+    const sectionIndices = sectionSlice.map((section) => section.index).filter((n) => Number.isFinite(n));
+    const startSec = sectionSlice[0]?.startSec ?? 0;
+    const endSec = sectionSlice[sectionSlice.length - 1]?.endSec ?? durationSec;
+    const totalDuration = durationSec > 0 ? durationSec : 1;
+
+    return {
+      ...chapter,
+      sectionIndices,
+      startSec,
+      endSec,
+      startRatio: startSec / totalDuration,
+      endRatio: endSec / totalDuration,
+    };
+  });
+
+  cinematicDirection.chapters = grouped;
+
+  const climax = cinematicDirection.climax as Record<string, unknown> | undefined;
+  if (climax && typeof climax === "object") {
+    const climaxRatio = typeof climax.timeRatio === "number" ? climax.timeRatio : 0.65;
+    climax.timeSec = Math.max(0, Math.min(durationSec, climaxRatio * (durationSec || 0)));
+  }
+}
+
 async function persistCinematicDirection(cinematicDirection: Record<string, unknown>, lyricId?: string): Promise<boolean> {
   if (!lyricId) return false;
 
@@ -641,7 +731,7 @@ RULES FROM SCENE:
         : scenePrefix + MASTER_DIRECTOR_PROMPT_V2;
       const messages: { role: string; content: string }[] = [
         { role: "system", content: systemContent },
-        { role: "user", content: `${listenerScenePrefix}Song: ${artist} — ${title}\nLyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
+        { role: "user", content: `${listenerScenePrefix}Song: ${artist} — ${title}\nLyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nAudio sections (fixed timing, cannot be split/merged/retimed):\n${JSON.stringify(body.audioSections ?? [])}\n\nIf audio sections exist, chapters must group adjacent section indices and preserve section timing exactly. Do not invent new sections.\n\nSong signature summary:\n${JSON.stringify(body.songSignature ?? {})}\nBeat grid summary:\n${JSON.stringify(body.beatGridSummary ?? body.beatGrid ?? {})}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
       ];
       const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -697,6 +787,12 @@ RULES FROM SCENE:
     }
 
     parsed = validateAndCleanGeminiOutput(parsed as Record<string, any>);
+
+    const sections = Array.isArray(body.audioSections) ? body.audioSections : [];
+    const inferredDuration = Number(body.songSignature?.durationSec ?? sections[sections.length - 1]?.endSec ?? lines[lines.length - 1]?.end ?? 0);
+    if (sections.length > 0) {
+      groupSectionsToChapters(parsed, sections, inferredDuration);
+    }
 
     if (Array.isArray(parsed.wordDirectives)) {
       const obj: Record<string, unknown> = {};

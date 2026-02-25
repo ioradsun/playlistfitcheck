@@ -1228,6 +1228,32 @@ export class LyricDancePlayer {
     'editorial-light': '"Cormorant Garamond", serif',
   };
 
+
+  private resolveChapterIndex(chapters: any[], currentTimeSec: number, totalDurationSec: number): number {
+    const tsIdx = chapters.findIndex((ch: any) =>
+      typeof ch?.startSec === 'number' &&
+      typeof ch?.endSec === 'number' &&
+      currentTimeSec >= ch.startSec &&
+      currentTimeSec < ch.endSec,
+    );
+    if (tsIdx !== -1) return tsIdx;
+
+    const ratio = totalDurationSec > 0 ? currentTimeSec / totalDurationSec : 0;
+    const ratioIdx = chapters.findIndex((ch: any) =>
+      typeof ch?.startRatio === 'number' &&
+      typeof ch?.endRatio === 'number' &&
+      ratio >= ch.startRatio &&
+      ratio < ch.endRatio,
+    );
+    if (ratioIdx !== -1) return ratioIdx;
+
+    return 0;
+  }
+
+  private resolveChapter(chapters: any[], currentTimeSec: number, totalDurationSec: number): any {
+    const idx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
+    return chapters[idx] ?? chapters[0];
+  }
   /** Resolve the effective palette from image-derived palettes or legacy fallbacks */
   private getResolvedPalette(): string[] {
     const autoPalettes = this.data?.auto_palettes;
@@ -1235,12 +1261,9 @@ export class LyricDancePlayer {
     const chapters = (cd?.chapters as any[]) ?? [];
 
     // Find current chapter based on playback position
-    const songProg = this.audio
-      ? this.audio.currentTime / (this.audio.duration || 1)
-      : 0;
-    const chIdx = chapters.findIndex((ch: any) =>
-      songProg >= (ch.startRatio ?? 0) && songProg < (ch.endRatio ?? 1)
-    );
+    const currentTimeSec = this.audio?.currentTime ?? 0;
+    const totalDurationSec = this.audio?.duration || 1;
+    const chIdx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
 
     // Priority 1: auto-palettes computed from chapter images
     if (Array.isArray(autoPalettes) && chIdx >= 0 && autoPalettes[chIdx]) {
@@ -1299,12 +1322,9 @@ export class LyricDancePlayer {
   private getAtmosphere(): string {
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const chapters = (cd?.chapters as any[]) ?? [];
-    const songProg = this.audio
-      ? this.audio.currentTime / (this.audio.duration || 1)
-      : 0;
-    const chIdx = chapters.findIndex((ch: any) =>
-      songProg >= (ch.startRatio ?? 0) && songProg < (ch.endRatio ?? 1)
-    );
+    const currentTimeSec = this.audio?.currentTime ?? 0;
+    const totalDurationSec = this.audio?.duration || 1;
+    const chIdx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
 
     // Chapter-level override
     if (chIdx >= 0 && chapters[chIdx]?.atmosphere) {
@@ -1365,9 +1385,8 @@ export class LyricDancePlayer {
     const songProgress = duration > 0 ? Math.max(0, Math.min(1, (clamped - this.songStartSec) / duration)) : 0;
     const cd = this.payload?.cinematic_direction;
     const chapters = cd?.chapters ?? [];
-    const currentChapter = chapters.find(
-      (ch: any) => songProgress >= (ch.startRatio ?? 0) && songProgress <= (ch.endRatio ?? 1)
-    ) ?? chapters[0];
+    const currentChapter = this.resolveChapter(chapters, clamped - this.songStartSec, duration);
+
     const tensionCurve = (cd as any)?.tensionCurve ?? [];
     const currentTension = tensionCurve.find(
       (ts: any) => songProgress >= (ts.startRatio ?? 0) && songProgress <= (ts.endRatio ?? 1)
@@ -2174,7 +2193,7 @@ export class LyricDancePlayer {
 
     // Dark crush overlay — always on top of image
     const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
-    const currentChapterObj = chapters.find((ch: any) => chapterProgress >= (ch.startRatio ?? 0) && chapterProgress < (ch.endRatio ?? 1));
+    const currentChapterObj = this.resolveChapter(chapters, this.audio.currentTime, this.audio.duration || 1);
     const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
     const atmosphereCrush: Record<string, number> = {
       void: 0.80,
@@ -2444,7 +2463,7 @@ export class LyricDancePlayer {
       const ambientFraction = 0.15;
       const climaxBoost = climaxCurve * 0.85;
       const ambientSimScale = ambientFraction + climaxBoost;
-      const chapterIdxRaw = chapters.findIndex((ch: any) => songProgress < (ch.endRatio ?? 1));
+      const chapterIdxRaw = this.resolveChapterIndex(chapters, this.audio.currentTime, this.audio.duration || 1);
       const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
 

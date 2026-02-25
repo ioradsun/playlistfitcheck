@@ -4,7 +4,7 @@
  * Analysis pipeline runs in background; Fit tab reads shared state.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { sessionAudio } from "@/lib/sessionAudioCache";
@@ -12,8 +12,9 @@ import { safeManifest } from "@/engine/validateManifest";
 import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import type { LyricData, LyricLine } from "./LyricDisplay";
-import type { SongSignature } from "@/lib/songSignatureAnalyzer";
+import { songSignatureAnalyzer, type SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
+import { detectSections, type TimestampedLine } from "@/engine/sectionDetector";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
@@ -90,6 +91,30 @@ export function LyricFitTab({
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
 
+  const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
+  const [transcriptionModel, setTranscriptionModel] = useState("scribe");
+
+  const timestampedLines = useMemo<TimestampedLine[]>(() => {
+    return lines
+      .filter((line) => line.tag !== "adlib")
+      .map((line, lineIndex) => ({
+        text: line.text,
+        startSec: Number(line.start ?? 0),
+        endSec: Number(line.end ?? line.start ?? 0),
+        lineIndex,
+      }));
+  }, [lines]);
+
+  const audioDurationSec = useMemo(() => {
+    const lastLineEnd = timestampedLines[timestampedLines.length - 1]?.endSec ?? 0;
+    return Math.max(audioBuffer?.duration ?? 0, lastLineEnd);
+  }, [audioBuffer, timestampedLines]);
+
+  const audioSections = useMemo(() => {
+    if (!songSignature || !beatGrid || !audioDurationSec) return [];
+    return detectSections(songSignature, beatGrid, timestampedLines, audioDurationSec);
+  }, [songSignature, beatGrid, timestampedLines, audioDurationSec]);
+
   useEffect(() => {
     if (!user) return;
     supabase.from("profiles").select("display_name").eq("id", user.id).single()
@@ -123,8 +148,32 @@ export function LyricFitTab({
     setFitProgress(prev => Math.max(prev, 35));
   }, [detectedGrid, beatGrid]);
 
-  const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
-  const [transcriptionModel, setTranscriptionModel] = useState("scribe");
+  useEffect(() => {
+    if (!audioBuffer || !beatGrid || songSignature) return;
+    const lyricsText = timestampedLines.map((line) => line.text).join("\n");
+    let cancelled = false;
+
+    songSignatureAnalyzer
+      .analyze(audioBuffer, beatGrid, lyricsText, audioDurationSec)
+      .then(async (signature) => {
+        if (cancelled) return;
+        setSongSignature(signature);
+        if (savedIdRef.current) {
+          await supabase
+            .from("saved_lyrics")
+            .update({ song_signature: signature as any, updated_at: new Date().toISOString() })
+            .eq("id", savedIdRef.current);
+        }
+      })
+      .catch((error) => {
+        console.warn("[song-signature] failed", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [audioBuffer, beatGrid, songSignature, timestampedLines, audioDurationSec]);
+
 
   const resolveProjectTitle = useCallback(
     (title: string | null | undefined, filename: string) => {
@@ -431,7 +480,23 @@ export function LyricFitTab({
           title: lyricData.title,
           artist: artistNameRef.current,
           lines: lyricsForDirection,
-          beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
+          lyrics: lyricsForDirection.map((line: { text: string }) => line.text).join("\n"),
+          beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : undefined,
+          beatGridSummary: beatGrid
+            ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence, totalBeats: beatGrid.beats.length }
+            : undefined,
+          songSignature: songSignature
+            ? {
+                bpm: songSignature.bpm,
+                durationSec: songSignature.durationSec,
+                tempoStability: songSignature.tempoStability,
+                rmsMean: songSignature.rmsMean,
+                rmsVariance: songSignature.rmsVariance,
+                spectralCentroidHz: songSignature.spectralCentroidHz,
+                lyricDensity: songSignature.lyricDensity,
+              }
+            : undefined,
+          audioSections: audioSections.length ? audioSections : undefined,
           lyricId: savedIdRef.current || undefined,
           scene_context: sceneContext,
         },
@@ -475,7 +540,7 @@ export function LyricFitTab({
     } catch {
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error" }));
     }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna, words]);
+  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna, words, songSignature, audioSections]);
 
   const pipelineTriggeredRef = useRef(false);
   const [pipelineRetryCount, setPipelineRetryCount] = useState(0);

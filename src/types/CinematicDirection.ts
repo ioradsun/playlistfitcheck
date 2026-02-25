@@ -80,6 +80,9 @@ export interface VisualWorld {
 }
 
 export interface Chapter {
+  sectionIndices?: number[];
+  startSec?: number;
+  endSec?: number;
   startRatio: number;
   endRatio: number;
   title: string;
