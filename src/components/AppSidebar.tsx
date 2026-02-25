@@ -363,7 +363,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                     </SidebarMenuButton>
 
                     {isActive && recents.length > 0 && (
-                      <ul className="ml-6 mt-1 space-y-0.5 pl-3 max-h-[40vh] overflow-y-auto">
+                      <ul className="mt-1 space-y-0.5 max-h-[40vh] overflow-y-auto">
                         {recents.map((item) => (
                           <li key={item.id} className="group flex items-center gap-0.5">
                             {editingId === item.id ? (
