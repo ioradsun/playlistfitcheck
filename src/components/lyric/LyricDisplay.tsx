@@ -1429,9 +1429,9 @@ export function LyricDisplay({
 
       {/* Metadata strip removed — mood/description now in Song DNA */}
 
-      <div className="flex flex-col lg:flex-row gap-4 items-start">
-        {/* ── LEFT: Waveform + Lyrics + Export ── */}
-        <div className="flex-1 min-w-0 w-full space-y-3">
+      <div className="max-w-3xl mx-auto space-y-4">
+        {/* ── Waveform — centered full width ── */}
+        <div className="w-full">
           {/* Waveform */}
           <div className="glass-card rounded-xl p-3">
             {hasRealAudio ? (
@@ -1496,8 +1496,12 @@ export function LyricDisplay({
               </div>
             )}
           </div>
+        </div>
 
-          {/* Lyrics editor */}
+        {/* ── Two-column: Lyrics (left) + Controls (right) ── */}
+        <div className="flex flex-col lg:flex-row gap-4 items-start">
+          {/* LEFT — Lyrics editor */}
+          <div className="flex-1 min-w-0 w-full space-y-3">
           <div className="glass-card rounded-xl p-4 space-y-1">
             {activeLines.length > 0 && (
               <div className="flex items-center justify-between mb-2">
@@ -2088,6 +2092,7 @@ export function LyricDisplay({
           {/* Spacer so floating widget doesn't block last card */}
           <div className="h-20" />
         </div>
+      </div>
       </div>
 
       <SignUpToSaveBanner />
