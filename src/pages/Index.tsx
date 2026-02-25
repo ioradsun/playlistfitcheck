@@ -331,11 +331,12 @@ const Index = () => {
       if (inserted) {
         savedSearchIdRef.current = inserted.id;
         navigate(`/PlaylistFit/${inserted.id}`, { replace: true });
+        refreshSidebar();
       }
     } catch (e) {
       console.error("Failed to save search:", e);
     }
-  }, [user]);
+  }, [user, navigate, refreshSidebar]);
 
   const handleAnalyze = useCallback((data: PlaylistInput & { _trackList?: { name: string; artists: string }[]; _songUrl?: string }) => {
     if (!playlistQuota.canUse) {
