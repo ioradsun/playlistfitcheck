@@ -179,6 +179,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     }
 
     // Restart the newly activated side (only when it changes)
+    // NOTE: on mobile, restart triggered from useEffect won't satisfy autoplay policy.
+    // The synchronous restart from handleTileTapLocal covers that case.
     if (activePlaying && activePlaying !== prevActiveRef.current) {
       if (activePlaying === "a") hookACanvas.restart();
       if (activePlaying === "b") hookBCanvas.restart();
@@ -186,6 +188,14 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
     prevActiveRef.current = activePlaying;
   }, [activePlaying]);
+
+  // Synchronous tap handler — calls restart in the user gesture call stack (required for mobile audio)
+  const handleTileTapLocal = useCallback((side: "a" | "b") => {
+    // Restart the audio synchronously so mobile browsers allow play()
+    if (side === "a") hookACanvas.restart();
+    if (side === "b") hookBCanvas.restart();
+    onTileTap?.(side);
+  }, [onTileTap, hookACanvas, hookBCanvas]);
 
   // ── Progress bar state (must be before early returns) ────────
   const [progress, setProgress] = useState(0);
@@ -283,7 +293,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           className="relative flex-1 overflow-hidden cursor-pointer"
           animate={{ opacity: getOpacity("a") }}
           transition={{ duration: 0.4 }}
-          onClick={() => onTileTap?.("a")}
+          onClick={() => handleTileTapLocal("a")}
         >
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
@@ -308,7 +318,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           className="relative flex-1 overflow-hidden cursor-pointer"
           animate={{ opacity: getOpacity("b") }}
           transition={{ duration: 0.4 }}
-          onClick={() => onTileTap?.("b")}
+          onClick={() => handleTileTapLocal("b")}
         >
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
