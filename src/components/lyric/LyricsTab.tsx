@@ -199,7 +199,14 @@ export function LyricsTab({
         let projectId: string | null = null;
         if (user) {
           projectId = crypto.randomUUID();
-          const audioUrl = await uploadAudioImmediately(file, user.id, projectId);
+          console.log("[LyricsTab] Saving project", projectId);
+          // Upload audio in background — don't block the modal
+          const audioUploadPromise = uploadAudioImmediately(file, user.id, projectId);
+          const audioUrl = await Promise.race([
+            audioUploadPromise,
+            new Promise<string | null>((resolve) => setTimeout(() => resolve(null), 15000)),
+          ]);
+          console.log("[LyricsTab] Audio upload done, url:", !!audioUrl);
           await supabase.from("saved_lyrics").upsert({
             id: projectId,
             user_id: user.id,
@@ -210,9 +217,10 @@ export function LyricsTab({
             ...(audioUrl ? { audio_url: audioUrl } : {}),
             updated_at: new Date().toISOString(),
           } as any);
+          console.log("[LyricsTab] Project saved");
         }
 
-        await new Promise((r) => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 400));
 
         const newLyricData: LyricData = {
           title: resolveProjectTitle(data.title, file.name),
@@ -241,6 +249,7 @@ export function LyricsTab({
         console.error("Transcription error:", e);
         toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");
       } finally {
+        console.log("[LyricsTab] Closing progress modal");
         setLoading(false);
         setProgressOpen(false);
       }

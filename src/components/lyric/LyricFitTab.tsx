@@ -150,24 +150,29 @@ export function LyricFitTab({
     const lyricsText = timestampedLines.map((line) => line.text).join("\n");
     let cancelled = false;
 
-    songSignatureAnalyzer
-      .analyze(audioBuffer, beatGrid, lyricsText, audioDurationSec)
-      .then(async (signature) => {
-        if (cancelled) return;
-        setSongSignature(signature);
-        if (savedIdRef.current) {
-          await supabase
-            .from("saved_lyrics")
-            .update({ song_signature: signature as any, updated_at: new Date().toISOString() })
-            .eq("id", savedIdRef.current);
-        }
-      })
-      .catch((error) => {
-        console.warn("[song-signature] failed", error);
-      });
+    // Defer heavy computation to avoid blocking UI (e.g. progress modal close)
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      songSignatureAnalyzer
+        .analyze(audioBuffer, beatGrid, lyricsText, audioDurationSec)
+        .then(async (signature) => {
+          if (cancelled) return;
+          setSongSignature(signature);
+          if (savedIdRef.current) {
+            await supabase
+              .from("saved_lyrics")
+              .update({ song_signature: signature as any, updated_at: new Date().toISOString() })
+              .eq("id", savedIdRef.current);
+          }
+        })
+        .catch((error) => {
+          console.warn("[song-signature] failed", error);
+        });
+    }, 500);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [audioBuffer, beatGrid, songSignature, timestampedLines, audioDurationSec]);
 
