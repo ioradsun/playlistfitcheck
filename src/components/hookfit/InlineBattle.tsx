@@ -281,7 +281,6 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         {/* Hook A */}
         <motion.div
           className="relative flex-1 overflow-hidden cursor-pointer"
-          style={getBorderStyle("a")}
           animate={{ opacity: getOpacity("a") }}
           transition={{ duration: 0.4 }}
           onClick={() => onTileTap?.("a")}
@@ -289,6 +288,9 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
+          {getBorderStyle("a").boxShadow && (
+            <div className="absolute inset-0 z-10 pointer-events-none rounded-sm" style={getBorderStyle("a")} />
+          )}
         </motion.div>
 
         {/* Seam */}
@@ -304,7 +306,6 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         {/* Hook B */}
         <motion.div
           className="relative flex-1 overflow-hidden cursor-pointer"
-          style={getBorderStyle("b")}
           animate={{ opacity: getOpacity("b") }}
           transition={{ duration: 0.4 }}
           onClick={() => onTileTap?.("b")}
@@ -312,6 +313,9 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           <div ref={containerRefB} className="absolute inset-0">
             <canvas ref={canvasRefB} className="absolute inset-0 w-full h-full" />
           </div>
+          {getBorderStyle("b").boxShadow && (
+            <div className="absolute inset-0 z-10 pointer-events-none rounded-sm" style={getBorderStyle("b")} />
+          )}
         </motion.div>
       </div>
 
