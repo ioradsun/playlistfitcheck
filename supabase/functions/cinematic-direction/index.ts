@@ -395,6 +395,7 @@ interface AnalyzeRequest {
   lyricId?: string;
   id?: string;
   scene_context?: SceneContext | null;
+  listenerScene?: string;
   systemPromptOverride?: string;
 }
 
@@ -626,7 +627,13 @@ RULES FROM SCENE:
 - atmosphere should match the scene's visual quality (outdoor haze → "haze", night city → "cinematic", bright day → "clean")
 ` : 'SCENE CONTEXT — not specified. Use the lyrics to infer the visual world.\n';
 
-    console.log(`[cinematic-direction] title="${title}" artist="${artist}" lines=${lines.length} scene=${sceneCtx?.scene ?? 'none'}`);
+    // Derive listener scene from explicit param, scene_context, or fallback
+    const listenerSceneRaw = body.listenerScene?.trim() || sceneCtx?.scene?.trim() || '';
+    const listenerScenePrefix = listenerSceneRaw
+      ? `Listener scene: "${listenerSceneRaw}"\n`
+      : `Listener scene: not provided. Infer from lyrics and emotional tone.\n`;
+
+    console.log(`[cinematic-direction] title="${title}" artist="${artist}" lines=${lines.length} listenerScene="${listenerSceneRaw || 'none'}" scene=${sceneCtx?.scene ?? 'none'}`);
 
     async function callAI(): Promise<Record<string, unknown> | null> {
       const systemContent = body.systemPromptOverride
@@ -634,7 +641,7 @@ RULES FROM SCENE:
         : scenePrefix + MASTER_DIRECTOR_PROMPT_V2;
       const messages: { role: string; content: string }[] = [
         { role: "system", content: systemContent },
-        { role: "user", content: `Song: ${artist} — ${title}\n${sceneCtx?.scene ? `Listener scene: "${sceneCtx.scene}"\n` : ""}Lyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
+        { role: "user", content: `${listenerScenePrefix}Song: ${artist} — ${title}\nLyrics (${lines.length} lines):\n${lines.map((line) => line.text).join("\n")}\n\nCreate the cinematic_direction. 3 acts. Be decisive. JSON only.` },
       ];
       const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
