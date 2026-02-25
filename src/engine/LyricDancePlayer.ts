@@ -1475,14 +1475,14 @@ export class LyricDancePlayer {
     // Background: static bg cache first, then section images on top
     this.drawBackground(frame);
 
-    // Chapter image overlay with crossfade
+    // Chapter image overlay with crossfade — index by section_images count, not bgCacheCount
     const bgBlend = frame.bgBlend ?? 0;
-    const totalChapters = this.bgCacheCount;
-    const chapterProgress = bgBlend * (totalChapters - 1);
-    const chapterIdx = Math.floor(chapterProgress);
-    const nextChapterIdx = Math.min(chapterIdx + 1, totalChapters - 1);
-    const chapterFraction = chapterProgress - chapterIdx;
-    this.drawChapterImage(chapterIdx, nextChapterIdx, chapterFraction);
+    const totalImages = this.chapterImages.length || 1;
+    const imgProgress = bgBlend * (totalImages - 1);
+    const imgIdx = Math.floor(imgProgress);
+    const nextImgIdx = Math.min(imgIdx + 1, totalImages - 1);
+    const imgFraction = imgProgress - imgIdx;
+    this.drawChapterImage(imgIdx, nextImgIdx, imgFraction);
 
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
