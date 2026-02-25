@@ -246,6 +246,39 @@ export function LyricFitTab({
         setFitReadiness("ready");
         setFitProgress(100);
         setFitUnlocked(true);
+
+        // Derive sceneManifest from loaded cinematic direction presets
+        import("@/engine/deriveCanvasManifest").then(({ deriveCanvasManifest }) => {
+          import("@/engine/presetDerivation").then(({ getTypography }) => {
+            const typoPreset = loadedCinematicDirection.typography || "clean-modern";
+            const typo = getTypography(typoPreset);
+            const bgSystemMap: Record<string, string> = {
+              void: "void", cinematic: "fracture", haze: "breath", split: "static",
+              grain: "static", wash: "breath", glass: "pressure", clean: "void",
+            };
+            const atm = loadedCinematicDirection.atmosphere || "cinematic";
+            const derivedSpec = {
+              ...(loadedSongDna?.physicsSpec || {}),
+              system: bgSystemMap[atm] || "fracture",
+              palette: loadedSongDna?.physicsSpec?.palette || ["#0a0a0a", "#a855f7", "#ec4899"],
+              typographyProfile: {
+                fontFamily: typo.fontFamily,
+                fontWeight: typo.fontWeight,
+                letterSpacing: typo.letterSpacing,
+                textTransform: typo.textTransform,
+                lineHeightMultiplier: typo.lineHeight,
+                hasSerif: ["Playfair Display", "Cormorant Garamond"].includes(typo.fontFamily),
+                personality: "RAW TRANSCRIPT" as const,
+              },
+            };
+            const { manifest } = deriveCanvasManifest({
+              physicsSpec: derivedSpec,
+              fallbackPalette: derivedSpec.palette,
+              systemType: derivedSpec.system,
+            });
+            setSceneManifest(manifest);
+          });
+        });
       }
 
       const savedSignature = (initialLyric as any).song_signature;
@@ -422,21 +455,41 @@ export function LyricFitTab({
           : dirResult.cinematicDirection;
         setCinematicDirection(enrichedDirection);
 
-        // Section images are generated after dance publish (PublishLyricDanceButton)
+        // Derive SceneManifest from cinematic direction presets
+        const { deriveCanvasManifest } = await import("@/engine/deriveCanvasManifest");
+        const { getTypography } = await import("@/engine/presetDerivation");
 
-        const derivedPreset = (enrichedDirection as any)?.presetDerivation ?? null;
-        if (derivedPreset) {
-          setSceneManifest(derivedPreset);
-        } else {
-          // Derive a scene manifest from available physics spec / song DNA
-          const { buildManifestFromDna } = await import("@/engine/buildManifestFromDna");
-          const builtManifest = buildManifestFromDna({
-            ...(songDna || {}),
-            physicsSpec: songDna?.physicsSpec || {},
-            cinematicDirection: enrichedDirection,
-          });
-          if (builtManifest) setSceneManifest(builtManifest);
-        }
+        const typoPreset = enrichedDirection.typography || "clean-modern";
+        const typo = getTypography(typoPreset);
+
+        const bgSystemMap: Record<string, string> = {
+          void: "void", cinematic: "fracture", haze: "breath", split: "static",
+          grain: "static", wash: "breath", glass: "pressure", clean: "void",
+        };
+        const atmospherePreset = enrichedDirection.atmosphere || "cinematic";
+
+        const derivedSpec = {
+          ...(songDna?.physicsSpec || {}),
+          system: bgSystemMap[atmospherePreset] || "fracture",
+          palette: songDna?.physicsSpec?.palette || ["#0a0a0a", "#a855f7", "#ec4899"],
+          typographyProfile: {
+            fontFamily: typo.fontFamily,
+            fontWeight: typo.fontWeight,
+            letterSpacing: typo.letterSpacing,
+            textTransform: typo.textTransform,
+            lineHeightMultiplier: typo.lineHeight,
+            hasSerif: ["Playfair Display", "Cormorant Garamond"].includes(typo.fontFamily),
+            personality: "RAW TRANSCRIPT" as const,
+          },
+        };
+
+        const { manifest } = deriveCanvasManifest({
+          physicsSpec: derivedSpec,
+          fallbackPalette: derivedSpec.palette,
+          systemType: derivedSpec.system,
+        });
+
+        setSceneManifest(manifest);
 
         // Persist cinematic direction back to song_dna in DB
         if (savedIdRef.current) {
