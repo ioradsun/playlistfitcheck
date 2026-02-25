@@ -364,7 +364,9 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
 
                     {isActive && recents.length > 0 && (
                       <ul className="mt-1 space-y-0.5 max-h-[40vh] overflow-y-auto">
-                        {recents.map((item) => (
+                        {recents.map((item) => {
+                          const isItemSelected = location.pathname.includes(item.id);
+                          return (
                           <li key={item.id} className="group flex items-center gap-0.5">
                             {editingId === item.id ? (
                               <form
@@ -386,7 +388,11 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                             ) : (
                               <>
                                 <button
-                                  className="flex-1 min-w-0 text-left px-2 py-1 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-md truncate transition-colors"
+                                  className={`flex-1 min-w-0 text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${
+                                    isItemSelected
+                                      ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+                                      : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                                  }`}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleRecentClick(item);
@@ -433,7 +439,8 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                               </>
                             )}
                           </li>
-                        ))}
+                          );
+                        })}
                       </ul>
                     )}
                   </SidebarMenuItem>
