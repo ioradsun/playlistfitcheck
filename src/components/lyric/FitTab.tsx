@@ -220,65 +220,113 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
   const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
+  const [danceId, setDanceId] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const sections: any[] = cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
     ? cinematicDirection.sections
     : [];
 
-  // Check for existing images when we have a published dance
+  // Auto-load existing section images from the user's published dance
   useEffect(() => {
-    if (!savedId) return;
-    // Look up the shareable_lyric_dances by saved lyric id to find section_images
-    supabase
-      .from("shareable_lyric_dances" as any)
-      .select("id, section_images")
-      .or(`song_slug.neq.placeholder`)
-      .limit(20)
-      .then(({ data }: any) => {
-        // We don't have direct lyric→dance mapping, so skip auto-load for now
-      });
-  }, [savedId]);
+    let cancelled = false;
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user || cancelled) return;
+
+      const { data: dances }: any = await supabase
+        .from("shareable_lyric_dances" as any)
+        .select("id, section_images")
+        .eq("user_id", userData.user.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (cancelled || !dances?.[0]) return;
+      setDanceId(dances[0].id);
+
+      const imgs = dances[0].section_images;
+      if (Array.isArray(imgs) && imgs.length > 0 && imgs.some(Boolean)) {
+        setSectionImages(imgs);
+      } else {
+        // Images might be generating in background — poll for them
+        setGenerating(true);
+        setGenProgress({ done: 0, total: sections.length });
+        pollRef.current = setInterval(async () => {
+          const { data: updated }: any = await supabase
+            .from("shareable_lyric_dances" as any)
+            .select("section_images")
+            .eq("id", dances[0].id)
+            .maybeSingle();
+          const updatedImgs = updated?.section_images;
+          if (Array.isArray(updatedImgs) && updatedImgs.some(Boolean)) {
+            setSectionImages(updatedImgs);
+            setGenProgress({ done: updatedImgs.filter(Boolean).length, total: sections.length });
+            setGenerating(false);
+            if (pollRef.current) clearInterval(pollRef.current);
+          }
+        }, 3000);
+        // Stop polling after 2 min
+        setTimeout(() => {
+          if (pollRef.current) { clearInterval(pollRef.current); setGenerating(false); }
+        }, 120_000);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [savedId, sections.length]);
+
+  // Listen for dance-published event to refresh images
+  useEffect(() => {
+    const handler = () => {
+      setSectionImages([]);
+      setGenerating(true);
+      setGenProgress({ done: 0, total: sections.length });
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData?.user) return;
+        const { data: dances }: any = await supabase
+          .from("shareable_lyric_dances" as any)
+          .select("id, section_images")
+          .eq("user_id", userData.user.id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (!dances?.[0]) return;
+        setDanceId(dances[0].id);
+        const imgs = dances[0].section_images;
+        if (Array.isArray(imgs) && imgs.some(Boolean)) {
+          setSectionImages(imgs);
+          setGenProgress({ done: imgs.filter(Boolean).length, total: sections.length });
+          setGenerating(false);
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      }, 3000);
+      setTimeout(() => {
+        if (pollRef.current) { clearInterval(pollRef.current); setGenerating(false); }
+      }, 120_000);
+    };
+    window.addEventListener("songfit:dance-published", handler);
+    return () => {
+      window.removeEventListener("songfit:dance-published", handler);
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [sections.length]);
 
   const handleGenerateImages = useCallback(async () => {
     if (generating || !sections.length) return;
-    // We need a published dance to generate images — look for it
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user) {
-      toast.error("Sign in to generate images");
-      return;
-    }
-
-    // Find the most recent dance for this user
-    const { data: dances }: any = await supabase
-      .from("shareable_lyric_dances" as any)
-      .select("id, section_images")
-      .eq("user_id", userData.user.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    if (!dances?.[0]) {
+    if (!danceId) {
       toast.error("Publish a Dance first to generate section images");
       return;
     }
-
-    const danceId = dances[0].id;
-
-    // Check cached
-    if (dances[0].section_images && Array.isArray(dances[0].section_images) && dances[0].section_images.length > 0) {
-      setSectionImages(dances[0].section_images);
-      return;
-    }
-
     setGenerating(true);
     setGenProgress({ done: 0, total: sections.length });
-
     try {
       const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
         body: { lyric_dance_id: danceId, force: true },
       });
-
       if (error) throw error;
-
       const urls = result?.urls || result?.section_images || [];
       setSectionImages(urls);
       setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
@@ -289,7 +337,7 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
     } finally {
       setGenerating(false);
     }
-  }, [generating, sections]);
+  }, [generating, sections, danceId]);
 
   return (
     <div className="glass-card rounded-xl p-3 space-y-2">
