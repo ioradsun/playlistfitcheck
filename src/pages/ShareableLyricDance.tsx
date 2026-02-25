@@ -725,34 +725,25 @@ export default function ShareableLyricDance() {
       <LyricDanceDebugPanel
         player={playerInstance}
         onRegenerateSong={() => {
-          toast.info("Re-analyzing song DNA…");
+          toast.info("Re-generating cinematic direction…");
           if (!data) return;
-          const lyricsText = (data.lyrics as any[])
+          const lyricsForDirection = (data.lyrics as any[])
             .filter((l: any) => l.tag !== "adlib")
-            .map((l: any) => l.text)
-            .join("\n");
-          supabase.functions.invoke("lyric-analyze", {
+            .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+          supabase.functions.invoke("cinematic-direction", {
             body: {
               title: data.song_name,
               artist: data.artist_name,
-              lyrics: lyricsText,
-              includeHooks: true,
+              lines: lyricsForDirection,
+              lyricId: data.id,
             },
-          }).then(({ data: dnaResult, error }) => {
-            if (error) { toast.error("Song DNA failed"); return; }
-            // Update the dance row with new physics_spec
-            const newSpec = {
-              mood: dnaResult?.mood,
-              description: dnaResult?.description,
-              meaning: dnaResult?.meaning,
-              physicsSpec: dnaResult?.physics_spec,
-              scene_manifest: dnaResult?.scene_manifest || dnaResult?.sceneManifest,
-            };
+          }).then(({ data: dirResult, error }) => {
+            if (error) { toast.error("Cinematic direction failed"); return; }
             supabase.from("shareable_lyric_dances" as any)
-              .update({ physics_spec: newSpec, scene_manifest: newSpec.scene_manifest, updated_at: new Date().toISOString() } as any)
+              .update({ cinematic_direction: dirResult?.cinematicDirection ?? null, updated_at: new Date().toISOString() } as any)
               .eq("id", data.id)
               .then(() => {
-                toast.success("Song DNA updated — reloading…");
+                toast.success("Cinematic direction updated — reloading…");
                 setTimeout(() => window.location.reload(), 1000);
               });
           });
@@ -778,29 +769,29 @@ export default function ShareableLyricDance() {
         }}
         onRegenerateDirector={async () => {
           if (!data) return;
-          toast.info("Re-generating scene manifest…");
+          toast.info("Refreshing cinematic direction…");
           try {
-            const lastLine = (data.lyrics as any[])[(data.lyrics as any[]).length - 1];
-            const { data: result, error } = await supabase.functions.invoke("generate-scene-manifest", {
+            const lyricsForDirection = (data.lyrics as any[])
+              .filter((l: any) => l.tag !== "adlib")
+              .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+            const { data: result, error } = await supabase.functions.invoke("cinematic-direction", {
               body: {
-                cinematic_direction: data.cinematic_direction,
-                lyrics: data.lyrics,
-                words: data.words ?? [],
-                beat_grid: data.beat_grid,
-                song_duration: lastLine?.end ?? 0,
+                title: data.song_name,
+                artist: data.artist_name,
+                lines: lyricsForDirection,
                 lyricId: data.id,
               },
             });
             if (error) throw error;
-            if (result?.scene_manifest) {
-              toast.success("Scene manifest updated — reloading…");
+            if (result?.cinematicDirection) {
+              toast.success("Cinematic direction updated — reloading…");
               setTimeout(() => window.location.reload(), 800);
             } else {
-              toast.error("No scene manifest returned");
+              toast.error("No cinematic direction returned");
             }
           } catch (e: any) {
             console.error("[DEBUG] Director error:", e);
-            toast.error(e.message || "Failed to generate scene manifest");
+            toast.error(e.message || "Failed to generate cinematic direction");
           }
         }}
         onRunCustomPrompt={async (systemPrompt: string) => {

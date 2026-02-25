@@ -31,7 +31,6 @@ import {
   computeStackedLayout,
 } from "@/engine/SystemStyles";
 import type { BeatTick } from "@/engine/HookDanceEngine";
-import { deriveSceneManifestFromSpec } from "@/engine/buildSceneManifest";
 import { safeManifest } from "@/engine/validateManifest";
 import { getBackgroundSystemForTime } from "@/engine/getBackgroundSystemForTime";
 import { ParticleEngine } from "@/engine/ParticleEngine";
@@ -123,14 +122,7 @@ export function LyricDanceExporter({
         "lyric-video-bg",
         {
           body: {
-            manifest: safeManifest(
-              deriveSceneManifestFromSpec({
-                spec,
-                mood,
-                description,
-                songTitle: title,
-              }),
-            ).manifest,
+            manifest: safeManifest(sceneManifest ?? {}).manifest,
             userDirection: `Song: ${title} by ${artist}`,
           },
         },
@@ -143,7 +135,7 @@ export function LyricDanceExporter({
     } finally {
       setAiBgLoading(false);
     }
-  }, [title, artist, mood, description, aiBgUrl, aiBgLoading]);
+  }, [title, artist, aiBgUrl, aiBgLoading, sceneManifest]);
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
@@ -160,11 +152,7 @@ export function LyricDanceExporter({
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const duration = songEnd - songStart;
     const totalFrames = Math.ceil(duration * FPS);
-    const baseManifest = sceneManifest
-      ? safeManifest(sceneManifest).manifest
-      : safeManifest(
-          deriveSceneManifestFromSpec({ spec, mood, description, songTitle: title }),
-        ).manifest;
+    const baseManifest = safeManifest(sceneManifest ?? {}).manifest;
 
     if (totalFrames <= 0) {
       toast.error("No lines to render");
