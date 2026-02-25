@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, Film, RefreshCw, Music, Sparkles, Eye, Palette, Zap } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -565,25 +565,23 @@ export function FitTab({
                 href={publishedUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+                className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
               >
-                <Film size={14} />
                 Watch Dance
               </a>
               <button
                 onClick={handleDance}
-                disabled={republishDisabled}
-                className="flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 px-4 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+                disabled={republishDisabled || !danceNeedsRegeneration}
+                className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
               >
-                {publishing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                Republish
+                {publishing ? <Loader2 size={14} className="animate-spin" /> : "Republish"}
               </button>
             </div>
           ) : (
             <button
               onClick={handleDance}
               disabled={danceDisabled}
-              className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              className="w-full flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
             >
               {publishing ? (
                 <span className="flex items-center gap-2">
@@ -591,10 +589,7 @@ export function FitTab({
                   <span>{publishStatus || "Publishing…"}</span>
                 </span>
               ) : (
-                <>
-                  <Film size={14} />
-                  {publishedUrl ? "Regenerate Dance" : "Dance"}
-                </>
+                publishedUrl ? "Regenerate Dance" : "Dance"
               )}
             </button>
           )}
