@@ -711,33 +711,46 @@ export function FitTab({
                     <Eye size={10} />
                     Cinematic Direction
                   </div>
-                  {cinematicDirection.thesis && (
-                    <p className="text-xs text-muted-foreground italic leading-relaxed">{cinematicDirection.thesis}</p>
-                  )}
-                  {cinematicDirection.tensionCurve && Array.isArray(cinematicDirection.tensionCurve) && (
-                    <div className="flex items-end gap-px h-8">
-                      {cinematicDirection.tensionCurve.map((t: any, i: number) => (
-                        <div
-                          key={i}
-                          className="flex-1 bg-primary/40 rounded-t-sm"
-                          style={{ height: `${(t.motionIntensity ?? t.tension ?? t.value ?? 0.5) * 100}%` }}
-                          title={t.stage || `${i}`}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {cinematicDirection.chapters && Array.isArray(cinematicDirection.chapters) && (
+
+                  {/* Song defaults */}
+                  <div className="flex flex-wrap gap-1">
+                    {cinematicDirection.sceneTone && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.sceneTone}</span>
+                    )}
+                    {cinematicDirection.atmosphere && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.atmosphere}</span>
+                    )}
+                    {cinematicDirection.motion && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.motion}</span>
+                    )}
+                    {cinematicDirection.typography && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.typography}</span>
+                    )}
+                    {cinematicDirection.texture && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.texture}</span>
+                    )}
+                    {cinematicDirection.emotionalArc && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">{cinematicDirection.emotionalArc}</span>
+                    )}
+                  </div>
+
+                  {/* Sections */}
+                  {cinematicDirection.sections && Array.isArray(cinematicDirection.sections) && cinematicDirection.sections.length > 0 && (
                     <div className="space-y-1">
-                      {cinematicDirection.chapters.slice(0, 4).map((ch: any, i: number) => (
+                      {cinematicDirection.sections.slice(0, 4).map((s: any, i: number) => (
                         <div key={i} className="flex items-start gap-2">
-                          <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap">{ch.title || `Ch ${i + 1}`}</span>
-                          <p className="text-[10px] text-muted-foreground leading-tight">{ch.emotionalArc || ch.description || ch.mood || ""}</p>
+                          <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap">§{s.sectionIndex ?? i}</span>
+                          <p className="text-[10px] text-muted-foreground leading-tight">{s.description || s.mood || ""}</p>
                         </div>
                       ))}
+                      {cinematicDirection.sections.length > 4 && (
+                        <p className="text-[9px] text-muted-foreground/50">+{cinematicDirection.sections.length - 4} more sections</p>
+                      )}
                     </div>
                   )}
+
                   {cinematicDirection.storyboard && Array.isArray(cinematicDirection.storyboard) && (
-                    <p className="text-[9px] text-muted-foreground/60">{cinematicDirection.storyboard.length} storyboard frames</p>
+                    <p className="text-[9px] text-muted-foreground/60">{cinematicDirection.storyboard.length} storyboard frames · {(cinematicDirection.wordDirectives?.length ?? 0)} word directives</p>
                   )}
                 </div>
               )}
