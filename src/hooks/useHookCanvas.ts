@@ -369,90 +369,132 @@ export function useHookCanvas(
       ctx.scale(anim.scale, anim.scale);
       ctx.translate(-lineX, -lineY);
       let workingFontSize = fs;
-      const words = activeLine.text.split(/\s+/).filter(Boolean);
       const wordSpacingRatio = 0.25;
       const maxTextWidth = w * 0.85;
-      const measureLineWidth = (fontSize: number) => {
-        ctx.font = `${st.weight} ${fontSize}px ${st.font}`;
-        const widths = words.map((word) => ctx.measureText(word).width);
-        const spacing = fontSize * wordSpacingRatio;
-        const total = widths.reduce((sum, width) => sum + width, 0) + Math.max(0, widths.length - 1) * spacing;
-        return { widths, spacing, total };
-      };
 
-      let measuredLayout = measureLineWidth(workingFontSize);
-      while (measuredLayout.total > maxTextWidth && workingFontSize > 12) {
-        workingFontSize -= 1;
-        measuredLayout = measureLineWidth(workingFontSize);
-      }
-
-      ctx.font = `${st.weight} ${workingFontSize}px ${st.font}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      const entryAlpha = applyEntrance(ctx, anim.entryProgress, manifest.lyricEntrance);
-      const exitAlpha = anim.exitProgress > 0 ? applyExit(ctx, anim.exitProgress, manifest.lyricExit) : 1;
-      ctx.globalAlpha = Math.min(entryAlpha, exitAlpha);
-
-      if (anim.activeMod) {
-        applyModEffect(ctx, anim.activeMod, ct, beatIntensityRef.current);
-      }
-
-      applyLyricShadow(ctx, manifest.palette, manifest.typographyProfile?.personality);
-      const isOrbitalLayout = (hd.font_system || hd.system_type) === "orbit";
-      const wordPadding = 24;
-      const orbitRadius = Math.min(w, h) * 0.2;
-      const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
-      const activeWordIndex = Math.max(0, Math.min(words.length - 1, Math.floor(((ct - activeLine.start) / lineDuration) * words.length)));
-
+      // Build words and positions arrays — stacked-aware
+      let words: string[] = [];
       const positions: Array<{ x: number; y: number }> = [];
-      if (isOrbitalLayout) {
-        let angleAccumulator = -Math.PI / 2;
-        measuredLayout.widths.forEach((width) => {
-          const angleForWord = (width + wordPadding) / Math.max(1, orbitRadius);
-          positions.push({
-            x: lineX + Math.cos(angleAccumulator) * orbitRadius,
-            y: lineY + Math.sin(angleAccumulator) * orbitRadius,
+
+      if (stackedLayout.isStacked) {
+        // --- STACKED: render each line on its own vertical row ---
+        workingFontSize = stackedLayout.fs;
+        const ls = stackedLayout.effectiveLetterSpacing;
+        const rowHeight = workingFontSize * (st.lineHeight || 1.2);
+        const totalBlockHeight = rowHeight * stackedLayout.lines.length;
+        const blockTopY = lineY - totalBlockHeight / 2;
+
+        ctx.font = `${st.weight} ${workingFontSize}px ${st.font}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        const entryAlpha = applyEntrance(ctx, anim.entryProgress, manifest.lyricEntrance);
+        const exitAlpha = anim.exitProgress > 0 ? applyExit(ctx, anim.exitProgress, manifest.lyricExit) : 1;
+        ctx.globalAlpha = Math.min(entryAlpha, exitAlpha);
+
+        if (anim.activeMod) {
+          applyModEffect(ctx, anim.activeMod, ct, beatIntensityRef.current);
+        }
+        applyLyricShadow(ctx, manifest.palette, manifest.typographyProfile?.personality);
+
+        stackedLayout.lines.forEach((line, rowIdx) => {
+          const rowY = blockTopY + rowIdx * rowHeight + rowHeight / 2;
+          const lineWords = line.split(/\s+/).filter(Boolean);
+          // Measure this row
+          const widths = lineWords.map((word) => ctx.measureText(word).width);
+          const spacing = workingFontSize * wordSpacingRatio;
+          const rowTotal = widths.reduce((s, w2) => s + w2, 0) + Math.max(0, widths.length - 1) * spacing;
+          let currentX = lineX - rowTotal / 2;
+          lineWords.forEach((word, wi) => {
+            words.push(word);
+            positions.push({ x: currentX + widths[wi] / 2, y: rowY });
+            currentX += widths[wi] + spacing;
           });
-          angleAccumulator += angleForWord;
         });
-
-        for (let i = 0; i < positions.length - 1; i += 1) {
-          const minDist = (measuredLayout.widths[i] + measuredLayout.widths[i + 1]) / 2 + wordPadding;
-          const actualDist = Math.abs(positions[i + 1].x - positions[i].x);
-          if (actualDist < minDist) {
-            const push = (minDist - actualDist) / 2;
-            positions[i].x -= push;
-            positions[i + 1].x += push;
-          }
-        }
-
-        if (positions[activeWordIndex]) {
-          const activeTarget = positions[activeWordIndex];
-          const shiftX = lineX - activeTarget.x;
-          const shiftY = lineY - activeTarget.y;
-          for (let i = 0; i < positions.length; i += 1) {
-            positions[i].x += shiftX;
-            positions[i].y += shiftY;
-          }
-        }
-
-        const lineKey = `${activeLine.start}:${activeLine.end}:${activeLine.text}`;
-        const previousPositions = orbitalWordPositionsRef.current[lineKey] ?? positions;
-        const smoothed = positions.map((target, idx) => {
-          const current = previousPositions[idx] ?? target;
-          return {
-            x: current.x + (target.x - current.x) * 0.08,
-            y: current.y + (target.y - current.y) * 0.08,
-          };
-        });
-        orbitalWordPositionsRef.current = { [lineKey]: smoothed };
       } else {
-        let currentX = lineX - measuredLayout.total / 2;
-        measuredLayout.widths.forEach((width) => {
-          positions.push({ x: currentX + width / 2, y: lineY });
-          currentX += width + measuredLayout.spacing;
-        });
+        // --- SINGLE LINE (original logic) ---
+        words = activeLine.text.split(/\s+/).filter(Boolean);
+        const measureLineWidth = (fontSize: number) => {
+          ctx.font = `${st.weight} ${fontSize}px ${st.font}`;
+          const widths = words.map((word) => ctx.measureText(word).width);
+          const spacing = fontSize * wordSpacingRatio;
+          const total = widths.reduce((sum, width) => sum + width, 0) + Math.max(0, widths.length - 1) * spacing;
+          return { widths, spacing, total };
+        };
+
+        let measuredLayout2 = measureLineWidth(workingFontSize);
+        while (measuredLayout2.total > maxTextWidth && workingFontSize > 12) {
+          workingFontSize -= 1;
+          measuredLayout2 = measureLineWidth(workingFontSize);
+        }
+
+        ctx.font = `${st.weight} ${workingFontSize}px ${st.font}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        const entryAlpha = applyEntrance(ctx, anim.entryProgress, manifest.lyricEntrance);
+        const exitAlpha = anim.exitProgress > 0 ? applyExit(ctx, anim.exitProgress, manifest.lyricExit) : 1;
+        ctx.globalAlpha = Math.min(entryAlpha, exitAlpha);
+
+        if (anim.activeMod) {
+          applyModEffect(ctx, anim.activeMod, ct, beatIntensityRef.current);
+        }
+
+        applyLyricShadow(ctx, manifest.palette, manifest.typographyProfile?.personality);
+        const isOrbitalLayout = (hd.font_system || hd.system_type) === "orbit";
+        const wordPadding = 24;
+        const orbitRadius = Math.min(w, h) * 0.2;
+        const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
+        const activeWordIndex = Math.max(0, Math.min(words.length - 1, Math.floor(((ct - activeLine.start) / lineDuration) * words.length)));
+
+        if (isOrbitalLayout) {
+          let angleAccumulator = -Math.PI / 2;
+          measuredLayout2.widths.forEach((width) => {
+            const angleForWord = (width + wordPadding) / Math.max(1, orbitRadius);
+            positions.push({
+              x: lineX + Math.cos(angleAccumulator) * orbitRadius,
+              y: lineY + Math.sin(angleAccumulator) * orbitRadius,
+            });
+            angleAccumulator += angleForWord;
+          });
+
+          for (let i = 0; i < positions.length - 1; i += 1) {
+            const minDist = (measuredLayout2.widths[i] + measuredLayout2.widths[i + 1]) / 2 + wordPadding;
+            const actualDist = Math.abs(positions[i + 1].x - positions[i].x);
+            if (actualDist < minDist) {
+              const push = (minDist - actualDist) / 2;
+              positions[i].x -= push;
+              positions[i + 1].x += push;
+            }
+          }
+
+          if (positions[activeWordIndex]) {
+            const activeTarget = positions[activeWordIndex];
+            const shiftX = lineX - activeTarget.x;
+            const shiftY = lineY - activeTarget.y;
+            for (let i = 0; i < positions.length; i += 1) {
+              positions[i].x += shiftX;
+              positions[i].y += shiftY;
+            }
+          }
+
+          const lineKey = `${activeLine.start}:${activeLine.end}:${activeLine.text}`;
+          const previousPositions = orbitalWordPositionsRef.current[lineKey] ?? positions;
+          const smoothed = positions.map((target, idx) => {
+            const current = previousPositions[idx] ?? target;
+            return {
+              x: current.x + (target.x - current.x) * 0.08,
+              y: current.y + (target.y - current.y) * 0.08,
+            };
+          });
+          orbitalWordPositionsRef.current = { [lineKey]: smoothed };
+        } else {
+          let currentX = lineX - measuredLayout2.total / 2;
+          measuredLayout2.widths.forEach((width) => {
+            positions.push({ x: currentX + width / 2, y: lineY });
+            currentX += width + measuredLayout2.spacing;
+          });
+        }
       }
 
       words.forEach((word, wi) => {
