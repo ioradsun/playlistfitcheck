@@ -330,7 +330,8 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     if (playerInitializedRef.current) return;
-    if (!data || !data.words?.length || !data.cinematic_direction) return;
+    if (!data || !data.cinematic_direction) return;
+    // words are optional — player falls back to line-level timing if absent
     if (!bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
     playerInitializedRef.current = true;
@@ -370,7 +371,7 @@ export default function ShareableLyricDance() {
       setPlayerInstance(null);
       playerInitializedRef.current = false;
     };
-  }, [playerKey, data?.words?.length, !!data?.cinematic_direction]);
+  }, [playerKey, !!data?.cinematic_direction]);
 
   // ── Hot-patch chapter images without restart ───────────────────────
   useEffect(() => {
