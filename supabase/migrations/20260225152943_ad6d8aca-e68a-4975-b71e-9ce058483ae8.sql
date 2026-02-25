@@ -1,0 +1,1 @@
+ALTER TABLE public.shareable_lyric_dances RENAME COLUMN chapter_images TO section_images;

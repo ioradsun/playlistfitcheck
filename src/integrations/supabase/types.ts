@@ -1256,7 +1256,6 @@ export type Database = {
           audio_url: string
           background_url: string | null
           beat_grid: Json
-          chapter_images: Json | null
           cinematic_direction: Json | null
           created_at: string
           fire_count: number
@@ -1266,6 +1265,7 @@ export type Database = {
           physics_spec: Json
           scene_context: Json | null
           scene_manifest: Json | null
+          section_images: Json | null
           seed: string
           song_name: string
           song_slug: string
@@ -1281,7 +1281,6 @@ export type Database = {
           audio_url: string
           background_url?: string | null
           beat_grid: Json
-          chapter_images?: Json | null
           cinematic_direction?: Json | null
           created_at?: string
           fire_count?: number
@@ -1291,6 +1290,7 @@ export type Database = {
           physics_spec: Json
           scene_context?: Json | null
           scene_manifest?: Json | null
+          section_images?: Json | null
           seed?: string
           song_name: string
           song_slug: string
@@ -1306,7 +1306,6 @@ export type Database = {
           audio_url?: string
           background_url?: string | null
           beat_grid?: Json
-          chapter_images?: Json | null
           cinematic_direction?: Json | null
           created_at?: string
           fire_count?: number
@@ -1316,6 +1315,7 @@ export type Database = {
           physics_spec?: Json
           scene_context?: Json | null
           scene_manifest?: Json | null
+          section_images?: Json | null
           seed?: string
           song_name?: string
           song_slug?: string
