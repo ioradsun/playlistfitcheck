@@ -61,19 +61,24 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
     setActivePlaying(prev => prev === side ? null : side);
   }, []);
 
-  // When a hook finishes, alternate to the other side; if both played, stop
+  // When a hook finishes, alternate to the other side; if both played, stop.
+  // ONLY auto-alternate if user has actively started playback (activePlaying !== null).
   const playedRef = useRef<Set<"a" | "b">>(new Set());
   const handleHookEnd = useCallback((side: "a" | "b") => {
-    playedRef.current.add(side);
-    if (side === "a" && !playedRef.current.has("b")) {
-      setActivePlaying("b");
-    } else if (side === "b" && !playedRef.current.has("a")) {
-      setActivePlaying("a");
-    } else {
-      // Both have played — stop
-      setActivePlaying(null);
-      playedRef.current.clear();
-    }
+    // If nothing is actively playing (user hasn't tapped), ignore onEnd events
+    setActivePlaying(prev => {
+      if (!prev) return null; // No auto-start from silent state
+      playedRef.current.add(side);
+      if (side === "a" && !playedRef.current.has("b")) {
+        return "b";
+      } else if (side === "b" && !playedRef.current.has("a")) {
+        return "a";
+      } else {
+        // Both have played — stop
+        playedRef.current.clear();
+        return null;
+      }
+    });
   }, []);
 
   // Reset played tracker when user manually taps
