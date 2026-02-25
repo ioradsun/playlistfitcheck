@@ -2,9 +2,10 @@
  * FitTab — Displays analysis results with waveform + beat markers.
  * Centered single-column layout for readability.
  * Pipeline runs in LyricFitTab parent.
+ * v2: removed lyrics column, single-column report.
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Film, RefreshCw, Music, Sparkles, Eye, Palette, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -363,29 +364,10 @@ export function FitTab({
   const physicsSpec = songDna?.physicsSpec;
   const meaning = songDna?.meaning;
 
-  // ── Active line tracking for lyrics scroll ────────────────────────────
-  const activeLineIdx = useMemo(() => {
-    if (!lyricData?.lines) return -1;
-    const ml = lyricData.lines.filter(l => l.tag !== "adlib");
-    for (let i = ml.length - 1; i >= 0; i--) {
-      if (currentTime >= ml[i].start) return i;
-    }
-    return -1;
-  }, [lyricData?.lines, currentTime]);
 
-  const lyricsContainerRef = useRef<HTMLDivElement>(null);
-  const activeLineRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (activeLineRef.current && lyricsContainerRef.current) {
-      activeLineRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [activeLineIdx]);
-
-  const mainLines = useMemo(() => lyricData?.lines?.filter(l => l.tag !== "adlib") ?? [], [lyricData?.lines]);
 
   return (
-    <div className="flex-1 px-4 py-6 space-y-4">
+    <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
       {/* Waveform — full width */}
       {hasRealAudio && (
         <div className="glass-card rounded-xl p-3">
@@ -401,39 +383,9 @@ export function FitTab({
         </div>
       )}
 
-      {/* Two-column split: lyrics left, report/export right */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* LEFT — Lyrics */}
-        <div
-          ref={lyricsContainerRef}
-          className="glass-card rounded-xl p-4 max-h-[60vh] overflow-y-auto space-y-0.5 scrollbar-thin"
-        >
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-3">Lyrics</p>
-          {mainLines.map((line, i) => {
-            const isActive = i === activeLineIdx;
-            return (
-              <div
-                key={i}
-                ref={isActive ? activeLineRef : undefined}
-                className={`py-1 px-2 rounded cursor-pointer text-sm leading-relaxed transition-colors ${
-                  isActive
-                    ? "bg-primary/10 text-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                }`}
-                onClick={() => handleSeek(line.start)}
-              >
-                <span className="text-[9px] font-mono text-muted-foreground/50 mr-2 select-none">
-                  {Math.floor(line.start / 60)}:{Math.floor(line.start % 60).toString().padStart(2, "0")}
-                </span>
-                {line.text}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* RIGHT — Report + Export */}
-        <div className="space-y-3">
-          {!allReady && (
+      {/* Single-column report */}
+      <div className="space-y-3">
+        {!allReady && (
             <div className="glass-card rounded-xl p-4 space-y-2">
               <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
                 {hasErrors ? "Some steps failed" : Object.values(generationStatus).some(v => v === "running") ? "Generating Fit in background" : "Analysis not yet complete"}
@@ -647,7 +599,6 @@ export function FitTab({
             </button>
           )}
         </div>
-      </div>
     </div>
   );
 }
