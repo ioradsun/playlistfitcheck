@@ -1,14 +1,13 @@
 // ============= Full file contents =============
 
-import type { Chapter, CinematicDirection, SymbolSystem, TensionStage, WordDirective } from "@/types/CinematicDirection";
+import type { Chapter, CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
 import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
 import type { ParticleEngine } from "@/engine/ParticleEngine";
 import type { DirectionInterpreter, WordHistory } from "@/engine/DirectionInterpreter";
 import type { HookDanceEngine } from "@/engine/HookDanceEngine";
-import { renderSectionBackground, getSymbolStateForProgress } from "@/engine/BackgroundDirector";
+import { renderSectionBackground } from "@/engine/BackgroundDirector";
 import { renderSectionLighting } from "@/engine/LightingDirector";
 import { renderText, type TextState, type TextInput } from "@/engine/renderText";
-import { renderSymbol } from "@/engine/SymbolRenderer";
 import type { RenderSection } from "@/engine/directionResolvers";
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -99,7 +98,6 @@ export interface BackgroundRenderInput {
   now: number;
   lightIntensity: number;
   activeWordPosition: { x: number; y: number };
-  symbol: SymbolSystem | null;
 }
 
 export function renderBackground(
@@ -112,7 +110,7 @@ export function renderBackground(
 ): number {
   const {
     chapter, songProgress, beatIntensity,
-    now, lightIntensity, activeWordPosition, symbol,
+    now, lightIntensity, activeWordPosition,
   } = input;
 
   // Dirty check — same logic as the original rAF loop

@@ -28,8 +28,6 @@ export interface WordPlan {
   hookStartTimes: Float64Array;
   chapterBoundaries: Array<{ start: number; end: number; chapter: Chapter }>;
   tensionBoundaries: Array<{ start: number; end: number; stage: TensionStage }>;
-  shotsByLineIndex: Map<number, any>;
-  cameraByChapterIndex: Map<number, any>;
   /**
    * Word Plan extension notes:
    * - Add new per-word static fields on PlanLine (e.g. semantic buckets, stylistic flags).
@@ -59,8 +57,6 @@ export function buildWordPlan(opts: {
   interpreter: DirectionInterpreter | null;
   chapters?: Chapter[];
   tensionCurve?: TensionStage[];
-  shotProgression?: any[];
-  cameraDistanceByChapter?: any[];
   effectiveSystem: string;
   cw: number;
   ch: number;
@@ -73,8 +69,6 @@ export function buildWordPlan(opts: {
     interpreter,
     chapters,
     tensionCurve,
-    shotProgression,
-    cameraDistanceByChapter,
     effectiveSystem,
     cw,
     ch,
@@ -155,8 +149,6 @@ export function buildWordPlan(opts: {
     hookStartTimes,
     chapterBoundaries: (chapters ?? []).map((chapter) => ({ start: chapter.startRatio, end: chapter.endRatio, chapter })),
     tensionBoundaries: (tensionCurve ?? []).map((stage) => ({ start: stage.startRatio, end: stage.endRatio, stage })),
-    shotsByLineIndex: new Map((shotProgression ?? []).map((shot: any) => [shot.lineIndex, shot])),
-    cameraByChapterIndex: new Map((cameraDistanceByChapter ?? []).map((cam: any) => [cam.chapterIndex, cam])),
   };
 }
 
