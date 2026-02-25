@@ -742,7 +742,7 @@ export class LyricDancePlayer {
     options?: { bootMode?: "minimal" | "full" },
   ) {
     // Invalidate cache if song changed (survives HMR)
-    const sessionKey = `v12-${data.id}`;
+    const sessionKey = `v13-${data.id}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;
@@ -1475,14 +1475,16 @@ export class LyricDancePlayer {
     // Background: static bg cache first, then section images on top
     this.drawBackground(frame);
 
-    // Chapter image overlay with crossfade — index by section_images count, not bgCacheCount
-    const bgBlend = frame.bgBlend ?? 0;
-    const totalImages = this.chapterImages.length || 1;
-    const imgProgress = bgBlend * (totalImages - 1);
-    const imgIdx = Math.floor(imgProgress);
-    const nextImgIdx = Math.min(imgIdx + 1, totalImages - 1);
-    const imgFraction = imgProgress - imgIdx;
-    this.drawChapterImage(imgIdx, nextImgIdx, imgFraction);
+    // Chapter image overlay — use baked chapterIndex directly
+    const imgIdx = Math.min(frame.chapterIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
+    const nextImgIdx = Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
+    // Simple crossfade: use fractional song progress within the chapter
+    const duration = this.audio?.duration || 1;
+    const totalChapters = this.chapterImages.length || 1;
+    const chapterSpan = duration / totalChapters;
+    const chapterLocalProgress = chapterSpan > 0 ? ((this.audio?.currentTime ?? 0) % chapterSpan) / chapterSpan : 0;
+    const crossfade = chapterLocalProgress > 0.85 ? (chapterLocalProgress - 0.85) / 0.15 : 0;
+    this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
 
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
@@ -3460,6 +3462,7 @@ export class LyricDancePlayer {
       timeMs: f.timeMs,
       beatIndex: f.beatIndex,
       bgBlend: f.bgBlend,
+      chapterIndex: f.chapterIndex,
       particles: f.particles,
       cameraX: f.cameraX * sx,
       cameraY: f.cameraY * sy,
@@ -3508,6 +3511,7 @@ export class LyricDancePlayer {
       timeMs: f.timeMs,
       beatIndex: f.beatIndex,
       bgBlend: f.bgBlend,
+      chapterIndex: f.chapterIndex,
       particles: f.particles,
       cameraX: sx ? f.cameraX / sx : f.cameraX,
       cameraY: sy ? f.cameraY / sy : f.cameraY,

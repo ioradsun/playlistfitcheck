@@ -89,6 +89,7 @@ export type Keyframe = {
   }>;
   particleColor?: string;
   atmosphere?: AtmosphereConfig;
+  chapterIndex: number;
 };
 
 export type BakedTimeline = Keyframe[];
@@ -2026,6 +2027,7 @@ function bakeFrame(
     particles,
     particleColor,
     atmosphere: chapterAtmosphere,
+    chapterIndex: activeChapterIdx,
   };
 }
 
