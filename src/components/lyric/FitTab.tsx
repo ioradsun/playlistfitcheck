@@ -361,14 +361,8 @@ export function FitTab({
   const physicsSpec = songDna?.physicsSpec;
   const meaning = songDna?.meaning;
 
-  // Find active lyric line based on currentTime
-  const activeLineIdx = lyricData.lines.findIndex((line, i) => {
-    const next = lyricData.lines[i + 1];
-    return currentTime >= line.start && (next ? currentTime < next.start : currentTime <= line.end);
-  });
-
   return (
-    <div className="flex-1 px-4 py-6 space-y-4">
+    <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
       {/* Waveform — full width */}
       {hasRealAudio && (
         <div className="glass-card rounded-xl p-3">
@@ -384,34 +378,8 @@ export function FitTab({
         </div>
       )}
 
-      {/* Two-column layout: lyrics left, report/controls right */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* ── Left column: Lyrics ── */}
-        <div className="glass-card rounded-xl p-3 max-h-[60vh] overflow-y-auto space-y-0.5">
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">Lyrics</p>
-          {lyricData.lines.filter(l => l.tag !== "adlib").map((line, i) => {
-            const isActive = i === activeLineIdx;
-            return (
-              <button
-                key={i}
-                onClick={() => handleSeek(line.start)}
-                className={`w-full text-left px-2 py-1 rounded transition-colors text-sm leading-relaxed ${
-                  isActive
-                    ? "bg-primary/10 text-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                }`}
-              >
-                <span className="text-[9px] font-mono text-muted-foreground/50 mr-2 tabular-nums">
-                  {line.start.toFixed(1)}s
-                </span>
-                {line.text}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ── Right column: Report + Export ── */}
-        <div className="space-y-3">
+      {/* Report + Export */}
+      <div className="space-y-3">
           {/* Generation status */}
           {!allReady && (
             <div className="glass-card rounded-xl p-4 space-y-2">
@@ -627,7 +595,6 @@ export function FitTab({
               )}
             </button>
           )}
-        </div>
       </div>
     </div>
   );
