@@ -715,9 +715,10 @@ export function useHookCanvas(
 
   // Track active prop — pause/resume engine
   useEffect(() => {
+    const wasActive = activeRef.current;
     activeRef.current = active;
-    if (active) {
-      // Reset so onEnd can fire again for this new activation
+    if (active && !wasActive) {
+      // Only reset when transitioning from inactive → active (not when staying active)
       firedEndRef.current = false;
     }
     const engine = engineRef.current;

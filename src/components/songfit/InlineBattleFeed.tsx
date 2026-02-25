@@ -161,7 +161,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
 
       {/* Bottom controls */}
       {hooksReady && (
-        <div className="absolute bottom-0 left-0 p-2 z-10 pointer-events-none">
+        <div className="absolute bottom-0 left-0 p-2 z-30 pointer-events-none">
           <button
             onClick={(e) => {
               e.stopPropagation();
