@@ -603,12 +603,30 @@ export function LyricDisplay({
       const lyricsForDirection = data.lines
         .filter((l: any) => l.tag !== "adlib")
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+      const existingSections = (songDna as any)?.cinematic_direction?.sections;
+      const audioLen = audioBuffer?.duration ?? (data.lines.length > 0 ? data.lines[data.lines.length - 1].end : 1);
+      const audioSections = Array.isArray(existingSections) && existingSections.length > 0
+        ? existingSections.map((s: any, i: number) => ({
+            index: s.sectionIndex ?? i,
+            startSec: (s.startRatio ?? 0) * audioLen,
+            endSec: (s.endRatio ?? 1) * audioLen,
+            role: s.mood ?? "verse",
+            avgEnergy: 0.5,
+            beatDensity: 1,
+            lyrics: lyricsForDirection.filter((l: any) => {
+              const secStart = (s.startRatio ?? 0) * audioLen;
+              const secEnd = (s.endRatio ?? 1) * audioLen;
+              return (l.start ?? 0) >= secStart && (l.start ?? 0) < secEnd;
+            }).map((l: any, li: number) => ({ text: l.text, lineIndex: li })),
+          }))
+        : undefined;
       const { data: result, error } = await supabase.functions.invoke("cinematic-direction", {
         body: {
           title: data.title,
           artist: profileDisplayName || "artist",
           lines: lyricsForDirection,
           listenerScene: direction.trim(),
+          audioSections,
         },
       });
       if (error) throw error;
@@ -2470,12 +2488,30 @@ export function LyricDisplay({
             const lyricsForDirection = data.lines
               .filter((l: any) => l.tag !== "adlib")
               .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+             const audioLen2 = audioBuffer?.duration ?? (data.lines.length > 0 ? data.lines[data.lines.length - 1].end : 1);
+            const existingSections2 = (songDna as any)?.cinematic_direction?.sections;
+            const audioSections2 = Array.isArray(existingSections2) && existingSections2.length > 0
+              ? existingSections2.map((s: any, i: number) => ({
+                  index: s.sectionIndex ?? i,
+                  startSec: (s.startRatio ?? 0) * audioLen2,
+                  endSec: (s.endRatio ?? 1) * audioLen2,
+                  role: s.mood ?? "verse",
+                  avgEnergy: 0.5,
+                  beatDensity: 1,
+                  lyrics: lyricsForDirection.filter((l: any) => {
+                    const secStart = (s.startRatio ?? 0) * audioLen2;
+                    const secEnd = (s.endRatio ?? 1) * audioLen2;
+                    return (l.start ?? 0) >= secStart && (l.start ?? 0) < secEnd;
+                  }).map((l: any, li: number) => ({ text: l.text, lineIndex: li })),
+                }))
+              : undefined;
             const { data: result, error } = await supabase.functions.invoke("cinematic-direction", {
               body: {
                 title: data.title,
                 artist: profileDisplayName,
                 lines: lyricsForDirection,
                 lyricId: currentSavedId ?? undefined,
+                audioSections: audioSections2,
               },
             });
             if (error) throw error;
@@ -2496,6 +2532,19 @@ export function LyricDisplay({
             const lyricsForDirection = data.lines
               .filter((l: any) => l.tag !== "adlib")
               .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+             const audioLen3 = audioBuffer?.duration ?? (data.lines.length > 0 ? data.lines[data.lines.length - 1].end : 1);
+             const existingSections3 = (songDna as any)?.cinematic_direction?.sections;
+            const audioSections3 = Array.isArray(existingSections3) && existingSections3.length > 0
+               ? existingSections3.map((s: any, i: number) => ({
+                  index: s.sectionIndex ?? i,
+                  startSec: (s.startRatio ?? 0) * audioLen3,
+                  endSec: (s.endRatio ?? 1) * audioLen3,
+                  role: s.mood ?? "verse",
+                  avgEnergy: 0.5,
+                  beatDensity: 1,
+                  lyrics: [],
+                }))
+              : undefined;
             const { data: dirResult, error } = await supabase.functions.invoke("cinematic-direction", {
               body: {
                 title: data.title,
@@ -2504,6 +2553,7 @@ export function LyricDisplay({
                 beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
                 lyricId: currentSavedId ?? undefined,
                 systemPromptOverride: systemPrompt,
+                audioSections: audioSections3,
               },
             });
             if (error) throw error;

@@ -23,6 +23,34 @@ import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import type { CinematicDirection } from "@/types/CinematicDirection";
 
+// ─── Helpers ────────────────────────────────────────────────────────
+
+/** Reconstruct audioSections from existing cinematic direction for regeneration calls */
+function extractAudioSectionsFromDirection(
+  cinematicDirection: any,
+  lyrics: any[],
+): any[] | undefined {
+  const sections = cinematicDirection?.sections;
+  if (!Array.isArray(sections) || sections.length === 0) return undefined;
+  const lastLine = lyrics[lyrics.length - 1];
+  const totalDur = lastLine?.end ?? lastLine?.start ?? 1;
+  return sections.map((s: any, i: number) => ({
+    index: s.sectionIndex ?? i,
+    startSec: (s.startRatio ?? i / sections.length) * totalDur,
+    endSec: (s.endRatio ?? (i + 1) / sections.length) * totalDur,
+    role: s.mood ?? "verse",
+    avgEnergy: 0.5,
+    beatDensity: 1,
+    lyrics: lyrics
+      .filter((l: any) => {
+        const secStart = (s.startRatio ?? i / sections.length) * totalDur;
+        const secEnd = (s.endRatio ?? (i + 1) / sections.length) * totalDur;
+        return (l.start ?? 0) >= secStart && (l.start ?? 0) < secEnd;
+      })
+      .map((l: any, li: number) => ({ text: l.text, lineIndex: li })),
+  }));
+}
+
 // ─── Types ──────────────────────────────────────────────────────────
 
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
@@ -718,12 +746,14 @@ export default function ShareableLyricDance() {
           const lyricsForDirection = (data.lyrics as any[])
             .filter((l: any) => l.tag !== "adlib")
             .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+          const existingAudioSections = extractAudioSectionsFromDirection(data.cinematic_direction, lyricsForDirection);
           supabase.functions.invoke("cinematic-direction", {
             body: {
               title: data.song_name,
               artist: data.artist_name,
               lines: lyricsForDirection,
               lyricId: data.id,
+              audioSections: existingAudioSections,
             },
           }).then(({ data: dirResult, error }) => {
             if (error) { toast.error("Cinematic direction failed"); return; }
@@ -762,12 +792,14 @@ export default function ShareableLyricDance() {
             const lyricsForDirection = (data.lyrics as any[])
               .filter((l: any) => l.tag !== "adlib")
               .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+            const existingAudioSections2 = extractAudioSectionsFromDirection(data.cinematic_direction, lyricsForDirection);
             const { data: result, error } = await supabase.functions.invoke("cinematic-direction", {
               body: {
                 title: data.song_name,
                 artist: data.artist_name,
                 lines: lyricsForDirection,
                 lyricId: data.id,
+                audioSections: existingAudioSections2,
               },
             });
             if (error) throw error;
@@ -789,6 +821,7 @@ export default function ShareableLyricDance() {
             const lyricsForDirection = (data.lyrics as any[])
               .filter((l: any) => l.tag !== "adlib")
               .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+            const existingAudioSections3 = extractAudioSectionsFromDirection(data.cinematic_direction, lyricsForDirection);
             const { data: dirResult, error } = await supabase.functions.invoke("cinematic-direction", {
               body: {
                 title: data.song_name,
@@ -798,6 +831,7 @@ export default function ShareableLyricDance() {
                 lyricId: data.id,
                 scene_context: data.scene_context ?? null,
                 systemPromptOverride: systemPrompt,
+                audioSections: existingAudioSections3,
               },
             });
             if (error) throw error;
