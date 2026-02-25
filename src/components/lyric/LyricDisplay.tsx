@@ -47,7 +47,7 @@ import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import { LyricDanceDebugPanel } from "./LyricDanceDebugPanel";
 import { HookDanceCanvas } from "./HookDanceCanvas";
-import type { CinematicDirection } from "@/types/CinematicDirection";
+import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
 import { LyricStage } from "./LyricStage";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { DirectorsCutPanel } from "./DirectorsCutPanel";
@@ -1195,10 +1195,15 @@ export function LyricDisplay({
       ? songDna.hook.start / Math.max(0.001, songDuration)
       : 0;
     if (!cinematicDirection) return null;
+    // Resolve wordDirectives to Record form for HookDanceCanvas
+    const rawWd = cinematicDirection.wordDirectives;
+    const wdRecord: Record<string, WordDirective> = Array.isArray(rawWd)
+      ? Object.fromEntries(rawWd.map(w => [w.word.toLowerCase().replace(/[^a-z]/g, ""), w]))
+      : (rawWd ?? {});
     return {
       thesis: cinematicDirection.thesis,
       visualWorld: cinematicDirection.visualWorld,
-      wordDirectives: cinematicDirection.wordDirectives,
+      wordDirectives: wdRecord,
       climax: cinematicDirection.climax,
       activeChapter: cinematicDirection.chapters?.find(c => (
         hookStartRatio >= c.startRatio && hookStartRatio <= c.endRatio
