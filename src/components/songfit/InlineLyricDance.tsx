@@ -139,9 +139,14 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
     setMuted(m => !m);
   }, []);
 
-  const openFullPage = useCallback(() => {
+  const openFullPage = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     window.open(lyricDanceUrl, "_blank");
   }, [lyricDanceUrl]);
+
+  const handleCanvasClick = useCallback(() => {
+    setMuted(m => !m);
+  }, []);
 
   if (error) {
     return (
@@ -164,7 +169,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       ref={containerRef}
       className="relative w-full overflow-hidden bg-black cursor-pointer rounded-xl"
       style={{ minHeight: 352, height: 352 }}
-      onClick={openFullPage}
+      onClick={handleCanvasClick}
     >
       {/* Canvases */}
       <canvas
@@ -205,7 +210,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
               {songTitle}
             </span>
             <button
-              onClick={(e) => { e.stopPropagation(); openFullPage(); }}
+              onClick={openFullPage}
               className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
             >
               <Maximize2 size={14} />
