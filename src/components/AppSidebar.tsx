@@ -270,7 +270,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   const handleRecentClick = (item: RecentItem) => {
     onTabChange?.(item.type);
     const tool = TOOLS.find(t => t.value === item.type);
-    if (tool) navigate(tool.path);
+    if (tool) navigate(`${tool.path}/${item.id}`);
     onLoadProject?.(item.type, item.rawData);
     closeMobileIfNeeded();
   };
