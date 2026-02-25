@@ -255,13 +255,13 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const getBorderStyle = (side: "a" | "b"): React.CSSProperties => {
     // Green highlight on the actively playing side or voted side
     if (activePlaying === side || (votedSide === side && !activePlaying)) {
-      return { boxShadow: "inset 0 0 0 1.5px rgba(34,197,94,0.6)" };
+      return { boxShadow: "inset 0 0 0 3px rgba(34,197,94,0.8)" };
     }
     if ((mode !== "scorecard" && mode !== "results") || !votedSide) return {};
     if (side !== votedSide) return {};
     const palette = side === "a" ? hookA?.palette : hookB?.palette;
     const color = (palette as any)?.[0] || "#ffffff";
-    return { boxShadow: `inset 0 0 0 2px ${color}` };
+    return { boxShadow: `inset 0 0 0 3px ${color}` };
   };
 
   const getSeamColor = () => {
