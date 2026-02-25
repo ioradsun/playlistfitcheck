@@ -1,17 +1,50 @@
+/**
+ * CinematicDirection — unified type supporting both:
+ * - OLD format (thesis, visualWorld, chapters, tensionCurve, etc.)
+ * - NEW format (sceneTone, atmosphere, motion, sections, wordDirectives as array)
+ *
+ * The normalizeCinematicDirection() adapter converts new → old at ingestion time.
+ * All fields below are optional to support both formats.
+ */
+
 export interface CinematicDirection {
-  thesis: string;
-  visualWorld: VisualWorld;
-  chapters: Chapter[];
-  wordDirectives: Record<string, WordDirective>;
-  storyboard: LineDirection[];
-  silenceDirective: SilenceDirective;
-  climax: ClimaxDirective;
-  ending: EndingDirective;
-  symbolSystem: SymbolSystem;
-  cameraLanguage: CameraLanguage;
-  tensionCurve: TensionStage[];
-  shotProgression: ShotType[];
+  // ── NEW backend fields (v2 prompt) ─────────────────────────
+  sceneTone?: string;
+  atmosphere?: string;
+  motion?: string;
+  typography?: string;
+  texture?: string;
+  emotionalArc?: string;
+  sections?: CinematicSection[];
+
+  // ── OLD engine fields (synthesized by normalizer) ──────────
+  thesis?: string;
+  visualWorld?: VisualWorld;
+  chapters?: Chapter[];
+  wordDirectives?: Record<string, WordDirective>;
+  storyboard?: LineDirection[];
+  silenceDirective?: SilenceDirective;
+  climax?: ClimaxDirective;
+  ending?: EndingDirective;
+  symbolSystem?: SymbolSystem;
+  cameraLanguage?: CameraLanguage;
+  tensionCurve?: TensionStage[];
+  shotProgression?: ShotType[];
 }
+
+// ── New section type ─────────────────────────────────────────
+
+export interface CinematicSection {
+  sectionIndex: number;
+  description: string;
+  mood?: string;
+  motion?: string;
+  texture?: string;
+  typography?: string;
+  atmosphere?: string;
+}
+
+// ── Old sub-types (kept for engine compatibility) ────────────
 
 export interface SymbolSystem {
   primary: string;
@@ -83,8 +116,8 @@ export interface Chapter {
   sectionIndices?: number[];
   startSec?: number;
   endSec?: number;
-  startRatio: number;
-  endRatio: number;
+  startRatio?: number;
+  endRatio?: number;
   title: string;
   emotionalArc: string;
   dominantColor: string;
@@ -93,6 +126,15 @@ export interface Chapter {
   backgroundDirective: string;
   emotionalIntensity: number;
   typographyShift: string | null;
+  // New section overrides (optional)
+  motion?: string;
+  texture?: string;
+  typography?: string;
+  atmosphere?: string;
+  overrides?: Record<string, string | undefined>;
+  sectionIndex?: number;
+  description?: string;
+  mood?: string;
 }
 
 export interface WordDirective {
@@ -124,9 +166,11 @@ export interface LineDirection {
   heroWord: string;
   visualTreatment: string;
   entryStyle:
-    | 'fades' | 'slams-in' | 'rises' | 'materializes' | 'fractures-in' | 'cuts';
+    | 'fades' | 'slams-in' | 'rises' | 'materializes' | 'fractures-in' | 'cuts'
+    | string;
   exitStyle:
-    | 'fades' | 'dissolves-upward' | 'shatters' | 'burns-out' | 'drops' | 'lingers';
+    | 'fades' | 'dissolves-upward' | 'shatters' | 'burns-out' | 'drops' | 'lingers'
+    | string;
   particleBehavior: string;
   beatAlignment: string;
   transitionToNext: string;

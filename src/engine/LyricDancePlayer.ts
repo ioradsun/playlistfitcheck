@@ -11,6 +11,7 @@ import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
+import { normalizeCinematicDirection } from "@/lib/normalizeCinematicDirection";
 import { drawIcon, type IconGlyph, type IconStyle } from "@/lib/lyricIcons";
 import {
   bakeSceneChunked,
@@ -1065,9 +1066,10 @@ export class LyricDancePlayer {
   }
 
   updateCinematicDirection(direction: CinematicDirection): void {
-    this.data = { ...this.data, cinematic_direction: direction };
+    const normalized = normalizeCinematicDirection(direction) ?? direction;
+    this.data = { ...this.data, cinematic_direction: normalized };
     if (!this.payload) return;
-    this.payload = { ...this.payload, cinematic_direction: direction };
+    this.payload = { ...this.payload, cinematic_direction: normalized };
     this.buildChunkCache(this.payload);
     this.buildBgCache();
     this.deriveVisualSystems();
@@ -1942,7 +1944,7 @@ export class LyricDancePlayer {
       beat_grid: this.data.beat_grid,
       physics_spec: this.data.physics_spec,
       scene_manifest: this.data.scene_manifest ?? null,
-      cinematic_direction: this.data.cinematic_direction ?? null,
+      cinematic_direction: normalizeCinematicDirection(this.data.cinematic_direction) ?? this.data.cinematic_direction ?? null,
       auto_palettes: this.data.auto_palettes,
       palette: this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"],
       lineBeatMap: [],
@@ -1963,7 +1965,8 @@ export class LyricDancePlayer {
     measureCanvas.height = 540;
     const measureCtx = measureCanvas.getContext('2d')!;
 
-    const typo = payload.cinematic_direction?.visualWorld?.typographyProfile;
+    const cd = normalizeCinematicDirection(payload.cinematic_direction) ?? payload.cinematic_direction;
+    const typo = cd?.visualWorld?.typographyProfile;
     const fontFamily = typo?.fontFamily?.trim() || 'Montserrat';
     const fontWeight = typo?.fontWeight || 800;
     const textTransform = typo?.textTransform || 'uppercase';
