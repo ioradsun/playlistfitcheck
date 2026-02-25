@@ -247,6 +247,12 @@ const Index = () => {
   const refreshSidebar = useCallback(() => setSidebarRefreshKey(k => k + 1), []);
   const [deferSidebarReady, setDeferSidebarReady] = useState(false);
 
+  // Shared header UI persists across route transitions, so clear route-scoped
+  // project chrome immediately whenever the pathname changes.
+  useEffect(() => {
+    setHeaderProject(null);
+  }, [location.pathname]);
+
   useEffect(() => {
     const idle = window.setTimeout(() => setDeferSidebarReady(true), 250);
     return () => window.clearTimeout(idle);
