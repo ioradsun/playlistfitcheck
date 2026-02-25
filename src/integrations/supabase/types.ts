@@ -589,6 +589,7 @@ export type Database = {
       mix_projects: {
         Row: {
           created_at: string
+          deleted_at: string | null
           id: string
           mixes: Json | null
           notes: string | null
@@ -598,6 +599,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           mixes?: Json | null
           notes?: string | null
@@ -607,6 +609,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           mixes?: Json | null
           notes?: string | null
@@ -900,6 +903,7 @@ export type Database = {
           artist_id: string
           blueprint_json: Json
           created_at: string
+          deleted_at: string | null
           id: string
           model_info: string | null
           share_token: string | null
@@ -909,6 +913,7 @@ export type Database = {
           artist_id: string
           blueprint_json: Json
           created_at?: string
+          deleted_at?: string | null
           id?: string
           model_info?: string | null
           share_token?: string | null
@@ -918,6 +923,7 @@ export type Database = {
           artist_id?: string
           blueprint_json?: Json
           created_at?: string
+          deleted_at?: string | null
           id?: string
           model_info?: string | null
           share_token?: string | null
@@ -937,6 +943,7 @@ export type Database = {
         Row: {
           analysis_json: Json
           created_at: string
+          deleted_at: string | null
           filename: string
           id: string
           updated_at: string
@@ -945,6 +952,7 @@ export type Database = {
         Insert: {
           analysis_json: Json
           created_at?: string
+          deleted_at?: string | null
           filename?: string
           id?: string
           updated_at?: string
@@ -953,6 +961,7 @@ export type Database = {
         Update: {
           analysis_json?: Json
           created_at?: string
+          deleted_at?: string | null
           filename?: string
           id?: string
           updated_at?: string
@@ -974,6 +983,7 @@ export type Database = {
           background_image_url: string | null
           beat_grid: Json | null
           created_at: string
+          deleted_at: string | null
           filename: string | null
           fmly_lines: Json | null
           id: string
@@ -991,6 +1001,7 @@ export type Database = {
           background_image_url?: string | null
           beat_grid?: Json | null
           created_at?: string
+          deleted_at?: string | null
           filename?: string | null
           fmly_lines?: Json | null
           id?: string
@@ -1008,6 +1019,7 @@ export type Database = {
           background_image_url?: string | null
           beat_grid?: Json | null
           created_at?: string
+          deleted_at?: string | null
           filename?: string | null
           fmly_lines?: Json | null
           id?: string
@@ -1027,6 +1039,7 @@ export type Database = {
           blended_label: string | null
           blended_score: number | null
           created_at: string
+          deleted_at: string | null
           health_label: string | null
           health_score: number | null
           id: string
@@ -1041,6 +1054,7 @@ export type Database = {
           blended_label?: string | null
           blended_score?: number | null
           created_at?: string
+          deleted_at?: string | null
           health_label?: string | null
           health_score?: number | null
           id?: string
@@ -1055,6 +1069,7 @@ export type Database = {
           blended_label?: string | null
           blended_score?: number | null
           created_at?: string
+          deleted_at?: string | null
           health_label?: string | null
           health_score?: number | null
           id?: string
@@ -1070,6 +1085,7 @@ export type Database = {
       saved_vibefit: {
         Row: {
           created_at: string
+          deleted_at: string | null
           genre: string
           id: string
           moods: string[]
@@ -1080,6 +1096,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           genre?: string
           id?: string
           moods?: string[]
@@ -1090,6 +1107,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           genre?: string
           id?: string
           moods?: string[]
@@ -1985,6 +2003,7 @@ export type Database = {
       }
       increment_cycle_number: { Args: { _post_id: string }; Returns: undefined }
       increment_impressions: { Args: { _post_id: string }; Returns: undefined }
+      purge_old_trash: { Args: never; Returns: undefined }
       update_submission_statuses: { Args: never; Returns: undefined }
     }
     Enums: {
