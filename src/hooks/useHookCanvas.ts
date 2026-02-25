@@ -602,10 +602,7 @@ export function useHookCanvas(
       // Defer to avoid calling setState during render frame
       setTimeout(() => onEndRef.current?.(), 0);
     }
-    // Reset the flag when progress loops back
-    if (hookProgress < 0.5) {
-      firedEndRef.current = false;
-    }
+    // Note: do NOT reset firedEndRef on loop — onEnd should only fire once per activation
 
     ctx.restore();
   }, [hookData, canvasRef, containerRef, constellationRef, riverOffsetsRef]);
@@ -719,6 +716,10 @@ export function useHookCanvas(
   // Track active prop — pause/resume engine
   useEffect(() => {
     activeRef.current = active;
+    if (active) {
+      // Reset so onEnd can fire again for this new activation
+      firedEndRef.current = false;
+    }
     const engine = engineRef.current;
     if (!engine) return;
     if (!active) {
