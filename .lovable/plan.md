@@ -1,59 +1,59 @@
 
 
-# Fix Hook Battle Text Stacking
+# Hook Battle Signal Buttons
 
-## The Problem
+## Overview
+When a CrowdFit post contains a hook battle (instead of a regular track), the signal buttons and results text need to reflect the battle context: "LEFT HOOK" vs "RIGHT HOOK" instead of "Run it back" vs "Skip".
 
-In the `useHookCanvas.ts` rendering code, `computeStackedLayout()` is called and correctly detects when text needs to be stacked into multiple lines (e.g., when the canvas is narrow, like in a 50/50 battle split). However, the **actual drawing code completely ignores the stacked lines**. It always splits the full `activeLine.text` into individual words and lays them out **horizontally on a single row** (lines 450-456). The stacked layout is only used for font size calculation -- the multi-line positioning is never applied.
+## Changes
 
-This means in a battle view where each canvas is ~half the screen width (well under the 600px stacking threshold), the text tries to render all words on one line, causing them to overlap and run into each other.
+### 1. Add a `isBattle` prop to HookReview
 
-## The Fix
+**File: `src/components/songfit/HookReview.tsx`**
 
-**File: `src/hooks/useHookCanvas.ts`** (lines ~370-470)
+- Add an optional `isBattle?: boolean` prop to the `Props` interface
+- When `isBattle` is true:
+  - Step 2 buttons change from "Run it back" / "Skip" to "LEFT HOOK" / "RIGHT HOOK"
+  - The `would_replay` mapping stays the same (LEFT HOOK = true, RIGHT HOOK = false) so the same DB schema works
+  - Results "done" state changes label from "REPLAY FIT" to "LEFT HOOK" percentage display:
+    - Instead of `"67% REPLAY FIT"`, show `"67% LEFT HOOK"`
+    - The tally text stays the same: `"2 OF 3 FMLY MEMBERS"`
+  - Pre-resolved billboard mode also uses the battle labels
+  - The "replay_cta" step prompt changes from Spotify CTAs to a simpler comment-only flow (no "Follow artist" / "Save track" links since battles don't have a single Spotify track)
+  - The "skip_cta" prompt changes from "What's missing?" to "What sealed it?" or similar battle-appropriate copy
 
-Replace the single-line horizontal word layout with a stacked-aware layout that:
+### 2. Pass `isBattle` from SongFitPostCard
 
-1. When `stackedLayout.isStacked` is `true`, renders each stacked line on its own vertical row
-2. Each stacked line's words are measured and positioned horizontally within that row
-3. The vertical spacing uses the system style's `lineHeight` multiplied by font size
-4. The total block is vertically centered on the canvas (same `lineY` center point)
+**File: `src/components/songfit/SongFitPostCard.tsx`**
 
-### Current flow (broken):
-```text
-computeStackedLayout() --> returns { lines: ["line 1", "line 2"], isStacked: true }
-                      |
-                      v  (only fs is used)
-words = activeLine.text.split(" ")  <-- ignores stacked lines
-positions = all words on single horizontal row at lineY
+- Detect battle posts using the existing condition: `post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id`
+- Pass `isBattle={true}` to the `HookReview` component when this condition is met
+
+## Technical Details
+
+### HookReview.tsx changes (around lines 14, 47, 156-190, 239-257, 195-236)
+
+**Props interface** -- add `isBattle?: boolean`
+
+**Step 2 buttons (lines 239-257)**:
+- Button labels become conditional: `isBattle ? "LEFT HOOK" : "Run it back"` and `isBattle ? "RIGHT HOOK" : "Skip"`
+
+**Pre-resolved billboard (lines 156-190)**:
+- Same button label logic applies
+
+**Results "done" state (lines 195-236)**:
+- Change fit label: `isBattle ? "LEFT HOOK" : "REPLAY FIT"`
+- The percentage calculation stays the same (`replay_yes / total`)
+
+**replay_cta / skip_cta steps (lines 260-351)**:
+- When `isBattle`, hide the Spotify follow/save CTAs (they don't apply to battles)
+- Adjust placeholder text to be battle-appropriate
+
+### SongFitPostCard.tsx changes (around line 457)
+
+Add the `isBattle` prop:
 ```
-
-### Fixed flow:
-```text
-computeStackedLayout() --> returns { lines: ["line 1", "line 2"], isStacked: true }
-                      |
-                      v
-if (isStacked) {
-  for each stacked line:
-    words = line.split(" ")
-    positions = horizontal row at lineY + row offset
-}
-else {
-  words = activeLine.text.split(" ")  // existing single-line logic
-  positions = single horizontal row at lineY
-}
+const isBattlePost = !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
 ```
+Then pass `isBattle={isBattlePost}` to `<HookReview>`.
 
-### Specific changes:
-
-**In `useHookCanvas.ts`, around lines 370-470** -- restructure the word positioning block:
-
-- Move the existing `words`, `measureLineWidth`, and position calculation into an `else` branch (non-stacked case, unchanged)
-- Add a new `if (stackedLayout.isStacked)` branch that:
-  - Calculates vertical offset for each stacked line: `rowY = lineY - totalBlockHeight/2 + rowIndex * rowHeight + rowHeight/2`
-  - For each stacked line, measures its words, centers them horizontally, and pushes `{x, y}` positions
-  - Builds a flat `words[]` array and matching flat `positions[]` array so the existing per-word rendering loop (lines 458-470) works without changes
-- The orbital layout path remains in the non-stacked branch only (orbital doesn't apply to narrow stacked views)
-- The `workingFontSize` shrink loop is kept but uses the stacked font size when stacked
-
-No other files need to change. The `computeStackedLayout` function in `SystemStyles.ts` already works correctly -- it just wasn't being used for rendering.
