@@ -115,13 +115,54 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       setRecentItems([]);
       return;
     }
+
+    const [
+      { data: reports },
+      { data: searches },
+      { data: mixes },
+      { data: lyrics },
+      { data: hitfits },
+      { data: vibefits },
+    ] = await Promise.all([
+      supabase
+        .from("profit_reports")
+        .select("id, created_at, blueprint_json, share_token, artist_id, profit_artists!inner(name, spotify_artist_id, image_url, genres_json, followers_total, popularity, raw_artist_json, signals_json)")
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("saved_searches")
+        .select("id, playlist_name, playlist_url, song_url, report_data, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("mix_projects")
+        .select("id, title, notes, mixes, updated_at")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("saved_lyrics")
+        .select("id, title, lines, filename, updated_at, audio_url, beat_grid, song_signature, song_dna, fmly_lines, version_meta")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("saved_hitfit")
+        .select("id, filename, analysis_json, updated_at")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("saved_vibefit")
+        .select("id, song_title, updated_at, result_json")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(20),
+    ]);
+
     const items: RecentItem[] = [];
 
-    const { data: reports } = await supabase
-      .from("profit_reports")
-      .select("id, created_at, blueprint_json, share_token, artist_id, profit_artists!inner(name, spotify_artist_id, image_url, genres_json, followers_total, popularity, raw_artist_json, signals_json)")
-      .order("created_at", { ascending: false })
-      .limit(20);
     if (reports) {
       reports.forEach((r: any) => {
         items.push({
@@ -148,12 +189,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       });
     }
 
-    const { data: searches } = await supabase
-      .from("saved_searches")
-      .select("id, playlist_name, playlist_url, song_url, report_data, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20);
     if (searches) {
       searches.forEach((s: any) => {
         items.push({
@@ -166,12 +201,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       });
     }
 
-    const { data: mixes } = await supabase
-      .from("mix_projects")
-      .select("id, title, notes, mixes, updated_at")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(20);
     if (mixes) {
       mixes.forEach((m: any) => {
         items.push({
@@ -184,12 +213,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       });
     }
 
-    const { data: lyrics } = await supabase
-      .from("saved_lyrics")
-      .select("id, title, lines, filename, updated_at, audio_url, beat_grid, song_signature, song_dna, fmly_lines, version_meta")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(20);
     if (lyrics) {
       lyrics.forEach((l: any) => {
         items.push({
@@ -202,12 +225,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       });
     }
 
-    const { data: hitfits } = await supabase
-      .from("saved_hitfit")
-      .select("id, filename, analysis_json, updated_at")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(20);
     if (hitfits) {
       hitfits.forEach((h: any) => {
         items.push({
@@ -220,12 +237,6 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       });
     }
 
-    const { data: vibefits } = await supabase
-      .from("saved_vibefit")
-      .select("id, song_title, updated_at, result_json")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(20);
     if (vibefits) {
       vibefits.forEach((v: any) => {
         items.push({
