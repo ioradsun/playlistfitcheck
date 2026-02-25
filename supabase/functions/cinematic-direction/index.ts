@@ -397,71 +397,11 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
   return { ok: errors.length === 0, errors, value: v };
 }
 
-/**
- * Synthesize storyboard and wordDirectives from lyrics when AI fails to provide them.
- */
-function synthesizeDefaults(
-  direction: Record<string, any>,
-  lines: LyricLine[],
-): Record<string, any> {
-  const v = { ...direction };
-
-  // Synthesize storyboard if empty
-  if (!Array.isArray(v.storyboard) || v.storyboard.length < 5) {
-    const nonEmpty = lines
-      .map((l, i) => ({ text: l.text, idx: i }))
-      .filter((l) => l.text.trim().length > 3);
-    const step = Math.max(1, Math.floor(nonEmpty.length / 20));
-    const entries = ENUMS.entries;
-    const exits = ENUMS.exits;
-    v.storyboard = [];
-    for (let i = 0; i < nonEmpty.length && v.storyboard.length < 20; i += step) {
-      const line = nonEmpty[i];
-      const words = line.text.split(/\s+/).filter((w: string) => w.length > 2);
-      const hero = words.reduce((a: string, b: string) => (b.length > a.length ? b : a), words[0] || "");
-      v.storyboard.push({
-        lineIndex: line.idx,
-        heroWord: hero.toUpperCase().replace(/[^A-Z']/g, ""),
-        entryStyle: entries[i % entries.length],
-        exitStyle: exits[i % exits.length],
-      });
-    }
-    console.log(`[cinematic-direction] Synthesized ${v.storyboard.length} storyboard entries`);
-  }
-
-  // Synthesize wordDirectives if empty
-  if (!Array.isArray(v.wordDirectives) || v.wordDirectives.length < 5) {
-    const allWords = lines
-      .flatMap((l) => l.text.split(/\s+/))
-      .filter((w) => w.length > 3)
-      .map((w) => w.toLowerCase().replace(/[^a-z']/g, ""));
-    const unique = [...new Set(allWords)];
-    const step = Math.max(1, Math.floor(unique.length / 20));
-    const entries = ENUMS.entries;
-    const exits = ENUMS.exits;
-    const behaviors = ENUMS.behaviors;
-    v.wordDirectives = [];
-    for (let i = 0; i < unique.length && v.wordDirectives.length < 20; i += step) {
-      v.wordDirectives.push({
-        word: unique[i],
-        emphasisLevel: 2 + (i % 3),
-        entry: entries[i % entries.length],
-        behavior: behaviors[i % behaviors.length],
-        exit: exits[i % exits.length],
-      });
-    }
-    console.log(`[cinematic-direction] Synthesized ${v.wordDirectives.length} wordDirectives`);
-  }
-
-  return v;
-}
-
 async function callWithRetry(
   apiKey: string,
   systemPrompt: string,
   userMessage: string,
   sectionCount: number,
-  lines: LyricLine[],
 ): Promise<Record<string, any>> {
   const callAI = async (messages: Array<{ role: string; content: string }>) => {
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -499,24 +439,51 @@ async function callWithRetry(
   if (!first) throw { status: 422, message: "Invalid JSON from AI" };
 
   const result = validate(first, sectionCount);
-  if (result.ok) return synthesizeDefaults(result.value, lines);
 
-  console.warn("[cinematic-direction] Validation errors, retrying:", result.errors);
+  // Check for empty creative data — this means the prompt failed
+  const missingCreative: string[] = [];
+  if (!Array.isArray(result.value.storyboard) || result.value.storyboard.length === 0) {
+    missingCreative.push("storyboard has 0 entries (need 15-25)");
+  }
+  if (!Array.isArray(result.value.wordDirectives) || result.value.wordDirectives.length === 0) {
+    missingCreative.push("wordDirectives has 0 entries (need 15-25)");
+  }
+
+  const allErrors = [...result.errors, ...missingCreative];
+
+  if (result.ok && missingCreative.length === 0) return result.value;
+
+  console.warn("[cinematic-direction] Errors on first attempt, retrying:", allErrors);
   const retryMessages = [
     ...messages,
     { role: "assistant", content: JSON.stringify(first) },
     {
       role: "user",
-      content: `Your response had these errors:\n${result.errors.join("\n")}\n\nFix them and return corrected JSON only.`,
+      content: `Your response had these errors:\n${allErrors.join("\n")}\n\nFix them and return corrected JSON only. You MUST include 15-25 storyboard entries and 15-25 wordDirectives.`,
     },
   ];
 
   const second = await callAI(retryMessages);
-  if (!second) return synthesizeDefaults(result.value, lines);
+  if (!second) {
+    throw { status: 422, message: `Cinematic direction failed: ${allErrors.join("; ")}` };
+  }
 
   const retryResult = validate(second, sectionCount);
-  console.log(`[cinematic-direction] Retry: ${retryResult.errors.length} errors remaining`);
-  return synthesizeDefaults(retryResult.value, lines);
+
+  // Check retry for empty creative data too
+  const retryStoryboard = Array.isArray(retryResult.value.storyboard) ? retryResult.value.storyboard.length : 0;
+  const retryDirectives = Array.isArray(retryResult.value.wordDirectives) ? retryResult.value.wordDirectives.length : 0;
+
+  if (retryStoryboard === 0 || retryDirectives === 0) {
+    console.error(`[cinematic-direction] Retry still empty: ${retryStoryboard} storyboard, ${retryDirectives} wordDirectives`);
+    throw {
+      status: 422,
+      message: `Cinematic direction failed after retry: storyboard=${retryStoryboard}, wordDirectives=${retryDirectives}`,
+    };
+  }
+
+  console.log(`[cinematic-direction] Retry: ${retryResult.errors.length} errors remaining, ${retryStoryboard} storyboard, ${retryDirectives} wordDirectives`);
+  return retryResult.value;
 }
 
 async function persist(direction: Record<string, any>, lyricId: string): Promise<void> {
@@ -582,7 +549,7 @@ serve(async (req) => {
 
     console.log(`[cinematic-direction] ${title} by ${artist} | ${lines.length} lines | ${sectionCount} sections`);
 
-    const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount, lines);
+    const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount);
 
     if (lyricId) await persist(result, lyricId);
 
