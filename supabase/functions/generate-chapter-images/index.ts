@@ -66,7 +66,7 @@ async function generateImage(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
+      model: "google/gemini-3-pro-image-preview",
       messages: [
         {
           role: "user",
