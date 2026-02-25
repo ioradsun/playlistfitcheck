@@ -379,7 +379,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                         {recents.map((item) => {
                           const isItemSelected = location.pathname.includes(item.id);
                           return (
-                          <li key={item.id} className="group/item flex items-center gap-0.5">
+                          <li key={item.id} className="group/item flex items-center gap-0.5 has-[[data-state=open]]:bg-sidebar-accent rounded-md">
                             {editingId === item.id ? (
                               <form
                                 className="flex-1 min-w-0"
@@ -417,7 +417,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <button
-                                      className="opacity-0 group-hover/item:opacity-100 shrink-0 p-0.5 rounded hover:bg-sidebar-accent transition-opacity"
+                                      className="opacity-0 group-hover/item:opacity-100 data-[state=open]:opacity-100 shrink-0 p-0.5 rounded hover:bg-sidebar-accent transition-opacity"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <MoreVertical size={12} className="text-muted-foreground" />
