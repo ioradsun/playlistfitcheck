@@ -15,6 +15,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import { getSessionId } from "@/lib/sessionId";
+import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
 import { LyricDancePlayer, DEFAULT_DEBUG_STATE, type LyricDanceData, type LiveDebugState } from "@/engine/LyricDancePlayer";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
@@ -27,7 +28,7 @@ import type { CinematicDirection } from "@/types/CinematicDirection";
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
 interface DanceComment { id: string; text: string; submitted_at: string; }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,chapter_images,scene_context";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,chapter_images,auto_palettes,scene_context";
 const DIRECTION_COLUMNS = "cinematic_direction,scene_manifest";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
@@ -246,11 +247,12 @@ export default function ShareableLyricDance() {
           // Check if cinematic_direction already exists in DB
           const { data: existingRow } = await supabase
             .from("shareable_lyric_dances" as any)
-            .select("cinematic_direction, chapter_images")
+            .select("cinematic_direction, chapter_images, auto_palettes")
             .eq("id", d.id)
             .maybeSingle();
           const existingDir = (existingRow as any)?.cinematic_direction;
           const existingImages = (existingRow as any)?.chapter_images;
+          const existingAutoPalettes = (existingRow as any)?.auto_palettes;
 
           if (existingDir && !Array.isArray(existingDir) && existingDir.chapters?.length > 0) {
             // Use cached direction — skip generation
@@ -263,7 +265,7 @@ export default function ShareableLyricDance() {
               existingImages.every((url: string) => !!url);
 
             if (imagesAlreadyExist) {
-              setData(prev => prev ? { ...prev, chapter_images: existingImages } : prev);
+              setData(prev => prev ? { ...prev, chapter_images: existingImages, auto_palettes: Array.isArray(existingAutoPalettes) ? existingAutoPalettes : prev?.auto_palettes } : prev);
             } else {
               // Generate chapter images from existing direction
               const chapters = existingDir.chapters;
@@ -279,8 +281,9 @@ export default function ShareableLyricDance() {
                     })),
                   },
                 }).then(({ data: imgResult }) => {
-                  if (imgResult?.chapter_images) {
-                    setData(prev => prev ? { ...prev, chapter_images: imgResult.chapter_images } : prev);
+                  const nextImages = imgResult?.chapter_images ?? imgResult?.urls;
+                  if (nextImages) {
+                    setData(prev => prev ? { ...prev, chapter_images: nextImages, auto_palettes: imgResult?.auto_palettes ?? prev?.auto_palettes } : prev);
                   }
                 }).catch(() => {});
               }
@@ -311,8 +314,9 @@ export default function ShareableLyricDance() {
                       })),
                     },
                   }).then(({ data: imgResult }) => {
-                    if (imgResult?.chapter_images) {
-                      setData(prev => prev ? { ...prev, chapter_images: imgResult.chapter_images } : prev);
+                    const nextImages = imgResult?.chapter_images ?? imgResult?.urls;
+                    if (nextImages) {
+                      setData(prev => prev ? { ...prev, chapter_images: nextImages, auto_palettes: imgResult?.auto_palettes ?? prev?.auto_palettes } : prev);
                     }
                   }).catch(() => {});
                 }
@@ -382,6 +386,34 @@ export default function ShareableLyricDance() {
     if (!playerRef.current || !data?.chapter_images?.length) return;
     playerRef.current.updateChapterImages(data.chapter_images);
   }, [data?.chapter_images]);
+
+
+  // ── Auto-palette from chapter images (client-side sampler) ───────────────
+  useEffect(() => {
+    if (!data?.id) return;
+    const urls = (data.chapter_images ?? []).filter((u): u is string => Boolean(u));
+    if (urls.length === 0) return;
+    if (Array.isArray(data.auto_palettes) && data.auto_palettes.length >= urls.length) return;
+
+    let cancelled = false;
+    computeAutoPalettesFromUrls(urls)
+      .then(async (autoPalettes) => {
+        if (cancelled || autoPalettes.length === 0) return;
+        setData(prev => (prev ? { ...prev, auto_palettes: autoPalettes } : prev));
+
+        await supabase
+          .from('shareable_lyric_dances' as any)
+          .update({ auto_palettes: autoPalettes })
+          .eq('id', data.id);
+      })
+      .catch((error) => {
+        console.warn('[auto-palette] failed to compute from chapter images', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.id, data?.chapter_images, data?.auto_palettes]);
 
   // ── Hot-patch scene context without restart ────────────────────────
   useEffect(() => {

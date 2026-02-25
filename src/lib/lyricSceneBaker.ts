@@ -21,6 +21,7 @@ export type ScenePayload = {
   physics_spec: PhysicsSpec;
   scene_manifest: SceneManifest | null;
   cinematic_direction: CinematicDirection | null;
+  auto_palettes?: string[][];
   palette: string[];
   lineBeatMap: LineBeatMap[];
   songStart: number;
@@ -230,8 +231,24 @@ const PALETTE_COLORS: Record<string, string[]> = {
 };
 
 function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): string[] {
+  const autoPalettes = payload.auto_palettes;
   const cd = payload.cinematic_direction as unknown as Record<string, unknown> | null;
   const chapters = (cd?.chapters as any[]) ?? [];
+
+  // Priority 1: computed image-driven palettes
+  if (autoPalettes && autoPalettes.length > 0 && chapterProgress != null && chapters.length > 0) {
+    const chapterIdx = chapters.findIndex((ch: any) =>
+      chapterProgress >= (ch.startRatio ?? 0) && chapterProgress < (ch.endRatio ?? 1)
+    );
+    if (chapterIdx >= 0 && autoPalettes[chapterIdx]) {
+      return autoPalettes[chapterIdx];
+    }
+    return autoPalettes[0];
+  }
+
+  if (autoPalettes && autoPalettes.length > 0) {
+    return autoPalettes[0];
+  }
 
   // Check per-chapter palette override first
   if (chapterProgress != null && chapters.length > 0) {

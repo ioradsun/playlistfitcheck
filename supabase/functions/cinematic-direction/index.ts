@@ -34,12 +34,12 @@ You may NOT invent colors, styles, effects, or any values not listed below.
 Return ONLY valid JSON. No markdown. No explanation. No preamble.
 
 ═══════════════════════════════════════
-SECTION 1 — WORLD DEFAULTS (7 picks)
+SECTION 1 — WORLD DEFAULTS (6 picks)
 ═══════════════════════════════════════
 
-Pick exactly one value for each of these 7 dimensions.
+Pick exactly one value for each of these 6 dimensions.
 
-These are the SONG-WIDE DEFAULTS. Chapters can override 5 of them.
+These are the SONG-WIDE DEFAULTS. Chapters can override 4 of them.
 
 SCENE TONE — controls light/dark foundation:
   "dark"         — moody, cinematic, dark backgrounds
@@ -54,8 +54,7 @@ SCENE TONE SELECTION:
   A song that starts dark but ends hopeful = "mixed-dawn" (dark → light).
   Only use "light" if the song is PREDOMINANTLY bright/positive throughout.
   Only use "dark" if the song is PREDOMINANTLY heavy/moody throughout.
-  When in doubt, use "mixed-*" — it unlocks both palette lists and lets
-  chapters override palette per-act for natural progression.
+  When in doubt, use "mixed-*" for emotional transitions.
   The listener's scene should influence this: "at a funeral" = dark,
   "beach sunset" = mixed-dusk, "morning run" = light.
 
@@ -65,13 +64,9 @@ ATMOSPHERE — controls background image treatment:
   "haze"       — dreamy soft focus, blurred background
   "split"      — image on one half, solid color on other
   "grain"      — film grain overlay, analog texture
-  "wash"       — heavy color tint toward palette color
+  "wash"       — heavy color tint toward chapter image tones
   "glass"      — frosted glass effect, modern
   "clean"      — minimal overlay, image-forward
-
-PALETTE — locked color set:
-  Dark palettes:  "cold-gold", "warm-ember", "ice-blue", "midnight-rose", "neon-green", "storm-grey", "blood-red", "lavender-dream", "earth-brown"
-  Light palettes: "pure-white", "soft-cream", "sky-blue", "sunset-pink", "spring-green"
 
 MOTION — text animation cadence:
   "weighted"  — heavy, impactful, hip-hop/trap
@@ -101,12 +96,6 @@ EMOTIONAL ARC — how intensity evolves over the song:
   "flatline"   — intentionally monotone, ambient, meditative
   "eruption"   — quiet start, explodes Act 2, Act 3 rides energy
 
-COMPATIBILITY RULES:
-- If sceneTone is "dark", top-level palette MUST be from the Dark list
-- If sceneTone is "light", top-level palette MUST be from the Light list
-- "mixed-*" tones can use any palette from either list
-- Per-chapter palette overrides can use ANY palette regardless of sceneTone
-
 ═══════════════════════════════════════
 SECTION 2 — CHAPTERS (exactly 3)
 ═══════════════════════════════════════
@@ -126,18 +115,10 @@ Each chapter has:
 - "mood": 2-3 emotional keywords
 
 OPTIONAL per chapter — override the song defaults for THIS act:
-- "palette": override palette for this chapter (any palette, regardless of sceneTone)
 - "motion": override motion for this chapter (same values as Section 1)
 - "texture": override texture for this chapter (same values as Section 1)
 - "typography": override typography for this chapter (same values as Section 1)
 - "atmosphere": override atmosphere for this chapter (same values as Section 1)
-
-PALETTE OVERRIDE is critical for songs whose emotional arc shifts between
-moods. If Act 1 is hopeful and Act 3 is destructive, the text colors
-must change to stay readable against completely different backgrounds.
-
-Use palette overrides whenever the chapter background would make the
-default palette's text color unreadable.
 
 Use chapter overrides to CREATE A JOURNEY. Don't repeat the same values
 as the song defaults unless you mean it. Think like a film director —
@@ -158,15 +139,15 @@ CHAPTER OVERRIDE EXAMPLES:
            motion "weighted", texture "storm" (pain escalates)
     Act 3: "First light hitting the rooftops ahead, the sky turning from black to deep blue"
            motion "fluid", texture "aurora", atmosphere "clean",
-           palette "sky-blue" (release — palette shifts to hope)
+           typography "editorial-light" (release into hopeful clarity)
 
   Listener scene: "watching everything fall apart"
   Song starts bright, ends in destruction (sceneTone "mixed-dusk"):
-    Act 1: (uses song defaults — "elastic", palette "spring-green")
+    Act 1: (uses song defaults — "elastic")
            "Sunlight streaming through clean windows of a house that still feels like home"
-    Act 2: palette "earth-brown", texture "smoke", atmosphere "haze"
+    Act 2: texture "smoke", atmosphere "haze"
            "The same room with boxes stacked against walls, dust floating in fading light"
-    Act 3: palette "warm-ember", motion "glitch", texture "fire",
+    Act 3: motion "glitch", texture "fire",
            atmosphere "cinematic"
            "The house at night, windows glowing orange from the inside, smoke rising"
 
@@ -177,8 +158,7 @@ CHAPTER OVERRIDE EXAMPLES:
 
   Don't override every chapter. Only override when the emotional shift
   demands a different feel. If Act 1 matches the song defaults, omit
-  the override fields entirely. Palette overrides are most useful for
-  "mixed-*" sceneTones where the mood shifts dramatically between acts.
+  the override fields entirely. Chapter overrides are most useful when mood shifts dramatically between acts.
 
 ═══════════════════════════════════════
 SECTION 3 — STORYBOARD (sparse)
@@ -289,7 +269,6 @@ Return this exact JSON structure. All top-level keys are required.
 {
   "sceneTone": "mixed-dusk",
   "atmosphere": "haze",
-  "palette": "spring-green",
   "motion": "elastic",
   "typography": "clean-modern",
   "texture": "dust",
@@ -309,7 +288,6 @@ Return this exact JSON structure. All top-level keys are required.
       "endRatio": 0.75,
       "description": "The green field browning at the edges, dust rising, distant haze on the horizon",
       "mood": "unsettled, building, chaotic",
-      "palette": "earth-brown",
       "motion": "weighted",
       "texture": "smoke",
       "atmosphere": "haze"
@@ -320,7 +298,6 @@ Return this exact JSON structure. All top-level keys are required.
       "endRatio": 1.0,
       "description": "A wide shot of a field consumed by wildfire, smoke billowing into reddish-orange sky",
       "mood": "explosive, destructive, release",
-      "palette": "warm-ember",
       "motion": "glitch",
       "texture": "fire",
       "typography": "display-heavy",
@@ -384,9 +361,9 @@ Return this exact JSON structure. All top-level keys are required.
 }
 
 VALIDATION:
-- sceneTone, atmosphere, palette, motion, typography, texture, emotionalArc are ALL required top-level strings
+- sceneTone, atmosphere, motion, typography, texture, emotionalArc are ALL required top-level strings
 - chapters array MUST have exactly 3 entries
-- Chapter override fields (palette, motion, texture, typography, atmosphere) are OPTIONAL — only include when overriding
+- Chapter override fields (motion, texture, typography, atmosphere) are OPTIONAL — only include when overriding
 - storyboard array MUST have 15-25 entries
 - wordDirectives MUST have 15-25 entries
 - All enum values MUST be from the lists above — do NOT invent values
@@ -493,11 +470,6 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
   const VALID = {
     sceneTone: ["dark", "light", "mixed-dawn", "mixed-dusk", "mixed-pulse"],
     atmosphere: ["void", "cinematic", "haze", "split", "grain", "wash", "glass", "clean"],
-    palette: [
-      "cold-gold", "warm-ember", "ice-blue", "midnight-rose", "neon-green",
-      "storm-grey", "blood-red", "lavender-dream", "earth-brown",
-      "pure-white", "soft-cream", "sky-blue", "sunset-pink", "spring-green",
-    ],
     motion: ["weighted", "fluid", "elastic", "drift", "glitch"],
     typography: [
       "bold-impact", "clean-modern", "elegant-serif", "raw-condensed",
@@ -510,7 +482,6 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
   const DEFAULTS: Record<string, string> = {
     sceneTone: "dark",
     atmosphere: "cinematic",
-    palette: "cold-gold",
     motion: "fluid",
     typography: "clean-modern",
     texture: "dust",
@@ -524,20 +495,6 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
     }
   }
 
-  const DARK_PALETTES = ["cold-gold", "warm-ember", "ice-blue", "midnight-rose", "neon-green", "storm-grey", "blood-red", "lavender-dream", "earth-brown"];
-  const LIGHT_PALETTES = ["pure-white", "soft-cream", "sky-blue", "sunset-pink", "spring-green"];
-
-  if (raw.sceneTone === "dark" && !DARK_PALETTES.includes(raw.palette)) {
-    console.warn(`[CINEMATIC] Palette "${raw.palette}" incompatible with dark tone — falling back to "cold-gold"`);
-    raw.palette = "cold-gold";
-  }
-  if (raw.sceneTone === "light" && !LIGHT_PALETTES.includes(raw.palette)) {
-    console.warn(`[CINEMATIC] Palette "${raw.palette}" incompatible with light tone — falling back to "soft-cream"`);
-    raw.palette = "soft-cream";
-  }
-
-
-
 
   const storyboard = raw.storyboard ?? [];
   const wordCount = Object.keys(raw.wordDirectives ?? {}).length;
@@ -548,7 +505,7 @@ function validateAndCleanGeminiOutput(raw: Record<string, any>): Record<string, 
 
 function validateCinematicDirection(value: Record<string, unknown>): string[] {
   const errors: string[] = [];
-  const required = ["sceneTone", "atmosphere", "palette", "motion", "typography", "texture", "emotionalArc"];
+  const required = ["sceneTone", "atmosphere", "motion", "typography", "texture", "emotionalArc"];
   for (const key of required) {
     if (typeof value[key] !== "string" || !String(value[key]).trim()) {
       errors.push(`${key} is required`);
@@ -582,7 +539,6 @@ async function persistCinematicDirection(cinematicDirection: Record<string, unkn
   const payloadWithColumns = {
     scene_tone: cinematicDirection.sceneTone,
     atmosphere: cinematicDirection.atmosphere,
-    palette: cinematicDirection.palette,
     motion: cinematicDirection.motion,
     typography: cinematicDirection.typography,
     texture: cinematicDirection.texture,
@@ -646,9 +602,9 @@ serve(async (req) => {
 
     const sceneCtx = body.scene_context;
     const luminanceToTone: Record<string, string> = {
-      dark: 'sceneTone should be "dark" or "mixed-dawn". palette must be from the Dark list.',
-      medium: 'sceneTone can be "mixed-dawn", "mixed-dusk", or "mixed-pulse". palette can be from either list.',
-      light: 'sceneTone should be "light". palette must be from the Light list. texture should NOT be "fire" or "storm".',
+      dark: 'sceneTone should be "dark" or "mixed-dawn". Favor lower luminance chapters.',
+      medium: 'sceneTone can be "mixed-dawn", "mixed-dusk", or "mixed-pulse".',
+      light: 'sceneTone should be "light". texture should NOT be "fire" or "storm".',
     };
     const temperatureToTexture: Record<string, string> = {
       warm: 'Prefer warm textures: "fire", "aurora", "dust", "smoke".',
