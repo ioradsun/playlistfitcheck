@@ -361,9 +361,15 @@ export function FitTab({
   const physicsSpec = songDna?.physicsSpec;
   const meaning = songDna?.meaning;
 
+  // Find active lyric line based on currentTime
+  const activeLineIdx = lyricData.lines.findIndex((line, i) => {
+    const next = lyricData.lines[i + 1];
+    return currentTime >= line.start && (next ? currentTime < next.start : currentTime <= line.end);
+  });
+
   return (
     <div className="flex-1 px-4 py-6 space-y-4">
-      {/* Waveform — always at top, matching Lyrics tab */}
+      {/* Waveform — full width */}
       {hasRealAudio && (
         <div className="glass-card rounded-xl p-3">
           <LyricWaveform
@@ -378,229 +384,251 @@ export function FitTab({
         </div>
       )}
 
-      {/* Song overview hero */}
-      {!allReady && (
-        <div className="glass-card rounded-xl p-4 space-y-2">
-          <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-            {hasErrors ? "Some steps failed" : Object.values(generationStatus).some(v => v === "running") ? "Generating Fit in background" : "Analysis not yet complete"}
-          </p>
-          <div className="space-y-1.5 text-xs text-muted-foreground">
-            <div>Rhythm: {generationStatus.beatGrid}</div>
-            <div>Song DNA: {generationStatus.songDna}</div>
-            <div>Cinematic direction: {generationStatus.cinematicDirection}</div>
-          </div>
-          {onRetry && (
+      {/* Two-column layout: lyrics left, report/controls right */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* ── Left column: Lyrics ── */}
+        <div className="glass-card rounded-xl p-3 max-h-[60vh] overflow-y-auto space-y-0.5">
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">Lyrics</p>
+          {lyricData.lines.filter(l => l.tag !== "adlib").map((line, i) => {
+            const isActive = i === activeLineIdx;
+            return (
+              <button
+                key={i}
+                onClick={() => handleSeek(line.start)}
+                className={`w-full text-left px-2 py-1 rounded transition-colors text-sm leading-relaxed ${
+                  isActive
+                    ? "bg-primary/10 text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                }`}
+              >
+                <span className="text-[9px] font-mono text-muted-foreground/50 mr-2 tabular-nums">
+                  {line.start.toFixed(1)}s
+                </span>
+                {line.text}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Right column: Report + Export ── */}
+        <div className="space-y-3">
+          {/* Generation status */}
+          {!allReady && (
+            <div className="glass-card rounded-xl p-4 space-y-2">
+              <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                {hasErrors ? "Some steps failed" : Object.values(generationStatus).some(v => v === "running") ? "Generating Fit in background" : "Analysis not yet complete"}
+              </p>
+              <div className="space-y-1.5 text-xs text-muted-foreground">
+                <div>Rhythm: {generationStatus.beatGrid}</div>
+                <div>Song DNA: {generationStatus.songDna}</div>
+                <div>Cinematic direction: {generationStatus.cinematicDirection}</div>
+              </div>
+              {onRetry && (
+                <button
+                  onClick={onRetry}
+                  className="text-[11px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+                >
+                  <RefreshCw size={10} />
+                  {hasErrors ? "Retry failed steps" : "Re-analyze"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {songDna?.description && (
+            <div className="glass-card rounded-xl p-4 space-y-2">
+              <p className="text-sm text-muted-foreground italic leading-relaxed">{songDna.description}</p>
+              {songDna.mood && (
+                <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                  {songDna.mood}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Song DNA results */}
+          {songDna && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Song DNA</span>
+                {onRetry && hasErrors && (
+                  <button
+                    onClick={onRetry}
+                    className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <RefreshCw size={10} />
+                    Test Again
+                  </button>
+                )}
+              </div>
+
+              {meaning && (
+                <div className="glass-card rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    <Sparkles size={10} />
+                    Meaning
+                  </div>
+                  {meaning.theme && <p className="text-sm font-semibold text-foreground">{meaning.theme}</p>}
+                  {meaning.narrative && <p className="text-xs text-muted-foreground leading-relaxed">{meaning.narrative}</p>}
+                  {meaning.emotions && Array.isArray(meaning.emotions) && (
+                    <div className="flex flex-wrap gap-1">
+                      {meaning.emotions.map((e: string, i: number) => (
+                        <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{e}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(songDna.hook || songDna.secondHook) && (
+                <div className="glass-card rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    <Zap size={10} />
+                    Hottest Hooks
+                  </div>
+                  {songDna.hook && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">{songDna.hookLabel || "Hook 1"}</span>
+                        <span className="text-[9px] text-muted-foreground">{songDna.hook.start?.toFixed(1)}s – {songDna.hook.end?.toFixed(1)}s</span>
+                        {songDna.hook.score && <span className="text-[9px] font-mono text-primary">{songDna.hook.score}%</span>}
+                      </div>
+                      {songDna.hookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.hookJustification}</p>}
+                    </div>
+                  )}
+                  {songDna.secondHook && (
+                    <div className="space-y-1 pt-1 border-t border-border/20">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/50 text-accent-foreground">{songDna.secondHookLabel || "Hook 2"}</span>
+                        <span className="text-[9px] text-muted-foreground">{songDna.secondHook.start?.toFixed(1)}s – {songDna.secondHook.end?.toFixed(1)}s</span>
+                      </div>
+                      {songDna.secondHookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.secondHookJustification}</p>}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {physicsSpec && (
+                <div className="glass-card rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    <Palette size={10} />
+                    Visual System
+                  </div>
+                  {physicsSpec.system && (
+                    <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                      {physicsSpec.system}
+                    </span>
+                  )}
+                  {physicsSpec.palette && Array.isArray(physicsSpec.palette) && (
+                    <div className="flex items-center gap-1">
+                      {physicsSpec.palette.map((c: string, i: number) => (
+                        <div key={i} className="w-5 h-5 rounded-full border border-border/40" style={{ backgroundColor: c }} title={c} />
+                      ))}
+                    </div>
+                  )}
+                  {physicsSpec.typography && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Font: <span className="text-foreground">{physicsSpec.typography.fontFamily || physicsSpec.typography}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {cinematicDirection && (
+                <div className="glass-card rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    <Eye size={10} />
+                    Cinematic Direction
+                  </div>
+                  {cinematicDirection.thesis && (
+                    <p className="text-xs text-muted-foreground italic leading-relaxed">{cinematicDirection.thesis}</p>
+                  )}
+                  {cinematicDirection.tensionCurve && Array.isArray(cinematicDirection.tensionCurve) && (
+                    <div className="flex items-end gap-px h-8">
+                      {cinematicDirection.tensionCurve.map((t: any, i: number) => (
+                        <div
+                          key={i}
+                          className="flex-1 bg-primary/40 rounded-t-sm"
+                          style={{ height: `${(t.motionIntensity ?? t.tension ?? t.value ?? 0.5) * 100}%` }}
+                          title={t.stage || `${i}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {cinematicDirection.chapters && Array.isArray(cinematicDirection.chapters) && (
+                    <div className="space-y-1">
+                      {cinematicDirection.chapters.slice(0, 4).map((ch: any, i: number) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap">{ch.title || `Ch ${i + 1}`}</span>
+                          <p className="text-[10px] text-muted-foreground leading-tight">{ch.emotionalArc || ch.description || ch.mood || ""}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {cinematicDirection.storyboard && Array.isArray(cinematicDirection.storyboard) && (
+                    <p className="text-[9px] text-muted-foreground/60">{cinematicDirection.storyboard.length} storyboard frames</p>
+                  )}
+                </div>
+              )}
+
+              {beatGrid && (
+                <div className="glass-card rounded-xl p-3 space-y-1">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    <Music size={10} />
+                    Rhythm
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-foreground">{beatGrid.bpm.toFixed(0)} BPM</span>
+                    <span className="text-[10px] text-muted-foreground">{Math.round((beatGrid.confidence ?? 0) * 100)}% confidence</span>
+                    <span className="text-[10px] text-muted-foreground">{beatGrid.beats?.length ?? 0} beats</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Dance buttons */}
+          {publishedUrl && !danceNeedsRegeneration ? (
+            <div className="flex gap-2">
+              <a
+                href={publishedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              >
+                <Film size={14} />
+                Watch Dance
+              </a>
+              <button
+                onClick={handleDance}
+                disabled={republishDisabled}
+                className="flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 px-4 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              >
+                {publishing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                Republish
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={onRetry}
-              className="text-[11px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+              onClick={handleDance}
+              disabled={danceDisabled}
+              className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
             >
-              <RefreshCw size={10} />
-              {hasErrors ? "Retry failed steps" : "Re-analyze"}
+              {publishing ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>{publishStatus || "Publishing…"}</span>
+                </span>
+              ) : (
+                <>
+                  <Film size={14} />
+                  {publishedUrl ? "Regenerate Dance" : "Dance"}
+                </>
+              )}
             </button>
           )}
         </div>
-      )}
-
-      {songDna?.description && (
-        <div className="glass-card rounded-xl p-4 space-y-2">
-          <p className="text-sm text-muted-foreground italic leading-relaxed">{songDna.description}</p>
-          {songDna.mood && (
-            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-              {songDna.mood}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Song DNA results */}
-      {songDna && (
-        <div className="space-y-3">
-          {/* Header + Test Again */}
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Song DNA</span>
-            {onRetry && hasErrors && (
-              <button
-                onClick={onRetry}
-                className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
-              >
-                <RefreshCw size={10} />
-                Test Again
-              </button>
-            )}
-          </div>
-
-
-          {/* Meaning & Theme */}
-          {meaning && (
-            <div className="glass-card rounded-xl p-3 space-y-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                <Sparkles size={10} />
-                Meaning
-              </div>
-              {meaning.theme && <p className="text-sm font-semibold text-foreground">{meaning.theme}</p>}
-              {meaning.narrative && <p className="text-xs text-muted-foreground leading-relaxed">{meaning.narrative}</p>}
-              {meaning.emotions && Array.isArray(meaning.emotions) && (
-                <div className="flex flex-wrap gap-1">
-                  {meaning.emotions.map((e: string, i: number) => (
-                    <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{e}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Hooks */}
-          {(songDna.hook || songDna.secondHook) && (
-            <div className="glass-card rounded-xl p-3 space-y-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                <Zap size={10} />
-                Hottest Hooks
-              </div>
-              {songDna.hook && (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">{songDna.hookLabel || "Hook 1"}</span>
-                    <span className="text-[9px] text-muted-foreground">{songDna.hook.start?.toFixed(1)}s – {songDna.hook.end?.toFixed(1)}s</span>
-                    {songDna.hook.score && <span className="text-[9px] font-mono text-primary">{songDna.hook.score}%</span>}
-                  </div>
-                  {songDna.hookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.hookJustification}</p>}
-                </div>
-              )}
-              {songDna.secondHook && (
-                <div className="space-y-1 pt-1 border-t border-border/20">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/50 text-accent-foreground">{songDna.secondHookLabel || "Hook 2"}</span>
-                    <span className="text-[9px] text-muted-foreground">{songDna.secondHook.start?.toFixed(1)}s – {songDna.secondHook.end?.toFixed(1)}s</span>
-                  </div>
-                  {songDna.secondHookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.secondHookJustification}</p>}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Physics / Visual System */}
-          {physicsSpec && (
-            <div className="glass-card rounded-xl p-3 space-y-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                <Palette size={10} />
-                Visual System
-              </div>
-              {physicsSpec.system && (
-                <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
-                  {physicsSpec.system}
-                </span>
-              )}
-              {physicsSpec.palette && Array.isArray(physicsSpec.palette) && (
-                <div className="flex items-center gap-1">
-                  {physicsSpec.palette.map((c: string, i: number) => (
-                    <div key={i} className="w-5 h-5 rounded-full border border-border/40" style={{ backgroundColor: c }} title={c} />
-                  ))}
-                </div>
-              )}
-              {physicsSpec.typography && (
-                <p className="text-[10px] text-muted-foreground">
-                  Font: <span className="text-foreground">{physicsSpec.typography.fontFamily || physicsSpec.typography}</span>
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Cinematic Direction */}
-          {cinematicDirection && (
-            <div className="glass-card rounded-xl p-3 space-y-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                <Eye size={10} />
-                Cinematic Direction
-              </div>
-              {cinematicDirection.thesis && (
-                <p className="text-xs text-muted-foreground italic leading-relaxed">{cinematicDirection.thesis}</p>
-              )}
-              {cinematicDirection.tensionCurve && Array.isArray(cinematicDirection.tensionCurve) && (
-                <div className="flex items-end gap-px h-8">
-                  {cinematicDirection.tensionCurve.map((t: any, i: number) => (
-                    <div
-                      key={i}
-                      className="flex-1 bg-primary/40 rounded-t-sm"
-                      style={{ height: `${(t.motionIntensity ?? t.tension ?? t.value ?? 0.5) * 100}%` }}
-                      title={t.stage || `${i}`}
-                    />
-                  ))}
-                </div>
-              )}
-              {cinematicDirection.chapters && Array.isArray(cinematicDirection.chapters) && (
-                <div className="space-y-1">
-                  {cinematicDirection.chapters.slice(0, 4).map((ch: any, i: number) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap">{ch.title || `Ch ${i + 1}`}</span>
-                      <p className="text-[10px] text-muted-foreground leading-tight">{ch.emotionalArc || ch.description || ch.mood || ""}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {cinematicDirection.storyboard && Array.isArray(cinematicDirection.storyboard) && (
-                <p className="text-[9px] text-muted-foreground/60">{cinematicDirection.storyboard.length} storyboard frames</p>
-              )}
-            </div>
-          )}
-
-          {/* Beat Grid */}
-          {beatGrid && (
-            <div className="glass-card rounded-xl p-3 space-y-1">
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                <Music size={10} />
-                Rhythm
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-foreground">{beatGrid.bpm.toFixed(0)} BPM</span>
-                <span className="text-[10px] text-muted-foreground">{Math.round((beatGrid.confidence ?? 0) * 100)}% confidence</span>
-                <span className="text-[10px] text-muted-foreground">{beatGrid.beats?.length ?? 0} beats</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Dance buttons */}
-      {publishedUrl && !danceNeedsRegeneration ? (
-        <div className="flex gap-2">
-          <a
-            href={publishedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-          >
-            <Film size={14} />
-            Watch Dance
-          </a>
-          <button
-            onClick={handleDance}
-            disabled={republishDisabled}
-            className="flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 px-4 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-          >
-            {publishing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            Republish
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={handleDance}
-          disabled={danceDisabled}
-          className="w-full flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-        >
-          {publishing ? (
-            <span className="flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin" />
-              <span>{publishStatus || "Publishing…"}</span>
-            </span>
-          ) : (
-            <>
-              <Film size={14} />
-              {publishedUrl ? "Regenerate Dance" : "Dance"}
-            </>
-          )}
-        </button>
-      )}
-
+      </div>
     </div>
   );
 }
