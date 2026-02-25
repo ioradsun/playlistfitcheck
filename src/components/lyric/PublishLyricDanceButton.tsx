@@ -206,6 +206,7 @@ export function PublishLyricDanceButton({
             supabase.functions.invoke("generate-section-images", {
               body: {
                 lyric_dance_id: danceRow.id,
+                force: true,
               },
             }).then(({ data: imgResult }) => {
               console.log("[PUBLISH] Section images generated:", imgResult?.generated ?? 0);
