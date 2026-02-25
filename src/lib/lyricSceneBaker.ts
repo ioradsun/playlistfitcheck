@@ -1,4 +1,5 @@
-import type { CinematicDirection } from "@/types/CinematicDirection";
+import type { CinematicDirection, CinematicSection } from "@/types/CinematicDirection";
+import { enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { SceneManifest } from "@/engine/SceneManifest";
@@ -234,7 +235,14 @@ const PALETTE_COLORS: Record<string, string[]> = {
 function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): string[] {
   const autoPalettes = payload.auto_palettes;
   const cd = payload.cinematic_direction as unknown as Record<string, unknown> | null;
-  const chapters = (cd?.chapters as any[]) ?? [];
+  const rawChapters = (cd?.chapters as any[]) ?? [];
+  const chapters = rawChapters.length > 0
+    ? rawChapters
+    : enrichSections((cd?.sections as CinematicSection[] | undefined)).map((s) => ({
+        startRatio: s.startRatio,
+        endRatio: s.endRatio,
+        palette: undefined,
+      }));
 
   // Priority 1: computed image-driven palettes
   if (autoPalettes && autoPalettes.length > 0 && chapterProgress != null && chapters.length > 0) {
@@ -1245,7 +1253,29 @@ function resolveWorldDefaults(payload: ScenePayload, chapters: ChapterLike[]) {
 }
 
 function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMode: VisualMode): PrebakedData {
-  const chapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
+  // V3 uses sections (enriched with startRatio/endRatio), V2 used chapters directly
+  const rawChapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
+  const chapters: ChapterLike[] = rawChapters.length > 0
+    ? rawChapters
+    : enrichSections(payload.cinematic_direction?.sections).map((s: CinematicSection) => ({
+        title: s.description ?? `Section ${s.sectionIndex}`,
+        startRatio: s.startRatio,
+        endRatio: s.endRatio,
+        emotionalArc: s.mood ?? '',
+        dominantColor: '',
+        lightBehavior: '',
+        particleDirective: '',
+        backgroundDirective: '',
+        emotionalIntensity: 0.5,
+        typographyShift: null,
+        motion: s.motion,
+        texture: s.texture,
+        typography: s.typography,
+        atmosphere: s.atmosphere,
+        sectionIndex: s.sectionIndex,
+        description: s.description,
+        mood: s.mood,
+      } as ChapterLike));
   const resolved = resolveWorldDefaults(payload, chapters);
   const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
   const tensionCurve = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
