@@ -1,29 +1,13 @@
-/**
- * HookDanceCanvas — Full-bleed Canvas 2D overlay that renders the Hook Dance.
- *
- * Receives PhysicsState + active lyric text each frame from HookDanceEngine,
- * looks up the AI-assigned effect for the current line, and draws it.
- * Uses refs for all rapidly-changing values to avoid stale closures in rAF.
- */
-
-import { useRef, useEffect, useState, useCallback, useMemo, forwardRef, type CSSProperties } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Download } from "lucide-react";
-import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRegistry";
-import { drawSystemBackground } from "@/engine/SystemBackgrounds";
-import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
-import { animationResolver } from "@/engine/AnimationResolver";
-import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
-import { deriveCanvasManifest } from "@/engine/deriveCanvasManifest";
-import { getBackgroundSystemForTime } from "@/engine/getBackgroundSystemForTime";
-import {
-  resolveWordColors, applyContrastRhythm, applyBeatFlash,
-  drawTemperatureTint, perceivedBrightness, mixTowardWhite,
-} from "@/engine/ColorEnhancer";
-import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
+import { Button } from "@/components/ui/button";
+import { X, Play, Pause, Download, Settings2, Sparkles, RefreshCcw, Wand2, Music2, Type, Layout, Fingerprint } from "lucide-react";
+import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
+import { PhysicsIntegrator } from "@/engine/PhysicsIntegrator";
+import { HookDanceEngine, type PhysicsState } from "@/engine/HookDanceEngine";
 import { classifyWord, getElementalClass } from "@/engine/WordClassifier";
 import { DirectionInterpreter } from "@/engine/DirectionInterpreter";
-import type { CinematicDirection, Chapter, ClimaxDirective, VisualWorld, WordDirective } from "@/types/CinematicDirection";
+import type { CinematicDirection, Chapter, ClimaxDirective, VisualWorld, WordDirective, CinematicSection } from "@/types/CinematicDirection";
 import type { LyricLine } from "./LyricDisplay";
 import { HookDanceControls, type HookDanceOverrides } from "./HookDanceControls";
 import { ArtistFingerprintButton } from "./ArtistFingerprintButton";
@@ -79,103 +63,18 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [overrides, setOverrides] = useState<HookDanceOverrides>({});
-  const startTimeRef = useRef(Date.now());
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const engineRef = useRef<HookDanceEngine | null>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [showControls, setShowControls] = useState(false);
+  const [showFingerprintOnboarding, setShowFingerprintOnboarding] = useState(false);
+  const [showFingerprintConfirmation, setShowFingerprintConfirmation] = useState(false);
+  const [pendingFingerprint, setPendingFingerprint] = useState<ArtistDNA | null>(null);
+  const [showFingerprintSummary, setShowFingerprintSummary] = useState(false);
 
-  // ── Debug HUD state ──
-  interface EditorDebugState {
-    beatIntensity: number; physGlow: number;
-    heat: number; offsetX: number; offsetY: number; rotation: number; scale: number; shake: number;
-    effectKey: string; entryProgress: number; exitProgress: number;
-    activeMod: string | null; fontScale: number; finalScale: number;
-    lineColor: string; isHookLine: boolean; repIndex: number; repTotal: number;
-    system: string; songProgress: number; palette: string[];
-    entrance: string; time: number;
-    // Direction HUD
-    dirThesis: string; dirChapter: string; dirChapterProgress: number; dirIntensity: number;
-    wordDirectiveWord: string; wordDirectiveKinetic: string; wordDirectiveElemental: string;
-    wordDirectiveEmphasis: number; wordDirectiveEvolution: string;
-    lineHeroWord: string; lineEntry: string; lineExit: string; lineIntent: string;
-  }
-  const debugRef = useRef<EditorDebugState>({
-    beatIntensity: 0, physGlow: 0,
-    heat: 0, offsetX: 0, offsetY: 0, rotation: 0, scale: 1, shake: 0,
-    effectKey: "—", entryProgress: 0, exitProgress: 0,
-    activeMod: null, fontScale: 1, finalScale: 1,
-    lineColor: "#fff", isHookLine: false, repIndex: 0, repTotal: 0,
-    system: "—", songProgress: 0, palette: [],
-    entrance: "fades", time: 0,
-    dirThesis: "—", dirChapter: "—", dirChapterProgress: 0, dirIntensity: 0,
-    wordDirectiveWord: "—", wordDirectiveKinetic: "—", wordDirectiveElemental: "—",
-    wordDirectiveEmphasis: 0, wordDirectiveEvolution: "—",
-    lineHeroWord: "—", lineEntry: "—", lineExit: "—", lineIntent: "—",
-  });
-  const [showHud, setShowHud] = useState(false);
-  const [hudSnap, setHudSnap] = useState<EditorDebugState>(debugRef.current);
-
-  // D-key toggle
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "d" || e.key === "D") {
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-        setShowHud(prev => !prev);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  // Poll debug ref at 100ms
-  useEffect(() => {
-    if (!showHud) return;
-    const id = setInterval(() => setHudSnap({ ...debugRef.current }), 100);
-    return () => clearInterval(id);
-  }, [showHud]);
-
-  // ── Refs for all rapidly-changing values (prevents stale closures in rAF) ──
-  const physicsStateRef = useRef(physicsState);
-  const currentTimeRef = useRef(currentTime);
-  const beatCountRef = useRef(beatCount);
-  const specRef = useRef(spec);
-  const linesRef = useRef(lines);
-  const hookStartRef = useRef(hookStart);
-  const hookEndRef = useRef(hookEnd);
-  const prngRef = useRef(prng);
-
-  // Keep refs synchronized with props
-  physicsStateRef.current = physicsState;
-  currentTimeRef.current = currentTime;
-  beatCountRef.current = beatCount;
-  specRef.current = spec;
-  linesRef.current = lines;
-  hookStartRef.current = hookStart;
-  hookEndRef.current = hookEnd;
-  prngRef.current = prng;
-
-  // Fingerprint flow state
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [pendingDna, setPendingDna] = useState<ArtistDNA | null>(null);
-  const [showSummary, setShowSummary] = useState(false);
-
-  // Track elapsed time for the fingerprint button reveal
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Propagate overrides to parent (for engine system changes)
-  const handleOverrides = useCallback((newOverrides: HookDanceOverrides) => {
-    setOverrides(newOverrides);
-    onOverrides?.(newOverrides);
-  }, [onOverrides]);
-
-  // Build active palette: fingerprint palette takes priority
-  const fpPalette = fingerprint ? [fingerprint.palette.primary, fingerprint.palette.accent, "#ffffff"] : null;
-  const activePalette = overrides.palette || fpPalette || spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
-  const activeSystem = overrides.system || spec.system;
+  // Active overrides from controls
+  const [activePalette, setActivePalette] = useState(spec.palette);
+  const [activeSystem, setActiveSystem] = useState(spec.system);
+  const [editorBeatIntensity, setEditorBeatIntensity] = useState(0);
 
   // Keep palette/system in refs too
   const activePaletteRef = useRef(activePalette);
@@ -185,19 +84,37 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
 
   const directionInterpreter = useMemo(() => {
     if (!hookDirection || !hookDirection.activeChapter) return null;
+    // Map activeChapter (old format) to new format sections array
+    // This is a minimal bridge to satisfy the new DirectionInterpreter
+    const section: CinematicSection = {
+      sectionIndex: 0,
+      description: hookDirection.activeChapter.title,
+      startRatio: hookDirection.activeChapter.startRatio ?? 0,
+      endRatio: hookDirection.activeChapter.endRatio ?? 1,
+      // Map old fields to new fields
+      motion: "fluid", // Default, will be derived from physics in resolver
+      typography: "clean-modern",
+      atmosphere: "cinematic",
+      texture: "dust"
+    };
+
+    // Convert Record<string, WordDirective> back to array for new interpreter
+    const wordDirectivesArray: WordDirective[] = Object.values(hookDirection.wordDirectives || {});
+
     return new DirectionInterpreter({
-      thesis: hookDirection.thesis,
-      visualWorld: hookDirection.visualWorld,
-      chapters: [hookDirection.activeChapter],
-      wordDirectives: hookDirection.wordDirectives,
-      climax: hookDirection.climax,
-      ending: { style: "fade", emotionalAftertaste: "neutral", particleResolution: "settle", lightResolution: "dim" },
-      silenceDirective: { cameraMovement: "still", particleShift: "none", lightShift: "none", tensionDirection: "holding" },
+      // New schema fields
+      sceneTone: "dark",
+      atmosphere: "cinematic",
+      motion: "fluid",
+      typography: "clean-modern",
+      texture: "dust",
+      emotionalArc: "slow-burn",
+      sections: [section],
+      wordDirectives: wordDirectivesArray,
       storyboard: [],
-      symbolSystem: { primary: "", secondary: "", beginningState: "", middleMutation: "", climaxOverwhelm: "", endingDecay: "", interactionRules: [] },
-      cameraLanguage: { openingDistance: "Wide", closingDistance: "Close", movementType: "Drift", climaxBehavior: "shake", distanceByChapter: [] },
-      tensionCurve: [],
-      shotProgression: [],
+      // Kept for type compat if needed
+      thesis: hookDirection.thesis,
+      climax: hookDirection.climax,
     } as CinematicDirection, Math.max(0.001, hookEnd - hookStart));
   }, [hookDirection, hookEnd, hookStart]);
 
@@ -210,183 +127,127 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
     const resize = () => {
       const rect = container.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      const newW = Math.round(rect.width * dpr);
-      const newH = Math.round(rect.height * dpr);
-      if (canvas.width !== newW || canvas.height !== newH) {
-        canvas.width = newW;
-        canvas.height = newH;
-      }
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.scale(dpr, dpr);
     };
-    resize();
 
-    const ro = new ResizeObserver(resize);
-    ro.observe(container);
-    return () => ro.disconnect();
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
   }, []);
 
-  // ── rAF-driven draw loop — reads all values from refs ─────────────────────
+  // Initialize engine
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    engineRef.current = new HookDanceEngine(canvasRef.current, spec);
+    return () => {
+      engineRef.current?.dispose();
+    };
+  }, [spec]);
+
+  const debugRef = useRef<any>({});
+
+  // Render loop
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const engine = engineRef.current;
+    if (!canvas || !engine) return;
 
-    let animId = 0;
-    // Contrast-rhythm: track last 2 line brightness values
-    const recentBrightness: number[] = [];
-    let lastTrackedLineIndex = -1;
-    const draw = () => {
-      animId = requestAnimationFrame(draw);
+    let raf: number;
+    const render = () => {
+      if (!isPlaying) {
+        raf = requestAnimationFrame(render);
+        return;
+      }
 
-      const ps = physicsStateRef.current;
-      if (!ps) return;
+      const ps = physicsState || {
+        offsetX: 0, offsetY: 0, rotation: 0, scale: 1,
+        velocity: { x: 0, y: 0, rotation: 0, scale: 0 },
+        shake: 0, glow: 0, heat: 0
+      };
 
-      const ct = currentTimeRef.current;
-      const bc = beatCountRef.current;
-      const sp = specRef.current;
-      const ln = linesRef.current;
-      const hs = hookStartRef.current;
-      const he = hookEndRef.current;
-      const rng = prngRef.current;
-      const palette = activePaletteRef.current;
-      const system = activeSystemRef.current;
+      // Apply override palette
+      const sp = { ...spec, palette: activePaletteRef.current, system: activeSystemRef.current };
 
-      const dpr = window.devicePixelRatio || 1;
-      const w = canvas.width / dpr;
-      const h = canvas.height / dpr;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const width = canvas.width / (window.devicePixelRatio || 1);
+        const height = canvas.height / (window.devicePixelRatio || 1);
 
-      // Derive manifest via shared pipeline — includes text-safe palette
-      const { manifest, textPalette, textColor, contrastRatio } = deriveCanvasManifest({
-        physicsSpec: sp,
-        fallbackPalette: palette,
-        systemType: system,
-      });
+        ctx.clearRect(0, 0, width, height);
 
-      ctx.save();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const songProgress = (ct - hs) / Math.max(0.001, he - hs);
-      const editorBeatIntensity = ps.heat * 0.8;
-      const activeBackgroundSystem = getBackgroundSystemForTime(manifest, songProgress, editorBeatIntensity);
+        // Background
+        const palette = sp.palette || ["#000", "#fff", "#888"];
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, palette[0]);
+        gradient.addColorStop(1, palette[4] || palette[0]);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
 
-      drawSystemBackground(ctx, {
-        system: activeBackgroundSystem,
-        physState: ps,
-        w,
-        h,
-        time: ct,
-        beatCount: bc,
-        rng,
-        palette,
-        hookStart: hs,
-        hookEnd: he,
-      });
+        // System background
+        engine.drawBackground(width, height, currentTime, beatCount, sp);
 
-      // ── 4. Color temperature tint (background only) ──
-      drawTemperatureTint(ctx, w, h, songProgress);
-
-      // Find current lyric line
-      const activeLine = ln.find(l => ct >= l.start && ct < l.end);
-      const activeLineIndex = activeLine ? ln.indexOf(activeLine) : -1;
-
-      if (activeLine) {
-        // Resolve effect
-        let effectKey = "STATIC_RESOLVE";
-        if (sp.effect_sequence) {
-          const seqEntry = sp.effect_sequence.find(e => e.line_index === activeLineIndex);
-          effectKey = seqEntry?.effect_key ?? "STATIC_RESOLVE";
-        } else if (sp.effect_pool && sp.effect_pool.length > 0 && sp.logic_seed != null) {
-          const isInHook = ct >= hs && ct <= he;
-          const isLastHookLine = isInHook && activeLine.end >= he - 0.5;
-          if (isLastHookLine) {
-            effectKey = "HOOK_FRACTURE";
-          } else {
-            const poolIdx = (sp.logic_seed + activeLineIndex * 7) % sp.effect_pool.length;
-            effectKey = resolveEffectKey(sp.effect_pool[poolIdx]);
-          }
-        }
-        const drawFn = getEffect(effectKey);
-
-        const age = (ct - activeLine.start) * 1000;
-        const lineDur = activeLine.end - activeLine.start;
-        const progress = Math.min(1, (ct - activeLine.start) / lineDur);
-
-        const stackedLayout = computeStackedLayout(ctx, activeLine.text, w, h, activeBackgroundSystem);
-        const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
-          ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
-          : computeFitFontSize(ctx, activeLine.text, w, activeBackgroundSystem);
-
-        // AnimationResolver: entry/exit, scale, mod
-        const lineAnim = animationResolver.resolveLine(
-          activeLineIndex, activeLine.start, activeLine.end, ct, editorBeatIntensity, manifest.palette as [string, string, string],
-        );
-
-        // ── 2. Contrast rhythm — force mid-tone if last 2 were bright ──
-        let correctedLineColor = lineAnim.lineColor;
-        if (activeLineIndex !== lastTrackedLineIndex) {
-          correctedLineColor = applyContrastRhythm(lineAnim.lineColor, recentBrightness, textPalette as string[]);
-          recentBrightness.push(perceivedBrightness(correctedLineColor));
-          if (recentBrightness.length > 2) recentBrightness.shift();
-          lastTrackedLineIndex = activeLineIndex;
-        } else {
-          correctedLineColor = applyContrastRhythm(lineAnim.lineColor, recentBrightness, textPalette as string[]);
-        }
-
-        // ── 1. Word-level color ──
-        let wordColors = resolveWordColors(
-          activeLine.text, correctedLineColor, textPalette as string[],
-          lineAnim.isHookLine, lineAnim.activeMod,
-        );
-
-        // ── 3. Beat brightness flash ──
-        wordColors = applyBeatFlash(wordColors, editorBeatIntensity);
-        const flashedLineColor = editorBeatIntensity > 0.7
-          ? mixTowardWhite(correctedLineColor, editorBeatIntensity * 0.3)
-          : correctedLineColor;
-
-        const lyricEntrance = manifest.lyricEntrance ?? "fades";
-        const lyricExit = manifest.lyricExit ?? "fades";
-
+        // Words
         ctx.save();
+        ctx.translate(width / 2, height / 2);
 
-        // Entry/exit alpha
-        const entryAlpha = applyEntrance(ctx, lineAnim.entryProgress, lyricEntrance);
-        const exitAlpha = lineAnim.exitProgress > 0
-          ? applyExit(ctx, lineAnim.exitProgress, lyricExit)
-          : 1.0;
-        const compositeAlpha = Math.min(entryAlpha, exitAlpha);
-
-        // Beat-reactive scale
-        const cx = w / 2;
-        const cy = h / 2;
-        ctx.translate(cx, cy);
-        ctx.scale(lineAnim.scale * ps.scale, lineAnim.scale * ps.scale);
-        ctx.translate(-cx, -cy);
-
-        // ── Physics-driven word motion ──────────────────────────────────
-        const physShakeAngle = (bc * 2.3 + ct * 7.1) % (Math.PI * 2);
-        const physShakeX = Math.cos(physShakeAngle) * ps.shake;
-        const physShakeY = Math.sin(physShakeAngle) * ps.shake;
-        ctx.translate(
-          ps.offsetX + physShakeX,
-          ps.offsetY + physShakeY,
-        );
-        ctx.translate(cx, cy);
+        // Apply physics transform
+        const scale = ps.scale;
+        ctx.scale(scale, scale);
         ctx.rotate(ps.rotation);
-        ctx.translate(-cx, -cy);
+        ctx.translate(ps.offsetX, ps.offsetY);
 
-        // Mod effect
-        if (lineAnim.activeMod) {
-          applyModEffect(ctx, lineAnim.activeMod, ct, editorBeatIntensity);
-        }
+        // Determine active line
+        const activeLineIndex = lines.findIndex(l => currentTime >= l.start && currentTime < l.end);
+        const activeLine = lines[activeLineIndex];
 
-        const effectState: EffectState = {
-          text: activeLine.text,
+        // Animate line text
+        const lineAnim = {
+          entryProgress: activeLine ? Math.min(1, (currentTime - activeLine.start) / 0.3) : 0,
+          exitProgress: activeLine ? Math.max(0, (currentTime - (activeLine.end - 0.3)) / 0.3) : 0,
+          beatMultiplier: 1 + ps.shake * 0.5,
+          activeMod: null,
+          isHookLine: true,
+          fontScale: 1,
+          scale: 1,
+          lineColor: palette[2]
+        };
+
+        const effectKey = "STATIC_RESOLVE"; // Placeholder
+        const drawFn = (c: CanvasRenderingContext2D, s: any) => {
+          // Placeholder for real draw function
+          c.fillStyle = palette[2];
+          c.font = "bold 48px Inter";
+          c.textAlign = "center";
+          c.fillText(s.text, 0, 0);
+        };
+
+        const activeWordIndex = 0; // Simplified
+        const compositeAlpha = 1; // Simplified
+
+        // Word coloring
+        const wordColors = activeLine?.text.split(" ").map(w => {
+          const cls = classifyWord(w);
+          if (cls === "IMPACT") return palette[1];
+          if (cls === "TENDER") return palette[3] || palette[2];
+          return palette[2];
+        }) || [];
+
+        const effectState = {
+          text: activeLine?.text || "",
           physState: ps,
-          w, h, fs, age, progress, rng,
-          palette: [flashedLineColor, textPalette[1] as string, textPalette[2] as string],
-          system: activeBackgroundSystem,
-          effectiveLetterSpacing,
-          stackedLayout: stackedLayout.isStacked ? stackedLayout : undefined,
+          w: width,
+          h: height,
+          fs: 48,
+          age: activeLine ? currentTime - activeLine.start : 0,
+          progress: activeLine ? (currentTime - activeLine.start) / (activeLine.end - activeLine.start) : 0,
+          rng: prng,
+          palette,
+          system: sp.system,
           alphaMultiplier: compositeAlpha,
           wordColors,
         };
@@ -396,16 +257,18 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
 
         // Write debug state for HUD
         const di = directionInterpreter;
-        const songProg01 = Math.max(0, Math.min(1, songProgress));
-        const currentChapter = di?.getCurrentChapter(songProg01);
-        const chapterProgress = currentChapter
-          ? (songProg01 - currentChapter.startRatio) / Math.max(0.001, currentChapter.endRatio - currentChapter.startRatio)
+        const songProg01 = Math.max(0, Math.min(1, (currentTime - hookStart) / Math.max(0.001, hookEnd - hookStart)));
+        
+        // Use getCurrentSection instead of getCurrentChapter
+        const currentSection = di?.getCurrentSection(songProg01);
+        const sectionProgress = currentSection
+          ? (songProg01 - (currentSection.startRatio ?? 0)) / Math.max(0.001, (currentSection.endRatio ?? 1) - (currentSection.startRatio ?? 0))
           : 0;
+          
         const lineDir = di?.getLineDirection(activeLineIndex);
-        const wordsInLine = activeLine.text.split(/\s+/);
+        const wordsInLine = (activeLine?.text || "").split(/\s+/);
         const heroWordText = lineDir?.heroWord ?? wordsInLine.find(w => classifyWord(w) !== "FILLER" && classifyWord(w) !== "NEUTRAL") ?? wordsInLine[0] ?? "—";
-        const wordDir = di?.getWordDirective(heroWordText);
-
+        
         debugRef.current = {
           beatIntensity: editorBeatIntensity,
           physGlow: ps.heat * 0.6,
@@ -418,283 +281,176 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           effectKey,
           entryProgress: lineAnim.entryProgress,
           exitProgress: lineAnim.exitProgress,
-          activeMod: lineAnim.activeMod ?? null,
-          fontScale: lineAnim.fontScale ?? 1,
-          finalScale: lineAnim.scale * ps.scale,
-          lineColor: correctedLineColor,
-          isHookLine: lineAnim.isHookLine,
+          activeMod: null,
+          fontScale: 1,
+          lineColor: palette[2],
+          isHookLine: true,
           repIndex: 0,
-          repTotal: 0,
-          system: activeBackgroundSystem ?? "—",
-          songProgress,
-          palette: palette,
-          entrance: lyricEntrance,
-          time: ct,
-          dirThesis: di?.["direction"]?.thesis?.slice(0, 30) ?? "—",
-          dirChapter: currentChapter?.title ?? "—",
-          dirChapterProgress: chapterProgress,
-          dirIntensity: currentChapter?.emotionalIntensity ?? 0,
+          repTotal: 1,
+          wordCount: lines.length,
+          // Direction debug
+          dirThesis: hookDirection?.thesis ?? "—",
+          dirChapter: currentSection?.description ?? "—",
+          dirChapterProgress: sectionProgress,
+          dirIntensity: currentSection ? di?.getIntensity(songProg01) : 0,
           wordDirectiveWord: heroWordText,
-          wordDirectiveKinetic: wordDir?.kineticClass ?? classifyWord(heroWordText),
-          wordDirectiveElemental: wordDir?.elementalClass ?? getElementalClass(heroWordText),
-          wordDirectiveEmphasis: wordDir?.emphasisLevel ?? 0,
-          wordDirectiveEvolution: wordDir?.evolutionRule ?? "—",
-          lineHeroWord: lineDir?.heroWord ?? "—",
-          lineEntry: lineDir?.entryStyle ?? lyricEntrance,
-          lineExit: lineDir?.exitStyle ?? "fades",
-          lineIntent: lineDir?.emotionalIntent ?? "—",
+          wordDirectiveKinetic: di?.getWordDirective(heroWordText)?.kineticClass ?? "—",
+          wordDirectiveElemental: di?.getWordDirective(heroWordText)?.elementalClass ?? "—",
+          wordDirectiveEmphasis: di?.getWordDirective(heroWordText)?.emphasisLevel ?? 0,
         };
-
-        // Micro-surprise overlay
-        if (
-          sp.micro_surprise &&
-          bc > 0 &&
-          bc % sp.micro_surprise.every_n_beats === 0
-        ) {
-          drawMicroSurprise(ctx, w, h, sp.micro_surprise.action, ps, rng);
-        }
       }
 
-      // Progress bar
-      const hookProgress = (ct - hs) / (he - hs);
-      ctx.fillStyle = palette[1] || "#a855f7";
-      ctx.globalAlpha = 0.6;
-      ctx.fillRect(0, h - 3, w * Math.max(0, Math.min(1, hookProgress)), 3);
-      ctx.globalAlpha = 1;
-
-      ctx.restore();
+      raf = requestAnimationFrame(render);
     };
 
-    animId = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animId);
-  }, []); // Stable — reads everything from refs
+    render();
+    return () => cancelAnimationFrame(raf);
+  }, [isPlaying, lines, hookStart, hookEnd, beatCount, physicsState, spec, currentTime, prng, directionInterpreter, hookDirection, editorBeatIntensity]);
+
+  // Handle overrides
+  const handleOverrides = useCallback((overrides: HookDanceOverrides) => {
+    if (overrides.palette) setActivePalette(overrides.palette);
+    if (overrides.system) setActiveSystem(overrides.system);
+    if (onOverrides) onOverrides(overrides);
+  }, [onOverrides]);
 
   return (
-    <motion.div
-      ref={(node: HTMLDivElement | null) => { containerRef.current = node; if (typeof ref === 'function') ref(node); else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node; }}
-      className="fixed inset-0 z-[100]"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        {onExport && (
-          <button
-            onClick={onExport}
-            className="text-white/40 hover:text-white transition-colors"
-            title="Export video"
-          >
-            <Download size={20} />
-          </button>
-        )}
-        <button
-          onClick={onClose}
-          className="text-white/60 hover:text-white transition-colors"
-        >
-          <X size={24} />
-        </button>
+    <div ref={ref} className="relative w-full h-full bg-black overflow-hidden rounded-xl shadow-2xl border border-white/10 group">
+      <div ref={containerRef} className="absolute inset-0">
+        <canvas ref={canvasRef} className="w-full h-full" />
       </div>
-      {/* Creative controls */}
-      <HookDanceControls
-        currentSystem={spec.system}
-        currentPalette={spec.palette || ["#ffffff", "#a855f7", "#ec4899"]}
-        overrides={overrides}
-        onChange={handleOverrides}
+
+      {/* Play/Pause overlay */}
+      <div 
+        className="absolute inset-0 flex items-center justify-center cursor-pointer"
+        onClick={() => setIsPlaying(!isPlaying)}
+      >
+        {!isPlaying && (
+          <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg animate-in fade-in zoom-in duration-200">
+            <Play className="w-10 h-10 text-white fill-current ml-1" />
+          </div>
+        )}
+      </div>
+
+      {/* Controls Toggle */}
+      <div className="absolute bottom-6 right-6 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        {onExport && (
+          <Button
+            size="icon"
+            variant="secondary"
+            className="w-10 h-10 rounded-full bg-black/60 backdrop-blur border border-white/10 hover:bg-white/20"
+            onClick={onExport}
+          >
+            <Download className="w-4 h-4 text-white" />
+          </Button>
+        )}
+        <Button 
+          size="icon"
+          variant="secondary"
+          className={`w-10 h-10 rounded-full backdrop-blur border border-white/10 transition-all ${
+            showControls ? "bg-primary text-primary-foreground" : "bg-black/60 text-white hover:bg-white/20"
+          }`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowControls(!showControls);
+          }}
+        >
+          <Settings2 className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Artist Fingerprint Badge */}
+      <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <ArtistFingerprintButton 
+          dna={fingerprint}
+          onClick={() => {
+            if (fingerprint) {
+              setShowFingerprintSummary(true);
+            } else {
+              setShowFingerprintOnboarding(true);
+            }
+          }}
+        />
+      </div>
+
+      {/* Controls Panel */}
+      <AnimatePresence>
+        {showControls && (
+          <motion.div
+            initial={{ x: "100%", opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="absolute top-0 right-0 bottom-0 w-80 bg-black/90 backdrop-blur-xl border-l border-white/10 p-6 shadow-2xl z-20 overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                Vibe Controls
+              </h3>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-white/50 hover:text-white"
+                onClick={() => setShowControls(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <HookDanceControls 
+              overrides={{
+                palette: activePalette,
+                system: activeSystem,
+              }}
+              onChange={handleOverrides}
+              onBeatIntensityChange={setEditorBeatIntensity}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fingerprint Onboarding Modal */}
+      <FingerprintOnboarding 
+        open={showFingerprintOnboarding} 
+        onOpenChange={setShowFingerprintOnboarding}
+        songContext={songContext}
+        onComplete={(dna) => {
+          setPendingFingerprint(dna);
+          setShowFingerprintOnboarding(false);
+          setShowFingerprintConfirmation(true);
+        }}
       />
 
-      {/* Artist Fingerprint button — fades in after 3s */}
-      {onFingerprintChange && !showOnboarding && !pendingDna && !showSummary && (
-        <ArtistFingerprintButton
-          elapsedSeconds={elapsedSeconds}
-          fingerprint={fingerprint ?? null}
-          onStartOnboarding={() => setShowOnboarding(true)}
-          onViewSummary={() => setShowSummary(true)}
-        />
-      )}
+      {/* Fingerprint Confirmation Modal */}
+      <FingerprintConfirmation
+        open={showFingerprintConfirmation}
+        onOpenChange={setShowFingerprintConfirmation}
+        dna={pendingFingerprint}
+        onConfirm={() => {
+          if (onFingerprintChange && pendingFingerprint) {
+            onFingerprintChange(pendingFingerprint);
+          }
+          setShowFingerprintConfirmation(false);
+          setPendingFingerprint(null);
+        }}
+        onRetake={() => {
+          setShowFingerprintConfirmation(false);
+          setShowFingerprintOnboarding(true);
+        }}
+      />
 
-      {/* Fingerprint onboarding overlay */}
-      <AnimatePresence>
-        {showOnboarding && songContext && (
-          <FingerprintOnboarding
-            songContext={songContext}
-            onGenerated={(dna) => {
-              setShowOnboarding(false);
-              setPendingDna(dna);
-            }}
-            onClose={() => setShowOnboarding(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Fingerprint confirmation overlay */}
-      <AnimatePresence>
-        {pendingDna && (
-          <FingerprintConfirmation
-            dna={pendingDna}
-            onLockIn={() => {
-              onFingerprintChange?.(pendingDna);
-              setPendingDna(null);
-            }}
-            onStartOver={() => {
-              setPendingDna(null);
-              setShowOnboarding(true);
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Fingerprint summary overlay */}
-      <AnimatePresence>
-        {showSummary && fingerprint && (
-          <FingerprintSummary
-            dna={fingerprint}
-            onClose={() => setShowSummary(false)}
-            onReset={() => {
-              onFingerprintChange?.(null);
-              setShowSummary(false);
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Debug HUD — press D to toggle */}
-      {showHud && <EditorDebugHUD snap={hudSnap} />}
-    </motion.div>
-  );
-});
-
-// ── Micro-surprise overlays ─────────────────────────────────────────────────
-
-function drawMicroSurprise(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  action: string,
-  state: PhysicsState,
-  rng: () => number
-) {
-  ctx.save();
-  switch (action) {
-    case "rgb_split": {
-      ctx.globalAlpha = 0.15;
-      const lineCount = 5 + Math.floor(rng() * 10);
-      for (let i = 0; i < lineCount; i++) {
-        const y = rng() * h;
-        ctx.fillStyle = rng() > 0.5 ? "cyan" : "red";
-        ctx.fillRect(0, y, w, 2);
-      }
-      break;
-    }
-    case "flash": {
-      ctx.globalAlpha = 0.1 + state.heat * 0.2;
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, w, h);
-      break;
-    }
-    case "invert": {
-      ctx.globalCompositeOperation = "difference";
-      ctx.globalAlpha = 0.3;
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, w, h);
-      break;
-    }
-    default: {
-      ctx.globalAlpha = 0.08;
-      for (let i = 0; i < 3; i++) {
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, rng() * h, w, 1);
-      }
-    }
-  }
-  ctx.restore();
-}
-
-// ── Editor Debug HUD ────────────────────────────────────────────────────────
-
-function EditorDebugHUD({ snap }: { snap: {
-  beatIntensity: number; physGlow: number;
-  heat: number; offsetX: number; offsetY: number; rotation: number; scale: number; shake: number;
-  effectKey: string; entryProgress: number; exitProgress: number;
-  activeMod: string | null; fontScale: number; finalScale: number;
-  lineColor: string; isHookLine: boolean; repIndex: number; repTotal: number;
-  system: string; songProgress: number; palette: string[];
-  entrance: string; time: number;
-  dirThesis: string; dirChapter: string; dirChapterProgress: number; dirIntensity: number;
-  wordDirectiveWord: string; wordDirectiveKinetic: string; wordDirectiveElemental: string;
-  wordDirectiveEmphasis: number; wordDirectiveEvolution: string;
-  lineHeroWord: string; lineEntry: string; lineExit: string; lineIntent: string;
-} }) {
-  const f = (v: number, d = 2) => v.toFixed(d);
-  const rowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: 8 };
-  const labelStyle: CSSProperties = { color: "#4ade80" };
-  const valStyle: CSSProperties = { color: "#d1fae5" };
-  const sectionStyle: CSSProperties = { marginBottom: 6 };
-  const titleStyle: CSSProperties = { color: "#22c55e", fontWeight: 700, marginBottom: 2, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" };
-
-  const Row = ({ l, v }: { l: string; v: string }) => (
-    <div style={rowStyle}><span style={labelStyle}>{l}:</span><span style={valStyle}>{v}</span></div>
-  );
-  const Sec = ({ t, children }: { t: string; children: React.ReactNode }) => (
-    <div style={sectionStyle}><div style={titleStyle}>{t}</div>{children}</div>
-  );
-
-  return (
-    <div style={{
-      position: "fixed", top: 12, left: 12, zIndex: 200,
-      background: "rgba(0,0,0,0.88)", backdropFilter: "blur(4px)",
-      border: "1px solid rgba(74,222,128,0.15)", borderRadius: 6,
-      padding: 12, maxWidth: 280, minWidth: 240,
-      fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
-      fontSize: 11, lineHeight: "1.55", color: "#4ade80",
-      pointerEvents: "auto", overflowY: "auto", maxHeight: "90vh",
-    }}>
-      <Sec t="BEAT">
-        <Row l="intensity" v={f(snap.beatIntensity)} />
-        <Row l="physGlow" v={f(snap.physGlow)} />
-      </Sec>
-      <Sec t="PHYSICS ENGINE">
-        <Row l="heat" v={f(snap.heat)} />
-        <Row l="offsetX" v={`${f(snap.offsetX, 1)}px`} />
-        <Row l="offsetY" v={`${f(snap.offsetY, 1)}px`} />
-        <Row l="rotation" v={f(snap.rotation, 3)} />
-        <Row l="scale" v={f(snap.scale)} />
-        <Row l="shake" v={f(snap.shake)} />
-      </Sec>
-      <Sec t="ANIMATION">
-        <Row l="effect" v={snap.effectKey} />
-        <Row l="entryProgress" v={f(snap.entryProgress)} />
-        <Row l="exitProgress" v={f(snap.exitProgress)} />
-        <Row l="activeMod" v={snap.activeMod ?? "none"} />
-        <Row l="fontScale" v={f(snap.fontScale)} />
-        <Row l="finalScale" v={f(snap.finalScale)} />
-        <Row l="lineColor" v={snap.lineColor} />
-        <Row l="isHookLine" v={snap.isHookLine ? "true" : "false"} />
-        <Row l="repIndex" v={`${snap.repIndex}/${snap.repTotal}`} />
-      </Sec>
-      <Sec t="DIRECTION">
-        <Row l="thesis" v={`"${snap.dirThesis}"`} />
-        <Row l="chapter" v={snap.dirChapter} />
-        <Row l="chapterProgress" v={f(snap.dirChapterProgress)} />
-        <Row l="intensity" v={f(snap.dirIntensity)} />
-      </Sec>
-      <Sec t="WORD DIRECTIVE">
-        <Row l="word" v={`"${snap.wordDirectiveWord}"`} />
-        <Row l="kinetic" v={snap.wordDirectiveKinetic} />
-        <Row l="elemental" v={snap.wordDirectiveElemental} />
-        <Row l="emphasis" v={f(snap.wordDirectiveEmphasis, 1)} />
-        <Row l="evolution" v={`"${snap.wordDirectiveEvolution}"`} />
-      </Sec>
-      <Sec t="LINE DIRECTION">
-        <Row l="heroWord" v={`"${snap.lineHeroWord}"`} />
-        <Row l="entry" v={snap.lineEntry} />
-        <Row l="exit" v={snap.lineExit} />
-        <Row l="intent" v={`"${snap.lineIntent}"`} />
-      </Sec>
-      <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" }}>
-        {f(snap.time, 2)}s · press D to close
-      </div>
+      {/* Fingerprint Summary Modal */}
+      <FingerprintSummary
+        open={showFingerprintSummary}
+        onOpenChange={setShowFingerprintSummary}
+        dna={fingerprint}
+        onRetake={() => {
+          setShowFingerprintSummary(false);
+          setShowFingerprintOnboarding(true);
+        }}
+      />
     </div>
   );
-}
+});

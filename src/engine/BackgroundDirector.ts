@@ -1,27 +1,15 @@
-import type { Chapter, SymbolSystem } from "@/types/CinematicDirection";
+import type { RenderSection } from "@/engine/directionResolvers";
 
-export function getSymbolStateForProgress(
-  songProgress: number,
-  symbol?: SymbolSystem | null,
-): string | null {
-  if (!symbol) return null;
-  if (songProgress < 0.25) return symbol.beginningState;
-  if (songProgress < 0.60) return symbol.middleMutation;
-  if (songProgress < 0.85) return symbol.climaxOverwhelm;
-  return symbol.endingDecay;
-}
-
-export function renderChapterBackground(
+export function renderSectionBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  chapter: Chapter,
+  section: RenderSection,
   songProgress: number,
   beatIntensity: number,
   currentTime: number,
-  symbol?: SymbolSystem | null,
 ): void {
-  const intensity = chapter.emotionalIntensity;
-  const color = chapter.dominantColor;
+  const intensity = section.emotionalIntensity;
+  const color = section.dominantColor;
 
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -32,75 +20,47 @@ export function renderChapterBackground(
   ctx.fillStyle = depthGrad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const symbolState = getSymbolStateForProgress(songProgress, symbol);
-  if (symbolState) {
-    const symbolInfluence = 0.06 + intensity * 0.06;
-    const lowerSymbolState = symbolState.toLowerCase();
-    if (lowerSymbolState.includes("water") || lowerSymbolState.includes("submerg")) {
-      ctx.fillStyle = `rgba(90,140,200,${symbolInfluence})`;
-    } else if (lowerSymbolState.includes("fire") || lowerSymbolState.includes("burn")) {
-      ctx.fillStyle = `rgba(255,130,80,${symbolInfluence})`;
-    } else if (lowerSymbolState.includes("void") || lowerSymbolState.includes("fog")) {
-      ctx.fillStyle = `rgba(120,120,140,${symbolInfluence})`;
-    } else if (lowerSymbolState.includes("mountain") || lowerSymbolState.includes("peak") || lowerSymbolState.includes("summit")) {
-      ctx.fillStyle = `rgba(100,80,60,${symbolInfluence})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      // Draw mountain silhouette
-      const mtnH = canvas.height * (0.3 + symbolInfluence * 2);
-      const baseY = canvas.height;
-      ctx.fillStyle = `rgba(60,50,40,${symbolInfluence * 1.5})`;
-      ctx.beginPath();
-      ctx.moveTo(0, baseY);
-      ctx.lineTo(canvas.width * 0.15, baseY - mtnH * 0.6);
-      ctx.lineTo(canvas.width * 0.35, baseY - mtnH);
-      ctx.lineTo(canvas.width * 0.55, baseY - mtnH * 0.4);
-      ctx.lineTo(canvas.width * 0.7, baseY - mtnH * 0.85);
-      ctx.lineTo(canvas.width * 0.85, baseY - mtnH * 0.5);
-      ctx.lineTo(canvas.width, baseY);
-      ctx.closePath();
-      ctx.fill();
-      // Snow caps
-      ctx.fillStyle = `rgba(220,225,235,${symbolInfluence * 0.8})`;
-      ctx.beginPath();
-      ctx.moveTo(canvas.width * 0.3, baseY - mtnH * 0.9);
-      ctx.lineTo(canvas.width * 0.35, baseY - mtnH);
-      ctx.lineTo(canvas.width * 0.4, baseY - mtnH * 0.9);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(canvas.width * 0.65, baseY - mtnH * 0.75);
-      ctx.lineTo(canvas.width * 0.7, baseY - mtnH * 0.85);
-      ctx.lineTo(canvas.width * 0.75, baseY - mtnH * 0.75);
-      ctx.closePath();
-      ctx.fill();
-      return; // skip the generic fillRect below
-    } else {
-      ctx.fillStyle = `rgba(255,255,255,${symbolInfluence * 0.5})`;
-    }
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  const directive = chapter.backgroundDirective.toLowerCase();
+  const directive = section.backgroundDirective.toLowerCase();
   if (directive.includes("ocean") || directive.includes("water") || directive.includes("deep")) {
-    renderOceanBackground(ctx, canvas, chapter, songProgress, beatIntensity, currentTime);
+    renderOceanBackground(ctx, canvas, section, songProgress, beatIntensity, currentTime);
   } else if (directive.includes("fire") || directive.includes("burn") || directive.includes("flame")) {
-    renderFireBackground(ctx, canvas, chapter, songProgress, beatIntensity, currentTime);
+    renderFireBackground(ctx, canvas, section, songProgress, beatIntensity, currentTime);
   } else if (directive.includes("neon") || directive.includes("club") || directive.includes("electric")) {
-    renderNeonBackground(ctx, canvas, chapter, songProgress, beatIntensity, currentTime);
+    renderNeonBackground(ctx, canvas, section, songProgress, beatIntensity, currentTime);
   } else {
-    renderAmbientBackground(ctx, canvas, chapter, songProgress, beatIntensity, currentTime);
+    renderAmbientBackground(ctx, canvas, section, songProgress, beatIntensity, currentTime);
   }
+}
+
+/** @deprecated Use renderSectionBackground */
+export function renderChapterBackground(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  chapter: RenderSection,
+  songProgress: number,
+  beatIntensity: number,
+  currentTime: number,
+): void {
+  return renderSectionBackground(ctx, canvas, chapter, songProgress, beatIntensity, currentTime);
+}
+
+/** @deprecated Symbol system removed — returns null */
+export function getSymbolStateForProgress(
+  _songProgress: number,
+  _symbol?: unknown,
+): string | null {
+  return null;
 }
 
 function renderOceanBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  chapter: Chapter,
+  section: RenderSection,
   _songProgress: number,
   _beatIntensity: number,
   currentTime: number,
 ): void {
-  const intensity = chapter.emotionalIntensity;
+  const intensity = section.emotionalIntensity;
   for (let w = 0; w < 3; w++) {
     ctx.beginPath();
     const waveY = canvas.height * (0.3 + w * 0.2);
@@ -134,12 +94,8 @@ function renderOceanBackground(
   }
 
   const vigGrad = ctx.createRadialGradient(
-    canvas.width / 2,
-    canvas.height / 2,
-    canvas.height * 0.2,
-    canvas.width / 2,
-    canvas.height / 2,
-    canvas.height * 0.9,
+    canvas.width / 2, canvas.height / 2, canvas.height * 0.2,
+    canvas.width / 2, canvas.height / 2, canvas.height * 0.9,
   );
   vigGrad.addColorStop(0, "rgba(0,0,0,0)");
   vigGrad.addColorStop(1, `rgba(0,0,10,${0.3 + intensity * 0.4})`);
@@ -150,12 +106,12 @@ function renderOceanBackground(
 function renderFireBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  chapter: Chapter,
+  section: RenderSection,
   _songProgress: number,
   beatIntensity: number,
   currentTime: number,
 ): void {
-  const intensity = chapter.emotionalIntensity;
+  const intensity = section.emotionalIntensity;
   for (let i = 0; i < 4; i++) {
     const y = canvas.height * (0.75 + i * 0.05);
     ctx.beginPath();
@@ -172,12 +128,8 @@ function renderFireBackground(
 
   if (beatIntensity > 0.55) {
     const bloom = ctx.createRadialGradient(
-      canvas.width / 2,
-      canvas.height * 0.85,
-      0,
-      canvas.width / 2,
-      canvas.height * 0.85,
-      canvas.height * 0.7,
+      canvas.width / 2, canvas.height * 0.85, 0,
+      canvas.width / 2, canvas.height * 0.85, canvas.height * 0.7,
     );
     bloom.addColorStop(0, `rgba(255,180,80,${beatIntensity * 0.08})`);
     bloom.addColorStop(1, "rgba(0,0,0,0)");
@@ -189,37 +141,27 @@ function renderFireBackground(
 function renderNeonBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  chapter: Chapter,
+  section: RenderSection,
   _songProgress: number,
   beatIntensity: number,
   _currentTime: number,
 ): void {
-  const intensity = chapter.emotionalIntensity;
+  const intensity = section.emotionalIntensity;
   ctx.strokeStyle = `rgba(138,74,240,${0.06 + intensity * 0.06})`;
   ctx.lineWidth = 1;
 
   const gridSize = 60;
   for (let x = 0; x < canvas.width; x += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
   }
   for (let y = 0; y < canvas.height; y += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
   }
 
   if (beatIntensity > 0.5) {
     const bloom = ctx.createRadialGradient(
-      canvas.width / 2,
-      canvas.height / 2,
-      0,
-      canvas.width / 2,
-      canvas.height / 2,
-      canvas.height * 0.6,
+      canvas.width / 2, canvas.height / 2, 0,
+      canvas.width / 2, canvas.height / 2, canvas.height * 0.6,
     );
     bloom.addColorStop(0, `rgba(138,74,240,${beatIntensity * 0.12})`);
     bloom.addColorStop(1, "rgba(0,0,0,0)");
@@ -231,19 +173,15 @@ function renderNeonBackground(
 function renderAmbientBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  _chapter: Chapter,
+  _section: RenderSection,
   _songProgress: number,
   _beatIntensity: number,
   currentTime: number,
 ): void {
   const pulse = Math.sin(currentTime * 0.5) * 0.03;
   const grad = ctx.createRadialGradient(
-    canvas.width / 2,
-    canvas.height / 2,
-    0,
-    canvas.width / 2,
-    canvas.height / 2,
-    canvas.height * 0.8,
+    canvas.width / 2, canvas.height / 2, 0,
+    canvas.width / 2, canvas.height / 2, canvas.height * 0.8,
   );
   grad.addColorStop(0, `rgba(255,255,255,${0.03 + pulse})`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
