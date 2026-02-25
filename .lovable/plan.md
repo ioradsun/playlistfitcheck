@@ -1,60 +1,59 @@
 
 
-# Add "Start CrowdFit Battle" Button to Fit Tab
+# Fix Hook Battle Text Stacking
 
-Add a button under the Hottest Hooks section in the Fit tab that publishes hook battles directly to the CrowdFit feed, mirroring how Lyric Dance posts appear there.
+## The Problem
 
-## What Changes
+In the `useHookCanvas.ts` rendering code, `computeStackedLayout()` is called and correctly detects when text needs to be stacked into multiple lines (e.g., when the canvas is narrow, like in a 50/50 battle split). However, the **actual drawing code completely ignores the stacked lines**. It always splits the full `activeLine.text` into individual words and lays them out **horizontally on a single row** (lines 450-456). The stacked layout is only used for font size calculation -- the multi-line positioning is never applied.
 
-### 1. FitTab.tsx -- Add Battle Publishing Logic and Button
+This means in a battle view where each canvas is ~half the screen width (well under the 600px stacking threshold), the text tries to render all words on one line, causing them to overlap and run into each other.
 
-**New state variables:**
-- `battlePublishing` (boolean) -- tracks publish-in-progress
-- `battlePublishedUrl` (string | null) -- stores the published battle URL
+## The Fix
 
-**New handler: `handleStartBattle`**
-- Fetches user profile for display name
-- Generates artist/song/hook slugs
-- Uploads audio to storage
-- Upserts both hooks into `shareable_hooks` with a shared `battle_id`
-- Upserts primary hook into `hookfit_posts`
-- Creates a CrowdFit post (`songfit_posts`) with:
-  - `track_title` = song title
-  - `spotify_track_url` = null, `spotify_track_id` = null
-  - `lyric_dance_url` = battle page URL (e.g. `/:artist/:song/:hook`)
-  - `lyric_dance_id` = null (this is a battle, not a dance)
-  - `status` = "live", 21-day expiry
-- Dispatches `hookfit:battle-published` and `songfit:dance-published` events for feed refresh
-- Shows toast on success
+**File: `src/hooks/useHookCanvas.ts`** (lines ~370-470)
 
-**Button placement:**
-- Rendered inside the Hottest Hooks card (lines 454-479), below the hook details
-- Only shown when both `songDna.hook` and `songDna.secondHook` exist (a battle requires two hooks)
-- Label: "START CROWDFIT BATTLE" (changes to "VIEW BATTLE" after publishing)
-- Styled consistently with the existing Dance button aesthetic
+Replace the single-line horizontal word layout with a stacked-aware layout that:
 
-### 2. Props -- No Changes Needed
+1. When `stackedLayout.isStacked` is `true`, renders each stacked line on its own vertical row
+2. Each stacked line's words are measured and positioned horizontally within that row
+3. The vertical spacing uses the system style's `lineHeight` multiplied by font size
+4. The total block is vertically centered on the canvas (same `lineY` center point)
 
-The FitTab already receives all necessary data: `songDna` (contains hook/secondHook), `audioFile`, `beatGrid`, `lyricData` (contains lines, title), and `cinematicDirection`. No new props required.
+### Current flow (broken):
+```text
+computeStackedLayout() --> returns { lines: ["line 1", "line 2"], isStacked: true }
+                      |
+                      v  (only fs is used)
+words = activeLine.text.split(" ")  <-- ignores stacked lines
+positions = all words on single horizontal row at lineY
+```
 
-## Technical Details
+### Fixed flow:
+```text
+computeStackedLayout() --> returns { lines: ["line 1", "line 2"], isStacked: true }
+                      |
+                      v
+if (isStacked) {
+  for each stacked line:
+    words = line.split(" ")
+    positions = horizontal row at lineY + row offset
+}
+else {
+  words = activeLine.text.split(" ")  // existing single-line logic
+  positions = single horizontal row at lineY
+}
+```
 
-### Battle publish flow (mirrors PublishHookButton logic)
-1. Derive `artistSlug`, `songSlug`, `hookSlug` from display name, song title, and hook phrase
-2. Upload audio once to storage
-3. Upsert hook 1 with `battle_position: 1` and a new `battle_id`
-4. Upsert hook 2 with `battle_position: 2` and the same `battle_id`
-5. Upsert into `hookfit_posts` (for HookFit feed)
-6. Insert into `songfit_posts` (for CrowdFit feed) -- fire-and-forget, same pattern as the lyric dance auto-post at line 290
-7. Dispatch window events for both feeds
+### Specific changes:
 
-### Duplicate prevention
-- `shareable_hooks` upsert uses `onConflict: "artist_slug,song_slug,hook_slug"`
-- `hookfit_posts` upsert uses `onConflict: "battle_id"`
-- CrowdFit post checks for existing post by `user_id` + battle URL before inserting
+**In `useHookCanvas.ts`, around lines 370-470** -- restructure the word positioning block:
 
-### Button states
-- Disabled when `!allReady` or `battlePublishing` or hooks missing
-- Shows spinner while publishing
-- After publish, shows "VIEW BATTLE" linking to the battle page
+- Move the existing `words`, `measureLineWidth`, and position calculation into an `else` branch (non-stacked case, unchanged)
+- Add a new `if (stackedLayout.isStacked)` branch that:
+  - Calculates vertical offset for each stacked line: `rowY = lineY - totalBlockHeight/2 + rowIndex * rowHeight + rowHeight/2`
+  - For each stacked line, measures its words, centers them horizontally, and pushes `{x, y}` positions
+  - Builds a flat `words[]` array and matching flat `positions[]` array so the existing per-word rendering loop (lines 458-470) works without changes
+- The orbital layout path remains in the non-stacked branch only (orbital doesn't apply to narrow stacked views)
+- The `workingFontSize` shrink loop is kept but uses the stacked font size when stacked
 
+No other files need to change. The `computeStackedLayout` function in `SystemStyles.ts` already works correctly -- it just wasn't being used for rendering.
