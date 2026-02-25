@@ -695,7 +695,7 @@ export function useHookCanvas(
         localAnalyserRef.current = null;
       }
     };
-  }, [hookData, drawCanvas, active, analyserNode]);
+  }, [hookData, drawCanvas, analyserNode]);
 
   useEffect(() => {
     if (!hookData) return;
