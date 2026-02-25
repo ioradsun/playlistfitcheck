@@ -9,13 +9,13 @@ import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { WalletProvider } from "@/components/crypto/WalletProvider";
 import { PageLayout } from "@/components/PageLayout";
-import { FitWidget } from "@/components/FitWidget";
 import { lazy, Suspense } from "react";
 import Index from "./pages/Index";
 
 import About from "./pages/About";
 
 const Admin = lazy(() => import("./pages/Admin"));
+const FitWidget = lazy(() => import("@/components/FitWidget").then((module) => ({ default: module.FitWidget })));
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import PublicProfile from "./pages/PublicProfile";
@@ -129,7 +129,9 @@ const App = () => (
                     <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
                   </Routes>
                 </SidebarProvider>
-                <FitWidget />
+                <Suspense fallback={null}>
+                  <FitWidget />
+                </Suspense>
                 </WalletProvider>
                 </SiteCopyProvider>
               </AuthProvider>

@@ -19,10 +19,16 @@ interface UsageQuota {
   increment: () => Promise<void>;
 }
 
-export function useUsageQuota(tool: string): UsageQuota {
+interface UseUsageQuotaOptions {
+  enabled?: boolean;
+}
+
+export function useUsageQuota(tool: string, options?: UseUsageQuotaOptions): UsageQuota {
   const { user, profile } = useAuth();
   const siteCopy = useSiteCopy();
+  const enabled = options?.enabled ?? true;
   const growthEnabled = siteCopy.features.growth_flow;
+  const shouldTrack = enabled && growthEnabled;
   const [used, setUsed] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -35,7 +41,7 @@ export function useUsageQuota(tool: string): UsageQuota {
 
   // Fetch current usage count
   const fetchUsage = useCallback(async () => {
-    if (!growthEnabled) return;
+    if (!shouldTrack) return;
     setLoading(true);
     try {
       const period = "lifetime";
@@ -58,18 +64,19 @@ export function useUsageQuota(tool: string): UsageQuota {
     } finally {
       setLoading(false);
     }
-  }, [tool, user, growthEnabled]);
+  }, [tool, user, shouldTrack]);
 
   useEffect(() => {
-    if (!growthEnabled) {
+    if (!shouldTrack) {
       setLoading(false);
       return;
     }
     fetchUsage();
-  }, [fetchUsage, growthEnabled]);
+  }, [fetchUsage, shouldTrack]);
 
   // Listen for quota changes from other components
   useEffect(() => {
+    if (!shouldTrack) return;
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail || detail.tool === tool) {
@@ -78,10 +85,10 @@ export function useUsageQuota(tool: string): UsageQuota {
     };
     window.addEventListener("quota-updated", handler);
     return () => window.removeEventListener("quota-updated", handler);
-  }, [fetchUsage, tool]);
+  }, [fetchUsage, tool, shouldTrack]);
 
   const increment = useCallback(async () => {
-    if (!growthEnabled) return;
+    if (!shouldTrack) return;
 
     const newCount = used + 1;
     setUsed(newCount);
@@ -135,10 +142,10 @@ export function useUsageQuota(tool: string): UsageQuota {
     } catch (e) {
       console.error("Failed to increment usage:", e);
     }
-  }, [used, user, tool, growthEnabled]);
+  }, [used, user, tool, shouldTrack]);
 
   // If growth flow disabled, everything is unlimited
-  if (!growthEnabled) {
+  if (!shouldTrack) {
     return { canUse: true, remaining: Infinity, limit: Infinity, used: 0, tier, loading: false, increment };
   }
 
