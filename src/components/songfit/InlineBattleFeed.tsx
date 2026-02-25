@@ -5,7 +5,7 @@
  * Tap a side to unmute that hook.
  */
 
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle } from "@/components/hookfit/InlineBattle";
@@ -53,12 +53,51 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName }: Props) {
       });
   }, [battleUrl]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const handleTileTap = useCallback((side: "a" | "b") => {
     setActivePlaying(prev => prev === side ? null : side);
   }, []);
 
+  // When a hook finishes, alternate to the other side; if both played, stop
+  const playedRef = useRef<Set<"a" | "b">>(new Set());
+  const handleHookEnd = useCallback((side: "a" | "b") => {
+    playedRef.current.add(side);
+    if (side === "a" && !playedRef.current.has("b")) {
+      setActivePlaying("b");
+    } else if (side === "b" && !playedRef.current.has("a")) {
+      setActivePlaying("a");
+    } else {
+      // Both have played — stop
+      setActivePlaying(null);
+      playedRef.current.clear();
+    }
+  }, []);
+
+  // Reset played tracker when user manually taps
+  const handleTileTapWrapped = useCallback((side: "a" | "b") => {
+    playedRef.current.clear();
+    handleTileTap(side);
+  }, [handleTileTap]);
+
   const handleHooksLoaded = useCallback((a: HookData, b: HookData | null) => {
     setHooksReady(true);
+  }, []);
+
+  // Mute everything when scrolled out of view
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) {
+          setActivePlaying(null);
+        }
+      },
+      { threshold: 0.3 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   const openFullPage = useCallback((e: React.MouseEvent) => {
@@ -81,7 +120,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName }: Props) {
   }
 
   return (
-    <div className="relative w-full overflow-hidden bg-black rounded-xl" style={{ minHeight: 300, height: 300 }}>
+    <div ref={containerRef} className="relative w-full overflow-hidden bg-black rounded-xl" style={{ minHeight: 300, height: 300 }}>
       {(loading || !battleId) ? (
         <div className="absolute inset-0 flex items-center justify-center bg-black">
           <div className="text-center space-y-2">
@@ -94,8 +133,9 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName }: Props) {
           battleId={battleId}
           mode="judgment"
           activePlaying={activePlaying}
-          onTileTap={handleTileTap}
+          onTileTap={handleTileTapWrapped}
           onHooksLoaded={handleHooksLoaded}
+          onHookEnd={handleHookEnd}
         />
       )}
 
