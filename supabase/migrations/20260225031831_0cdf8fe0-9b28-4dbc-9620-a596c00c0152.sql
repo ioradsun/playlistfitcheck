@@ -1,0 +1,1 @@
+ALTER TABLE public.dream_tools ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;

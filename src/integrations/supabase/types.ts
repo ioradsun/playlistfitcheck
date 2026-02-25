@@ -285,6 +285,7 @@ export type Database = {
           backers_count: number
           comments_count: number
           created_at: string
+          deleted_at: string | null
           dream_type: string
           frustration: string
           greenlight_count: number
@@ -301,6 +302,7 @@ export type Database = {
           backers_count?: number
           comments_count?: number
           created_at?: string
+          deleted_at?: string | null
           dream_type?: string
           frustration: string
           greenlight_count?: number
@@ -317,6 +319,7 @@ export type Database = {
           backers_count?: number
           comments_count?: number
           created_at?: string
+          deleted_at?: string | null
           dream_type?: string
           frustration?: string
           greenlight_count?: number
