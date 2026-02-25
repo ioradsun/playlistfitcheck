@@ -310,6 +310,10 @@ export default function ShareableLyricDance() {
                         emotionalIntensity: ch.emotionalIntensity ?? 0.5,
                       })),
                     },
+                  }).then(({ data: imgResult }) => {
+                    if (imgResult?.chapter_images) {
+                      setData(prev => prev ? { ...prev, chapter_images: imgResult.chapter_images } : prev);
+                    }
                   }).catch(() => {});
                 }
               }
