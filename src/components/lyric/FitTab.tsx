@@ -247,29 +247,8 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
       const imgs = dances[0].section_images;
       if (Array.isArray(imgs) && imgs.length > 0 && imgs.some(Boolean)) {
         setSectionImages(imgs);
-      } else {
-        // Images might be generating in background — poll for them
-        setGenerating(true);
-        setGenProgress({ done: 0, total: sections.length });
-        pollRef.current = setInterval(async () => {
-          const { data: updated }: any = await supabase
-            .from("shareable_lyric_dances" as any)
-            .select("section_images")
-            .eq("id", dances[0].id)
-            .maybeSingle();
-          const updatedImgs = updated?.section_images;
-          if (Array.isArray(updatedImgs) && updatedImgs.some(Boolean)) {
-            setSectionImages(updatedImgs);
-            setGenProgress({ done: updatedImgs.filter(Boolean).length, total: sections.length });
-            setGenerating(false);
-            if (pollRef.current) clearInterval(pollRef.current);
-          }
-        }, 3000);
-        // Stop polling after 2 min
-        setTimeout(() => {
-          if (pollRef.current) { clearInterval(pollRef.current); setGenerating(false); }
-        }, 120_000);
       }
+      // Don't auto-poll — let the user click "Generate Images" or wait for publish event
     })();
     return () => {
       cancelled = true;
