@@ -1475,8 +1475,8 @@ export class LyricDancePlayer {
     // Background: static bg cache first, then section images on top
     this.drawBackground(frame);
 
-    // Chapter image overlay — use baked chapterIndex directly
-    const imgIdx = Math.min(frame.chapterIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
+    // Section image overlay — use baked sectionIndex directly
+    const imgIdx = Math.min(frame.sectionIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
     const nextImgIdx = Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
     // Simple crossfade: use fractional song progress within the chapter
     const duration = this.audio?.duration || 1;
@@ -3462,7 +3462,7 @@ export class LyricDancePlayer {
       timeMs: f.timeMs,
       beatIndex: f.beatIndex,
       bgBlend: f.bgBlend,
-      chapterIndex: f.chapterIndex,
+      sectionIndex: f.sectionIndex,
       particles: f.particles,
       cameraX: f.cameraX * sx,
       cameraY: f.cameraY * sy,
@@ -3511,7 +3511,7 @@ export class LyricDancePlayer {
       timeMs: f.timeMs,
       beatIndex: f.beatIndex,
       bgBlend: f.bgBlend,
-      chapterIndex: f.chapterIndex,
+      sectionIndex: f.sectionIndex,
       particles: f.particles,
       cameraX: sx ? f.cameraX / sx : f.cameraX,
       cameraY: sy ? f.cameraY / sy : f.cameraY,
