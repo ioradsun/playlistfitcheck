@@ -209,7 +209,9 @@ export function FitTab({
 
   // ── Dance publish handler ─────────────────────────────────────────────
   const handleDance = useCallback(async () => {
-    if (!user || !sceneManifest || !lyricData || !audioFile || publishing) return;
+    console.log("[FitTab] handleDance called", { user: !!user, sceneManifest: !!sceneManifest, lyricData: !!lyricData, audioFile: !!audioFile, publishing });
+    if (!user) { toast.error("Sign in to publish your Dance"); return; }
+    if (!sceneManifest || !lyricData || !audioFile || publishing) return;
     setPublishing(true);
     setPublishStatus("Preparing…");
 
