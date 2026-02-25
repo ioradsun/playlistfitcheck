@@ -415,7 +415,7 @@ async function callWithRetry(
         messages,
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 4096,
+        max_tokens: 8192,
       }),
     });
 
@@ -427,6 +427,11 @@ async function callWithRetry(
 
     const completion = await resp.json();
     const raw = String(completion?.choices?.[0]?.message?.content ?? "");
+    const finishReason = completion?.choices?.[0]?.finish_reason ?? "unknown";
+    console.log(`[cinematic-direction] AI response: ${raw.length} chars, finish_reason: ${finishReason}`);
+    if (finishReason === "length") {
+      console.warn("[cinematic-direction] Response truncated by token limit!");
+    }
     return extractJson(raw);
   };
 
