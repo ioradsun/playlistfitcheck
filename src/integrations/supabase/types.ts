@@ -1256,7 +1256,7 @@ export type Database = {
           audio_url: string
           background_url: string | null
           beat_grid: Json
-          section_images: Json | null
+          chapter_images: Json | null
           cinematic_direction: Json | null
           created_at: string
           fire_count: number
@@ -1281,7 +1281,7 @@ export type Database = {
           audio_url: string
           background_url?: string | null
           beat_grid: Json
-          section_images?: Json | null
+          chapter_images?: Json | null
           cinematic_direction?: Json | null
           created_at?: string
           fire_count?: number
@@ -1306,7 +1306,7 @@ export type Database = {
           audio_url?: string
           background_url?: string | null
           beat_grid?: Json
-          section_images?: Json | null
+          chapter_images?: Json | null
           cinematic_direction?: Json | null
           created_at?: string
           fire_count?: number
