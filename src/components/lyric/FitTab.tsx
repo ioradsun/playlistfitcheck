@@ -282,6 +282,61 @@ export function FitTab({
       setPublishedUrl(url);
       setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
+
+      // ── Auto-post to CrowdFit (fire-and-forget) ──────────────
+      (async () => {
+        try {
+          const { data: danceRow }: any = await supabase
+            .from("shareable_lyric_dances" as any)
+            .select("id")
+            .eq("artist_slug", artistSlug)
+            .eq("song_slug", songSlug)
+            .single();
+
+          if (!danceRow?.id) return;
+          const danceId = danceRow.id;
+
+          const { data: existing }: any = await supabase
+            .from("songfit_posts" as any)
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("lyric_dance_id", danceId)
+            .maybeSingle();
+
+          if (existing) {
+            await supabase
+              .from("songfit_posts" as any)
+              .update({ lyric_dance_url: url })
+              .eq("id", existing.id);
+          } else {
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 21);
+
+            await supabase
+              .from("songfit_posts" as any)
+              .insert({
+                user_id: user.id,
+                track_title: lyricData.title || "Untitled",
+                caption: "",
+                lyric_dance_url: url,
+                lyric_dance_id: danceId,
+                spotify_track_url: null,
+                spotify_track_id: null,
+                album_art_url: null,
+                tags_json: [],
+                track_artists_json: [],
+                status: "live",
+                submitted_at: new Date().toISOString(),
+                expires_at: expiresAt.toISOString(),
+              });
+          }
+
+          window.dispatchEvent(new Event("songfit:dance-published"));
+          console.log("[FitTab] CrowdFit post created for lyric dance");
+        } catch (e: any) {
+          console.warn("[FitTab] CrowdFit auto-post failed (non-blocking):", e?.message);
+        }
+      })();
     } catch (e: any) {
       console.error("Dance publish error:", e);
       toast.error(e.message || "Failed to publish lyric dance");
