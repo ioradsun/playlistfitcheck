@@ -28,9 +28,17 @@ function applyLyricShadow(
     typographyPersonality === "MONUMENTAL" ||
     typographyPersonality === "SHATTERED DISPLAY";
   const shadowBase = (palette?.[0] ?? "#000000").replace(/\s+/g, "");
-  const shadowColor = /^#[0-9a-fA-F]{6}$/.test(shadowBase)
-    ? `${shadowBase}cc`
-    : "rgba(0,0,0,0.8)";
+
+  // Detect if the background is light — if so, use a dark shadow instead of palette-based
+  let shadowColor = "rgba(0,0,0,0.8)";
+  if (/^#[0-9a-fA-F]{6}$/.test(shadowBase)) {
+    const r = parseInt(shadowBase.slice(1, 3), 16);
+    const g = parseInt(shadowBase.slice(3, 5), 16);
+    const b = parseInt(shadowBase.slice(5, 7), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    // Light background → dark shadow; dark background → palette shadow
+    shadowColor = luminance > 0.5 ? "rgba(0,0,0,0.6)" : `${shadowBase}cc`;
+  }
 
   ctx.shadowColor = shadowColor;
   ctx.shadowBlur = isHeavy ? 14 : 8;
