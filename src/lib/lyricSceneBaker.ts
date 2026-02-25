@@ -1122,54 +1122,50 @@ function getGroupLayout(
     }
   }
 
-  // Collect non-anchor word indices grouped by vertical band (filler vs non-filler)
-  // and lay them out inline with inter-word spacing
-  const supportIndices = Array.from({ length: count }, (_, i) => i).filter(i => i !== anchorIdx);
-
   // Approximate character width as fontSize * 0.6 (monospace-ish heuristic for sans-serif)
   const approxWordWidth = (word: string, fontSize: number) => word.length * fontSize * 0.6;
   const spaceWidth = (fontSize: number) => fontSize * 0.3;
 
-  // Group support words by their vertical band
-  const fillerSupport = supportIndices.filter(i => isFillerWord(group.words[i].word));
-  const nonFillerSupport = supportIndices.filter(i => !isFillerWord(group.words[i].word));
+  // All non-anchor words stay on one baseline in original word order (left-to-right readable phrase).
+  // The anchor word gets its own prominent position; the rest form a centered phrase line below it.
+  const supportIndices = Array.from({ length: count }, (_, i) => i).filter(i => i !== anchorIdx);
 
-  const layoutInlineGroup = (indices: number[], yOff: number) => {
-    if (indices.length === 0) return;
-    // Calculate total width of all words + spaces
-    let totalWidth = 0;
-    for (let j = 0; j < indices.length; j++) {
-      const idx = indices[j];
-      totalWidth += approxWordWidth(group.words[idx].word, wordFontSizes[idx]);
-      if (j < indices.length - 1) totalWidth += spaceWidth(wordFontSizes[idx]);
-    }
-    // Center the group horizontally on cx
-    let cursor = cx - totalWidth * 0.5;
-    for (let j = 0; j < indices.length; j++) {
-      const idx = indices[j];
-      const ww = approxWordWidth(group.words[idx].word, wordFontSizes[idx]);
-      positions[idx] = {
-        x: cursor + ww * 0.5, // center of the word
-        y: cy + yOff,
-        fontSize: wordFontSizes[idx],
-        isAnchor: false,
-        isFiller: isFillerWord(group.words[idx].word),
-      };
-      cursor += ww + spaceWidth(wordFontSizes[idx]);
-    }
-  };
-
-  // Place anchor first
-  for (let i = 0; i < count; i += 1) {
-    if (i === anchorIdx) {
-      const isFiller = isFillerWord(group.words[i].word);
-      positions[i] = { x: cx, y: cy, fontSize: wordFontSizes[i], isAnchor: true, isFiller };
-    }
+  // Place anchor word prominently
+  {
+    const isFiller = isFillerWord(group.words[anchorIdx].word);
+    positions[anchorIdx] = { x: cx, y: cy, fontSize: wordFontSizes[anchorIdx], isAnchor: true, isFiller };
   }
 
-  // Layout filler support words above anchor, non-filler support words below
-  layoutInlineGroup(fillerSupport, -baseFontSize * 1.1);
-  layoutInlineGroup(nonFillerSupport, baseFontSize * 0.9);
+  // Layout remaining words as a single readable phrase on one baseline below the anchor
+  if (supportIndices.length > 0) {
+    // Use a uniform font size for the phrase line (the non-filler support size) for consistency
+    const phraseFontSize = Math.max(MIN_FONT, baseFontSize * 0.75);
+
+    // Calculate total width of phrase line
+    let totalWidth = 0;
+    for (let j = 0; j < supportIndices.length; j++) {
+      const idx = supportIndices[j];
+      totalWidth += approxWordWidth(group.words[idx].word, phraseFontSize);
+      if (j < supportIndices.length - 1) totalWidth += spaceWidth(phraseFontSize);
+    }
+
+    // Center the phrase horizontally on cx, place below anchor
+    const phraseY = cy + baseFontSize * 1.0;
+    let cursor = cx - totalWidth * 0.5;
+    for (let j = 0; j < supportIndices.length; j++) {
+      const idx = supportIndices[j];
+      const ww = approxWordWidth(group.words[idx].word, phraseFontSize);
+      const isFiller = isFillerWord(group.words[idx].word);
+      positions[idx] = {
+        x: cursor + ww * 0.5,
+        y: phraseY,
+        fontSize: phraseFontSize,
+        isAnchor: false,
+        isFiller,
+      };
+      cursor += ww + spaceWidth(phraseFontSize);
+    }
+  }
 
   // Fill any gaps (shouldn't happen, but defensive)
   for (let i = 0; i < count; i += 1) {
