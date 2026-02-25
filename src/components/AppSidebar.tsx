@@ -351,11 +351,12 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                   ? activeTab === tool.value
                   : location.pathname === effectivePath || location.pathname === tool.path;
                 const recents = recentByType[tool.value] || [];
+                const hasSelectedChild = recents.some(item => location.pathname.includes(item.id));
 
                 return (
                   <SidebarMenuItem key={tool.value}>
                     <SidebarMenuButton
-                      isActive={isActive}
+                      isActive={isActive && !hasSelectedChild}
                       tooltip={siteCopy.tools[tool.value]?.label || tool.label}
                       onClick={() => handleToolClick(tool)}
                     >
