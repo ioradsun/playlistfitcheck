@@ -140,6 +140,64 @@ export function PublishLyricDanceButton({
       setPublishedUrl(url);
       toast.success("Lyric Dance page published!");
 
+      // ── Auto-post to CrowdFit (fire-and-forget) ──────────────
+      (async () => {
+        try {
+          const { data: danceRow }: any = await supabase
+            .from("shareable_lyric_dances" as any)
+            .select("id")
+            .eq("artist_slug", artistSlug)
+            .eq("song_slug", songSlug)
+            .single();
+
+          if (!danceRow?.id) return;
+          const danceId = danceRow.id;
+
+          // Check for existing CrowdFit post with this dance
+          const { data: existing } = await supabase
+            .from("songfit_posts" as any)
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("lyric_dance_id", danceId)
+            .maybeSingle();
+
+          if (existing) {
+            // Update existing post's URL
+            await supabase
+              .from("songfit_posts" as any)
+              .update({ lyric_dance_url: url })
+              .eq("id", (existing as any).id);
+          } else {
+            // Insert new CrowdFit post
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 21);
+
+            await supabase
+              .from("songfit_posts" as any)
+              .insert({
+                user_id: user.id,
+                track_title: songTitle || "Untitled",
+                caption: "",
+                lyric_dance_url: url,
+                lyric_dance_id: danceId,
+                spotify_track_url: null,
+                spotify_track_id: null,
+                album_art_url: null,
+                tags_json: [],
+                track_artists_json: [],
+                status: "live",
+                submitted_at: new Date().toISOString(),
+                expires_at: expiresAt.toISOString(),
+              });
+          }
+
+          window.dispatchEvent(new Event("songfit:dance-published"));
+          console.log("[PUBLISH] CrowdFit post created for lyric dance");
+        } catch (e: any) {
+          console.warn("[PUBLISH] CrowdFit auto-post failed (non-blocking):", e?.message);
+        }
+      })();
+
       // Fire-and-forget: generate chapter background images
       // Need the actual shareable dance ID for the edge function
       const cinematicDir = songDna?.cinematicDirection ?? songDna?.cinematic_direction;

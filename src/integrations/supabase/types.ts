@@ -1616,11 +1616,13 @@ export type Database = {
           impressions: number
           legacy_boost: number
           likes_count: number
+          lyric_dance_id: string | null
+          lyric_dance_url: string | null
           peak_rank: number | null
           preview_url: string | null
           release_date: string | null
-          spotify_track_id: string
-          spotify_track_url: string
+          spotify_track_id: string | null
+          spotify_track_url: string | null
           status: string
           submitted_at: string
           tags_json: Json
@@ -1643,11 +1645,13 @@ export type Database = {
           impressions?: number
           legacy_boost?: number
           likes_count?: number
+          lyric_dance_id?: string | null
+          lyric_dance_url?: string | null
           peak_rank?: number | null
           preview_url?: string | null
           release_date?: string | null
-          spotify_track_id: string
-          spotify_track_url: string
+          spotify_track_id?: string | null
+          spotify_track_url?: string | null
           status?: string
           submitted_at?: string
           tags_json?: Json
@@ -1670,11 +1674,13 @@ export type Database = {
           impressions?: number
           legacy_boost?: number
           likes_count?: number
+          lyric_dance_id?: string | null
+          lyric_dance_url?: string | null
           peak_rank?: number | null
           preview_url?: string | null
           release_date?: string | null
-          spotify_track_id?: string
-          spotify_track_url?: string
+          spotify_track_id?: string | null
+          spotify_track_url?: string | null
           status?: string
           submitted_at?: string
           tags_json?: Json
