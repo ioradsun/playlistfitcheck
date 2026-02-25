@@ -361,7 +361,7 @@ export function LyricFitTab({
   }, [savedId, songDna, persistSongDna]);
 
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
-    if (!targetAudioFile || !hasRealAudio || targetAudioFile.size === 0) return;
+    if (!targetAudioFile || targetAudioFile.size === 0) return;
     // Data-existence guard: if we already have beatGrid (e.g. loaded from DB), skip
     if (beatGrid) {
       setGenerationStatus(prev => prev.beatGrid === "done" ? prev : ({ ...prev, beatGrid: "done" }));
@@ -369,6 +369,7 @@ export function LyricFitTab({
     }
     if (generationStatus.beatGrid === "running" || generationStatus.beatGrid === "done") return;
 
+    console.log("[Pipeline] Starting beat grid analysis");
     setGenerationStatus(prev => ({ ...prev, beatGrid: "running" }));
     setPipelineStages(prev => ({ ...prev, rhythm: "running" }));
 
@@ -381,7 +382,7 @@ export function LyricFitTab({
     } catch {
       setGenerationStatus(prev => ({ ...prev, beatGrid: "error" }));
     }
-  }, [hasRealAudio, beatGrid, generationStatus.beatGrid]);
+  }, [beatGrid, generationStatus.beatGrid]);
 
   const startSongDefaultsDerivation = useCallback(async () => {
     if (songDna) {
