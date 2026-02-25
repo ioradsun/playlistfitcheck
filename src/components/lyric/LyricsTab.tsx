@@ -49,6 +49,7 @@ interface Props {
   analysisModel: string;
   transcriptionModel: string;
   sceneInput?: ReactNode;
+  onAudioSubmitted?: (file: File) => void;
 }
 
 export function LyricsTab({
@@ -74,6 +75,7 @@ export function LyricsTab({
   analysisModel,
   transcriptionModel,
   sceneInput,
+  onAudioSubmitted,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Syncing...");
@@ -127,6 +129,9 @@ export function LyricsTab({
       setProgressFileName(file.name);
       setProgressStage("compressing");
       setProgressOpen(true);
+
+      // Start beat grid analysis in parallel with transcription
+      onAudioSubmitted?.(file);
 
       try {
         // Only compress if over 25MB
@@ -254,7 +259,7 @@ export function LyricsTab({
         setProgressOpen(false);
       }
     },
-    [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId],
+    [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted],
   );
 
   const handleBack = useCallback(() => {

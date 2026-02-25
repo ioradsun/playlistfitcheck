@@ -513,22 +513,45 @@ export function LyricFitTab({
 
   const pipelineTriggeredRef = useRef(false);
   const [pipelineRetryCount, setPipelineRetryCount] = useState(0);
+
+  // ── Fork 1: Beat grid starts when audio file is submitted (parallel with transcription) ──
+  // Called from onAudioSubmitted callback, not from an effect waiting on lines.
+  const handleAudioSubmitted = useCallback((file: File) => {
+    console.log("[Pipeline] Audio submitted — starting beat grid analysis (parallel with transcription)");
+    startBeatAnalysis(file);
+  }, [startBeatAnalysis]);
+
+  // ── Fork 2: Song defaults derivation starts when lyrics arrive ──
   useEffect(() => {
-    if (!lines?.length || !audioFile) return;
-    if (pipelineTriggeredRef.current && pipelineRetryCount === 0) return;
+    if (!lines?.length) return;
     // If all data already loaded from DB, skip pipeline entirely
     if (songDna && beatGrid && cinematicDirection) {
       pipelineTriggeredRef.current = true;
       setGenerationStatus({ beatGrid: "done", songDna: "done", cinematicDirection: "done" });
       return;
     }
-    pipelineTriggeredRef.current = true;
-    console.log("[Pipeline] Starting pipeline, retry:", pipelineRetryCount);
-    startBeatAnalysis(audioFile);
-    startSongDefaultsDerivation();
+    if (!pipelineTriggeredRef.current || pipelineRetryCount > 0) {
+      pipelineTriggeredRef.current = true;
+      startSongDefaultsDerivation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, pipelineRetryCount, startSongDefaultsDerivation, songDna, beatGrid, cinematicDirection]);
+
+  // ── Waterfall: Cinematic direction fires only when audioSections are ready ──
+  // audioSections depends on songSignature + beatGrid + lyrics (all upstream)
+  const cinematicTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (!audioSections.length || !lines?.length) return;
+    if (cinematicTriggeredRef.current && pipelineRetryCount === 0) return;
+    if (cinematicDirection && pipelineRetryCount === 0) {
+      setGenerationStatus(prev => prev.cinematicDirection === "done" ? prev : ({ ...prev, cinematicDirection: "done" }));
+      return;
+    }
+    cinematicTriggeredRef.current = true;
+    console.log("[Pipeline] Sections ready — starting cinematic direction");
     startCinematicDirection(lines, pipelineRetryCount > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, audioFile, pipelineRetryCount, startSongDefaultsDerivation, startCinematicDirection, songDna, beatGrid, cinematicDirection]);
+  }, [audioSections, lines, pipelineRetryCount, startCinematicDirection, cinematicDirection]);
 
   useEffect(() => {
     const values = Object.values(generationStatus);
@@ -570,26 +593,26 @@ export function LyricFitTab({
   const retryGeneration = useCallback(() => {
     if (!audioFile || !lines.length) return;
     console.log("[Pipeline] Retry requested — clearing all state");
-    // Reset all state
     setSongDna(null);
     setCinematicDirection(null);
     setBeatGrid(null);
+    setSongSignature(null);
     setSceneManifest(null);
     setAudioBuffer(null);
     setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
     pipelineTriggeredRef.current = false;
+    cinematicTriggeredRef.current = false;
 
-    // Clear from DB
     if (savedIdRef.current) {
       persistSongDna(savedIdRef.current, { cinematicDirection: null });
     }
 
-    // Bump retry counter — the pipeline effect will re-run with fresh closures
-    // after React processes the state clears above
+    // Restart beat grid immediately, then bump retry counter for waterfall
+    startBeatAnalysis(audioFile);
     setTimeout(() => {
       setPipelineRetryCount(c => c + 1);
     }, 100);
-  }, [audioFile, lines, persistSongDna]);
+  }, [audioFile, lines, persistSongDna, startBeatAnalysis]);
 
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
@@ -649,7 +672,7 @@ export function LyricFitTab({
       )}
 
       {activeTab === "lyrics" ? (
-        <LyricsTab
+      <LyricsTab
           lyricData={lyricData}
           setLyricData={setLyricData}
           audioFile={audioFile}
@@ -674,9 +697,12 @@ export function LyricFitTab({
             setBgImageUrl(null);
             setSceneManifest(null);
             setLines([]);
+            setAudioBuffer(null);
             setGenerationStatus({ beatGrid: "idle", songDna: "idle", cinematicDirection: "idle" });
             setFitReadiness("not_started");
             setFitUnlocked(false);
+            cinematicTriggeredRef.current = false;
+            pipelineTriggeredRef.current = false;
             onNewProject?.();
           }}
           onHeaderProject={onHeaderProject}
@@ -684,6 +710,7 @@ export function LyricFitTab({
           analysisModel={analysisModel}
           transcriptionModel={transcriptionModel}
           sceneInput={sceneInputNode}
+          onAudioSubmitted={handleAudioSubmitted}
         />
       ) : lyricData && audioFile ? (
         <FitTab
