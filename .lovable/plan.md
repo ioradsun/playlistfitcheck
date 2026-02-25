@@ -1,25 +1,64 @@
-Here's the final Lovable prompt:
 
----
 
-Refactor LyricFit into a two-tab architecture using the same tab strip pattern as `BillboardToggle` in CrowdFit. Create a new `LyricFitToggle` component modeled directly on `BillboardToggle` with two buttons — **Lyrics** and **Fit** — where Fit renders at `opacity-30` with `pointer-events-none` until `lines` has entries.
+# Auto-Post Lyric Dance to CrowdFit
 
-Rewrite `LyricFitTab` as a thin parent container that holds all shared state: `audioFile`, `audioUrl`, `lines`, `savedLyricId`, `songDna`, `beatGrid`, `songSignature`, `cinematicDirection`, `bgImageUrl`, `sceneManifest`. It renders the toggle strip and conditionally shows either the Lyrics or Fit content below it.
+When a lyric dance is published, it will automatically create a CrowdFit post — the same pattern used by HookFit battles. The post appears in the CrowdFit feed like any other post, with the Spotify embed replaced by a link to the lyric dance page.
 
-**Lyrics tab** — upload audio, check file size, if under 25MB send raw to `lyric-transcribe`, only run `compressAudioFile` if over 25MB. On response render lines and inline editor from `LyricDisplay` (editing only). Remove `useBeatGrid`, `songSignatureAnalyzer`, `lyric-analyze`, `cinematic-direction`, `lyric-video-bg` from this tab entirely.
+## What Changes
 
-**Fit tab** — on entry, first sync/refresh the final transcript from `saved_lyrics`, then auto-trigger in parallel: `beatAnalyzer.worker` and `lyric-analyze`. Show a combined progress bar. Once both complete, auto-call `cinematic-direction`, then unlock the Dance button. Dance button is disabled until `sceneManifest` exists — remove `deriveSceneManifestFromSpec` fallback entirely. Dance button sequence: `lyric-video-bg` → audio upload → upsert `shareable_lyric_dances` → redirect to share URL.
+### 1. Database Migration
+Add two nullable columns to `songfit_posts` and make `spotify_track_url` / `spotify_track_id` nullable so dance-only posts don't need Spotify data:
 
-In `LyricDisplay` remove: `fetchSongDna`, the Reveal Song DNA button, `useBeatGrid`, `songSignatureAnalyzer`, `generateBackgroundImage`, and `PublishLyricDanceButton`. Keep: inline editing, waveform, playback, FMLY filter, export.
+```text
+ALTER TABLE public.songfit_posts
+  ALTER COLUMN spotify_track_url DROP NOT NULL,
+  ALTER COLUMN spotify_track_id DROP NOT NULL;
 
-In `PublishLyricDanceButton` remove the `deriveSceneManifestFromSpec` fallback — `sceneManifest` must come from props or the button stays disabled.
+ALTER TABLE public.songfit_posts
+  ADD COLUMN lyric_dance_url text,
+  ADD COLUMN lyric_dance_id uuid;
+```
 
-**State flow:**
+### 2. Publishing Flow (FitTab.tsx)
+After the `shareable_lyric_dances` upsert succeeds (around line 281), add a fire-and-forget block:
+- Query the just-upserted dance record to get its ID
+- Check if a `songfit_posts` row already exists for this user with a matching `lyric_dance_id`
+- If not, insert a new CrowdFit post with:
+  - `track_title` = song name
+  - `caption` = auto-generated (e.g. empty or short default)
+  - `lyric_dance_url` = the published dance path
+  - `lyric_dance_id` = the dance record ID
+  - `spotify_track_url` = null, `spotify_track_id` = null
+  - `album_art_url` = null (or background URL if available)
+  - `status` = "live", standard 21-day expiry
+- If post already exists, update its `lyric_dance_url`
 
-1. User uploads audio in Lyrics tab
-2. Transcription runs → lines populate from ElevenLabs → Fit tab unlocks immediately
-3. User clicks Fit tab → sync/refresh final transcript from `saved_lyrics` before proceeding
-4. Beat analysis + Song DNA auto-trigger in parallel on tab entry
-5. Progress bar shows combined status
-6. When both complete, Dance button enables
-7. Dance button: bg image → upload → upsert → redirect
+### 3. CrowdFit Post Card (SongFitPostCard.tsx)
+- Before the `LazySpotifyEmbed`, check if `post.lyric_dance_url` exists
+- If so, render a compact card linking to the dance page instead of the Spotify embed — similar to how HookFit cards show battle canvases instead of track embeds
+- Show song title, artist name, and a "Watch Lyric Dance" CTA button
+
+### 4. Types Update (songfit/types.ts)
+- Add `lyric_dance_url?: string | null` and `lyric_dance_id?: string | null` to the `SongFitPost` interface
+
+### 5. Feed Query (SongFitFeed.tsx)
+- No query changes needed — dance posts are just regular `songfit_posts` rows with `status = 'live'`
+- The existing feed query already fetches all live posts
+
+## Technical Details
+
+### Dance post card rendering
+When `post.lyric_dance_url` is set and `post.spotify_track_id` is empty/null:
+- Replace the Spotify embed area with a styled card containing:
+  - Song title (from `track_title`)
+  - Artist name (from profile)
+  - A "WATCH LYRIC DANCE" button linking to `post.lyric_dance_url`
+- The card uses the same resolved/scored filter states as regular posts
+
+### Duplicate prevention
+- On republish, the system checks for existing posts by `lyric_dance_id` to avoid duplicates
+- If found, updates the existing post's URL rather than creating a new one
+
+### Event dispatch
+- After auto-posting, dispatch `window.dispatchEvent(new Event("songfit:dance-published"))` so the feed can refresh if open (mirrors the HookFit pattern with `hookfit:battle-published`)
+
