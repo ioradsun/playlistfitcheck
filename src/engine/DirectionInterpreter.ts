@@ -214,7 +214,10 @@ export class DirectionInterpreter {
 
   getLineDirection(lineIndex: number): LineDirection | null {
     if (!this.normalizedDirection?.storyboard) return null;
-    return this.normalizedDirection.storyboard[lineIndex] ?? null;
+    const entry = this.normalizedDirection.storyboard[lineIndex];
+    if (!entry) return null;
+    // StoryboardEntry has optional `text`; coerce to LineDirection
+    return { text: "", emotionalIntent: "", heroWord: "", visualTreatment: "", entryStyle: "fades", exitStyle: "fades", particleBehavior: "", beatAlignment: "", transitionToNext: "", ...entry } as LineDirection;
   }
 
   isClimaxMoment(songProgress: number): boolean {
