@@ -16,8 +16,6 @@ export type LineBeatMap = {
 export type ScenePayload = {
   lines: LyricLine[];
   words?: Array<{ word: string; start: number; end: number }>;
-  viewportW?: number;
-  viewportH?: number;
   bpm?: number | null;
   beat_grid: { bpm: number; beats: number[]; confidence: number };
   physics_spec: PhysicsSpec;
@@ -95,8 +93,8 @@ export type Keyframe = {
 export type BakedTimeline = Keyframe[];
 
 const FRAME_STEP_MS = 16;
-const DEFAULT_VIEWPORT_W = 960;
-const DEFAULT_VIEWPORT_H = 540;
+const BASE_X = 960 * 0.5;
+const BASE_Y_CENTER = 540 * 0.5;
 const easeOut = (t: number): number => 1 - Math.pow(1 - t, 3);
 const easeIn = (t: number): number => Math.pow(t, 3);
 const easeOutBack = (t: number): number => {
@@ -136,7 +134,6 @@ type ExitStyle =
   | 'blur-out' | 'spin-out' | 'peel-off' | 'peel-reverse';
 
 type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
-type ViewportFontKind = 'multiWord' | 'hero';
 
 interface MotionDefaults {
   entries: EntryStyle[];
@@ -836,13 +833,6 @@ type BakeState = {
 };
 
 type PrebakedData = {
-  viewportW: number;
-  viewportH: number;
-  viewportSafeMargin: number;
-  multiWordBaseFontSize: number;
-  heroBaseFontSize: number;
-  baseX: number;
-  baseYCenter: number;
   chapters: ChapterLike[];
   tensionMotionByFrame: number[];
   chapterIndexByFrame: number[];
@@ -883,41 +873,6 @@ type PrebakedData = {
   emotionalArc: string;
 };
 
-const clamp = (min: number, value: number, max: number): number => Math.max(min, Math.min(max, value));
-
-function getViewportSafeMarginPx(viewportW: number, viewportH: number): number {
-  return Math.max(16, Math.min(viewportW, viewportH) * 0.05);
-}
-
-export function getViewportBaseFontSize(viewportW: number, viewportH: number, kind: ViewportFontKind = 'multiWord'): number {
-  const safeH = Math.max(1, viewportH);
-  const safeW = Math.max(1, viewportW);
-  const dominantH = Math.max(safeH, safeW * 0.5);
-  if (kind === 'hero') return clamp(44, dominantH * 0.20, 240);
-  return clamp(36, dominantH * 0.13, 180);
-}
-
-function clampTextToSafeArea(
-  x: number,
-  y: number,
-  text: string,
-  fontSize: number,
-  viewportW: number,
-  viewportH: number,
-  marginPx: number,
-): { x: number; y: number } {
-  const approxTextW = Math.max(fontSize * 0.6, fontSize * 0.6 * Math.max(1, text.length));
-  const approxTextH = Math.max(fontSize, fontSize * 1.1);
-  const minX = marginPx + approxTextW * 0.5;
-  const maxX = viewportW - marginPx - approxTextW * 0.5;
-  const minY = marginPx + approxTextH * 0.5;
-  const maxY = viewportH - marginPx - approxTextH * 0.5;
-  return {
-    x: maxX >= minX ? clamp(minX, x, maxX) : clamp(marginPx, x, viewportW - marginPx),
-    y: maxY >= minY ? clamp(minY, y, maxY) : clamp(marginPx, y, viewportH - marginPx),
-  };
-}
-
 function getLayoutForMode(
   mode: VisualMode,
   wordIndex: number,
@@ -939,7 +894,6 @@ function getWordFontSize(
   word: string,
   directive: WordDirectiveLike | null,
   baseFontSize: number,
-  heroBaseFontSize: number,
   _visualMode: VisualMode,
 ): number {
   const clean = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
@@ -947,7 +901,8 @@ function getWordFontSize(
 
   const emphasisLevel = directive?.emphasisLevel ?? 2;
   const scale = EMPHASIS_CURVE[emphasisLevel] ?? 1.0;
-  const maxFontSize = heroBaseFontSize;
+  // Clamp: hero word never exceeds 32% of reference canvas height (540)
+  const maxFontSize = 540 * 0.32; // 172.8px at reference
   const sized = Math.min(Math.round(baseFontSize * scale), maxFontSize);
   // Filler words are always subordinate — cap at base regardless of emphasis
   if (isFillerWord(clean)) return Math.min(sized, Math.round(baseFontSize * 0.60));
@@ -1070,7 +1025,6 @@ function getGroupLayout(
   canvasW: number,
   canvasH: number,
   baseFontSize: number,
-  margin: number,
 ): GroupPosition[] {
   const count = group.words.length;
   const anchorIdx = group.anchorWordIdx;
@@ -1092,13 +1046,10 @@ function getGroupLayout(
 
   if (count === 1) {
     const isFiller = isFillerWord(group.words[0].word);
-    const soloText = group.words[0].word;
-    const soloFontSize = Math.max(MIN_FONT, isFiller ? baseFontSize * 0.9 : baseFontSize * 1.2);
-    const soloClamped = clampTextToSafeArea(cx, cy, soloText, soloFontSize, canvasW, canvasH, margin);
     return [{
-      x: soloClamped.x,
-      y: soloClamped.y,
-      fontSize: soloFontSize,
+      x: Math.max(80, Math.min(canvasW - 80, cx)),
+      y: Math.max(80, Math.min(canvasH - 80, cy)),
+      fontSize: Math.max(MIN_FONT, isFiller ? baseFontSize * 0.9 : baseFontSize * 1.2),
       isAnchor: true,
       isFiller,
     }];
@@ -1175,12 +1126,10 @@ function getGroupLayout(
     }
   }
 
-  for (let i = 0; i < positions.length; i += 1) {
-    const pos = positions[i];
-    const wordText = group.words[i]?.word ?? '';
-    const clamped = clampTextToSafeArea(pos.x, pos.y, wordText, pos.fontSize, canvasW, canvasH, margin);
-    pos.x = clamped.x;
-    pos.y = clamped.y;
+  const margin = 80;
+  for (const pos of positions) {
+    pos.x = Math.max(margin, Math.min(canvasW - margin, pos.x));
+    pos.y = Math.max(margin, Math.min(canvasH - margin, pos.y));
   }
 
   return positions;
@@ -1280,13 +1229,6 @@ function resolveWorldDefaults(payload: ScenePayload, chapters: ChapterLike[]) {
 }
 
 function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMode: VisualMode): PrebakedData {
-  const viewportW = Math.max(1, payload.viewportW ?? DEFAULT_VIEWPORT_W);
-  const viewportH = Math.max(1, payload.viewportH ?? DEFAULT_VIEWPORT_H);
-  const viewportSafeMargin = getViewportSafeMarginPx(viewportW, viewportH);
-  const multiWordBaseFontSize = getViewportBaseFontSize(viewportW, viewportH, 'multiWord');
-  const heroBaseFontSize = getViewportBaseFontSize(viewportW, viewportH, 'hero');
-  const baseX = viewportW * 0.5;
-  const baseYCenter = viewportH * 0.5;
   const chapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
   const resolved = resolveWorldDefaults(payload, chapters);
   const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
@@ -1338,16 +1280,16 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     const actIdx = Math.max(0, chapters.indexOf(currentChapter as ChapterLike));
     const actSizeMultiplier = actIdx === 0 ? 0.85 : actIdx === 1 ? 1.0 : 1.2;
 
-    const shotFontScales: Record<string, number> = {
-      Wide: 0.80,
-      Medium: 1.00,
-      Close: 1.12,
-      CloseUp: 1.20,
-      ExtremeClose: 1.32,
-      FloatingInWorld: 0.85,
+    const shotFontSizes: Record<string, number> = {
+      Wide: 30,
+      Medium: 38,
+      Close: 46,
+      CloseUp: 50,
+      ExtremeClose: 56,
+      FloatingInWorld: 32,
     };
 
-    const baseFontSize = multiWordBaseFontSize * (shotFontScales[shot] ?? 1.0);
+    const baseFontSize = shotFontSizes[shot] ?? 36;
     const actBaseFontSize = baseFontSize * actSizeMultiplier;
     return Math.round(actBaseFontSize);
   });
@@ -1445,21 +1387,12 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   if (phraseGroups) {
     for (const group of phraseGroups) {
       const key = `${group.lineIndex}-${group.groupIndex}`;
-      const baseFontSize = lineFontSizes[group.lineIndex] ?? Math.round(multiWordBaseFontSize);
-      groupLayouts.set(key, getGroupLayout(group, visualMode, viewportW, viewportH, baseFontSize, viewportSafeMargin));
+      const baseFontSize = lineFontSizes[group.lineIndex] ?? 36;
+      groupLayouts.set(key, getGroupLayout(group, visualMode, 960, 540, baseFontSize));
     }
   }
 
-  // Dev sizing sanity check: at 1920x1080 expect multiWord ≈ 140px and hero ≈ 216px.
-
   return {
-    viewportW,
-    viewportH,
-    viewportSafeMargin,
-    multiWordBaseFontSize,
-    heroBaseFontSize,
-    baseX,
-    baseYCenter,
     chapters,
     tensionMotionByFrame,
     chapterIndexByFrame,
@@ -1694,23 +1627,12 @@ function bakeFrame(
             const letterOffsetX = isLetterSequence
               ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5)
               : 0;
-            const unclampedX = pos.x + finalOffsetX + letterOffsetX;
-            const unclampedY = pos.y + finalOffsetY;
-            const clampedPos = clampTextToSafeArea(
-              unclampedX,
-              unclampedY,
-              chunkText,
-              pos.fontSize,
-              pre.viewportW,
-              pre.viewportH,
-              pre.viewportSafeMargin,
-            );
 
             chunks.push({
               id: isLetterSequence ? `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}` : `${group.lineIndex}-${group.groupIndex}-${wi}`,
               text: chunkText,
-              x: clampedPos.x,
-              y: clampedPos.y,
+              x: pos.x + finalOffsetX + letterOffsetX,
+              y: pos.y + finalOffsetY,
               alpha: Math.max(0, Math.min(1, finalAlpha)),
               scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1) * intensityScaleMult,
               scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1) * intensityScaleMult,
@@ -1770,8 +1692,8 @@ function bakeFrame(
             ?? getLayoutForMode(pre.visualMode, wm.wordIndex, totalWords, chapterEmotionalIntensity);
           const [nx, ny] = position;
 
-          const canvasX = nx * pre.viewportW;
-          const canvasY = ny * pre.viewportH;
+          const canvasX = nx * 960;
+          const canvasY = ny * 540;
           const elapsed = tSec - wm.start;
 
           const stagger = wm.wordIndex * (pre.manifestStagger ?? lineLayout?.stagger ?? 0);
@@ -1838,10 +1760,10 @@ function bakeFrame(
               ?? pre.lineColors[wm.lineIndex]
               ?? '#ffffff';
 
-            const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? Math.round(pre.multiWordBaseFontSize);
+            const baseFontSize = pre.lineFontSizes[wm.lineIndex] ?? 36;
             const soloWordBonus = pre.motionProfile === 'drift' || pre.motionProfile === 'fluid' ? 1.3 : 1.0;
             const fontSize = manifestDirective?.fontSize
-              ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.heroBaseFontSize, pre.visualMode);
+              ?? getWordFontSize(wm.word, wm.directive, baseFontSize * soloWordBonus, pre.visualMode);
             const activeChIdx = chapters.findIndex((ch) =>
               songProgress >= (ch.startRatio ?? 0) && songProgress < (ch.endRatio ?? 1));
             const chapterFontWeight = currentChapter?.typographyShift?.fontWeight
@@ -1857,24 +1779,12 @@ function bakeFrame(
             const letterOffsetX2 = isLetterSequence
               ? (li * charW2) - (wordSpan2 * 0.5) + (charW2 * 0.5)
               : 0;
-            const chunkText = isLetterSequence ? wm.word[li] ?? '' : wm.word;
-            const unclampedX = canvasX + finalOffsetX + letterOffsetX2;
-            const unclampedY = canvasY + finalOffsetY;
-            const clampedPos = clampTextToSafeArea(
-              unclampedX,
-              unclampedY,
-              chunkText,
-              fontSize,
-              pre.viewportW,
-              pre.viewportH,
-              pre.viewportSafeMargin,
-            );
 
             return {
               id: isLetterSequence ? `${wm.lineIndex}-${wm.wordIndex}-L${li}` : `${wm.lineIndex}-${wm.wordIndex}`,
-              text: chunkText,
-              x: clampedPos.x,
-              y: clampedPos.y,
+              text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
+              x: canvasX + finalOffsetX + letterOffsetX2,
+              y: canvasY + finalOffsetY,
               alpha: finalAlpha,
               scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
               scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
@@ -1934,8 +1844,8 @@ function bakeFrame(
         : Math.min(1, Math.max(0, (lineEnd - tSec) / 0.3));
       const alpha = Math.max(0, Math.min(1, Math.min(fadeIn, fadeOut)));
 
-      const x = pre.baseX;
-      const y = pre.baseYCenter;
+      const x = BASE_X;
+      const y = BASE_Y_CENTER;
 
       const visible = alpha > 0.001;
       const heroWord = storyboardEntry?.heroWord ?? pre.lineHeroWords[idx] ?? null;
@@ -1982,29 +1892,18 @@ function bakeFrame(
       const chunkScale = lineActive && visible ? scale : 1.0;
 
 
-      const lineFontSize = pre.lineFontSizes[idx] ?? Math.round(pre.multiWordBaseFontSize);
-      const clampedLinePos = clampTextToSafeArea(
-        x,
-        y,
-        line.text,
-        lineFontSize,
-        pre.viewportW,
-        pre.viewportH,
-        pre.viewportSafeMargin,
-      );
-
       chunks.push({
         id: `${idx}`,
         text: line.text,
-        x: clampedLinePos.x,
-        y: clampedLinePos.y,
+        x,
+        y,
         alpha,
         glow: chunkGlow,
         scale: chunkScale,
         scaleX: chunkScale,
         scaleY: chunkScale,
         visible,
-        fontSize: lineFontSize,
+        fontSize: pre.lineFontSizes[idx] ?? 36,
         fontWeight: (currentChapterIdx >= 0 ? chapters[currentChapterIdx]?.typographyShift?.fontWeight : undefined)
           ?? pre.chapterFontWeights[currentChapterIdx >= 0 ? currentChapterIdx : 0] ?? 700,
         color: pre.lineColors[idx] ?? "#ffffff",
@@ -2031,32 +1930,22 @@ function bakeFrame(
         const heroStart = normalizedText.indexOf(lowerHero);
         if (heroStart >= 0) {
           const preText = line.text.slice(0, heroStart);
-          const approxCharW = lineFontSize * 0.6;
+          const approxCharW = 12;
           const preOffset = (preText.length * approxCharW) / 2;
           const heroOffset = (directiveWord.length * approxCharW) / 2;
-          const heroFontSize = Math.min(Math.round(lineFontSize * 1.15), Math.round(pre.heroBaseFontSize));
-          const heroClampedPos = clampTextToSafeArea(
-            clampedLinePos.x + preOffset + heroOffset,
-            clampedLinePos.y,
-            directiveWord.toUpperCase(),
-            heroFontSize,
-            pre.viewportW,
-            pre.viewportH,
-            pre.viewportSafeMargin,
-          );
 
           chunks.push({
             id: `${idx}-hero`,
             text: directiveWord.toUpperCase(),
-            x: heroClampedPos.x,
-            y: heroClampedPos.y,
+            x: x + preOffset + heroOffset,
+            y,
             alpha: Math.min(1, alpha + ((entryStyle as string) === 'punch' ? 0.2 : 0.15)),
             glow: Math.min(1, chunkGlow + 0.2),
             scale: Math.min(chunkScale * ((exitStyle as string) === 'snap' ? 1.2 : 1.15), 1.25),
             scaleX: Math.min(chunkScale * ((exitStyle as string) === 'snap' ? 1.2 : 1.15), 1.25),
             scaleY: Math.min(chunkScale * ((exitStyle as string) === 'snap' ? 1.2 : 1.15), 1.25),
             visible,
-            fontSize: heroFontSize,
+            fontSize: pre.lineFontSizes[idx] ?? 36,
             fontWeight: (currentChapterIdx >= 0 ? chapters[currentChapterIdx]?.typographyShift?.fontWeight : undefined)
               ?? pre.chapterFontWeights[currentChapterIdx >= 0 ? currentChapterIdx : 0] ?? 700,
             color: pre.lineColors[idx] ?? "#ffffff",
