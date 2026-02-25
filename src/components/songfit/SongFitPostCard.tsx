@@ -55,12 +55,14 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
   const [isScored, setIsScored] = useState(false);
+  const [votedBattleSide, setVotedBattleSide] = useState<"a" | "b" | null>(null);
   const impressionRef = useRef<HTMLDivElement>(null);
   const impressionLogged = useRef(false);
   const [reviewsSheetPostId, setReviewsSheetPostId] = useState<string | null>(null);
   const [hookReviewKey, setHookReviewKey] = useState(0);
 
   const isOwnPost = user?.id === post.user_id;
+  const isBattlePost = !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
   const CAPTION_MAX = 300;
 
   // Impression tracking via IntersectionObserver
@@ -282,6 +284,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             battleUrl={post.lyric_dance_url}
             songTitle={post.track_title}
             artistName={displayName}
+            votedSide={votedBattleSide}
           />
         ) : (
           <LazySpotifyEmbed
@@ -461,7 +464,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             onOpenReviews={() => setReviewsSheetPostId(post.id)}
             spotifyTrackUrl={post.spotify_track_url}
             artistsJson={post.track_artists_json as any[]}
-            isBattle={!!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id)}
+            isBattle={isBattlePost}
+            onVotedSide={isBattlePost ? setVotedBattleSide : undefined}
             showPreResolved={isBillboard && !!signalData}
             preResolved={signalData}
             rank={rank}

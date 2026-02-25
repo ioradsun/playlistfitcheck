@@ -253,8 +253,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   };
 
   const getBorderStyle = (side: "a" | "b"): React.CSSProperties => {
-    // Green highlight on the actively playing side
-    if (activePlaying === side) {
+    // Green highlight on the actively playing side or voted side
+    if (activePlaying === side || (votedSide === side && !activePlaying)) {
       return { boxShadow: "inset 0 0 0 1.5px rgba(34,197,94,0.6)" };
     }
     if ((mode !== "scorecard" && mode !== "results") || !votedSide) return {};
