@@ -699,6 +699,7 @@ export function LyricFitTab({
           bgImageUrl={bgImageUrl}
           setBgImageUrl={setBgImageUrl}
           generationStatus={generationStatus}
+          audioSections={audioSections}
           words={words}
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
