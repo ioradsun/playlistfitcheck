@@ -198,11 +198,11 @@ export function PublishLyricDanceButton({
         }
       })();
 
-      // Fire-and-forget: generate chapter background images
+      // Fire-and-forget: generate section background images
       // Need the actual shareable dance ID for the edge function
       const cinematicDir = songDna?.cinematicDirection ?? songDna?.cinematic_direction;
-      const chapters = cinematicDir?.chapters;
-      if (Array.isArray(chapters) && chapters.length > 0) {
+      const sections = cinematicDir?.sections;
+      if (Array.isArray(sections) && sections.length > 0) {
         // Fetch the dance ID we just upserted
         supabase
           .from("shareable_lyric_dances" as any)
@@ -212,20 +212,14 @@ export function PublishLyricDanceButton({
           .single()
           .then(({ data: danceRow }: any) => {
             if (!danceRow?.id) return;
-            supabase.functions.invoke("generate-chapter-images", {
+            supabase.functions.invoke("generate-section-images", {
               body: {
                 lyric_dance_id: danceRow.id,
-                chapters: chapters.map((ch: any, i: number) => ({
-                  index: i,
-                  backgroundDirective: ch.backgroundDirective ?? ch.background ?? ch.description ?? "",
-                  dominantColor: ch.dominantColor ?? "#333333",
-                  emotionalIntensity: ch.emotionalIntensity ?? 0.5,
-                })),
               },
             }).then(({ data: imgResult }) => {
-              console.log("[PUBLISH] Chapter images generated:", imgResult?.generated ?? 0);
+              console.log("[PUBLISH] Section images generated:", imgResult?.generated ?? 0);
             }).catch((e: any) => {
-              console.warn("[PUBLISH] Chapter images failed (non-blocking):", e?.message);
+              console.warn("[PUBLISH] Section images failed (non-blocking):", e?.message);
             });
           });
       }

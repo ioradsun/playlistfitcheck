@@ -205,7 +205,7 @@ interface DebugData {
   fingerprint: unknown;
   // Extended fields for shareable dance debug
   scene_context?: { sourceDescription?: string; baseLuminance?: number; colorTemperature?: number; timeOfDay?: string; textStyle?: string; moodSummary?: string } | null;
-  chapter_images?: string[];
+  section_images?: string[];
   words?: Array<{ word: string; start: number; end: number }>;
 }
 
@@ -457,8 +457,8 @@ function DataTab({ data }: { data: DebugData }) {
       {/* Chapter Images */}
       <CollapsibleSection title="Chapter Images">
         <div className="space-y-0.5">
-          <KV label="Loaded" value={`${data.chapter_images?.length ?? 0}/3`} />
-          {data.chapter_images?.map((url: string, i: number) => (
+          <KV label="Loaded" value={`${data.section_images?.length ?? 0}`} />
+          {data.section_images?.map((url: string, i: number) => (
             <p key={i} className="font-mono text-[10px] text-muted-foreground/60 truncate">
               ch{i + 1}: {url ? '✓ ' + url.split('/').pop() : '✗ missing'}
             </p>

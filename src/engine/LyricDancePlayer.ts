@@ -42,7 +42,7 @@ export interface LyricDanceData {
   seed: string;
   scene_manifest: any;
   cinematic_direction: CinematicDirection | null;
-  chapter_images?: string[];
+  section_images?: string[];
   auto_palettes?: string[][];
   scene_context?: SceneContext | null;
 }
@@ -886,7 +886,7 @@ export class LyricDancePlayer {
     this.deriveVisualSystems();
     this.buildChapterSims();
     this.buildEmotionalEvents();
-    this.loadChapterImages().catch(() => {
+    this.loadSectionImages().catch(() => {
       // image upgrade best-effort
     });
     this.fullModeEnabled = true;
@@ -1075,10 +1075,10 @@ export class LyricDancePlayer {
     this.buildEmotionalEvents();
   }
 
-  updateChapterImages(urls: string[]): void {
+  updateSectionImages(urls: string[]): void {
     
-    this.data = { ...this.data, chapter_images: urls };
-    this.loadChapterImages();
+    this.data = { ...this.data, section_images: urls };
+    this.loadSectionImages();
   }
 
   updateSceneContext(sceneCtx: SceneContext): void {
@@ -1265,7 +1265,7 @@ export class LyricDancePlayer {
     const totalDurationSec = this.audio?.duration || 1;
     const chIdx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
 
-    // Priority 1: auto-palettes computed from chapter images
+    // Priority 1: auto-palettes computed from section images
     if (Array.isArray(autoPalettes) && chIdx >= 0 && autoPalettes[chIdx]) {
       return autoPalettes[chIdx];
     }
@@ -1477,7 +1477,7 @@ export class LyricDancePlayer {
       // sim crash — silently continue
     }
 
-    // Background: static bg cache first, then chapter images on top
+    // Background: static bg cache first, then section images on top
     this.drawBackground(frame);
 
     // Chapter image overlay with crossfade
@@ -2143,8 +2143,8 @@ export class LyricDancePlayer {
   // Per-chapter particle systems derived from cinematic direction
   public chapterParticleSystems: (string | null)[] = [];
 
-  private async loadChapterImages(): Promise<void> {
-    const urls = this.data.chapter_images ?? [];
+  private async loadSectionImages(): Promise<void> {
+    const urls = this.data.section_images ?? [];
     if (urls.length === 0) return;
     this.chapterImages = await Promise.all(
       urls.map((url: string) => new Promise<HTMLImageElement>((resolve) => {

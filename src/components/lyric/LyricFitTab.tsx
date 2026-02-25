@@ -508,7 +508,7 @@ export function LyricFitTab({
           : dirResult.cinematicDirection;
         setCinematicDirection(enrichedDirection);
 
-        // Chapter images are generated after dance publish (PublishLyricDanceButton)
+        // Section images are generated after dance publish (PublishLyricDanceButton)
 
         const sceneManifestRes = await supabase.functions.invoke("generate-scene-manifest", {
           body: {
