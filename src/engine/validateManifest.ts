@@ -357,11 +357,8 @@ export function validateManifest(raw: unknown): ManifestValidationResult {
 
   checkConsistency(m, warnings);
 
-  if (warnings.length > 0) {
-    console.group(
-      `[SceneManifest] "${m.songTitle}" — ${warnings.length} warning(s)`,
-    );
-    console.groupEnd();
+  if (warnings.length > 0 && typeof globalThis.__LYRIC_DEBUG__ !== 'undefined') {
+    console.warn(`[SceneManifest] "${m.songTitle}" — ${warnings.length} warning(s)`);
   }
 
   return { valid: errors.length === 0, warnings, errors, manifest: m };
