@@ -159,17 +159,26 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
         </div>
       )}
 
-      {/* Bottom controls */}
+      {/* Bottom controls — one mute button per side */}
       {hooksReady && (
-        <div className="absolute bottom-0 left-0 p-2 z-30 pointer-events-none">
+        <div className="absolute bottom-0 left-0 right-0 flex justify-between p-2 z-30 pointer-events-none">
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setActivePlaying(prev => prev ? null : "a");
+              setActivePlaying(prev => prev === "a" ? null : "a");
             }}
             className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors pointer-events-auto"
           >
-            {activePlaying ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            {activePlaying === "a" ? <Volume2 size={14} /> : <VolumeX size={14} />}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setActivePlaying(prev => prev === "b" ? null : "b");
+            }}
+            className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors pointer-events-auto"
+          >
+            {activePlaying === "b" ? <Volume2 size={14} /> : <VolumeX size={14} />}
           </button>
         </div>
       )}
