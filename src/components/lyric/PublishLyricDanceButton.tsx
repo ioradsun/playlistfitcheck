@@ -99,6 +99,18 @@ export function PublishLyricDanceButton({
 
       const backgroundUrl: string | null = null;
 
+      // ── Cinematic direction from songDna ──────────────────────────
+      const cinematicDirection =
+        songDna?.cinematicDirection ??
+        songDna?.cinematic_direction ??
+        null;
+
+      // ── Scene context from songDna ────────────────────────────────
+      const sceneContext =
+        songDna?.scene_context ??
+        songDna?.sceneContext ??
+        null;
+
       // ── Filter to main lines ──────────────────────────────────────
       const mainLines = lines.filter(l => l.tag !== "adlib");
 
@@ -123,6 +135,9 @@ export function PublishLyricDanceButton({
           scene_manifest: sceneManifest,
           background_url: backgroundUrl,
           words: words ?? null,
+          cinematic_direction: cinematicDirection,
+          scene_context: sceneContext,
+          section_images: null, // Clear stale images — regenerated below
         }, { onConflict: "artist_slug,song_slug" });
 
       if (insertError) throw insertError;
