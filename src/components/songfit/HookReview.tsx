@@ -246,19 +246,15 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
           <div className="flex gap-2 px-3 py-2.5">
             <button
               onClick={() => handleVoteClick(true)}
-              className={`flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border bg-transparent transition-all duration-[120ms] ${
-                wouldReplay === true ? "border-green-500/60" : "border-border/40 hover:border-foreground/15 hover:bg-foreground/[0.03]"
-              }`}
+              className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
             >
-              <span className={`text-[13px] leading-none font-bold tracking-[0.15em] ${wouldReplay === true ? "text-green-500" : "text-muted-foreground"}`}>{leftLabel}</span>
+              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{leftLabel}</span>
             </button>
             <button
               onClick={() => handleVoteClick(false)}
-              className={`flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border bg-transparent transition-all duration-[120ms] ${
-                wouldReplay === false ? "border-green-500/60" : "border-border/40 hover:border-foreground/15 hover:bg-foreground/[0.03]"
-              }`}
+              className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
             >
-              <span className={`text-[13px] leading-none font-bold tracking-[0.15em] ${wouldReplay === false ? "text-green-500" : "text-muted-foreground"}`}>{rightLabel}</span>
+              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{rightLabel}</span>
             </button>
           </div>
         </div>
