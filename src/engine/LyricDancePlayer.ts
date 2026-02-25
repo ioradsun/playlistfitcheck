@@ -43,6 +43,7 @@ export interface LyricDanceData {
   scene_manifest: any;
   cinematic_direction: CinematicDirection | null;
   chapter_images?: string[];
+  auto_palettes?: string[][];
   scene_context?: SceneContext | null;
 }
 
@@ -1227,8 +1228,9 @@ export class LyricDancePlayer {
     'editorial-light': '"Cormorant Garamond", serif',
   };
 
-  /** Resolve the effective palette from V3 cinematic_direction or fallback */
+  /** Resolve the effective palette from image-derived palettes or legacy fallbacks */
   private getResolvedPalette(): string[] {
+    const autoPalettes = this.data?.auto_palettes;
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const chapters = (cd?.chapters as any[]) ?? [];
 
@@ -1239,6 +1241,14 @@ export class LyricDancePlayer {
     const chIdx = chapters.findIndex((ch: any) =>
       songProg >= (ch.startRatio ?? 0) && songProg < (ch.endRatio ?? 1)
     );
+
+    // Priority 1: auto-palettes computed from chapter images
+    if (Array.isArray(autoPalettes) && chIdx >= 0 && autoPalettes[chIdx]) {
+      return autoPalettes[chIdx];
+    }
+    if (Array.isArray(autoPalettes) && autoPalettes.length > 0) {
+      return autoPalettes[0];
+    }
 
     // Try prebaked per-chapter palette
     const bakedPalettes = (this.data as any)?.resolvedPalettes;
@@ -1921,6 +1931,7 @@ export class LyricDancePlayer {
       physics_spec: this.data.physics_spec,
       scene_manifest: this.data.scene_manifest ?? null,
       cinematic_direction: this.data.cinematic_direction ?? null,
+      auto_palettes: this.data.auto_palettes,
       palette: this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"],
       lineBeatMap: [],
       songStart,

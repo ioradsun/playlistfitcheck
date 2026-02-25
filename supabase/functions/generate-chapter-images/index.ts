@@ -175,7 +175,7 @@ serve(async (req) => {
     if (alreadyGenerated) {
       console.log(`[chapter-images] Images already exist for ${lyric_dance_id} — returning cached`);
       return new Response(
-        JSON.stringify({ success: true, cached: true, chapter_images: existingImages }),
+        JSON.stringify({ success: true, cached: true, chapter_images: existingImages, urls: existingImages }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -219,7 +219,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, urls, generated: successCount }),
+      JSON.stringify({ success: true, urls, chapter_images: urls, generated: successCount }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
