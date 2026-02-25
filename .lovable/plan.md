@@ -1,64 +1,60 @@
 
 
-# Auto-Post Lyric Dance to CrowdFit
+# Add "Start CrowdFit Battle" Button to Fit Tab
 
-When a lyric dance is published, it will automatically create a CrowdFit post — the same pattern used by HookFit battles. The post appears in the CrowdFit feed like any other post, with the Spotify embed replaced by a link to the lyric dance page.
+Add a button under the Hottest Hooks section in the Fit tab that publishes hook battles directly to the CrowdFit feed, mirroring how Lyric Dance posts appear there.
 
 ## What Changes
 
-### 1. Database Migration
-Add two nullable columns to `songfit_posts` and make `spotify_track_url` / `spotify_track_id` nullable so dance-only posts don't need Spotify data:
+### 1. FitTab.tsx -- Add Battle Publishing Logic and Button
 
-```text
-ALTER TABLE public.songfit_posts
-  ALTER COLUMN spotify_track_url DROP NOT NULL,
-  ALTER COLUMN spotify_track_id DROP NOT NULL;
+**New state variables:**
+- `battlePublishing` (boolean) -- tracks publish-in-progress
+- `battlePublishedUrl` (string | null) -- stores the published battle URL
 
-ALTER TABLE public.songfit_posts
-  ADD COLUMN lyric_dance_url text,
-  ADD COLUMN lyric_dance_id uuid;
-```
-
-### 2. Publishing Flow (FitTab.tsx)
-After the `shareable_lyric_dances` upsert succeeds (around line 281), add a fire-and-forget block:
-- Query the just-upserted dance record to get its ID
-- Check if a `songfit_posts` row already exists for this user with a matching `lyric_dance_id`
-- If not, insert a new CrowdFit post with:
-  - `track_title` = song name
-  - `caption` = auto-generated (e.g. empty or short default)
-  - `lyric_dance_url` = the published dance path
-  - `lyric_dance_id` = the dance record ID
+**New handler: `handleStartBattle`**
+- Fetches user profile for display name
+- Generates artist/song/hook slugs
+- Uploads audio to storage
+- Upserts both hooks into `shareable_hooks` with a shared `battle_id`
+- Upserts primary hook into `hookfit_posts`
+- Creates a CrowdFit post (`songfit_posts`) with:
+  - `track_title` = song title
   - `spotify_track_url` = null, `spotify_track_id` = null
-  - `album_art_url` = null (or background URL if available)
-  - `status` = "live", standard 21-day expiry
-- If post already exists, update its `lyric_dance_url`
+  - `lyric_dance_url` = battle page URL (e.g. `/:artist/:song/:hook`)
+  - `lyric_dance_id` = null (this is a battle, not a dance)
+  - `status` = "live", 21-day expiry
+- Dispatches `hookfit:battle-published` and `songfit:dance-published` events for feed refresh
+- Shows toast on success
 
-### 3. CrowdFit Post Card (SongFitPostCard.tsx)
-- Before the `LazySpotifyEmbed`, check if `post.lyric_dance_url` exists
-- If so, render a compact card linking to the dance page instead of the Spotify embed — similar to how HookFit cards show battle canvases instead of track embeds
-- Show song title, artist name, and a "Watch Lyric Dance" CTA button
+**Button placement:**
+- Rendered inside the Hottest Hooks card (lines 454-479), below the hook details
+- Only shown when both `songDna.hook` and `songDna.secondHook` exist (a battle requires two hooks)
+- Label: "START CROWDFIT BATTLE" (changes to "VIEW BATTLE" after publishing)
+- Styled consistently with the existing Dance button aesthetic
 
-### 4. Types Update (songfit/types.ts)
-- Add `lyric_dance_url?: string | null` and `lyric_dance_id?: string | null` to the `SongFitPost` interface
+### 2. Props -- No Changes Needed
 
-### 5. Feed Query (SongFitFeed.tsx)
-- No query changes needed — dance posts are just regular `songfit_posts` rows with `status = 'live'`
-- The existing feed query already fetches all live posts
+The FitTab already receives all necessary data: `songDna` (contains hook/secondHook), `audioFile`, `beatGrid`, `lyricData` (contains lines, title), and `cinematicDirection`. No new props required.
 
 ## Technical Details
 
-### Dance post card rendering
-When `post.lyric_dance_url` is set and `post.spotify_track_id` is empty/null:
-- Replace the Spotify embed area with a styled card containing:
-  - Song title (from `track_title`)
-  - Artist name (from profile)
-  - A "WATCH LYRIC DANCE" button linking to `post.lyric_dance_url`
-- The card uses the same resolved/scored filter states as regular posts
+### Battle publish flow (mirrors PublishHookButton logic)
+1. Derive `artistSlug`, `songSlug`, `hookSlug` from display name, song title, and hook phrase
+2. Upload audio once to storage
+3. Upsert hook 1 with `battle_position: 1` and a new `battle_id`
+4. Upsert hook 2 with `battle_position: 2` and the same `battle_id`
+5. Upsert into `hookfit_posts` (for HookFit feed)
+6. Insert into `songfit_posts` (for CrowdFit feed) -- fire-and-forget, same pattern as the lyric dance auto-post at line 290
+7. Dispatch window events for both feeds
 
 ### Duplicate prevention
-- On republish, the system checks for existing posts by `lyric_dance_id` to avoid duplicates
-- If found, updates the existing post's URL rather than creating a new one
+- `shareable_hooks` upsert uses `onConflict: "artist_slug,song_slug,hook_slug"`
+- `hookfit_posts` upsert uses `onConflict: "battle_id"`
+- CrowdFit post checks for existing post by `user_id` + battle URL before inserting
 
-### Event dispatch
-- After auto-posting, dispatch `window.dispatchEvent(new Event("songfit:dance-published"))` so the feed can refresh if open (mirrors the HookFit pattern with `hookfit:battle-published`)
+### Button states
+- Disabled when `!allReady` or `battlePublishing` or hooks missing
+- Shows spinner while publishing
+- After publish, shows "VIEW BATTLE" linking to the battle page
 
