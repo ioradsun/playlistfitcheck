@@ -833,9 +833,7 @@ type ChapterLike = {
     atmosphere?: string;
   };
 };
-
 type CameraDistanceLike = {
-  chapterIndex?: number;
   distance?: string;
 };
 
@@ -1515,9 +1513,7 @@ function bakeFrame(
   const currentChapterIdx = chapters.findIndex((ch) =>
     songProgress >= (ch.startRatio ?? 0) && songProgress < (ch.endRatio ?? 1),
   );
-  const chapterCameraEntry = (payload.cinematic_direction?.cameraLanguage?.distanceByChapter ?? [])
-    .find((d) => (d as CameraDistanceLike).chapterIndex === currentChapterIdx) as CameraDistanceLike | undefined;
-  const fallbackZoom = distanceToZoom[chapterCameraEntry?.distance ?? 'Medium'] ?? 1.0;
+  const fallbackZoom = distanceToZoom['Medium'] ?? 1.0;
   const targetZoom = manifestChapters[currentChapterIdx]?.zoom ?? fallbackZoom;
 
   state.currentZoom = state.currentZoom ?? 1.0;

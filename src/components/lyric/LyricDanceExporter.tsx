@@ -9,7 +9,7 @@ import { DirectionInterpreter } from "@/engine/DirectionInterpreter";
 import { renderSectionBackground } from "@/engine/BackgroundDirector";
 import { renderSectionLighting } from "@/engine/LightingDirector";
 import { renderText, type TextState, type TextInput } from "@/engine/renderText";
-import { renderSymbol } from "@/engine/SymbolRenderer";
+// SymbolRenderer removed — dead V2 feature
 import { getParticleConfigForTime, renderParticles, type ParticleState } from "@/engine/renderFrame";
 import { animationResolver } from "@/engine/AnimationResolver";
 import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";

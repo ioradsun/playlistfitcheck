@@ -6,7 +6,7 @@
  * shot-type overlays, hero word glow, motion trails, and word history tracking.
  */
 
-import type { Chapter, CinematicDirection, ShotType, TensionStage, WordDirective } from "@/types/CinematicDirection";
+import type { Chapter, CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
 import type { SceneManifest } from "@/engine/SceneManifest";
 import type { DirectionInterpreter, WordHistory } from "@/engine/DirectionInterpreter";
 import type { LineAnimation } from "@/engine/AnimationResolver";
@@ -170,7 +170,7 @@ export interface TextInput {
     wordOffsets: { x: number; y: number; rotation: number }[];
   };
   interpreter: DirectionInterpreter | null;
-  shot: ShotType | null;
+  shot: { shotType?: string; description?: string } | null;
   tensionStage: TensionStage | null;
   chapterDirective: Chapter | null;
   cinematicDirection: CinematicDirection | null;
@@ -842,13 +842,7 @@ export function renderText(
     drawFn(ctx, effectState);
   }
 
-  // Symbol overlay
-  if (drawSymbolOverText && cinematicDirection?.symbolSystem) {
-    ctx.save();
-    ctx.fillStyle = "rgba(180, 210, 255, 0.12)";
-    ctx.fillRect(0, 0, cw, ch);
-    ctx.restore();
-  }
+  // (Symbol overlay removed — dead V2 feature)
 
   ctx.restore();
 

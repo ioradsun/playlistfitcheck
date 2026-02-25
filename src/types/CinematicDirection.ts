@@ -40,14 +40,6 @@ export interface CinematicDirection {
   climax?: ClimaxDirective;
   /** @deprecated */
   ending?: EndingDirective;
-  /** @deprecated */
-  symbolSystem?: SymbolSystem;
-  /** @deprecated */
-  cameraLanguage?: CameraLanguage;
-  /** @deprecated */
-  silenceDirective?: SilenceDirective;
-  /** @deprecated */
-  shotProgression?: ShotType[];
 }
 
 // ── New section type ─────────────────────────────────────────
@@ -118,42 +110,7 @@ export interface TensionStage {
   typographyAggression: number;
 }
 
-// ── Legacy sub-types (kept for backward compat) ──────────────
-
-export interface SymbolSystem {
-  primary: string;
-  secondary: string;
-  beginningState: string;
-  middleMutation: string;
-  climaxOverwhelm: string;
-  endingDecay: string;
-  interactionRules: string[];
-}
-
-export interface CameraLanguage {
-  openingDistance: 'ExtremeWide' | 'Wide' | 'Medium' | 'Close' | 'ExtremeClose';
-  closingDistance: 'ExtremeWide' | 'Wide' | 'Medium' | 'Close' | 'ExtremeClose';
-  movementType: 'Drift' | 'PushIn' | 'Orbit' | 'Descent' | 'Rise' | 'Shake' | 'Freeze';
-  climaxBehavior: string;
-  distanceByChapter: {
-    chapterIndex: number;
-    distance: string;
-    movement: string;
-  }[];
-}
-
-export interface ShotType {
-  lineIndex: number;
-  shotType:
-    | 'FloatingInWorld'
-    | 'EmergingFromSymbol'
-    | 'SubmergedInSymbol'
-    | 'FragmentedBySymbol'
-    | 'ReflectedInSymbol'
-    | 'ConsumedBySymbol'
-    | 'AloneInVoid';
-  description: string;
-}
+// (SymbolSystem, CameraLanguage, ShotType, SilenceDirective removed — dead V2 fields)
 
 export interface VisualWorld {
   palette: [string, string, string];
@@ -216,12 +173,7 @@ export interface LineDirection {
   transitionToNext: string;
 }
 
-export interface SilenceDirective {
-  cameraMovement: string;
-  particleShift: string;
-  lightShift: string;
-  tensionDirection: 'building' | 'releasing' | 'holding';
-}
+// (SilenceDirective removed — dead V2 field)
 
 export interface ClimaxDirective {
   timeRatio: number;
