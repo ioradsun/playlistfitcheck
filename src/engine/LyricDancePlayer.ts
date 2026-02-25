@@ -1229,25 +1229,18 @@ export class LyricDancePlayer {
   };
 
 
-  private resolveChapterIndex(chapters: any[], currentTimeSec: number, totalDurationSec: number): number {
-    const tsIdx = chapters.findIndex((ch: any) =>
-      typeof ch?.startSec === 'number' &&
-      typeof ch?.endSec === 'number' &&
-      currentTimeSec >= ch.startSec &&
-      currentTimeSec < ch.endSec,
-    );
-    if (tsIdx !== -1) return tsIdx;
+  private resolveSectionIndex(sections: Array<{ startSec: number; endSec: number }>, currentTimeSec: number): number {
+    for (let i = 0; i < sections.length; i++) {
+      if (currentTimeSec >= sections[i].startSec && currentTimeSec < sections[i].endSec) {
+        return i;
+      }
+    }
 
-    const ratio = totalDurationSec > 0 ? currentTimeSec / totalDurationSec : 0;
-    const ratioIdx = chapters.findIndex((ch: any) =>
-      typeof ch?.startRatio === 'number' &&
-      typeof ch?.endRatio === 'number' &&
-      ratio >= ch.startRatio &&
-      ratio < ch.endRatio,
-    );
-    if (ratioIdx !== -1) return ratioIdx;
+    return sections.length - 1;
+  }
 
-    return 0;
+  private resolveChapterIndex(chapters: any[], currentTimeSec: number, _totalDurationSec: number): number {
+    return this.resolveSectionIndex(chapters, currentTimeSec);
   }
 
   private resolveChapter(chapters: any[], currentTimeSec: number, totalDurationSec: number): any {
