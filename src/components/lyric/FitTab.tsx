@@ -216,7 +216,7 @@ export function FitTab({
   }, [lyricData.title, audioFile.name, onHeaderProject, onBack]);
 
 // ── Cinematic Direction Card with Section Images ─────────────────────
-function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDirection: any; savedId: string | null }) {
+function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDirection: any; songTitle: string }) {
   const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
@@ -226,6 +226,8 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
   const sections: any[] = cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
     ? cinematicDirection.sections
     : [];
+
+  const songSlug = slugify(songTitle || "untitled");
 
   // Auto-load existing section images from the user's published dance
   useEffect(() => {
@@ -238,6 +240,7 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
         .from("shareable_lyric_dances" as any)
         .select("id, section_images")
         .eq("user_id", userData.user.id)
+        .eq("song_slug", songSlug)
         .order("created_at", { ascending: false })
         .limit(1);
 
@@ -254,7 +257,7 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
       cancelled = true;
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [savedId, sections.length]);
+  }, [songSlug, sections.length]);
 
   // Listen for dance-published event to refresh images
   useEffect(() => {
@@ -270,7 +273,7 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
           .from("shareable_lyric_dances" as any)
           .select("id, section_images")
           .eq("user_id", userData.user.id)
-          .order("created_at", { ascending: false })
+          .eq("song_slug", songSlug)
           .limit(1);
         if (!dances?.[0]) return;
         setDanceId(dances[0].id);
@@ -294,6 +297,7 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
   }, [sections.length]);
 
   const handleGenerateImages = useCallback(async () => {
+    console.log("[SectionImages] Generate clicked", { generating, sectionsLen: sections.length, danceId });
     if (generating || !sections.length) return;
     if (!danceId) {
       toast.error("Publish a Dance first to generate section images");
@@ -936,7 +940,7 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
               )}
 
               {cinematicDirection && (
-                <CinematicDirectionCard cinematicDirection={cinematicDirection} savedId={savedId} />
+                <CinematicDirectionCard cinematicDirection={cinematicDirection} songTitle={lyricData.title} />
               )}
 
               {beatGrid && (
