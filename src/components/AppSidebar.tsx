@@ -34,6 +34,8 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  RotateCcw,
+  Trash,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -104,6 +106,8 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
   const isDark = theme === "dark";
 
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
+  const [trashedItems, setTrashedItems] = useState<RecentItem[]>([]);
+  const [trashExpanded, setTrashExpanded] = useState(false);
   const [profileExpanded, setProfileExpanded] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
@@ -127,36 +131,42 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
       supabase
         .from("profit_reports")
         .select("id, created_at, blueprint_json, share_token, artist_id, profit_artists!inner(name, spotify_artist_id, image_url, genres_json, followers_total, popularity, raw_artist_json, signals_json)")
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(20),
       supabase
         .from("saved_searches")
         .select("id, playlist_name, playlist_url, song_url, report_data, created_at")
         .eq("user_id", user.id)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(20),
       supabase
         .from("mix_projects")
         .select("id, title, notes, mixes, updated_at")
         .eq("user_id", user.id)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(20),
       supabase
         .from("saved_lyrics")
         .select("id, title, lines, filename, updated_at, audio_url, beat_grid, song_signature, song_dna, fmly_lines, version_meta")
         .eq("user_id", user.id)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(20),
       supabase
         .from("saved_hitfit")
         .select("id, filename, analysis_json, updated_at")
         .eq("user_id", user.id)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(20),
       supabase
         .from("saved_vibefit")
         .select("id, song_title, updated_at, result_json")
         .eq("user_id", user.id)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(20),
     ]);
@@ -252,9 +262,43 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
     setRecentItems(items);
   }, [user]);
 
+  const fetchTrashed = useCallback(async () => {
+    if (!user) { setTrashedItems([]); return; }
+    const TABLE_MAP: { table: string; labelKey: string; dateKey: string; type: string; select: string }[] = [
+      { table: "saved_lyrics", labelKey: "title", dateKey: "deleted_at", type: "lyric", select: "id, title, deleted_at" },
+      { table: "mix_projects", labelKey: "title", dateKey: "deleted_at", type: "mix", select: "id, title, deleted_at" },
+      { table: "saved_hitfit", labelKey: "filename", dateKey: "deleted_at", type: "hitfit", select: "id, filename, deleted_at" },
+      { table: "saved_vibefit", labelKey: "song_title", dateKey: "deleted_at", type: "vibefit", select: "id, song_title, deleted_at" },
+      { table: "saved_searches", labelKey: "playlist_name", dateKey: "deleted_at", type: "playlist", select: "id, playlist_name, deleted_at" },
+      { table: "profit_reports", labelKey: "id", dateKey: "deleted_at", type: "profit", select: "id, deleted_at" },
+    ];
+    const results = await Promise.all(
+      TABLE_MAP.map(({ table, select }) =>
+        supabase.from(table as any).select(select).not("deleted_at", "is", null)
+          .order("deleted_at", { ascending: false }).limit(50)
+      )
+    );
+    const trashed: RecentItem[] = [];
+    results.forEach(({ data }, i) => {
+      if (!data) return;
+      const { labelKey, type } = TABLE_MAP[i];
+      (data as any[]).forEach((row: any) => {
+        const toolLabel = TOOLS.find(t => t.value === type)?.label || type;
+        trashed.push({
+          id: row.id,
+          label: row[labelKey] || "Untitled",
+          meta: `${toolLabel} · ${formatDistanceToNow(new Date(row.deleted_at), { addSuffix: true })}`,
+          type,
+        });
+      });
+    });
+    setTrashedItems(trashed);
+  }, [user]);
+
   useEffect(() => {
     fetchRecents();
-  }, [fetchRecents, refreshKey]);
+    fetchTrashed();
+  }, [fetchRecents, fetchTrashed, refreshKey]);
 
   const closeMobileIfNeeded = () => {
     if (isMobile) setOpenMobile(false);
@@ -275,14 +319,38 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
     closeMobileIfNeeded();
   };
 
+  const softDeleteTable = (type: string) => {
+    const map: Record<string, string> = {
+      profit: "profit_reports", playlist: "saved_searches", mix: "mix_projects",
+      lyric: "saved_lyrics", hitfit: "saved_hitfit", vibefit: "saved_vibefit",
+    };
+    return map[type];
+  };
+
   const handleDeleteRecent = async (item: RecentItem) => {
-    if (item.type === "profit") await supabase.from("profit_reports").delete().eq("id", item.id);
-    else if (item.type === "playlist") await supabase.from("saved_searches").delete().eq("id", item.id);
-    else if (item.type === "mix") await supabase.from("mix_projects").delete().eq("id", item.id);
-    else if (item.type === "lyric") await supabase.from("saved_lyrics").delete().eq("id", item.id);
-    else if (item.type === "hitfit") await supabase.from("saved_hitfit").delete().eq("id", item.id);
-    else if (item.type === "vibefit") await supabase.from("saved_vibefit").delete().eq("id", item.id);
+    const table = softDeleteTable(item.type);
+    if (table) {
+      await supabase.from(table as any).update({ deleted_at: new Date().toISOString() } as any).eq("id", item.id);
+    }
     setRecentItems((prev) => prev.filter((i) => i.id !== item.id));
+    setTrashedItems((prev) => [{ ...item, meta: `${TOOLS.find(t => t.value === item.type)?.label || item.type} · just now` }, ...prev]);
+  };
+
+  const handleRestoreTrashed = async (item: RecentItem) => {
+    const table = softDeleteTable(item.type);
+    if (table) {
+      await supabase.from(table as any).update({ deleted_at: null } as any).eq("id", item.id);
+    }
+    setTrashedItems((prev) => prev.filter((i) => i.id !== item.id));
+    fetchRecents();
+  };
+
+  const handlePermanentDelete = async (item: RecentItem) => {
+    const table = softDeleteTable(item.type);
+    if (table) {
+      await supabase.from(table as any).delete().eq("id", item.id);
+    }
+    setTrashedItems((prev) => prev.filter((i) => i.id !== item.id));
   };
 
   const handleRenameRecent = async (item: RecentItem) => {
@@ -301,6 +369,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
     await supabase.auth.signOut();
     // Clear sidebar state immediately
     setRecentItems([]);
+    setTrashedItems([]);
     // Clear ALL user-specific localStorage to prevent data leakage between accounts
     [
       "mix_projects",
@@ -461,6 +530,69 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Trash */}
+        {user && trashedItems.length > 0 && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      tooltip="Trash"
+                      onClick={() => setTrashExpanded(!trashExpanded)}
+                    >
+                      <Trash size={14} className="text-muted-foreground" />
+                      <span className="flex-1">Trash</span>
+                      <span className="text-[10px] text-muted-foreground">{trashedItems.length}</span>
+                      <ChevronDown
+                        size={12}
+                        className={`text-muted-foreground transition-transform ${trashExpanded ? "" : "-rotate-90"}`}
+                      />
+                    </SidebarMenuButton>
+
+                    {trashExpanded && (
+                      <ul className="mt-1 space-y-0.5 max-h-[30vh] overflow-y-auto">
+                        {trashedItems.map((item) => (
+                          <li key={item.id} className="group/trash flex items-center gap-0.5">
+                            <div className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md truncate text-sidebar-foreground/50">
+                              <span className="block truncate">{item.label}</span>
+                              <span className="text-[10px] text-muted-foreground">{item.meta}</span>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  className="opacity-0 group-hover/trash:opacity-100 data-[state=open]:opacity-100 shrink-0 p-0.5 rounded hover:bg-sidebar-accent transition-opacity"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreVertical size={12} className="text-muted-foreground" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => handleRestoreTrashed(item)}>
+                                  <RotateCcw size={12} className="mr-2" />
+                                  Restore
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handlePermanentDelete(item)}
+                                >
+                                  <Trash2 size={12} className="mr-2" />
+                                  Delete forever
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
 
         <SidebarSeparator />
 
