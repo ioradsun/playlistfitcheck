@@ -528,7 +528,7 @@ export function FitTab({
   const hasBattle = !!(songDna?.hook && songDna?.secondHook);
   const battleDisabled = !allReady || battlePublishing || !hasBattle;
 
-  console.log("[FitTab] allReady:", allReady, "sceneManifest:", !!sceneManifest, "generationStatus:", generationStatus, "publishedUrl:", publishedUrl, "danceNeedsRegeneration:", danceNeedsRegeneration);
+  
 
   // ── Sections derived from songDna ─────────────────────────────────────
   const physicsSpec = songDna?.physicsSpec;
