@@ -2420,8 +2420,8 @@ export function LyricDisplay({
       {/* Lyric Dance Exporter — full song */}
       {songDna?.physicsSpec && beatGrid?.beats && (
         <LyricDanceExporter
-          open={lyricDanceExportOpen}
-          onOpenChange={setLyricDanceExportOpen}
+          isOpen={lyricDanceExportOpen}
+          onClose={() => setLyricDanceExportOpen(false)}
           spec={
             hookDanceOverrides.system
               ? {
@@ -2444,16 +2444,9 @@ export function LyricDisplay({
             strength: i % 4 === 0 ? 1 : 0.6,
           }))}
           lines={data.lines.filter((l) => l.tag !== "adlib")}
-          title={
-            data.title && data.title !== "Unknown" && data.title !== "Untitled"
-              ? data.title
-              : audioFile.name.replace(/\.[^.]+$/, "")
-          }
-          artist={profileDisplayName}
-          audioFile={audioFile}
-          seed={`${data.title}-lyric-dance`}
-          mood={songDna.mood}
-          description={songDna.description}
+          songStart={0}
+          songEnd={data.lines[data.lines.length - 1]?.end ?? 0}
+          audioUrl={audioFile ? URL.createObjectURL(audioFile) : ""}
           cinematicDirection={(songDna as any)?.cinematic_direction ?? null}
           sceneManifest={(songDna as any)?.scene_manifest ?? null}
         />
