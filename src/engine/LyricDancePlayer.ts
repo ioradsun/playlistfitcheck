@@ -742,7 +742,7 @@ export class LyricDancePlayer {
     options?: { bootMode?: "minimal" | "full" },
   ) {
     // Invalidate cache if song changed (survives HMR)
-    const sessionKey = `v13-${data.id}`;
+    const sessionKey = `v14-${data.id}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;
