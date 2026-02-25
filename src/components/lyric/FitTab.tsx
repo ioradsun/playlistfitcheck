@@ -92,6 +92,10 @@ export function FitTab({
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
 
+  // ── Battle publish state ──────────────────────────────────────────────
+  const [battlePublishing, setBattlePublishing] = useState(false);
+  const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(null);
+
   // Simple hash of lyrics to detect transcript changes
   const computeLyricsHash = useCallback((lns: LyricLine[]) => {
     const text = lns.filter(l => l.tag !== "adlib").map(l => `${l.text}|${l.start}|${l.end}`).join("\n");
@@ -349,6 +353,167 @@ export function FitTab({
     }
   }, [user, sceneManifest, lyricData, audioFile, publishing, songDna, beatGrid, cinematicDirection, setBgImageUrl]);
 
+  // ── Battle publish handler ──────────────────────────────────────────
+  const handleStartBattle = useCallback(async () => {
+    if (!user || battlePublishing) return;
+    if (!songDna?.hook || !songDna?.secondHook || !audioFile || !lyricData) return;
+    setBattlePublishing(true);
+
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .single();
+
+      const displayName = profile?.display_name || "artist";
+      const artistSlug = slugify(displayName);
+      const songSlug = slugify(lyricData.title || "untitled");
+
+      const deriveHookSlug = (h: any): string => {
+        const hookLines = lyricData.lines.filter(l => l.start < h.end && l.end > h.start);
+        const lastLine = hookLines[hookLines.length - 1];
+        const hookPhrase = lastLine?.text || h.previewText || "hook";
+        return slugify(hookPhrase);
+      };
+
+      const hookSlug = deriveHookSlug(songDna.hook);
+
+      if (!artistSlug || !songSlug || !hookSlug) {
+        toast.error("Couldn't generate a valid URL — check song/artist name");
+        setBattlePublishing(false);
+        return;
+      }
+
+      // Upload audio
+      const fileExt = audioFile.name.split(".").pop() || "webm";
+      const storagePath = `${user.id}/${artistSlug}/${songSlug}/${hookSlug}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("audio-clips")
+        .upload(storagePath, audioFile, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+      const audioUrl = urlData.publicUrl;
+
+      const battleId = crypto.randomUUID();
+      const pSpec = songDna?.physicsSpec || {};
+      const bg = beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {};
+      const palette = pSpec.palette || ["#ffffff", "#a855f7", "#ec4899"];
+      const system = pSpec.system || "fracture";
+
+      // Helper to build hook payload
+      const buildHookPayload = (h: any, slug: string, position: number, label: string | null) => {
+        const hookLines = lyricData.lines.filter(l => l.start < h.end && l.end > h.start);
+        const lastLine = hookLines[hookLines.length - 1];
+        const hookPhrase = lastLine?.text || h.previewText || "hook";
+        return {
+          user_id: user.id,
+          artist_slug: artistSlug,
+          song_slug: songSlug,
+          hook_slug: slug,
+          artist_name: displayName,
+          song_name: lyricData.title,
+          hook_phrase: hookPhrase,
+          artist_dna: null,
+          physics_spec: pSpec,
+          beat_grid: bg,
+          hook_start: h.start,
+          hook_end: h.end,
+          lyrics: hookLines,
+          audio_url: audioUrl,
+          system_type: system,
+          palette,
+          signature_line: null,
+          battle_id: battleId,
+          battle_position: position,
+          hook_label: label,
+        };
+      };
+
+      // Upsert hook 1
+      const { error: e1 } = await supabase
+        .from("shareable_hooks" as any)
+        .upsert(buildHookPayload(songDna.hook, hookSlug, 1, songDna.hookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
+      if (e1) throw e1;
+
+      // Upsert hook 2
+      const secondHookSlug = deriveHookSlug(songDna.secondHook);
+      const { error: e2 } = await supabase
+        .from("shareable_hooks" as any)
+        .upsert(buildHookPayload(songDna.secondHook, secondHookSlug || `${hookSlug}-2`, 2, songDna.secondHookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
+      if (e2) throw e2;
+
+      // Upsert hookfit_posts
+      const { data: primaryHook } = await supabase
+        .from("shareable_hooks" as any)
+        .select("id")
+        .eq("artist_slug", artistSlug)
+        .eq("song_slug", songSlug)
+        .eq("hook_slug", hookSlug)
+        .maybeSingle();
+
+      if (primaryHook) {
+        await supabase
+          .from("hookfit_posts" as any)
+          .upsert({
+            user_id: user.id,
+            battle_id: battleId,
+            hook_id: (primaryHook as any).id,
+            status: "live",
+          }, { onConflict: "battle_id" });
+      }
+
+      const battleUrl = `/${artistSlug}/${songSlug}/${hookSlug}`;
+      setBattlePublishedUrl(battleUrl);
+
+      // Auto-post to CrowdFit (fire-and-forget)
+      (async () => {
+        try {
+          const { data: existing }: any = await supabase
+            .from("songfit_posts" as any)
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("lyric_dance_url", battleUrl)
+            .maybeSingle();
+
+          if (!existing) {
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 21);
+            await supabase
+              .from("songfit_posts" as any)
+              .insert({
+                user_id: user.id,
+                track_title: lyricData.title || "Untitled",
+                caption: "",
+                lyric_dance_url: battleUrl,
+                lyric_dance_id: null,
+                spotify_track_url: null,
+                spotify_track_id: null,
+                album_art_url: null,
+                tags_json: [],
+                track_artists_json: [],
+                status: "live",
+                submitted_at: new Date().toISOString(),
+                expires_at: expiresAt.toISOString(),
+              });
+          }
+          window.dispatchEvent(new Event("songfit:dance-published"));
+        } catch (e: any) {
+          console.warn("[FitTab] CrowdFit battle auto-post failed:", e?.message);
+        }
+      })();
+
+      window.dispatchEvent(new Event("hookfit:battle-published"));
+      toast.success("Hook Battle published to CrowdFit!");
+    } catch (e: any) {
+      console.error("Battle publish error:", e);
+      toast.error(e.message || "Failed to publish battle");
+    } finally {
+      setBattlePublishing(false);
+    }
+  }, [user, battlePublishing, songDna, audioFile, lyricData, beatGrid]);
+
   const allReady =
     generationStatus.beatGrid === "done" &&
     generationStatus.songDna === "done" &&
@@ -357,6 +522,8 @@ export function FitTab({
   const danceDisabled = !sceneManifest || publishing || !allReady;
   // Republish only needs auth + not currently publishing (data already exists on server)
   const republishDisabled = publishing;
+  const hasBattle = !!(songDna?.hook && songDna?.secondHook);
+  const battleDisabled = !allReady || battlePublishing || !hasBattle;
 
   console.log("[FitTab] allReady:", allReady, "sceneManifest:", !!sceneManifest, "generationStatus:", generationStatus, "publishedUrl:", publishedUrl, "danceNeedsRegeneration:", danceNeedsRegeneration);
 
@@ -465,17 +632,50 @@ export function FitTab({
                         {songDna.hook.score && <span className="text-[9px] font-mono text-primary">{songDna.hook.score}%</span>}
                       </div>
                       {songDna.hookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.hookJustification}</p>}
-                    </div>
-                  )}
-                  {songDna.secondHook && (
-                    <div className="space-y-1 pt-1 border-t border-border/20">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/50 text-accent-foreground">{songDna.secondHookLabel || "Hook 2"}</span>
-                        <span className="text-[9px] text-muted-foreground">{songDna.secondHook.start?.toFixed(1)}s – {songDna.secondHook.end?.toFixed(1)}s</span>
-                      </div>
-                      {songDna.secondHookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.secondHookJustification}</p>}
-                    </div>
-                  )}
+                </div>
+              )}
+              {songDna.secondHook && (
+                <div className="space-y-1 pt-1 border-t border-border/20">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/50 text-accent-foreground">{songDna.secondHookLabel || "Hook 2"}</span>
+                    <span className="text-[9px] text-muted-foreground">{songDna.secondHook.start?.toFixed(1)}s – {songDna.secondHook.end?.toFixed(1)}s</span>
+                  </div>
+                  {songDna.secondHookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.secondHookJustification}</p>}
+                </div>
+              )}
+
+              {/* CrowdFit Battle button */}
+              {hasBattle && (
+                battlePublishedUrl ? (
+                  <a
+                    href={battlePublishedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 mt-2"
+                  >
+                    <Zap size={10} />
+                    VIEW BATTLE
+                  </a>
+                ) : (
+                  <button
+                    onClick={handleStartBattle}
+                    disabled={battleDisabled}
+                    className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 disabled:opacity-50 text-foreground hover:text-primary border-border/40 hover:border-primary/40 mt-2"
+                  >
+                    {battlePublishing ? (
+                      <span className="flex items-center gap-1.5">
+                        <Loader2 size={10} className="animate-spin" />
+                        PUBLISHING…
+                      </span>
+                    ) : (
+                      <>
+                        <Zap size={10} />
+                        START CROWDFIT BATTLE
+                      </>
+                    )}
+                  </button>
+                )
+              )}
                 </div>
               )}
 
