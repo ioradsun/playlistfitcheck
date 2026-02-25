@@ -389,19 +389,30 @@ export default function ShareableLyricDance() {
 
   // ── Auto-palette from chapter images (client-side sampler) ───────────────
   useEffect(() => {
+    console.info('[auto-palette] effect fired', {
+      id: data?.id,
+      chapter_images: data?.chapter_images,
+      existing_auto_palettes: data?.auto_palettes,
+    });
     if (!data?.id) return;
     const urls = (data.chapter_images ?? []).filter((u): u is string => Boolean(u));
+    console.info('[auto-palette] filtered urls:', urls.length, urls);
     if (urls.length === 0) return;
-    if (Array.isArray(data.auto_palettes) && data.auto_palettes.length >= urls.length) return;
+    if (Array.isArray(data.auto_palettes) && data.auto_palettes.length >= urls.length) {
+      console.info('[auto-palette] skipped — already have', data.auto_palettes.length, 'palettes');
+      return;
+    }
 
     let cancelled = false;
+    console.info('[auto-palette] starting computeAutoPalettesFromUrls...');
     computeAutoPalettesFromUrls(urls)
       .then(async (autoPalettes) => {
+        console.info('[auto-palette] computed:', JSON.stringify(autoPalettes));
         if (cancelled || autoPalettes.length === 0) return;
         setData(prev => (prev ? { ...prev, auto_palettes: autoPalettes } : prev));
       })
       .catch((error) => {
-        console.warn('[auto-palette] failed to compute from chapter images', error);
+        console.error('[auto-palette] failed to compute from chapter images', error);
       });
 
     return () => {
