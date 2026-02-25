@@ -20,6 +20,7 @@ interface Props {
   artistsJson?: any[];
   onScored?: () => void;
   onUnscored?: () => void;
+  onVotedSide?: (side: "a" | "b" | null) => void;
   isBattle?: boolean;
   // Billboard pre-resolved mode
   showPreResolved?: boolean;
@@ -45,7 +46,7 @@ function incrementSessionReviewCount(): number {
   return next;
 }
 
-export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, onScored, onUnscored, isBattle, showPreResolved, preResolved, rank }: Props) {
+export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, onScored, onUnscored, onVotedSide, isBattle, showPreResolved, preResolved, rank }: Props) {
   const leftLabel = isBattle ? "LEFT HOOK" : "Run it back";
   const rightLabel = isBattle ? "RIGHT HOOK" : "Skip";
   const fitLabel = isBattle ? "LEFT HOOK" : "REPLAY FIT";
@@ -68,7 +69,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
 
   useEffect(() => {
     const checkExisting = async () => {
-      let query = supabase.from("songfit_hook_reviews").select("id").eq("post_id", postId);
+      let query = supabase.from("songfit_hook_reviews").select("id, would_replay").eq("post_id", postId);
       if (user) {
         query = query.eq("user_id", user.id);
       } else {
@@ -76,6 +77,9 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       }
       const { data } = await query.maybeSingle();
       if (data) {
+        const voted = (data as any).would_replay;
+        setWouldReplay(voted);
+        onVotedSide?.(voted === true ? "a" : voted === false ? "b" : null);
         fetchResults().then(r => { setResults(r); setStep("done"); });
         onScored?.();
       }
@@ -108,6 +112,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
       return;
     }
     setWouldReplay(replay);
+    onVotedSide?.(replay ? "a" : "b");
     setStep(replay ? "replay_cta" : "skip_cta");
   };
 
@@ -119,6 +124,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
     setResults(null);
     setStep(2);
     setContextNote("");
+    onVotedSide?.(null);
     onUnscored?.();
     window.dispatchEvent(new CustomEvent("crowdfit:vote"));
   };
@@ -308,7 +314,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               />
               <button
                 onClick={() => handleSubmit(contextNote)}
-                className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity"
+                className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-4 py-2.5 rounded-md hover:opacity-90 transition-opacity"
               >
                 BROADCAST
               </button>
@@ -345,7 +351,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               />
               <button
                 onClick={() => handleSubmit(contextNote)}
-                className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity"
+                className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-4 py-2.5 rounded-md hover:opacity-90 transition-opacity"
               >
                 BROADCAST
               </button>

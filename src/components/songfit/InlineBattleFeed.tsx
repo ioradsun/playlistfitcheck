@@ -16,9 +16,11 @@ interface Props {
   battleUrl: string;
   songTitle: string;
   artistName: string;
+  /** Which side the user voted for in HookReview */
+  votedSide?: "a" | "b" | null;
 }
 
-function InlineBattleFeedInner({ battleUrl, songTitle, artistName }: Props) {
+function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: Props) {
   const [battleId, setBattleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -133,6 +135,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName }: Props) {
           battleId={battleId}
           mode="judgment"
           activePlaying={activePlaying}
+          votedSide={votedSide}
           onTileTap={handleTileTapWrapped}
           onHooksLoaded={handleHooksLoaded}
           onHookEnd={handleHookEnd}
