@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame, Film } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
+import { InlineLyricDance } from "./InlineLyricDance";
 import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -268,26 +269,13 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         "transition-all duration-500",
         isScored && "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]"
       )}>
-        {post.lyric_dance_url && !post.spotify_track_id ? (
-          <a
-            href={post.lyric_dance_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block mx-3 my-2 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors overflow-hidden"
-          >
-            <div className="flex items-center gap-3 p-4">
-              <div className="h-14 w-14 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <Film size={24} className="text-primary" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold truncate">{post.track_title}</p>
-                <p className="text-xs text-muted-foreground truncate">{displayName}</p>
-              </div>
-              <span className="shrink-0 text-[10px] font-semibold tracking-[0.1em] uppercase text-primary px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5">
-                WATCH DANCE
-              </span>
-            </div>
-          </a>
+        {post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
+          <InlineLyricDance
+            lyricDanceId={post.lyric_dance_id}
+            lyricDanceUrl={post.lyric_dance_url}
+            songTitle={post.track_title}
+            artistName={displayName}
+          />
         ) : (
           <LazySpotifyEmbed
             trackId={post.spotify_track_id}

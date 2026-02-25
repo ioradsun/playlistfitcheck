@@ -1,0 +1,220 @@
+/**
+ * InlineLyricDance — Renders a live lyric dance canvas inside a CrowdFit card.
+ * Fetches dance data on mount, initializes LyricDancePlayer on tap.
+ * Muted autoplay on visibility, tap to unmute & open full page.
+ */
+
+import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
+
+const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,chapter_images,scene_context,cinematic_direction";
+
+interface Props {
+  lyricDanceId: string;
+  lyricDanceUrl: string;
+  songTitle: string;
+  artistName: string;
+}
+
+function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName }: Props) {
+  const [data, setData] = useState<LyricDanceData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [started, setStarted] = useState(false);
+  const [fontsReady, setFontsReady] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textCanvasRef = useRef<HTMLCanvasElement>(null);
+  const playerRef = useRef<LyricDancePlayer | null>(null);
+  const initRef = useRef(false);
+
+  // Fetch dance data
+  useEffect(() => {
+    if (!lyricDanceId) return;
+    setLoading(true);
+
+    supabase
+      .from("shareable_lyric_dances" as any)
+      .select(COLUMNS)
+      .eq("id", lyricDanceId)
+      .maybeSingle()
+      .then(({ data: row, error: err }) => {
+        if (err || !row) {
+          setError(true);
+          setLoading(false);
+          return;
+        }
+        setData(row as any as LyricDanceData);
+        setLoading(false);
+      });
+  }, [lyricDanceId]);
+
+  // Load fonts
+  useEffect(() => {
+    Promise.all([
+      document.fonts.load("400 16px Montserrat"),
+      document.fonts.load("700 16px Montserrat"),
+      document.fonts.load("800 16px Montserrat"),
+      document.fonts.load("900 16px Montserrat"),
+    ]).catch(() => {}).finally(() => setFontsReady(true));
+  }, []);
+
+  // Auto-start on visibility
+  useEffect(() => {
+    if (started || !data || !data.words?.length || !data.cinematic_direction) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setStarted(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [data, started]);
+
+  // Init player
+  useEffect(() => {
+    if (initRef.current) return;
+    if (!started || !fontsReady || !data || !data.words?.length || !data.cinematic_direction) return;
+    if (!canvasRef.current || !textCanvasRef.current || !containerRef.current) return;
+
+    initRef.current = true;
+    let destroyed = false;
+
+    const player = new LyricDancePlayer(
+      data,
+      canvasRef.current,
+      textCanvasRef.current,
+      containerRef.current as HTMLDivElement,
+    );
+    playerRef.current = player;
+
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) player.resize(width, height);
+    });
+    ro.observe(containerRef.current);
+
+    player.init()
+      .then(() => {
+        if (!destroyed) {
+          player.audio.muted = true;
+          player.play();
+        }
+      })
+      .catch((err) => {
+        console.error("[InlineLyricDance] init failed:", err);
+      });
+
+    return () => {
+      destroyed = true;
+      ro.disconnect();
+      player.destroy();
+      playerRef.current = null;
+      initRef.current = false;
+    };
+  }, [started, fontsReady, data?.id, data?.words?.length, !!data?.cinematic_direction]);
+
+  // Mute toggle
+  useEffect(() => {
+    if (playerRef.current) {
+      playerRef.current.audio.muted = muted;
+    }
+  }, [muted]);
+
+  const toggleMute = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setMuted(m => !m);
+  }, []);
+
+  const openFullPage = useCallback(() => {
+    window.open(lyricDanceUrl, "_blank");
+  }, [lyricDanceUrl]);
+
+  if (error) {
+    return (
+      <a
+        href={lyricDanceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block mx-3 my-2 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors p-4 text-center"
+      >
+        <p className="text-sm font-semibold">{songTitle}</p>
+        <p className="text-xs text-muted-foreground mt-1">Tap to watch lyric dance →</p>
+      </a>
+    );
+  }
+
+  const canPlay = data && data.words?.length && data.cinematic_direction;
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative w-full overflow-hidden bg-black cursor-pointer"
+      style={{ aspectRatio: "16/9" }}
+      onClick={openFullPage}
+    >
+      {/* Canvases */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full"
+        style={{ display: started ? "block" : "none" }}
+      />
+      <canvas
+        ref={textCanvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ display: "none" }}
+      />
+
+      {/* Loading state */}
+      {(loading || (!canPlay && !error)) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black">
+          <div className="text-center space-y-2">
+            <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto" />
+            <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">Loading dance…</p>
+          </div>
+        </div>
+      )}
+
+      {/* Controls overlay */}
+      {started && (
+        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between p-2 z-10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={toggleMute}
+            className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
+          >
+            {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">
+              {songTitle}
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); openFullPage(); }}
+              className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
+            >
+              <Maximize2 size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export const InlineLyricDance = memo(InlineLyricDanceInner);
