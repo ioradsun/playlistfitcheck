@@ -171,6 +171,13 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     if (audioA) audioA.muted = activePlaying !== "a";
     if (audioB) audioB.muted = activePlaying !== "b";
 
+    // Pause the inactive side's audio entirely so it doesn't drift out of sync
+    if (activePlaying === "a" && audioB) {
+      audioB.pause();
+    } else if (activePlaying === "b" && audioA) {
+      audioA.pause();
+    }
+
     // Restart the newly activated side (only when it changes)
     if (activePlaying && activePlaying !== prevActiveRef.current) {
       if (activePlaying === "a") hookACanvas.restart();
