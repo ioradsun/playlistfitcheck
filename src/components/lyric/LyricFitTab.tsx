@@ -8,12 +8,9 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { sessionAudio } from "@/lib/sessionAudioCache";
-import { safeManifest } from "@/engine/validateManifest";
-import { buildManifestFromDna } from "@/engine/buildManifestFromDna";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import type { LyricData, LyricLine } from "./LyricDisplay";
 import { songSignatureAnalyzer, type SongSignature } from "@/lib/songSignatureAnalyzer";
-import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
 import { detectSections, type TimestampedLine } from "@/engine/sectionDetector";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
@@ -74,7 +71,7 @@ export function LyricFitTab({
   const [songSignature, setSongSignature] = useState<SongSignature | null>(null);
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
-  const [sceneManifest, setSceneManifest] = useState<FullSceneManifest | null>(null);
+  const [sceneManifest, setSceneManifest] = useState<any | null>(null);
 
   const [fitReadiness, setFitReadiness] = useState<FitReadiness>("not_started");
   const [fitProgress, setFitProgress] = useState(0);
@@ -227,17 +224,24 @@ export function LyricFitTab({
       }
 
       const loadedSongDna = (initialLyric as any).song_dna ?? null;
+      const loadedCinematicDirection =
+        (initialLyric as any).cinematic_direction ??
+        (loadedSongDna as any)?.cinematicDirection ??
+        (loadedSongDna as any)?.cinematic_direction ??
+        null;
+
       if (loadedSongDna) {
         setSongDna(loadedSongDna);
         setGenerationStatus(prev => ({ ...prev, songDna: "done" }));
-        if ((loadedSongDna as any).cinematicDirection) {
-          setCinematicDirection((loadedSongDna as any).cinematicDirection);
-          setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
-        }
+      }
+
+      if (loadedCinematicDirection) {
+        setCinematicDirection(loadedCinematicDirection);
+        setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
       }
 
       // If all three analysis results exist, lock the pipeline gate immediately
-      if (savedBg && loadedSongDna && (loadedSongDna as any).cinematicDirection) {
+      if (savedBg && loadedCinematicDirection) {
         pipelineTriggeredRef.current = true;
         setFitReadiness("ready");
         setFitProgress(100);
@@ -248,11 +252,6 @@ export function LyricFitTab({
       if (savedSignature) setSongSignature(savedSignature as SongSignature);
 
       setBgImageUrl((initialLyric as any).background_image_url ?? null);
-
-      if (loadedSongDna) {
-        const m = buildManifestFromDna(loadedSongDna as Record<string, unknown>);
-        if (m) setSceneManifest(safeManifest(m).manifest);
-      }
 
       const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
       if (cachedAudio) {
@@ -346,9 +345,7 @@ export function LyricFitTab({
     }
   }, [hasRealAudio, beatGrid, generationStatus.beatGrid]);
 
-  const startLyricAnalyze = useCallback(async (sourceLines: LyricLine[], targetAudioFile: File) => {
-    if (!lyricData || !sourceLines.length || !targetAudioFile) return;
-    // Data-existence guard: if we already have songDna (e.g. loaded from DB), skip
+  const startSongDefaultsDerivation = useCallback(async () => {
     if (songDna) {
       setGenerationStatus(prev => prev.songDna === "done" ? prev : ({ ...prev, songDna: "done" }));
       return;
@@ -358,103 +355,20 @@ export function LyricFitTab({
     setGenerationStatus(prev => ({ ...prev, songDna: "running" }));
     setPipelineStages(prev => ({ ...prev, songDna: "running" }));
 
-    const lyricsText = sourceLines
-      .filter((l: any) => l.tag !== "adlib")
-      .map((l: any) => l.text)
-      .join("\n");
-
-    let audioBase64: string | undefined;
-    let format: string | undefined;
-
-    if (hasRealAudio && targetAudioFile.size > 0) {
-      try {
-        const arrayBuffer = await targetAudioFile.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuffer);
-        let binary = "";
-        const chunkSize = 8192;
-        for (let i = 0; i < uint8.length; i += chunkSize) {
-          binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
-        }
-        audioBase64 = btoa(binary);
-        const name = targetAudioFile.name.toLowerCase();
-        if (name.endsWith(".wav")) format = "wav";
-        else if (name.endsWith(".m4a")) format = "m4a";
-        else if (name.endsWith(".flac")) format = "flac";
-        else if (name.endsWith(".ogg")) format = "ogg";
-        else if (name.endsWith(".webm")) format = "webm";
-        else format = "mp3";
-      } catch {}
-    }
-
-    const { data: dnaResult, error: dnaError } = await supabase.functions.invoke("lyric-analyze", {
-      body: {
-        title: lyricData.title,
-        artist: artistNameRef.current,
-        lyrics: lyricsText,
-        audioBase64,
-        format,
-        beatGrid: beatGrid ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence } : undefined,
-        includeHooks: true,
-      },
-    });
-
-    if (dnaError) {
-      console.error("[Pipeline] lyric-analyze error:", dnaError);
-      setGenerationStatus(prev => ({ ...prev, songDna: "error" }));
-      return;
-    }
-
-    const rawHooks = Array.isArray(dnaResult?.hottest_hooks)
-      ? dnaResult.hottest_hooks
-      : dnaResult?.hottest_hook ? [dnaResult.hottest_hook] : [];
-
-    const parseHook = (raw: any) => {
-      if (!raw?.start_sec) return null;
-      const startSec = Number(raw.start_sec);
-      const durationSec = Number(raw.duration_sec) || 10;
-      const conf = Number(raw.confidence) || 0;
-      if (conf < 0.5) return null;
-      return {
-        hook: { start: startSec, end: startSec + durationSec, score: Math.round(conf * 100), reasonCodes: [], previewText: "", status: conf >= 0.75 ? "confirmed" : "candidate" },
-        justification: raw.justification,
-        label: raw.label,
-      };
+    const nextSongDefaults = {
+      source: "presetDerivation",
+      generatedAt: new Date().toISOString(),
     };
 
-    const parsedHooks = rawHooks.map(parseHook).filter(Boolean);
-    const primary = parsedHooks[0] || null;
-    const secondary = parsedHooks[1] || null;
-
-    const nextSongDna = {
-      mood: dnaResult?.mood,
-      description: dnaResult?.description,
-      meaning: dnaResult?.meaning,
-      hook: primary?.hook || null,
-      secondHook: secondary?.hook || null,
-      hookJustification: primary?.justification,
-      secondHookJustification: secondary?.justification,
-      hookLabel: primary?.label,
-      secondHookLabel: secondary?.label,
-      physicsSpec: dnaResult?.physics_spec || null,
-      scene_manifest: dnaResult?.scene_manifest || dnaResult?.sceneManifest || null,
-    };
-
-    setSongDna(nextSongDna);
+    setSongDna(nextSongDefaults);
     setGenerationStatus(prev => ({ ...prev, songDna: "done" }));
     setPipelineStages(prev => ({ ...prev, songDna: "done" }));
     setFitProgress(prev => Math.max(prev, 70));
 
-    const builtManifest = buildManifestFromDna(nextSongDna as Record<string, unknown>);
-    if (builtManifest) {
-      setSceneManifest(safeManifest(builtManifest).manifest);
-    } else if (nextSongDna.scene_manifest) {
-      setSceneManifest(safeManifest(nextSongDna.scene_manifest).manifest);
-    }
-
     if (savedIdRef.current) {
-      await persistSongDna(savedIdRef.current, nextSongDna);
+      await persistSongDna(savedIdRef.current, nextSongDefaults);
     }
-  }, [lyricData, generationStatus.songDna, hasRealAudio, beatGrid, cinematicDirection, persistSongDna, songDna]);
+  }, [generationStatus.songDna, persistSongDna, songDna]);
 
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
     if (!lyricData || !sourceLines.length) return;
@@ -510,22 +424,8 @@ export function LyricFitTab({
 
         // Section images are generated after dance publish (PublishLyricDanceButton)
 
-        const sceneManifestRes = await supabase.functions.invoke("generate-scene-manifest", {
-          body: {
-            cinematic_direction: enrichedDirection,
-            lyrics: sourceLines,
-            words: words ?? [],
-            beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats.map((time) => ({ time })) } : null,
-            song_duration: sourceLines[sourceLines.length - 1]?.end ?? 0,
-            lyricId: savedIdRef.current || undefined,
-          },
-        });
-        const generatedManifest = sceneManifestRes.data?.scene_manifest ?? null;
-        if (generatedManifest) {
-          const validatedManifest = safeManifest(generatedManifest).manifest;
-          setSceneManifest(validatedManifest);
-          setSongDna((prev: any) => ({ ...(prev || {}), scene_manifest: validatedManifest }));
-        }
+        const derivedPreset = (enrichedDirection as any)?.presetDerivation ?? null;
+        if (derivedPreset) setSceneManifest(derivedPreset);
 
         // Persist cinematic direction back to song_dna in DB
         if (savedIdRef.current) {
@@ -540,7 +440,7 @@ export function LyricFitTab({
     } catch {
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error" }));
     }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna, words, songSignature, audioSections]);
+  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, songDna, persistSongDna, songSignature, audioSections]);
 
   const pipelineTriggeredRef = useRef(false);
   const [pipelineRetryCount, setPipelineRetryCount] = useState(0);
@@ -556,10 +456,10 @@ export function LyricFitTab({
     pipelineTriggeredRef.current = true;
     console.log("[Pipeline] Starting pipeline, retry:", pipelineRetryCount);
     startBeatAnalysis(audioFile);
-    startLyricAnalyze(lines, audioFile);
+    startSongDefaultsDerivation();
     startCinematicDirection(lines, pipelineRetryCount > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, audioFile, pipelineRetryCount]);
+  }, [lines, audioFile, pipelineRetryCount, startSongDefaultsDerivation, startCinematicDirection, songDna, beatGrid, cinematicDirection]);
 
   useEffect(() => {
     const values = Object.values(generationStatus);

@@ -18,15 +18,6 @@ import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import type { ArtistDNA } from "./ArtistFingerprintTypes";
 
-interface SongDna {
-  mood?: string;
-  description?: string;
-  meaning?: { theme?: string; summary?: string; imagery?: string[] };
-  scene_manifest?: any;
-  sceneManifest?: any;
-  [key: string]: any;
-}
-
 interface Props {
   physicsSpec: PhysicsSpec;
   lines: LyricLine[];
@@ -37,7 +28,7 @@ interface Props {
   palette: string[];
   fingerprint?: ArtistDNA | null;
   seed: string;
-  songDna?: SongDna | null;
+  songDna?: Record<string, any> | null;
   words?: Array<{ word: string; start: number; end: number }> | null;
 }
 

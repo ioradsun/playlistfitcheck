@@ -600,25 +600,21 @@ export function LyricDisplay({
     try {
       const beforeManifest = safeManifest(songDna.scene_manifest || {}).manifest;
       const playhead = audioRef.current?.currentTime ?? 0;
-      const lyricsText = data.lines.filter((l) => l.tag !== "adlib").map((l) => l.text).join("\n");
-      const { data: result, error } = await supabase.functions.invoke("lyric-analyze", {
+      const lyricsForDirection = data.lines
+        .filter((l: any) => l.tag !== "adlib")
+        .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+      const { data: result, error } = await supabase.functions.invoke("cinematic-direction", {
         body: {
           title: data.title,
           artist: profileDisplayName || "artist",
-          lyrics: lyricsText,
-          userSceneDirection: direction.trim(),
-          includeHooks: false,
+          lines: lyricsForDirection,
+          listenerScene: direction.trim(),
         },
       });
       if (error) throw error;
 
       const merged = normalizeSongDnaWithManifest({
         ...songDna,
-        mood: result?.mood ?? songDna.mood,
-        description: result?.description ?? songDna.description,
-        meaning: result?.meaning ?? songDna.meaning,
-        physicsSpec: result?.physics_spec ?? songDna.physicsSpec,
-        scene_manifest: result?.scene_manifest || result?.sceneManifest || songDna.scene_manifest,
         cinematic_direction: result?.cinematicDirection ?? (songDna as any).cinematic_direction,
       }, data.title);
 
@@ -2471,29 +2467,29 @@ export function LyricDisplay({
         }}
         onRegenerateDirector={async () => {
           if (!songDna) return;
-          toast.info("Re-generating scene manifest…");
+          toast.info("Re-generating cinematic direction…");
           try {
-            const lastLine = data.lines[data.lines.length - 1];
-            const { data: result, error } = await supabase.functions.invoke("generate-scene-manifest", {
+            const lyricsForDirection = data.lines
+              .filter((l: any) => l.tag !== "adlib")
+              .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+            const { data: result, error } = await supabase.functions.invoke("cinematic-direction", {
               body: {
-                cinematic_direction: (songDna as any)?.cinematic_direction ?? null,
-                lyrics: data.lines,
-                words: (songDna as any)?.words ?? [],
-                beat_grid: beatGrid ?? null,
-                song_duration: lastLine?.end ?? 0,
+                title: data.title,
+                artist: profileDisplayName,
+                lines: lyricsForDirection,
                 lyricId: currentSavedId ?? undefined,
               },
             });
             if (error) throw error;
-            if (result?.scene_manifest) {
-              setSongDna((prev) => prev ? normalizeSongDnaWithManifest({ ...prev, scene_manifest: result.scene_manifest }, data.title) : prev);
-              toast.success("Scene manifest updated");
+            if (result?.cinematicDirection) {
+              setSongDna((prev) => prev ? normalizeSongDnaWithManifest({ ...prev, cinematic_direction: result.cinematicDirection }, data.title) : prev);
+              toast.success("Cinematic direction updated");
             } else {
-              toast.error("No scene manifest returned");
+              toast.error("No cinematic direction returned");
             }
           } catch (e: any) {
             console.error("[DEBUG] Director error:", e);
-            toast.error(e.message || "Failed to generate scene manifest");
+            toast.error(e.message || "Failed to generate cinematic direction");
           }
         }}
         onRunCustomPrompt={async (systemPrompt: string) => {
