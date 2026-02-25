@@ -9,7 +9,7 @@ import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 
-const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,chapter_images,scene_context,cinematic_direction";
+const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,section_images,scene_context,cinematic_direction";
 
 interface Props {
   lyricDanceId: string;

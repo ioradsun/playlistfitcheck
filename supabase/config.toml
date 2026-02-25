@@ -81,7 +81,7 @@ verify_jwt = false
 [functions.update-submission-statuses]
 verify_jwt = false
 
-[functions.generate-chapter-images]
+[functions.generate-section-images]
 verify_jwt = false
 
 [functions.resolve-scene-context]

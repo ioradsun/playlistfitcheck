@@ -28,7 +28,7 @@ import type { CinematicDirection } from "@/types/CinematicDirection";
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
 interface DanceComment { id: string; text: string; submitted_at: string; }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,chapter_images,scene_context";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,section_images,scene_context";
 const DIRECTION_COLUMNS = "cinematic_direction,scene_manifest";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
@@ -247,42 +247,36 @@ export default function ShareableLyricDance() {
           // Check if cinematic_direction already exists in DB
           const { data: existingRow } = await supabase
             .from("shareable_lyric_dances" as any)
-            .select("cinematic_direction, chapter_images")
+            .select("cinematic_direction, section_images")
             .eq("id", d.id)
             .maybeSingle();
           const existingDir = (existingRow as any)?.cinematic_direction;
-          const existingImages = (existingRow as any)?.chapter_images;
+          const existingImages = (existingRow as any)?.section_images;
 
-          if (existingDir && !Array.isArray(existingDir) && existingDir.chapters?.length > 0) {
+          if (existingDir && !Array.isArray(existingDir) && existingDir.sections?.length > 0) {
             // Use cached direction — skip generation
             setData(prev => prev ? { ...prev, cinematic_direction: existingDir } : prev);
 
-            // Check if chapter images also already exist
+            // Check if section images also already exist
             const imagesAlreadyExist =
               Array.isArray(existingImages) &&
               existingImages.length >= 3 &&
               existingImages.every((url: string) => !!url);
 
             if (imagesAlreadyExist) {
-              setData(prev => prev ? { ...prev, chapter_images: existingImages } : prev);
+              setData(prev => prev ? { ...prev, section_images: existingImages } : prev);
             } else {
-              // Generate chapter images from existing direction
-              const chapters = existingDir.chapters;
-              if (Array.isArray(chapters) && chapters.length > 0) {
-                supabase.functions.invoke("generate-chapter-images", {
+              // Generate section images from existing direction
+              const sections = existingDir.sections;
+              if (Array.isArray(sections) && sections.length > 0) {
+                supabase.functions.invoke("generate-section-images", {
                   body: {
                     lyric_dance_id: d.id,
-                    chapters: chapters.map((ch: any, i: number) => ({
-                      index: i,
-                      backgroundDirective: ch.backgroundDirective ?? ch.background ?? ch.description ?? "",
-                      dominantColor: ch.dominantColor ?? "#333333",
-                      emotionalIntensity: ch.emotionalIntensity ?? 0.5,
-                    })),
                   },
                 }).then(({ data: imgResult }) => {
-                  const nextImages = imgResult?.chapter_images ?? imgResult?.urls;
+                  const nextImages = imgResult?.section_images ?? imgResult?.urls;
                   if (nextImages) {
-                      setData(prev => prev ? { ...prev, chapter_images: nextImages } : prev);
+                      setData(prev => prev ? { ...prev, section_images: nextImages } : prev);
                   }
                 }).catch(() => {});
               }
@@ -299,23 +293,17 @@ export default function ShareableLyricDance() {
               if (dirResult?.cinematicDirection) {
                 setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
 
-                // Fire-and-forget: generate chapter background images
-                const chapters = dirResult.cinematicDirection?.chapters;
-                if (Array.isArray(chapters) && chapters.length > 0) {
-                  supabase.functions.invoke("generate-chapter-images", {
+                // Fire-and-forget: generate section background images
+                const sections = dirResult.cinematicDirection?.sections;
+                if (Array.isArray(sections) && sections.length > 0) {
+                  supabase.functions.invoke("generate-section-images", {
                     body: {
                       lyric_dance_id: d.id,
-                      chapters: chapters.map((ch: any, i: number) => ({
-                        index: i,
-                        backgroundDirective: ch.backgroundDirective ?? ch.background ?? "",
-                        dominantColor: ch.dominantColor ?? "#333333",
-                        emotionalIntensity: ch.emotionalIntensity ?? 0.5,
-                      })),
                     },
                   }).then(({ data: imgResult }) => {
-                    const nextImages = imgResult?.chapter_images ?? imgResult?.urls;
+                    const nextImages = imgResult?.section_images ?? imgResult?.urls;
                     if (nextImages) {
-                      setData(prev => prev ? { ...prev, chapter_images: nextImages } : prev);
+                      setData(prev => prev ? { ...prev, section_images: nextImages } : prev);
                     }
                   }).catch(() => {});
                 }
@@ -380,22 +368,22 @@ export default function ShareableLyricDance() {
     };
   }, [playerKey, !!data?.cinematic_direction]);
 
-  // ── Hot-patch chapter images without restart ───────────────────────
+  // ── Hot-patch section images without restart ───────────────────────
   useEffect(() => {
-    if (!playerRef.current || !data?.chapter_images?.length) return;
-    playerRef.current.updateChapterImages(data.chapter_images);
-  }, [data?.chapter_images]);
+    if (!playerRef.current || !data?.section_images?.length) return;
+    playerRef.current.updateSectionImages(data.section_images);
+  }, [data?.section_images]);
 
 
-  // ── Auto-palette from chapter images (client-side sampler) ───────────────
+  // ── Auto-palette from section images (client-side sampler) ───────────────
   useEffect(() => {
     console.info('[auto-palette] effect fired', {
       id: data?.id,
-      chapter_images: data?.chapter_images,
+      section_images: data?.section_images,
       existing_auto_palettes: data?.auto_palettes,
     });
     if (!data?.id) return;
-    const urls = (data.chapter_images ?? []).filter((u): u is string => Boolean(u));
+    const urls = (data.section_images ?? []).filter((u): u is string => Boolean(u));
     console.info('[auto-palette] filtered urls:', urls.length, urls);
     if (urls.length === 0) return;
     if (Array.isArray(data.auto_palettes) && data.auto_palettes.length >= urls.length) {
@@ -412,13 +400,13 @@ export default function ShareableLyricDance() {
         setData(prev => (prev ? { ...prev, auto_palettes: autoPalettes } : prev));
       })
       .catch((error) => {
-        console.error('[auto-palette] failed to compute from chapter images', error);
+        console.error('[auto-palette] failed to compute from section images', error);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [data?.id, data?.chapter_images, data?.auto_palettes]);
+  }, [data?.id, data?.section_images, data?.auto_palettes]);
 
   // ── Hot-patch scene context without restart ────────────────────────
   useEffect(() => {
@@ -848,7 +836,7 @@ export default function ShareableLyricDance() {
           title: data.song_name, artist: data.artist_name,
           overrides: {}, fingerprint: data.artist_dna,
           scene_context: data.scene_context as any,
-          chapter_images: data.chapter_images,
+          section_images: data.section_images,
           words: data.words,
         }}
       />
