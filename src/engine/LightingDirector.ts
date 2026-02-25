@@ -1,17 +1,16 @@
-import type { Chapter } from "@/types/CinematicDirection";
+import type { RenderSection } from "@/engine/directionResolvers";
 
-export function renderChapterLighting(
+export function renderSectionLighting(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  chapter: Chapter,
+  section: RenderSection,
   activeWordPosition: { x: number; y: number },
   songProgress: number,
   beatIntensity: number,
-  currentTime: number,
+  _currentTime: number,
 ): void {
-  void currentTime;
-  const lightBehavior = chapter.lightBehavior.toLowerCase();
-  const intensity = chapter.emotionalIntensity;
+  const lightBehavior = section.lightBehavior.toLowerCase();
+  const intensity = section.emotionalIntensity;
 
   if (
     lightBehavior.includes("bioluminescent") ||
@@ -19,12 +18,8 @@ export function renderChapterLighting(
     lightBehavior.includes("words")
   ) {
     const glow = ctx.createRadialGradient(
-      activeWordPosition.x,
-      activeWordPosition.y,
-      0,
-      activeWordPosition.x,
-      activeWordPosition.y,
-      canvas.height * 0.35,
+      activeWordPosition.x, activeWordPosition.y, 0,
+      activeWordPosition.x, activeWordPosition.y, canvas.height * 0.35,
     );
     glow.addColorStop(0, `rgba(140,160,200,${0.12 + intensity * 0.1})`);
     glow.addColorStop(1, "rgba(0,0,0,0)");
@@ -62,12 +57,8 @@ export function renderChapterLighting(
     lightBehavior.includes("luminescen")
   ) {
     const desperateGlow = ctx.createRadialGradient(
-      activeWordPosition.x,
-      activeWordPosition.y,
-      0,
-      activeWordPosition.x,
-      activeWordPosition.y,
-      canvas.height * 0.5,
+      activeWordPosition.x, activeWordPosition.y, 0,
+      activeWordPosition.x, activeWordPosition.y, canvas.height * 0.5,
     );
     desperateGlow.addColorStop(0, `rgba(200,220,255,${0.15 + beatIntensity * 0.1})`);
     desperateGlow.addColorStop(1, "rgba(0,0,0,0)");
@@ -84,4 +75,17 @@ export function renderChapterLighting(
     ctx.fillStyle = `rgba(255,255,255,${(beatIntensity - 0.85) * 0.6})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
+}
+
+/** @deprecated Use renderSectionLighting */
+export function renderChapterLighting(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  chapter: RenderSection,
+  activeWordPosition: { x: number; y: number },
+  songProgress: number,
+  beatIntensity: number,
+  currentTime: number,
+): void {
+  return renderSectionLighting(ctx, canvas, chapter, activeWordPosition, songProgress, beatIntensity, currentTime);
 }

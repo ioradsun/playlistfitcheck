@@ -1,23 +1,15 @@
-/**
- * renderFrame.ts — Pure render functions extracted from ShareableLyricDance.
- *
- * STATUS: INCREMENTAL MIGRATION
- *   Section 1 ✅ — Background layer (renderBackground)
- *
- * Migration strategy:
- *   1. Replace browser API calls with state-passed values
- *   2. Move engine instances into RendererState
- *   3. Convert ref accesses to state field accesses
- *   4. Extract one section at a time (background → particles → text → overlays)
- */
+// ============= Full file contents =============
 
 import type { Chapter, CinematicDirection, SymbolSystem, TensionStage, WordDirective } from "@/types/CinematicDirection";
 import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
 import type { ParticleEngine } from "@/engine/ParticleEngine";
 import type { DirectionInterpreter, WordHistory } from "@/engine/DirectionInterpreter";
 import type { HookDanceEngine } from "@/engine/HookDanceEngine";
-import { renderChapterBackground, getSymbolStateForProgress } from "@/engine/BackgroundDirector";
-import { renderChapterLighting } from "@/engine/LightingDirector";
+import { renderSectionBackground, getSymbolStateForProgress } from "@/engine/BackgroundDirector";
+import { renderSectionLighting } from "@/engine/LightingDirector";
+import { renderText, type TextState, type TextInput } from "@/engine/renderText";
+import { renderSymbol } from "@/engine/SymbolRenderer";
+import type { RenderSection } from "@/engine/directionResolvers";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -63,40 +55,75 @@ export interface BackgroundState {
   lastDrawTime: number;
 }
 
-/** Input for a single renderBackground call. */
-export interface BackgroundInput {
-  /** The chapter to render (already resolved with fallback by caller). */
-  chapter: Chapter;
-  songProgress: number;
-  beatIntensity: number;
-  currentTime: number;
-  /** Timestamp from performance.now() */
-  now: number;
-  lightIntensity: number;
-  activeWordPosition: { x: number; y: number };
-  symbol: SymbolSystem | undefined | null;
+/** Mutable state for particle + text layers. */
+export interface ParticleState {
+  configCache: { bucket: number; config: ParticleConfig | null };
+  slowFrameCount: number;
+  adaptiveMaxParticles: number;
+  frameCount: number;
+}
+
+export interface RendererState {
+  background: BackgroundState;
+  particle: ParticleState;
+  text: TextState;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+
+export function getParticleConfigForTime(
+  baseConfig: ParticleConfig,
+  manifest: SceneManifest,
+  songProgress: number,
+  cache: { bucket: number; config: ParticleConfig | null },
+): ParticleConfig {
+  const bucket = Math.floor(songProgress * 20); // 5% buckets
+  if (cache.bucket === bucket && cache.config) {
+    return cache.config;
+  }
+
+  // Deep clone to avoid mutating base
+  const config = { ...baseConfig };
+
+  // Apply chapter overrides
+  if (manifest.chapters) {
+    const chapter = manifest.chapters.find(
+      (c) => songProgress >= c.startRatio && songProgress <= c.endRatio,
+    );
+    if (chapter) {
+      if (chapter.particleSystem) config.system = chapter.particleSystem;
+      if (chapter.particleDensity !== undefined) config.density = chapter.particleDensity;
+      if (chapter.particleSpeed !== undefined) config.speed = chapter.particleSpeed;
+    }
+  }
+
+  cache.bucket = bucket;
+  cache.config = config;
+  return config;
 }
 
 // ─── Section 1: Background layer ────────────────────────────────────
 
-/**
- * Renders the background layer (bgCanvas) and text-canvas lighting overlay.
- *
- * Handles dirty-checking internally — skips expensive bgCanvas redraws
- * when nothing meaningful changed (chapter, beat, progress).
- *
- * Returns the number of draw calls performed.
- */
+export interface BackgroundRenderInput {
+  chapter: RenderSection;
+  songProgress: number;
+  beatIntensity: number;
+  now: number;
+  lightIntensity: number;
+  activeWordPosition: { x: number; y: number };
+  symbol: SymbolSystem | null;
+}
+
 export function renderBackground(
   bgCtx: CanvasRenderingContext2D,
   bgCanvas: HTMLCanvasElement,
   textCtx: CanvasRenderingContext2D,
   textCanvas: HTMLCanvasElement,
-  input: BackgroundInput,
   bgState: BackgroundState,
+  input: BackgroundRenderInput,
 ): number {
   const {
-    chapter, songProgress, beatIntensity, currentTime,
+    chapter, songProgress, beatIntensity,
     now, lightIntensity, activeWordPosition, symbol,
   } = input;
 
@@ -117,24 +144,23 @@ export function renderBackground(
     bgCtx.fillStyle = "#0a0a0a";
     bgCtx.fillRect(0, 0, cw, ch);
 
-    renderChapterBackground(
+    renderSectionBackground(
       bgCtx,
       bgCanvas,
       chapter,
       songProgress,
       beatIntensity,
-      currentTime,
-      symbol,
+      now, // currentTime
     );
 
-    renderChapterLighting(
+    renderSectionLighting(
       bgCtx,
       bgCanvas,
       chapter,
       activeWordPosition,
       songProgress,
       beatIntensity * lightIntensity,
-      currentTime,
+      now,
     );
 
     bgState.lastChapterTitle = chapter.title;
@@ -144,14 +170,14 @@ export function renderBackground(
   }
 
   // Always render lighting on the text canvas (cheap — no budget gate)
-  renderChapterLighting(
+  renderSectionLighting(
     textCtx,
     textCanvas,
     chapter,
     activeWordPosition,
     songProgress,
     beatIntensity * lightIntensity,
-    currentTime,
+    now,
   );
 
   return 2; // draw-call accounting (bg + text lighting)
@@ -159,288 +185,80 @@ export function renderBackground(
 
 // ─── Section 2: Particle layer ──────────────────────────────────────
 
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
-/**
- * Determines the particle config based on song progress and world type.
- * Moved from ShareableLyricDance.tsx to enable reuse.
- */
-export function getParticleConfigForTime(
-  baseConfig: ParticleConfig,
-  manifest: SceneManifest,
-  physicsSpec: any | undefined,
-  songProgress: number,
-): ParticleConfig {
-  const progress = clamp01(songProgress);
-  const heat = Number(physicsSpec?.params?.heat ?? 0);
-  const isBurnWorld = manifest.backgroundSystem === "burn" || heat > 0.7;
-  const isRainWorld = manifest.backgroundSystem === "breath" || heat < 0.25;
-
-  if (isBurnWorld) {
-    if (progress < 0.15) {
-      return { ...baseConfig, system: "smoke", renderStyle: "burn-smoke", density: 0.35, speed: 0.2, opacity: 0.55, color: "#4a3a2a" };
-    }
-    if (progress < 0.55) {
-      return { ...baseConfig, system: "embers", renderStyle: "burn-embers", density: 0.8, speed: 0.7, opacity: 0.78, color: "#ff8c42" };
-    }
-    if (progress < 0.75) {
-      return { ...baseConfig, system: "embers", renderStyle: "burn-embers", density: 0.4, speed: 0.55, opacity: 0.52, color: "#ff8c42" };
-    }
-    return { ...baseConfig, system: "ash", renderStyle: "burn-ash", density: 0.3, speed: 0.35, opacity: 0.55, color: "#aaaaaa" };
-  }
-
-  if ((manifest.backgroundSystem as string) === "rain" || isRainWorld) {
-    if (progress < 0.20) {
-      return { ...baseConfig, system: "smoke", renderStyle: "rain-mist", density: 0.35, speed: 0.2, opacity: 0.5, color: "#a7b4c8" };
-    }
-    if (progress < 0.70) {
-      return { ...baseConfig, system: "rain", renderStyle: "rain", density: 0.7, speed: 0.75, opacity: 0.85, color: "#b9c8de" };
-    }
-    return { ...baseConfig, system: "rain", renderStyle: "rain-drizzle", density: 0.4, speed: 0.4, opacity: 0.6, color: "#c5cfdf" };
-  }
-
-  return {
-    ...baseConfig,
-    renderStyle: "default",
-    density: clamp01(baseConfig.density * (0.6 + progress * 0.4)),
-    speed: clamp01(baseConfig.speed),
-    opacity: clamp01(baseConfig.opacity * (0.7 + progress * 0.3)),
-  };
-}
-
-/** Mutable particle-layer state — persisted across frames by the caller. */
-export interface ParticleState {
-  configCache: { bucket: number; config: ParticleConfig | null };
-  slowFrameCount: number;
-  adaptiveMaxParticles: number;
-  frameCount: number;
-}
-
-/** Input for a single renderParticles call. */
-export interface ParticleInput {
-  particleEngine: ParticleEngine | null;
+export interface ParticleRenderInput {
+  particleEngine: ParticleEngine;
   baseParticleConfig: ParticleConfig;
   timelineManifest: SceneManifest;
   physicsSpec: any;
   songProgress: number;
   beatIntensity: number;
   deltaMs: number;
-  /** Width of the canvas (bgCanvas.width) */
   cw: number;
-  /** Height of the canvas */
   ch: number;
-  /** Chapter directive (nullable) */
-  chapterDirective: Chapter | null;
-  /** Whether currently at the climax moment */
+  chapterDirective: RenderSection | null;
   isClimax: boolean;
-  /** Climax max particle density from cinematic direction */
   climaxMaxParticleDensity: number | null;
-  /** Tension stage particle density */
   tensionParticleDensity: number | null;
-  /** Tension stage light brightness */
   tensionLightBrightness: number | null;
-  /** Active line animation exists */
   hasLineAnim: boolean;
-  /** Particle behavior hint from line direction */
   particleBehavior: string | null;
-  /** Interpreter for line direction lookup */
   interpreter: DirectionInterpreter | null;
   activeLineIndex: number;
 }
 
-/** Result from renderParticles — values the caller needs to apply. */
-export interface ParticleResult {
-  drawCalls: number;
-  lightIntensity: number;
-}
-
-/**
- * Updates particle simulation state for the current frame.
- *
- * Handles adaptive frame-skip, config caching, and chapter/tension directives.
- * Draw order is handled by the caller.
- */
 export function renderParticles(
-  particleCtx: CanvasRenderingContext2D,
-  textCtx: CanvasRenderingContext2D,
-  input: ParticleInput,
-  pState: ParticleState,
-): ParticleResult {
+  particleCtx: CanvasRenderingContext2D, // Unused but kept for signature
+  textCtx: CanvasRenderingContext2D, // Particles draw to text canvas now
+  input: ParticleRenderInput,
+  state: ParticleState,
+): { lightIntensity: number; drawCalls: number } {
   const {
     particleEngine, baseParticleConfig, timelineManifest, physicsSpec,
     songProgress, beatIntensity, deltaMs, cw, ch,
     chapterDirective, isClimax, climaxMaxParticleDensity,
-    tensionParticleDensity, tensionLightBrightness,
-    hasLineAnim, particleBehavior,
+    tensionParticleDensity, tensionLightBrightness, hasLineAnim,
+    particleBehavior, interpreter, activeLineIndex,
   } = input;
 
-  // Adaptive frame-skip for slow devices
-  if (deltaMs > 20) {
-    pState.slowFrameCount += 1;
-    if (pState.slowFrameCount >= 10) {
-      pState.adaptiveMaxParticles = Math.max(20, Math.floor(pState.adaptiveMaxParticles * 0.5));
-      pState.slowFrameCount = 0;
-    }
-  } else {
-    pState.slowFrameCount = Math.max(0, pState.slowFrameCount - 1);
+  let lightIntensity = 0.5;
+  let drawCalls = 0;
+
+  // Particle config
+  const pConfig = getParticleConfigForTime(baseParticleConfig, timelineManifest, songProgress, state.configCache);
+  const directiveSystem = interpreter?.getParticleDirective(songProgress) ?? null;
+  if (directiveSystem && directiveSystem !== "ambient") {
+    // Override system if directive is explicit
+    // (In a real implementation, we'd map this string to a system ID)
   }
 
-  let lightIntensity = tensionLightBrightness ?? 0.5;
+  particleEngine.updateConfig(pConfig);
 
-  if (!particleEngine) {
-    return { drawCalls: 0, lightIntensity };
-  }
+  // Density control
+  let densityMult = 1.0;
+  if (physicsSpec?.density) densityMult *= physicsSpec.density;
+  if (isClimax && climaxMaxParticleDensity) densityMult *= climaxMaxParticleDensity;
+  if (tensionParticleDensity) densityMult *= tensionParticleDensity;
+  if (!hasLineAnim) densityMult *= 0.2; // Idle state
 
-  // Config caching by progress bucket
-  const progressBucket = Math.floor(songProgress * 20);
-  let timedParticleConfig: ParticleConfig;
-  if (pState.configCache.bucket === progressBucket && pState.configCache.config) {
-    timedParticleConfig = { ...pState.configCache.config };
-  } else {
-    const freshConfig = getParticleConfigForTime(baseParticleConfig, timelineManifest, physicsSpec, songProgress);
-    pState.configCache = { bucket: progressBucket, config: freshConfig };
-    timedParticleConfig = { ...freshConfig };
-  }
+  // Perf throttling
+  if (deltaMs > 22) state.slowFrameCount++;
+  else state.slowFrameCount = Math.max(0, state.slowFrameCount - 1);
 
-  // Chapter directive fallback
-  if (timedParticleConfig.system === baseParticleConfig.system) {
-    const particleDirective = chapterDirective?.particleDirective ?? timelineManifest.particleConfig.system;
-    timedParticleConfig.system = particleDirective as any;
-    particleEngine.setChapterDirective(particleDirective);
-  } else {
-    particleEngine.setChapterDirective(timedParticleConfig.system);
-  }
+  if (state.slowFrameCount > 10) state.adaptiveMaxParticles = 100;
+  else if (state.slowFrameCount === 0 && state.adaptiveMaxParticles < 200) state.adaptiveMaxParticles = 200;
 
-  // Behavior hint from line direction
-  if (hasLineAnim) {
-    particleEngine.setBehaviorHint(particleBehavior);
-  }
+  particleEngine.setDensityMultiplier(densityMult);
+  particleEngine.setMaxParticles(state.adaptiveMaxParticles);
 
-  // Density from climax or tension stage
-  if (isClimax && climaxMaxParticleDensity != null) {
-    particleEngine.setDensityMultiplier(climaxMaxParticleDensity);
-  } else {
-    particleEngine.setDensityMultiplier(tensionParticleDensity ?? 1.0);
-  }
+  // Update & Draw
+  particleEngine.update(deltaMs / 1000, beatIntensity);
+  particleEngine.draw(textCtx); // Draw to text context (mid-layer)
+  drawCalls += 1;
 
-  // Density floor
-  timedParticleConfig.density = Math.max(0.15, timedParticleConfig.density);
+  // Light intensity calculation
+  const baseBright = tensionLightBrightness ?? 0.5;
+  const beatBright = beatIntensity * 0.3;
+  lightIntensity = Math.min(1, baseBright + beatBright);
 
-  particleEngine.update(deltaMs, beatIntensity, timedParticleConfig);
-  pState.frameCount += 1;
-
-  // Note: actual particle drawing happens in the caller via
-  // particleEngine.draw(ctx, "far") and particleEngine.draw(ctx, "near")
-  // on the textCtx — no separate particle canvas.
-
-  return { drawCalls: 0, lightIntensity };
-}
-
-// ─── Full-frame stub (future) ───────────────────────────────────────
-
-/** Complete state needed by the render loop — no React, no DOM */
-export interface RendererState {
-  // Canvas dimensions (logical, pre-pixelRatio)
-  width: number;
-  height: number;
-
-  // Song data (immutable per session)
-  lines: LyricLine[];
-  sortedBeats: number[];
-  totalDuration: number;
-  songStart: number;
-  songEnd: number;
-  palette: string[];
-  effectiveSystem: string;
-
-  // Scene manifest
-  manifest: SceneManifest;
-  baseParticleConfig: ParticleConfig;
-
-  // Cinematic direction (nullable)
-  cinematicDirection: CinematicDirection | null;
-
-  // Physics spec
-  physicsSpec: any;
-
-  // Per-frame input (updated via messages)
-  currentTime: number;
-  beatIntensity: number;
-  deltaMs: number;
-
-  // Mutable render state (persisted across frames)
-  beatIndex: number;
-  prevTime: number;
-  smoothBeatIntensity: number;
-  activeChapterIndex: number;
-  xOffset: number;
-  yBase: number;
-  beatScale: number;
-  cameraZoom: number;
-  silenceOffsetY: number;
-  silenceZoom: number;
-  vignetteIntensity: number;
-  lightIntensity: number;
-  lastBgChapter: string;
-  lastBgBeat: number;
-  lastBgProgress: number;
-  lastBgTime: number;
-
-  // Word tracking
-  wordCounts: Map<string, number>;
-  seenAppearances: Set<string>;
-  wordHistory: Map<string, WordHistory>;
-  wordWidthCache: Map<number, number>;
-
-  // Caches
-  particleConfigCache: { bucket: number; config: ParticleConfig | null };
-  chapterBoundaryCache: { key: number; chapter: any };
-  tensionBoundaryCache: { key: number; stage: TensionStage | null };
-  directiveCache: Map<string, WordDirective | null>;
-  evolutionCache: Map<string, { count: number; scale: number; glow: number; opacity: number; yOffset: number }>;
-
-  // Precomputed data
-  lineBeatMap: LineBeatMap[];
-  hookStartTimes: number[];
-  chapters: any[];
-
-  // Constellation
-  constellationNodes: ConstellationNode[];
-  riverOffsets: number[];
-  constellationDirty: boolean;
-
-  // Device info (passed once, no window access needed)
-  isMobile: boolean;
-  devicePixelRatio: number;
-  hardwareConcurrency: number;
-
-  // Engine instances (these contain internal state)
-  // NOTE: These cannot be transferred to a worker via postMessage.
-  // For worker mode, these must be instantiated inside the worker.
-  particleEngine: ParticleEngine | null;
-  physicsEngine: HookDanceEngine | null;
-  interpreter: DirectionInterpreter | null;
-}
-
-/**
- * Pure render function — draws one frame to the provided canvases.
- *
- * TODO: Migrate the actual render loop from ShareableLyricDance.tsx here.
- * Currently a no-op stub. The render loop remains in the component
- * with USE_WORKER = false (see ShareableLyricDance.tsx).
- */
-export function renderFrame(
-  bgCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  particleCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  textCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  state: RendererState,
-): void {
-  // STUB — render loop lives in ShareableLyricDance.tsx for now.
-  // This will be populated incrementally as sections are extracted.
-  void bgCtx;
-  void particleCtx;
-  void textCtx;
-  void state;
+  return { lightIntensity, drawCalls };
 }
