@@ -1,34 +1,52 @@
 /**
  * CinematicDirection — unified type supporting both:
- * - OLD format (thesis, visualWorld, chapters, tensionCurve, etc.)
- * - NEW format (sceneTone, atmosphere, motion, sections, wordDirectives as array)
+ * - NEW format (sceneTone, sections, wordDirectives as array, storyboard)
+ * - OLD format fields (kept as optional for backward compat during migration)
  *
- * The normalizeCinematicDirection() adapter converts new → old at ingestion time.
- * All fields below are optional to support both formats.
+ * New consumers should use directionResolvers.ts utilities.
+ * Old fields will be removed once all consumers are migrated.
  */
 
+// ── Primary new-schema fields ────────────────────────────────
+
 export interface CinematicDirection {
-  // ── NEW backend fields (v2 prompt) ─────────────────────────
+  // New backend fields (v2 prompt)
   sceneTone?: string;
   atmosphere?: string;
   motion?: string;
   typography?: string;
   texture?: string;
   emotionalArc?: string;
+  palette?: string;
   sections?: CinematicSection[];
 
-  // ── OLD engine fields (synthesized by normalizer) ──────────
+  // WordDirectives: new format = array, old format = Record
+  // Consumers should use directionResolvers.buildWordDirectiveMap() for lookup
+  wordDirectives?: WordDirective[] | Record<string, WordDirective>;
+
+  // Storyboard: new format = StoryboardEntry[], old = LineDirection[]
+  storyboard?: StoryboardEntry[] | LineDirection[];
+
+  // ── Legacy fields (deprecated — use resolvers instead) ─────
+  /** @deprecated Use emotionalArc + resolvers */
   thesis?: string;
+  /** @deprecated Use resolvers: resolveTypography(), resolveMotionPhysics() */
   visualWorld?: VisualWorld;
+  /** @deprecated Use sections + enrichSections() */
   chapters?: Chapter[];
-  wordDirectives?: Record<string, WordDirective>;
-  storyboard?: LineDirection[];
-  silenceDirective?: SilenceDirective;
-  climax?: ClimaxDirective;
-  ending?: EndingDirective;
-  symbolSystem?: SymbolSystem;
-  cameraLanguage?: CameraLanguage;
+  /** @deprecated Use emotionalArc + deriveTensionCurve() */
   tensionCurve?: TensionStage[];
+  /** @deprecated Use emotionalArc + deriveClimaxRatio() */
+  climax?: ClimaxDirective;
+  /** @deprecated */
+  ending?: EndingDirective;
+  /** @deprecated */
+  symbolSystem?: SymbolSystem;
+  /** @deprecated */
+  cameraLanguage?: CameraLanguage;
+  /** @deprecated */
+  silenceDirective?: SilenceDirective;
+  /** @deprecated */
   shotProgression?: ShotType[];
 }
 
@@ -42,9 +60,65 @@ export interface CinematicSection {
   texture?: string;
   typography?: string;
   atmosphere?: string;
+  /** Computed by enrichSections() */
+  startRatio?: number;
+  /** Computed by enrichSections() */
+  endRatio?: number;
 }
 
-// ── Old sub-types (kept for engine compatibility) ────────────
+export interface StoryboardEntry {
+  lineIndex: number;
+  text?: string;
+  heroWord?: string;
+  entryStyle?: string;
+  exitStyle?: string;
+  emotionalIntent?: string;
+  visualTreatment?: string;
+  particleBehavior?: string;
+  beatAlignment?: string;
+  transitionToNext?: string;
+}
+
+// ── Word directive (supports both v1 and v2 fields) ──────────
+
+export interface WordDirective {
+  word: string;
+  emphasisLevel: number;
+  // v2 fields
+  entry?: string | null;
+  behavior?: string | null;
+  exit?: string | null;
+  trail?: string | null;
+  ghostTrail?: boolean;
+  ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial' | null;
+  letterSequence?: boolean;
+  visualMetaphor?: string | null;
+  // v1 legacy fields
+  kineticClass?:
+    | 'RUNNING' | 'FALLING' | 'SPINNING' | 'FLOATING' | 'SHAKING' | 'RISING'
+    | 'BREAKING' | 'HIDING' | 'NEGATION' | 'CRYING' | 'SCREAMING' | 'WHISPERING'
+    | 'IMPACT' | 'TENDER' | 'STILL' | null;
+  elementalClass?:
+    | 'FIRE' | 'ICE' | 'RAIN' | 'SMOKE' | 'ELECTRIC' | 'NEON' | null;
+  colorOverride?: string | null;
+  specialEffect?: string | null;
+  evolutionRule?: string | null;
+}
+
+// ── Tension stage (used by deriveTensionCurve) ───────────────
+
+export interface TensionStage {
+  stage: 'Setup' | 'Build' | 'Peak' | 'Release';
+  startRatio: number;
+  endRatio: number;
+  motionIntensity: number;
+  particleDensity: number;
+  lightBrightness: number;
+  cameraMovement: string;
+  typographyAggression: number;
+}
+
+// ── Legacy sub-types (kept for backward compat) ──────────────
 
 export interface SymbolSystem {
   primary: string;
@@ -66,17 +140,6 @@ export interface CameraLanguage {
     distance: string;
     movement: string;
   }[];
-}
-
-export interface TensionStage {
-  stage: 'Setup' | 'Build' | 'Peak' | 'Release';
-  startRatio: number;
-  endRatio: number;
-  motionIntensity: number;
-  particleDensity: number;
-  lightBrightness: number;
-  cameraMovement: string;
-  typographyAggression: number;
 }
 
 export interface ShotType {
@@ -126,7 +189,6 @@ export interface Chapter {
   backgroundDirective: string;
   emotionalIntensity: number;
   typographyShift: string | null;
-  // New section overrides (optional)
   motion?: string;
   texture?: string;
   typography?: string;
@@ -135,28 +197,6 @@ export interface Chapter {
   sectionIndex?: number;
   description?: string;
   mood?: string;
-}
-
-export interface WordDirective {
-  word: string;
-  kineticClass:
-    | 'RUNNING' | 'FALLING' | 'SPINNING' | 'FLOATING' | 'SHAKING' | 'RISING'
-    | 'BREAKING' | 'HIDING' | 'NEGATION' | 'CRYING' | 'SCREAMING' | 'WHISPERING'
-    | 'IMPACT' | 'TENDER' | 'STILL' | null;
-  elementalClass:
-    | 'FIRE' | 'ICE' | 'RAIN' | 'SMOKE' | 'ELECTRIC' | 'NEON' | null;
-  emphasisLevel: number;
-  colorOverride: string | null;
-  specialEffect: string | null;
-  evolutionRule: string | null;
-  entry?: string | null;
-  behavior?: string | null;
-  exit?: string | null;
-  trail?: string | null;
-  ghostTrail?: boolean;
-  ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial' | null;
-  letterSequence?: boolean;
-  visualMetaphor?: string | null;
 }
 
 export interface LineDirection {
