@@ -253,6 +253,13 @@ export function SongFitFeed() {
     return () => window.removeEventListener("crowdfit:post-created", handler);
   }, []);
 
+  // Listen for dance-published events to refresh feed
+  useEffect(() => {
+    const handler = () => fetchPosts();
+    window.addEventListener("songfit:dance-published", handler);
+    return () => window.removeEventListener("songfit:dance-published", handler);
+  }, [fetchPosts]);
+
   // Floating anchor: show when composer is unlocked and user scrolled > 300px
   // The actual scroll container for CrowdFit is #songfit-scroll-container in Index.tsx
   useEffect(() => {
