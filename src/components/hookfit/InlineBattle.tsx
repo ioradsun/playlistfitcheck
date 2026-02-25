@@ -163,6 +163,14 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   // Parent is responsible for setting it correctly for all modes.
   const prevActiveRef = useRef<"a" | "b" | null>(null);
 
+  // Enforce mute state on EVERY render, not just when activePlaying changes.
+  // This closes the race where engine.resume() calls audio.play() before
+  // the activePlaying useEffect runs.
+  const audioA = hookACanvas.audioRef.current;
+  const audioB = hookBCanvas.audioRef.current;
+  if (audioA) audioA.muted = activePlaying !== "a";
+  if (audioB) audioB.muted = activePlaying !== "b";
+
   useEffect(() => {
     const audioA = hookACanvas.audioRef.current;
     const audioB = hookBCanvas.audioRef.current;
@@ -178,9 +186,13 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       audioA.pause();
     }
 
+    // When nothing is active, pause both sides
+    if (!activePlaying) {
+      if (audioA && !audioA.paused) audioA.pause();
+      if (audioB && !audioB.paused) audioB.pause();
+    }
+
     // Restart the newly activated side (only when it changes)
-    // NOTE: on mobile, restart triggered from useEffect won't satisfy autoplay policy.
-    // The synchronous restart from handleTileTapLocal covers that case.
     if (activePlaying && activePlaying !== prevActiveRef.current) {
       if (activePlaying === "a") hookACanvas.restart();
       if (activePlaying === "b") hookBCanvas.restart();
