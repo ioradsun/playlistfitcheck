@@ -162,8 +162,8 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden bg-black cursor-pointer"
-      style={{ aspectRatio: "16/9" }}
+      className="relative w-full overflow-hidden bg-black cursor-pointer rounded-xl"
+      style={{ minHeight: 352, height: 352 }}
       onClick={openFullPage}
     >
       {/* Canvases */}
