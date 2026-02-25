@@ -105,7 +105,7 @@ const initWorker = async (payload: InitMessage["payload"]) => {
   });
 
   workerScope.postMessage({ type: "BAKING", progress: 0 });
-  timeline = bakeScene(scenePayload, (progress) => {
+  timeline = bakeScene({ ...scenePayload, viewportW: width, viewportH: height }, (progress) => {
     workerScope.postMessage({ type: "BAKING", progress });
   });
 

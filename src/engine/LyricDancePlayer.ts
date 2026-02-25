@@ -1914,6 +1914,8 @@ export class LyricDancePlayer {
     const payload = {
       lines,
       words: this.data.words ?? [],
+      viewportW: this.width,
+      viewportH: this.height,
       bpm: this.data.beat_grid?.bpm ?? null,
       beat_grid: this.data.beat_grid,
       physics_spec: this.data.physics_spec,
