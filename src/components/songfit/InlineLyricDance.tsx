@@ -24,13 +24,13 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   const [error, setError] = useState(false);
   const [muted, setMuted] = useState(true);
   const [started, setStarted] = useState(false);
-  const [fontsReady, setFontsReady] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const initRef = useRef(false);
+  const [isVisible, setIsVisible] = useState(false);
 
   // Fetch dance data
   useEffect(() => {
@@ -53,39 +53,44 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       });
   }, [lyricDanceId]);
 
-  // Load fonts
+  // Visibility-gated startup and playback
   useEffect(() => {
-    Promise.all([
-      document.fonts.load("400 16px Montserrat"),
-      document.fonts.load("700 16px Montserrat"),
-      document.fonts.load("800 16px Montserrat"),
-      document.fonts.load("900 16px Montserrat"),
-    ]).catch(() => {}).finally(() => setFontsReady(true));
-  }, []);
-
-  // Auto-start on visibility
-  useEffect(() => {
-    if (started || !data || !data.words?.length || !data.cinematic_direction) return;
+    if (!data || !data.words?.length || !data.cinematic_direction) return;
     const el = containerRef.current;
     if (!el) return;
 
+    let startTimer: ReturnType<typeof setTimeout> | null = null;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          setStarted(true);
-          observer.disconnect();
+        const visible = entry.isIntersecting && entry.intersectionRatio > 0.2;
+        setIsVisible(visible);
+
+        if (visible && !started && !startTimer) {
+          startTimer = setTimeout(() => {
+            setStarted(true);
+            startTimer = null;
+          }, 350);
+        }
+
+        if (!visible && startTimer) {
+          clearTimeout(startTimer);
+          startTimer = null;
         }
       },
-      { rootMargin: "200px" }
+      { threshold: [0, 0.2, 0.6], rootMargin: "180px" }
     );
     observer.observe(el);
-    return () => observer.disconnect();
+
+    return () => {
+      if (startTimer) clearTimeout(startTimer);
+      observer.disconnect();
+    };
   }, [data, started]);
 
   // Init player
   useEffect(() => {
     if (initRef.current) return;
-    if (!started || !fontsReady || !data || !data.words?.length || !data.cinematic_direction) return;
+    if (!started || !data || !data.words?.length || !data.cinematic_direction) return;
     if (!canvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
     initRef.current = true;
@@ -96,6 +101,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       canvasRef.current,
       textCanvasRef.current,
       containerRef.current as HTMLDivElement,
+      { bootMode: "minimal" },
     );
     playerRef.current = player;
 
@@ -112,6 +118,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         if (!destroyed) {
           player.audio.muted = true;
           player.play();
+          console.info("[InlineLyricDance boot]", player.getBootMetrics());
         }
       })
       .catch((err) => {
@@ -125,7 +132,18 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       playerRef.current = null;
       initRef.current = false;
     };
-  }, [started, fontsReady, data?.id, data?.words?.length, !!data?.cinematic_direction]);
+  }, [started, data?.id, data?.words?.length, !!data?.cinematic_direction]);
+
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player || !started) return;
+    if (isVisible) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }, [isVisible, started]);
 
   // Mute toggle
   useEffect(() => {
