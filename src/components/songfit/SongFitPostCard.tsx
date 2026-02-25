@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame, Film, Zap } from "lucide-react";
+import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame, Film } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { InlineLyricDance } from "./InlineLyricDance";
+import { InlineBattleFeed } from "./InlineBattleFeed";
 import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -277,15 +278,11 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             artistName={displayName}
           />
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
-          <a
-            href={post.lyric_dance_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-10 rounded-xl bg-secondary/50 border border-border/30 hover:border-primary/40 transition-colors"
-          >
-            <Zap size={16} className="text-primary" />
-            <span className="text-sm font-semibold tracking-wide uppercase text-foreground">Watch Hook Battle</span>
-          </a>
+          <InlineBattleFeed
+            battleUrl={post.lyric_dance_url}
+            songTitle={post.track_title}
+            artistName={displayName}
+          />
         ) : (
           <LazySpotifyEmbed
             trackId={post.spotify_track_id}
