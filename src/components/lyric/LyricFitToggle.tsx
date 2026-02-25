@@ -64,7 +64,7 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
 
   return (
     <div className="border-b border-border/40">
-      <div className="flex">
+      <div className="flex max-w-2xl mx-auto">
         <div className="flex-1 flex items-center justify-center">
           <button
             onClick={() => onViewChange("lyrics")}
