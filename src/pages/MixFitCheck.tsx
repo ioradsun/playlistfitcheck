@@ -96,10 +96,10 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     }
     const newId = crypto.randomUUID();
     setProjectId(newId);
-    onSavedId?.(newId);
     setTitle(t);
     setNotes(n);
     // Decode uploaded files
+    const decodedMixes: AudioMix[] = [];
     for (const file of files) {
       try {
         const { buffer, waveform } = await decodeFile(file);
@@ -114,19 +114,35 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         };
         // Cache file for session persistence
         sessionAudio.set("mix", `${newId}::${mixName}`, file);
-        setMixes((prev) => {
-          const updated = [...prev, newMix];
-          if (updated.filter((m) => m.buffer).length === 1) {
-            setMarkerEnd(waveform.duration);
-          }
-          return updated;
-        });
+        decodedMixes.push(newMix);
       } catch {
         toast.error(`Failed to decode ${file.name}`);
       }
     }
+    // Update mixes state
+    setMixes(decodedMixes);
+    if (decodedMixes.length > 0 && decodedMixes[0].waveform) {
+      setMarkerEnd(decodedMixes[0].waveform.duration);
+    }
+    // Immediately save to DB so sidebar picks it up
+    try {
+      await save({
+        id: newId,
+        title: t,
+        notes: n,
+        mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })),
+        markerStart: 0,
+        markerEnd: decodedMixes[0]?.waveform?.duration ?? 10,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      onProjectSaved?.();
+      onSavedId?.(newId);
+    } catch (e) {
+      console.error("Failed initial save for MixFit project:", e);
+    }
     await mixQuota.increment();
-  }, [decodeFile, mixQuota]);
+  }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId]);
 
   const handleLoadProject = useCallback(async (project: MixProjectData) => {
     stop();

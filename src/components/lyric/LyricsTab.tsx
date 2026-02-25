@@ -232,6 +232,7 @@ export function LyricsTab({
         if (projectId) {
           sessionAudio.set("lyric", projectId, file);
           onSavedId?.(projectId);
+          onProjectSaved?.();
         } else {
           sessionAudio.set("lyric", "__unsaved__", file);
         }
@@ -244,7 +245,7 @@ export function LyricsTab({
         setProgressOpen(false);
       }
     },
-    [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId],
+    [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId],
   );
 
   const handleBack = useCallback(() => {
