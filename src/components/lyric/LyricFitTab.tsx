@@ -145,6 +145,21 @@ export function LyricFitTab({
     setFitProgress(prev => Math.max(prev, 35));
   }, [detectedGrid, beatGrid]);
 
+  // Ensure audioBuffer is decoded when audioFile exists (e.g. loaded from DB)
+  // songSignature needs audioBuffer even if beatGrid was loaded from saved data
+  useEffect(() => {
+    if (audioBuffer || !audioFile || audioFile.size === 0) return;
+    let cancelled = false;
+    const ctx = new AudioContext();
+    audioFile.arrayBuffer().then((ab) =>
+      ctx.decodeAudioData(ab).then((buf) => {
+        if (!cancelled) setAudioBuffer(buf);
+        ctx.close();
+      })
+    ).catch(() => ctx.close());
+    return () => { cancelled = true; };
+  }, [audioFile, audioBuffer]);
+
   useEffect(() => {
     if (!audioBuffer || !beatGrid || songSignature) return;
     const lyricsText = timestampedLines.map((line) => line.text).join("\n");
@@ -362,7 +377,21 @@ export function LyricFitTab({
 
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
     if (!targetAudioFile || targetAudioFile.size === 0) return;
-    // Data-existence guard: if we already have beatGrid (e.g. loaded from DB), skip
+
+    // Always decode audioBuffer — songSignature needs it even if beatGrid is loaded from DB
+    if (!audioBuffer) {
+      try {
+        const ctx = new AudioContext();
+        const ab = await targetAudioFile.arrayBuffer();
+        const buf = await ctx.decodeAudioData(ab);
+        setAudioBuffer(buf);
+        ctx.close();
+      } catch {
+        console.warn("[Pipeline] AudioBuffer decode failed");
+      }
+    }
+
+    // Data-existence guard: if we already have beatGrid (e.g. loaded from DB), skip detection
     if (beatGrid) {
       setGenerationStatus(prev => prev.beatGrid === "done" ? prev : ({ ...prev, beatGrid: "done" }));
       return;
@@ -372,17 +401,7 @@ export function LyricFitTab({
     console.log("[Pipeline] Starting beat grid analysis");
     setGenerationStatus(prev => ({ ...prev, beatGrid: "running" }));
     setPipelineStages(prev => ({ ...prev, rhythm: "running" }));
-
-    try {
-      const ctx = new AudioContext();
-      const ab = await targetAudioFile.arrayBuffer();
-      const buf = await ctx.decodeAudioData(ab);
-      setAudioBuffer(buf);
-      ctx.close();
-    } catch {
-      setGenerationStatus(prev => ({ ...prev, beatGrid: "error" }));
-    }
-  }, [beatGrid, generationStatus.beatGrid]);
+  }, [beatGrid, generationStatus.beatGrid, audioBuffer]);
 
   const startSongDefaultsDerivation = useCallback(async () => {
     if (songDna) {
