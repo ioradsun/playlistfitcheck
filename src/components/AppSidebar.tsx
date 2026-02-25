@@ -349,7 +349,7 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
                 const effectivePath = tool.path;
                 const isActive = activeTab
                   ? activeTab === tool.value
-                  : location.pathname === effectivePath || location.pathname === tool.path;
+                  : location.pathname === effectivePath || location.pathname === tool.path || location.pathname.startsWith(tool.path + "/");
                 const recents = recentByType[tool.value] || [];
                 const hasSelectedChild = recents.some(item => location.pathname.includes(item.id));
 
