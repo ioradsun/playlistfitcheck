@@ -73,7 +73,7 @@ export interface RendererState {
 
 export function getParticleConfigForTime(
   baseConfig: ParticleConfig,
-  manifest: SceneManifest,
+  _manifest: SceneManifest,
   songProgress: number,
   cache: { bucket: number; config: ParticleConfig | null },
 ): ParticleConfig {
@@ -82,20 +82,8 @@ export function getParticleConfigForTime(
     return cache.config;
   }
 
-  // Deep clone to avoid mutating base
+  // Clone base config — section overrides are now handled by the interpreter
   const config = { ...baseConfig };
-
-  // Apply chapter overrides
-  if (manifest.chapters) {
-    const chapter = manifest.chapters.find(
-      (c) => songProgress >= c.startRatio && songProgress <= c.endRatio,
-    );
-    if (chapter) {
-      if (chapter.particleSystem) config.system = chapter.particleSystem;
-      if (chapter.particleDensity !== undefined) config.density = chapter.particleDensity;
-      if (chapter.particleSpeed !== undefined) config.speed = chapter.particleSpeed;
-    }
-  }
 
   cache.bucket = bucket;
   cache.config = config;
@@ -231,7 +219,7 @@ export function renderParticles(
     // (In a real implementation, we'd map this string to a system ID)
   }
 
-  particleEngine.updateConfig(pConfig);
+  particleEngine.setConfig(pConfig);
 
   // Density control
   let densityMult = 1.0;
@@ -248,7 +236,7 @@ export function renderParticles(
   else if (state.slowFrameCount === 0 && state.adaptiveMaxParticles < 200) state.adaptiveMaxParticles = 200;
 
   particleEngine.setDensityMultiplier(densityMult);
-  particleEngine.setMaxParticles(state.adaptiveMaxParticles);
+  // Max particles controlled internally by ParticleEngine based on hardware
 
   // Update & Draw
   particleEngine.update(deltaMs / 1000, beatIntensity);

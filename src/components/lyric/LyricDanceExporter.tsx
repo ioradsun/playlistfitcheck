@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { getBackgroundSystemForTime } from "@/engine/getBackgroundSystemForTime";
 import { ParticleEngine } from "@/engine/ParticleEngine";
+import { PhysicsIntegrator } from "@/engine/PhysicsIntegrator";
 import { DirectionInterpreter } from "@/engine/DirectionInterpreter";
 import { renderSectionBackground } from "@/engine/BackgroundDirector";
 import { renderSectionLighting } from "@/engine/LightingDirector";
@@ -11,10 +12,11 @@ import { renderText, type TextState, type TextInput } from "@/engine/renderText"
 import { renderSymbol } from "@/engine/SymbolRenderer";
 import { getParticleConfigForTime, renderParticles, type ParticleState } from "@/engine/renderFrame";
 import { animationResolver } from "@/engine/AnimationResolver";
-import type { CinematicDirection, Chapter, CinematicSection, WordDirective } from "@/types/CinematicDirection";
+import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
 import type { SceneManifest } from "@/engine/SceneManifest";
 import type { LyricLine } from "./LyricDisplay";
-import { ensureFullTensionCurve } from "@/engine/presetDerivation";
+import { getTypography, getParticles } from "@/engine/presetDerivation";
+import { enrichSections, resolveTypography } from "@/engine/directionResolvers";
 
 // ── Aspect ratio → canvas dimensions ────────────────────────────────────────
 
@@ -35,7 +37,7 @@ const ASPECT_OPTIONS = [
   { key: "16:9", label: "16:9", sub: "YouTube" },
 ];
 
-const FPS = 60; // Smooth 60fps video
+const FPS = 60;
 
 // Helpers
 function mulberry32(a: number) {
@@ -90,16 +92,38 @@ export function LyricDanceExporter({
   const cancelRef = useRef(false);
 
   const duration = songEnd - songStart;
-  const seed = sceneManifest?.seed || "default-seed";
+  // Derive seed from cinematic direction or fallback
+  const seed = cinematicDirection?.sceneTone ?? "default-seed";
 
   // Use base manifest with fallbacks
   const baseManifest: SceneManifest = sceneManifest ?? {
-    seed: "fallback",
-    systemType: "nebula",
+    world: "void",
+    coreEmotion: "neutral",
+    gravity: "normal",
+    tension: 0.5,
+    decay: "linger",
+    lightSource: "ambient",
     palette: ["#000", "#fff", "#888"],
-    particleConfig: { system: "stars", density: 0.5, speed: 0.5, size: [1, 3], opacity: [0.5, 1], direction: "up", beatReactive: true },
-    beatGrid: { bpm: 120, beats: [], confidence: 1 },
-    physicsSpec: { params: { heat: 0.5, tension: 0.5, velocity: 0.5 } }
+    contrastMode: "soft",
+    letterPersonality: "static",
+    stackBehavior: "centered",
+    beatResponse: "pulse",
+    lyricEntrance: "fades",
+    lyricExit: "fades",
+    backgroundSystem: "void",
+    backgroundIntensity: 0.3,
+    typographyProfile: {
+      fontFamily: "Montserrat",
+      fontWeight: 500,
+      letterSpacing: "0.02em",
+      textTransform: "none",
+      lineHeightMultiplier: 1.4,
+      hasSerif: false,
+      personality: "RAW TRANSCRIPT",
+    },
+    particleConfig: { system: "dust", density: 0.3, speed: 0.15, opacity: 0.2, color: "#fff", beatReactive: false, foreground: false },
+    songTitle: "",
+    generatedAt: Date.now(),
   };
 
   const startExport = async () => {
@@ -118,7 +142,6 @@ export function LyricDanceExporter({
     const ghostCanvas = ghostCanvasRef.current;
     const ghostCtx = ghostCanvas.getContext("2d")!;
 
-    // Setup resolution
     const [baseW, baseH] = ASPECT_BASE[aspectRatio];
     const scale = RESOLUTION_PRESETS[resolution].scale;
     const cw = Math.round(baseW * scale);
@@ -136,7 +159,6 @@ export function LyricDanceExporter({
       videoBitsPerSecond: resolution === "1080p" ? 8000000 : 4000000,
     });
 
-    // Audio setup
     const audioCtx = new AudioContext();
     const dest = audioCtx.createMediaStreamDestination();
     const videoStream = dest.stream;
@@ -150,9 +172,7 @@ export function LyricDanceExporter({
         const source = audioCtx.createMediaElementSource(audioEl);
         source.connect(dest);
         const tracks = videoStream.getAudioTracks();
-        if (tracks.length > 0) {
-          stream.addTrack(tracks[0]);
-        }
+        if (tracks.length > 0) stream.addTrack(tracks[0]);
       }
     } catch (e) {
       console.warn("Audio export setup failed:", e);
@@ -163,35 +183,33 @@ export function LyricDanceExporter({
       if (e.data.size > 0) chunks.push(e.data);
     };
 
-    // Initialize deterministic engine
     const integrator = new PhysicsIntegrator(spec);
     const rng = mulberry32(hashSeed(seed));
     const sortedBeats = [...beats].sort((a, b) => a.time - b.time);
     const effectivePalette = spec.palette || ["#ffffff", "#a855f7", "#ec4899"];
 
-    // ── Cinematic direction interpreter ──────────────────────────────
-    // Use new-schema compatible object
-    const normalizedCinematicDirection = cinematicDirection
-      ? cinematicDirection
-      : null;
+    // Resolve typography from cinematic direction via presetDerivation
+    const typoPreset = cinematicDirection?.typography ?? "clean-modern";
+    const resolvedTypo = getTypography(typoPreset);
 
-    // ── Particle engine ──────────────────────────────────────────────
+    // Particle engine
     let particleEngine: ParticleEngine | null = null;
     if (baseManifest.particleConfig?.system !== "none") {
       particleEngine = new ParticleEngine(baseManifest);
       particleEngine.setBounds({ x: 0, y: 0, w: cw, h: ch });
-      if (normalizedCinematicDirection?.visualWorld?.particleSystem) {
-        particleEngine.setSystem(normalizedCinematicDirection.visualWorld.particleSystem);
+      // Apply texture preset from cinematic direction
+      if (cinematicDirection?.texture) {
+        const pConfig = getParticles(cinematicDirection.texture);
+        particleEngine.setSystem(pConfig.system);
       }
       particleEngine.init(baseManifest.particleConfig, baseManifest);
     }
 
     let interpreter: DirectionInterpreter | null = null;
-    if (normalizedCinematicDirection) {
-      interpreter = new DirectionInterpreter(normalizedCinematicDirection, duration);
+    if (cinematicDirection) {
+      interpreter = new DirectionInterpreter(cinematicDirection, duration);
     }
 
-    // ── Mutable state for particle + text layers ────────────────────
     const particleState: ParticleState = {
       configCache: { bucket: -1, config: null },
       slowFrameCount: 0,
@@ -210,7 +228,6 @@ export function LyricDanceExporter({
       evolutionCache: new Map(),
     };
 
-    // Word width cache for export
     const wordWidthCache = new Map<string, number>();
     const getWordWidth = (word: string, fSize: number, fontFamily: string): number => {
       const key = `${word}:${fSize}:${fontFamily}`;
@@ -222,11 +239,7 @@ export function LyricDanceExporter({
     };
 
     if (audioEl) {
-      try {
-        await audioEl.play();
-      } catch (e) {
-        console.warn("Audio play failed:", e);
-      }
+      try { await audioEl.play(); } catch (e) { console.warn("Audio play failed:", e); }
     }
 
     mediaRecorder.start();
@@ -236,17 +249,11 @@ export function LyricDanceExporter({
     let frame = 0;
     let lightIntensity = 0.5;
 
-    // AI background (if available) - simplified for exporter
-    const bgImage = null; // To implement if needed
-
     const renderNextFrame = () => {
       if (cancelRef.current || frame >= totalFrames) {
         setStage("encoding");
         mediaRecorder.stop();
-        if (audioEl) {
-          audioEl.pause();
-          audioEl.src = "";
-        }
+        if (audioEl) { audioEl.pause(); audioEl.src = ""; }
         if (audioCtx) audioCtx.close();
         return;
       }
@@ -254,31 +261,19 @@ export function LyricDanceExporter({
       const currentTime = songStart + frame / FPS;
       const deltaMs = 1000 / FPS;
 
-      // Scan beats
-      while (
-        beatIndex < sortedBeats.length &&
-        sortedBeats[beatIndex].time <= currentTime
-      ) {
+      while (beatIndex < sortedBeats.length && sortedBeats[beatIndex].time <= currentTime) {
         const beat = sortedBeats[beatIndex];
-        if (beat.time > prevTime) {
-          integrator.onBeat(beat.strength, beat.isDownbeat);
-        }
+        if (beat.time > prevTime) integrator.onBeat(beat.strength, beat.isDownbeat);
         beatIndex++;
       }
 
       const state = integrator.tick();
       const songProgress = (currentTime - songStart) / Math.max(0.001, duration);
       const activeSystem = getBackgroundSystemForTime(baseManifest, songProgress, state.heat * 0.8);
-      const activeLine = lines.find(
-        (l) => currentTime >= l.start && currentTime < l.end,
-      );
+      const activeLine = lines.find((l) => currentTime >= l.start && currentTime < l.end);
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
-
-      // Beat intensity from physics
       const currentBeatIntensity = Math.max(state.glow, state.shake * 2, 0);
 
-      // ── Cinematic direction lookups ──────────────────────────────
-      // Use getRenderSection for drawing props (color, intensity, etc)
       const renderSection = interpreter?.getRenderSection(songProgress, effectivePalette) ?? {
         title: "default",
         emotionalIntensity: 0.5,
@@ -289,59 +284,21 @@ export function LyricDanceExporter({
         typographyShift: null,
       };
 
-      // Get actual section for layout/logic if needed
-      const currentSection = interpreter?.getCurrentSection(songProgress);
-
-      const tensionStage = interpreter?.getIntensity(songProgress) ?? 0.5; // Simplified tension
-      const shot = normalizedCinematicDirection
-        ? interpreter?.getLineDirection(activeLineIndex) // map to line direction
-        : null;
       const isClimax = interpreter?.isClimaxMoment(songProgress) ?? false;
-      // Symbol system removed - pass null
-      const symbol = null;
       const activeWordPosition = { x: cw / 2, y: ch / 2 };
 
-      // ── Draw frame ──
-
-      // Background
-      // Temporal ghosting: fade previous frame
+      // Draw frame
       ctx.drawImage(ghostCanvas, 0, 0);
       ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
       ctx.fillRect(0, 0, cw, ch);
 
-      // System background (procedural fallback)
-      // (Simplified drawSystemBackground call for exporter - can be expanded)
-
-      // Chapter background + lighting (cinematic direction)
       if (interpreter && renderSection) {
-        renderSectionBackground(
-          ctx,
-          canvas,
-          renderSection,
-          songProgress,
-          currentBeatIntensity,
-          currentTime,
-        );
-        renderSectionLighting(
-          ctx,
-          canvas,
-          renderSection,
-          activeWordPosition,
-          songProgress,
-          currentBeatIntensity * lightIntensity,
-          currentTime,
-        );
+        renderSectionBackground(ctx, canvas, renderSection, songProgress, currentBeatIntensity, currentTime);
+        renderSectionLighting(ctx, canvas, renderSection, activeWordPosition, songProgress, currentBeatIntensity * lightIntensity, currentTime);
       }
 
-      if (symbol) {
-        renderSymbol(ctx, symbol, songProgress, cw, ch);
-      }
-
-      // ── Particles ────────────────────────────────────────────────
       if (particleEngine) {
-        const lineDir = activeLine && interpreter
-          ? interpreter.getLineDirection(activeLineIndex)
-          : null;
+        const lineDir = activeLine && interpreter ? interpreter.getLineDirection(activeLineIndex) : null;
         const particleResult = renderParticles(
           particleCtx, ctx,
           {
@@ -355,9 +312,9 @@ export function LyricDanceExporter({
             cw, ch,
             chapterDirective: renderSection,
             isClimax,
-            climaxMaxParticleDensity: normalizedCinematicDirection?.climax?.maxParticleDensity ?? null,
-            tensionParticleDensity: null, // tensionStage?.particleDensity ?? null,
-            tensionLightBrightness: null, // tensionStage?.lightBrightness ?? null,
+            climaxMaxParticleDensity: null,
+            tensionParticleDensity: null,
+            tensionLightBrightness: null,
             hasLineAnim: !!activeLine,
             particleBehavior: lineDir?.particleBehavior ?? null,
             interpreter,
@@ -368,10 +325,8 @@ export function LyricDanceExporter({
         lightIntensity = particleResult.lightIntensity;
       }
 
-      // ── Text + word effects ─────────────────────────────────────
       if (activeLine) {
         const visibleLines = lines.filter(l => currentTime >= l.start && currentTime < l.end);
-
         const textResult = renderText(ctx, {
           lines,
           activeLine,
@@ -392,13 +347,13 @@ export function LyricDanceExporter({
             scale: 1, shake: 0, offsetX: 0, offsetY: 0, rotation: 0,
             blur: 0, glow: 0, isFractured: false, position: 0,
             velocity: 0, heat: 0, safeOffset: 0, shatter: 0,
-            wordOffsets: []
+            wordOffsets: [],
           },
           interpreter,
-          shot: null, // ShotType deprecated
-          tensionStage: null, // TensionStage deprecated
-          chapterDirective: null, // Legacy Chapter deprecated
-          cinematicDirection: normalizedCinematicDirection,
+          shot: null,
+          tensionStage: null,
+          chapterDirective: null,
+          cinematicDirection,
           isClimax,
           particleEngine: particleEngine ? { setDensityMultiplier: particleEngine.setDensityMultiplier.bind(particleEngine) } : null,
           rng,
@@ -412,7 +367,6 @@ export function LyricDanceExporter({
         activeWordPosition.y = textResult.activeWordPosition.y;
       }
 
-      // Draw ghost canvas for next frame
       ghostCtx.clearRect(0, 0, cw, ch);
       ghostCtx.drawImage(canvas, 0, 0);
 
@@ -483,40 +437,41 @@ export function LyricDanceExporter({
               ))}
             </div>
 
-            <Button className="w-full h-12 text-lg font-bold" onClick={startExport}>
-              Start Render
+            <Button onClick={startExport} className="w-full py-6 text-lg font-bold">
+              <Play className="w-5 h-5 mr-2" /> Start Export
             </Button>
           </div>
         ) : (
-          <div className="space-y-6 py-8 text-center">
-            <div className="relative w-24 h-24 mx-auto mb-4">
-              <div className="absolute inset-0 border-4 border-white/10 rounded-full"></div>
-              <div
-                className="absolute inset-0 border-4 border-primary rounded-full transition-all duration-300"
-                style={{ clipPath: `inset(0 0 ${100 - progress}% 0)` }}
-              ></div>
-              <div className="absolute inset-0 flex items-center justify-center font-mono font-bold text-2xl">
-                {Math.round(progress)}%
-              </div>
+          <div className="space-y-4">
+            <div className="text-center">
+              <p className="text-sm text-zinc-400 mb-2">
+                {stage === "rendering" ? "Rendering frames…" : "Encoding video…"}
+              </p>
+              <Progress value={progress} className="h-2" />
+              <p className="text-xs text-zinc-500 mt-1">{Math.round(progress)}%</p>
             </div>
-            <div>
-              <div className="text-white font-medium mb-1">
-                {stage === "rendering" ? "Rendering Frames..." : "Encoding Video..."}
-              </div>
-              <div className="text-sm text-zinc-500">
-                Please keep this tab open
-              </div>
-            </div>
+            <Button
+              variant="outline"
+              onClick={() => { cancelRef.current = true; setStage("idle"); }}
+              className="w-full"
+            >
+              Cancel
+            </Button>
           </div>
         )}
 
-        {/* Hidden canvases for rendering */}
-        <div className="hidden">
-          <canvas ref={canvasRef} />
-          <canvas ref={particleCanvasRef} />
-          <canvas ref={textCanvasRef} />
-          <canvas ref={ghostCanvasRef} />
-        </div>
+        {error && (
+          <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {/* Hidden canvases */}
+        <canvas ref={canvasRef} className="hidden" />
+        <canvas ref={particleCanvasRef} className="hidden" />
+        <canvas ref={textCanvasRef} className="hidden" />
+        <canvas ref={ghostCanvasRef} className="hidden" />
       </div>
     </div>
   );

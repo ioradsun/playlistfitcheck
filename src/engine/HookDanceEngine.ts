@@ -33,6 +33,7 @@ import {
   type PhysicsSpec,
   type PhysicsState,
 } from "./PhysicsIntegrator";
+export type { PhysicsState } from "./PhysicsIntegrator";
 import type { SceneManifest } from "./SceneManifest";
 
 export interface BeatTick {
