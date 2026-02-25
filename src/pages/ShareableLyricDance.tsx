@@ -194,7 +194,6 @@ export default function ShareableLyricDance() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [fontsReady, setFontsReady] = useState(false);
   const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -325,41 +324,19 @@ export default function ShareableLyricDance() {
       });
   }, [artistSlug, songSlug]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadFonts = async () => {
-      try {
-        await Promise.all([
-          document.fonts.load('700 16px "Montserrat"'),
-          document.fonts.load('400 16px "Space Mono"'),
-        ]);
-      } catch {
-        // continue with fallback fonts
-      } finally {
-        if (!cancelled) setFontsReady(true);
-      }
-    };
-
-    loadFonts();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // ── Player lifecycle (init ONCE) ─────────────────────────────────────
 
   const playerKey = data?.id;
 
   useEffect(() => {
     if (playerInitializedRef.current) return;
-    if (!fontsReady || !data || !data.words?.length || !data.cinematic_direction) return;
+    if (!data || !data.words?.length || !data.cinematic_direction) return;
     if (!bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
     playerInitializedRef.current = true;
     let destroyed = false;
     const container = containerRef.current;
-    const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, container);
+    const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, container, { bootMode: "minimal" });
     playerRef.current = player;
     setPlayerInstance(player);
 
@@ -376,7 +353,10 @@ export default function ShareableLyricDance() {
 
     player.init()
       .then(() => {
-        if (!destroyed) player.play();
+        if (!destroyed) {
+          player.play();
+          console.info("[LyricDance boot]", player.getBootMetrics());
+        }
       })
       .catch((err) => {
         console.error("LyricDancePlayer init failed:", err);
@@ -390,7 +370,7 @@ export default function ShareableLyricDance() {
       setPlayerInstance(null);
       playerInitializedRef.current = false;
     };
-  }, [playerKey, fontsReady, data?.words?.length, !!data?.cinematic_direction]);
+  }, [playerKey, data?.words?.length, !!data?.cinematic_direction]);
 
   // ── Hot-patch chapter images without restart ───────────────────────
   useEffect(() => {
@@ -496,7 +476,7 @@ export default function ShareableLyricDance() {
 
   // ── Loading / Not Found ─────────────────────────────────────────────
 
-  if (loading || !fontsReady) {
+  if (loading) {
     return (
       <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center z-50">
         <div className="text-center space-y-3">

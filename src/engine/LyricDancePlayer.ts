@@ -718,12 +718,26 @@ export class LyricDancePlayer {
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
+  private bootMode: "minimal" | "full" = "full";
+  private fullModeEnabled = false;
+  private perfMarks: {
+    tInitStart: number;
+    tFirstFrameDrawn: number | null;
+    tClockStart: number | null;
+    tFullModeEnabled: number | null;
+  } = {
+    tInitStart: 0,
+    tFirstFrameDrawn: null,
+    tClockStart: null,
+    tFullModeEnabled: null,
+  };
 
   constructor(
     data: LyricDanceData,
     bgCanvas: HTMLCanvasElement,
     textCanvas: HTMLCanvasElement,
     container: HTMLDivElement,
+    options?: { bootMode?: "minimal" | "full" },
   ) {
     // Invalidate cache if song changed (survives HMR)
     const sessionKey = `v12-${data.id}`;
@@ -735,12 +749,6 @@ export class LyricDancePlayer {
       globalBakeLock = false;
       globalHasCinematicDirection = false;
     }
-    // Always clear cache on construction — component gates on full data
-    globalBakePromise = null;
-    globalTimelineCache = null;
-    globalChunkCache = null;
-    globalBakeLock = false;
-    globalHasCinematicDirection = false;
     this.data = data;
     this.data = data;
     this.bgCanvas = bgCanvas;
@@ -759,20 +767,69 @@ export class LyricDancePlayer {
     this.audio.loop = true;
     this.audio.muted = true;
     this.audio.preload = "auto";
+    this.bootMode = options?.bootMode ?? "full";
   }
 
   // Compatibility with existing React shell
   async init(): Promise<void> {
-    await Promise.all([
-      document.fonts.load('400 16px Montserrat'),
-      document.fonts.load('700 16px Montserrat'),
-      document.fonts.load('800 16px Montserrat'),
-      document.fonts.load('900 16px Montserrat'),
-    ]).catch(() => { /* font preload best-effort */ });
+    this.perfMarks.tInitStart = performance.now();
+
+    if (this.bootMode === "full") {
+      await Promise.all([
+        document.fonts.load('400 16px Montserrat'),
+        document.fonts.load('700 16px Montserrat'),
+        document.fonts.load('800 16px Montserrat'),
+        document.fonts.load('900 16px Montserrat'),
+      ]).catch(() => { /* font preload best-effort */ });
+    }
 
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
     this.displayWidth = this.width;
     this.displayHeight = this.height;
+    this.drawMinimalFirstFrame();
+
+    if (this.bootMode === "minimal") {
+      this.startPlaybackClock();
+      this.scheduleFullModeUpgrade();
+      return;
+    }
+
+    await this.prepareFullMode();
+    this.startPlaybackClock();
+  }
+
+  private startPlaybackClock(): void {
+    if (this.destroyed) return;
+    this.perfMarks.tClockStart = this.perfMarks.tClockStart ?? performance.now();
+    this.audio.play().catch(() => {});
+    this.playing = true;
+    this.startHealthMonitor();
+    this.rafHandle = requestAnimationFrame(this.tick);
+  }
+
+  private scheduleFullModeUpgrade(): void {
+    const run = () => {
+      this.prepareFullMode().catch(() => {
+        // keep minimal mode alive on upgrade errors
+      });
+    };
+
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    window.setTimeout(() => {
+      if (idle) {
+        idle(run, { timeout: 1200 });
+      } else {
+        run();
+      }
+    }, 400);
+  }
+
+  private async prepareFullMode(): Promise<void> {
+    await this.ensureTimelineReady();
+    this.enableFullVisualMode();
+  }
+
+  private async ensureTimelineReady(): Promise<void> {
 
     // Cache exists but was baked without cinematic direction — invalidate before promise reuse
     if (globalTimelineCache && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
@@ -817,17 +874,55 @@ export class LyricDancePlayer {
     this.chunks = new Map(globalChunkCache!);
     this.songStartSec = globalSongStartSec;
     this.songEndSec = globalSongEndSec;
+    if (this.audio.currentTime <= 0) {
+      this.audio.currentTime = this.songStartSec;
+    }
+  }
+
+  private enableFullVisualMode(): void {
+    if (this.destroyed || this.fullModeEnabled) return;
     this.buildBgCache();
     this.deriveVisualSystems();
     this.buildChapterSims();
     this.buildEmotionalEvents();
-    await this.loadChapterImages();
+    this.loadChapterImages().catch(() => {
+      // image upgrade best-effort
+    });
+    this.fullModeEnabled = true;
+    this.perfMarks.tFullModeEnabled = performance.now();
+  }
 
-    this.audio.currentTime = this.songStartSec;
-    this.audio.play().catch(() => {});
-    this.playing = true;
-    this.startHealthMonitor();
-    this.rafHandle = requestAnimationFrame(this.tick);
+  private drawMinimalFirstFrame(): void {
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.clearRect(0, 0, this.width, this.height);
+    const bg = this.data.palette?.[0] ?? '#0b0b10';
+    const accent = this.data.palette?.[1] ?? '#2b2b45';
+    const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
+    gradient.addColorStop(0, bg);
+    gradient.addColorStop(1, accent);
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    const firstLine = this.data.lyrics?.[0]?.text?.trim() || 'Loading lyrics…';
+    this.ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.font = '700 32px "Montserrat", sans-serif';
+    this.ctx.fillText(firstLine, this.width / 2, this.height / 2);
+    this.perfMarks.tFirstFrameDrawn = this.perfMarks.tFirstFrameDrawn ?? performance.now();
+  }
+
+  getBootMetrics(): {
+    ttffMs: number | null;
+    startLatencyMs: number | null;
+    fullModeMs: number | null;
+  } {
+    const base = this.perfMarks.tInitStart;
+    return {
+      ttffMs: this.perfMarks.tFirstFrameDrawn ? Math.round(this.perfMarks.tFirstFrameDrawn - base) : null,
+      startLatencyMs: this.perfMarks.tClockStart ? Math.round(this.perfMarks.tClockStart - base) : null,
+      fullModeMs: this.perfMarks.tFullModeEnabled ? Math.round(this.perfMarks.tFullModeEnabled - base) : null,
+    };
   }
 
   // ────────────────────────────────────────────────────────────
