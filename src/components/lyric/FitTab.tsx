@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -215,7 +215,189 @@ export function FitTab({
     return () => onHeaderProject(null);
   }, [lyricData.title, audioFile.name, onHeaderProject, onBack]);
 
-  // ── Dance publish handler ─────────────────────────────────────────────
+// ── Cinematic Direction Card with Section Images ─────────────────────
+function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDirection: any; savedId: string | null }) {
+  const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const sections: any[] = cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
+    ? cinematicDirection.sections
+    : [];
+
+  // Check for existing images when we have a published dance
+  useEffect(() => {
+    if (!savedId) return;
+    // Look up the shareable_lyric_dances by saved lyric id to find section_images
+    supabase
+      .from("shareable_lyric_dances" as any)
+      .select("id, section_images")
+      .or(`song_slug.neq.placeholder`)
+      .limit(20)
+      .then(({ data }: any) => {
+        // We don't have direct lyric→dance mapping, so skip auto-load for now
+      });
+  }, [savedId]);
+
+  const handleGenerateImages = useCallback(async () => {
+    if (generating || !sections.length) return;
+    // We need a published dance to generate images — look for it
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) {
+      toast.error("Sign in to generate images");
+      return;
+    }
+
+    // Find the most recent dance for this user
+    const { data: dances }: any = await supabase
+      .from("shareable_lyric_dances" as any)
+      .select("id, section_images")
+      .eq("user_id", userData.user.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (!dances?.[0]) {
+      toast.error("Publish a Dance first to generate section images");
+      return;
+    }
+
+    const danceId = dances[0].id;
+
+    // Check cached
+    if (dances[0].section_images && Array.isArray(dances[0].section_images) && dances[0].section_images.length > 0) {
+      setSectionImages(dances[0].section_images);
+      return;
+    }
+
+    setGenerating(true);
+    setGenProgress({ done: 0, total: sections.length });
+
+    try {
+      const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
+        body: { lyric_dance_id: danceId, force: true },
+      });
+
+      if (error) throw error;
+
+      const urls = result?.urls || result?.section_images || [];
+      setSectionImages(urls);
+      setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
+      toast.success(`Generated ${urls.filter(Boolean).length}/${sections.length} section images`);
+    } catch (e: any) {
+      console.error("[SectionImages] Error:", e);
+      toast.error(e?.message || "Failed to generate section images");
+    } finally {
+      setGenerating(false);
+    }
+  }, [generating, sections]);
+
+  return (
+    <div className="glass-card rounded-xl p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+          <Eye size={10} />
+          Cinematic Direction
+        </div>
+        {sections.length > 0 && (
+          <button
+            onClick={handleGenerateImages}
+            disabled={generating}
+            className="flex items-center gap-1 text-[9px] font-mono text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+          >
+            {generating ? (
+              <>
+                <Loader2 size={9} className="animate-spin" />
+                {genProgress ? `${genProgress.done}/${genProgress.total}` : "Generating…"}
+              </>
+            ) : sectionImages.length > 0 ? (
+              <>
+                <Image size={9} />
+                Regenerate Images
+              </>
+            ) : (
+              <>
+                <Image size={9} />
+                Generate Images
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Song defaults */}
+      <div className="flex flex-wrap gap-1">
+        {cinematicDirection.sceneTone && (
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.sceneTone}</span>
+        )}
+        {cinematicDirection.atmosphere && (
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.atmosphere}</span>
+        )}
+        {cinematicDirection.motion && (
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.motion}</span>
+        )}
+        {cinematicDirection.typography && (
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.typography}</span>
+        )}
+        {cinematicDirection.texture && (
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.texture}</span>
+        )}
+        {cinematicDirection.emotionalArc && (
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">{cinematicDirection.emotionalArc}</span>
+        )}
+      </div>
+
+      {/* All sections with descriptions + image status */}
+      {sections.length > 0 && (
+        <div className="space-y-2">
+          <span className="text-[9px] font-mono text-muted-foreground/60 uppercase">Sections · {sections.length}</span>
+          {sections.map((s: any, i: number) => {
+            const imgUrl = sectionImages[i] ?? null;
+            return (
+              <div key={i} className="space-y-0.5">
+                <div className="flex items-start gap-2">
+                  <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap">§{s.sectionIndex ?? i}</span>
+                  <p className="text-[10px] text-muted-foreground leading-tight flex-1">{s.description || s.mood || "No description"}</p>
+                  {generating && !imgUrl && (
+                    <Loader2 size={9} className="animate-spin text-muted-foreground/50 shrink-0 mt-0.5" />
+                  )}
+                  {imgUrl && (
+                    <a
+                      href={imgUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-0.5 text-[8px] font-mono text-primary hover:text-primary/80 shrink-0 mt-0.5"
+                    >
+                      <ExternalLink size={8} />
+                      View
+                    </a>
+                  )}
+                </div>
+                {imgUrl && (
+                  <div className="ml-6">
+                    <a href={imgUrl} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={imgUrl}
+                        alt={`Section ${s.sectionIndex ?? i} background`}
+                        className="w-full max-w-[200px] h-auto rounded border border-border/30 opacity-80 hover:opacity-100 transition-opacity"
+                        loading="lazy"
+                      />
+                    </a>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {cinematicDirection.storyboard && Array.isArray(cinematicDirection.storyboard) && (
+        <p className="text-[9px] text-muted-foreground/60">{cinematicDirection.storyboard.length} storyboard frames · {(cinematicDirection.wordDirectives?.length ?? 0)} word directives</p>
+      )}
+    </div>
+  );
+}
+
+
   const handleDance = useCallback(async () => {
     console.log("[FitTab] handleDance called", { user: !!user, sceneManifest: !!sceneManifest, lyricData: !!lyricData, audioFile: !!audioFile, publishing });
     if (!user) { toast.error("Sign in to publish your Dance"); return; }
@@ -713,53 +895,7 @@ export function FitTab({
               )}
 
               {cinematicDirection && (
-                <div className="glass-card rounded-xl p-3 space-y-2">
-                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                    <Eye size={10} />
-                    Cinematic Direction
-                  </div>
-
-                  {/* Song defaults */}
-                  <div className="flex flex-wrap gap-1">
-                    {cinematicDirection.sceneTone && (
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.sceneTone}</span>
-                    )}
-                    {cinematicDirection.atmosphere && (
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.atmosphere}</span>
-                    )}
-                    {cinematicDirection.motion && (
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.motion}</span>
-                    )}
-                    {cinematicDirection.typography && (
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.typography}</span>
-                    )}
-                    {cinematicDirection.texture && (
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{cinematicDirection.texture}</span>
-                    )}
-                    {cinematicDirection.emotionalArc && (
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">{cinematicDirection.emotionalArc}</span>
-                    )}
-                  </div>
-
-                  {/* Sections */}
-                  {cinematicDirection.sections && Array.isArray(cinematicDirection.sections) && cinematicDirection.sections.length > 0 && (
-                    <div className="space-y-1">
-                      {cinematicDirection.sections.slice(0, 4).map((s: any, i: number) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap">§{s.sectionIndex ?? i}</span>
-                          <p className="text-[10px] text-muted-foreground leading-tight">{s.description || s.mood || ""}</p>
-                        </div>
-                      ))}
-                      {cinematicDirection.sections.length > 4 && (
-                        <p className="text-[9px] text-muted-foreground/50">+{cinematicDirection.sections.length - 4} more sections</p>
-                      )}
-                    </div>
-                  )}
-
-                  {cinematicDirection.storyboard && Array.isArray(cinematicDirection.storyboard) && (
-                    <p className="text-[9px] text-muted-foreground/60">{cinematicDirection.storyboard.length} storyboard frames · {(cinematicDirection.wordDirectives?.length ?? 0)} word directives</p>
-                  )}
-                </div>
+                <CinematicDirectionCard cinematicDirection={cinematicDirection} savedId={savedId} />
               )}
 
               {beatGrid && (
