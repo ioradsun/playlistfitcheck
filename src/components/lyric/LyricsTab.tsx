@@ -125,6 +125,8 @@ export function LyricsTab({
         );
         return;
       }
+      const t0 = performance.now();
+      console.log(`[LyricUpload] START file="${file.name}" size=${(file.size / 1024 / 1024).toFixed(2)}MB`);
       setLoading(true);
       setProgressFileName(file.name);
       setProgressStage("compressing");
@@ -139,7 +141,9 @@ export function LyricsTab({
         if (file.size > MAX_RAW_UPLOAD_BYTES) {
           setProgressStage("compressing");
           try {
+            const ct0 = performance.now();
             uploadFile = await compressAudioFile(file);
+            console.log(`[LyricUpload] COMPRESS done in ${(performance.now() - ct0).toFixed(0)}ms => ${(uploadFile.size / 1024 / 1024).toFixed(2)}MB`);
           } catch (compErr) {
             toast.error(compErr instanceof Error ? compErr.message : "Compression failed");
             setLoading(false);
@@ -147,11 +151,13 @@ export function LyricsTab({
             return;
           }
         } else {
+          console.log(`[LyricUpload] SKIP compress (under 25MB)`);
           uploadFile = file;
         }
 
         // Run all stage timers as one continuous sequence — don't wait for fetch
         setProgressStage("uploading");
+        console.log(`[LyricUpload] FETCH START (elapsed ${(performance.now() - t0).toFixed(0)}ms)`);
         const allTimers: ReturnType<typeof setTimeout>[] = [];
         allTimers.push(setTimeout(() => setProgressStage("buffering"), 3000));
         allTimers.push(setTimeout(() => setProgressStage("transmitting"), 6000));
@@ -184,6 +190,7 @@ export function LyricsTab({
           },
         );
 
+        console.log(`[LyricUpload] FETCH DONE (elapsed ${(performance.now() - t0).toFixed(0)}ms) status=${response.status}`);
         allTimers.forEach(clearTimeout);
 
         if (!response.ok) {
@@ -250,7 +257,7 @@ export function LyricsTab({
         console.error("Transcription error:", e);
         toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");
       } finally {
-        console.log("[LyricsTab] Closing progress modal");
+        console.log(`[LyricUpload] CLOSING progress modal (total ${(performance.now() - t0).toFixed(0)}ms)`);
         setLoading(false);
         setProgressOpen(false);
       }
