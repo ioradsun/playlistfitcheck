@@ -1478,23 +1478,25 @@ export class LyricDancePlayer {
     if (frame.particles?.length) {
       const ambientPal = this.getResolvedPalette();
       for (const p of frame.particles) {
-        this.ctx.globalAlpha = p.alpha;
+        const drawAlpha = p.alpha * 0.4;
+        const drawSize = p.size * 0.5;
+        this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = ambientPal[3];
         if (p.shape === 'line') {
-          this.ctx.fillRect(p.x * this.width, p.y * this.height, Math.max(1, p.size * 0.6), Math.max(2, p.size * 4));
+          this.ctx.fillRect(p.x * this.width, p.y * this.height, Math.max(1, drawSize * 0.6), Math.max(2, drawSize * 4));
         } else if (p.shape === 'diamond') {
           const x = p.x * this.width;
           const y = p.y * this.height;
           this.ctx.beginPath();
-          this.ctx.moveTo(x, y - p.size);
-          this.ctx.lineTo(x + p.size, y);
-          this.ctx.lineTo(x, y + p.size);
-          this.ctx.lineTo(x - p.size, y);
+          this.ctx.moveTo(x, y - drawSize);
+          this.ctx.lineTo(x + drawSize, y);
+          this.ctx.lineTo(x, y + drawSize);
+          this.ctx.lineTo(x - drawSize, y);
           this.ctx.closePath();
           this.ctx.fill();
         } else {
           this.ctx.beginPath();
-          this.ctx.arc(p.x * this.width, p.y * this.height, p.size, 0, Math.PI * 2);
+          this.ctx.arc(p.x * this.width, p.y * this.height, drawSize, 0, Math.PI * 2);
           this.ctx.fill();
         }
       }
