@@ -193,9 +193,26 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         </div>
       )}
 
-      {/* Controls overlay */}
+      {/* Title overlay top-left */}
       {started && (
-        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between p-2 z-10"
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="text-[10px] font-mono text-white/60 uppercase tracking-wider bg-black/40 backdrop-blur-sm rounded px-1.5 py-0.5">
+            {songTitle}
+          </span>
+          <button
+            onClick={openFullPage}
+            className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
+          >
+            <Maximize2 size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Bottom controls */}
+      {started && (
+        <div className="absolute bottom-0 left-0 p-2 z-10"
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -204,18 +221,6 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
           >
             {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </button>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">
-              {songTitle}
-            </span>
-            <button
-              onClick={openFullPage}
-              className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
-            >
-              <Maximize2 size={14} />
-            </button>
-          </div>
         </div>
       )}
     </div>
