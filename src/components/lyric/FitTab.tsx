@@ -17,6 +17,7 @@ import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
+import type { AudioSection } from "@/engine/sectionDetector";
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus } from "./LyricFitTab";
 
@@ -57,6 +58,7 @@ interface Props {
   bgImageUrl: string | null;
   setBgImageUrl: (u: string | null) => void;
   generationStatus: GenerationStatus;
+  audioSections?: AudioSection[];
   words?: Array<{ word: string; start: number; end: number }> | null;
   onRetry?: () => void;
   onHeaderProject?: HeaderProjectSetter;
@@ -81,6 +83,7 @@ export function FitTab({
   bgImageUrl,
   setBgImageUrl,
   generationStatus,
+  audioSections,
   words,
   onRetry,
   onHeaderProject,
@@ -531,7 +534,11 @@ export function FitTab({
   const physicsSpec = songDna?.physicsSpec;
   const meaning = songDna?.meaning;
 
-
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   return (
     <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
@@ -765,6 +772,35 @@ export function FitTab({
                     <span className="text-sm font-semibold text-foreground">{beatGrid.bpm.toFixed(0)} BPM</span>
                     <span className="text-[10px] text-muted-foreground">{Math.round((beatGrid.confidence ?? 0) * 100)}% confidence</span>
                     <span className="text-[10px] text-muted-foreground">{beatGrid.beats?.length ?? 0} beats</span>
+                  </div>
+                </div>
+              )}
+
+              {audioSections && audioSections.length > 0 && (
+                <div className="glass-card rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    <Zap size={10} />
+                    Sections · {audioSections.length}
+                  </div>
+                  <div className="space-y-1.5">
+                    {audioSections.map((s) => (
+                      <div key={s.index} className="flex items-start gap-2">
+                        <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap w-16 shrink-0">
+                          {formatTime(s.startSec)}–{formatTime(s.endSec)}
+                        </span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">
+                          {s.role}
+                        </span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="w-12 h-1.5 rounded-full bg-secondary overflow-hidden shrink-0" title={`Energy: ${Math.round(s.avgEnergy * 100)}%`}>
+                            <div className="h-full rounded-full bg-primary/60" style={{ width: `${Math.round(s.avgEnergy * 100)}%` }} />
+                          </div>
+                          <span className="text-[8px] text-muted-foreground/60 truncate">
+                            {s.spectralCharacter} · {s.beatDensity.toFixed(1)}b/s
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
