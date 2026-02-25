@@ -523,7 +523,7 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
       setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
 
-      // ── Auto-post to CrowdFit (fire-and-forget) ──────────────
+      // ── Auto-post to CrowdFit + generate section images (fire-and-forget) ──
       (async () => {
         try {
           const { data: danceRow }: any = await supabase
@@ -535,6 +535,15 @@ function CinematicDirectionCard({ cinematicDirection, savedId }: { cinematicDire
 
           if (!danceRow?.id) return;
           const danceId = danceRow.id;
+
+          // Generate section images
+          supabase.functions.invoke("generate-section-images", {
+            body: { lyric_dance_id: danceId, force: true },
+          }).then(({ data: imgResult }) => {
+            console.log("[FitTab] Section images generated:", imgResult?.generated ?? 0);
+          }).catch((e: any) => {
+            console.warn("[FitTab] Section images failed (non-blocking):", e?.message);
+          });
 
           const { data: existing }: any = await supabase
             .from("songfit_posts" as any)
