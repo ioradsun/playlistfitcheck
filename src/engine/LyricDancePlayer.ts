@@ -1830,6 +1830,9 @@ export class LyricDancePlayer {
 
     // Word-local particle emitters — render behind text
     this.drawWordEmitters(performance.now() / 1000);
+    // Cleanup expired word emitters
+    const nowCleanup = performance.now() / 1000;
+    this.wordEmitters = this.wordEmitters.filter(e => (nowCleanup - e.startTime) < e.duration);
 
     // Ambient particles — runtime system updates per section
     this.ambientParticleEngine?.draw(this.ctx, "far");
