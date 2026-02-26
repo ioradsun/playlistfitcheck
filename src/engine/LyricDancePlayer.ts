@@ -701,6 +701,7 @@ export class LyricDancePlayer {
   private currentSimCanvases: HTMLCanvasElement[] = [];
   private chapterImages: HTMLImageElement[] = [];
   private chapterImageLuminance = new WeakMap<HTMLImageElement, number>();
+  private _prevImgIdx = -1;
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
