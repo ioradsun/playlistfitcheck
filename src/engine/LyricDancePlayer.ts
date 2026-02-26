@@ -1650,10 +1650,12 @@ export class LyricDancePlayer {
       lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
       lineIntent: currentChapter?.emotionalArc ?? "—",
       wordDirectiveWord: activeWordDirective?.word ?? activeWordClean ?? "—",
-      wordDirectiveKinetic: activeWordDirective?.entry ?? activeWordDirective?.kineticClass ?? "—",
-      wordDirectiveElemental: activeWordDirective?.exit ?? activeWordDirective?.elementalClass ?? "—",
+      wordDirectiveBehavior: activeWordDirective?.behavior ?? "—",
+      wordDirectiveEntry: activeWordDirective?.entry ?? "—",
       wordDirectiveEmphasis: activeWordDirective?.emphasisLevel ?? 0,
-      wordDirectiveEvolution: activeWordDirective?.behavior ?? activeWordDirective?.evolution ?? "—",
+      wordDirectiveExit: activeWordDirective?.exit ?? "—",
+      wordDirectiveGhostTrail: activeWordDirective?.ghostTrail ?? false,
+      wordDirectiveGhostDir: activeWordDirective?.ghostDirection ?? "—",
 
       // Section boundaries
       ...(() => {
