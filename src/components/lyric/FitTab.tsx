@@ -623,6 +623,12 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
     if (!renderData?.hook || !renderData?.secondHook || !audioFile || !lyricData) return;
     setBattlePublishing(true);
 
+    const BATTLE_TIMEOUT = 30_000;
+    const timeoutId = setTimeout(() => {
+      toast.error("Battle publish timed out — please try again");
+      setBattlePublishing(false);
+    }, BATTLE_TIMEOUT);
+
     try {
       const { data: profile } = await supabase
         .from("profiles")
@@ -658,8 +664,10 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
         .eq("hook_slug", hookSlug)
         .maybeSingle();
 
-      let audioUrl = existingHook?.audio_url as string | undefined;
-      if (!audioUrl) {
+      let audioUrl: string;
+      if (existingHook?.audio_url) {
+        audioUrl = existingHook.audio_url;
+      } else {
         const fileExt = audioFile.name.split(".").pop() || "webm";
         const storagePath = `${user.id}/${artistSlug}/${songSlug}/${hookSlug}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
@@ -677,7 +685,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       const palette = pSpec.palette || ["#ffffff", "#a855f7", "#ec4899"];
       const system = pSpec.system || "fracture";
 
-      // Helper to build hook payload
+      // Helper to build hook payload — all values explicitly non-undefined
       const buildHookPayload = (h: any, slug: string, position: number, label: string | null) => {
         const hookLines = lyricData.lines.filter(l => l.start < h.end && l.end > h.start);
         const lastLine = hookLines[hookLines.length - 1];
@@ -688,7 +696,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
           song_slug: songSlug,
           hook_slug: slug,
           artist_name: displayName,
-          song_name: lyricData.title,
+          song_name: lyricData.title || "Untitled",
           hook_phrase: hookPhrase,
           artist_dna: null,
           motion_profile_spec: pSpec,
@@ -785,6 +793,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       console.error("Battle publish error:", e);
       toast.error(e.message || "Failed to publish battle");
     } finally {
+      clearTimeout(timeoutId);
       setBattlePublishing(false);
     }
   }, [user, battlePublishing, renderData, audioFile, lyricData, beatGrid]);
