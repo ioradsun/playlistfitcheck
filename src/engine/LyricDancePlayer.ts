@@ -3488,37 +3488,36 @@ export class LyricDancePlayer {
           break;
         }
         case 'memory-orbs': {
-          const count = 8;
+          const count = 10;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
-            const angle = seed * Math.PI * 2 + elapsed * 0.3;
-            const dist = progress * 60 * (0.5 + seed) * pScale;
+            const angle = seed * Math.PI * 2 + elapsed * 0.25;
+            const dist = progress * 55 * (0.5 + seed) * pScale;
             const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist - elapsed * 8 * pScale;
-            const radius = (5 + seed * 5) * pScale;
+            const py = em.y + Math.sin(angle) * dist - elapsed * 6 * pScale;
+            const radius = (4 + seed * 4) * pScale;
 
             this.ctx.save();
-            this.ctx.globalAlpha = fadeAlpha * 0.65;
-            this.ctx.shadowColor = em.color;
-            this.ctx.shadowBlur = radius * 3;
+            this.ctx.globalAlpha = fadeAlpha * 0.3;
 
             const grad = this.ctx.createRadialGradient(px, py, 0, px, py, radius);
-            grad.addColorStop(0, em.color + '40');
-            grad.addColorStop(0.6, em.color + '15');
+            grad.addColorStop(0, em.color + '18');
+            grad.addColorStop(0.5, em.color + '08');
             grad.addColorStop(1, 'transparent');
             this.ctx.fillStyle = grad;
             this.ctx.beginPath();
             this.ctx.arc(px, py, radius, 0, Math.PI * 2);
             this.ctx.fill();
 
+            // Thin wispy ring
             this.ctx.strokeStyle = em.color;
-            this.ctx.lineWidth = 1.5 * pScale;
+            this.ctx.lineWidth = (0.5 + (1 - progress) * 0.5) * pScale;
+            this.ctx.globalAlpha = fadeAlpha * 0.2;
             this.ctx.beginPath();
-            this.ctx.arc(px, py, radius * 0.7, 0, Math.PI * 2);
+            this.ctx.arc(px, py, radius * 0.6, 0, Math.PI * 2);
             this.ctx.stroke();
             this.ctx.restore();
           }
-          this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
           break;
         }
