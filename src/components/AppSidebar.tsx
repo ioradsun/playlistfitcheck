@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useSiteCopy } from "@/hooks/useSiteCopy";
+import { useSiteCopySelector } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTrailblazer } from "@/hooks/useTrailblazer";
@@ -94,8 +94,17 @@ export interface AppSidebarProps {
 export { TOOLS };
 
 export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey, optimisticItem }: AppSidebarProps) {
-  const siteCopy = useSiteCopy();
-  const isHookMode = siteCopy.features?.crowdfit_mode === "hook_review";
+  const sidebarCopy = useSiteCopySelector((c) => ({
+    brand: c.sidebar.brand,
+    story_link: c.sidebar.story_link,
+    tools_order: c.features?.tools_order,
+    tools_enabled: c.features?.tools_enabled,
+    crowdfit_mode: c.features?.crowdfit_mode,
+    toolLabels: Object.fromEntries(
+      Object.entries(c.tools).map(([k, v]) => [k, v.label])
+    ),
+  }));
+  const isHookMode = sidebarCopy.crowdfit_mode === "hook_review";
   const { user, loading: authLoading, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -400,10 +409,10 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   const initials = (profile?.display_name ?? user?.email ?? "?")
     .split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
-  const recentByType = TOOLS.reduce((acc, tool) => {
+  const recentByType = useMemo(() => TOOLS.reduce((acc, tool) => {
     acc[tool.value] = recentItems.filter(i => i.type === tool.value);
     return acc;
-  }, {} as Record<string, RecentItem[]>);
+  }, {} as Record<string, RecentItem[]>), [recentItems]);
 
   return (
     <Sidebar collapsible="offcanvas">
@@ -411,7 +420,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
         <div className="flex items-center justify-between px-2 py-1">
           <div className="flex items-center gap-2">
             <Music size={18} className="text-primary shrink-0" />
-            <span className="font-mono text-sm font-bold text-primary">{siteCopy.sidebar.brand}</span>
+            <span className="font-mono text-sm font-bold text-primary">{sidebarCopy.brand}</span>
           </div>
         </div>
         {!authLoading && !user && (
@@ -434,13 +443,13 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
           <SidebarGroupContent>
             <SidebarMenu>
               {([
-                ...((siteCopy.features?.tools_order ?? []).filter((key) => TOOLS.some((tool) => tool.value === key))),
-                ...TOOLS.map((tool) => tool.value).filter((key) => !(siteCopy.features?.tools_order ?? []).includes(key)),
+                ...((sidebarCopy.tools_order ?? []).filter((key) => TOOLS.some((tool) => tool.value === key))),
+                ...TOOLS.map((tool) => tool.value).filter((key) => !(sidebarCopy.tools_order ?? []).includes(key)),
               ])
                 .map(key => TOOLS.find(t => t.value === key))
                 .filter((tool): tool is typeof TOOLS[number] => {
                   if (!tool) return false;
-                  const enabled = siteCopy.features?.tools_enabled?.[tool.value];
+                  const enabled = sidebarCopy.tools_enabled?.[tool.value];
                   return enabled === undefined || enabled === true;
                 }).map((tool) => {
                 const effectivePath = tool.path;
@@ -454,10 +463,10 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                   <SidebarMenuItem key={tool.value}>
                     <SidebarMenuButton
                       isActive={isActive && !hasSelectedChild}
-                      tooltip={siteCopy.tools[tool.value]?.label || tool.label}
+                      tooltip={sidebarCopy.toolLabels[tool.value] || tool.label}
                       onClick={() => handleToolClick(tool)}
                     >
-                      <span>{siteCopy.tools[tool.value]?.label || tool.label}</span>
+                      <span>{sidebarCopy.toolLabels[tool.value] || tool.label}</span>
                     </SidebarMenuButton>
 
                     {isActive && recents.length > 0 && (
@@ -618,11 +627,11 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip={siteCopy.sidebar.story_link}
+                  tooltip={sidebarCopy.story_link}
                   isActive={location.pathname === "/about"}
                   onClick={() => { navigate("/about"); closeMobileIfNeeded(); }}
                 >
-                  <span>{siteCopy.sidebar.story_link}</span>
+                  <span>{sidebarCopy.story_link}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>

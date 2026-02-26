@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 // Default copy (fallback if DB not loaded yet)
@@ -139,6 +139,34 @@ export function SiteCopyProvider({ children }: { children: ReactNode }) {
 
 export function useSiteCopy() {
   return useContext(SiteCopyContext);
+}
+
+/**
+ * Selector hook — returns a memoized slice of SiteCopy so consumers
+ * only re-render when the selected slice actually changes (shallow compare).
+ */
+export function useSiteCopySelector<T>(selector: (copy: SiteCopy) => T): T {
+  const copy = useContext(SiteCopyContext);
+  const selected = selector(copy);
+  const ref = useRef(selected);
+
+  if (!shallowEqual(ref.current, selected)) {
+    ref.current = selected;
+  }
+
+  return ref.current;
+}
+
+function shallowEqual(a: any, b: any): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (!Object.is(a[key], b[key])) return false;
+  }
+  return true;
 }
 
 // Deep merge helper
