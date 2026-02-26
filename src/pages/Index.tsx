@@ -250,8 +250,25 @@ const Index = () => {
   const [songFitAnalysis, setSongFitAnalysis] = useState<SongFitAnalysis | null>(null);
   const [songFitLoading, setSongFitLoading] = useState(false);
   const savedSearchIdRef = useRef<string | null>(null);
-  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
-  const refreshSidebar = useCallback(() => setSidebarRefreshKey(k => k + 1), []);
+  // Throttled sidebar refresh — dispatches a window event at most once per 10s.
+  // This preserves the AppSidebar memo boundary (no prop changes).
+  const lastRefreshRef = useRef(0);
+  const pendingRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshSidebar = useCallback(() => {
+    const now = Date.now();
+    const elapsed = now - lastRefreshRef.current;
+    const THROTTLE_MS = 10_000;
+    if (elapsed >= THROTTLE_MS) {
+      lastRefreshRef.current = now;
+      window.dispatchEvent(new Event("sidebar-refresh"));
+    } else if (!pendingRefreshRef.current) {
+      pendingRefreshRef.current = setTimeout(() => {
+        lastRefreshRef.current = Date.now();
+        pendingRefreshRef.current = null;
+        window.dispatchEvent(new Event("sidebar-refresh"));
+      }, THROTTLE_MS - elapsed);
+    }
+  }, []);
   const [deferSidebarReady, setDeferSidebarReady] = useState(false);
   const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
   // Tracks when we're loading a project from URL/sidebar — shows skeleton instead of uploader
@@ -341,7 +358,14 @@ const Index = () => {
       if (inserted) {
         savedSearchIdRef.current = inserted.id;
         navigate(`/PlaylistFit/${inserted.id}`, { replace: true });
-        refreshSidebar();
+        // Optimistic update — inject into sidebar immediately, no refetch needed
+        setOptimisticSidebarItem({
+          id: inserted.id,
+          label: data.playlistName || "Playlist Analysis",
+          meta: "just now",
+          type: "playlist",
+          rawData: { playlist_url: (data as any).playlistUrl, song_url: songUrl },
+        });
       }
     } catch (e) {
       console.error("Failed to save search:", e);
@@ -387,6 +411,8 @@ const Index = () => {
       blended_label: songFitAnalysis?.blendedLabel ?? null,
     }).eq("id", savedSearchIdRef.current).then(() => {
       savedSearchIdRef.current = null;
+      // Data updated in DB — sidebar already has the item via optimistic insert.
+      // Schedule a background refresh so the metadata (scores, labels) eventually sync.
       refreshSidebar();
     });
   }, [isFullyLoaded, result, vibeAnalysis, songFitAnalysis, refreshSidebar]);
@@ -478,7 +504,10 @@ const Index = () => {
       setOptimisticSidebarItem(null);
       setProfitLoadKey(k => k + 1);
       setVibeFitLoadKey(k => k + 1);
-      setSidebarRefreshKey(k => k + 1);
+      // Force immediate sidebar refresh on logout (bypass throttle)
+      lastRefreshRef.current = 0;
+      if (pendingRefreshRef.current) { clearTimeout(pendingRefreshRef.current); pendingRefreshRef.current = null; }
+      window.dispatchEvent(new Event("sidebar-refresh"));
       setHeaderProject(null);
       // Clear all cached audio on logout
       sessionAudio.clearAll();
@@ -653,7 +682,7 @@ const Index = () => {
     <>
       {deferSidebarReady && (
         <Suspense fallback={null}>
-          <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} refreshKey={sidebarRefreshKey} optimisticItem={optimisticSidebarItem} />
+          <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} optimisticItem={optimisticSidebarItem} />
         </Suspense>
       )}
       <SidebarInset className="h-svh !min-h-0 overflow-hidden">

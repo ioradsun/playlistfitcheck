@@ -87,13 +87,12 @@ export interface AppSidebarProps {
   onTabChange?: (tab: string) => void;
   onNewProject?: () => void;
   onLoadProject?: (type: string, data: any) => void;
-  refreshKey?: number;
   optimisticItem?: RecentItem | null;
 }
 
 export { TOOLS };
 
-export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey, optimisticItem }: AppSidebarProps) {
+export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onLoadProject, optimisticItem }: AppSidebarProps) {
   const sidebarCopy = useSiteCopySelector((c) => ({
     brand: c.sidebar.brand,
     story_link: c.sidebar.story_link,
@@ -305,10 +304,18 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     setTrashedItems(trashed);
   }, [user]);
 
+  // Initial fetch on mount / user change (via fetchRecents dep)
   useEffect(() => {
     fetchRecents();
     fetchTrashed();
-  }, [fetchRecents, fetchTrashed, refreshKey]);
+  }, [fetchRecents, fetchTrashed]);
+
+  // Listen for throttled refresh events from parent (preserves memo boundary — no prop change)
+  useEffect(() => {
+    const handler = () => { fetchRecents(); fetchTrashed(); };
+    window.addEventListener("sidebar-refresh", handler);
+    return () => window.removeEventListener("sidebar-refresh", handler);
+  }, [fetchRecents, fetchTrashed]);
 
   useEffect(() => {
     if (user) return;
