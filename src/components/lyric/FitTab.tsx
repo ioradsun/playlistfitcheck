@@ -575,11 +575,11 @@ function CinematicDirectionCard({
           ? getAudioStoragePath(user.id, savedId, audioFile.name)
           : `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
         const { error: uploadError } = await supabase.storage
-          .from("audio")
+          .from("audio-clips")
           .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
         if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage.from("audio").getPublicUrl(storagePath);
+        const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
         audioUrl = urlData.publicUrl;
       }
 
