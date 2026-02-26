@@ -3009,10 +3009,12 @@ export class LyricDancePlayer {
       'dark-absorb': 3.0,
     };
 
+    const measuredWidth = this.ctx.measureText(chunkId.split('_')[0] ?? '').width || 60;
     this.wordEmitters.push({
       type: emitterType,
       x: wordX,
       y: wordY,
+      wordWidth: measuredWidth,
       color: palette.glow,
       startTime: nowSecEmitters,
       duration: EMITTER_DURATIONS[emitterType] ?? 2.0,
