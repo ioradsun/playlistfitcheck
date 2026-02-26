@@ -12,7 +12,7 @@ import type { DirectionInterpreter, WordHistory } from "@/engine/DirectionInterp
 import type { LineAnimation } from "@/engine/AnimationResolver";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { resolveEffectKey, getEffect, type EffectState } from "@/engine/EffectRegistry";
-import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
+import { cinematicFontSize, computeFitFontSize, computeStackedLayout, getCinematicLayout } from "@/engine/SystemStyles";
 import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
 import { applyKineticEffect } from "@/engine/KineticEffects";
 import { drawElementalWord } from "@/engine/ElementalEffects";
@@ -21,42 +21,85 @@ import * as WordClassifier from "@/engine/WordClassifier";
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
-function drawWithLetterSpacing(
+function measureTextWithSpacing(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  fs: number,
+  letterSpacingEm: number,
+): number {
+  if (!text) return 0;
+  const spacingPx = letterSpacingEm * fs;
+  const chars = Array.from(text);
+  let total = 0;
+  for (let i = 0; i < chars.length; i += 1) {
+    total += ctx.measureText(chars[i]).width;
+    if (i < chars.length - 1) total += spacingPx;
+  }
+  return total;
+}
+
+function drawTextWithSpacing(
   ctx: CanvasRenderingContext2D,
   text: string,
   x: number,
   y: number,
-  letterSpacing: string,
+  fs: number,
+  letterSpacingEm: number,
+  align: CanvasTextAlign,
 ): void {
-  const parsedSpacing = Number.parseFloat(letterSpacing);
-  // Extract font size from ctx.font (e.g. "300 48px Montserrat" → 48)
-  const fontSizeMatch = ctx.font.match(/(\d+(?:\.\d+)?)px/);
-  const currentFontSize = fontSizeMatch ? Number.parseFloat(fontSizeMatch[1]) : 16;
-  const spacingPx = Number.isFinite(parsedSpacing)
-    ? parsedSpacing * currentFontSize
-    : 0;
-
-  if (spacingPx === 0 || text.length <= 1) {
+  if (letterSpacingEm === 0 || text.length <= 1) {
     ctx.fillText(text, x, y);
     return;
   }
-
-  const glyphWidths = Array.from(text).map((char) => ctx.measureText(char).width);
-  const totalWidth = glyphWidths.reduce((sum, width) => sum + width, 0) + spacingPx * (text.length - 1);
-  const originalAlign = ctx.textAlign;
-  const startX = originalAlign === "center"
+  const spacingPx = letterSpacingEm * fs;
+  const chars = Array.from(text);
+  const totalWidth = measureTextWithSpacing(ctx, text, fs, letterSpacingEm);
+  const startX = align === "center"
     ? x - totalWidth / 2
-    : originalAlign === "right" || originalAlign === "end"
+    : (align === "right" || align === "end")
       ? x - totalWidth
       : x;
 
+  const prevAlign = ctx.textAlign;
   ctx.textAlign = "left";
   let cursorX = startX;
-  Array.from(text).forEach((char, index) => {
-    ctx.fillText(char, cursorX, y);
-    cursorX += glyphWidths[index] + spacingPx;
-  });
-  ctx.textAlign = originalAlign;
+  for (let i = 0; i < chars.length; i += 1) {
+    ctx.fillText(chars[i], cursorX, y);
+    cursorX += ctx.measureText(chars[i]).width + (i < chars.length - 1 ? spacingPx : 0);
+  }
+  ctx.textAlign = prevAlign;
+}
+
+function strokeTextWithSpacing(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fs: number,
+  letterSpacingEm: number,
+  align: CanvasTextAlign,
+): void {
+  if (letterSpacingEm === 0 || text.length <= 1) {
+    ctx.strokeText(text, x, y);
+    return;
+  }
+  const spacingPx = letterSpacingEm * fs;
+  const chars = Array.from(text);
+  const totalWidth = measureTextWithSpacing(ctx, text, fs, letterSpacingEm);
+  const startX = align === "center"
+    ? x - totalWidth / 2
+    : (align === "right" || align === "end")
+      ? x - totalWidth
+      : x;
+
+  const prevAlign = ctx.textAlign;
+  ctx.textAlign = "left";
+  let cursorX = startX;
+  for (let i = 0; i < chars.length; i += 1) {
+    ctx.strokeText(chars[i], cursorX, y);
+    cursorX += ctx.measureText(chars[i]).width + (i < chars.length - 1 ? spacingPx : 0);
+  }
+  ctx.textAlign = prevAlign;
 }
 
 function drawBubbles(
@@ -90,6 +133,34 @@ function snapToNearestBeat(timestamp: number, beats: number[], tolerance: number
     Math.abs(curr - timestamp) < Math.abs(prev - timestamp) ? curr : prev
   ));
   return Math.abs(nearest - timestamp) <= tolerance ? nearest : timestamp;
+}
+
+
+function ellipsizeToWidth(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  fs: number,
+  letterSpacingEm: number,
+): string {
+  const ellipsis = '…';
+  const measure = (value: string) => measureTextWithSpacing(ctx, value, fs, letterSpacingEm);
+  if (measure(text) <= maxWidth) return text;
+
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  while (words.length > 1) {
+    words.pop();
+    const candidate = `${words.join(' ')}${ellipsis}`;
+    if (measure(candidate) <= maxWidth) return candidate;
+  }
+
+  let out = words[0] ?? text;
+  while (out.length > 1) {
+    out = out.slice(0, -1);
+    const candidate = `${out}${ellipsis}`;
+    if (measure(candidate) <= maxWidth) return candidate;
+  }
+  return ellipsis;
 }
 
 function getDirectiveEffectKey(directive: WordDirective | null): string | null {
@@ -180,6 +251,10 @@ export interface TextInput {
   getWordWidth: (word: string, fSize: number, fontFamily: string) => number;
   /** Is this a mobile viewport? */
   isMobile: boolean;
+  fontSize?: number;
+  letterSpacingOverride?: number;
+  wrappedLines?: string[];
+  aspectHint?: "9:16" | "1:1" | "16:9";
   hardwareConcurrency: number;
   devicePixelRatio: number;
   precomputedLine?: PrecomputedLineMetrics | null;
@@ -219,7 +294,7 @@ export function renderText(
     currentTime, songProgress, beatIntensity, beatIndex, sortedBeats,
     cw, ch, effectivePalette, effectiveSystem, resolvedManifest, textPalette, spec,
     state, interpreter, shot, tensionStage, chapterDirective, cinematicDirection,
-    isClimax, particleEngine, rng, getWordWidth, isMobile, hardwareConcurrency, devicePixelRatio, precomputedLine,
+    isClimax, particleEngine, rng, getWordWidth, isMobile, fontSize: providedFontSize, hardwareConcurrency, devicePixelRatio, precomputedLine,
   } = input;
   const baseTypoProfile = cinematicDirection?.visualWorld?.typographyProfile;
   const chapterTypoShift = chapterDirective?.typographyShift as { fontWeight?: number; letterSpacing?: string } | undefined;
@@ -346,16 +421,41 @@ export function renderText(
   }
 
   // ── Font sizing ───────────────────────────────────────────────────
-  const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, effectiveSystem);
-  const { fs, effectiveLetterSpacing } = stackedLayout.isStacked
+  const cinematicSizingV2 = cinematicDirection != null;
+  const cinematicLayout = getCinematicLayout(cw, ch);
+  const shortSide = Math.min(cw, ch);
+  const strokePaddingPx = shortSide * 0.015;
+  const effectiveBoxW = cinematicLayout.textBoxW - strokePaddingPx;
+  const stackedLayout = computeStackedLayout(ctx, activeLine.text, cw, ch, effectiveSystem, input.aspectHint);
+  const legacySize = stackedLayout.isStacked
     ? { fs: stackedLayout.fs, effectiveLetterSpacing: stackedLayout.effectiveLetterSpacing }
     : computeFitFontSize(ctx, activeLine.text, cw, effectiveSystem);
+
+  const inputFontSize = typeof providedFontSize === "number" ? providedFontSize : undefined;
+  const hasProvidedSizing = inputFontSize != null
+    && typeof input.letterSpacingOverride === "number"
+    && Array.isArray(input.wrappedLines);
+
+  let resolvedWrappedLines = input.wrappedLines;
+  let resolvedLetterSpacingEm = input.letterSpacingOverride ?? 0;
+  let fs = legacySize.fs;
+  let effectiveLetterSpacing = legacySize.effectiveLetterSpacing;
+
+  if (cinematicSizingV2) {
+    const sizing = hasProvidedSizing
+      ? { fs: inputFontSize as number, letterSpacingEm: input.letterSpacingOverride as number, lines: input.wrappedLines }
+      : cinematicFontSize(ctx, activeLine.text, cw, ch, cinematicFontFamily, Number(cinematicFontWeight));
+    fs = sizing.fs;
+    resolvedLetterSpacingEm = sizing.letterSpacingEm;
+    resolvedWrappedLines = sizing.lines;
+    effectiveLetterSpacing = 0;
+  }
+
   const typoAggression = tensionStage?.typographyAggression ?? 0.5;
   const baseWordScale = 0.9 + typoAggression * 0.4;
-  // Hard cap: font should never exceed ~30% of canvas height to prevent single letters dominating the viewport
-  const maxFontPx = Math.min(ch * 0.28, cw * 0.25);
-  const fontSize = Math.min(fs * activeLineAnim.fontScale * baseWordScale, maxFontPx);
-  frameFontSize = fontSize;
+  const computedFontSize = fs * activeLineAnim.fontScale * baseWordScale;
+  const fontSize = computedFontSize;
+  frameFontSize = computedFontSize;
 
   // ── Position ──────────────────────────────────────────────────────
   const sectionProgress = songProgress;
@@ -369,7 +469,7 @@ export function renderText(
 
   const strongMods = new Set(["PULSE_STRONG", "HEAT_SPIKE", "ERUPT", "FLAME_BURST", "EXPLODE"]);
   const softMods = new Set(["BLUR_OUT", "ECHO_FADE", "DISSOLVE", "FADE_OUT", "FADE_OUT_FAST"]);
-  let targetYBase = ch * 0.5;
+  let targetYBase = cinematicLayout.baselineY;
   if (activeLineAnim.isHookLine) {
     targetYBase = ch * 0.44;
   } else if (activeLineAnim.activeMod && strongMods.has(activeLineAnim.activeMod)) {
@@ -484,16 +584,25 @@ export function renderText(
       ? "two_line_stack"
       : "phrase_stack";
 
+  let resolvedDisplayMode = displayMode;
+  if (cinematicSizingV2 && resolvedDisplayMode === "two_line_stack") {
+    resolvedDisplayMode = "single_word";
+  }
+
   // Previous line ghost for two_line_stack
   const previousLine = activeLineIndex > 0 ? lines[activeLineIndex - 1] : null;
-  if (displayMode === "two_line_stack" && previousLine) {
+  if (resolvedDisplayMode === "two_line_stack" && previousLine) {
     ctx.save();
     ctx.font = buildWordFont(Math.max(14, fontSize * 0.86));
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = activeLineAnim.lineColor;
     ctx.globalAlpha = 0.12 * compositeAlpha * Math.max(0.2, 1 - tightenedExitProgress);
-    ctx.fillText(previousLine.text, lineX, lineY - Math.max(40, fontSize * 1.5));
+    if (resolvedLetterSpacingEm !== 0) {
+      drawTextWithSpacing(ctx, previousLine.text, lineX, lineY - Math.max(40, fontSize * 1.5), fontSize, resolvedLetterSpacingEm, "center");
+    } else {
+      ctx.fillText(previousLine.text, lineX, lineY - Math.max(40, fontSize * 1.5));
+    }
     ctx.restore();
   }
 
@@ -501,16 +610,67 @@ export function renderText(
     cinematicTextTransform === "uppercase" ? text.toUpperCase() : text
   );
 
-  const renderedWords = displayMode === "single_word"
+  const drawLine = (text: string, y: number): void => {
+    if (resolvedLetterSpacingEm === -0.05 && ch > cw) {
+      const measured = measureTextWithSpacing(ctx, text, fontSize, resolvedLetterSpacingEm);
+      if (measured > effectiveBoxW) {
+        text = ellipsizeToWidth(ctx, text, effectiveBoxW, fontSize, resolvedLetterSpacingEm);
+      }
+    }
+
+    if (resolvedLetterSpacingEm !== 0) drawTextWithSpacing(ctx, text, lineX, y, fontSize, resolvedLetterSpacingEm, "center");
+    else ctx.fillText(text, lineX, y);
+  };
+
+  if (cinematicSizingV2 && resolvedWrappedLines && resolvedWrappedLines.length > 1) {
+    const renderLines = resolvedWrappedLines.slice(0, 2);
+    const yOffsets = renderLines.length === 2
+      ? [-cinematicLayout.lineHeight * 0.55, cinematicLayout.lineHeight * 0.55]
+      : [0];
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = buildWordFont(fontSize);
+    ctx.fillStyle = activeLineAnim.lineColor;
+    ctx.globalAlpha = compositeAlpha;
+
+    renderLines.forEach((segment, idx) => {
+      const y = cinematicLayout.baselineY + (yOffsets[idx] ?? 0);
+      drawLine(getDisplayWord(segment), y);
+      drawCalls += 1;
+    });
+
+    ctx.restore();
+    return {
+      drawCalls,
+      activeWordPosition: { x: lineX, y: cinematicLayout.baselineY },
+      effectKey: frameEffectKey,
+      fontSize: frameFontSize,
+      activeMod: frameActiveMod,
+      isHook: frameIsHook,
+      beatMult: frameBeatMult,
+      entry: frameEntry,
+      exit: frameExit,
+      fontScale: frameFontScale,
+      scale: frameScale,
+      lineColor: frameLineColor,
+      repIndex: frameRepIndex,
+      repTotal: frameRepTotal,
+      xNudge: frameXNudge,
+      sectionZone: frameSectionZone,
+      wordsProcessed: renderLines.length,
+    };
+  }
+
+  const renderedWords = resolvedDisplayMode === "single_word"
     ? (visibleWordCount > 0 ? [displayMode === "single_word" ? words[Math.max(0, visibleWordCount - 1)] : ""] : [])
-    : displayMode === "two_line_stack"
+    : resolvedDisplayMode === "two_line_stack"
       ? words
       : words.slice(0, visibleWordCount);
 
   const measuredWordWidths = renderedWords.map((word) => getWordWidth(getDisplayWord(word), fontSize, resolvedWordFont));
   const baseSpaceWidth = getWordWidth(" ", fontSize, resolvedWordFont);
   const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, renderedWords.length - 1) * baseSpaceWidth;
-  let cursorX = displayMode === "single_word" ? lineX : lineX - totalWidth / 2;
+  let cursorX = resolvedDisplayMode === "single_word" ? lineX : lineX - totalWidth / 2;
 
   if (renderedWords.length > 0) {
     const activeWordIdx = Math.max(0, renderedWords.length - 1);
@@ -519,7 +679,7 @@ export function renderText(
       .reduce((sum, width) => sum + width, 0) + activeWordIdx * baseSpaceWidth;
     const activeWidth = measuredWordWidths[activeWordIdx] ?? 0;
     activeWordPosition = {
-      x: (displayMode === "single_word" ? lineX : lineX - totalWidth / 2) + priorWidth + activeWidth / 2,
+      x: (resolvedDisplayMode === "single_word" ? lineX : lineX - totalWidth / 2) + priorWidth + activeWidth / 2,
       y: lineY,
     };
   }
@@ -536,8 +696,8 @@ export function renderText(
   // ── Per-word rendering ────────────────────────────────────────────
   renderedWords.forEach((wordText, renderedIndex) => {
     const displayWord = getDisplayWord(wordText);
-    const normalizedWord = normalizedWords[Math.max(0, displayMode === "single_word" ? visibleWordCount - 1 : renderedIndex)] ?? wordText.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
-    const sourceWordIndex = displayMode === "single_word"
+    const normalizedWord = normalizedWords[Math.max(0, resolvedDisplayMode === "single_word" ? visibleWordCount - 1 : renderedIndex)] ?? wordText.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
+    const sourceWordIndex = resolvedDisplayMode === "single_word"
       ? Math.max(0, visibleWordCount - 1)
       : renderedIndex;
     const resolvedWordStartTime = snappedStarts?.[Math.max(0, sourceWordIndex)]
@@ -573,7 +733,7 @@ export function renderText(
     }
 
     const wordWidth = getWordWidth(displayWord, fontSize, resolvedWordFont);
-    const wordCenterX = displayMode === "single_word" ? lineX : cursorX + wordWidth / 2;
+    const wordCenterX = resolvedDisplayMode === "single_word" ? lineX : cursorX + wordWidth / 2;
     const wordX = wordCenterX;
     let wordY = lineY;
 
@@ -597,7 +757,7 @@ export function renderText(
     }
 
     const isHeroWord = Boolean(lineDirection?.heroWord && wordText.toLowerCase().includes(lineDirection.heroWord.toLowerCase()));
-    const modeOpacity = displayMode === "phrase_stack"
+    const modeOpacity = resolvedDisplayMode === "phrase_stack"
       ? (renderedIndex === renderedWords.length - 1 ? 1 : 0.4)
       : 1;
 
@@ -618,7 +778,11 @@ export function renderText(
         ctx.save();
         ctx.globalAlpha = 0.08;
         ctx.fillStyle = directive.colorOverride ?? effectivePalette[2] ?? "#ffffff";
-        ctx.fillText(displayWord, lastPos.x, lastPos.y);
+        if (resolvedLetterSpacingEm !== 0) {
+          drawTextWithSpacing(ctx, displayWord, lastPos.x, lastPos.y, fontSize, resolvedLetterSpacingEm, "center");
+        } else {
+          ctx.fillText(displayWord, lastPos.x, lastPos.y);
+        }
         ctx.restore();
       }
     }
@@ -779,9 +943,13 @@ export function renderText(
         },
       );
     } else if (props.letterSpacing !== "0em" || cinematicLetterSpacing !== "0") {
-      drawWithLetterSpacing(ctx, displayWord, 0, 0, props.letterSpacing !== "0em" ? props.letterSpacing : cinematicLetterSpacing);
+      const ls = resolvedLetterSpacingEm !== 0
+        ? resolvedLetterSpacingEm
+        : (props.letterSpacing !== "0em" ? Number.parseFloat(props.letterSpacing) : Number.parseFloat(cinematicLetterSpacing));
+      drawTextWithSpacing(ctx, displayWord, 0, 0, fontSize, Number.isFinite(ls) ? ls : 0, "center");
     } else {
-      ctx.fillText(displayWord, 0, 0);
+      if (resolvedLetterSpacingEm !== 0) drawTextWithSpacing(ctx, displayWord, 0, 0, fontSize, resolvedLetterSpacingEm, "center");
+      else ctx.fillText(displayWord, 0, 0);
     }
 
     ctx.restore();
@@ -790,7 +958,8 @@ export function renderText(
     if (props.showTrail) {
       for (let t = 1; t <= props.trailCount; t += 1) {
         ctx.globalAlpha = (props.opacity * 0.3) / t;
-        ctx.fillText(displayWord, finalX - (t * 4), finalY);
+        if (resolvedLetterSpacingEm !== 0) drawTextWithSpacing(ctx, displayWord, finalX - (t * 4), finalY, fontSize, resolvedLetterSpacingEm, "center");
+        else ctx.fillText(displayWord, finalX - (t * 4), finalY);
         drawCalls += 1;
       }
     }
@@ -807,7 +976,7 @@ export function renderText(
     });
 
     ctx.globalAlpha = 1;
-    if (displayMode !== "single_word") {
+    if (resolvedDisplayMode !== "single_word") {
       cursorX += wordWidth + baseSpaceWidth;
     }
   });

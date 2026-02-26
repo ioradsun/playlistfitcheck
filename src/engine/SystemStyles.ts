@@ -416,3 +416,156 @@ export function computeFitFontSize(
 
   return { fs: Math.round(fs), effectiveLetterSpacing: ls };
 }
+
+export interface CinematicFontResult {
+  fs: number;
+  letterSpacingEm: number;
+  lines?: string[];
+}
+
+export interface CinematicLayout {
+  safeInset: number;
+  textBoxX: number;
+  textBoxW: number;
+  baselineY: number;
+  lineHeight: number;
+  maxLines: number;
+}
+
+const CACHE_MAX = 500;
+const _fontSizeCache = new Map<string, CinematicFontResult>();
+
+function cacheGet(key: string): CinematicFontResult | undefined {
+  const val = _fontSizeCache.get(key);
+  if (val) {
+    _fontSizeCache.delete(key);
+    _fontSizeCache.set(key, val);
+  }
+  return val;
+}
+
+function cacheSet(key: string, val: CinematicFontResult): void {
+  if (_fontSizeCache.size >= CACHE_MAX) {
+    const first = _fontSizeCache.keys().next().value;
+    if (first) _fontSizeCache.delete(first);
+  }
+  _fontSizeCache.set(key, val);
+}
+
+export function clearCinematicFontSizeCache(): void {
+  _fontSizeCache.clear();
+}
+
+export function wrapToMaxLines(
+  text: string,
+  ctx: CanvasRenderingContext2D,
+  effectiveBoxW: number,
+  maxLines: number,
+): { lines: string[]; maxLineWidth: number } {
+  const words = text.trim().split(/\s+/);
+  const segments: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (ctx.measureText(candidate).width > effectiveBoxW && current) {
+      segments.push(current);
+      current = word;
+      if (segments.length >= maxLines) {
+        return { lines: [text], maxLineWidth: ctx.measureText(text).width };
+      }
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current) segments.push(current);
+  const maxLineWidth = Math.max(...segments.map((s) => ctx.measureText(s).width));
+  return { lines: segments, maxLineWidth };
+}
+
+export function getCinematicLayout(canvasW: number, canvasH: number): CinematicLayout {
+  const shortSide = Math.min(canvasW, canvasH);
+  const isPortrait = canvasH > canvasW;
+  const safeInset = shortSide * 0.055;
+
+  return {
+    safeInset,
+    textBoxX: safeInset,
+    textBoxW: canvasW - safeInset * 2,
+    baselineY: canvasH * (isPortrait ? 0.60 : 0.56),
+    lineHeight: shortSide * 0.14,
+    maxLines: isPortrait ? 1 : 2,
+  };
+}
+
+export function cinematicFontSize(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  canvasW: number,
+  canvasH: number,
+  fontFamily: string,
+  fontWeight: number,
+  options?: { targetFill?: number; safeInset?: number },
+): CinematicFontResult {
+  const cacheKey = `${text}|${canvasW}|${canvasH}|${fontFamily}|${fontWeight}|${options?.targetFill ?? ''}|${options?.safeInset ?? ''}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
+  const shortSide = Math.min(canvasW, canvasH);
+  const isPortrait = canvasH > canvasW;
+  const safeInset = options?.safeInset ?? shortSide * 0.055;
+  const textBoxW = canvasW - safeInset * 2;
+  const strokePaddingPx = shortSide * 0.015;
+  const effectiveBoxW = textBoxW - strokePaddingPx;
+  const defaultFill = isPortrait ? 0.92 : 0.88;
+  const targetFill = options?.targetFill ?? defaultFill;
+  const wordCount = text.trim().split(/\s+/).length;
+  const shaping = wordCount <= 1 ? 1.2 : wordCount <= 2 ? 1.12 : wordCount <= 6 ? 1.0 : wordCount <= 10 ? 0.88 : 0.78;
+  const shapedFill = Math.min(0.98, targetFill * shaping);
+  const targetWidth = effectiveBoxW * shapedFill;
+  const minFs = Math.max(16, shortSide * 0.055);
+  const maxFs = shortSide * 0.30;
+  const probeSize = 100;
+  ctx.font = `${fontWeight} ${probeSize}px ${fontFamily}`;
+
+  if (!isPortrait) {
+    const singleLineWidth = ctx.measureText(text).width;
+    if (singleLineWidth > effectiveBoxW * 1.08) {
+      const { lines, maxLineWidth } = wrapToMaxLines(text, ctx, effectiveBoxW, 2);
+      if (lines.length > 1) {
+        const rawFs = probeSize * (targetWidth / Math.max(1, maxLineWidth));
+        const fs = Math.round(Math.max(minFs, Math.min(maxFs, rawFs)));
+        const result: CinematicFontResult = { fs, letterSpacingEm: 0, lines };
+        cacheSet(cacheKey, result);
+        return result;
+      }
+    }
+  }
+
+  const probeW = ctx.measureText(text).width;
+  if (probeW <= 0) {
+    const fallback = { fs: Math.max(minFs, shortSide * 0.12), letterSpacingEm: 0 };
+    cacheSet(cacheKey, fallback);
+    return fallback;
+  }
+
+  let fs = Math.max(minFs, Math.min(maxFs, probeSize * (targetWidth / probeW)));
+  let letterSpacingEm = 0;
+
+  if (isPortrait) {
+    ctx.font = `${fontWeight} ${fs}px ${fontFamily}`;
+    const actualW = ctx.measureText(text).width;
+    if (actualW > effectiveBoxW) {
+      if (fs > minFs) {
+        fs = Math.max(minFs, probeSize * (effectiveBoxW / probeW));
+      } else {
+        letterSpacingEm = -0.05;
+      }
+    }
+  }
+
+  const result = { fs: Math.round(fs), letterSpacingEm };
+  cacheSet(cacheKey, result);
+  return result;
+}
