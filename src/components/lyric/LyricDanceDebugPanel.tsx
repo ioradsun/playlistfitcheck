@@ -163,7 +163,7 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
           <KV label="Tension" value={snap.tensionStage} />
           <KV label="Motion" value={f(snap.tensionMotion)} />
           <KV label="Particles" value={f(snap.tensionParticles)} />
-          <KV label="Typo" value={f(snap.tensionTypo)} />
+          <KV label="Typography" value={snap.tensionTypo} />
         </div>
       </Section>
       <Section title="Word Directive">

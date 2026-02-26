@@ -246,7 +246,7 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   tensionStage: "—",
   tensionMotion: 0,
   tensionParticles: 0,
-  tensionTypo: 0,
+  tensionTypo: "—",
 
   wordDirectiveWord: "",
   wordDirectiveBehavior: "—",
