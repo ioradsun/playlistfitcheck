@@ -331,6 +331,13 @@ export function LyricFitTab({
     const savedSections = (initialLyric as any).cinematic_direction?.sections;
     if (Array.isArray(savedSections)) setAudioSections(savedSections);
 
+    // Hydrate section_images from saved_lyrics — survives tab switches
+    const savedSectionImages = (initialLyric as any).section_images;
+    if (Array.isArray(savedSectionImages) && savedSectionImages.length > 0 && savedSectionImages.some(Boolean)) {
+      console.log(`[Pipeline] Hydrated ${savedSectionImages.filter(Boolean).length} section images from saved_lyrics`);
+      setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+    }
+
     const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
     if (cachedAudio) {
       setAudioFile(cachedAudio);
@@ -737,6 +744,11 @@ export function LyricFitTab({
 
     if (savedIdRef.current) {
       persistRenderData(savedIdRef.current, { cinematicDirection: null });
+      // Clear section_images in DB — they no longer match
+      void supabase
+        .from("saved_lyrics")
+        .update({ section_images: null } as any)
+        .eq("id", savedIdRef.current);
     }
 
     // Restart beat grid immediately, then bump retry counter for waterfall

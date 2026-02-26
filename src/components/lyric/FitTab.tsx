@@ -260,12 +260,32 @@ function CinematicDirectionCard({
 
   const songSlug = slugify(songTitle || "untitled");
 
-  // Auto-load existing section images from the user's published dance
+  // Auto-load existing section images — first from saved_lyrics (projectId),
+  // then fall back to shareable_lyric_dances (published dance row)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!userId || cancelled) return;
 
+      // 1. Try saved_lyrics first (project-level persistence)
+      if (projectId) {
+        const { data: lyricRow }: any = await supabase
+          .from("saved_lyrics")
+          .select("section_images")
+          .eq("id", projectId)
+          .maybeSingle();
+        if (cancelled) return;
+        const savedImgs = lyricRow?.section_images;
+        if (Array.isArray(savedImgs) && savedImgs.length > 0 && savedImgs.some(Boolean)) {
+          console.log(`[FitTab Debug] hydrated ${savedImgs.filter(Boolean).length} section images from saved_lyrics`);
+          setSectionImages(savedImgs);
+          setImageTimestamps(Array.from({ length: savedImgs.length }, () => null));
+          setImagesHydrated(true);
+          return;
+        }
+      }
+
+      // 2. Fallback: shareable_lyric_dances (published dance)
       const { data: dances }: any = await supabase
         .from("shareable_lyric_dances" as any)
         .select("id, section_images")
@@ -286,14 +306,13 @@ function CinematicDirectionCard({
         setSectionImages(imgs);
         setImageTimestamps(Array.from({ length: imgs.length }, () => null));
       }
-      // Don't auto-poll — let the user click "Generate Images" or wait for publish event
       setImagesHydrated(true);
     })();
     return () => {
       cancelled = true;
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [songSlug, sections.length, userId]);
+  }, [songSlug, sections.length, userId, projectId]);
 
   // Listen for dance-published event to refresh images
   useEffect(() => {
@@ -364,7 +383,14 @@ function CinematicDirectionCard({
       setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
       onImageGenerationStatusChange?.("done");
 
-      // section_images are stored on shareable_lyric_dances, not saved_lyrics
+      // Persist to saved_lyrics so images survive tab switches / remounts
+      if (projectId && urls.length > 0) {
+        void supabase
+          .from("saved_lyrics")
+          .update({ section_images: urls as any })
+          .eq("id", projectId);
+        console.log(`[FitTab Debug] saved ${urls.filter(Boolean).length} section images to DB`);
+      }
 
       toast.success(`Generated ${urls.filter(Boolean).length}/${sections.length} section images`);
     } catch (e: any) {
@@ -378,12 +404,22 @@ function CinematicDirectionCard({
   }, [danceId, fitTabImageMs, formatImageTimestamp, generating, onImageGenerationStatusChange, projectId, sections]);
 
   useEffect(() => {
+    console.log('[FitTab Debug] auto-image effect:', {
+      hasDirection: !!cinematicDirection,
+      sections: sections.length,
+      existingImages: sectionImages.length,
+      refGuard: imageGenerationStartedRef.current,
+      danceId,
+      imagesHydrated,
+    });
     if (!cinematicDirection) return;
     if (!sections.length) return;
-    if (!danceId) return;
     if (!imagesHydrated) return;
     if (sectionImages.length > 0) return;
     if (imageGenerationStartedRef.current) return;
+    // danceId is NOT required — handleGenerateImages will prompt if missing
+    // but we still need a dance row for the edge function, so check danceId
+    if (!danceId) return;
 
     imageGenerationStartedRef.current = true;
     console.log(`[FitTab Debug] ${fitTabImageMs()} auto-starting image generation for ${sections.length} sections`);
