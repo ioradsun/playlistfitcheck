@@ -1535,6 +1535,41 @@ export class LyricDancePlayer {
     const chapterSpan = duration / totalChapters;
     const chapterLocalProgress = chapterSpan > 0 ? ((this.audio?.currentTime ?? 0) % chapterSpan) / chapterSpan : 0;
     const crossfade = chapterLocalProgress > 0.85 ? (chapterLocalProgress - 0.85) / 0.15 : 0;
+
+    // Image diagnostics — log section transitions
+    if (imgIdx !== this._prevImgIdx && this.chapterImages.length > 0) {
+      const currentUrl = this.data.section_images?.[imgIdx];
+      const prevUrl = this._prevImgIdx >= 0 ? this.data.section_images?.[this._prevImgIdx] : undefined;
+      if (this._prevImgIdx >= 0 && prevUrl) {
+        console.log('[Player Image Hide]', { sectionIndex: this._prevImgIdx, time: tSec.toFixed(2) });
+      }
+      if (currentUrl) {
+        console.log('[Player Image Show]', { sectionIndex: imgIdx, time: tSec.toFixed(2), opacity: 1, url: currentUrl.slice(-30) });
+      }
+      console.log('[Player Section Change]', {
+        time: tSec.toFixed(2),
+        from: this._prevImgIdx,
+        to: imgIdx,
+        imageUrl: currentUrl ? currentUrl.slice(-30) : 'none',
+      });
+      this._prevImgIdx = imgIdx;
+    }
+
+    // Update image debug state
+    const atmosphere = this.getAtmosphere();
+    const atmosphereOpacityMap: Record<string, number> = { void: 0.10, cinematic: 0.65, haze: 0.50, split: 0.75, grain: 0.60, wash: 0.55, glass: 0.45, clean: 0.85 };
+    this.debugState = {
+      ...this.debugState,
+      imgCount: this.chapterImages.length,
+      imgActiveIdx: imgIdx,
+      imgNextIdx: nextImgIdx,
+      imgCrossfade: crossfade,
+      imgChapterSpan: chapterSpan,
+      imgLocalProgress: chapterLocalProgress,
+      imgOpacity: atmosphereOpacityMap[atmosphere] ?? 0.65,
+      imgOverlap: false,
+    };
+
     this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
 
     this.drawSimLayer(frame);

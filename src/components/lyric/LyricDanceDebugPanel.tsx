@@ -163,6 +163,18 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
           <KV label="Shot" value={snap.shotType} />
         </div>
       </Section>
+      <Section title="Images">
+        <div className="space-y-0.5">
+          <KV label="Count" value={snap.imgCount} />
+          <KV label="Active Idx" value={snap.imgActiveIdx} />
+          <KV label="Next Idx" value={snap.imgNextIdx} />
+          <KV label="Crossfade" value={f(snap.imgCrossfade)} />
+          <KV label="Ch Span" value={f(snap.imgChapterSpan) + "s"} />
+          <KV label="Local %" value={f(snap.imgLocalProgress * 100, 0) + "%"} />
+          <KV label="Opacity" value={f(snap.imgOpacity)} />
+          <KV label="Overlap" value={snap.imgOverlap ? "⚠️ YES" : "no"} />
+        </div>
+      </Section>
       <Section title="Performance">
         <div className="space-y-0.5">
           <KV label="FPS" value={Math.round(snap.fps)} />
