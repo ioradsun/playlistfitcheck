@@ -67,11 +67,30 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
   const [activePalette, setActivePalette] = useState(spec.palette);
   const [activeSystem, setActiveSystem] = useState(spec.system);
   const [editorBeatIntensity, setEditorBeatIntensity] = useState(0);
+  const currentTimeRef = useRef(currentTime);
+  const linesRef = useRef(lines);
+  const physicsStateRef = useRef(physicsState);
+  const specRef = useRef(spec);
+  const hookStartRef = useRef(hookStart);
+  const hookEndRef = useRef(hookEnd);
+  const prngRef = useRef(prng);
+  const directionInterpreterRef = useRef<DirectionInterpreter | null>(null);
+  const hookDirectionRef = useRef(hookDirection);
+  const editorBeatIntensityRef = useRef(editorBeatIntensity);
 
   const activePaletteRef = useRef(activePalette);
   const activeSystemRef = useRef(activeSystem);
   activePaletteRef.current = activePalette;
   activeSystemRef.current = activeSystem;
+  currentTimeRef.current = currentTime;
+  linesRef.current = lines;
+  physicsStateRef.current = physicsState;
+  specRef.current = spec;
+  hookStartRef.current = hookStart;
+  hookEndRef.current = hookEnd;
+  prngRef.current = prng;
+  hookDirectionRef.current = hookDirection;
+  editorBeatIntensityRef.current = editorBeatIntensity;
 
   const directionInterpreter = useMemo(() => {
     if (!hookDirection) return null;
@@ -97,6 +116,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
       thesis: hookDirection.thesis,
     } as CinematicDirection, Math.max(0.001, hookEnd - hookStart));
   }, [hookDirection, hookEnd, hookStart]);
+  directionInterpreterRef.current = directionInterpreter;
 
   // Resize canvas to fill container
   useEffect(() => {
@@ -125,23 +145,33 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
   // Render loop
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !isPlaying) return;
 
-    let raf: number;
+    let raf = 0;
     const render = () => {
-      if (!isPlaying) {
+      if (document.hidden) {
         raf = requestAnimationFrame(render);
         return;
       }
 
-      const ps = physicsState || {
+      const currentPhysicsState = physicsStateRef.current;
+      const currentSpec = specRef.current;
+      const localCurrentTime = currentTimeRef.current;
+      const currentLines = linesRef.current;
+      const currentHookStart = hookStartRef.current;
+      const currentHookEnd = hookEndRef.current;
+      const currentPrng = prngRef.current;
+      const currentDirectionInterpreter = directionInterpreterRef.current;
+      const currentHookDirection = hookDirectionRef.current;
+
+      const ps = currentPhysicsState || {
         offsetX: 0, offsetY: 0, rotation: 0, scale: 1,
         velocity: 0, position: 0, blur: 0,
         shake: 0, glow: 0, heat: 0, safeOffset: 0, shatter: 0,
         isFractured: false, wordOffsets: [],
       };
 
-      const sp = { ...spec, palette: activePaletteRef.current, system: activeSystemRef.current };
+      const sp = { ...currentSpec, palette: activePaletteRef.current, system: activeSystemRef.current };
       const ctx = canvas.getContext("2d");
       if (ctx) {
         const width = canvas.width / (window.devicePixelRatio || 1);
@@ -166,8 +196,8 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         ctx.rotate(ps.rotation);
         ctx.translate(ps.offsetX, ps.offsetY);
 
-        const activeLineIndex = lines.findIndex(l => currentTime >= l.start && currentTime < l.end);
-        const activeLine = lines[activeLineIndex];
+        const activeLineIndex = currentLines.findIndex(l => localCurrentTime >= l.start && localCurrentTime < l.end);
+        const activeLine = currentLines[activeLineIndex];
 
         const effectKey = "STATIC_RESOLVE";
         const drawFn = (c: CanvasRenderingContext2D, s: any) => {
@@ -190,9 +220,9 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           w: width,
           h: height,
           fs: 48,
-          age: activeLine ? currentTime - activeLine.start : 0,
-          progress: activeLine ? (currentTime - activeLine.start) / (activeLine.end - activeLine.start) : 0,
-          rng: prng,
+          age: activeLine ? localCurrentTime - activeLine.start : 0,
+          progress: activeLine ? (localCurrentTime - activeLine.start) / (activeLine.end - activeLine.start) : 0,
+          rng: currentPrng,
           palette,
           system: sp.system,
           alphaMultiplier: 1,
@@ -203,8 +233,8 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         ctx.restore();
 
         // Debug state
-        const di = directionInterpreter;
-        const songProg01 = Math.max(0, Math.min(1, (currentTime - hookStart) / Math.max(0.001, hookEnd - hookStart)));
+        const di = currentDirectionInterpreter;
+        const songProg01 = Math.max(0, Math.min(1, (localCurrentTime - currentHookStart) / Math.max(0.001, currentHookEnd - currentHookStart)));
         const currentSection = di?.getCurrentSection(songProg01);
         const sectionProgress = currentSection
           ? (songProg01 - (currentSection.startRatio ?? 0)) / Math.max(0.001, (currentSection.endRatio ?? 1) - (currentSection.startRatio ?? 0))
@@ -214,7 +244,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
         const heroWordText = lineDir?.heroWord ?? wordsInLine.find(w => classifyWord(w) !== "FILLER" && classifyWord(w) !== "NEUTRAL") ?? wordsInLine[0] ?? "—";
 
         debugRef.current = {
-          beatIntensity: editorBeatIntensity,
+          beatIntensity: editorBeatIntensityRef.current,
           physGlow: ps.heat * 0.6,
           heat: sp.params?.heat ?? 0,
           offsetX: ps.offsetX,
@@ -223,7 +253,7 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           scale: ps.scale,
           shake: ps.shake,
           effectKey,
-          dirThesis: hookDirection?.thesis ?? "—",
+          dirThesis: currentHookDirection?.thesis ?? "—",
           dirChapter: currentSection?.description ?? "—",
           dirChapterProgress: sectionProgress,
           dirIntensity: currentSection ? di?.getIntensity(songProg01) : 0,
@@ -237,9 +267,11 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
       raf = requestAnimationFrame(render);
     };
 
-    render();
-    return () => cancelAnimationFrame(raf);
-  }, [isPlaying, lines, hookStart, hookEnd, beatCount, physicsState, spec, currentTime, prng, directionInterpreter, hookDirection, editorBeatIntensity]);
+    raf = requestAnimationFrame(render);
+    return () => {
+      cancelAnimationFrame(raf);
+    };
+  }, [isPlaying]);
 
   const handleOverrides = useCallback((overrides: HookDanceOverrides) => {
     if (overrides.palette) setActivePalette(overrides.palette);

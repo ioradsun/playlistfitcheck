@@ -221,8 +221,6 @@ export function LyricsTab({
         }
 
         const data = await response.json();
-        console.log("[Transcribe Debug]", ms(), "raw response keys:", Object.keys(data));
-        console.log("[Transcribe Debug]", ms(), "raw response:", JSON.stringify(data).slice(0, 500));
         console.log(`[Transcribe Debug] ${ms()} parsed JSON, lines=${data.lines?.length}, words=${data.words?.length}`);
 
         if (data.error) throw new Error(data.error);

@@ -72,6 +72,7 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
   const barRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const wasPlaying = useRef(false);
+  const lastProgressRef = useRef(0);
 
   useEffect(() => {
     if (!player) return;
@@ -81,13 +82,51 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
     const songEnd = lines.length > 0 ? lines[lines.length - 1].end + 1 : 0;
     const duration = songEnd - songStart;
     let rafId = 0;
+    const stop = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+    };
     const update = () => {
       const p = duration > 0 ? (audio.currentTime - songStart) / duration : 0;
-      setProgress(Math.max(0, Math.min(1, p)));
+      const clamped = Math.max(0, Math.min(1, p));
+      if (Math.abs(clamped - lastProgressRef.current) > 0.005) {
+        lastProgressRef.current = clamped;
+        setProgress(clamped);
+      }
+      if (audio.paused || document.hidden) {
+        rafId = 0;
+        return;
+      }
       rafId = requestAnimationFrame(update);
     };
-    rafId = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(rafId);
+
+    const start = () => {
+      if (!rafId && !audio.paused && !document.hidden) {
+        rafId = requestAnimationFrame(update);
+      }
+    };
+
+    if (!audio.paused && !document.hidden) start();
+
+    const handlePlay = () => start();
+    const handlePause = () => stop();
+    const handleVisibility = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      stop();
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [player, data]);
 
   const seekTo = useCallback((clientX: number) => {
@@ -368,7 +407,6 @@ export default function ShareableLyricDance() {
       const entry = entries[0];
       if (!entry) return;
       const { width, height } = entry.contentRect;
-      console.log('[RESIZE]', width, height, window.innerWidth, window.innerHeight);
       if (width > 0 && height > 0) {
         player.resize(width, height);
       }
@@ -405,14 +443,9 @@ export default function ShareableLyricDance() {
 
   // ── Auto-palette from section images (client-side sampler) ───────────────
   useEffect(() => {
-    console.info('[auto-palette] effect fired', {
-      id: data?.id,
-      section_images: data?.section_images,
-      existing_auto_palettes: data?.auto_palettes,
-    });
     if (!data?.id) return;
     const urls = (data.section_images ?? []).filter((u): u is string => Boolean(u));
-    console.info('[auto-palette] filtered urls:', urls.length, urls);
+    console.info('[auto-palette] filtered urls count:', urls.length);
     if (urls.length === 0) return;
     if (Array.isArray(data.auto_palettes) && data.auto_palettes.length >= urls.length) {
       console.info('[auto-palette] skipped — already have', data.auto_palettes.length, 'palettes');
@@ -420,10 +453,9 @@ export default function ShareableLyricDance() {
     }
 
     let cancelled = false;
-    console.info('[auto-palette] starting computeAutoPalettesFromUrls...');
     computeAutoPalettesFromUrls(urls)
       .then(async (autoPalettes) => {
-        console.info('[auto-palette] computed:', JSON.stringify(autoPalettes));
+        console.info('[auto-palette] computed count:', autoPalettes.length);
         if (cancelled || autoPalettes.length === 0) return;
         setData(prev => (prev ? { ...prev, auto_palettes: autoPalettes } : prev));
       })
