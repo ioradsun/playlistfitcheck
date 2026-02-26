@@ -1646,6 +1646,7 @@ export class LyricDancePlayer {
       tensionStage: currentTension?.stage ?? "—",
       tensionMotion: currentTension?.motionIntensity ?? 0,
       tensionParticles: currentTension?.particleDensity ?? 0,
+      tensionTypo: section?.typography ?? (cd as any)?.typography ?? "clean-modern",
       backgroundSystem: this.backgroundSystem ?? "—",
       lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
       lineIntent: currentChapter?.emotionalArc ?? "—",
