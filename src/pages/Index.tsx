@@ -475,6 +475,7 @@ const Index = () => {
       setProfitSavedReport(null);
       setLoadedHitFitAnalysis(null);
       setLoadedVibeFitResult(null);
+      setOptimisticSidebarItem(null);
       setProfitLoadKey(k => k + 1);
       setVibeFitLoadKey(k => k + 1);
       setSidebarRefreshKey(k => k + 1);
