@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense, startTransition } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
@@ -151,6 +151,7 @@ const Index = () => {
     // Skip re-fetch if we already have this project loaded
     if (projectLoadedRef.current === projectId) return;
 
+    setLoadingProjectType("lyric");
     (async () => {
       const { data, error } = await supabase
         .from("saved_lyrics")
@@ -159,8 +160,11 @@ const Index = () => {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (error || !data) return;
-      setLoadedLyric(data);
+      if (error || !data) { setLoadingProjectType(null); return; }
+      startTransition(() => {
+        setLoadedLyric(data);
+        setLoadingProjectType(null);
+      });
       projectLoadedRef.current = projectId;
     })();
   }, [activeTab, projectId, user?.id]);
@@ -184,6 +188,7 @@ const Index = () => {
       return;
     }
     projectLoadedRef.current = projectId;
+    setLoadingProjectType(tab);
 
     const pathMap: Record<string, string> = { lyric: "/LyricFit", mix: "/MixFit", hitfit: "/HitFit", profit: "/ProFit", vibefit: "/VibeFit", playlist: "/PlaylistFit" };
 
@@ -207,10 +212,12 @@ const Index = () => {
         data = r.data; error = r.error;
       }
       if (error || !data) {
+        setLoadingProjectType(null);
         toast.error("Project not found");
         navigate(pathMap[tab] || "/CrowdFit", { replace: true });
         return;
       }
+      setLoadingProjectType(null);
       // For profit, reshape data to match expected format
       if (tab === "profit" && data.blueprint_json) {
         const artist = (data as any).profit_artists;
@@ -247,6 +254,8 @@ const Index = () => {
   const refreshSidebar = useCallback(() => setSidebarRefreshKey(k => k + 1), []);
   const [deferSidebarReady, setDeferSidebarReady] = useState(false);
   const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
+  // Tracks when we're loading a project from URL/sidebar — shows skeleton instead of uploader
+  const [loadingProjectType, setLoadingProjectType] = useState<string | null>(null);
 
   // Shared header UI persists across route transitions, so clear route-scoped
   // project chrome immediately whenever the pathname changes.
@@ -482,6 +491,7 @@ const Index = () => {
 
   const handleSidebarTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
+    setLoadingProjectType(null);
     // Reset loaded project for the clicked tool so it opens fresh/new
     if (tab === "lyric") { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }
     else if (tab === "mix") { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }
@@ -489,99 +499,103 @@ const Index = () => {
   }, [setActiveTab, navigate]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
-    // Only reset state for the tool being loaded — don't touch other tools'
-    // persisted state (e.g. loadedLyric) to prevent unnecessary remounts.
-    setResult(null);
-    setVibeAnalysis(null);
-    setSongFitAnalysis(null);
-    if (type === "mix") setLoadedMixProject(null);
-    if (type === "profit") { setProfitArtistUrl(null); setProfitSavedReport(null); }
-    if (type === "hitfit") setLoadedHitFitAnalysis(null);
-    if (type === "vibefit") setLoadedVibeFitResult(null);
+    // Use startTransition so heavy state updates don't block the sidebar
+    startTransition(() => {
+      // Only reset state for the tool being loaded — don't touch other tools'
+      // persisted state (e.g. loadedLyric) to prevent unnecessary remounts.
+      setResult(null);
+      setVibeAnalysis(null);
+      setSongFitAnalysis(null);
+      if (type === "mix") setLoadedMixProject(null);
+      if (type === "profit") { setProfitArtistUrl(null); setProfitSavedReport(null); }
+      if (type === "hitfit") setLoadedHitFitAnalysis(null);
+      if (type === "vibefit") setLoadedVibeFitResult(null);
 
-    switch (type) {
-      case "profit": {
-        if (data?.reportId && data?.blueprint && data?.artist) {
-          setProfitSavedReport(data);
-          setProfitLoadKey(k => k + 1);
-          navigate(`/ProFit/${data.reportId}`, { replace: true });
-        } else {
-          const artistId = data?.spotify_artist_id;
-          if (artistId) {
-            setProfitArtistUrl(`https://open.spotify.com/artist/${artistId}`);
+      switch (type) {
+        case "profit": {
+          if (data?.reportId && data?.blueprint && data?.artist) {
+            setProfitSavedReport(data);
             setProfitLoadKey(k => k + 1);
-          }
-        }
-        break;
-      }
-      case "hitfit": {
-        if (data?.analysis) {
-          setLoadedHitFitAnalysis(data.analysis);
-          if (data.id) navigate(`/HitFit/${data.id}`, { replace: true });
-        }
-        break;
-      }
-      case "playlist": {
-        if (data?.report_data) {
-          const { input, output, vibeAnalysis: vibe, songFitAnalysis: songFit, trackList, songUrl } = data.report_data;
-          setResult({ output, input, name: input?.playlistName, key: Date.now(), trackList, songUrl });
-          setVibeAnalysis(vibe ?? null);
-          setSongFitAnalysis(songFit ?? null);
-          setVibeLoading(false);
-          setSongFitLoading(false);
-          if (data.id) navigate(`/PlaylistFit/${data.id}`, { replace: true });
-        } else if (data?.playlist_url) {
-          (async () => {
-            setVibeLoading(true);
-            try {
-              const { data: plData, error } = await supabase.functions.invoke("spotify-playlist", {
-                body: { playlistUrl: data.playlist_url, sessionId: null, songUrl: data.song_url || null },
-              });
-              if (error) throw new Error(error.message);
-              if (plData?.error) throw new Error(plData.error);
-              handleAnalyze({ ...(plData as PlaylistInput), _songUrl: data.song_url || undefined });
-            } catch (e) {
-              console.error("Re-run error:", e);
-              toast.error("Failed to load report. Try running PlaylistFit again.");
-              setVibeLoading(false);
+            navigate(`/ProFit/${data.reportId}`, { replace: true });
+          } else {
+            const artistId = data?.spotify_artist_id;
+            if (artistId) {
+              setProfitArtistUrl(`https://open.spotify.com/artist/${artistId}`);
+              setProfitLoadKey(k => k + 1);
             }
-          })();
+          }
+          break;
         }
-        break;
-      }
-      case "mix": {
-        if (data) {
-          const mixData: MixProjectData = {
-            id: data.id,
-            title: data.title || "",
-            notes: data.notes || "",
-            mixes: Array.isArray(data.mixes) ? data.mixes : [],
-            markerStart: 0,
-            markerEnd: 10,
-            createdAt: data.created_at || new Date().toISOString(),
-            updatedAt: data.updated_at || new Date().toISOString(),
-          };
-          setLoadedMixProject(mixData);
-          if (data.id) navigate(`/MixFit/${data.id}`, { replace: true });
+        case "hitfit": {
+          if (data?.analysis) {
+            setLoadedHitFitAnalysis(data.analysis);
+            if (data.id) navigate(`/HitFit/${data.id}`, { replace: true });
+          }
+          break;
         }
-        break;
-      }
-      case "lyric": {
-        if (data) {
-          setLoadedLyric(data);
-          if (data.id) navigate(`/LyricFit/${data.id}`, { replace: true });
+        case "playlist": {
+          if (data?.report_data) {
+            const { input, output, vibeAnalysis: vibe, songFitAnalysis: songFit, trackList, songUrl } = data.report_data;
+            setResult({ output, input, name: input?.playlistName, key: Date.now(), trackList, songUrl });
+            setVibeAnalysis(vibe ?? null);
+            setSongFitAnalysis(songFit ?? null);
+            setVibeLoading(false);
+            setSongFitLoading(false);
+            if (data.id) navigate(`/PlaylistFit/${data.id}`, { replace: true });
+          } else if (data?.playlist_url) {
+            (async () => {
+              setVibeLoading(true);
+              try {
+                const { data: plData, error } = await supabase.functions.invoke("spotify-playlist", {
+                  body: { playlistUrl: data.playlist_url, sessionId: null, songUrl: data.song_url || null },
+                });
+                if (error) throw new Error(error.message);
+                if (plData?.error) throw new Error(plData.error);
+                handleAnalyze({ ...(plData as PlaylistInput), _songUrl: data.song_url || undefined });
+              } catch (e) {
+                console.error("Re-run error:", e);
+                toast.error("Failed to load report. Try running PlaylistFit again.");
+                setVibeLoading(false);
+              }
+            })();
+          }
+          break;
         }
-        break;
-      }
-      case "vibefit": {
-        if (data) {
-          setLoadedVibeFitResult(data);
-          setVibeFitLoadKey((k) => k + 1);
-          if (data.id) navigate(`/VibeFit/${data.id}`, { replace: true });
+        case "mix": {
+          if (data) {
+            const mixData: MixProjectData = {
+              id: data.id,
+              title: data.title || "",
+              notes: data.notes || "",
+              mixes: Array.isArray(data.mixes) ? data.mixes : [],
+              markerStart: 0,
+              markerEnd: 10,
+              createdAt: data.created_at || new Date().toISOString(),
+              updatedAt: data.updated_at || new Date().toISOString(),
+            };
+            setLoadedMixProject(mixData);
+            if (data.id) navigate(`/MixFit/${data.id}`, { replace: true });
+          }
+          break;
         }
-        break;
+        case "lyric": {
+          if (data) {
+            setLoadedLyric(data);
+            setLoadingProjectType(null);
+            if (data.id) navigate(`/LyricFit/${data.id}`, { replace: true });
+          }
+          break;
+        }
+        case "vibefit": {
+          if (data) {
+            setLoadedVibeFitResult(data);
+            setVibeFitLoadKey((k) => k + 1);
+            if (data.id) navigate(`/VibeFit/${data.id}`, { replace: true });
+          }
+          break;
+        }
       }
-    }
+    });
   }, [handleAnalyze, navigate]);
 
   const navigateToProject = useCallback((tool: string, id: string) => {
@@ -684,23 +698,26 @@ const Index = () => {
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("lyric") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
-              <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
-                if (payload.projectId) {
-                  // Mark project as "already loaded" so the URL-based fetch effect
-                  // doesn't fire and remount LyricFitTab mid-transcription.
-                  projectLoadedRef.current = payload.projectId;
-                  setOptimisticSidebarItem({
-                    id: payload.projectId,
-                    label: payload.title || "Untitled",
-                    meta: "just now",
-                    type: "lyric",
-                    rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
-                  });
-                  // Update URL without triggering a remount — loadedLyric stays null
-                  // so the key stays "new" and the component keeps running.
-                  navigate(`/LyricFit/${payload.projectId}`, { replace: true });
-                }
-              }} /></Suspense>
+              {loadingProjectType === "lyric" ? (
+                <div className="flex-1 flex items-center justify-center py-8 text-muted-foreground">
+                  <Loader2 size={18} className="animate-spin mr-2" />
+                  <span className="text-sm">Loading project…</span>
+                </div>
+              ) : (
+                <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
+                  if (payload.projectId) {
+                    projectLoadedRef.current = payload.projectId;
+                    setOptimisticSidebarItem({
+                      id: payload.projectId,
+                      label: payload.title || "Untitled",
+                      meta: "just now",
+                      type: "lyric",
+                      rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
+                    });
+                    navigate(`/LyricFit/${payload.projectId}`, { replace: true });
+                  }
+                }} /></Suspense>
+              )}
             </div>
           )}
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
