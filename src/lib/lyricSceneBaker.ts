@@ -1636,8 +1636,9 @@ function bakeFrame(
       for (let gi = 0; gi < phraseGroups.length; gi += 1) {
         const group = phraseGroups[gi];
         const nextGroupStart = phraseGroups[gi + 1]?.start ?? Infinity;
+        const groupEnd = Math.min(group.end + animParams.linger, nextGroupStart);
         if (tSec < group.start - animParams.stagger * group.words.length) continue;
-        if (tSec > Math.min(group.end + animParams.linger, nextGroupStart)) continue;
+        if (tSec > groupEnd) continue;
 
         const groupKey = `${group.lineIndex}-${group.groupIndex}`;
         const layout = groupLayouts.get(groupKey);
