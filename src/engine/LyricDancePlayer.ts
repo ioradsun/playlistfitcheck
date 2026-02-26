@@ -3327,39 +3327,48 @@ export class LyricDancePlayer {
           break;
         }
         case 'spark-burst': {
-          const count = 16;
-          for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2 + ((i * 0.618033) % 1) * 0.3;
-            const speed = (100 + ((i * 0.618033) % 1) * 80) * pScale;
+          // Expanding thin rings — ripple effect
+          const ringCount = 3;
+          for (let r = 0; r < ringCount; r++) {
+            const ringDelay = r * 0.12;
+            const ringAge = Math.max(0, linearProgress - ringDelay);
+            if (ringAge <= 0 || ringAge >= 1) continue;
+            const expandRadius = ringAge * 120 * em.intensity * pScale;
+            const ringAlpha = 0.3 * (1 - ringAge) * fadeAlpha;
+
+            this.ctx.save();
+            this.ctx.globalAlpha = ringAlpha;
+            this.ctx.strokeStyle = `rgba(255,255,255,${ringAlpha})`;
+            this.ctx.lineWidth = (0.8 + (1 - ringAge) * 1.2) * pScale;
+            this.ctx.beginPath();
+            this.ctx.arc(em.x, em.y, expandRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.restore();
+          }
+          // Tiny wispy streaks radiating out
+          const streakCount = 12;
+          for (let i = 0; i < streakCount; i++) {
+            const angle = (i / streakCount) * Math.PI * 2 + ((i * 0.618033) % 1) * 0.4;
+            const speed = (60 + ((i * 0.618033) % 1) * 50) * pScale;
             const dist = progress * speed;
-            const alpha = fadeAlpha * 0.95;
             const px = em.x + Math.cos(angle) * dist;
             const py = em.y + Math.sin(angle) * dist;
-            const streakLen = (8 + (1 - progress) * 12) * pScale;
-            const tailX = px - Math.cos(angle) * streakLen;
-            const tailY = py - Math.sin(angle) * streakLen;
+            const trailLen = (3 + (1 - progress) * 5) * pScale;
+            const tailX = px - Math.cos(angle) * trailLen;
+            const tailY = py - Math.sin(angle) * trailLen;
+            const alpha = fadeAlpha * 0.25 * (1 - progress);
 
             this.ctx.save();
             this.ctx.globalAlpha = alpha;
-            this.ctx.shadowColor = em.color;
-            this.ctx.shadowBlur = 6 * pScale;
-            this.ctx.strokeStyle = em.color;
-            this.ctx.lineWidth = (2 + (1 - progress) * 2) * pScale;
+            this.ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.5})`;
+            this.ctx.lineWidth = 0.6 * pScale;
             this.ctx.lineCap = 'round';
             this.ctx.beginPath();
             this.ctx.moveTo(tailX, tailY);
             this.ctx.lineTo(px, py);
             this.ctx.stroke();
-
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.shadowColor = '#FFFFFF';
-            this.ctx.shadowBlur = 4 * pScale;
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, (1.5 + (1 - progress)) * pScale, 0, Math.PI * 2);
-            this.ctx.fill();
             this.ctx.restore();
           }
-          this.ctx.shadowBlur = 0;
           this.ctx.globalAlpha = 1;
           break;
         }
