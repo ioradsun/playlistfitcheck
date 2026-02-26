@@ -107,13 +107,13 @@ export function LyricsTab({
     async (file: File, userId: string, projectId: string): Promise<string | null> => {
       const path = getAudioStoragePath(userId, projectId, file.name);
       const { error } = await supabase.storage
-        .from("audio")
+        .from("audio-clips")
         .upload(path, file, { upsert: true, contentType: file.type || undefined });
       if (error) {
         console.warn("[Pipeline] Audio upload failed during transcription pipeline:", error.message);
         return null;
       }
-      const { data } = supabase.storage.from("audio").getPublicUrl(path);
+      const { data } = supabase.storage.from("audio-clips").getPublicUrl(path);
       console.log("[Pipeline] Audio uploaded to storage:", data.publicUrl);
       return data.publicUrl;
     },

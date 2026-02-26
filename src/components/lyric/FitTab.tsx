@@ -364,12 +364,7 @@ function CinematicDirectionCard({
       setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
       onImageGenerationStatusChange?.("done");
 
-      if (projectId && urls.length > 0) {
-        void supabase
-          .from("saved_lyrics")
-          .update({ section_images: urls as any })
-          .eq("id", projectId);
-      }
+      // section_images are stored on shareable_lyric_dances, not saved_lyrics
 
       toast.success(`Generated ${urls.filter(Boolean).length}/${sections.length} section images`);
     } catch (e: any) {
@@ -580,11 +575,11 @@ function CinematicDirectionCard({
           ? getAudioStoragePath(user.id, savedId, audioFile.name)
           : `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
         const { error: uploadError } = await supabase.storage
-          .from("audio")
+          .from("audio-clips")
           .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
         if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage.from("audio").getPublicUrl(storagePath);
+        const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
         audioUrl = urlData.publicUrl;
       }
 
