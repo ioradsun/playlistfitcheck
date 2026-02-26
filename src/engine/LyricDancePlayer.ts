@@ -230,6 +230,15 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   evolutionBubbles: 0,
   evolutionSinkPx: 0,
 
+  imgCount: 0,
+  imgActiveIdx: -1,
+  imgNextIdx: -1,
+  imgCrossfade: 0,
+  imgChapterSpan: 0,
+  imgLocalProgress: 0,
+  imgOpacity: 0,
+  imgOverlap: false,
+
   fps: 60,
   drawCalls: 0,
   cacheHits: 0,
