@@ -2195,13 +2195,30 @@ export class LyricDancePlayer {
   private async loadSectionImages(): Promise<void> {
     const urls = this.data.section_images ?? [];
     if (urls.length === 0) return;
+    const duration = this.audio?.duration || 1;
+    const totalChapters = urls.length || 1;
+    const chapterSpan = duration / totalChapters;
+    console.log('[Player Sections]', urls.map((url: string, i: number) => ({
+      index: i,
+      start: (i * chapterSpan).toFixed(2),
+      end: ((i + 1) * chapterSpan).toFixed(2),
+      duration: chapterSpan.toFixed(2),
+      hasImage: !!url,
+      imageUrl: url ? url.slice(-30) : 'none',
+    })));
     this.chapterImages = await Promise.all(
-      urls.map((url: string) => new Promise<HTMLImageElement>((resolve) => {
+      urls.map((url: string, i: number) => new Promise<HTMLImageElement>((resolve) => {
         if (!url) { resolve(new Image()); return; }
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(new Image()); // silent fail
+        img.onload = () => {
+          console.log('[Player Image Preload]', { index: i, url: url.slice(-30), loaded: true });
+          resolve(img);
+        };
+        img.onerror = () => {
+          console.log('[Player Image Preload]', { index: i, url: url.slice(-30), loaded: false });
+          resolve(new Image());
+        };
         img.src = url;
       }))
     );
