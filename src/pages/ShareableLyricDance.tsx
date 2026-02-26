@@ -56,7 +56,7 @@ function extractAudioSectionsFromDirection(
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
 interface DanceComment { id: string; text: string; submitted_at: string; }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,auto_palettes";
 const DIRECTION_COLUMNS = "cinematic_direction";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
@@ -444,20 +444,31 @@ export default function ShareableLyricDance() {
   // ── Auto-palette from section images (client-side sampler) ───────────────
   useEffect(() => {
     if (!data?.id) return;
-    const urls = (data.section_images ?? []).filter((u): u is string => Boolean(u));
-    console.info('[auto-palette] filtered urls count:', urls.length);
-    if (urls.length === 0) return;
-    if (Array.isArray(data.auto_palettes) && data.auto_palettes.length >= urls.length) {
-      console.info('[auto-palette] skipped — already have', data.auto_palettes.length, 'palettes');
+
+    if (Array.isArray(data.auto_palettes) && data.auto_palettes.length > 0) {
       return;
     }
 
+    const urls = (data.section_images ?? []).filter((u): u is string => Boolean(u));
+    if (urls.length === 0) return;
+
+    const savePalettesToDb = async (id: string, palettes: string[][]) => {
+      try {
+        await supabase
+          .from("shareable_lyric_dances" as any)
+          .update({ auto_palettes: palettes, updated_at: new Date().toISOString() } as any)
+          .eq("id", id);
+      } catch (error) {
+        console.warn("[auto-palette] failed to cache:", error);
+      }
+    };
+
     let cancelled = false;
     computeAutoPalettesFromUrls(urls)
-      .then(async (autoPalettes) => {
-        console.info('[auto-palette] computed count:', autoPalettes.length);
+      .then((autoPalettes) => {
         if (cancelled || autoPalettes.length === 0) return;
         setData(prev => (prev ? { ...prev, auto_palettes: autoPalettes } : prev));
+        void savePalettesToDb(data.id, autoPalettes);
       })
       .catch((error) => {
         console.error('[auto-palette] failed to compute from section images', error);

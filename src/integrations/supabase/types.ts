@@ -1254,6 +1254,7 @@ export type Database = {
       shareable_lyric_dances: {
         Row: {
           artist_dna: Json | null
+          auto_palettes: Json | null
           artist_name: string
           artist_slug: string
           audio_url: string
@@ -1279,6 +1280,7 @@ export type Database = {
         }
         Insert: {
           artist_dna?: Json | null
+          auto_palettes?: Json | null
           artist_name: string
           artist_slug: string
           audio_url: string
@@ -1304,6 +1306,7 @@ export type Database = {
         }
         Update: {
           artist_dna?: Json | null
+          auto_palettes?: Json | null
           artist_name?: string
           artist_slug?: string
           audio_url?: string
