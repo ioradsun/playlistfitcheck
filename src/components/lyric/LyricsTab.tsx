@@ -50,6 +50,7 @@ interface Props {
   transcriptionModel: string;
   sceneInput?: ReactNode;
   onAudioSubmitted?: (file: File) => void;
+  onUploadStarted?: (payload: { file: File; projectId: string | null; title: string }) => void;
 }
 
 export function LyricsTab({
@@ -76,6 +77,7 @@ export function LyricsTab({
   transcriptionModel,
   sceneInput,
   onAudioSubmitted,
+  onUploadStarted,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Syncing...");
@@ -132,8 +134,42 @@ export function LyricsTab({
       setProgressStage("compressing");
       setProgressOpen(true);
 
+      const projectId = user ? crypto.randomUUID() : null;
+      const draftTitle = resolveProjectTitle(null, file.name);
+      setLyricData({ title: draftTitle, lines: [] });
+      setLines([]);
+      setAudioFile(file);
+      setHasRealAudio(true);
+      setSavedId(projectId);
+      if (projectId) {
+        sessionAudio.set("lyric", projectId, file);
+      } else {
+        sessionAudio.set("lyric", "__unsaved__", file);
+      }
+      onUploadStarted?.({ file, projectId, title: draftTitle });
+
       // Start beat grid analysis in parallel with transcription
       onAudioSubmitted?.(file);
+
+      if (user && projectId) {
+        void (async () => {
+          const audioUploadPromise = uploadAudioImmediately(file, user.id, projectId);
+          const { data: audioUrl } = await Promise.race([
+            audioUploadPromise.then((url) => ({ data: url })),
+            new Promise<{ data: string | null }>((resolve) => setTimeout(() => resolve({ data: null }), 15000)),
+          ]);
+          await supabase.from("saved_lyrics").upsert({
+            id: projectId,
+            user_id: user.id,
+            title: draftTitle,
+            lines: [],
+            words: null,
+            filename: file.name,
+            ...(audioUrl ? { audio_url: audioUrl } : {}),
+            updated_at: new Date().toISOString(),
+          } as any);
+        })();
+      }
 
       try {
         // Only compress if over 25MB
@@ -204,17 +240,7 @@ export function LyricsTab({
         if (data.error) throw new Error(data.error);
         if (!data.lines) throw new Error("Invalid response format");
 
-        let projectId: string | null = null;
-        if (user) {
-          projectId = crypto.randomUUID();
-          console.log("[LyricsTab] Saving project", projectId);
-          // Upload audio in background — don't block the modal
-          const audioUploadPromise = uploadAudioImmediately(file, user.id, projectId);
-          const audioUrl = await Promise.race([
-            audioUploadPromise,
-            new Promise<string | null>((resolve) => setTimeout(() => resolve(null), 15000)),
-          ]);
-          console.log("[LyricsTab] Audio upload done, url:", !!audioUrl);
+        if (user && projectId) {
           await supabase.from("saved_lyrics").upsert({
             id: projectId,
             user_id: user.id,
@@ -222,10 +248,8 @@ export function LyricsTab({
             lines: data.lines,
             words: data.words ?? null,
             filename: file.name,
-            ...(audioUrl ? { audio_url: audioUrl } : {}),
             updated_at: new Date().toISOString(),
           } as any);
-          console.log("[LyricsTab] Project saved");
         }
 
         await new Promise((r) => setTimeout(r, 400));
@@ -262,7 +286,7 @@ export function LyricsTab({
         setProgressOpen(false);
       }
     },
-    [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted],
+    [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
   );
 
   const handleBack = useCallback(() => {
@@ -278,7 +302,12 @@ export function LyricsTab({
 
   if (lyricData && audioFile) {
     return (
-      <div className="flex-1 px-4 py-6">
+      <div className="flex-1 px-4 py-6 space-y-3">
+        {loading && (
+          <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
+            Transcribing lyrics…
+          </div>
+        )}
         <LyricDisplay
           data={lyricData}
           audioFile={audioFile}
