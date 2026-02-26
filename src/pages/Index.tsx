@@ -686,6 +686,9 @@ const Index = () => {
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
               <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
                 if (payload.projectId) {
+                  // Mark project as "already loaded" so the URL-based fetch effect
+                  // doesn't fire and remount LyricFitTab mid-transcription.
+                  projectLoadedRef.current = payload.projectId;
                   setOptimisticSidebarItem({
                     id: payload.projectId,
                     label: payload.title || "Untitled",
@@ -693,7 +696,9 @@ const Index = () => {
                     type: "lyric",
                     rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
                   });
-                  navigateToProject("lyric", payload.projectId);
+                  // Update URL without triggering a remount — loadedLyric stays null
+                  // so the key stays "new" and the component keeps running.
+                  navigate(`/LyricFit/${payload.projectId}`, { replace: true });
                 }
               }} /></Suspense>
             </div>
