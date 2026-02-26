@@ -126,6 +126,16 @@ export interface LiveDebugState {
   evolutionBubbles: number;
   evolutionSinkPx: number;
 
+  // Image diagnostics
+  imgCount: number;
+  imgActiveIdx: number;
+  imgNextIdx: number;
+  imgCrossfade: number;
+  imgChapterSpan: number;
+  imgLocalProgress: number;
+  imgOpacity: number;
+  imgOverlap: boolean;
+
   fps: number;
   drawCalls: number;
   cacheHits: number;
@@ -219,6 +229,15 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   evolutionGlow: 0,
   evolutionBubbles: 0,
   evolutionSinkPx: 0,
+
+  imgCount: 0,
+  imgActiveIdx: -1,
+  imgNextIdx: -1,
+  imgCrossfade: 0,
+  imgChapterSpan: 0,
+  imgLocalProgress: 0,
+  imgOpacity: 0,
+  imgOverlap: false,
 
   fps: 60,
   drawCalls: 0,
@@ -682,6 +701,7 @@ export class LyricDancePlayer {
   private currentSimCanvases: HTMLCanvasElement[] = [];
   private chapterImages: HTMLImageElement[] = [];
   private chapterImageLuminance = new WeakMap<HTMLImageElement, number>();
+  private _prevImgIdx = -1;
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
@@ -1515,6 +1535,41 @@ export class LyricDancePlayer {
     const chapterSpan = duration / totalChapters;
     const chapterLocalProgress = chapterSpan > 0 ? ((this.audio?.currentTime ?? 0) % chapterSpan) / chapterSpan : 0;
     const crossfade = chapterLocalProgress > 0.85 ? (chapterLocalProgress - 0.85) / 0.15 : 0;
+
+    // Image diagnostics — log section transitions
+    if (imgIdx !== this._prevImgIdx && this.chapterImages.length > 0) {
+      const currentUrl = this.data.section_images?.[imgIdx];
+      const prevUrl = this._prevImgIdx >= 0 ? this.data.section_images?.[this._prevImgIdx] : undefined;
+      if (this._prevImgIdx >= 0 && prevUrl) {
+        console.log('[Player Image Hide]', { sectionIndex: this._prevImgIdx, time: tSec.toFixed(2) });
+      }
+      if (currentUrl) {
+        console.log('[Player Image Show]', { sectionIndex: imgIdx, time: tSec.toFixed(2), opacity: 1, url: currentUrl.slice(-30) });
+      }
+      console.log('[Player Section Change]', {
+        time: tSec.toFixed(2),
+        from: this._prevImgIdx,
+        to: imgIdx,
+        imageUrl: currentUrl ? currentUrl.slice(-30) : 'none',
+      });
+      this._prevImgIdx = imgIdx;
+    }
+
+    // Update image debug state
+    const atmosphere = this.getAtmosphere();
+    const atmosphereOpacityMap: Record<string, number> = { void: 0.10, cinematic: 0.65, haze: 0.50, split: 0.75, grain: 0.60, wash: 0.55, glass: 0.45, clean: 0.85 };
+    this.debugState = {
+      ...this.debugState,
+      imgCount: this.chapterImages.length,
+      imgActiveIdx: imgIdx,
+      imgNextIdx: nextImgIdx,
+      imgCrossfade: crossfade,
+      imgChapterSpan: chapterSpan,
+      imgLocalProgress: chapterLocalProgress,
+      imgOpacity: atmosphereOpacityMap[atmosphere] ?? 0.65,
+      imgOverlap: false,
+    };
+
     this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
 
     this.drawSimLayer(frame);
@@ -2175,13 +2230,30 @@ export class LyricDancePlayer {
   private async loadSectionImages(): Promise<void> {
     const urls = this.data.section_images ?? [];
     if (urls.length === 0) return;
+    const duration = this.audio?.duration || 1;
+    const totalChapters = urls.length || 1;
+    const chapterSpan = duration / totalChapters;
+    console.log('[Player Sections]', urls.map((url: string, i: number) => ({
+      index: i,
+      start: (i * chapterSpan).toFixed(2),
+      end: ((i + 1) * chapterSpan).toFixed(2),
+      duration: chapterSpan.toFixed(2),
+      hasImage: !!url,
+      imageUrl: url ? url.slice(-30) : 'none',
+    })));
     this.chapterImages = await Promise.all(
-      urls.map((url: string) => new Promise<HTMLImageElement>((resolve) => {
+      urls.map((url: string, i: number) => new Promise<HTMLImageElement>((resolve) => {
         if (!url) { resolve(new Image()); return; }
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(new Image()); // silent fail
+        img.onload = () => {
+          console.log('[Player Image Preload]', { index: i, url: url.slice(-30), loaded: true });
+          resolve(img);
+        };
+        img.onerror = () => {
+          console.log('[Player Image Preload]', { index: i, url: url.slice(-30), loaded: false });
+          resolve(new Image());
+        };
         img.src = url;
       }))
     );
