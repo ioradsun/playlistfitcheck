@@ -526,6 +526,18 @@ export function LyricFitTab({
         const enrichedDirection = beatGrid
           ? { ...dirResult.cinematicDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
           : dirResult.cinematicDirection;
+
+        // Merge audioSections time boundaries into direction sections
+        if (audioSections.length > 0 && Array.isArray(enrichedDirection.sections)) {
+          enrichedDirection.sections = enrichedDirection.sections.map((s: any, i: number) => ({
+            ...s,
+            startSec: audioSections[i]?.startSec ?? s.startSec,
+            endSec: audioSections[i]?.endSec ?? s.endSec,
+          }));
+          console.log('[Pipeline] Merged audioSections time boundaries into direction sections:', 
+            enrichedDirection.sections.map((s: any, i: number) => ({ index: i, startSec: s.startSec, endSec: s.endSec })));
+        }
+
         setCinematicDirection(enrichedDirection);
 
         // Derive FrameRenderState from cinematic direction presets

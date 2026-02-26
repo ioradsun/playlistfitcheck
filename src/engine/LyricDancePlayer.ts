@@ -1282,14 +1282,26 @@ export class LyricDancePlayer {
   };
 
 
-  private resolveSectionIndex(sections: Array<{ startSec: number; endSec: number }>, currentTimeSec: number): number {
+  private resolveSectionIndex(sections: Array<{ startSec?: number; endSec?: number; startRatio?: number; endRatio?: number }>, currentTimeSec: number, totalDurationSec?: number): number {
+    // Try absolute time boundaries first
     for (let i = 0; i < sections.length; i++) {
-      if (currentTimeSec >= sections[i].startSec && currentTimeSec < sections[i].endSec) {
-        return i;
+      if (sections[i].startSec != null && sections[i].endSec != null) {
+        if (currentTimeSec >= sections[i].startSec! && currentTimeSec < sections[i].endSec!) {
+          return i;
+        }
       }
     }
-
-    return sections.length - 1;
+    // Fallback: use ratio-based boundaries
+    const dur = totalDurationSec ?? (this.audio?.duration || 1);
+    if (dur > 0) {
+      const progress = currentTimeSec / dur;
+      for (let i = 0; i < sections.length; i++) {
+        const sr = sections[i].startRatio ?? (i / sections.length);
+        const er = sections[i].endRatio ?? ((i + 1) / sections.length);
+        if (progress >= sr && progress < er) return i;
+      }
+    }
+    return Math.max(0, sections.length - 1);
   }
 
   private resolveChapterIndex(chapters: any[], currentTimeSec: number, _totalDurationSec: number): number {

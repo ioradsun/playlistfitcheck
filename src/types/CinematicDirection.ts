@@ -52,9 +52,13 @@ export interface CinematicSection {
   texture?: string;
   typography?: string;
   atmosphere?: string;
-  /** Computed by enrichSections() */
+  /** Time boundary in seconds (from audioSections) */
+  startSec?: number;
+  /** Time boundary in seconds (from audioSections) */
+  endSec?: number;
+  /** Computed by enrichSections() — ratio 0–1 */
   startRatio?: number;
-  /** Computed by enrichSections() */
+  /** Computed by enrichSections() — ratio 0–1 */
   endRatio?: number;
 }
 
