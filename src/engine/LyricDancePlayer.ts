@@ -720,6 +720,7 @@ interface WordEmitter {
   type: WordEmitterType;
   x: number;
   y: number;
+  wordWidth: number;
   color: string;
   startTime: number;
   duration: number;
@@ -1829,6 +1830,9 @@ export class LyricDancePlayer {
 
     // Word-local particle emitters — render behind text
     this.drawWordEmitters(performance.now() / 1000);
+    // Cleanup expired word emitters
+    const nowCleanup = performance.now() / 1000;
+    this.wordEmitters = this.wordEmitters.filter(e => (nowCleanup - e.startTime) < e.duration);
 
     // Ambient particles — runtime system updates per section
     this.ambientParticleEngine?.draw(this.ctx, "far");
@@ -3008,10 +3012,12 @@ export class LyricDancePlayer {
       'dark-absorb': 3.0,
     };
 
+    const measuredWidth = this.ctx.measureText(chunkId.split('_')[0] ?? '').width || 60;
     this.wordEmitters.push({
       type: emitterType,
       x: wordX,
       y: wordY,
+      wordWidth: measuredWidth,
       color: palette.glow,
       startTime: nowSecEmitters,
       duration: EMITTER_DURATIONS[emitterType] ?? 2.0,
@@ -3236,58 +3242,51 @@ export class LyricDancePlayer {
 
       switch (em.type) {
         case 'ember': {
-          // Heat shimmer: tiny irregular scratches, barely visible
-          const count = Math.floor(20 + em.intensity * 12);
+          const hw = (em.wordWidth || 60) / 2;
+          const count = 6;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
             const seed2 = (i * 0.381966) % 1;
-            const life = 0.3 + seed2 * 0.5; // 0.3-0.8s lifecycle
+            const life = 0.3 + seed2 * 0.4;
             const age = (elapsed * (0.8 + seed * 0.4)) % life;
             const agePct = age / life;
-            // Spread across word width area, not just center
-            const spawnX = em.x + (seed - 0.5) * 120 * pScale;
-            const spawnY = em.y - agePct * 40 * pScale + (seed2 - 0.5) * 10 * pScale;
-            const hDrift = Math.sin(elapsed * 2.5 + i * 1.7) * 8 * pScale;
-            const px = spawnX + hDrift;
-            const py = spawnY;
-            const alpha = 0.12 * (1 - agePct) * fadeAlpha * em.intensity;
-            if (alpha <= 0.005) continue;
+            const px = em.x - hw + seed * hw * 2 + Math.sin(elapsed * 2 + i) * 4 * pScale;
+            const py = em.y - agePct * 25 * pScale;
+            const alpha = 0.06 * (1 - agePct) * fadeAlpha * em.intensity;
+            if (alpha <= 0.003) continue;
 
-            const angle = seed * Math.PI * 2 + elapsed * 0.5;
-            const len = (0.8 + seed2 * 1.2) * pScale;
-            const g = seed < 0.4 ? 200 : seed < 0.7 ? 160 : 140;
+            const angle = seed * Math.PI * 2 + elapsed * 0.4;
+            const len = (0.5 + seed2 * 0.5) * pScale;
 
             this.ctx.beginPath();
             this.ctx.moveTo(px, py);
             this.ctx.lineTo(px + Math.cos(angle) * len, py + Math.sin(angle) * len);
-            this.ctx.lineWidth = (0.3 + seed2 * 0.4) * pScale;
-            this.ctx.strokeStyle = `rgba(255,${g},100,${alpha})`;
+            this.ctx.lineWidth = 0.3 * pScale;
+            this.ctx.strokeStyle = `rgba(255,${seed < 0.5 ? 200 : 150},100,${alpha})`;
             this.ctx.stroke();
           }
           break;
         }
         case 'frost': {
-          // Subtle cool shimmer: short blue-white scratches
-          const count = 14;
+          const hw = (em.wordWidth || 60) / 2;
+          const count = 6;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
             const seed2 = (i * 0.381966) % 1;
-            const life = 0.4 + seed * 0.4;
+            const life = 0.3 + seed * 0.4;
             const age = (elapsed * (0.6 + seed2 * 0.5)) % life;
             const agePct = age / life;
-            const angle = (i / count) * Math.PI * 2 + elapsed * 0.2;
-            const dist = (10 + progress * 40 * seed) * pScale;
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist;
-            const alpha = 0.12 * (1 - agePct) * fadeAlpha;
-            if (alpha <= 0.005) continue;
+            const px = em.x - hw + seed * hw * 2 + Math.cos(elapsed * 0.8 + i) * 6 * pScale;
+            const py = em.y - agePct * 20 * pScale + (seed2 - 0.5) * 8 * pScale;
+            const alpha = 0.06 * (1 - agePct) * fadeAlpha;
+            if (alpha <= 0.003) continue;
 
-            const scratchAngle = angle + seed * 0.8;
-            const len = (0.8 + seed2 * 1.5) * pScale;
+            const a = seed * Math.PI * 2;
+            const len = (0.5 + seed2 * 0.8) * pScale;
             this.ctx.beginPath();
             this.ctx.moveTo(px, py);
-            this.ctx.lineTo(px + Math.cos(scratchAngle) * len, py + Math.sin(scratchAngle) * len);
-            this.ctx.lineWidth = (0.3 + seed2 * 0.3) * pScale;
+            this.ctx.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len);
+            this.ctx.lineWidth = 0.3 * pScale;
             this.ctx.strokeStyle = `rgba(180,220,255,${alpha})`;
             this.ctx.stroke();
           }
@@ -3308,23 +3307,21 @@ export class LyricDancePlayer {
           break;
         }
         case 'dust-impact': {
-          // Tiny 1px dots, slow drift, very low opacity
-          const count = 16;
+          const hw = (em.wordWidth || 60) / 2;
+          const count = 6;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
             const seed2 = (i * 0.381966) % 1;
-            const life = 0.4 + seed * 0.4;
+            const life = 0.3 + seed * 0.4;
             const age = (elapsed * (0.5 + seed2 * 0.4)) % life;
             const agePct = age / life;
-            const angle = (seed - 0.5) * Math.PI;
-            const dist = agePct * 35 * (0.5 + seed) * pScale;
-            const px = em.x + Math.cos(angle) * dist + (seed2 - 0.5) * 60 * pScale;
-            const py = em.y + Math.sin(angle) * dist * 0.3 - agePct * 15 * pScale;
-            const alpha = 0.10 * (1 - agePct) * fadeAlpha;
-            if (alpha <= 0.005) continue;
+            const px = em.x - hw + seed * hw * 2 + (seed2 - 0.5) * 20 * pScale;
+            const py = em.y - agePct * 12 * pScale;
+            const alpha = 0.06 * (1 - agePct) * fadeAlpha;
+            if (alpha <= 0.003) continue;
 
             this.ctx.beginPath();
-            this.ctx.arc(px, py, 0.8 * pScale, 0, Math.PI * 2);
+            this.ctx.arc(px, py, 0.5 * pScale, 0, Math.PI * 2);
             this.ctx.fillStyle = `rgba(255,255,240,${alpha})`;
             this.ctx.fill();
           }
