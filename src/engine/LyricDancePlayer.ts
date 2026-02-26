@@ -1602,6 +1602,10 @@ export class LyricDancePlayer {
     const frame = this.getFrame(this.currentTimeMs);
     const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
 
+    const activeWord = this.getActiveWord(clamped);
+    const activeWordClean = activeWord?.word?.toLowerCase()?.replace(/[.,!?'"]/g, '') ?? '';
+    const activeWordDirective = activeWordClean ? this.resolvedState.wordDirectivesMap[activeWordClean] ?? null : null;
+
     this.debugState = {
       ...this.debugState,
       time: clamped,
@@ -1641,6 +1645,11 @@ export class LyricDancePlayer {
       backgroundSystem: this.backgroundSystem ?? "—",
       lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
       lineIntent: currentChapter?.emotionalArc ?? "—",
+      wordDirectiveWord: activeWordDirective?.word ?? activeWordClean ?? "—",
+      wordDirectiveKinetic: activeWordDirective?.entry ?? activeWordDirective?.kineticClass ?? "—",
+      wordDirectiveElemental: activeWordDirective?.exit ?? activeWordDirective?.elementalClass ?? "—",
+      wordDirectiveEmphasis: activeWordDirective?.emphasisLevel ?? 0,
+      wordDirectiveEvolution: activeWordDirective?.behavior ?? activeWordDirective?.evolution ?? "—",
 
       // Section boundaries
       ...(() => {
@@ -1692,11 +1701,9 @@ export class LyricDancePlayer {
 
       // Active word
       ...(() => {
-        const words = this.data.words ?? [];
-        const t = clamped;
-        const w = words.find((w: any) => t >= w.start && t <= w.end);
+        const w = activeWord;
         if (!w) return { activeWord: "—", activeWordEntry: "—", activeWordExit: "—", activeWordEmphasis: 0, activeWordTrail: "none" };
-        const directive = this.resolvedState.wordDirectivesMap[w.word?.toLowerCase()] ?? null;
+        const directive = activeWordDirective;
         return {
           activeWord: w.word ?? "—",
           activeWordEntry: directive?.entry ?? "—",
@@ -2316,6 +2323,21 @@ export class LyricDancePlayer {
     };
     this.activeSectionIndex = -1;
     this.activeSectionTexture = texture;
+    console.log('[Player] wordDirectivesMap keys:', Object.keys(this.resolvedState?.wordDirectivesMap ?? {}));
+  }
+
+  private getActiveWord(timeSec: number): AnyWord | null {
+    const words = this.data.words ?? [];
+    for (let i = words.length - 1; i >= 0; i--) {
+      const word = words[i];
+      if (word.start <= timeSec && word.end >= timeSec) {
+        return word;
+      }
+      if (word.start <= timeSec) {
+        return word;
+      }
+    }
+    return null;
   }
 
   private buildChunkCache(payload: ScenePayload): void {
