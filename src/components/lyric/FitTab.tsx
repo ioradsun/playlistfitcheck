@@ -622,11 +622,9 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
     if (!renderData?.hook || !renderData?.secondHook || !audioFile || !lyricData) return;
     setBattlePublishing(true);
 
-    const BATTLE_TIMEOUT = 30_000;
-    const timeoutId = setTimeout(() => {
-      toast.error("Battle publish timed out — please try again");
-      setBattlePublishing(false);
-    }, BATTLE_TIMEOUT);
+    const slowWarningId2 = setTimeout(() => {
+      toast("Still uploading — large files take longer…");
+    }, 30_000);
 
     try {
       const { data: profile } = await supabase
