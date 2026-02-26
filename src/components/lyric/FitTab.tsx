@@ -404,12 +404,22 @@ function CinematicDirectionCard({
   }, [danceId, fitTabImageMs, formatImageTimestamp, generating, onImageGenerationStatusChange, projectId, sections]);
 
   useEffect(() => {
+    console.log('[FitTab Debug] auto-image effect:', {
+      hasDirection: !!cinematicDirection,
+      sections: sections.length,
+      existingImages: sectionImages.length,
+      refGuard: imageGenerationStartedRef.current,
+      danceId,
+      imagesHydrated,
+    });
     if (!cinematicDirection) return;
     if (!sections.length) return;
-    if (!danceId) return;
     if (!imagesHydrated) return;
     if (sectionImages.length > 0) return;
     if (imageGenerationStartedRef.current) return;
+    // danceId is NOT required — handleGenerateImages will prompt if missing
+    // but we still need a dance row for the edge function, so check danceId
+    if (!danceId) return;
 
     imageGenerationStartedRef.current = true;
     console.log(`[FitTab Debug] ${fitTabImageMs()} auto-starting image generation for ${sections.length} sections`);
