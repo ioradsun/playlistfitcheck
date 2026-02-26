@@ -146,6 +146,10 @@ export function LyricFitTab({
   }, [audioBuffer, timestampedLines]);
 
   const sectionsReady = audioSections.length > 0;
+  const fitPipelineT0Ref = useRef<number | null>(null);
+  const fitPipelineMs = useCallback(() => fitPipelineT0Ref.current === null
+    ? "0ms"
+    : `${(performance.now() - fitPipelineT0Ref.current).toFixed(0)}ms`, []);
 
   useEffect(() => {
     const done = timestampedLines.length > 0;
@@ -438,6 +442,7 @@ export function LyricFitTab({
     }
     if (generationStatus.renderData === "running" || generationStatus.renderData === "done") return;
 
+    console.log(`[FitTab Debug] ${fitPipelineMs()} starting render data derivation`);
     setGenerationStatus(prev => ({ ...prev, renderData: "running" }));
     setPipelineStages(prev => ({ ...prev, renderData: "running" }));
 
@@ -447,6 +452,7 @@ export function LyricFitTab({
     };
 
     setRenderData(nextSongDefaults);
+    console.log(`[FitTab Debug] ${fitPipelineMs()} render data derivation complete`);
     setGenerationStatus(prev => ({ ...prev, renderData: "done" }));
     setPipelineStages(prev => ({ ...prev, renderData: "done" }));
     setFitProgress(prev => Math.max(prev, 70));
@@ -454,7 +460,7 @@ export function LyricFitTab({
     if (savedIdRef.current) {
       await persistRenderData(savedIdRef.current, nextSongDefaults);
     }
-  }, [generationStatus.renderData, persistRenderData, renderData]);
+  }, [generationStatus.renderData, persistRenderData, renderData, fitPipelineMs]);
 
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
     if (!lyricData || !sourceLines.length) return;
@@ -467,6 +473,9 @@ export function LyricFitTab({
 
     setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running" }));
     setPipelineStages(prev => ({ ...prev, cinematic: "running" }));
+
+    console.log(`[FitTab Debug] ${fitPipelineMs()} starting cinematic direction`);
+    console.log(`[FitTab Debug] ${fitPipelineMs()} cinematic direction source: API call (supabase.functions.invoke)`);
 
     try {
       const lyricsForDirection = sourceLines
@@ -503,12 +512,15 @@ export function LyricFitTab({
       });
 
       if (dirResult?.cinematicDirection) {
+        console.log(`[FitTab Debug] ${fitPipelineMs()} cinematic direction complete, sections: ${dirResult.cinematicDirection.sections?.length ?? 0}`);
+        console.log(`[FitTab Debug] ${fitPipelineMs()} direction keys: ${Object.keys(dirResult.cinematicDirection || {}).join(", ")}`);
         const enrichedDirection = beatGrid
           ? { ...dirResult.cinematicDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
           : dirResult.cinematicDirection;
         setCinematicDirection(enrichedDirection);
 
         // Derive FrameRenderState from cinematic direction presets
+        console.log(`[FitTab Debug] ${fitPipelineMs()} deriving frame state preset (local computation)`);
         const { deriveFrameState } = await import("@/engine/presetDerivation");
         const { getTypography } = await import("@/engine/presetDerivation");
 
@@ -522,6 +534,7 @@ export function LyricFitTab({
         const atmospherePreset = enrichedDirection.atmosphere || "cinematic";
 
         deriveFrameState(enrichedDirection, 0, 0.5); // warm up cache
+        console.log(`[FitTab Debug] ${fitPipelineMs()} frame state warmup complete`);
 
         // Persist cinematic direction back to render_data in DB
         if (savedIdRef.current) {
@@ -536,7 +549,7 @@ export function LyricFitTab({
     } catch {
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error" }));
     }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, renderData, persistRenderData, songSignature, audioSections]);
+  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, renderData, persistRenderData, songSignature, audioSections, fitPipelineMs]);
 
   const sectionPipelineRunningRef = useRef(false);
   const sectionPipelineDoneRef = useRef(false);
@@ -558,12 +571,16 @@ export function LyricFitTab({
     if (!songSignature && (!audioBufferReady || !audioBuffer)) return;
 
     console.log(`[Transcribe Debug] section pipeline RUNNING`);
+    fitPipelineT0Ref.current = performance.now();
+    console.log(`[FitTab Debug] ${fitPipelineMs()} section pipeline START`);
     sectionPipelineRunningRef.current = true;
     try {
       let sig = songSignature;
       if (!sig) {
+        console.log(`[FitTab Debug] ${fitPipelineMs()} starting section detection`);
         const lyricsText = timestampedLines.map((line) => line.text).join("\n");
         sig = await songSignatureAnalyzer.analyze(audioBuffer!, beatGrid, lyricsText, audioDurationSec);
+        console.log(`[FitTab Debug] ${fitPipelineMs()} section detection complete (song signature analyzed)`);
         setSongSignature(sig);
         if (savedIdRef.current) {
           await supabase
@@ -573,8 +590,11 @@ export function LyricFitTab({
         }
       }
 
+      console.log(`[FitTab Debug] ${fitPipelineMs()} deriving sections from signature`);
       const nextSections = detectSections(sig, beatGrid, timestampedLines, audioDurationSec);
       console.log(`[Transcribe Debug] sections computed: ${nextSections.length} sections`);
+      console.log(`[FitTab Debug] ${fitPipelineMs()} sections detected: ${nextSections.length} sections`);
+      console.log(`[FitTab Debug] ${fitPipelineMs()} section types: ${nextSections.map((section: any) => section.type).join(", ")}`);
       setAudioSections(nextSections);
       sectionPipelineDoneRef.current = true;
     } catch (error) {
@@ -582,22 +602,26 @@ export function LyricFitTab({
     } finally {
       sectionPipelineRunningRef.current = false;
     }
-  }, [transcriptionDone, beatGridDone, audioBufferReady, audioBuffer, beatGrid, timestampedLines, audioDurationSec, songSignature, audioSections.length]);
+  }, [transcriptionDone, beatGridDone, audioBufferReady, audioBuffer, beatGrid, timestampedLines, audioDurationSec, songSignature, audioSections.length, fitPipelineMs]);
 
   useEffect(() => {
+    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [section-pipeline-trigger] fired`);
+    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [section-pipeline-trigger] invoking maybeRunSectionPipeline`);
     void maybeRunSectionPipeline();
-  }, [maybeRunSectionPipeline]);
+  }, [maybeRunSectionPipeline, fitPipelineMs]);
 
   const pipelineTriggeredRef = useRef(false);
   const [pipelineRetryCount, setPipelineRetryCount] = useState(0);
   const cinematicTriggeredRef = useRef(false);
   useEffect(() => {
+    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [cinematic-direction-trigger] fired`);
     if (!sectionsReady || !lines?.length) return;
     if (cinematicTriggeredRef.current && pipelineRetryCount === 0) return;
     cinematicTriggeredRef.current = true;
     console.log(`[Transcribe Debug] starting cinematic direction`);
+    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [cinematic-direction-trigger] triggering startCinematicDirection`);
     void startCinematicDirection(lines, pipelineRetryCount > 0);
-  }, [sectionsReady, lines, pipelineRetryCount, startCinematicDirection]);
+  }, [sectionsReady, lines, pipelineRetryCount, startCinematicDirection, fitPipelineMs]);
 
   // ── Fork 1: Beat grid starts when audio file is submitted (parallel with transcription) ──
   // Called from onAudioSubmitted callback, not from an effect waiting on lines.
@@ -610,6 +634,7 @@ export function LyricFitTab({
 
   // ── Fork 2: Song defaults derivation starts when lyrics arrive ──
   useEffect(() => {
+    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [song-defaults-derivation] fired`);
     if (!lines?.length) return;
     // If all data already loaded from DB, skip pipeline entirely
     if (renderData && beatGrid && cinematicDirection) {
@@ -619,12 +644,14 @@ export function LyricFitTab({
     }
     if (!pipelineTriggeredRef.current || pipelineRetryCount > 0) {
       pipelineTriggeredRef.current = true;
+      console.log(`[FitTab Debug] ${fitPipelineMs()} effect [song-defaults-derivation] triggering startSongDefaultsDerivation`);
       startSongDefaultsDerivation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, pipelineRetryCount, startSongDefaultsDerivation, renderData, beatGrid, cinematicDirection]);
+  }, [lines, pipelineRetryCount, startSongDefaultsDerivation, renderData, beatGrid, cinematicDirection, fitPipelineMs]);
 
   useEffect(() => {
+    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [fit-readiness-from-generation-status] fired`);
     const values = Object.values(generationStatus);
     const allDone = values.every(v => v === "done");
     const hasRunning = values.includes("running");
@@ -659,7 +686,7 @@ export function LyricFitTab({
     setFitProgress(0);
     setFitStageLabel("");
     setPipelineStages({ rhythm: "pending", renderData: "pending", cinematic: "pending", transcript: "pending" });
-  }, [generationStatus]);
+  }, [generationStatus, fitPipelineMs]);
 
   const retryGeneration = useCallback(() => {
     if (!audioFile || !lines.length) return;
@@ -703,6 +730,26 @@ export function LyricFitTab({
   }, [fitUnlocked, fitReadiness]);
 
   const fitDisabled = !transcriptionDone;
+
+  useEffect(() => {
+    console.log(`[FitTab Debug] ${fitPipelineMs()} FitTab enabled/disabled state: ${fitDisabled ? "disabled" : "enabled"}`);
+  }, [fitDisabled, fitPipelineMs]);
+
+
+  useEffect(() => {
+    console.log(`[FitTab Debug] ${fitPipelineMs()} sectionsReady changed to ${sectionsReady}`);
+  }, [sectionsReady, fitPipelineMs]);
+
+  useEffect(() => {
+    const directionReady = !!cinematicDirection;
+    console.log(`[FitTab Debug] ${fitPipelineMs()} directionReady changed to ${directionReady}`);
+  }, [cinematicDirection, fitPipelineMs]);
+
+  useEffect(() => {
+    const imagesReady = !!(cinematicDirection?.sections && cinematicDirection.sections.some((section: any) => section.imagePrompt || section.image));
+    console.log(`[FitTab Debug] ${fitPipelineMs()} imagesReady changed to ${imagesReady}`);
+  }, [cinematicDirection, fitPipelineMs]);
+
 
   const sceneInputNode = !lyricData ? (
     <div className="space-y-1.5">

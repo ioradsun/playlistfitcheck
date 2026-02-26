@@ -215,6 +215,10 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
   const [danceId, setDanceId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fitTabImageT0Ref = useRef<number | null>(null);
+  const fitTabImageMs = useCallback(() => fitTabImageT0Ref.current === null
+    ? "0ms"
+    : `${(performance.now() - fitTabImageT0Ref.current).toFixed(0)}ms`, []);
 
   const sections: any[] = cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
     ? cinematicDirection.sections
@@ -291,6 +295,8 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
 
   const handleGenerateImages = useCallback(async () => {
     console.log("[SectionImages] Generate clicked", { generating, sectionsLen: sections.length, danceId });
+    fitTabImageT0Ref.current = performance.now();
+    console.log(`[FitTab Debug] ${fitTabImageMs()} starting image generation for ${sections.length} sections`);
     if (generating || !sections.length) return;
     if (!danceId) {
       toast.error("Publish a Dance first to generate section images");
@@ -299,11 +305,19 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
     setGenerating(true);
     setGenProgress({ done: 0, total: sections.length });
     try {
+      sections.forEach((_, index) => {
+        console.log(`[FitTab Debug] ${fitTabImageMs()} image ${index + 1}/${sections.length} starting`);
+      });
       const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
         body: { lyric_dance_id: danceId, force: true },
       });
       if (error) throw error;
       const urls = result?.urls || result?.section_images || [];
+      urls.forEach((url: string | null | undefined, index: number) => {
+        const preview = typeof url === "string" ? `${url.slice(0, 50)}...` : "null";
+        console.log(`[FitTab Debug] ${fitTabImageMs()} image ${index + 1}/${sections.length} done, url=${preview}`);
+      });
+      console.log(`[FitTab Debug] ${fitTabImageMs()} all images complete`);
       setSectionImages(urls);
       setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
       toast.success(`Generated ${urls.filter(Boolean).length}/${sections.length} section images`);
@@ -313,7 +327,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
     } finally {
       setGenerating(false);
     }
-  }, [generating, sections, danceId]);
+  }, [generating, sections, danceId, fitTabImageMs]);
 
   return (
     <div className="glass-card rounded-xl p-3 space-y-2">
