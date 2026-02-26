@@ -496,13 +496,26 @@ const Index = () => {
   const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }, [navigate]);
 
   const handleSidebarTabChange = useCallback((tab: string) => {
-    setActiveTab(tab);
     setLoadingProjectType(null);
-    // Reset loaded project for the clicked tool so it opens fresh/new
-    if (tab === "lyric") { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }
-    else if (tab === "mix") { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }
-    else if (tab === "hitfit") { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }
-  }, [setActiveTab, navigate]);
+    // If switching FROM a different tab TO this one, preserve any active project
+    // Only reset to "New Project" if the user is ALREADY on this tab (double-click)
+    const isAlreadyOnTab = activeTab === tab;
+    if (isAlreadyOnTab) {
+      if (tab === "lyric") { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }
+      else if (tab === "mix") { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }
+      else if (tab === "hitfit") { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }
+    } else {
+      // Switching tabs — navigate to the active project URL if one exists
+      if (tab === "lyric" && loadedLyric?.id) { navigate(`/LyricFit/${loadedLyric.id}`, { replace: true }); }
+      else if (tab === "mix" && loadedMixProject?.id) { navigate(`/MixFit/${loadedMixProject.id}`, { replace: true }); }
+      else if (tab === "hitfit" && loadedHitFitAnalysis) { /* keep current state */ }
+      else {
+        const pathMap: Record<string, string> = { songfit: "/CrowdFit", hookfit: "/HookFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
+        navigate(pathMap[tab] || "/CrowdFit", { replace: true });
+      }
+    }
+    setActiveTab(tab);
+  }, [activeTab, setActiveTab, navigate, loadedLyric, loadedMixProject, loadedHitFitAnalysis]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
     // Use startTransition so heavy state updates don't block the sidebar
