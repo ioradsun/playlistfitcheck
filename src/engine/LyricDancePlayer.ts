@@ -249,10 +249,12 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   tensionTypo: 0,
 
   wordDirectiveWord: "",
-  wordDirectiveKinetic: "—",
-  wordDirectiveElemental: "—",
+  wordDirectiveBehavior: "—",
+  wordDirectiveEntry: "—",
   wordDirectiveEmphasis: 0,
-  wordDirectiveEvolution: "—",
+  wordDirectiveExit: "—",
+  wordDirectiveGhostTrail: false,
+  wordDirectiveGhostDir: "—",
 
   lineHeroWord: "",
   lineEntry: "fades",
