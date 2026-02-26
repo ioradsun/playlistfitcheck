@@ -18,12 +18,35 @@ interface Props {
   artistName: string;
 }
 
+type VisibilityListener = (visible: boolean) => void;
+
+const visibilityListeners = new Map<Element, VisibilityListener>();
+let sharedVisibilityObserver: IntersectionObserver | null = null;
+
+function getSharedVisibilityObserver() {
+  if (!sharedVisibilityObserver) {
+    sharedVisibilityObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const listener = visibilityListeners.get(entry.target);
+          if (listener) {
+            listener(entry.isIntersecting && entry.intersectionRatio > 0.2);
+          }
+        }
+      },
+      { threshold: [0, 0.2, 0.6], rootMargin: "180px" },
+    );
+  }
+  return sharedVisibilityObserver;
+}
+
 function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName }: Props) {
   const [data, setData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [muted, setMuted] = useState(true);
   const [started, setStarted] = useState(false);
+  const [armed, setArmed] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -53,44 +76,26 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       });
   }, [lyricDanceId]);
 
-  // Visibility-gated startup and playback
+  // Visibility updates via shared observer (single observer instance for feed items)
   useEffect(() => {
     if (!data || !data.words?.length || !data.cinematic_direction) return;
     const el = containerRef.current;
     if (!el) return;
 
-    let startTimer: ReturnType<typeof setTimeout> | null = null;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        const visible = entry.isIntersecting && entry.intersectionRatio > 0.2;
-        setIsVisible(visible);
-
-        if (visible && !started && !startTimer) {
-          startTimer = setTimeout(() => {
-            setStarted(true);
-            startTimer = null;
-          }, 350);
-        }
-
-        if (!visible && startTimer) {
-          clearTimeout(startTimer);
-          startTimer = null;
-        }
-      },
-      { threshold: [0, 0.2, 0.6], rootMargin: "180px" }
-    );
+    const observer = getSharedVisibilityObserver();
+    visibilityListeners.set(el, setIsVisible);
     observer.observe(el);
 
     return () => {
-      if (startTimer) clearTimeout(startTimer);
-      observer.disconnect();
+      visibilityListeners.delete(el);
+      observer.unobserve(el);
     };
-  }, [data, started]);
+  }, [data]);
 
   // Init player
   useEffect(() => {
     if (initRef.current) return;
-    if (!started || !data || !data.words?.length || !data.cinematic_direction) return;
+    if (!armed || !started || !data || !data.words?.length || !data.cinematic_direction) return;
     if (!canvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
     initRef.current = true;
@@ -132,7 +137,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       playerRef.current = null;
       initRef.current = false;
     };
-  }, [started, data?.id, data?.words?.length, !!data?.cinematic_direction]);
+  }, [armed, started, data?.id, data?.words?.length, !!data?.cinematic_direction]);
 
 
   useEffect(() => {
@@ -163,8 +168,13 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   }, [lyricDanceUrl]);
 
   const handleCanvasClick = useCallback(() => {
+    if (!armed) {
+      setArmed(true);
+      setStarted(true);
+      return;
+    }
     setMuted(m => !m);
-  }, []);
+  }, [armed]);
 
   if (error) {
     return (
