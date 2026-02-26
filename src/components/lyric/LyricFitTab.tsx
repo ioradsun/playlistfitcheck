@@ -280,6 +280,13 @@ export function LyricFitTab({
       if (loadedRenderData) {
         setRenderData(loadedRenderData);
         setGenerationStatus(prev => ({ ...prev, renderData: "done" }));
+
+        // Restore persisted waveform peaks so waveform renders instantly without audio decode
+        const savedPeaks = (loadedRenderData as any)?.waveformPeaks;
+        const savedDuration = (loadedRenderData as any)?.waveformDuration;
+        if (Array.isArray(savedPeaks) && savedPeaks.length > 0 && savedDuration > 0) {
+          setWaveformData({ peaks: savedPeaks, duration: savedDuration });
+        }
       }
 
       if (loadedCinematicDirection) {
@@ -380,10 +387,15 @@ export function LyricFitTab({
       const payload = { ...renderData };
       // Only include cinematicDirection if it's not null (avoid overwriting a deliberate clear)
       if (cinematicDirection) payload.cinematicDirection = cinematicDirection;
+      // Persist waveform peaks so they load instantly without audio decode
+      if (waveformData && waveformData.peaks.length > 0) {
+        payload.waveformPeaks = waveformData.peaks;
+        payload.waveformDuration = waveformData.duration;
+      }
       persistRenderData(savedIdRef.current, payload);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedId, renderData, persistRenderData]);
+  }, [savedId, renderData, waveformData, persistRenderData]);
 
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
     if (!targetAudioFile || targetAudioFile.size === 0) return;
