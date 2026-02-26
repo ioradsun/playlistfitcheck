@@ -209,7 +209,7 @@ export function FitTab({
   }, [lyricData.title, audioFile.name, onHeaderProject, onBack]);
 
 // ── Cinematic Direction Card with Section Images ─────────────────────
-function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDirection: any; songTitle: string }) {
+function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cinematicDirection: any; songTitle: string; userId: string }) {
   const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
