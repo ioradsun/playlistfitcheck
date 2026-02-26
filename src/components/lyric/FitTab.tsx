@@ -81,7 +81,6 @@ export function FitTab({
   cinematicDirection,
   setCinematicDirection,
   bgImageUrl,
-  setBgImageUrl,
   generationStatus,
   audioSections,
   words,
@@ -453,16 +452,6 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
         return;
       }
 
-      setPublishStatus("Generating background…");
-      let backgroundUrl: string | null = null;
-      try {
-        const { data: bgResult } = await supabase.functions.invoke("lyric-video-bg", {
-          body: { manifest: frameState, userDirection: `Song: ${lyricData.title}` },
-        });
-        backgroundUrl = bgResult?.imageUrl ?? null;
-        setBgImageUrl(backgroundUrl);
-      } catch {}
-
       setPublishStatus("Uploading audio…");
       const fileExt = audioFile.name.split(".").pop() || "webm";
       const storagePath = `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${fileExt}`;
@@ -559,7 +548,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       setPublishing(false);
       setPublishStatus("");
     }
-  }, [user, frameState, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection, setBgImageUrl]);
+  }, [user, frameState, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection]);
 
   // ── Battle publish handler ──────────────────────────────────────────
   const handleStartBattle = useCallback(async () => {
