@@ -18,6 +18,7 @@ import type { LyricLine } from "./LyricDisplay";
 import { getTypography, getParticles } from "@/engine/presetDerivation";
 import type { ParticleRuntimeConfig } from "@/engine/ParticleEngine";
 import { enrichSections } from "@/engine/directionResolvers";
+import { cinematicFontSize, clearCinematicFontSizeCache } from "@/engine/SystemStyles";
 
 // ── Aspect ratio → canvas dimensions ────────────────────────────────────────
 
@@ -130,6 +131,8 @@ export function LyricDanceExporter({
     setProgress(0);
     cancelRef.current = false;
     setError(null);
+
+    clearCinematicFontSizeCache();
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d", { alpha: false })!;
@@ -268,7 +271,10 @@ export function LyricDanceExporter({
       const state = integrator.tick();
       const songProgress = (currentTime - songStart) / Math.max(0.001, duration);
       const activeSystem = getBackgroundSystemForTime(baseManifest, songProgress, state.heat * 0.8);
-      const activeLine = lines.find((l) => currentTime >= l.start && currentTime < l.end);
+      const visibleLines = lines.filter((l) => currentTime >= (l.start ?? 0) && currentTime < (l.end ?? 0));
+      const activeLine = visibleLines.length === 0
+        ? null
+        : visibleLines.reduce((latest, l) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
       const currentBeatIntensity = Math.max(state.glow, state.shake * 2, 0);
 
@@ -319,7 +325,15 @@ export function LyricDanceExporter({
       }
 
       if (activeLine) {
-        const visibleLines = lines.filter(l => currentTime >= l.start && currentTime < l.end);
+        const sizing = cinematicFontSize(
+          ctx,
+          activeLine.text,
+          cw,
+          ch,
+          `"${resolvedTypo.fontFamily}", Inter, ui-sans-serif, system-ui`,
+          resolvedTypo.fontWeight,
+        );
+
         const textResult = renderText(ctx, {
           lines,
           activeLine,
@@ -351,7 +365,11 @@ export function LyricDanceExporter({
           particleEngine: particleEngine ? { setDensityMultiplier: particleEngine.setDensityMultiplier.bind(particleEngine) } : null,
           rng,
           getWordWidth,
-          isMobile: false,
+          isMobile: aspectRatio === "9:16",
+          fontSize: sizing.fs,
+          letterSpacingOverride: sizing.letterSpacingEm,
+          wrappedLines: sizing.lines,
+          aspectHint: aspectRatio as "9:16" | "1:1" | "16:9",
           hardwareConcurrency: 4,
           devicePixelRatio: 1,
         }, textState);

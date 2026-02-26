@@ -21,6 +21,7 @@ import {
 } from "@/lib/lyricSceneBaker";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
+import { cinematicFontSize, getCinematicLayout } from "@/engine/SystemStyles";
 
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
@@ -1639,7 +1640,10 @@ export class LyricDancePlayer {
     this.ambientParticleEngine?.setDensityMultiplier((currentTension?.particleDensity ?? 0.5) * 2);
     this.ambientParticleEngine?.setSpeedMultiplier((currentTension?.motionIntensity ?? 0.5) * 2);
 
-    const activeLine = lines.find((l: any) => clamped >= l.start && clamped <= l.end);
+    const visibleLines = lines.filter((l: any) => clamped >= (l.start ?? 0) && clamped < (l.end ?? 0));
+    const activeLine = visibleLines.length === 0
+      ? null
+      : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
     const climaxRatio = (cd as any)?.climax?.timeRatio ?? 0.75;
     const simulatedBeat = Math.max(0.1, 1 - Math.abs(songProgress - climaxRatio) * 2);
     const frame = this.getFrame(this.currentTimeMs);
@@ -1880,7 +1884,59 @@ export class LyricDancePlayer {
 
     let drawCalls = 0;
     const palette = this.getBurstPalette(songProgress);
-    for (const chunk of frame.chunks) {
+    const cinematicSizingV2 = true;
+    const sortedChunks = [...frame.chunks].sort((a, b) => {
+      const aIsExiting = (a.exitProgress ?? 0) > 0 ? 1 : 0;
+      const bIsExiting = (b.exitProgress ?? 0) > 0 ? 1 : 0;
+      return bIsExiting - aIsExiting;
+    });
+
+    const visibleLines = this.payload?.lines?.filter((l: any) => tSec >= (l.start ?? 0) && tSec < (l.end ?? 0)) ?? [];
+    const activeLine = visibleLines.length === 0
+      ? null
+      : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
+    const activeLineText = activeLine?.text ?? null;
+
+    let baseFontSize: number | null = null;
+    if (cinematicSizingV2 && activeLineText) {
+      const { fs } = cinematicFontSize(
+        this.ctx,
+        activeLineText,
+        this.width,
+        this.height,
+        this.getResolvedFont(),
+        700,
+      );
+      baseFontSize = fs;
+
+      const activeChunks = sortedChunks.filter((c) => (c.exitProgress ?? 0) === 0 && c.visible);
+      const bakedSizes = activeChunks
+        .map((c) => c.fontSize)
+        .filter((size): size is number => typeof size === 'number' && size > 0);
+      const sortedSizes = [...bakedSizes].sort((a, b) => a - b);
+      const medianBaked = sortedSizes.length > 0
+        ? sortedSizes[Math.floor(sortedSizes.length / 2)]
+        : null;
+
+      for (const chunk of activeChunks) {
+        const emphasisRatio = medianBaked != null && (chunk.fontSize ?? 0) > 0
+          ? (chunk.fontSize as number) / medianBaked
+          : 1.0;
+        const clamped = Math.max(0.85, Math.min(1.25, emphasisRatio));
+        (chunk as any)._resolvedFontSize = Math.round(fs * clamped);
+      }
+
+      for (const chunk of sortedChunks) {
+        if ((chunk.exitProgress ?? 0) > 0 && (chunk as any)._resolvedFontSize == null && baseFontSize != null) {
+          (chunk as any)._resolvedFontSize = baseFontSize;
+        }
+      }
+    }
+
+    const layout = getCinematicLayout(this.width, this.height);
+    const opticalOffset = layout.baselineY - (this.height * 0.5);
+
+    for (const chunk of sortedChunks) {
       if (!chunk.visible) continue;
 
       // Spawn ambient burst trails as words exit.
@@ -1907,10 +1963,15 @@ export class LyricDancePlayer {
       const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
       const drawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
       const drawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
+      const isExitingChunk = (chunk.exitProgress ?? 0) > 0;
+      const finalDrawY = isExitingChunk ? drawY : drawY + opticalOffset;
       const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
-      const fontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
+      const fontSize = cinematicSizingV2
+        ? ((chunk as any)._resolvedFontSize ?? baseFontSize ?? 36)
+        : (Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36);
       const fontWeight = chunk.fontWeight ?? 700;
-      const safeFontSize = Math.max(12, Math.round(fontSize * zoom) || 36);
+      const viewportMinFont = Math.max(16, Math.min(this.width, this.height) * 0.055);
+      const safeFontSize = Math.max(viewportMinFont, Math.round(fontSize * zoom) || 36);
       const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
       const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
@@ -1921,7 +1982,7 @@ export class LyricDancePlayer {
       const isAnchor = chunk.isAnchor ?? false;
       const haloPal = this.getResolvedPalette();
       const chapterColor = haloPal[1];
-      this.drawWordHalo(drawX, drawY, fontSize, isAnchor, chapterColor, chunk.alpha);
+      this.drawWordHalo(drawX, finalDrawY, fontSize, isAnchor, chapterColor, chunk.alpha);
 
       const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
       const iconScaleMult = chunk.iconScale ?? 2.0;
@@ -1943,32 +2004,32 @@ export class LyricDancePlayer {
       }
       const iconSize = iconBaseSize * iconPulse;
       let iconX = drawX;
-      let iconY = drawY;
+      let iconY = finalDrawY;
       let iconOpacity = drawAlpha * 0.45;
       let iconGlow = 0;
 
       switch (chunk.iconPosition) {
         case 'behind':
           iconX = drawX;
-          iconY = drawY;
+          iconY = finalDrawY;
           iconOpacity = drawAlpha * 0.45;
           iconGlow = 12;
           break;
         case 'above':
           iconX = drawX;
-          iconY = drawY - (chunk.fontSize ?? 36) * 1.3;
+          iconY = finalDrawY - (chunk.fontSize ?? 36) * 1.3;
           iconOpacity = drawAlpha * 0.85;
           iconGlow = 6;
           break;
         case 'beside':
           iconX = drawX - iconSize * 0.7;
-          iconY = drawY;
+          iconY = finalDrawY;
           iconOpacity = drawAlpha * 0.9;
           iconGlow = 6;
           break;
         case 'replace':
           iconX = drawX;
-          iconY = drawY;
+          iconY = finalDrawY;
           iconOpacity = drawAlpha * 1.0;
           iconGlow = 16;
           break;
@@ -1994,7 +2055,7 @@ export class LyricDancePlayer {
           chunkId: chunk.id,
           text: chunk.text ?? obj.text,
           drawX,
-          drawY,
+          drawY: finalDrawY,
           fontSize: safeFontSize,
           fontWeight,
           fontFamily: chunk.fontFamily,
@@ -2044,7 +2105,7 @@ export class LyricDancePlayer {
             }
             this.ctx.globalAlpha = ghostAlpha;
             this.ctx.save();
-            this.ctx.translate(drawX + gx, drawY + gy);
+            this.ctx.translate(drawX + gx, finalDrawY + gy);
             if (chunk.rotation) this.ctx.rotate(chunk.rotation);
             this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
             this.ctx.scale(sx, sy);
@@ -2055,7 +2116,7 @@ export class LyricDancePlayer {
         }
 
         this.ctx.save();
-        this.ctx.translate(drawX, drawY);
+        this.ctx.translate(drawX, finalDrawY);
         if (chunk.rotation) {
           this.ctx.rotate(chunk.rotation);
         }
@@ -3395,6 +3456,10 @@ export class LyricDancePlayer {
   private scaleTimeline(baked: Keyframe[]): ScaledKeyframe[] {
     const sx = this.width / BASE_W;
     const sy = this.height / BASE_H;
+    const isPortrait = this.height > this.width;
+    const fontScale = isPortrait
+      ? Math.min(this.width / BASE_H, this.height / BASE_W)
+      : Math.min(sx, sy);
     return baked.map((kf) => ({
       ...kf,
       cameraX: kf.cameraX * sx,
@@ -3403,7 +3468,7 @@ export class LyricDancePlayer {
         ...c,
         x: c.x * sx,
         y: c.y * sy,
-        fontSize: c.fontSize ? c.fontSize * Math.min(sx, sy) : undefined,
+        fontSize: c.fontSize ? c.fontSize * fontScale : undefined,
         entryOffsetY: c.entryOffsetY ? c.entryOffsetY * sy : undefined,
         entryOffsetX: c.entryOffsetX ? c.entryOffsetX * sx : undefined,
         exitOffsetY: c.exitOffsetY ? c.exitOffsetY * sy : undefined,
@@ -3420,7 +3485,11 @@ export class LyricDancePlayer {
   private unscaleTimeline(): Keyframe[] {
     const sx = this.width / BASE_W;
     const sy = this.height / BASE_H;
-    if (sx === 0 || sy === 0) return [];
+    const isPortrait = this.height > this.width;
+    const fontScale = isPortrait
+      ? Math.min(this.width / BASE_H, this.height / BASE_W)
+      : Math.min(sx, sy);
+    if (sx === 0 || sy === 0 || fontScale === 0) return [];
     return this.timeline.map((kf) => ({
       ...kf,
       cameraX: kf.cameraX / sx,
@@ -3429,7 +3498,7 @@ export class LyricDancePlayer {
         ...c,
         x: c.x / sx,
         y: c.y / sy,
-        fontSize: c.fontSize ? c.fontSize / Math.min(sx, sy) : 24,
+        fontSize: c.fontSize ? c.fontSize / fontScale : 24,
         entryOffsetY: (c.entryOffsetY ?? 0) / sy,
         entryOffsetX: (c.entryOffsetX ?? 0) / sx,
         entryScale: c.entryScale ?? 1,

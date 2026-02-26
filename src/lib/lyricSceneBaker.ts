@@ -1392,14 +1392,10 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     const actIdx = Math.max(0, chapters.indexOf(currentChapter as ChapterLike));
     const actSizeMultiplier = actIdx === 0 ? 0.85 : actIdx === 1 ? 1.0 : 1.2;
 
-    const shotFontSizes: Record<string, number> = {
-      Wide: 30,
-      Medium: 38,
-      Close: 46,
-      CloseUp: 50,
-      ExtremeClose: 56,
-      FloatingInWorld: 32,
-    };
+    const useCinematicSizes = payload.cinematic_direction != null;
+    const shotFontSizes: Record<string, number> = useCinematicSizes
+      ? { Wide: 48, Medium: 62, Close: 74, CloseUp: 84, ExtremeClose: 96, FloatingInWorld: 52 }
+      : { Wide: 30, Medium: 38, Close: 46, CloseUp: 50, ExtremeClose: 56, FloatingInWorld: 32 };
 
     const baseFontSize = shotFontSizes[shot] ?? 36;
     const actBaseFontSize = baseFontSize * actSizeMultiplier;
@@ -1464,13 +1460,17 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     const tension = findByRatio(tensionCurve, progress);
     tensionMotionByFrame[frameIndex] = tension?.motionIntensity ?? tension?.motion ?? 0.5;
 
+    let latestIdx = -1;
+    let latestStart = -Infinity;
     for (let idx = 0; idx < payload.lines.length; idx += 1) {
       const line = payload.lines[idx];
-      if (tSec >= (line.start ?? 0) && tSec < (line.end ?? 0)) {
-        activeLineByFrame[frameIndex] = idx;
-        break;
+      const lineStart = line.start ?? 0;
+      if (tSec >= lineStart && tSec < (line.end ?? 0) && lineStart >= latestStart) {
+        latestStart = lineStart;
+        latestIdx = idx;
       }
     }
+    activeLineByFrame[frameIndex] = latestIdx;
   }
   // Pre-compute phrase groups, motion profile, and layouts ONCE
   const frameState = (payload.frame_state ?? null) as unknown as Record<string, unknown> | null;
@@ -1497,7 +1497,8 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
 
   const groupLayouts = new Map<string, GroupPosition[]>();
   if (phraseGroups) {
-    for (const group of phraseGroups) {
+    for (let gi = 0; gi < phraseGroups.length; gi += 1) {
+      const group = phraseGroups[gi];
       const key = `${group.lineIndex}-${group.groupIndex}`;
       const baseFontSize = lineFontSizes[group.lineIndex] ?? 36;
       groupLayouts.set(key, getGroupLayout(group, visualMode, 960, 540, baseFontSize));
@@ -1631,8 +1632,10 @@ function bakeFrame(
     const groupLayouts = pre.groupLayouts;
 
     if (phraseGroups) {
-      for (const group of phraseGroups) {
-        const groupEnd = group.end + animParams.linger;
+      for (let gi = 0; gi < phraseGroups.length; gi += 1) {
+        const group = phraseGroups[gi];
+        const nextGroupStart = phraseGroups[gi + 1]?.start ?? Infinity;
+        const groupEnd = Math.min(group.end + animParams.linger, nextGroupStart);
         if (tSec < group.start - animParams.stagger * group.words.length) continue;
         if (tSec > groupEnd) continue;
 
@@ -1791,8 +1794,10 @@ function bakeFrame(
     } else {
       const wordLinger = pre.animParams.linger;
       const wordChunks = pre.wordMeta
-        .filter((wm) => {
-          return tSec >= wm.start && tSec < (wm.end + wordLinger);
+        .filter((wm, i, arr) => {
+          const nextWordStart = arr[i + 1]?.start ?? Infinity;
+          const effectiveEnd = Math.min(wm.end + wordLinger, nextWordStart);
+          return tSec >= wm.start && tSec < effectiveEnd;
         })
         .flatMap((wm) => {
           const lineWords = pre.wordMeta.filter((w) => w.lineIndex === wm.lineIndex);
