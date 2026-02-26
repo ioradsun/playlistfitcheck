@@ -18,7 +18,6 @@ import {
   type BakedTimeline,
   type Keyframe,
   type ScenePayload,
-  type WordEmitterType,
 } from "@/lib/lyricSceneBaker";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
@@ -372,12 +371,12 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     fontFamily?: string;
     isAnchor?: boolean;
     color?: string;
-    emitterType?: WordEmitterType;
     trail?: string;
     entryStyle?: string;
     exitStyle?: string;
     emphasisLevel?: number;
     entryProgress?: number;
+    exitProgress?: number;
     iconGlyph?: string;
     iconStyle?: 'outline' | 'filled' | 'ghost';
     iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
@@ -716,15 +715,50 @@ interface BurstEmitter {
   palette: { accent: string; glow: string; particle: string };
 }
 
-interface WordEmitter {
-  type: WordEmitterType;
+type DecompEffect = 'explode' | 'ice-shatter' | 'burn-away' | 'dissolve' | 'melt' | 'ascend' | 'glitch' | 'bloom' | 'crush' | 'shockwave' | 'magnetize';
+
+interface DecompParticle {
   x: number;
   y: number;
-  wordWidth: number;
-  color: string;
+  vx: number;
+  vy: number;
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+  size: number;
+  life: number;
+  rotation: number;
+  rotSpeed: number;
+  gravity: number;
+  drag: number;
+  shape: 'dot' | 'shard' | 'streak' | 'ember';
+  column: number;
+  burnDelay: number;
+  dissolveDelay: number;
+  dripDelay: number;
+  riseDelay: number;
+  burstDelay: number;
+  glitchOffsetX: number;
+  glitchOffsetY: number;
+  targetX: number;
+  targetY: number;
+  active: boolean;
+}
+
+interface PixelDecomp {
+  id: string;
+  particles: DecompParticle[];
+  effect: DecompEffect;
   startTime: number;
   duration: number;
-  intensity: number;
+  centerX: number;
+  centerY: number;
+  wordWidth: number;
+  fontSize: number;
+  word: string;
+  color: string;
+  phase: number;
 }
 
 
@@ -797,8 +831,11 @@ export class LyricDancePlayer {
   // Word-local particle emitters
   private burstEmitters: BurstEmitter[] = [];
   private lastBurstTickMs = 0;
-  private wordEmitters: WordEmitter[] = [];
-  private lastWordEmitterSpawnMsByChunk = new Map<string, number>();
+  private activeDecomps: PixelDecomp[] = [];
+  private readonly particlePool: DecompParticle[] = Array.from({ length: 600 }, () => this.createEmptyParticle());
+  private poolIndex = 0;
+  private readonly offscreen = document.createElement('canvas');
+  private readonly octx = this.offscreen.getContext('2d', { willReadFrequently: true })!;
 
   // Comment comets
   private activeComments: CommentChunk[] = [];
@@ -819,6 +856,7 @@ export class LyricDancePlayer {
   private activeSectionIndex = -1;
   private activeSectionTexture = 'dust';
   private activeTension: any = null;
+  private lastExitProgressByChunk = new Map<string, number>();
 
 
   // Health monitor
@@ -1828,11 +1866,8 @@ export class LyricDancePlayer {
 
     this.drawEmotionalEvents(tSec);
 
-    // Word-local particle emitters — render behind text
-    this.drawWordEmitters(performance.now() / 1000);
-    // Cleanup expired word emitters
-    const nowCleanup = performance.now() / 1000;
-    this.wordEmitters = this.wordEmitters.filter(e => (nowCleanup - e.startTime) < e.duration);
+    const nowSec = performance.now() / 1000;
+    this.drawDecompositions(this.ctx, nowSec);
 
     // Ambient particles — runtime system updates per section
     this.ambientParticleEngine?.draw(this.ctx, "far");
@@ -1848,14 +1883,9 @@ export class LyricDancePlayer {
     for (const chunk of frame.chunks) {
       if (!chunk.visible) continue;
 
-      // Spawn word emitters near exit so particles bloom as the word is leaving,
-      // not competing while it's the focus. Fire when entry is complete AND exit has begun.
+      // Spawn ambient burst trails as words exit.
       const isExiting = (chunk.exitScale !== 1) || (chunk.exitOffsetY !== 0) || ((chunk.entryProgress ?? 0) >= 1 && chunk.alpha < 0.85);
-      if (
-        chunk.trail &&
-        chunk.trail !== 'none' &&
-        isExiting
-      ) {
+      if (chunk.trail && chunk.trail !== 'none' && isExiting) {
         this.spawnBurstEmitter(
           chunk.id,
           chunk.x,
@@ -1864,9 +1894,13 @@ export class LyricDancePlayer {
           this.deriveParticleDirection(chunk.entryStyle ?? '', chunk.exitStyle ?? ''),
           palette,
           chunk.emphasisLevel ?? 3,
-          chunk.emitterType,
         );
       }
+
+      const prevExitProgress = this.lastExitProgressByChunk.get(chunk.id) ?? 0;
+      const currentExitProgress = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
+      const wordJustExited = prevExitProgress <= 0 && currentExitProgress > 0;
+      this.lastExitProgressByChunk.set(chunk.id, currentExitProgress);
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
@@ -1953,7 +1987,24 @@ export class LyricDancePlayer {
         }
       }
 
-      if (chunk.iconPosition !== 'replace') {
+      const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
+      const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
+      if (wordJustExited && directive) {
+        this.tryStartDecomposition({
+          chunkId: chunk.id,
+          text: chunk.text ?? obj.text,
+          drawX,
+          drawY,
+          fontSize: safeFontSize,
+          fontWeight,
+          fontFamily: chunk.fontFamily,
+          color: this.getTextColor(chunk.color ?? chapterColor),
+          directive,
+        });
+      }
+      const decompActive = this.activeDecomps.some((d) => d.id === chunk.id);
+
+      if (chunk.iconPosition !== 'replace' && !decompActive) {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
         const resolvedFont = this.getResolvedFont();
@@ -2286,6 +2337,192 @@ export class LyricDancePlayer {
       zoom: 1,
       driftIntensity: direction.motion === 'fluid' ? 0.3 : 0.1,
     }));
+  }
+
+
+  private createEmptyParticle(): DecompParticle {
+    return {
+      x: 0, y: 0, vx: 0, vy: 0, r: 255, g: 255, b: 255, a: 0, size: 1.5, life: 0,
+      rotation: 0, rotSpeed: 0, gravity: 0, drag: 0.96, shape: 'dot', column: 0,
+      burnDelay: 0, dissolveDelay: 0, dripDelay: 0, riseDelay: 0, burstDelay: 0,
+      glitchOffsetX: 0, glitchOffsetY: 0, targetX: 0, targetY: 0, active: false,
+    };
+  }
+
+  private getParticle(): DecompParticle {
+    const p = this.particlePool[this.poolIndex % this.particlePool.length];
+    this.poolIndex += 1;
+    return p;
+  }
+
+  private resolveDecompEffect(d: any): DecompEffect | null {
+    const exit = String(d?.exit ?? '').toLowerCase();
+    if (exit === 'shatter' || exit === 'shatters') return 'explode';
+    if (exit === 'burn-out' || exit === 'burns-out') return 'burn-away';
+    if (exit === 'dissolve' || exit === 'dissolves-upward') return 'dissolve';
+    if (exit === 'melt' || exit === 'drip') return 'melt';
+    if (exit === 'ascend' || exit === 'drift-up') return 'ascend';
+    if (exit === 'fades' || exit === 'lingers') return 'dissolve';
+    const meta = String(d?.visualMetaphor ?? '').toLowerCase();
+    if (meta.includes('fire') || meta.includes('ember') || meta.includes('burn')) return 'burn-away';
+    if (meta.includes('ice') || meta.includes('frost') || meta.includes('shatter')) return 'ice-shatter';
+    if (meta.includes('bloom') || meta.includes('flower') || meta.includes('petal')) return 'bloom';
+    if (meta.includes('weight') || meta.includes('crush') || meta.includes('heavy')) return 'crush';
+    if (meta.includes('scream') || meta.includes('shock') || meta.includes('explod')) return 'shockwave';
+    if (meta.includes('rain') || meta.includes('tear') || meta.includes('drip')) return 'melt';
+    if (meta.includes('glitch') || meta.includes('static') || meta.includes('broken')) return 'glitch';
+    if (meta.includes('gather') || meta.includes('together') || meta.includes('embrace')) return 'magnetize';
+    if (meta.includes('rise') || meta.includes('ascend') || meta.includes('fly')) return 'ascend';
+    if (d?.behavior === 'pulse') return 'shockwave';
+    if (d?.behavior === 'float') return 'dissolve';
+    if ((d?.emphasisLevel ?? 0) >= 4) return 'dissolve';
+    return null;
+  }
+
+  private effectDuration(effect: DecompEffect): number {
+    const m: Record<DecompEffect, number> = {
+      'explode': 1.2, 'ice-shatter': 1.5, 'burn-away': 1.5, 'dissolve': 2.0, 'melt': 1.5,
+      'ascend': 1.8, 'glitch': 0.8, 'bloom': 2.0, 'crush': 0.8, 'shockwave': 1.0, 'magnetize': 1.2,
+    };
+    return m[effect];
+  }
+
+  private tryStartDecomposition(input: { chunkId: string; text: string; drawX: number; drawY: number; fontSize: number; fontWeight: number; fontFamily?: string; color: string; directive: any; }): void {
+    const effect = this.resolveDecompEffect(input.directive);
+    if (!effect || this.activeDecomps.some((d) => d.id === input.chunkId)) return;
+    if (this.activeDecomps.length >= 3) this.activeDecomps.shift();
+    const particles = this.captureWordParticles(input, effect);
+    const decomp: PixelDecomp = {
+      id: input.chunkId, particles, effect, startTime: performance.now() / 1000,
+      duration: this.effectDuration(effect), centerX: input.drawX, centerY: input.drawY,
+      wordWidth: this.ctx.measureText(input.text).width, fontSize: input.fontSize, word: input.text,
+      color: input.color, phase: 0,
+    };
+    console.log(`[Decomp] "${input.text}" → ${effect}, ${particles.length} particles`);
+    this.activeDecomps.push(decomp);
+  }
+
+  private captureWordParticles(input: { text: string; drawX: number; drawY: number; fontSize: number; fontWeight: number; fontFamily?: string; color: string; }, effect: DecompEffect): DecompParticle[] {
+    const GRID = 3;
+    const padding = 4;
+    const family = input.fontFamily ?? this.getResolvedFont();
+    this.octx.font = `${input.fontWeight} ${input.fontSize}px ${family}`;
+    const wordWidth = Math.ceil(this.octx.measureText(input.text).width);
+    this.offscreen.width = Math.max(8, wordWidth + padding * 2);
+    this.offscreen.height = Math.max(8, Math.ceil(input.fontSize * 1.4) + padding * 2);
+    this.octx.clearRect(0, 0, this.offscreen.width, this.offscreen.height);
+    this.octx.font = `${input.fontWeight} ${input.fontSize}px ${family}`;
+    this.octx.fillStyle = input.color;
+    this.octx.textBaseline = 'middle';
+    this.octx.textAlign = 'center';
+    this.octx.fillText(input.text, this.offscreen.width / 2, this.offscreen.height / 2);
+    const pixels = this.octx.getImageData(0, 0, this.offscreen.width, this.offscreen.height).data;
+    const out: DecompParticle[] = [];
+    const cx = input.drawX;
+    const cy = input.drawY;
+    const maxParticles = 200;
+    for (let y = 0; y < this.offscreen.height && out.length < maxParticles; y += GRID) {
+      for (let x = 0; x < this.offscreen.width && out.length < maxParticles; x += GRID) {
+        const i = (y * this.offscreen.width + x) * 4;
+        const a = pixels[i + 3];
+        if (a < 30) continue;
+        const p = this.getParticle();
+        Object.assign(p, this.createEmptyParticle());
+        p.active = true;
+        p.x = cx + x - this.offscreen.width / 2;
+        p.y = cy + y - this.offscreen.height / 2;
+        p.r = pixels[i]; p.g = pixels[i + 1]; p.b = pixels[i + 2]; p.a = a / 255;
+        p.size = GRID * 0.6;
+        p.life = 1;
+        this.seedParticleEffect(p, effect, cx, cy, wordWidth, input.fontSize);
+        out.push(p);
+      }
+    }
+    return out;
+  }
+
+  private seedParticleEffect(p: DecompParticle, effect: DecompEffect, cx: number, cy: number, wordWidth: number, fontSize: number): void {
+    if (effect === 'explode' || effect === 'shockwave') {
+      const ang = Math.atan2(p.y - cy, p.x - cx);
+      const force = 80 + Math.random() * 120;
+      p.vx = Math.cos(ang) * force + (Math.random() - 0.5) * 40;
+      p.vy = Math.sin(ang) * force + (Math.random() - 0.5) * 40;
+      p.gravity = 60 + Math.random() * 40; p.drag = 0.96; p.shape = 'shard'; p.rotSpeed = (Math.random() - 0.5) * 8;
+      p.burstDelay = effect === 'shockwave' ? 0.08 : 0;
+    } else if (effect === 'dissolve') { p.vx = (Math.random()-0.5)*20; p.vy=-8-Math.random()*15; p.gravity=-3; p.drag=0.97; p.dissolveDelay=Math.random()*0.4; }
+    else if (effect === 'melt') { const xNorm=(p.x-(cx-wordWidth/2))/Math.max(1,wordWidth); p.dripDelay=Math.random()*0.5+Math.abs(xNorm-0.5)*0.3; p.gravity=120+Math.random()*80; p.drag=0.92; p.shape='streak'; }
+    else if (effect === 'ascend') { p.vx=(Math.random()-0.5)*30; p.vy=-40-Math.random()*60; p.gravity=-10; p.drag=0.97; p.riseDelay=(1-((p.y-(cy-fontSize/2))/Math.max(1,fontSize)))*0.3; }
+    else if (effect === 'burn-away') { const yNorm=(p.y-(cy-fontSize/2))/Math.max(1,fontSize); p.burnDelay=(1-Math.max(0,Math.min(1,yNorm)))*0.6; p.shape='ember'; }
+    else if (effect === 'ice-shatter') { p.shape='shard'; p.column=Math.max(0,Math.min(4,Math.floor((p.x-(cx-wordWidth/2))/Math.max(1,wordWidth/4)))); p.rotSpeed=(Math.random()-0.5)*6; p.r=Math.min(255,p.r+80); p.g=Math.min(255,p.g+100); p.b=255; }
+    else if (effect === 'glitch') { p.shape='dot'; }
+    else if (effect === 'bloom') { const ang=Math.atan2(p.y-cy,p.x-cx)+(Math.random()-0.5)*0.5; const force=20+Math.random()*30; p.vx=Math.cos(ang)*force; p.vy=Math.sin(ang)*force; p.gravity=15; p.drag=0.96; p.r=Math.min(255,p.r+40); p.g=Math.max(0,p.g-20); }
+    else if (effect === 'crush') { p.drag=0.95; p.targetX=cx; p.targetY=cy+20; }
+    else if (effect === 'magnetize') { p.x+=(Math.random()-0.5)*30; p.y+=(Math.random()-0.5)*30; p.targetX=cx; p.targetY=cy; p.drag=0.92; }
+  }
+
+  private drawDecompositions(ctx: CanvasRenderingContext2D, time: number): void {
+    const dt = 1 / 60;
+    for (const d of this.activeDecomps) {
+      const elapsed = time - d.startTime;
+      if (elapsed > d.duration) continue;
+      for (const p of d.particles) {
+        if (!p.active || p.life <= 0 || p.a <= 0) continue;
+        this.updateDecompParticle(d, p, elapsed, dt);
+        const alpha = p.a * p.life;
+        if (alpha < 0.01) continue;
+        if (p.shape === 'shard') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation); ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.fillRect(-p.size*0.4,-p.size,p.size*0.8,p.size*2); ctx.restore(); }
+        else if (p.shape === 'streak') { const len=Math.min(Math.abs(p.vy)*0.03,8); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x,p.y-len); ctx.lineWidth=p.size*0.6; ctx.lineCap='round'; ctx.strokeStyle=`rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.stroke(); }
+        else if (p.shape === 'ember') { ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+p.vx*0.015,p.y+p.vy*0.015); ctx.lineWidth=p.size*0.4; ctx.strokeStyle=`rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.stroke(); }
+        else { ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size); }
+      }
+      if (d.effect === 'shockwave') {
+        const ringRadius = elapsed * 150;
+        const ringAlpha = Math.max(0, 0.3 * (1 - elapsed / 0.5));
+        ctx.beginPath(); ctx.arc(d.centerX, d.centerY, ringRadius, 0, Math.PI * 2);
+        ctx.lineWidth = Math.max(0.2, 2 * (1 - elapsed / 0.5));
+        ctx.strokeStyle = `rgba(255,255,255,${ringAlpha})`; ctx.stroke();
+      }
+    }
+    this.activeDecomps = this.activeDecomps.filter((d) => (time - d.startTime) < d.duration);
+  }
+
+  private updateDecompParticle(d: PixelDecomp, p: DecompParticle, elapsed: number, dt: number): void {
+    if (d.effect === 'glitch' && elapsed < 0.3) {
+      p.glitchOffsetX = (Math.random() - 0.5) * 40; p.glitchOffsetY = (Math.random() - 0.5) * 20;
+      p.x += p.glitchOffsetX * 0.1; p.y += p.glitchOffsetY * 0.1; p.life -= dt * 0.25; return;
+    }
+    if (d.effect === 'shockwave' && elapsed < p.burstDelay) return;
+    if (d.effect === 'dissolve' && elapsed < p.dissolveDelay) return;
+    if (d.effect === 'melt' && elapsed < p.dripDelay) return;
+    if (d.effect === 'ascend' && elapsed < p.riseDelay) return;
+    if (d.effect === 'burn-away' && elapsed < p.burnDelay) return;
+    if (d.effect === 'ice-shatter' && elapsed < (0.5 + p.column * 0.08)) return;
+
+    if (d.effect === 'burn-away') {
+      const burnAge = elapsed - p.burnDelay;
+      if (burnAge < 0.3) { p.r = 255; p.g = Math.max(0, 200 - burnAge * 600); p.b = 0; }
+      else { p.r = Math.max(0, 200 - (burnAge - 0.3) * 400); p.g = 0; p.b = 0; }
+      p.vy = -20 - Math.random() * 30; p.vx = (Math.random() - 0.5) * 15; p.size *= 0.996;
+    }
+    if (d.effect === 'crush') {
+      const dx = p.targetX - p.x; const dy = p.targetY - p.y; const dist = Math.max(5, Math.hypot(dx, dy));
+      const force = 200 / dist; p.vx += (dx / dist) * force * dt; p.vy += (dy / dist) * force * dt; p.size *= 0.98;
+    }
+    if (d.effect === 'magnetize') {
+      p.vx += (p.targetX - p.x) * 3 * dt; p.vy += (p.targetY - p.y) * 3 * dt;
+      if (elapsed > 0.8) p.life -= dt * 4;
+    }
+    if (d.effect === 'glitch' && elapsed >= 0.3) {
+      p.vx = (Math.random() - 0.5) * 200; p.vy = (Math.random() - 0.5) * 200; p.life -= dt * 2;
+    } else {
+      p.vy += p.gravity * dt;
+      p.vx *= p.drag;
+      p.vy *= p.drag;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rotation += p.rotSpeed * dt;
+      p.life -= dt * (1 / Math.max(0.2, d.duration));
+    }
   }
 
   private toWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives']): Record<string, any> {
@@ -2971,7 +3208,6 @@ export class LyricDancePlayer {
     direction: 'up' | 'down' | 'left' | 'right' | 'radial',
     palette: { accent: string; glow: string; particle: string },
     emphasisLevel: number,
-    emitterType?: WordEmitterType,
   ): void {
     if (this.burstEmitters.some((emitter) => emitter.id === chunkId)) return;
     const countScale = 0.5 + emphasisLevel * 0.15;
@@ -2988,40 +3224,6 @@ export class LyricDancePlayer {
       spawnRate: Math.round(80 * countScale),
       maxParticles: Math.round(50 * countScale),
       palette,
-    });
-
-    if (!emitterType || emitterType === 'none') return;
-
-    const nowMsEmitters = performance.now();
-    const lastSpawn = this.lastWordEmitterSpawnMsByChunk.get(chunkId) ?? -Infinity;
-    if (nowMsEmitters - lastSpawn < 700) return;
-    this.lastWordEmitterSpawnMsByChunk.set(chunkId, nowMsEmitters);
-
-    const nowSecEmitters = nowMsEmitters / 1000;
-    const EMITTER_DURATIONS: Record<string, number> = {
-      ember: 3.5,
-      frost: 2.5,
-      'spark-burst': 0.5,
-      'dust-impact': 1.2,
-      'light-rays': 2.0,
-      'shockwave-ring': 0.6,
-      'gold-coins': 2.2,
-      'memory-orbs': 3.8,
-      'motion-trail': 0.7,
-      converge: 0.9,
-      'dark-absorb': 3.0,
-    };
-
-    const measuredWidth = this.ctx.measureText(chunkId.split('_')[0] ?? '').width || 60;
-    this.wordEmitters.push({
-      type: emitterType,
-      x: wordX,
-      y: wordY,
-      wordWidth: measuredWidth,
-      color: palette.glow,
-      startTime: nowSecEmitters,
-      duration: EMITTER_DURATIONS[emitterType] ?? 2.0,
-      intensity: Math.max(0.5, emphasisLevel / 3),
     });
   }
 
@@ -3187,659 +3389,3 @@ export class LyricDancePlayer {
       }
     }
   }
-
-  private drawWordEmitters(nowSec: number): void {
-    const pScale = Math.max(1, Math.min(this.width / 960, this.height / 540));
-
-    for (const em of this.wordEmitters) {
-      const elapsed = nowSec - em.startTime;
-      const linearProgress = Math.min(1, elapsed / em.duration);
-      if (linearProgress >= 1) continue;
-
-      // ── Per-emitter easing ──
-      let progress: number;
-      switch (em.type) {
-        case 'spark-burst':
-        case 'shockwave-ring':
-        case 'motion-trail': {
-          const t = linearProgress;
-          progress = t < 0.3 ? (t / 0.3) * 0.8 : 0.8 + ((t - 0.3) / 0.7) * 0.2;
-          break;
-        }
-        case 'frost':
-        case 'converge':
-          progress = 1 - Math.pow(1 - linearProgress, 2.5);
-          break;
-        case 'gold-coins':
-        case 'dust-impact':
-          progress = Math.pow(linearProgress, 1.8);
-          break;
-        case 'dark-absorb':
-          progress = Math.pow(linearProgress, 2.5);
-          break;
-        default:
-          progress = linearProgress;
-          break;
-      }
-
-      const ep = 1 - progress;
-
-      // ── Per-emitter alpha fade ──
-      let fadeAlpha: number;
-      switch (em.type) {
-        case 'spark-burst':
-        case 'shockwave-ring':
-          fadeAlpha = linearProgress < 0.7 ? 1.0 : 1 - ((linearProgress - 0.7) / 0.3);
-          break;
-        case 'ember':
-        case 'memory-orbs':
-          fadeAlpha = linearProgress < 0.6 ? 1.0 : 1 - ((linearProgress - 0.6) / 0.4);
-          break;
-        default:
-          fadeAlpha = 1 - linearProgress;
-          break;
-      }
-
-      switch (em.type) {
-        case 'ember': {
-          const hw = (em.wordWidth || 60) / 2;
-          const count = 6;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const seed2 = (i * 0.381966) % 1;
-            const life = 0.3 + seed2 * 0.4;
-            const age = (elapsed * (0.8 + seed * 0.4)) % life;
-            const agePct = age / life;
-            const px = em.x - hw + seed * hw * 2 + Math.sin(elapsed * 2 + i) * 4 * pScale;
-            const py = em.y - agePct * 25 * pScale;
-            const alpha = 0.06 * (1 - agePct) * fadeAlpha * em.intensity;
-            if (alpha <= 0.003) continue;
-
-            const angle = seed * Math.PI * 2 + elapsed * 0.4;
-            const len = (0.5 + seed2 * 0.5) * pScale;
-
-            this.ctx.beginPath();
-            this.ctx.moveTo(px, py);
-            this.ctx.lineTo(px + Math.cos(angle) * len, py + Math.sin(angle) * len);
-            this.ctx.lineWidth = 0.3 * pScale;
-            this.ctx.strokeStyle = `rgba(255,${seed < 0.5 ? 200 : 150},100,${alpha})`;
-            this.ctx.stroke();
-          }
-          break;
-        }
-        case 'frost': {
-          const hw = (em.wordWidth || 60) / 2;
-          const count = 6;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const seed2 = (i * 0.381966) % 1;
-            const life = 0.3 + seed * 0.4;
-            const age = (elapsed * (0.6 + seed2 * 0.5)) % life;
-            const agePct = age / life;
-            const px = em.x - hw + seed * hw * 2 + Math.cos(elapsed * 0.8 + i) * 6 * pScale;
-            const py = em.y - agePct * 20 * pScale + (seed2 - 0.5) * 8 * pScale;
-            const alpha = 0.06 * (1 - agePct) * fadeAlpha;
-            if (alpha <= 0.003) continue;
-
-            const a = seed * Math.PI * 2;
-            const len = (0.5 + seed2 * 0.8) * pScale;
-            this.ctx.beginPath();
-            this.ctx.moveTo(px, py);
-            this.ctx.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len);
-            this.ctx.lineWidth = 0.3 * pScale;
-            this.ctx.strokeStyle = `rgba(180,220,255,${alpha})`;
-            this.ctx.stroke();
-          }
-          break;
-        }
-        case 'spark-burst': {
-          // Single expanding ring, very faint
-          const ringAge = linearProgress;
-          const ringRadius = ringAge * 80 * em.intensity * pScale;
-          const ringAlpha = Math.max(0, 0.15 * (1 - ringAge) * fadeAlpha);
-          if (ringAlpha > 0.005) {
-            this.ctx.beginPath();
-            this.ctx.arc(em.x, em.y, ringRadius, 0, Math.PI * 2);
-            this.ctx.lineWidth = (1.0 + (1 - ringAge) * 0.5) * pScale;
-            this.ctx.strokeStyle = `rgba(255,255,255,${ringAlpha})`;
-            this.ctx.stroke();
-          }
-          break;
-        }
-        case 'dust-impact': {
-          const hw = (em.wordWidth || 60) / 2;
-          const count = 6;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const seed2 = (i * 0.381966) % 1;
-            const life = 0.3 + seed * 0.4;
-            const age = (elapsed * (0.5 + seed2 * 0.4)) % life;
-            const agePct = age / life;
-            const px = em.x - hw + seed * hw * 2 + (seed2 - 0.5) * 20 * pScale;
-            const py = em.y - agePct * 12 * pScale;
-            const alpha = 0.06 * (1 - agePct) * fadeAlpha;
-            if (alpha <= 0.003) continue;
-
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 0.5 * pScale, 0, Math.PI * 2);
-            this.ctx.fillStyle = `rgba(255,255,240,${alpha})`;
-            this.ctx.fill();
-          }
-          break;
-        }
-        case 'light-rays': {
-          // Soft radial gradient glow — barely visible bloom
-          const bloomRadius = progress * 60 * em.intensity * pScale;
-          const alpha = fadeAlpha * 0.08;
-          if (alpha > 0.005 && bloomRadius > 1) {
-            const grad = this.ctx.createRadialGradient(em.x, em.y, 0, em.x, em.y, bloomRadius);
-            grad.addColorStop(0, `rgba(255,240,220,${alpha})`);
-            grad.addColorStop(0.4, `rgba(255,220,180,${alpha * 0.5})`);
-            grad.addColorStop(1, 'rgba(255,220,180,0)');
-            this.ctx.fillStyle = grad;
-            this.ctx.beginPath();
-            this.ctx.arc(em.x, em.y, bloomRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          break;
-        }
-        case 'shockwave-ring': {
-          // Single faint expanding ring
-          const radius = progress * this.width * 0.2;
-          const ringAlpha = Math.max(0, 0.12 * (1 - linearProgress) * fadeAlpha);
-          if (ringAlpha > 0.005) {
-            this.ctx.beginPath();
-            this.ctx.arc(em.x, em.y, radius, 0, Math.PI * 2);
-            this.ctx.lineWidth = (0.8 + (1 - linearProgress) * 0.8) * pScale;
-            this.ctx.strokeStyle = `rgba(255,255,255,${ringAlpha})`;
-            this.ctx.stroke();
-          }
-          break;
-        }
-        case 'gold-coins': {
-          // Tiny warm glints drifting down, barely visible
-          const count = 12;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const seed2 = (i * 0.381966) % 1;
-            const life = 0.5 + seed * 0.5;
-            const age = (elapsed * (0.3 + seed2 * 0.3)) % life;
-            const agePct = age / life;
-            const px = em.x + (seed - 0.5) * 100 * pScale;
-            const py = em.y + agePct * 30 * pScale;
-            const alpha = 0.15 * (1 - agePct) * fadeAlpha;
-            if (alpha <= 0.005) continue;
-
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, 0.6 * pScale, 0, Math.PI * 2);
-            this.ctx.fillStyle = `rgba(255,215,0,${alpha})`;
-            this.ctx.fill();
-          }
-          break;
-        }
-        case 'memory-orbs': {
-          // Soft radial gradient blobs only — no rings
-          const count = 8;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const angle = seed * Math.PI * 2 + elapsed * 0.2;
-            const dist = progress * 45 * (0.5 + seed) * pScale;
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist - elapsed * 4 * pScale;
-            const radius = (3 + seed * 3) * pScale;
-            const alpha = 0.08 * fadeAlpha * (1 - progress);
-            if (alpha <= 0.005) continue;
-
-            const grad = this.ctx.createRadialGradient(px, py, 0, px, py, radius);
-            grad.addColorStop(0, `rgba(200,200,220,${alpha})`);
-            grad.addColorStop(1, 'rgba(200,200,220,0)');
-            this.ctx.fillStyle = grad;
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          break;
-        }
-        case 'motion-trail': {
-          const trailLen = progress * 100 * pScale;
-          const alpha = fadeAlpha * 0.7;
-          const lineW = 6 * ep * pScale;
-          const headX = em.x;
-          const headY = em.y;
-          const perpSize = lineW * 0.5;
-
-          this.ctx.save();
-          this.ctx.globalAlpha = alpha;
-          this.ctx.shadowColor = em.color;
-          this.ctx.shadowBlur = lineW * 2;
-          this.ctx.fillStyle = em.color;
-          this.ctx.beginPath();
-          this.ctx.moveTo(headX - trailLen, headY);
-          this.ctx.lineTo(headX, headY - perpSize);
-          this.ctx.lineTo(headX + 3 * pScale, headY);
-          this.ctx.lineTo(headX, headY + perpSize);
-          this.ctx.closePath();
-          this.ctx.fill();
-
-          this.ctx.fillStyle = '#FFFFFF';
-          this.ctx.shadowColor = '#FFFFFF';
-          this.ctx.shadowBlur = 4 * pScale;
-          this.ctx.beginPath();
-          this.ctx.arc(headX, headY, 2 * pScale, 0, Math.PI * 2);
-          this.ctx.fill();
-          this.ctx.restore();
-          this.ctx.lineWidth = 1;
-          break;
-        }
-        case 'converge': {
-          const count = 10;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const fromLeft = i < count / 2;
-            const range = 140 * pScale;
-            const startX = fromLeft ? em.x - range : em.x + range;
-            const px = startX + (em.x - startX) * progress;
-            const py = em.y + (seed - 0.5) * 30 * (1 - progress) * pScale;
-            const size = (3 + seed * 3) * pScale;
-            const dir = fromLeft ? 1 : -1;
-
-            this.ctx.save();
-            this.ctx.translate(px, py);
-            this.ctx.globalAlpha = progress * fadeAlpha * 0.8;
-            this.ctx.shadowColor = em.color;
-            this.ctx.shadowBlur = size * 2;
-            this.ctx.fillStyle = em.color;
-            this.ctx.beginPath();
-            this.ctx.moveTo(dir * size * 1.5, 0);
-            this.ctx.lineTo(-dir * size * 0.5, -size * 0.8);
-            this.ctx.lineTo(-dir * size * 0.2, 0);
-            this.ctx.lineTo(-dir * size * 0.5, size * 0.8);
-            this.ctx.closePath();
-            this.ctx.fill();
-            this.ctx.restore();
-          }
-          this.ctx.shadowBlur = 0;
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'dark-absorb': {
-          const count = 10;
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const angle = seed * Math.PI * 2 + elapsed * 2;
-            const startDist = 80 * pScale;
-            const dist = startDist * (1 - progress);
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist;
-            const radius = (4 + seed * 4) * pScale;
-
-            this.ctx.save();
-            this.ctx.translate(px, py);
-            this.ctx.rotate(angle + elapsed * 3);
-            this.ctx.globalAlpha = progress * 0.7;
-            this.ctx.fillStyle = em.color;
-            this.ctx.shadowColor = em.color;
-            this.ctx.shadowBlur = radius * 3;
-            this.ctx.beginPath();
-            this.ctx.moveTo(0, -radius);
-            this.ctx.lineTo(radius * 0.5, -radius * 0.2);
-            this.ctx.lineTo(radius * 0.3, radius * 0.6);
-            this.ctx.lineTo(-radius * 0.4, radius * 0.4);
-            this.ctx.lineTo(-radius * 0.6, -radius * 0.3);
-            this.ctx.closePath();
-            this.ctx.fill();
-            this.ctx.restore();
-          }
-          this.ctx.save();
-          this.ctx.globalAlpha = progress * 0.5;
-          const voidRadius = progress * 15 * pScale;
-          const voidGrad = this.ctx.createRadialGradient(em.x, em.y, 0, em.x, em.y, voidRadius);
-          const vc = em.color.replace('#', '');
-          const vr = parseInt(vc.slice(0, 2), 16) || 0;
-          const vg = parseInt(vc.slice(2, 4), 16) || 0;
-          const vb = parseInt(vc.slice(4, 6), 16) || 0;
-          voidGrad.addColorStop(0, `rgba(${vr},${vg},${vb},0.6)`);
-          voidGrad.addColorStop(1, `rgba(${vr},${vg},${vb},0)`);
-          this.ctx.fillStyle = voidGrad;
-          this.ctx.beginPath();
-          this.ctx.arc(em.x, em.y, voidRadius, 0, Math.PI * 2);
-          this.ctx.fill();
-          this.ctx.restore();
-          this.ctx.shadowBlur = 0;
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-      }
-    }
-  }
-
-  private checkEmotionalEvents(tSec: number, songProgress: number): void {
-    for (const event of this.emotionalEvents) {
-      if (!event.triggered && Math.abs(songProgress - event.triggerRatio) < 0.005) {
-        event.triggered = true;
-        this.activeEvents.push({ event, startTime: tSec });
-      }
-    }
-    this.activeEvents = this.activeEvents.filter((ae) => tSec - ae.startTime < ae.event.duration + 0.1);
-  }
-
-  private drawEmotionalEvents(tSec: number): void {
-    for (const ae of this.activeEvents) {
-      const progress = (tSec - ae.startTime) / ae.event.duration;
-      const ep = Math.min(1, progress);
-      const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
-      const easeIn = (t: number) => Math.pow(t, 3);
-      const rpal = this.getResolvedPalette();
-      const accentColor = rpal[1];
-
-      switch (ae.event.type) {
-        case 'light-break': {
-          const phase = ep < 0.3 ? easeOut(ep / 0.3) : 1 - easeIn((ep - 0.3) / 0.7);
-          this.ctx.globalAlpha = phase * ae.event.intensity * 0.85;
-          this.ctx.fillStyle = '#ffffff';
-          this.ctx.fillRect(0, 0, this.width, this.height);
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'void-moment': {
-          const phase = ep < 0.2 ? easeOut(ep / 0.2) : 1 - easeOut((ep - 0.2) / 0.8);
-          this.ctx.globalAlpha = phase * 0.96;
-          this.ctx.fillStyle = '#000000';
-          this.ctx.fillRect(0, 0, this.width, this.height);
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'halo-ring': {
-          const radius = ep * this.width * 0.8;
-          const ringWidth = 30 * (1 - ep);
-          if (ringWidth < 1) break;
-          this.ctx.strokeStyle = `${accentColor}${Math.floor((1 - ep) * ae.event.intensity * 180).toString(16).padStart(2, '0')}`;
-          this.ctx.lineWidth = ringWidth;
-          this.ctx.beginPath();
-          this.ctx.arc(this.width / 2, this.height / 2, radius, 0, Math.PI * 2);
-          this.ctx.stroke();
-          this.ctx.lineWidth = 1;
-          break;
-        }
-        case 'lens-breath': {
-          const breathe = Math.sin(ep * Math.PI * 4) * 0.008 * ae.event.intensity;
-          const cx = this.width / 2;
-          const cy = this.height / 2;
-          this.ctx.save();
-          this.ctx.translate(cx, cy);
-          this.ctx.scale(1 + breathe, 1 + breathe);
-          this.ctx.translate(-cx, -cy);
-          this.ctx.restore();
-          break;
-        }
-        case 'soul-flare': {
-          const startX = this.width * (0.1 + ep * 0.8);
-          const flareAlpha = ep < 0.5 ? ep * 2 * ae.event.intensity * 0.6 : (1 - ep) * 2 * ae.event.intensity * 0.6;
-          const flare = this.ctx.createLinearGradient(startX - 100, this.height * 0.3, startX + 100, this.height * 0.7);
-          flare.addColorStop(0, 'transparent');
-          flare.addColorStop(0.5, `${accentColor}${Math.floor(flareAlpha * 255).toString(16).padStart(2, '0')}`);
-          flare.addColorStop(1, 'transparent');
-          this.ctx.fillStyle = flare;
-          this.ctx.fillRect(0, 0, this.width, this.height);
-          break;
-        }
-        case 'color-drain': {
-          const phase = ep < 0.3 ? easeOut(ep / 0.3) : 1 - easeOut((ep - 0.3) / 0.7);
-          this.ctx.globalAlpha = phase * 0.7;
-          this.ctx.fillStyle = 'rgba(128,128,128,0.5)';
-          this.ctx.globalCompositeOperation = 'saturation';
-          this.ctx.fillRect(0, 0, this.width, this.height);
-          this.ctx.globalCompositeOperation = 'source-over';
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'world-shift': {
-          const fadeAlpha = ep < 0.5 ? easeOut(ep * 2) * 0.3 : (1 - easeOut((ep - 0.5) * 2)) * 0.3;
-          const nextBg = this.bgCaches[Math.min(Math.floor(ep * this.bgCaches.length), this.bgCaches.length - 1)];
-          if (nextBg) {
-            this.ctx.globalAlpha = fadeAlpha;
-            this.ctx.drawImage(nextBg, 0, 0, this.width, this.height);
-            this.ctx.globalAlpha = 1;
-          }
-          break;
-        }
-        case 'heartbeat': {
-          const pulse1 = ep < 0.15 ? Math.sin(ep / 0.15 * Math.PI) : 0;
-          const pulse2 = ep > 0.2 && ep < 0.4 ? Math.sin((ep - 0.2) / 0.2 * Math.PI) * 0.7 : 0;
-          const pulse = Math.max(pulse1, pulse2) * ae.event.intensity * 0.3;
-          if (pulse > 0.01) {
-            this.ctx.globalAlpha = pulse;
-            this.ctx.fillStyle = accentColor;
-            this.ctx.fillRect(0, 0, this.width, this.height);
-            this.ctx.globalAlpha = 1;
-          }
-          break;
-        }
-        case 'golden-rain': {
-          const count = Math.floor(30 + ae.event.intensity * 40);
-          for (let i = 0; i < count; i++) {
-            const seed = (i * 0.618033) % 1;
-            const x = seed * this.width;
-            const y = ((ep * 1.5 + (i * 0.381966 % 1)) % 1) * this.height;
-            const size = 1.5 + seed * 3;
-            const alpha = (1 - ep) * ae.event.intensity * 0.6;
-            this.ctx.globalAlpha = alpha;
-            this.ctx.fillStyle = accentColor;
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, size, 0, Math.PI * 2);
-            this.ctx.fill();
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'tremor': {
-          if (ep < 0.3) {
-            const shake = Math.sin(ep * Math.PI * 20) * (1 - ep / 0.3) * 3 * ae.event.intensity;
-            this.ctx.save();
-            this.ctx.translate(shake, shake * 0.5);
-            this.ctx.restore();
-          }
-          break;
-        }
-        case 'echo-ghost':
-        default:
-          break;
-      }
-
-      this.ctx.globalAlpha = 1;
-      this.ctx.globalCompositeOperation = 'source-over';
-      this.ctx.lineWidth = 1;
-    }
-  }
-
-  private drawLightingOverlay(frame: ScaledKeyframe, tSec: number): void {
-    const pulse = (Math.sin(tSec * 2.5 + frame.beatIndex) * 0.5 + 0.5) * 0.08;
-    this.ctx.globalAlpha = pulse;
-    this.ctx.fillStyle = '#ffffff';
-    this.ctx.fillRect(0, 0, this.width, this.height);
-    this.ctx.globalAlpha = 1;
-  }
-
-  private drawBackground(frame: ScaledKeyframe): void {
-    const palette = this.payload?.palette ?? ['#0A0A0F', '#FFD700', '#F0F0F0', '#FFD700', '#2A2520'];
-    const baseBg = palette[0] ?? '#0A0A0F';
-    const lum = frame.bgBlend ?? 0.05;
-    this.ctx.globalAlpha = 1;
-    this.ctx.fillStyle = lerpColor(baseBg, '#F8F8FA', lum);
-    this.ctx.fillRect(0, 0, this.width, this.height);
-
-    if (this.bgCaches.length === 0) {
-      this.applyAtmosphere(frame, palette);
-      return;
-    }
-
-    const bgBlend = frame.bgBlend ?? 0;
-    const totalChapters = this.bgCacheCount;
-    const chapterProgress = bgBlend * (totalChapters - 1);
-    const chapterIdx = Math.floor(chapterProgress);
-    const chapterFraction = chapterProgress - chapterIdx;
-
-    const currentBg = this.bgCaches[Math.min(chapterIdx, totalChapters - 1)];
-    const nextBg = this.bgCaches[Math.min(chapterIdx + 1, totalChapters - 1)];
-
-    this.ctx.globalAlpha = 1;
-    this.ctx.drawImage(currentBg, 0, 0, this.width, this.height);
-
-    if (chapterFraction > 0 && nextBg !== currentBg) {
-      this.ctx.globalAlpha = chapterFraction;
-      this.ctx.drawImage(nextBg, 0, 0, this.width, this.height);
-      this.ctx.globalAlpha = 1;
-    }
-
-    this.applyAtmosphere(frame, palette);
-  }
-
-  private applyAtmosphere(frame: ScaledKeyframe, palette: string[]): void {
-    const atmo = frame.atmosphere;
-    if (!atmo) return;
-
-    if (atmo.tintStrength > 0) {
-      this.ctx.save();
-      this.ctx.globalAlpha = atmo.tintStrength;
-      this.ctx.fillStyle = palette[1] ?? '#FFD700';
-      this.ctx.globalCompositeOperation = 'multiply';
-      this.ctx.fillRect(0, 0, this.width, this.height);
-      this.ctx.restore();
-    }
-
-    if (atmo.vignetteStrength > 0) {
-      const gradient = this.ctx.createRadialGradient(
-        this.width / 2,
-        this.height / 2,
-        this.width * 0.3,
-        this.width / 2,
-        this.height / 2,
-        this.width * 0.7,
-      );
-      gradient.addColorStop(0, 'rgba(0,0,0,0)');
-      gradient.addColorStop(1, `rgba(0,0,0,${atmo.vignetteStrength})`);
-      this.ctx.fillStyle = gradient;
-      this.ctx.fillRect(0, 0, this.width, this.height);
-    }
-  }
-
-  // ────────────────────────────────────────────────────────────
-  // Timeline helpers
-  // ────────────────────────────────────────────────────────────
-
-  private getFrame(currentTimeMs: number): ScaledKeyframe | null {
-    const t = this.timeline;
-    if (!t.length) return null;
-
-    let low = 0;
-    let high = t.length - 1;
-    while (low <= high) {
-      const mid = (low + high) >> 1;
-      if (t[mid].timeMs < currentTimeMs) low = mid + 1;
-      else high = mid - 1;
-    }
-    return t[Math.max(0, low - 1)] ?? t[0];
-  }
-
-  private scaleTimeline(raw: BakedTimeline): ScaledKeyframe[] {
-    const sx = this.width / BASE_W;
-    const sy = this.height / BASE_H;
-    // Uniform scale for size-dependent values (fontSize, glow).
-    // Uses min to preserve aspect ratio — letterbox rather than stretch.
-    const sU = Math.min(sx, sy);
-    console.log('[SCALE]', { sx, sy, sU, sampleFontSize: raw[0]?.chunks?.[0]?.fontSize, scaled: (raw[0]?.chunks?.[0]?.fontSize ?? 0) * sU });
-
-    return raw.map((f) => ({
-      timeMs: f.timeMs,
-      beatIndex: f.beatIndex,
-      bgBlend: f.bgBlend,
-      sectionIndex: f.sectionIndex,
-      particles: f.particles,
-      cameraX: f.cameraX * sx,
-      cameraY: f.cameraY * sy,
-      cameraZoom: f.cameraZoom,
-      chunks: f.chunks.map((c) => ({
-        id: c.id,
-        text: c.text,
-        x: c.x * sx,
-        y: c.y * sy,
-        alpha: c.alpha,
-        glow: c.glow * sU,
-        scale: c.scale,
-        scaleX: c.scaleX,
-        scaleY: c.scaleY,
-        skewX: c.skewX,
-        fontSize: c.fontSize * sU,
-        color: c.color,
-        emitterType: c.emitterType,
-        trail: c.trail,
-        entryStyle: c.entryStyle,
-        exitStyle: c.exitStyle,
-        emphasisLevel: c.emphasisLevel,
-        entryProgress: c.entryProgress,
-        iconGlyph: c.iconGlyph,
-        iconStyle: c.iconStyle,
-        iconPosition: c.iconPosition,
-        iconScale: c.iconScale,
-        behavior: c.behavior,
-        visible: c.visible,
-        entryOffsetY: c.entryOffsetY,
-        entryOffsetX: c.entryOffsetX,
-        entryScale: c.entryScale,
-        exitOffsetY: c.exitOffsetY,
-        exitScale: c.exitScale,
-      })),
-    }));
-  }
-
-  // Used only so resize can rescale without rebaking.
-  private unscaleTimeline(): BakedTimeline {
-    const sx = this.width / BASE_W;
-    const sy = this.height / BASE_H;
-    const sU = Math.max(1, Math.min(sx, sy));
-
-    return this.timeline.map((f) => ({
-      timeMs: f.timeMs,
-      beatIndex: f.beatIndex,
-      bgBlend: f.bgBlend,
-      sectionIndex: f.sectionIndex,
-      particles: f.particles,
-      cameraX: sx ? f.cameraX / sx : f.cameraX,
-      cameraY: sy ? f.cameraY / sy : f.cameraY,
-      cameraZoom: f.cameraZoom,
-      chunks: f.chunks.map((c) => ({
-        id: c.id,
-        text: c.text,
-        x: sx ? c.x / sx : c.x,
-        y: sy ? c.y / sy : c.y,
-        alpha: c.alpha,
-        glow: c.glow / sU,
-        scale: c.scale,
-        scaleX: c.scaleX ?? c.scale,
-        scaleY: c.scaleY ?? c.scale,
-        skewX: c.skewX ?? 0,
-        visible: c.visible,
-        fontSize: (c.fontSize ?? 36) / sU,
-        fontWeight: c.fontWeight ?? 700,
-        isAnchor: c.isAnchor ?? false,
-        color: c.color ?? "#ffffff",
-        emitterType: c.emitterType,
-        trail: c.trail,
-        entryStyle: c.entryStyle,
-        exitStyle: c.exitStyle,
-        emphasisLevel: c.emphasisLevel,
-        entryProgress: c.entryProgress ?? 0,
-        iconGlyph: c.iconGlyph,
-        iconStyle: c.iconStyle,
-        iconPosition: c.iconPosition,
-        iconScale: c.iconScale,
-        behavior: c.behavior as any,
-        entryOffsetY: c.entryOffsetY ?? 0,
-        entryOffsetX: c.entryOffsetX ?? 0,
-        entryScale: c.entryScale ?? 1,
-        exitOffsetY: c.exitOffsetY ?? 0,
-        exitScale: c.exitScale ?? 1,
-      })),
-    }));
-  }
-}
