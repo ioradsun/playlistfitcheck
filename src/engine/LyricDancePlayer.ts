@@ -106,7 +106,7 @@ export interface LiveDebugState {
   tensionStage: string;
   tensionMotion: number;
   tensionParticles: number;
-  tensionTypo: number;
+  tensionTypo: string;
 
   wordDirectiveWord: string;
   wordDirectiveBehavior: string;
@@ -246,7 +246,7 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   tensionStage: "—",
   tensionMotion: 0,
   tensionParticles: 0,
-  tensionTypo: 0,
+  tensionTypo: "—",
 
   wordDirectiveWord: "",
   wordDirectiveBehavior: "—",
@@ -1641,11 +1641,12 @@ export class LyricDancePlayer {
       dirIntensity: simulatedBeat,
       dirBgDirective: currentChapter?.backgroundDirective ?? "—",
       dirLightBehavior: currentChapter?.lightBehavior ?? "—",
-      cameraDistance: (section as any)?.cameraDistance ?? (currentChapter as any)?.cameraDistance ?? "—",
-      cameraMovement: (section as any)?.cameraMovement ?? (currentChapter as any)?.cameraMovement ?? "—",
+      cameraDistance: section?.atmosphere ?? (cd as any)?.atmosphere ?? "cinematic",
+      cameraMovement: section?.motion ?? (cd as any)?.motion ?? "fluid",
       tensionStage: currentTension?.stage ?? "—",
       tensionMotion: currentTension?.motionIntensity ?? 0,
       tensionParticles: currentTension?.particleDensity ?? 0,
+      tensionTypo: section?.typography ?? (cd as any)?.typography ?? "clean-modern",
       backgroundSystem: this.backgroundSystem ?? "—",
       lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
       lineIntent: currentChapter?.emotionalArc ?? "—",
