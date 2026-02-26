@@ -752,6 +752,10 @@ export function FitTab({
                   userId={user?.id || ""}
                   projectId={savedId}
                   onImageGenerationStatusChange={onImageGenerationStatusChange}
+                  audioFile={audioFile}
+                  beatGrid={beatGrid}
+                  words={words ?? null}
+                  lyricData={lyricData}
                 />
               )}
 
