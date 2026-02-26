@@ -3463,4 +3463,115 @@ export class LyricDancePlayer {
     }
     return this.timeline[lo];
   }
+
+  private drawBackground(frame: ScaledKeyframe): void {
+    const chapters = this.resolvedState.chapters ?? [];
+    const chapterCount = Math.max(1, chapters.length);
+    const songDuration = Math.max(1, this.songEndSec - this.songStartSec);
+    const songProgress = Math.max(0, Math.min(1, (this.currentTSec - this.songStartSec) / songDuration));
+    const chapterIdx = Math.min(Math.floor(songProgress * chapterCount), chapterCount - 1);
+
+    const bgCanvas = this.bgCaches[chapterIdx] ?? this.bgCaches[0];
+    if (bgCanvas) {
+      this.ctx.drawImage(bgCanvas, 0, 0, this.width, this.height);
+    } else {
+      this.ctx.fillStyle = '#0a0a0f';
+      this.ctx.fillRect(0, 0, this.width, this.height);
+    }
+  }
+
+  private drawLightingOverlay(_frame: ScaledKeyframe, tSec: number): void {
+    const songDuration = Math.max(1, this.songEndSec - this.songStartSec);
+    const songProgress = Math.max(0, Math.min(1, (tSec - this.songStartSec) / songDuration));
+    const cd = this.data.cinematic_direction as any;
+    if (!cd) return;
+
+    const climaxRatio = cd.climax?.timeRatio ?? 0.75;
+    const climaxRange = 0.08;
+    const distToClimax = Math.abs(songProgress - climaxRatio);
+    if (distToClimax < climaxRange) {
+      const intensity = (1 - distToClimax / climaxRange) * (cd.climax?.maxLightIntensity ?? 0.6);
+      this.ctx.save();
+      const grad = this.ctx.createRadialGradient(
+        this.width / 2, this.height / 2, 0,
+        this.width / 2, this.height / 2, this.width * 0.6
+      );
+      grad.addColorStop(0, `rgba(255,255,240,${intensity * 0.15})`);
+      grad.addColorStop(1, 'rgba(255,255,240,0)');
+      this.ctx.fillStyle = grad;
+      this.ctx.fillRect(0, 0, this.width, this.height);
+      this.ctx.restore();
+    }
+  }
+
+  private checkEmotionalEvents(tSec: number, songProgress: number): void {
+    for (const ev of this.emotionalEvents) {
+      if (ev.triggered) continue;
+      if (songProgress >= ev.triggerRatio) {
+        ev.triggered = true;
+        this.activeEvents.push({ event: ev, startTime: tSec });
+      }
+    }
+    this.activeEvents = this.activeEvents.filter(ae => (tSec - ae.startTime) < ae.event.duration);
+  }
+
+  private drawEmotionalEvents(tSec: number): void {
+    for (const ae of this.activeEvents) {
+      const age = tSec - ae.startTime;
+      const progress = Math.min(1, age / ae.event.duration);
+      const fadeAlpha = ae.event.intensity * (1 - progress);
+
+      this.ctx.save();
+      switch (ae.event.type) {
+        case 'light-break': {
+          const grad = this.ctx.createRadialGradient(
+            this.width / 2, this.height / 2, 0,
+            this.width / 2, this.height / 2, this.width * (0.3 + progress * 0.5)
+          );
+          grad.addColorStop(0, `rgba(255,255,220,${fadeAlpha * 0.25})`);
+          grad.addColorStop(1, 'rgba(255,255,220,0)');
+          this.ctx.fillStyle = grad;
+          this.ctx.fillRect(0, 0, this.width, this.height);
+          break;
+        }
+        case 'void-moment': {
+          this.ctx.fillStyle = `rgba(0,0,0,${fadeAlpha * 0.3})`;
+          this.ctx.fillRect(0, 0, this.width, this.height);
+          break;
+        }
+        case 'lens-breath': {
+          const grad = this.ctx.createRadialGradient(
+            this.width / 2, this.height / 2, this.width * 0.3,
+            this.width / 2, this.height / 2, this.width * 0.7
+          );
+          grad.addColorStop(0, 'rgba(0,0,0,0)');
+          grad.addColorStop(1, `rgba(0,0,0,${fadeAlpha * 0.15})`);
+          this.ctx.fillStyle = grad;
+          this.ctx.fillRect(0, 0, this.width, this.height);
+          break;
+        }
+        case 'halo-ring': {
+          const radius = progress * this.width * 0.4;
+          this.ctx.beginPath();
+          this.ctx.arc(this.width / 2, this.height / 2, radius, 0, Math.PI * 2);
+          this.ctx.lineWidth = 2 * (1 - progress);
+          this.ctx.strokeStyle = `rgba(255,255,255,${fadeAlpha * 0.2})`;
+          this.ctx.stroke();
+          break;
+        }
+        case 'world-shift': {
+          this.ctx.fillStyle = `rgba(20,10,40,${fadeAlpha * 0.1})`;
+          this.ctx.fillRect(0, 0, this.width, this.height);
+          break;
+        }
+        default:
+          break;
+      }
+      this.ctx.restore();
+    }
+  }
+
+  private cleanWord(text: string): string {
+    return text.replace(/[^a-zA-Z'']/g, '').toLowerCase();
+  }
 }
