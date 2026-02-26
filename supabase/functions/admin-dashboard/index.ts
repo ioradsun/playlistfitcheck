@@ -86,18 +86,8 @@ serve(async (req) => {
         }
       }
 
-      // Delete all auth users except the current admin
-      const { data: { users: allUsers } } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      let deletedUsers = 0;
-      for (const u of allUsers || []) {
-        if (u.id === user.id) continue;
-        const { error: uErr } = await supabase.auth.admin.deleteUser(u.id);
-        if (uErr) errors.push(`user ${u.email}: ${uErr.message}`);
-        else deletedUsers++;
-      }
-
-      console.log(`[admin] DELETE ALL DATA complete. ${deletedUsers} users deleted. ${errors.length} errors.`);
-      return new Response(JSON.stringify({ success: true, deletedUsers, errors }), {
+      console.log(`[admin] DELETE ALL DATA complete. ${errors.length} errors.`);
+      return new Response(JSON.stringify({ success: true, errors }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
