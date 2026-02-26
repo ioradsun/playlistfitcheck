@@ -21,6 +21,7 @@ import {
   type WordEmitterType,
 } from "@/lib/lyricSceneBaker";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
+import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
@@ -809,6 +810,10 @@ export class LyricDancePlayer {
   private destroyed = false;
   private audioContext: AudioContext | null = null;
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
+  private ambientParticleEngine: ParticleEngine | null = null;
+  private activeSectionIndex = -1;
+  private activeSectionTexture = 'dust';
+  private activeTension: any = null;
 
 
   // Health monitor
@@ -874,6 +879,33 @@ export class LyricDancePlayer {
     this.audio.muted = true;
     this.audio.preload = "auto";
     this.bootMode = options?.bootMode ?? "full";
+
+    this.ambientParticleEngine = new ParticleEngine({
+      particleSystem: this.resolvedState.particleConfig.system,
+      particleDensity: this.resolvedState.particleConfig.density,
+      particleSpeed: this.resolvedState.particleConfig.speed,
+      particleOpacity: 0.4,
+      particleBeatReactive: true,
+      particleDirection: "drift",
+      fontFamily: "Montserrat",
+      fontWeight: 700,
+      letterSpacing: "0.02em",
+      textTransform: "none",
+      lineHeight: 1.2,
+      gravity: "normal",
+      tension: 0.5,
+      damping: 0.5,
+      beatResponse: "pulse",
+      beatResponseScale: 1,
+      imageOpacity: 0,
+      vignetteStrength: 0,
+      blurRadius: 0,
+      grainOpacity: 0,
+      tintStrength: 0,
+      tone: "dark",
+      intensity: 0.5,
+      transitionType: "cross-dissolve",
+    });
   }
 
   // Compatibility with existing React shell
@@ -1169,6 +1201,7 @@ export class LyricDancePlayer {
     this.textCanvas.style.height = `${h}px`;
 
     if (this.payload) this.buildBgCache();
+    this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
     if (this.timeline.length) this.timeline = this.scaleTimeline(this.unscaleTimeline());
   }
@@ -1233,6 +1266,7 @@ export class LyricDancePlayer {
     }
 
     this.currentSimCanvases = [];
+    this.ambientParticleEngine?.clear();
     this.chapterSims = [];
     this.chapterImages = [];
         this.ctx = null as any;
@@ -1536,6 +1570,32 @@ export class LyricDancePlayer {
       (ts: any) => songProgress >= (ts.startRatio ?? 0) && songProgress <= (ts.endRatio ?? 1)
     ) ?? tensionCurve[0];
     const lines = this.payload?.lines ?? [];
+
+    const sectionIndex = chapters.length > 0 ? this.resolveSectionIndex(chapters, clamped - this.songStartSec, duration) : -1;
+    const section = sectionIndex >= 0 ? chapters[sectionIndex] : null;
+    if (sectionIndex !== this.activeSectionIndex) {
+      this.activeSectionIndex = sectionIndex;
+      const texture = section?.texture ?? this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, cd) ?? "dust";
+      this.activeSectionTexture = texture;
+      const mapped = (PARTICLE_SYSTEM_MAP as Record<string, string | undefined>)[texture?.toLowerCase?.() ?? ""]?.toLowerCase?.() ?? texture;
+      this.ambientParticleEngine?.setSystem(mapped);
+      this.ambientParticleEngine?.setConfig({
+        system: mapped,
+        density: this.resolvedState.particleConfig.density ?? 0.35,
+        speed: this.resolvedState.particleConfig.speed ?? 0.35,
+        opacity: 0.4,
+        beatReactive: true,
+      });
+      console.log('[Player] section changed:', {
+        index: sectionIndex,
+        texture,
+        tension: currentTension?.stage ?? "—",
+      });
+    }
+    this.activeTension = currentTension;
+    this.ambientParticleEngine?.setDensityMultiplier((currentTension?.particleDensity ?? 0.5) * 2);
+    this.ambientParticleEngine?.setSpeedMultiplier((currentTension?.motionIntensity ?? 0.5) * 2);
+
     const activeLine = lines.find((l: any) => clamped >= l.start && clamped <= l.end);
     const climaxRatio = (cd as any)?.climax?.timeRatio ?? 0.75;
     const simulatedBeat = Math.max(0.1, 1 - Math.abs(songProgress - climaxRatio) * 2);
@@ -1564,7 +1624,7 @@ export class LyricDancePlayer {
       scale: frame?.cameraZoom ?? 1,
       zoom: frame?.cameraZoom ?? 1,
       lineColor: (visibleChunks[0] as any)?.color ?? "#ffffff",
-      particleSystem: this.resolvedState.particleConfig.texture ?? "—",
+      particleSystem: this.activeSectionTexture ?? this.resolvedState.particleConfig.texture ?? "—",
       particleDensity: this.resolvedState.particleConfig.density ?? 0,
       particleSpeed: this.resolvedState.particleConfig.speed ?? 0,
       dirThesis: (cd as any)?.thesis ?? "—",
@@ -1573,8 +1633,8 @@ export class LyricDancePlayer {
       dirIntensity: simulatedBeat,
       dirBgDirective: currentChapter?.backgroundDirective ?? "—",
       dirLightBehavior: currentChapter?.lightBehavior ?? "—",
-      cameraDistance: (currentChapter as any)?.cameraDistance ?? "—",
-      cameraMovement: (currentChapter as any)?.cameraMovement ?? "—",
+      cameraDistance: (section as any)?.cameraDistance ?? (currentChapter as any)?.cameraDistance ?? "—",
+      cameraMovement: (section as any)?.cameraMovement ?? (currentChapter as any)?.cameraMovement ?? "—",
       tensionStage: currentTension?.stage ?? "—",
       tensionMotion: currentTension?.motionIntensity ?? 0,
       tensionParticles: currentTension?.particleDensity ?? 0,
@@ -1600,7 +1660,7 @@ export class LyricDancePlayer {
           secDuration: secDur,
           secProgress: secDur > 0 ? Math.min(1, secElapsed / secDur) : 0,
           secMood: sec?.mood ?? "—",
-          secTexture: sec?.texture ?? this.resolveParticleTexture(secIdx >= 0 ? secIdx : 0, cd) ?? "—",
+          secTexture: this.activeSectionTexture ?? sec?.texture ?? this.resolveParticleTexture(secIdx >= 0 ? secIdx : 0, cd) ?? "—",
           secHasImage: !!(this.data.section_images?.[secIdx]),
         };
       })(),
@@ -1645,6 +1705,14 @@ export class LyricDancePlayer {
           activeWordTrail: directive?.trail ?? "none",
         };
       })(),
+    };
+
+    const beatIntensity = Math.max(0, Math.min(1, simulatedBeat));
+    this.ambientParticleEngine?.update(deltaMs, beatIntensity);
+    this.debugState = {
+      ...this.debugState,
+      particleCount: this.ambientParticleEngine?.getActiveCount() ?? 0,
+      tensionStage: this.activeTension?.stage ?? this.debugState.tensionStage,
     };
   }
 
@@ -1748,34 +1816,8 @@ export class LyricDancePlayer {
     // Word-local particle emitters — render behind text
     this.drawWordEmitters(performance.now() / 1000);
 
-    // Ambient particles — render behind text, use V3 palette glow color
-    if (frame.particles?.length) {
-      const ambientPal = this.getResolvedPalette();
-      for (const p of frame.particles) {
-        const drawAlpha = p.alpha * 0.4;
-        const drawSize = p.size * 0.5;
-        this.ctx.globalAlpha = drawAlpha;
-        this.ctx.fillStyle = ambientPal[3];
-        if (p.shape === 'line') {
-          this.ctx.fillRect(p.x * this.width, p.y * this.height, Math.max(1, drawSize * 0.6), Math.max(2, drawSize * 4));
-        } else if (p.shape === 'diamond') {
-          const x = p.x * this.width;
-          const y = p.y * this.height;
-          this.ctx.beginPath();
-          this.ctx.moveTo(x, y - drawSize);
-          this.ctx.lineTo(x + drawSize, y);
-          this.ctx.lineTo(x, y + drawSize);
-          this.ctx.lineTo(x - drawSize, y);
-          this.ctx.closePath();
-          this.ctx.fill();
-        } else {
-          this.ctx.beginPath();
-          this.ctx.arc(p.x * this.width, p.y * this.height, drawSize, 0, Math.PI * 2);
-          this.ctx.fill();
-        }
-      }
-      this.ctx.globalAlpha = 1;
-    }
+    // Ambient particles — runtime system updates per section
+    this.ambientParticleEngine?.draw(this.ctx, "far");
 
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
     const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
@@ -2272,6 +2314,8 @@ export class LyricDancePlayer {
         speed: 0.35,
       },
     };
+    this.activeSectionIndex = -1;
+    this.activeSectionTexture = texture;
   }
 
   private buildChunkCache(payload: ScenePayload): void {
