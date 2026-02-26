@@ -3347,25 +3347,16 @@ export class LyricDancePlayer {
           break;
         }
         case 'shockwave-ring': {
-          const radius = progress * this.width * 0.3;
-          const lineW = 4 * ep * pScale;
-          this.ctx.save();
-          this.ctx.globalAlpha = fadeAlpha * 0.5;
-          this.ctx.shadowColor = em.color;
-          this.ctx.shadowBlur = lineW * 6;
-          this.ctx.strokeStyle = em.color;
-          this.ctx.lineWidth = lineW * 0.5;
-          this.ctx.beginPath();
-          this.ctx.arc(em.x, em.y, radius * 1.08, 0, Math.PI * 2);
-          this.ctx.stroke();
-          this.ctx.globalAlpha = fadeAlpha * 0.85;
-          this.ctx.strokeStyle = '#FFFFFF';
-          this.ctx.lineWidth = lineW;
-          this.ctx.beginPath();
-          this.ctx.arc(em.x, em.y, radius, 0, Math.PI * 2);
-          this.ctx.stroke();
-          this.ctx.restore();
-          this.ctx.lineWidth = 1;
+          // Single faint expanding ring
+          const radius = progress * this.width * 0.2;
+          const ringAlpha = Math.max(0, 0.12 * (1 - linearProgress) * fadeAlpha);
+          if (ringAlpha > 0.005) {
+            this.ctx.beginPath();
+            this.ctx.arc(em.x, em.y, radius, 0, Math.PI * 2);
+            this.ctx.lineWidth = (0.8 + (1 - linearProgress) * 0.8) * pScale;
+            this.ctx.strokeStyle = `rgba(255,255,255,${ringAlpha})`;
+            this.ctx.stroke();
+          }
           break;
         }
         case 'gold-coins': {
