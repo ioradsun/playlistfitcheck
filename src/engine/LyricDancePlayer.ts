@@ -3236,289 +3236,171 @@ export class LyricDancePlayer {
 
       switch (em.type) {
         case 'ember': {
-          const count = Math.floor(18 + em.intensity * 10);
+          // Heat shimmer: tiny irregular scratches, barely visible
+          const count = Math.floor(20 + em.intensity * 12);
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
             const seed2 = (i * 0.381966) % 1;
-            const drift = (elapsed * 0.14 * (0.3 + seed)) % 1;
-            const wobble = Math.sin(elapsed * 3 + i * 2.1) * 14 * pScale;
-            const px = em.x + (seed - 0.5) * 80 * pScale + wobble;
-            const py = em.y - drift * 160 * pScale;
-            const alpha = (0.35 - drift * 0.4) * fadeAlpha * em.intensity;
-            if (alpha <= 0) continue;
-            const r = seed < 0.3 ? 255 : seed < 0.6 ? 255 : 255;
-            const g = seed < 0.3 ? 215 : seed < 0.6 ? 140 : 160;
-            const b = seed < 0.3 ? 0 : seed < 0.6 ? 0 : 50;
-            const streakLen = (2 + seed2 * 3) * pScale;
+            const life = 0.3 + seed2 * 0.5; // 0.3-0.8s lifecycle
+            const age = (elapsed * (0.8 + seed * 0.4)) % life;
+            const agePct = age / life;
+            // Spread across word width area, not just center
+            const spawnX = em.x + (seed - 0.5) * 120 * pScale;
+            const spawnY = em.y - agePct * 40 * pScale + (seed2 - 0.5) * 10 * pScale;
+            const hDrift = Math.sin(elapsed * 2.5 + i * 1.7) * 8 * pScale;
+            const px = spawnX + hDrift;
+            const py = spawnY;
+            const alpha = 0.12 * (1 - agePct) * fadeAlpha * em.intensity;
+            if (alpha <= 0.005) continue;
 
-            this.ctx.save();
-            this.ctx.globalAlpha = alpha;
-            this.ctx.strokeStyle = `rgba(${r},${g},${b},${alpha * 0.6})`;
-            this.ctx.lineWidth = (0.4 + (1 - drift) * 0.6) * pScale;
-            this.ctx.lineCap = 'round';
+            const angle = seed * Math.PI * 2 + elapsed * 0.5;
+            const len = (0.8 + seed2 * 1.2) * pScale;
+            const g = seed < 0.4 ? 200 : seed < 0.7 ? 160 : 140;
+
             this.ctx.beginPath();
             this.ctx.moveTo(px, py);
-            this.ctx.lineTo(px + (Math.random() - 0.5) * 2 * pScale, py - streakLen);
+            this.ctx.lineTo(px + Math.cos(angle) * len, py + Math.sin(angle) * len);
+            this.ctx.lineWidth = (0.3 + seed2 * 0.4) * pScale;
+            this.ctx.strokeStyle = `rgba(255,${g},100,${alpha})`;
             this.ctx.stroke();
-            this.ctx.restore();
           }
-          this.ctx.globalAlpha = 1;
           break;
         }
         case 'frost': {
-          const count = 10;
-          for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2 + Math.sin(elapsed * 0.5) * 0.1;
-            const dist = progress * 80 * pScale;
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist;
-            const size = (3 + Math.sin(elapsed * 4 + i) * 1) * pScale;
-            const crystalRotation = angle + elapsed * 0.3;
-
-            this.ctx.save();
-            this.ctx.translate(px, py);
-            this.ctx.rotate(crystalRotation);
-            this.ctx.globalAlpha = fadeAlpha * 0.85;
-            this.ctx.shadowColor = '#A8D8EA';
-            this.ctx.shadowBlur = 8 * pScale;
-            this.ctx.strokeStyle = '#A8D8EA';
-            this.ctx.fillStyle = '#E8F4FF';
-            this.ctx.lineWidth = 1.5 * pScale;
-
-            for (let arm = 0; arm < 3; arm++) {
-              const armAngle = (arm / 3) * Math.PI;
-              const ax = Math.cos(armAngle) * size * 2;
-              const ay = Math.sin(armAngle) * size * 2;
-              this.ctx.beginPath();
-              this.ctx.moveTo(-ax, -ay);
-              this.ctx.lineTo(ax, ay);
-              this.ctx.stroke();
-              const tipSize = size * 0.4;
-              for (const sign of [1, -1]) {
-                const tx = ax * sign;
-                const ty = ay * sign;
-                this.ctx.beginPath();
-                this.ctx.moveTo(tx, ty - tipSize);
-                this.ctx.lineTo(tx + tipSize * 0.6, ty);
-                this.ctx.lineTo(tx, ty + tipSize);
-                this.ctx.lineTo(tx - tipSize * 0.6, ty);
-                this.ctx.closePath();
-                this.ctx.fill();
-              }
-            }
-            this.ctx.restore();
-          }
-          this.ctx.globalAlpha = fadeAlpha * 0.4;
-          this.ctx.strokeStyle = '#A8D8EA';
-          this.ctx.lineWidth = 1 * pScale;
-          this.ctx.shadowColor = '#A8D8EA';
-          this.ctx.shadowBlur = 4 * pScale;
-          for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2;
-            const dist = progress * 80 * pScale;
-            this.ctx.beginPath();
-            this.ctx.moveTo(em.x + Math.cos(angle) * 8 * pScale, em.y + Math.sin(angle) * 8 * pScale);
-            this.ctx.lineTo(em.x + Math.cos(angle) * dist * 0.6, em.y + Math.sin(angle) * dist * 0.6);
-            this.ctx.stroke();
-          }
-          this.ctx.shadowBlur = 0;
-          this.ctx.globalAlpha = 1;
-          this.ctx.lineWidth = 1;
-          break;
-        }
-        case 'spark-burst': {
-          // Expanding thin rings — ripple effect
-          const ringCount = 3;
-          for (let r = 0; r < ringCount; r++) {
-            const ringDelay = r * 0.12;
-            const ringAge = Math.max(0, linearProgress - ringDelay);
-            if (ringAge <= 0 || ringAge >= 1) continue;
-            const expandRadius = ringAge * 120 * em.intensity * pScale;
-            const ringAlpha = 0.3 * (1 - ringAge) * fadeAlpha;
-
-            this.ctx.save();
-            this.ctx.globalAlpha = ringAlpha;
-            this.ctx.strokeStyle = `rgba(255,255,255,${ringAlpha})`;
-            this.ctx.lineWidth = (0.8 + (1 - ringAge) * 1.2) * pScale;
-            this.ctx.beginPath();
-            this.ctx.arc(em.x, em.y, expandRadius, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.restore();
-          }
-          // Tiny wispy streaks radiating out
-          const streakCount = 12;
-          for (let i = 0; i < streakCount; i++) {
-            const angle = (i / streakCount) * Math.PI * 2 + ((i * 0.618033) % 1) * 0.4;
-            const speed = (60 + ((i * 0.618033) % 1) * 50) * pScale;
-            const dist = progress * speed;
-            const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist;
-            const trailLen = (3 + (1 - progress) * 5) * pScale;
-            const tailX = px - Math.cos(angle) * trailLen;
-            const tailY = py - Math.sin(angle) * trailLen;
-            const alpha = fadeAlpha * 0.25 * (1 - progress);
-
-            this.ctx.save();
-            this.ctx.globalAlpha = alpha;
-            this.ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.5})`;
-            this.ctx.lineWidth = 0.6 * pScale;
-            this.ctx.lineCap = 'round';
-            this.ctx.beginPath();
-            this.ctx.moveTo(tailX, tailY);
-            this.ctx.lineTo(px, py);
-            this.ctx.stroke();
-            this.ctx.restore();
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'dust-impact': {
+          // Subtle cool shimmer: short blue-white scratches
           const count = 14;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
-            const angle = (seed - 0.5) * Math.PI;
-            const dist = progress * 60 * (0.5 + seed) * pScale;
+            const seed2 = (i * 0.381966) % 1;
+            const life = 0.4 + seed * 0.4;
+            const age = (elapsed * (0.6 + seed2 * 0.5)) % life;
+            const agePct = age / life;
+            const angle = (i / count) * Math.PI * 2 + elapsed * 0.2;
+            const dist = (10 + progress * 40 * seed) * pScale;
             const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist * 0.3;
-            const radius = (5 + seed * 8) * pScale;
+            const py = em.y + Math.sin(angle) * dist;
+            const alpha = 0.12 * (1 - agePct) * fadeAlpha;
+            if (alpha <= 0.005) continue;
 
-            this.ctx.save();
-            this.ctx.globalAlpha = fadeAlpha * 0.45;
-            const grad = this.ctx.createRadialGradient(px, py, 0, px, py, radius);
-            grad.addColorStop(0, this.hexWithAlpha(em.color, 0.6));
-            grad.addColorStop(0.5, this.hexWithAlpha(em.color, 0.3));
-            grad.addColorStop(1, this.hexWithAlpha(em.color, 0));
-            this.ctx.fillStyle = grad;
+            const scratchAngle = angle + seed * 0.8;
+            const len = (0.8 + seed2 * 1.5) * pScale;
             this.ctx.beginPath();
-            this.ctx.arc(px, py, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.restore();
-          }
-          this.ctx.globalAlpha = 1;
-          break;
-        }
-        case 'light-rays': {
-          const rayCount = 8;
-          for (let i = 0; i < rayCount; i++) {
-            const angle = (i / rayCount) * Math.PI * 2 + elapsed * 0.15;
-            const rayLen = progress * 120 * em.intensity * pScale;
-            const alpha = fadeAlpha * 0.6;
-            const tipX = em.x + Math.cos(angle) * rayLen;
-            const tipY = em.y + Math.sin(angle) * rayLen;
-            const perpX = Math.cos(angle + Math.PI / 2);
-            const perpY = Math.sin(angle + Math.PI / 2);
-            const baseWidth = 3 * pScale;
-
-            this.ctx.save();
-            this.ctx.globalAlpha = alpha;
-            this.ctx.shadowColor = em.color;
-            this.ctx.shadowBlur = 12 * pScale;
-            this.ctx.fillStyle = em.color;
-            this.ctx.beginPath();
-            this.ctx.moveTo(em.x + perpX * baseWidth, em.y + perpY * baseWidth);
-            this.ctx.lineTo(tipX, tipY);
-            this.ctx.lineTo(em.x - perpX * baseWidth, em.y - perpY * baseWidth);
-            this.ctx.closePath();
-            this.ctx.fill();
-
-            this.ctx.strokeStyle = '#FFFFFF';
-            this.ctx.lineWidth = 1 * pScale;
-            this.ctx.globalAlpha = alpha * 0.7;
-            this.ctx.beginPath();
-            this.ctx.moveTo(em.x, em.y);
-            this.ctx.lineTo(tipX, tipY);
+            this.ctx.moveTo(px, py);
+            this.ctx.lineTo(px + Math.cos(scratchAngle) * len, py + Math.sin(scratchAngle) * len);
+            this.ctx.lineWidth = (0.3 + seed2 * 0.3) * pScale;
+            this.ctx.strokeStyle = `rgba(180,220,255,${alpha})`;
             this.ctx.stroke();
-            this.ctx.restore();
           }
-          this.ctx.lineWidth = 1;
           break;
         }
-        case 'shockwave-ring': {
-          const radius = progress * this.width * 0.3;
-          const lineW = 4 * ep * pScale;
-          this.ctx.save();
-          this.ctx.globalAlpha = fadeAlpha * 0.5;
-          this.ctx.shadowColor = em.color;
-          this.ctx.shadowBlur = lineW * 6;
-          this.ctx.strokeStyle = em.color;
-          this.ctx.lineWidth = lineW * 0.5;
-          this.ctx.beginPath();
-          this.ctx.arc(em.x, em.y, radius * 1.08, 0, Math.PI * 2);
-          this.ctx.stroke();
-          this.ctx.globalAlpha = fadeAlpha * 0.85;
-          this.ctx.strokeStyle = '#FFFFFF';
-          this.ctx.lineWidth = lineW;
-          this.ctx.beginPath();
-          this.ctx.arc(em.x, em.y, radius, 0, Math.PI * 2);
-          this.ctx.stroke();
-          this.ctx.restore();
-          this.ctx.lineWidth = 1;
+        case 'spark-burst': {
+          // Single expanding ring, very faint
+          const ringAge = linearProgress;
+          const ringRadius = ringAge * 80 * em.intensity * pScale;
+          const ringAlpha = Math.max(0, 0.15 * (1 - ringAge) * fadeAlpha);
+          if (ringAlpha > 0.005) {
+            this.ctx.beginPath();
+            this.ctx.arc(em.x, em.y, ringRadius, 0, Math.PI * 2);
+            this.ctx.lineWidth = (1.0 + (1 - ringAge) * 0.5) * pScale;
+            this.ctx.strokeStyle = `rgba(255,255,255,${ringAlpha})`;
+            this.ctx.stroke();
+          }
           break;
         }
-        case 'gold-coins': {
+        case 'dust-impact': {
+          // Tiny 1px dots, slow drift, very low opacity
           const count = 16;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
             const seed2 = (i * 0.381966) % 1;
-            const fallSpeed = 0.25 + seed * 0.35;
-            const px = em.x + (seed - 0.5) * 120 * pScale;
-            const py = em.y + elapsed * fallSpeed * 100 * seed2 * pScale;
-            const alpha = Math.max(0, fadeAlpha - seed2 * 0.3) * 0.9;
-            const coinSize = (4 + seed * 3) * pScale;
-            const flipPhase = Math.cos(elapsed * 8 + i * 2.3);
-            const coinWidth = coinSize * Math.abs(flipPhase);
-            const glint = Math.abs(flipPhase) > 0.85;
+            const life = 0.4 + seed * 0.4;
+            const age = (elapsed * (0.5 + seed2 * 0.4)) % life;
+            const agePct = age / life;
+            const angle = (seed - 0.5) * Math.PI;
+            const dist = agePct * 35 * (0.5 + seed) * pScale;
+            const px = em.x + Math.cos(angle) * dist + (seed2 - 0.5) * 60 * pScale;
+            const py = em.y + Math.sin(angle) * dist * 0.3 - agePct * 15 * pScale;
+            const alpha = 0.10 * (1 - agePct) * fadeAlpha;
+            if (alpha <= 0.005) continue;
 
-            this.ctx.save();
-            this.ctx.translate(px, py);
-            this.ctx.globalAlpha = alpha;
-            this.ctx.shadowColor = '#FFD700';
-            this.ctx.shadowBlur = coinSize * (glint ? 4 : 2);
-            this.ctx.fillStyle = glint ? '#FFFACD' : '#FFD700';
             this.ctx.beginPath();
-            this.ctx.ellipse(0, 0, Math.max(1, coinWidth), coinSize, 0, 0, Math.PI * 2);
+            this.ctx.arc(px, py, 0.8 * pScale, 0, Math.PI * 2);
+            this.ctx.fillStyle = `rgba(255,255,240,${alpha})`;
             this.ctx.fill();
-            this.ctx.strokeStyle = '#DAA520';
-            this.ctx.lineWidth = 0.5 * pScale;
-            this.ctx.stroke();
-            this.ctx.restore();
           }
-          this.ctx.shadowBlur = 0;
-          this.ctx.globalAlpha = 1;
+          break;
+        }
+        case 'light-rays': {
+          // Soft radial gradient glow — barely visible bloom
+          const bloomRadius = progress * 60 * em.intensity * pScale;
+          const alpha = fadeAlpha * 0.08;
+          if (alpha > 0.005 && bloomRadius > 1) {
+            const grad = this.ctx.createRadialGradient(em.x, em.y, 0, em.x, em.y, bloomRadius);
+            grad.addColorStop(0, `rgba(255,240,220,${alpha})`);
+            grad.addColorStop(0.4, `rgba(255,220,180,${alpha * 0.5})`);
+            grad.addColorStop(1, 'rgba(255,220,180,0)');
+            this.ctx.fillStyle = grad;
+            this.ctx.beginPath();
+            this.ctx.arc(em.x, em.y, bloomRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          break;
+        }
+        case 'shockwave-ring': {
+          // Single faint expanding ring
+          const radius = progress * this.width * 0.2;
+          const ringAlpha = Math.max(0, 0.12 * (1 - linearProgress) * fadeAlpha);
+          if (ringAlpha > 0.005) {
+            this.ctx.beginPath();
+            this.ctx.arc(em.x, em.y, radius, 0, Math.PI * 2);
+            this.ctx.lineWidth = (0.8 + (1 - linearProgress) * 0.8) * pScale;
+            this.ctx.strokeStyle = `rgba(255,255,255,${ringAlpha})`;
+            this.ctx.stroke();
+          }
+          break;
+        }
+        case 'gold-coins': {
+          // Tiny warm glints drifting down, barely visible
+          const count = 12;
+          for (let i = 0; i < count; i++) {
+            const seed = (i * 0.618033) % 1;
+            const seed2 = (i * 0.381966) % 1;
+            const life = 0.5 + seed * 0.5;
+            const age = (elapsed * (0.3 + seed2 * 0.3)) % life;
+            const agePct = age / life;
+            const px = em.x + (seed - 0.5) * 100 * pScale;
+            const py = em.y + agePct * 30 * pScale;
+            const alpha = 0.15 * (1 - agePct) * fadeAlpha;
+            if (alpha <= 0.005) continue;
+
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 0.6 * pScale, 0, Math.PI * 2);
+            this.ctx.fillStyle = `rgba(255,215,0,${alpha})`;
+            this.ctx.fill();
+          }
           break;
         }
         case 'memory-orbs': {
-          const count = 10;
+          // Soft radial gradient blobs only — no rings
+          const count = 8;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
-            const angle = seed * Math.PI * 2 + elapsed * 0.25;
-            const dist = progress * 55 * (0.5 + seed) * pScale;
+            const angle = seed * Math.PI * 2 + elapsed * 0.2;
+            const dist = progress * 45 * (0.5 + seed) * pScale;
             const px = em.x + Math.cos(angle) * dist;
-            const py = em.y + Math.sin(angle) * dist - elapsed * 6 * pScale;
-            const radius = (4 + seed * 4) * pScale;
-
-            this.ctx.save();
-            this.ctx.globalAlpha = fadeAlpha * 0.3;
+            const py = em.y + Math.sin(angle) * dist - elapsed * 4 * pScale;
+            const radius = (3 + seed * 3) * pScale;
+            const alpha = 0.08 * fadeAlpha * (1 - progress);
+            if (alpha <= 0.005) continue;
 
             const grad = this.ctx.createRadialGradient(px, py, 0, px, py, radius);
-            grad.addColorStop(0, em.color + '18');
-            grad.addColorStop(0.5, em.color + '08');
-            grad.addColorStop(1, 'transparent');
+            grad.addColorStop(0, `rgba(200,200,220,${alpha})`);
+            grad.addColorStop(1, 'rgba(200,200,220,0)');
             this.ctx.fillStyle = grad;
             this.ctx.beginPath();
             this.ctx.arc(px, py, radius, 0, Math.PI * 2);
             this.ctx.fill();
-
-            // Thin wispy ring
-            this.ctx.strokeStyle = em.color;
-            this.ctx.lineWidth = (0.5 + (1 - progress) * 0.5) * pScale;
-            this.ctx.globalAlpha = fadeAlpha * 0.2;
-            this.ctx.beginPath();
-            this.ctx.arc(px, py, radius * 0.6, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.restore();
           }
-          this.ctx.globalAlpha = 1;
           break;
         }
         case 'motion-trail': {
