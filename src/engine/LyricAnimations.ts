@@ -143,7 +143,7 @@ export function applyWordMark(
       ctx.translate((Math.random() - 0.5) * (1 - anim.intensity) * 5, (Math.random() - 0.5) * (1 - anim.intensity) * 5);
       break;
     case "GLOW":
-      ctx.shadowColor = manifest.palette[2];
+      ctx.shadowColor = manifest.palette?.[2] ?? "#ec4899";
       ctx.shadowBlur = 8 + anim.intensity * 14;
       break;
     case "FADE":
