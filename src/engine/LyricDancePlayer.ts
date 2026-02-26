@@ -136,6 +136,40 @@ export interface LiveDebugState {
   imgOpacity: number;
   imgOverlap: boolean;
 
+  // Section boundaries
+  secIndex: number;
+  secTotal: number;
+  secStartSec: number;
+  secEndSec: number;
+  secElapsed: number;
+  secDuration: number;
+  secProgress: number;
+  secMood: string;
+  secTexture: string;
+  secHasImage: boolean;
+
+  // Cinematic direction defaults
+  cdSceneTone: string;
+  cdAtmosphere: string;
+  cdMotion: string;
+  cdTypography: string;
+  cdTexture: string;
+  cdEmotionalArc: string;
+
+  // Beat grid phase
+  bgBpm: number;
+  bgBeatsTotal: number;
+  bgConfidence: number;
+  bgNextBeat: number;
+  bgBeatPhase: number;
+
+  // Active word
+  activeWord: string;
+  activeWordEntry: string;
+  activeWordExit: string;
+  activeWordEmphasis: number;
+  activeWordTrail: string;
+
   fps: number;
   drawCalls: number;
   cacheHits: number;
