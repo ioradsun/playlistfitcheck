@@ -109,10 +109,12 @@ export interface LiveDebugState {
   tensionTypo: number;
 
   wordDirectiveWord: string;
-  wordDirectiveKinetic: string;
-  wordDirectiveElemental: string;
+  wordDirectiveBehavior: string;
+  wordDirectiveEntry: string;
   wordDirectiveEmphasis: number;
-  wordDirectiveEvolution: string;
+  wordDirectiveExit: string;
+  wordDirectiveGhostTrail: boolean;
+  wordDirectiveGhostDir: string;
 
   lineHeroWord: string;
   lineEntry: string;
