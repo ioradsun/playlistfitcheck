@@ -613,6 +613,21 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                             </DropdownMenu>
                           </li>
                         ))}
+                        <li className="pt-1 px-2">
+                          <button
+                            className="w-full text-[11px] text-destructive/70 hover:text-destructive py-1 rounded hover:bg-destructive/10 transition-colors"
+                            onClick={async () => {
+                              if (!confirm("Permanently delete all trashed items?")) return;
+                              await Promise.all(trashedItems.map((item) => {
+                                const table = softDeleteTable(item.type);
+                                return table ? supabase.from(table as any).delete().eq("id", item.id) : Promise.resolve();
+                              }));
+                              setTrashedItems([]);
+                            }}
+                          >
+                            Empty Trash
+                          </button>
+                        </li>
                       </ul>
                     )}
                   </SidebarMenuItem>
