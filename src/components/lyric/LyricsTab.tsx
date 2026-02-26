@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { compressAudioFile } from "@/lib/compressAudio";
+import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
@@ -104,13 +105,16 @@ export function LyricsTab({
 
   const uploadAudioImmediately = useCallback(
     async (file: File, userId: string, projectId: string): Promise<string | null> => {
-      const ext = file.name.split(".").pop() ?? "mp3";
-      const path = `${userId}/lyric/${projectId}.${ext}`;
+      const path = getAudioStoragePath(userId, projectId, file.name);
       const { error } = await supabase.storage
-        .from("audio-clips")
-        .upload(path, file, { upsert: true });
-      if (error) return null;
-      const { data } = supabase.storage.from("audio-clips").getPublicUrl(path);
+        .from("audio")
+        .upload(path, file, { upsert: true, contentType: file.type || undefined });
+      if (error) {
+        console.warn("[Pipeline] Audio upload failed during transcription pipeline:", error.message);
+        return null;
+      }
+      const { data } = supabase.storage.from("audio").getPublicUrl(path);
+      console.log("[Pipeline] Audio uploaded to storage:", data.publicUrl);
       return data.publicUrl;
     },
     [],
@@ -151,12 +155,8 @@ export function LyricsTab({
 
       if (user && projectId) {
         void (async () => {
-          const audioUploadPromise = uploadAudioImmediately(file, user.id, projectId);
-          const { data: audioUrl } = await Promise.race([
-            audioUploadPromise.then((url) => ({ data: url })),
-            new Promise<{ data: string | null }>((resolve) => setTimeout(() => resolve({ data: null }), 15000)),
-          ]);
-          await supabase.from("saved_lyrics").upsert({
+          const audioUrl = await uploadAudioImmediately(file, user.id, projectId);
+          const { error } = await supabase.from("saved_lyrics").upsert({
             id: projectId,
             user_id: user.id,
             title: draftTitle,
@@ -166,6 +166,9 @@ export function LyricsTab({
             ...(audioUrl ? { audio_url: audioUrl } : {}),
             updated_at: new Date().toISOString(),
           } as any);
+          if (error) {
+            console.warn("[Pipeline] Initial project save failed:", error.message);
+          }
         })();
       }
 

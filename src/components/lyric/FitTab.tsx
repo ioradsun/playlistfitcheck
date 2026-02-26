@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
+import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { LyricWaveform } from "./LyricWaveform";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -480,14 +481,15 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
         audioUrl = existingDance.audio_url;
       } else {
         setPublishStatus("Uploading audio…");
-        const fileExt = audioFile.name.split(".").pop() || "webm";
-        const storagePath = `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${fileExt}`;
+        const storagePath = savedId
+          ? getAudioStoragePath(user.id, savedId, audioFile.name)
+          : `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
         const { error: uploadError } = await supabase.storage
-          .from("audio-clips")
-          .upload(storagePath, audioFile, { upsert: true });
+          .from("audio")
+          .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
         if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+        const { data: urlData } = supabase.storage.from("audio").getPublicUrl(storagePath);
         audioUrl = urlData.publicUrl;
       }
 
