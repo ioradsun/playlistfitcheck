@@ -3267,64 +3267,30 @@ export class LyricDancePlayer {
           break;
         }
         case 'frost': {
-          const count = 10;
+          // Subtle cool shimmer: short blue-white scratches
+          const count = 14;
           for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2 + Math.sin(elapsed * 0.5) * 0.1;
-            const dist = progress * 80 * pScale;
+            const seed = (i * 0.618033) % 1;
+            const seed2 = (i * 0.381966) % 1;
+            const life = 0.4 + seed * 0.4;
+            const age = (elapsed * (0.6 + seed2 * 0.5)) % life;
+            const agePct = age / life;
+            const angle = (i / count) * Math.PI * 2 + elapsed * 0.2;
+            const dist = (10 + progress * 40 * seed) * pScale;
             const px = em.x + Math.cos(angle) * dist;
             const py = em.y + Math.sin(angle) * dist;
-            const size = (3 + Math.sin(elapsed * 4 + i) * 1) * pScale;
-            const crystalRotation = angle + elapsed * 0.3;
+            const alpha = 0.12 * (1 - agePct) * fadeAlpha;
+            if (alpha <= 0.005) continue;
 
-            this.ctx.save();
-            this.ctx.translate(px, py);
-            this.ctx.rotate(crystalRotation);
-            this.ctx.globalAlpha = fadeAlpha * 0.85;
-            this.ctx.shadowColor = '#A8D8EA';
-            this.ctx.shadowBlur = 8 * pScale;
-            this.ctx.strokeStyle = '#A8D8EA';
-            this.ctx.fillStyle = '#E8F4FF';
-            this.ctx.lineWidth = 1.5 * pScale;
-
-            for (let arm = 0; arm < 3; arm++) {
-              const armAngle = (arm / 3) * Math.PI;
-              const ax = Math.cos(armAngle) * size * 2;
-              const ay = Math.sin(armAngle) * size * 2;
-              this.ctx.beginPath();
-              this.ctx.moveTo(-ax, -ay);
-              this.ctx.lineTo(ax, ay);
-              this.ctx.stroke();
-              const tipSize = size * 0.4;
-              for (const sign of [1, -1]) {
-                const tx = ax * sign;
-                const ty = ay * sign;
-                this.ctx.beginPath();
-                this.ctx.moveTo(tx, ty - tipSize);
-                this.ctx.lineTo(tx + tipSize * 0.6, ty);
-                this.ctx.lineTo(tx, ty + tipSize);
-                this.ctx.lineTo(tx - tipSize * 0.6, ty);
-                this.ctx.closePath();
-                this.ctx.fill();
-              }
-            }
-            this.ctx.restore();
-          }
-          this.ctx.globalAlpha = fadeAlpha * 0.4;
-          this.ctx.strokeStyle = '#A8D8EA';
-          this.ctx.lineWidth = 1 * pScale;
-          this.ctx.shadowColor = '#A8D8EA';
-          this.ctx.shadowBlur = 4 * pScale;
-          for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2;
-            const dist = progress * 80 * pScale;
+            const scratchAngle = angle + seed * 0.8;
+            const len = (0.8 + seed2 * 1.5) * pScale;
             this.ctx.beginPath();
-            this.ctx.moveTo(em.x + Math.cos(angle) * 8 * pScale, em.y + Math.sin(angle) * 8 * pScale);
-            this.ctx.lineTo(em.x + Math.cos(angle) * dist * 0.6, em.y + Math.sin(angle) * dist * 0.6);
+            this.ctx.moveTo(px, py);
+            this.ctx.lineTo(px + Math.cos(scratchAngle) * len, py + Math.sin(scratchAngle) * len);
+            this.ctx.lineWidth = (0.3 + seed2 * 0.3) * pScale;
+            this.ctx.strokeStyle = `rgba(180,220,255,${alpha})`;
             this.ctx.stroke();
           }
-          this.ctx.shadowBlur = 0;
-          this.ctx.globalAlpha = 1;
-          this.ctx.lineWidth = 1;
           break;
         }
         case 'spark-burst': {
