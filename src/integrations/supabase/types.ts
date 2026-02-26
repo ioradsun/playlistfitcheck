@@ -988,6 +988,7 @@ export type Database = {
           fmly_lines: Json | null
           id: string
           lines: Json
+          render_data: Json | null
           song_dna: Json | null
           song_signature: Json | null
           title: string
@@ -1006,6 +1007,7 @@ export type Database = {
           fmly_lines?: Json | null
           id?: string
           lines?: Json
+          render_data?: Json | null
           song_dna?: Json | null
           song_signature?: Json | null
           title?: string
@@ -1024,6 +1026,7 @@ export type Database = {
           fmly_lines?: Json | null
           id?: string
           lines?: Json
+          render_data?: Json | null
           song_dna?: Json | null
           song_signature?: Json | null
           title?: string
