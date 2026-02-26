@@ -1,0 +1,1 @@
+ALTER TABLE public.saved_lyrics ADD COLUMN IF NOT EXISTS section_images jsonb DEFAULT NULL;

@@ -989,6 +989,7 @@ export type Database = {
           id: string
           lines: Json
           render_data: Json | null
+          section_images: Json | null
           song_dna: Json | null
           song_signature: Json | null
           title: string
@@ -1008,6 +1009,7 @@ export type Database = {
           id?: string
           lines?: Json
           render_data?: Json | null
+          section_images?: Json | null
           song_dna?: Json | null
           song_signature?: Json | null
           title?: string
@@ -1027,6 +1029,7 @@ export type Database = {
           id?: string
           lines?: Json
           render_data?: Json | null
+          section_images?: Json | null
           song_dna?: Json | null
           song_signature?: Json | null
           title?: string
