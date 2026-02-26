@@ -113,7 +113,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [showVerify, setShowVerify] = useState(false);
-  
+
 
   const fetchRecents = useCallback(async () => {
     if (!user) {
@@ -301,15 +301,21 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     fetchTrashed();
   }, [fetchRecents, fetchTrashed, refreshKey]);
 
+  useEffect(() => {
+    if (user) return;
+    setRecentItems([]);
+    setTrashedItems([]);
+  }, [user]);
+
   // Optimistically inject a new project into the sidebar immediately (no DB round-trip)
   useEffect(() => {
-    if (!optimisticItem) return;
+    if (!user || !optimisticItem) return;
     setRecentItems((prev) => {
       // Avoid duplicates
       if (prev.some((i) => i.id === optimisticItem.id)) return prev;
       return [optimisticItem, ...prev];
     });
-  }, [optimisticItem]);
+  }, [user, optimisticItem]);
 
   const closeMobileIfNeeded = () => {
     if (isMobile) setOpenMobile(false);
