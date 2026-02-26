@@ -3242,32 +3242,27 @@ export class LyricDancePlayer {
 
       switch (em.type) {
         case 'ember': {
-          // Heat shimmer: tiny irregular scratches, barely visible
-          const count = Math.floor(20 + em.intensity * 12);
+          const hw = (em.wordWidth || 60) / 2;
+          const count = 6;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
             const seed2 = (i * 0.381966) % 1;
-            const life = 0.3 + seed2 * 0.5; // 0.3-0.8s lifecycle
+            const life = 0.3 + seed2 * 0.4;
             const age = (elapsed * (0.8 + seed * 0.4)) % life;
             const agePct = age / life;
-            // Spread across word width area, not just center
-            const spawnX = em.x + (seed - 0.5) * 120 * pScale;
-            const spawnY = em.y - agePct * 40 * pScale + (seed2 - 0.5) * 10 * pScale;
-            const hDrift = Math.sin(elapsed * 2.5 + i * 1.7) * 8 * pScale;
-            const px = spawnX + hDrift;
-            const py = spawnY;
-            const alpha = 0.12 * (1 - agePct) * fadeAlpha * em.intensity;
-            if (alpha <= 0.005) continue;
+            const px = em.x - hw + seed * hw * 2 + Math.sin(elapsed * 2 + i) * 4 * pScale;
+            const py = em.y - agePct * 25 * pScale;
+            const alpha = 0.06 * (1 - agePct) * fadeAlpha * em.intensity;
+            if (alpha <= 0.003) continue;
 
-            const angle = seed * Math.PI * 2 + elapsed * 0.5;
-            const len = (0.8 + seed2 * 1.2) * pScale;
-            const g = seed < 0.4 ? 200 : seed < 0.7 ? 160 : 140;
+            const angle = seed * Math.PI * 2 + elapsed * 0.4;
+            const len = (0.5 + seed2 * 0.5) * pScale;
 
             this.ctx.beginPath();
             this.ctx.moveTo(px, py);
             this.ctx.lineTo(px + Math.cos(angle) * len, py + Math.sin(angle) * len);
-            this.ctx.lineWidth = (0.3 + seed2 * 0.4) * pScale;
-            this.ctx.strokeStyle = `rgba(255,${g},100,${alpha})`;
+            this.ctx.lineWidth = 0.3 * pScale;
+            this.ctx.strokeStyle = `rgba(255,${seed < 0.5 ? 200 : 150},100,${alpha})`;
             this.ctx.stroke();
           }
           break;
