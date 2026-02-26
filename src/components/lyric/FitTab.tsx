@@ -875,7 +875,7 @@ function CinematicDirectionCard({
   const [danceId, setDanceId] = useState<string | null>(null);
   const [imagesHydrated, setImagesHydrated] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoImageTriggered = useRef(false);
+  // autoImageTriggered ref removed — auto-trigger now lives in LyricFitTab pipeline
   const fitTabImageT0Ref = useRef<number | null>(null);
   const fitTabImageMs = useCallback(() => fitTabImageT0Ref.current === null
     ? "0ms"
@@ -1118,43 +1118,8 @@ function CinematicDirectionCard({
     }
   }, [ensureDanceId, fitTabImageMs, formatImageTimestamp, generating, onImageGenerationStatusChange, projectId, sections]);
 
-  // ── Reset auto-trigger ref when direction is cleared (new song upload) ──
-  useEffect(() => {
-    if (!cinematicDirection) {
-      autoImageTriggered.current = false;
-    }
-  }, [cinematicDirection]);
-
-  // ── Auto-trigger image generation after direction completes ──
-  // Uses primitive deps to avoid firing on every render
-  const directionReady = !!cinematicDirection;
-  const sectionCount = sections.length;
-  const imageCount = sectionImages.length;
-
-  useEffect(() => {
-    if (!directionReady) return; // Don't log until direction exists
-
-    console.log('[FitTab Debug] auto-image check:', {
-      sections: sectionCount,
-      images: imageCount,
-      triggered: autoImageTriggered.current,
-    });
-
-    if (sectionCount === 0) return;
-    if (imageCount > 0) return;
-    if (autoImageTriggered.current) return;
-
-    autoImageTriggered.current = true;
-    console.log(`[FitTab Debug] AUTO-TRIGGERING image generation`);
-    void handleGenerateImages();
-  }, [directionReady, sectionCount, imageCount, handleGenerateImages]);
-
-  // Notify parent when images are available
-  useEffect(() => {
-    if (imageCount > 0) {
-      onImageGenerationStatusChange?.("done");
-    }
-  }, [imageCount, onImageGenerationStatusChange]);
+  // Image generation is now auto-triggered by the pipeline in LyricFitTab.
+  // CinematicDirectionCard only provides the manual "Regenerate" button.
 
   return (
     <div className="glass-card rounded-xl p-3 space-y-2">
