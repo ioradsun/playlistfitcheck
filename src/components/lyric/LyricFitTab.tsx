@@ -550,6 +550,120 @@ export function LyricFitTab({
           const existingRenderData = renderData || {};
           persistRenderData(savedIdRef.current, { ...existingRenderData, cinematicDirection: enrichedDirection });
         }
+
+        // ── AUTO-TRIGGER: Start image generation immediately ──
+        // Runs in the pipeline — no need for FitTab to be mounted
+        const dirSections = enrichedDirection?.sections;
+        if (Array.isArray(dirSections) && dirSections.length > 0 && user) {
+          // Check if images already exist (hydrated from DB)
+          const currentSavedImages = initialLyric?.section_images;
+          if (Array.isArray(currentSavedImages) && currentSavedImages.length > 0 && currentSavedImages.some(Boolean)) {
+            console.log(`[Pipeline] Images already exist (${currentSavedImages.filter(Boolean).length}), skipping generation`);
+            setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done", sectionImages: "done" }));
+          } else {
+            console.log(`[Pipeline] Auto-starting image generation for ${dirSections.length} sections`);
+            setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done", sectionImages: "running" }));
+            setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
+            setFitProgress(prev => Math.max(prev, 85));
+
+            // Fire and forget — don't block the pipeline
+            void (async () => {
+              try {
+                // ensureDanceId inline
+                const songSlugVal = (await import("@/lib/slugify")).slugify(lyricData!.title || "untitled");
+                const artistSlugVal = (await import("@/lib/slugify")).slugify(artistNameRef.current || "artist");
+
+                // Find or create dance row
+                let resolvedDanceId: string | null = null;
+                const { data: existing }: any = await supabase
+                  .from("shareable_lyric_dances" as any)
+                  .select("id")
+                  .eq("user_id", user.id)
+                  .eq("song_slug", songSlugVal)
+                  .maybeSingle();
+                if (existing?.id) {
+                  resolvedDanceId = existing.id;
+                  // Update cinematic_direction on existing row
+                  await supabase
+                    .from("shareable_lyric_dances" as any)
+                    .update({ cinematic_direction: enrichedDirection } as any)
+                    .eq("id", resolvedDanceId);
+                } else {
+                  // Create draft row
+                  console.log("[Pipeline] Creating draft dance row for image generation");
+                  const mainLines = lyricData!.lines.filter((l: any) => l.tag !== "adlib");
+
+                  // Upload audio
+                  const audioFileName = audioFile?.name || "audio.webm";
+                  const storagePath = savedIdRef.current
+                    ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(user.id, savedIdRef.current, audioFileName)
+                    : `${user.id}/${artistSlugVal}/${songSlugVal}/lyric-dance.${audioFileName.split(".").pop() || "webm"}`;
+                  if (audioFile) {
+                    await supabase.storage
+                      .from("audio-clips")
+                      .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
+                  }
+                  const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+
+                  await supabase
+                    .from("shareable_lyric_dances" as any)
+                    .upsert({
+                      user_id: user.id,
+                      artist_slug: artistSlugVal,
+                      song_slug: songSlugVal,
+                      artist_name: artistNameRef.current || "artist",
+                      song_name: lyricData!.title || "Untitled",
+                      audio_url: urlData.publicUrl,
+                      lyrics: mainLines,
+                      cinematic_direction: enrichedDirection,
+                      words: words ?? null,
+                      beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
+                      palette: enrichedDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
+                      section_images: null,
+                    } as any, { onConflict: "artist_slug,song_slug" });
+
+                  const { data: newRow }: any = await supabase
+                    .from("shareable_lyric_dances" as any)
+                    .select("id")
+                    .eq("user_id", user.id)
+                    .eq("song_slug", songSlugVal)
+                    .maybeSingle();
+                  resolvedDanceId = newRow?.id ?? null;
+                  if (resolvedDanceId) console.log(`[Pipeline] Draft dance row created: ${resolvedDanceId}`);
+                }
+
+                if (!resolvedDanceId) {
+                  console.error("[Pipeline] Could not create dance row for image generation");
+                  setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
+                  return;
+                }
+
+                // Call edge function
+                const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
+                  body: { lyric_dance_id: resolvedDanceId, force: true },
+                });
+                if (error) throw error;
+                const urls = result?.urls || result?.section_images || [];
+                console.log(`[Pipeline] Image generation complete: ${urls.filter(Boolean).length}/${dirSections.length} images`);
+
+                // Persist to saved_lyrics
+                if (savedIdRef.current && urls.length > 0) {
+                  void supabase
+                    .from("saved_lyrics")
+                    .update({ section_images: urls as any })
+                    .eq("id", savedIdRef.current);
+                  console.log(`[Pipeline] Saved ${urls.filter(Boolean).length} section images to DB`);
+                }
+
+                setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+              } catch (imgErr: any) {
+                console.error("[Pipeline] Image generation failed:", imgErr?.message || imgErr);
+                setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
+              }
+            })();
+            return; // skip the normal setGenerationStatus below — already set above
+          }
+        }
       }
 
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
