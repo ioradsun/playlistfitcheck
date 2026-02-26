@@ -289,6 +289,35 @@ export interface FrameRenderState {
   intensity: number;
 
   transitionType: "hard-cut" | "cross-dissolve" | "flash-cut";
+
+  // ── Legacy manifest fields (used by LyricDisplay, LightingSystem, renderText, etc.) ──
+  world?: string;
+  coreEmotion?: string;
+  backgroundSystem?: string;
+  lightSource?: string;
+  palette?: string[];
+  contrastMode?: string;
+  backgroundIntensity?: number;
+  letterPersonality?: string;
+  decay?: number;
+  stackBehavior?: string;
+  lyricEntrance?: string;
+  lyricExit?: string;
+  typographyProfile?: {
+    fontFamily?: string;
+    fontWeight?: number;
+    personality?: string;
+    letterSpacing?: string;
+    textTransform?: string;
+  };
+  particleConfig?: {
+    system?: string;
+    density?: number;
+    speed?: number;
+    opacity?: number;
+    beatReactive?: boolean;
+    direction?: string;
+  };
 }
 
 export function deriveFrameState(
