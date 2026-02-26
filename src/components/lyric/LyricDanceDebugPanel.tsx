@@ -193,8 +193,6 @@ interface DebugData {
     secondHookLabel?: string;
     hookJustification?: string;
     secondHookJustification?: string;
-    motionProfileSpec?: Record<string, unknown> | null;
-    frame_state?: FrameRenderState | null;
     cinematic_direction?: CinematicDirection | null;
   } | null;
   beatGrid: { bpm: number; beats: number[]; confidence: number } | null;
@@ -211,8 +209,6 @@ interface DebugData {
 
 function DataTab({ data }: { data: DebugData }) {
   const { renderData, beatGrid, lines, title, artist, overrides, fingerprint } = data;
-  const spec = renderData?.motionProfileSpec;
-  const manifest = renderData?.frame_state;
   const direction = renderData?.cinematic_direction;
 
   return (
@@ -285,37 +281,7 @@ function DataTab({ data }: { data: DebugData }) {
         ) : <p className="text-[10px] text-muted-foreground">No beat grid</p>}
       </CollapsibleSection>
 
-      {/* Physics Spec */}
-      <CollapsibleSection title="Physics Spec">
-        {spec ? <JsonBlock value={spec} /> : <p className="text-[10px] text-muted-foreground">No physics spec</p>}
-      </CollapsibleSection>
-
-      {/* Scene Manifest */}
-      <CollapsibleSection title="Scene Manifest">
-        {manifest ? (
-          <div className="space-y-2">
-            <div className="space-y-1">
-              <KV label="World" value={manifest.world} />
-              <KV label="Emotion" value={manifest.coreEmotion} />
-              <KV label="Gravity" value={manifest.gravity} />
-              <KV label="Tension" value={manifest.tension} />
-              <KV label="Decay" value={manifest.decay} />
-              <KV label="Light" value={manifest.lightSource} />
-              <KV label="Palette" value={manifest.palette?.join(", ")} />
-              <KV label="Contrast" value={manifest.contrastMode} />
-              <KV label="Letter" value={manifest.letterPersonality} />
-              <KV label="Stack" value={manifest.stackBehavior} />
-              <KV label="Beat" value={manifest.beatResponse} />
-              <KV label="Entrance" value={manifest.lyricEntrance} />
-              <KV label="Exit" value={manifest.lyricExit} />
-              <KV label="BG System" value={manifest.backgroundSystem} />
-              <KV label="BG Intensity" value={manifest.backgroundIntensity} />
-            </div>
-            {manifest.typographyProfile && <JsonBlock value={manifest.typographyProfile} label="Typography Profile" />}
-            {manifest.particleConfig && <JsonBlock value={manifest.particleConfig} label="Particle Config" />}
-          </div>
-        ) : <p className="text-[10px] text-muted-foreground">No scene manifest</p>}
-      </CollapsibleSection>
+      {/* Physics Spec and Scene Manifest removed — V3 derives from Cinematic Direction */}
 
       {/* Cinematic Direction */}
       <CollapsibleSection title="Cinematic Direction">

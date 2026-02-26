@@ -51,7 +51,7 @@ import type { CinematicDirection, WordDirective } from "@/types/CinematicDirecti
 import { LyricStage } from "./LyricStage";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { DirectorsCutPanel } from "./DirectorsCutPanel";
-import type { FrameRenderState as FullFrameRenderState } from "@/engine/presetDerivation";
+import { deriveFrameState, type FrameRenderState as FullFrameRenderState } from "@/engine/presetDerivation";
 import { HookDanceExporter } from "./HookDanceExporter";
 import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
@@ -71,9 +71,7 @@ import type {
   ArtistDNA,
   FingerprintSongContext,
 } from "./ArtistFingerprintTypes";
-// deriveFrameRenderStateFromSpec removed — manifest comes from FitTab
-import { safeManifest } from "@/engine/validateFrameState";
-import { buildFrameStateFromDirection } from "@/engine/buildFrameStateFromDirection";
+// V3: manifest derived from cinematicDirection via deriveFrameState
 import { animationResolver } from "@/engine/AnimationResolver";
 
 export interface LyricLine {
@@ -134,16 +132,8 @@ type AudioElementWithAnalyser = HTMLAudioElement & {
 
 function normalizeRenderDataWithManifest(
   renderData: any,
-  fallbackTitle: string,
+  _fallbackTitle: string,
 ): any {
-  if (!renderData || typeof renderData !== "object") return renderData;
-  const rawManifest = renderData.frame_state || renderData.frameState;
-
-  if (rawManifest) {
-    const checked = safeManifest(rawManifest);
-    return { ...renderData, frame_state: checked.manifest };
-  }
-
   return renderData;
 }
 
@@ -480,34 +470,7 @@ export function LyricDisplay({
   }, []);
 
   // Song DNA — on-demand generation
-  const [renderData, setRenderData] = useState<{
-    mood?: string;
-    description?: string;
-    meaning?: { theme?: string; summary?: string; imagery?: string[] };
-    hook?: LyricHook | null;
-    secondHook?: LyricHook | null;
-    hookJustification?: string;
-    secondHookJustification?: string;
-    hookLabel?: string;
-    secondHookLabel?: string;
-    motionProfileSpec?: {
-      system: string;
-      params: Record<string, number>;
-      palette: string[];
-      typographyProfile?: TypographyProfile;
-      effect_pool?: string[];
-      logic_seed?: number;
-      lexicon?: {
-        semantic_tags?: { tag: string; strength: number }[];
-        line_mods?: { t_lyric: number; mods: string[] }[];
-        word_marks?: { t_lyric: number; wordIndex: number; mark: string }[];
-      };
-      // Legacy v5 fields (backwards compat)
-      effect_sequence?: { line_index: number; effect_key: string }[];
-      micro_surprise?: { every_n_beats: number; action: string };
-    } | null;
-    frame_state?: FullFrameRenderState | null;
-  } | null>(normalizeRenderDataWithManifest(initialRenderData, data.title) ?? null);
+  const [renderData, setRenderData] = useState<Record<string, any> | null>(normalizeRenderDataWithManifest(initialRenderData, data.title) ?? null);
   const [backgroundImageUrl] = useState<string | null>(
     initialBackgroundImageUrl ?? null,
   );
@@ -543,11 +506,10 @@ export function LyricDisplay({
   useEffect(() => {
     if (!renderData) return;
 
-    const manifestFromDna = buildFrameStateFromDirection(renderData as Record<string, unknown>);
-    if (!manifestFromDna) return;
-
-    setManifest(manifestFromDna);
-    hookDanceRef.current?.loadManifest(manifestFromDna);
+    const cd = renderData?.cinematic_direction ?? renderData?.cinematicDirection ?? {};
+    const derived = deriveFrameState(cd, 0, 0);
+    setManifest(derived);
+    hookDanceRef.current?.loadManifest(derived);
     animationResolver.loadFromDna(renderData as Record<string, unknown>);
 
   }, [renderData]);
@@ -581,7 +543,8 @@ export function LyricDisplay({
   const handleFieldOverride = useCallback((field: keyof FullFrameRenderState | string, value: unknown) => {
     setRenderData((prev) => {
       if (!prev) return prev;
-      const current = safeManifest(prev.frame_state || {}).manifest;
+      const cd = prev.cinematic_direction ?? prev.cinematicDirection ?? {};
+      const current = prev.frame_state ?? deriveFrameState(cd, 0, 0);
       const next = { ...current } as any;
       if (field.includes(".")) {
         const [parent, child] = field.split(".");
@@ -589,16 +552,15 @@ export function LyricDisplay({
       } else {
         next[field] = value;
       }
-      const validated = safeManifest(next).manifest;
-      return { ...prev, frame_state: validated };
+      return { ...prev, frame_state: next };
     });
-  }, [data.title]);
+  }, []);
 
   const handleRegenerateWithDirection = useCallback(async (direction: string) => {
     if (!renderData || directorsCutRegenerating || !direction.trim()) return;
     setDirectorsCutRegenerating(true);
     try {
-      const beforeManifest = safeManifest(renderData.frame_state || {}).manifest;
+      const beforeManifest = renderData.frame_state ?? deriveFrameState(renderData.cinematic_direction ?? {}, 0, 0);
       const playhead = audioRef.current?.currentTime ?? 0;
       const lyricsForDirection = data.lines
         .filter((l: any) => l.tag !== "adlib")
@@ -636,7 +598,7 @@ export function LyricDisplay({
         cinematic_direction: result?.cinematicDirection ?? (renderData as any).cinematic_direction,
       }, data.title);
 
-      const afterManifest = safeManifest(merged.frame_state || beforeManifest).manifest;
+      const afterManifest = merged.frame_state ?? deriveFrameState(merged.cinematic_direction ?? {}, 0, 0);
       setManifestDiff(getManifestDiff(beforeManifest, afterManifest));
       setRenderData(merged);
       // Background image generation now handled by FitTab
@@ -652,8 +614,9 @@ export function LyricDisplay({
   const currentManifest = useMemo<FullFrameRenderState | null>(() => {
     if (manifest) return manifest;
     if (!renderData) return null;
-    if (renderData.frame_state) return safeManifest(renderData.frame_state).manifest;
-    return null;
+    if (renderData.frame_state) return renderData.frame_state;
+    const cd = renderData.cinematic_direction ?? renderData.cinematicDirection;
+    return cd ? deriveFrameState(cd, 0, 0) : null;
   }, [manifest, renderData]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────

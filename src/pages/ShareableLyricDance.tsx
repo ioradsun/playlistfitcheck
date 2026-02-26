@@ -56,7 +56,7 @@ function extractAudioSectionsFromDirection(
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
 interface DanceComment { id: string; text: string; submitted_at: string; }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,artist_dna";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction";
 const DIRECTION_COLUMNS = "cinematic_direction";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
@@ -848,19 +848,11 @@ export default function ShareableLyricDance() {
         }}
         data={{
           renderData: {
-            mood: (data.motion_profile_spec as any)?.mood, description: (data.motion_profile_spec as any)?.description,
-            meaning: (data.motion_profile_spec as any)?.meaning, hook: (data.motion_profile_spec as any)?.hook,
-            secondHook: (data.motion_profile_spec as any)?.secondHook, hookLabel: (data.motion_profile_spec as any)?.hookLabel,
-            secondHookLabel: (data.motion_profile_spec as any)?.secondHookLabel,
-            hookJustification: (data.motion_profile_spec as any)?.hookJustification,
-            secondHookJustification: (data.motion_profile_spec as any)?.secondHookJustification,
-            motionProfileSpec: data.motion_profile_spec as any, frame_state: data.frame_state,
             cinematic_direction: data.cinematic_direction as any,
           },
-          beatGrid: data.beat_grid as any, lines: data.lyrics,
+          beatGrid: null, lines: data.lyrics,
           title: data.song_name, artist: data.artist_name,
-          overrides: {}, fingerprint: data.artist_dna,
-          scene_context: data.scene_context as any,
+          overrides: {},  fingerprint: null,
           section_images: data.section_images,
           words: data.words,
         }}
