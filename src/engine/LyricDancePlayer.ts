@@ -2332,7 +2332,7 @@ export class LyricDancePlayer {
     console.log('[Player] wordDirectivesMap keys:', Object.keys(this.resolvedState?.wordDirectivesMap ?? {}));
   }
 
-  private getActiveWord(timeSec: number): AnyWord | null {
+  private getActiveWord(timeSec: number): { word?: string; start: number; end: number } | null {
     const words = this.data.words ?? [];
     for (let i = words.length - 1; i >= 0; i--) {
       const word = words[i];
