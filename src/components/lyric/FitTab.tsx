@@ -441,11 +441,12 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
     setPublishing(true);
     setPublishStatus("Preparing…");
 
-    const PUBLISH_TIMEOUT = 30_000;
-    const timeoutId = setTimeout(() => {
-      setPublishStatus("Publish timed out — please try again");
-      setPublishing(false);
-    }, PUBLISH_TIMEOUT);
+    // Show a slow-publish warning after 30s but do NOT abort — storage uploads
+    // can legitimately take longer and calling setPublishing(false) here would
+    // trigger a React re-render that aborts the in-flight Supabase request.
+    const slowWarningId = setTimeout(() => {
+      setPublishStatus("Still working — large files take longer…");
+    }, 30_000);
 
     try {
       const { data: profile } = await supabase
