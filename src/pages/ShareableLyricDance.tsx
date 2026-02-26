@@ -707,7 +707,7 @@ export default function ShareableLyricDance() {
             data={data}
             onSeekStart={() => {}}
             onSeekEnd={() => {}}
-            palette={data.palette}
+            palette={Array.isArray(data.palette) ? data.palette : ["#ffffff", "#a855f7", "#ec4899"]}
           />
         )}
 
