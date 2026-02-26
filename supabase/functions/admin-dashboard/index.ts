@@ -51,6 +51,57 @@ serve(async (req) => {
       });
     }
 
+    // ── DELETE ALL DATA action ──
+    if (body.action === "delete_all_data") {
+      console.log(`[admin] DELETE ALL DATA requested by ${user.email}`);
+      const tables = [
+        "hook_comments", "hook_votes", "hookfit_posts",
+        "lyric_dance_comments", "lyric_dance_signals",
+        "songfit_tips", "songfit_saves", "songfit_hook_reviews",
+        "songfit_engagement_events", "songfit_cycle_history",
+        "songfit_comment_likes", "songfit_comments", "songfit_likes",
+        "songfit_reports", "songfit_blocks", "songfit_follows",
+        "songfit_posts",
+        "battle_passes",
+        "shareable_hooks", "shareable_lyric_dances",
+        "dream_comment_likes", "dream_comments", "dream_backers", "dream_tools",
+        "notifications",
+        "saved_lyrics", "saved_searches", "saved_hitfit", "saved_vibefit",
+        "mix_projects",
+        "profit_chats", "profit_plan_variants", "profit_reports", "profit_artists",
+        "search_logs", "track_engagement", "usage_tracking",
+        "playlist_snapshots",
+        "verification_requests",
+        "invites", "collab_points",
+        "ai_prompts", "site_copy",
+        "artist_pages",
+      ];
+
+      const errors: string[] = [];
+      for (const table of tables) {
+        const { error: delErr } = await supabase.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        if (delErr) {
+          console.warn(`[admin] Failed to delete from ${table}: ${delErr.message}`);
+          errors.push(`${table}: ${delErr.message}`);
+        }
+      }
+
+      // Delete all auth users except the current admin
+      const { data: { users: allUsers } } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      let deletedUsers = 0;
+      for (const u of allUsers || []) {
+        if (u.id === user.id) continue;
+        const { error: uErr } = await supabase.auth.admin.deleteUser(u.id);
+        if (uErr) errors.push(`user ${u.email}: ${uErr.message}`);
+        else deletedUsers++;
+      }
+
+      console.log(`[admin] DELETE ALL DATA complete. ${deletedUsers} users deleted. ${errors.length} errors.`);
+      return new Response(JSON.stringify({ success: true, deletedUsers, errors }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── TOGGLE UNLIMITED action ──
     if (body.action === "toggle_unlimited" && body.user_id) {
       const { data: profile } = await supabase.from("profiles").select("is_unlimited").eq("id", body.user_id).single();
