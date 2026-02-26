@@ -579,14 +579,32 @@ export function LyricFitTab({
       if (!sig) {
         console.log(`[FitTab Debug] ${fitPipelineMs()} starting section detection`);
         const lyricsText = timestampedLines.map((line) => line.text).join("\n");
-        sig = await songSignatureAnalyzer.analyze(audioBuffer!, beatGrid, lyricsText, audioDurationSec);
-        console.log(`[FitTab Debug] ${fitPipelineMs()} section detection complete (song signature analyzed)`);
-        setSongSignature(sig);
-        if (savedIdRef.current) {
-          await supabase
-            .from("saved_lyrics")
-            .update({ song_signature: sig as any, updated_at: new Date().toISOString() })
-            .eq("id", savedIdRef.current);
+        try {
+          sig = await songSignatureAnalyzer.analyze(audioBuffer!, beatGrid, lyricsText, audioDurationSec);
+          console.log(`[FitTab Debug] ${fitPipelineMs()} section detection complete (song signature analyzed)`);
+          setSongSignature(sig);
+          if (savedIdRef.current) {
+            await supabase
+              .from("saved_lyrics")
+              .update({ song_signature: sig as any, updated_at: new Date().toISOString() })
+              .eq("id", savedIdRef.current);
+          }
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          console.warn("[Pipeline] Signature analysis failed, continuing:", err.message);
+          sig = {
+            bpm: beatGrid.bpm,
+            durationSec: audioDurationSec,
+            tempoStability: Math.max(0, Math.min(1, beatGrid.confidence)),
+            beatIntervalVariance: 0,
+            rmsMean: 0,
+            rmsVariance: 0,
+            zeroCrossingRate: 0,
+            spectralCentroidHz: 0,
+            lyricDensity: null,
+            energyCurve: new Float32Array(0),
+            analysisVersion: 1,
+          };
         }
       }
 

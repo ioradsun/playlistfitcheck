@@ -30,6 +30,54 @@ function computeBeatIntervalVariance(beats: number[]): number {
   return clamp01(normalizedVariance / 0.12);
 }
 
+/**
+ * In-place radix-2 Cooley-Tukey FFT.
+ * real and imag are Float64Arrays of length N (must be power of 2).
+ * After call, real[k] and imag[k] hold the k-th bin.
+ */
+function fft(real: Float64Array, imag: Float64Array, N: number): void {
+  for (let i = 1, j = 0; i < N; i += 1) {
+    let bit = N >> 1;
+    while (j & bit) {
+      j ^= bit;
+      bit >>= 1;
+    }
+    j ^= bit;
+    if (i < j) {
+      let tmp = real[i];
+      real[i] = real[j];
+      real[j] = tmp;
+      tmp = imag[i];
+      imag[i] = imag[j];
+      imag[j] = tmp;
+    }
+  }
+
+  for (let len = 2; len <= N; len <<= 1) {
+    const halfLen = len >> 1;
+    const angleStep = (-2 * Math.PI) / len;
+    const wReal = Math.cos(angleStep);
+    const wImag = Math.sin(angleStep);
+    for (let i = 0; i < N; i += len) {
+      let curReal = 1;
+      let curImag = 0;
+      for (let j = 0; j < halfLen; j += 1) {
+        const a = i + j;
+        const b = a + halfLen;
+        const tRe = curReal * real[b] - curImag * imag[b];
+        const tIm = curReal * imag[b] + curImag * real[b];
+        real[b] = real[a] - tRe;
+        imag[b] = imag[a] - tIm;
+        real[a] += tRe;
+        imag[a] += tIm;
+        const nextReal = curReal * wReal - curImag * wImag;
+        curImag = curReal * wImag + curImag * wReal;
+        curReal = nextReal;
+      }
+    }
+  }
+}
+
 function computeFrameFeatures(signal: Float32Array, sampleRate: number): {
   rmsMean: number;
   rmsVariance: number;
@@ -47,6 +95,8 @@ function computeFrameFeatures(signal: Float32Array, sampleRate: number): {
   let zcrFrames = 0;
   let centroidAccum = 0;
   let centroidFrames = 0;
+  const fftReal = new Float64Array(frameSize);
+  const fftImag = new Float64Array(frameSize);
 
   for (let offset = 0; offset + frameSize <= signal.length; offset += hopSize) {
     let power = 0;
@@ -66,19 +116,18 @@ function computeFrameFeatures(signal: Float32Array, sampleRate: number): {
     zcrAccum += zeroCrosses / (frameSize - 1);
     zcrFrames += 1;
 
+    for (let n = 0; n < frameSize; n += 1) {
+      fftReal[n] = signal[offset + n];
+      fftImag[n] = 0;
+    }
+
+    fft(fftReal, fftImag, frameSize);
+
     let magnitudeSum = 0;
     let weightedFreqSum = 0;
     const half = frameSize / 2;
     for (let k = 0; k <= half; k += 1) {
-      let re = 0;
-      let im = 0;
-      for (let n = 0; n < frameSize; n += 1) {
-        const angle = (2 * Math.PI * k * n) / frameSize;
-        const sample = signal[offset + n];
-        re += sample * Math.cos(angle);
-        im -= sample * Math.sin(angle);
-      }
-      const magnitude = Math.sqrt(re * re + im * im);
+      const magnitude = Math.sqrt(fftReal[k] * fftReal[k] + fftImag[k] * fftImag[k]);
       const frequency = (k * sampleRate) / frameSize;
       magnitudeSum += magnitude;
       weightedFreqSum += magnitude * frequency;
