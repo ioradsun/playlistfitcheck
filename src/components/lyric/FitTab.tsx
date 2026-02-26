@@ -790,7 +790,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
       console.error("Battle publish error:", e);
       toast.error(e.message || "Failed to publish battle");
     } finally {
-      clearTimeout(timeoutId);
+      clearTimeout(slowWarningId2);
       setBattlePublishing(false);
     }
   }, [user, battlePublishing, renderData, audioFile, lyricData, beatGrid]);
