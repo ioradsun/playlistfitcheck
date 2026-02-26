@@ -3236,33 +3236,34 @@ export class LyricDancePlayer {
 
       switch (em.type) {
         case 'ember': {
-          const count = Math.floor(18 + em.intensity * 10);
+          // Heat shimmer: tiny irregular scratches, barely visible
+          const count = Math.floor(20 + em.intensity * 12);
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
             const seed2 = (i * 0.381966) % 1;
-            const drift = (elapsed * 0.14 * (0.3 + seed)) % 1;
-            const wobble = Math.sin(elapsed * 3 + i * 2.1) * 14 * pScale;
-            const px = em.x + (seed - 0.5) * 80 * pScale + wobble;
-            const py = em.y - drift * 160 * pScale;
-            const alpha = (0.35 - drift * 0.4) * fadeAlpha * em.intensity;
-            if (alpha <= 0) continue;
-            const r = seed < 0.3 ? 255 : seed < 0.6 ? 255 : 255;
-            const g = seed < 0.3 ? 215 : seed < 0.6 ? 140 : 160;
-            const b = seed < 0.3 ? 0 : seed < 0.6 ? 0 : 50;
-            const streakLen = (2 + seed2 * 3) * pScale;
+            const life = 0.3 + seed2 * 0.5; // 0.3-0.8s lifecycle
+            const age = (elapsed * (0.8 + seed * 0.4)) % life;
+            const agePct = age / life;
+            // Spread across word width area, not just center
+            const spawnX = em.x + (seed - 0.5) * 120 * pScale;
+            const spawnY = em.y - agePct * 40 * pScale + (seed2 - 0.5) * 10 * pScale;
+            const hDrift = Math.sin(elapsed * 2.5 + i * 1.7) * 8 * pScale;
+            const px = spawnX + hDrift;
+            const py = spawnY;
+            const alpha = 0.12 * (1 - agePct) * fadeAlpha * em.intensity;
+            if (alpha <= 0.005) continue;
 
-            this.ctx.save();
-            this.ctx.globalAlpha = alpha;
-            this.ctx.strokeStyle = `rgba(${r},${g},${b},${alpha * 0.6})`;
-            this.ctx.lineWidth = (0.4 + (1 - drift) * 0.6) * pScale;
-            this.ctx.lineCap = 'round';
+            const angle = seed * Math.PI * 2 + elapsed * 0.5;
+            const len = (0.8 + seed2 * 1.2) * pScale;
+            const g = seed < 0.4 ? 200 : seed < 0.7 ? 160 : 140;
+
             this.ctx.beginPath();
             this.ctx.moveTo(px, py);
-            this.ctx.lineTo(px + (Math.random() - 0.5) * 2 * pScale, py - streakLen);
+            this.ctx.lineTo(px + Math.cos(angle) * len, py + Math.sin(angle) * len);
+            this.ctx.lineWidth = (0.3 + seed2 * 0.4) * pScale;
+            this.ctx.strokeStyle = `rgba(255,${g},100,${alpha})`;
             this.ctx.stroke();
-            this.ctx.restore();
           }
-          this.ctx.globalAlpha = 1;
           break;
         }
         case 'frost': {
