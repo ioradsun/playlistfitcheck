@@ -653,7 +653,28 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : undefined;
+
+      // URL-based path: fetch audio from storage (same datacenter, ~1s)
+      if (typeof payload.audioUrl === "string" && payload.audioUrl.length > 0) {
+        console.log(`[Transcribe Debug] ${ms()} fetching audio from storage URL`);
+        const audioResp = await fetch(payload.audioUrl);
+        if (!audioResp.ok) {
+          throw new Error(`Failed to fetch audio from storage: ${audioResp.status}`);
+        }
+        const audioBytes = new Uint8Array(await audioResp.arrayBuffer());
+        console.log(`[Transcribe Debug] ${ms()} fetched ${(audioBytes.length/1024/1024).toFixed(2)}MB from storage`);
+        console.log(`[Transcribe Debug] ${ms()} base64 encoding start`);
+        let binary = "";
+        const chunkSize = 8192;
+        for (let i = 0; i < audioBytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...audioBytes.subarray(i, i + chunkSize));
+        }
+        audioBase64 = btoa(binary);
+        console.log(`[Transcribe Debug] ${ms()} base64 encoding done, ${(audioBase64.length/1024/1024).toFixed(2)}MB base64`);
+      } else {
+        audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : undefined;
+      }
+
       format = typeof payload.format === "string" ? payload.format : undefined;
       analysisModel = typeof payload.analysisModel === "string" ? payload.analysisModel : undefined;
       transcriptionModel = typeof payload.transcriptionModel === "string" ? payload.transcriptionModel : undefined;
