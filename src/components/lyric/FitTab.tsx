@@ -967,7 +967,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
               {/* Visual system info now shown via Cinematic Direction card below */}
 
               {cinematicDirection && (
-                <CinematicDirectionCard cinematicDirection={cinematicDirection} songTitle={lyricData.title} />
+                <CinematicDirectionCard cinematicDirection={cinematicDirection} songTitle={lyricData.title} userId={user?.id || ""} />
               )}
 
               {beatGrid && (
