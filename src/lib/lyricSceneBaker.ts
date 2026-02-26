@@ -53,6 +53,7 @@ export type Keyframe = {
     exitStyle?: string;
     emphasisLevel?: number;
     entryProgress?: number;
+    exitProgress?: number;
     iconGlyph?: string;
     iconStyle?: 'outline' | 'filled' | 'ghost';
     iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
@@ -1764,6 +1765,7 @@ function bakeFrame(
               exitStyle: (wm.directive?.exit as string | undefined) ?? effectiveExit,
               emphasisLevel: wm.directive?.emphasisLevel ?? 3,
               entryProgress,
+              exitProgress: Math.min(1, exitProgress),
               iconGlyph: isAnchor && iconGlyph && !isLetterSequence ? iconGlyph : undefined,
               iconStyle: isAnchor && iconGlyph && !isLetterSequence ? iconStyle : undefined,
               iconPosition: isAnchor && iconGlyph && !isLetterSequence ? iconPosition : undefined,
@@ -1935,6 +1937,7 @@ function bakeFrame(
               exitStyle: (wm.directive?.exit as string | undefined) ?? exit,
               emphasisLevel: wm.directive?.emphasisLevel ?? 3,
               entryProgress: Math.min(1, entryProgress),
+              exitProgress: Math.min(1, exitProgress),
             };
           });
         });
