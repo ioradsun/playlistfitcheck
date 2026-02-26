@@ -1677,9 +1677,11 @@ function bakeFrame(
           const semanticColorOverride = semanticEffect?.colorOverride ?? null;
           const directiveTrail = wm.directive?.trail ?? 'none';
           const emitterType: WordEmitterType = semanticEffect?.emitterType
-            ?? (directiveTrail !== 'none' ? directiveTrail as WordEmitterType : 'none');
+            ?? (directiveTrail !== 'none' ? directiveTrail as WordEmitterType : undefined)
+            ?? resolveV3EmitterType(wm.directive)
+            ?? 'none';
           if (emitterType !== 'none') {
-            console.log('[PARTICLE]', { word: wm.word, emitterType, source: semanticEffect?.emitterType ? 'semantic' : 'directive', trail: directiveTrail, metaphor });
+            console.log('[PARTICLE]', { word: wm.word, emitterType, source: semanticEffect?.emitterType ? 'semantic' : 'v3-resolve', trail: directiveTrail, metaphor });
           }
 
           const isLetterSequence = wm.directive?.letterSequence === true;
