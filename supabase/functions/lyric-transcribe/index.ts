@@ -44,10 +44,14 @@ async function runScribe(
   rawText: string;
   duration: number;
 }> {
+  const scribeT0 = Date.now();
+  const sms = () => `${Date.now() - scribeT0}ms`;
+
   const binaryStr = atob(audioBase64);
   const bytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
   const blob = new Blob([bytes], { type: mimeType });
+  console.log(`[Transcribe Debug] [scribe] ${sms()} blob created, ${(blob.size/1024/1024).toFixed(2)}MB`);
 
   const form = new FormData();
   form.append("file", blob, `audio.${ext}`);
@@ -55,18 +59,22 @@ async function runScribe(
   form.append("tag_audio_events", "true");
   form.append("diarize", "true");
 
+  console.log(`[Transcribe Debug] [scribe] ${sms()} sending to ElevenLabs`);
   const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
     method: "POST",
     headers: { "xi-api-key": apiKey },
     body: form,
   });
+  console.log(`[Transcribe Debug] [scribe] ${sms()} ElevenLabs responded status=${res.status}`);
 
   if (!res.ok) {
     const errText = await res.text();
     throw new Error(`Scribe error ${res.status}: ${errText.slice(0, 300)}`);
   }
 
+  console.log(`[Transcribe Debug] [scribe] ${sms()} parsing JSON response`);
   const data = await res.json();
+  console.log(`[Transcribe Debug] [scribe] ${sms()} JSON parsed, ${(data.words||[]).length} raw words`);
 
   const words: WhisperWord[] = (data.words || [])
     .filter((w: any) => w.type === "word" || !w.type)
@@ -578,6 +586,10 @@ async function runGeminiTranscribe(
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const T0 = Date.now();
+  const ms = () => `${Date.now() - T0}ms`;
+  console.log(`[Transcribe Debug] ${ms()} edge function ENTRY`);
+
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -591,7 +603,9 @@ serve(async (req) => {
     let referenceLyrics: string | undefined;
 
     if (contentType.includes("multipart/form-data")) {
+      console.log(`[Transcribe Debug] ${ms()} parsing multipart form data`);
       const form = await req.formData();
+      console.log(`[Transcribe Debug] ${ms()} formData parsed`);
       const audio = form.get("audio");
       analysisModel = String(form.get("analysisModel") || "");
       transcriptionModel = String(form.get("transcriptionModel") || "");
@@ -601,16 +615,21 @@ serve(async (req) => {
         throw new Error("No audio file provided");
       }
 
+      console.log(`[Transcribe Debug] ${ms()} audio file: ${audio.name}, size=${(audio.size/1024/1024).toFixed(2)}MB`);
       const ext = audio.name.split(".").pop()?.toLowerCase() || "mp3";
       format = ext;
 
+      console.log(`[Transcribe Debug] ${ms()} reading arrayBuffer`);
       const uint8 = new Uint8Array(await audio.arrayBuffer());
+      console.log(`[Transcribe Debug] ${ms()} arrayBuffer read, ${uint8.length} bytes`);
+      console.log(`[Transcribe Debug] ${ms()} base64 encoding start`);
       let binary = "";
       const chunkSize = 8192;
       for (let i = 0; i < uint8.length; i += chunkSize) {
         binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
       }
       audioBase64 = btoa(binary);
+      console.log(`[Transcribe Debug] ${ms()} base64 encoding done, ${(audioBase64.length/1024/1024).toFixed(2)}MB base64`);
     } else {
       let payload: any;
       try {
@@ -682,11 +701,13 @@ serve(async (req) => {
     );
 
     // ── Stage 1: Transcription only (Song DNA is now a separate on-demand call) ──
+    console.log(`[Transcribe Debug] ${ms()} starting transcription (engine=${transcriptionEngine})`);
     const transcribePromise = useGeminiTranscription
       ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined)
       : runScribe(audioBase64, ext, mimeType, ELEVENLABS_API_KEY!);
 
     const [transcribeResult] = await Promise.allSettled([transcribePromise]);
+    console.log(`[Transcribe Debug] ${ms()} transcription settled, status=${transcribeResult.status}`);
 
     if (transcribeResult.status === "rejected") {
       const err = (transcribeResult.reason as Error)?.message || "Transcription failed";
@@ -730,8 +751,10 @@ serve(async (req) => {
     const title = "Unknown";
     const artist = "Unknown";
 
+    console.log(`[Transcribe Debug] ${ms()} Final: ${lines.length} lines, title="${title}", artist="${artist}"`);
     console.log(`[v14.0] Final: ${lines.length} lines, title="${title}", artist="${artist}"`);
 
+    console.log(`[Transcribe Debug] ${ms()} sending response`);
     return new Response(
       JSON.stringify({
         title,
