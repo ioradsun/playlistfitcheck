@@ -1,0 +1,1 @@
+ALTER TABLE public.shareable_lyric_dances ALTER COLUMN physics_spec DROP NOT NULL;
