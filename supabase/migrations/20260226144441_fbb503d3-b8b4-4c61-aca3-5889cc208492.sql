@@ -1,0 +1,1 @@
+ALTER TABLE shareable_lyric_dances ADD COLUMN IF NOT EXISTS auto_palettes jsonb DEFAULT NULL;

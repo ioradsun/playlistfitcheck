@@ -1260,6 +1260,7 @@ export type Database = {
           artist_name: string
           artist_slug: string
           audio_url: string
+          auto_palettes: Json | null
           background_url: string | null
           beat_grid: Json
           cinematic_direction: Json | null
@@ -1285,6 +1286,7 @@ export type Database = {
           artist_name: string
           artist_slug: string
           audio_url: string
+          auto_palettes?: Json | null
           background_url?: string | null
           beat_grid: Json
           cinematic_direction?: Json | null
@@ -1310,6 +1312,7 @@ export type Database = {
           artist_name?: string
           artist_slug?: string
           audio_url?: string
+          auto_palettes?: Json | null
           background_url?: string | null
           beat_grid?: Json
           cinematic_direction?: Json | null
