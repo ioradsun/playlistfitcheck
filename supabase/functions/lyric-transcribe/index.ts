@@ -34,7 +34,7 @@ interface GeminiInsights {
 
 // ── ElevenLabs Scribe: word-level granularity with diarization ───────────────
 async function runScribe(
-  audioBase64: string,
+  audioBytes: Uint8Array,
   ext: string,
   mimeType: string,
   apiKey: string
@@ -47,10 +47,7 @@ async function runScribe(
   const scribeT0 = Date.now();
   const sms = () => `${Date.now() - scribeT0}ms`;
 
-  const binaryStr = atob(audioBase64);
-  const bytes = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-  const blob = new Blob([bytes], { type: mimeType });
+  const blob = new Blob([audioBytes], { type: mimeType });
   console.log(`[Transcribe Debug] [scribe] ${sms()} blob created, ${(blob.size/1024/1024).toFixed(2)}MB`);
 
   const form = new FormData();
