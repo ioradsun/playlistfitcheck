@@ -1,79 +1,79 @@
 
 
-## Dance Publishing Flow - Audit & Fixes
+# Skeleton-First Lyric Tab — Final Adjustments
 
-### Issues Found
+## 1. Delete `LyricProgressModal` entirely
 
-**1. Audio upload always runs (hangs on existing projects)**
-In `handleDance` (line 463-472), audio is uploaded to storage every single time, even when the dance already exists with a valid `audio_url`. The same issue exists in `handleStartBattle` (line 617-625). This is the primary cause of the hang you reported earlier.
+`LyricsTab.tsx` is the only consumer. The file `src/components/lyric/LyricProgressModal.tsx` will be deleted, along with its import and all related state (`progressStage`, `progressOpen`, `progressFileName`, and the `ProgressStage` type import) from `LyricsTab.tsx`.
 
-**2. Missing `beat_grid` in dance upsert (will fail on first publish)**
-The `shareable_lyric_dances` table has `beat_grid` as a NOT NULL column with no default value. The upsert payload (lines 501-512) does not include `beat_grid`, so first-time inserts will fail with a database constraint error.
+## 2. Create `LyricSkeleton.tsx`
 
-**3. Missing `palette` in dance upsert**
-The table has `palette` as NOT NULL (default exists), but the upsert doesn't include it. It works for inserts due to the default, but updates won't refresh the palette.
+New file: `src/components/lyric/LyricSkeleton.tsx`
 
-**4. Stale section images on re-publish**
-Per the project architecture, publishing a dance should nullify `section_images` when lyrics have changed so fresh images are generated. The current upsert doesn't set `section_images: null` on regeneration.
+A skeleton screen mimicking the `LyricDisplay` layout:
+- Song title (passed as prop)
+- Waveform placeholder bar
+- 12-16 skeleton lines with randomized widths (40-90%)
+- Uses the existing `Skeleton` component from `src/components/ui/skeleton.tsx`
 
-**5. Battle handler has same audio upload issue**
-`handleStartBattle` (line 617-625) also unconditionally uploads audio every time, same fix needed.
+Accepts two mode props:
+- **loading mode**: Shows "Transcribing lyrics..." with a subtle spinner
+- **error mode**: Shows "Transcription failed" message with a "Try Again" button and an optional "Back" button
 
----
-
-### Plan
-
-#### Change 1: Skip audio upload when existing dance has audio_url
-**File: `src/components/lyric/FitTab.tsx` -- `handleDance` (~line 462-472)**
-
-Move the existing dance lookup (currently at line 479) **before** the audio upload step. If `existingDance?.audio_url` exists, reuse it and skip the upload entirely.
-
-```
-// Before audio upload, check for existing dance
-const { data: existingDance } = await supabase
-  .from("shareable_lyric_dances")
-  .select("audio_url, section_images, auto_palettes")
-  .eq("user_id", user.id)
-  .eq("artist_slug", artistSlug)
-  .eq("song_slug", songSlug)
-  .maybeSingle();
-
-let audioUrl = existingDance?.audio_url;
-if (!audioUrl) {
-  setPublishStatus("Uploading audio...");
-  // ... upload logic ...
-  audioUrl = publicUrl;
+Props:
+```typescript
+interface Props {
+  title: string;
+  fileName?: string;
+  loading: boolean;       // true = transcribing, false = failed
+  onRetry?: () => void;   // retry button handler (error mode)
+  onBack?: () => void;    // back to uploader
 }
 ```
 
-#### Change 2: Include `beat_grid` and `palette` in upsert
-**File: `src/components/lyric/FitTab.tsx` -- upsert payload (~line 501-512)**
+## 3. Update `LyricsTab.tsx` — four render states
 
-Add the missing required fields:
+```text
+State A: lyricData + audioFile + lines.length > 0
+  --> LyricDisplay (normal editor)
 
-```
-beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
-palette: cinematicDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
-```
+State B: lyricData + audioFile + lines.length === 0 + loading
+  --> LyricSkeleton (transcribing mode)
 
-#### Change 3: Nullify `section_images` on lyric regeneration
-**File: `src/components/lyric/FitTab.tsx` -- upsert payload (~line 501-512)**
+State C: lyricData + audioFile + lines.length === 0 + !loading
+  --> LyricSkeleton (error mode, retry button calls handleTranscribe again)
 
-When the dance is being regenerated (lyrics changed), null out `section_images` so fresh images will be generated:
-
-```
-section_images: danceNeedsRegeneration ? null : (existingDance?.section_images ?? null),
+State D: everything else
+  --> LyricUploader
 ```
 
-#### Change 4: Skip audio upload in battle handler
-**File: `src/components/lyric/FitTab.tsx` -- `handleStartBattle` (~line 616-625)**
+State C is the key addition -- when transcription fails, `loading` becomes `false` but `lyricData` still has 0 lines. Instead of silently dropping the user back to the uploader, we show the skeleton in error mode with a retry button. The retry button re-calls `handleTranscribe` with the existing `audioFile`.
 
-Same pattern: check for an existing hook's `audio_url` before uploading. Query the existing hook by `artist_slug + song_slug + hook_slug`, and reuse `audio_url` if present.
+## 4. Clean up `handleTranscribe` in `LyricsTab.tsx`
 
----
+Remove:
+- All `setProgressStage(...)` calls
+- All `setTimeout` timer arrays and `clearTimeout` loops
+- `progressStage`, `progressOpen`, `progressFileName` state variables
+- `LyricProgressModal` import
 
-### Summary of Changes
-- **Single file modified**: `src/components/lyric/FitTab.tsx`
-- **No backend changes**
-- 4 targeted fixes to the publishing flow, all within existing callbacks
+Keep:
+- `setLoading(true)` / `setLoading(false)`
+- Immediate shell creation (`setLyricData({ title, lines: [] })`)
+- `onUploadStarted` / `onAudioSubmitted` callbacks
+- Transcription fetch, response handling, DB persistence
+- Console timing logs
 
+## Files affected
+
+| File | Action |
+|------|--------|
+| `src/components/lyric/LyricProgressModal.tsx` | **Delete** |
+| `src/components/lyric/LyricSkeleton.tsx` | **Create** |
+| `src/components/lyric/LyricsTab.tsx` | **Edit** — remove modal, add skeleton, four-state render |
+
+## Not modified
+- `LyricFitTab.tsx` — upload fast-path intact
+- `LyricDisplay.tsx` — unchanged
+- Backend / edge functions — untouched
+- `presetDerivation.ts` — untouched
