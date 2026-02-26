@@ -156,7 +156,7 @@ export function DirectorsCutPanel({
 
                 <details open className="space-y-2">
                   <summary className="cursor-pointer text-xs font-semibold">Color &amp; Light</summary>
-                  <PaletteEditor palette={manifest.palette} onChange={(palette) => onFieldOverride("palette", palette)} />
+                  <PaletteEditor palette={(manifest.palette ?? ["#111827", "#a855f7", "#ec4899"]) as [string, string, string]} onChange={(palette) => onFieldOverride("palette", palette)} />
                   <input className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={manifest.lightSource} onChange={(e) => onFieldOverride("lightSource", e.target.value)} />
                   <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={manifest.contrastMode} onChange={(e) => onFieldOverride("contrastMode", e.target.value)}>
                     {(["brutal", "soft", "neon", "ghost", "raw"] as const).map((opt) => <option key={opt}>{opt}</option>)}
