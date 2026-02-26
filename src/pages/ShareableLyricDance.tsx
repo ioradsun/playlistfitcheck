@@ -386,6 +386,14 @@ export default function ShareableLyricDance() {
       });
   }, [artistSlug, songSlug]);
 
+  useEffect(() => {
+    if (!data) return;
+    console.log('[Player Data] cinematic_direction keys:', Object.keys(data.cinematic_direction ?? {}));
+    console.log('[Player Data] beat_grid:', data.beat_grid ? `BPM=${data.beat_grid.bpm}` : 'null');
+    console.log('[Player Data] wordDirectives count:', data.cinematic_direction?.wordDirectives?.length ?? 0);
+    console.log('[Player Data] texture:', data.cinematic_direction?.texture);
+  }, [data]);
+
   // ── Player lifecycle (init ONCE) ─────────────────────────────────────
 
   const playerKey = data?.id;
