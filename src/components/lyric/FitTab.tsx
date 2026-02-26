@@ -230,13 +230,12 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user || cancelled) return;
+      if (!userId || cancelled) return;
 
       const { data: dances }: any = await supabase
         .from("shareable_lyric_dances" as any)
         .select("id, section_images")
-        .eq("user_id", userData.user.id)
+        .eq("user_id", userId)
         .eq("song_slug", songSlug)
         .order("created_at", { ascending: false })
         .limit(1);
