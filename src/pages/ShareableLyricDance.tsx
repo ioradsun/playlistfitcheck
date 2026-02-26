@@ -56,8 +56,8 @@ function extractAudioSectionsFromDirection(
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
 interface DanceComment { id: string; text: string; submitted_at: string; }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,motion_profile_spec,beat_grid,palette,system_type,artist_dna,seed,frame_state,section_images,scene_context";
-const DIRECTION_COLUMNS = "cinematic_direction,frame_state";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,artist_dna";
+const DIRECTION_COLUMNS = "cinematic_direction";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
 

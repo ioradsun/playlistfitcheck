@@ -1,14 +1,15 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-export interface FrameRenderState {
-  palette: string[];
-  contrastMode: "brutal" | "soft" | "neon" | "ghost" | "raw";
-  backgroundIntensity: number;
-  lightSource: string;
-}
+// Accepts any FrameRenderState — uses optional legacy fields when present
+export type FrameRenderState = Record<string, any> & {
+  palette?: string[];
+  contrastMode?: string;
+  backgroundIntensity?: number;
+  lightSource?: string;
+};
 
-export const COMPOSITING_DECISION_TABLE: Record<FrameRenderState["contrastMode"], { maskOpacity: number; bloomIntensity: number; vignetteStrength: number }> = {
+export const COMPOSITING_DECISION_TABLE: Record<string, { maskOpacity: number; bloomIntensity: number; vignetteStrength: number }> = {
   brutal: { maskOpacity: 0.0, bloomIntensity: 0.05, vignetteStrength: 0.5 },
   soft: { maskOpacity: 0.55, bloomIntensity: 0.15, vignetteStrength: 0.35 },
   neon: { maskOpacity: 0.35, bloomIntensity: 0.25, vignetteStrength: 0.45 },
@@ -26,11 +27,12 @@ interface LyricStageProps {
 }
 
 function BackgroundPlaceholder({ manifest }: { manifest: FrameRenderState }) {
-  const sourceAnchor = manifest.lightSource.includes("left")
+  const ls = (manifest.lightSource ?? "").toLowerCase();
+  const sourceAnchor = ls.includes("left")
     ? "20% 40%"
-    : manifest.lightSource.includes("right")
+    : ls.includes("right")
       ? "80% 40%"
-      : manifest.lightSource.includes("below")
+      : ls.includes("below")
         ? "50% 100%"
         : "50% 0%";
 
@@ -39,7 +41,7 @@ function BackgroundPlaceholder({ manifest }: { manifest: FrameRenderState }) {
       style={{
         position: "absolute",
         inset: 0,
-        background: `radial-gradient(ellipse 120% 80% at ${sourceAnchor}, ${manifest.palette[1] ?? "#6b7280"}80, ${manifest.palette[0] ?? "#111827"} 70%)`,
+        background: `radial-gradient(ellipse 120% 80% at ${sourceAnchor}, ${(manifest.palette ?? [])[1] ?? "#6b7280"}80, ${(manifest.palette ?? [])[0] ?? "#111827"} 70%)`,
         animation: "palettePulse 3s ease-in-out infinite",
       }}
     />
@@ -51,12 +53,13 @@ export function LyricStage({ manifest, backgroundImageUrl, isPlaying, beatIntens
   const [imageLoaded, setImageLoaded] = useState(false);
 
   const directionKeyframes = useMemo(() => {
-    if (manifest.lightSource.includes("flickering left")) return "kenBurnsRight";
-    if (manifest.lightSource.includes("golden hour")) return "kenBurnsLeft";
+    const ls = (manifest.lightSource ?? "").toLowerCase();
+    if (ls.includes("flickering left")) return "kenBurnsRight";
+    if (ls.includes("golden hour")) return "kenBurnsLeft";
     return "kenBurns";
   }, [manifest.lightSource]);
 
-  const contrast = COMPOSITING_DECISION_TABLE[manifest.contrastMode] ?? COMPOSITING_DECISION_TABLE.raw;
+  const contrast = COMPOSITING_DECISION_TABLE[manifest.contrastMode ?? "raw"] ?? COMPOSITING_DECISION_TABLE.raw;
   const maskOpacity = Math.min(0.3, contrast.maskOpacity + (isMobile ? 0.15 : 0));
   const bloomScale = (isMobile ? 0.75 : 1) * (1 + beatIntensity * 0.15);
   const bloomOpacity = contrast.bloomIntensity + beatIntensity * 0.12;
@@ -94,7 +97,7 @@ export function LyricStage({ manifest, backgroundImageUrl, isPlaying, beatIntens
               height: "100%",
               objectFit: "cover",
               objectPosition: "center 70%",
-              filter: `brightness(${0.6 + manifest.backgroundIntensity * 0.25})`,
+              filter: `brightness(${0.6 + (manifest.backgroundIntensity ?? 0.5) * 0.25})`,
             }}
           />
         </div>
@@ -113,7 +116,7 @@ export function LyricStage({ manifest, backgroundImageUrl, isPlaying, beatIntens
         style={{
           position: "absolute",
           inset: 0,
-          background: `radial-gradient(ellipse ${60 * bloomScale}% ${35 * bloomScale}% at 50% 50%, ${(manifest.palette[2] ?? "#ffffff")}${Math.round(Math.min(0.9, bloomOpacity) * 255).toString(16).padStart(2, "0")}, transparent 70%)`,
+          background: `radial-gradient(ellipse ${60 * bloomScale}% ${35 * bloomScale}% at 50% 50%, ${((manifest.palette ?? [])[2] ?? "#ffffff")}${Math.round(Math.min(0.9, bloomOpacity) * 255).toString(16).padStart(2, "0")}, transparent 70%)`,
           opacity: 0.4,
           transition: "all 0.1s ease",
           pointerEvents: "none",
