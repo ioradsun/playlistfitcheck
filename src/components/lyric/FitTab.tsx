@@ -459,31 +459,34 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
         setPublishing(false);
         return;
       }
+      // Check for existing dance to reuse audio_url and palettes
+      const { data: existingDance }: any = await supabase
+        .from("shareable_lyric_dances" as any)
+        .select("audio_url, section_images, auto_palettes")
+        .eq("user_id", user.id)
+        .eq("artist_slug", artistSlug)
+        .eq("song_slug", songSlug)
+        .maybeSingle();
 
-      setPublishStatus("Uploading audio…");
-      const fileExt = audioFile.name.split(".").pop() || "webm";
-      const storagePath = `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("audio-clips")
-        .upload(storagePath, audioFile, { upsert: true });
-      if (uploadError) throw uploadError;
+      let audioUrl = existingDance?.audio_url as string | undefined;
+      if (!audioUrl) {
+        setPublishStatus("Uploading audio…");
+        const fileExt = audioFile.name.split(".").pop() || "webm";
+        const storagePath = `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("audio-clips")
+          .upload(storagePath, audioFile, { upsert: true });
+        if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
-      const audioUrl = urlData.publicUrl;
+        const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+        audioUrl = urlData.publicUrl;
+      }
 
       setPublishStatus("Publishing…");
       const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
 
       let publishAutoPalettes: string[][] | null = null;
       try {
-        const { data: existingDance }: any = await supabase
-          .from("shareable_lyric_dances" as any)
-          .select("section_images, auto_palettes")
-          .eq("user_id", user.id)
-          .eq("artist_slug", artistSlug)
-          .eq("song_slug", songSlug)
-          .maybeSingle();
-
         if (Array.isArray(existingDance?.auto_palettes) && existingDance.auto_palettes.length > 0) {
           publishAutoPalettes = existingDance.auto_palettes;
         } else {
@@ -509,6 +512,9 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
           cinematic_direction: cinematicDirection || null,
           words: words ?? null,
           auto_palettes: publishAutoPalettes,
+          beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
+          palette: cinematicDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
+          section_images: danceNeedsRegeneration ? null : (existingDance?.section_images ?? null),
         }, { onConflict: "artist_slug,song_slug" });
 
       if (insertError) throw insertError;
