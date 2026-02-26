@@ -1118,34 +1118,43 @@ function CinematicDirectionCard({
     }
   }, [ensureDanceId, fitTabImageMs, formatImageTimestamp, generating, onImageGenerationStatusChange, projectId, sections]);
 
-  // ── Auto-trigger image generation after direction completes ──
-  // Conditions: direction exists, sections exist, no existing images, not already triggered
-  // NO danceId guard — ensureDanceId will create a draft row if needed
+  // ── Reset auto-trigger ref when direction is cleared (new song upload) ──
   useEffect(() => {
-    console.log('[FitTab Debug] auto-image effect:', {
-      hasDirection: !!cinematicDirection,
-      sections: sections.length,
-      existingImages: sectionImages.length,
-      refGuard: autoImageTriggered.current,
-      imagesHydrated,
+    if (!cinematicDirection) {
+      autoImageTriggered.current = false;
+    }
+  }, [cinematicDirection]);
+
+  // ── Auto-trigger image generation after direction completes ──
+  // Uses primitive deps to avoid firing on every render
+  const directionReady = !!cinematicDirection;
+  const sectionCount = sections.length;
+  const imageCount = sectionImages.length;
+
+  useEffect(() => {
+    if (!directionReady) return; // Don't log until direction exists
+
+    console.log('[FitTab Debug] auto-image check:', {
+      sections: sectionCount,
+      images: imageCount,
+      triggered: autoImageTriggered.current,
     });
-    if (!cinematicDirection) return;
-    if (!sections.length) return;
-    if (!imagesHydrated) return;
-    if (sectionImages.length > 0) return;
+
+    if (sectionCount === 0) return;
+    if (imageCount > 0) return;
     if (autoImageTriggered.current) return;
 
     autoImageTriggered.current = true;
-    console.log(`[FitTab Debug] ${fitTabImageMs()} AUTO-TRIGGERING image generation for ${sections.length} sections`);
+    console.log(`[FitTab Debug] AUTO-TRIGGERING image generation`);
     void handleGenerateImages();
-  }, [cinematicDirection, imagesHydrated, sections.length, sectionImages.length, handleGenerateImages, fitTabImageMs]);
+  }, [directionReady, sectionCount, imageCount, handleGenerateImages]);
 
+  // Notify parent when images are available
   useEffect(() => {
-    if (sectionImages.length > 0) {
-      autoImageTriggered.current = true;
+    if (imageCount > 0) {
       onImageGenerationStatusChange?.("done");
     }
-  }, [sectionImages.length, onImageGenerationStatusChange]);
+  }, [imageCount, onImageGenerationStatusChange]);
 
   return (
     <div className="glass-card rounded-xl p-3 space-y-2">
