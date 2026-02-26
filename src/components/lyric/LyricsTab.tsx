@@ -13,7 +13,7 @@ import { sessionAudio } from "@/lib/sessionAudioCache";
 import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData, type LyricLine } from "./LyricDisplay";
-import { LyricProgressModal, type ProgressStage } from "./LyricProgressModal";
+import { LyricSkeleton } from "./LyricSkeleton";
 import type { ReactNode } from "react";
 
 const MAX_RAW_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -80,10 +80,6 @@ export function LyricsTab({
   onUploadStarted,
 }: Props) {
   const [loading, setLoading] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState("Syncing...");
-  const [progressStage, setProgressStage] = useState<ProgressStage>("compressing");
-  const [progressOpen, setProgressOpen] = useState(false);
-  const [progressFileName, setProgressFileName] = useState<string>("");
   const [debugData, setDebugData] = useState<any | null>(null);
   const { user } = useAuth();
   const quota = useUsageQuota("lyric");
@@ -130,9 +126,6 @@ export function LyricsTab({
       const t0 = performance.now();
       console.log(`[LyricUpload] START file="${file.name}" size=${(file.size / 1024 / 1024).toFixed(2)}MB`);
       setLoading(true);
-      setProgressFileName(file.name);
-      setProgressStage("compressing");
-      setProgressOpen(true);
 
       const projectId = user ? crypto.randomUUID() : null;
       const draftTitle = resolveProjectTitle(null, file.name);
@@ -175,7 +168,6 @@ export function LyricsTab({
         // Only compress if over 25MB
         let uploadFile: File;
         if (file.size > MAX_RAW_UPLOAD_BYTES) {
-          setProgressStage("compressing");
           try {
             const ct0 = performance.now();
             uploadFile = await compressAudioFile(file);
@@ -183,7 +175,6 @@ export function LyricsTab({
           } catch (compErr) {
             toast.error(compErr instanceof Error ? compErr.message : "Compression failed");
             setLoading(false);
-            setProgressOpen(false);
             return;
           }
         } else {
@@ -191,20 +182,7 @@ export function LyricsTab({
           uploadFile = file;
         }
 
-        // Run all stage timers as one continuous sequence — don't wait for fetch
-        setProgressStage("uploading");
         console.log(`[LyricUpload] FETCH START (elapsed ${(performance.now() - t0).toFixed(0)}ms)`);
-        const allTimers: ReturnType<typeof setTimeout>[] = [];
-        allTimers.push(setTimeout(() => setProgressStage("buffering"), 3000));
-        allTimers.push(setTimeout(() => setProgressStage("transmitting"), 6000));
-        allTimers.push(setTimeout(() => setProgressStage("handshaking"), 9000));
-        allTimers.push(setTimeout(() => setProgressStage("receiving"), 12000));
-        allTimers.push(setTimeout(() => setProgressStage("transcribing"), 15000));
-        allTimers.push(setTimeout(() => setProgressStage("separating"), 20000));
-        allTimers.push(setTimeout(() => setProgressStage("analyzing"), 26000));
-        allTimers.push(setTimeout(() => setProgressStage("detecting_hook"), 33000));
-        allTimers.push(setTimeout(() => setProgressStage("aligning"), 40000));
-        // Don't auto-advance to "finalizing" — reserve that for when the response actually arrives
 
         const formData = new FormData();
         formData.append("audio", uploadFile, uploadFile.name);
@@ -227,14 +205,12 @@ export function LyricsTab({
         );
 
         console.log(`[LyricUpload] FETCH DONE (elapsed ${(performance.now() - t0).toFixed(0)}ms) status=${response.status}`);
-        allTimers.forEach(clearTimeout);
 
         if (!response.ok) {
           const err = await response.json().catch(() => ({ error: "Transcription failed" }));
           throw new Error(err.error || `Error ${response.status}`);
         }
 
-        setProgressStage("finalizing");
         const data = await response.json();
 
         if (data.error) throw new Error(data.error);
@@ -251,8 +227,6 @@ export function LyricsTab({
             updated_at: new Date().toISOString(),
           } as any);
         }
-
-        await new Promise((r) => setTimeout(r, 400));
 
         const newLyricData: LyricData = {
           title: resolveProjectTitle(data.title, file.name),
@@ -281,9 +255,8 @@ export function LyricsTab({
         console.error("Transcription error:", e);
         toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");
       } finally {
-        console.log(`[LyricUpload] CLOSING progress modal (total ${(performance.now() - t0).toFixed(0)}ms)`);
+        console.log(`[LyricUpload] DONE (total ${(performance.now() - t0).toFixed(0)}ms)`);
         setLoading(false);
-        setProgressOpen(false);
       }
     },
     [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
@@ -300,14 +273,10 @@ export function LyricsTab({
     onNewProject?.();
   }, [onNewProject, setLyricData, setAudioFile, setHasRealAudio, setSavedId, setFmlyLines, setVersionMeta]);
 
-  if (lyricData && audioFile) {
+  // State A: lines loaded → full editor
+  if (lyricData && audioFile && lyricData.lines.length > 0) {
     return (
       <div className="flex-1 px-4 py-6 space-y-3">
-        {loading && (
-          <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
-            Transcribing lyrics…
-          </div>
-        )}
         <LyricDisplay
           data={lyricData}
           audioFile={audioFile}
@@ -333,27 +302,33 @@ export function LyricsTab({
           }}
           onHeaderProject={onHeaderProject}
         />
-        <LyricProgressModal
-          open={progressOpen}
-          currentStage={progressStage}
-          fileName={progressFileName}
+      </div>
+    );
+  }
+
+  // State B & C: shell exists but no lines yet → skeleton
+  if (lyricData && audioFile) {
+    return (
+      <div className="flex-1 px-4 py-6">
+        <LyricSkeleton
+          title={lyricData.title}
+          fileName={audioFile.name}
+          loading={loading}
+          onRetry={() => handleTranscribe(audioFile)}
+          onBack={handleBack}
         />
       </div>
     );
   }
 
+  // State D: nothing yet → uploader
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto">
       <LyricUploader
         onTranscribe={handleTranscribe}
         loading={loading}
-        loadingMsg={loadingMsg}
+        loadingMsg="Syncing..."
         sceneInput={sceneInput}
-      />
-      <LyricProgressModal
-        open={progressOpen}
-        currentStage={progressStage}
-        fileName={progressFileName}
       />
     </div>
   );
