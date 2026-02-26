@@ -310,12 +310,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     fetchTrashed();
   }, [fetchRecents, fetchTrashed]);
 
-  // Listen for throttled refresh events from parent (preserves memo boundary — no prop change)
-  useEffect(() => {
-    const handler = () => { fetchRecents(); fetchTrashed(); };
-    window.addEventListener("sidebar-refresh", handler);
-    return () => window.removeEventListener("sidebar-refresh", handler);
-  }, [fetchRecents, fetchTrashed]);
+  
 
   useEffect(() => {
     if (user) return;

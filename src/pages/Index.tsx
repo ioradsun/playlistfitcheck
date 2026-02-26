@@ -250,25 +250,7 @@ const Index = () => {
   const [songFitAnalysis, setSongFitAnalysis] = useState<SongFitAnalysis | null>(null);
   const [songFitLoading, setSongFitLoading] = useState(false);
   const savedSearchIdRef = useRef<string | null>(null);
-  // Throttled sidebar refresh — dispatches a window event at most once per 10s.
-  // This preserves the AppSidebar memo boundary (no prop changes).
-  const lastRefreshRef = useRef(0);
-  const pendingRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const refreshSidebar = useCallback(() => {
-    const now = Date.now();
-    const elapsed = now - lastRefreshRef.current;
-    const THROTTLE_MS = 10_000;
-    if (elapsed >= THROTTLE_MS) {
-      lastRefreshRef.current = now;
-      window.dispatchEvent(new Event("sidebar-refresh"));
-    } else if (!pendingRefreshRef.current) {
-      pendingRefreshRef.current = setTimeout(() => {
-        lastRefreshRef.current = Date.now();
-        pendingRefreshRef.current = null;
-        window.dispatchEvent(new Event("sidebar-refresh"));
-      }, THROTTLE_MS - elapsed);
-    }
-  }, []);
+  
   const [deferSidebarReady, setDeferSidebarReady] = useState(false);
   const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
   // Tracks when we're loading a project from URL/sidebar — shows skeleton instead of uploader
@@ -370,7 +352,7 @@ const Index = () => {
     } catch (e) {
       console.error("Failed to save search:", e);
     }
-  }, [user, navigate, refreshSidebar]);
+  }, [user, navigate]);
 
   const handleAnalyze = useCallback((data: PlaylistInput & { _trackList?: { name: string; artists: string }[]; _songUrl?: string }) => {
     if (!playlistQuota.canUse) {
@@ -411,11 +393,8 @@ const Index = () => {
       blended_label: songFitAnalysis?.blendedLabel ?? null,
     }).eq("id", savedSearchIdRef.current).then(() => {
       savedSearchIdRef.current = null;
-      // Data updated in DB — sidebar already has the item via optimistic insert.
-      // Schedule a background refresh so the metadata (scores, labels) eventually sync.
-      refreshSidebar();
     });
-  }, [isFullyLoaded, result, vibeAnalysis, songFitAnalysis, refreshSidebar]);
+  }, [isFullyLoaded, result, vibeAnalysis, songFitAnalysis]);
 
   const handleBack = useCallback(() => {
     setResult(null);
@@ -504,10 +483,7 @@ const Index = () => {
       setOptimisticSidebarItem(null);
       setProfitLoadKey(k => k + 1);
       setVibeFitLoadKey(k => k + 1);
-      // Force immediate sidebar refresh on logout (bypass throttle)
-      lastRefreshRef.current = 0;
-      if (pendingRefreshRef.current) { clearTimeout(pendingRefreshRef.current); pendingRefreshRef.current = null; }
-      window.dispatchEvent(new Event("sidebar-refresh"));
+      
       setHeaderProject(null);
       // Clear all cached audio on logout
       sessionAudio.clearAll();
@@ -639,7 +615,7 @@ const Index = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case "profit":
-        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onProjectSaved={refreshSidebar} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense></div>;
+        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense></div>;
       case "playlist":
         return result ? (
           <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -670,7 +646,7 @@ const Index = () => {
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><Suspense fallback={<TabChunkFallback />}><DreamFitTab /></Suspense></div>;
       case "vibefit":
-        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><Suspense fallback={<TabChunkFallback />}><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onProjectSaved={refreshSidebar} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} /></Suspense></div>;
+        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><Suspense fallback={<TabChunkFallback />}><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} /></Suspense></div>;
       default:
         return null;
     }
@@ -734,7 +710,7 @@ const Index = () => {
                   <span className="text-sm">Loading project…</span>
                 </div>
               ) : (
-                <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
+                <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
                   if (payload.projectId) {
                     projectLoadedRef.current = payload.projectId;
                     setOptimisticSidebarItem({
@@ -753,15 +729,15 @@ const Index = () => {
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("mix") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "mix" ? "" : "hidden"}`}>
-              <Suspense fallback={<TabChunkFallback />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onProjectSaved={refreshSidebar} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
+              <Suspense fallback={<TabChunkFallback />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
             </div>
           )}
           {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("hitfit") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
               {loadedHitFitAnalysis
-                ? <Suspense fallback={<TabChunkFallback />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
-                : <Suspense fallback={<TabChunkFallback />}><HitFitTab key="new" initialAnalysis={null} onProjectSaved={refreshSidebar} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+                ? <Suspense fallback={<TabChunkFallback />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+                : <Suspense fallback={<TabChunkFallback />}><HitFitTab key="new" initialAnalysis={null} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
               }
             </div>
           )}
