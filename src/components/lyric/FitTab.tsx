@@ -61,6 +61,7 @@ interface Props {
   onRetry?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
+  onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
 }
 
 export function FitTab({
@@ -82,6 +83,7 @@ export function FitTab({
   onRetry,
   onHeaderProject,
   onBack,
+  onImageGenerationStatusChange,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
@@ -210,12 +212,27 @@ export function FitTab({
   }, [lyricData.title, audioFile.name, onHeaderProject, onBack]);
 
 // ── Cinematic Direction Card with Section Images ─────────────────────
-function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cinematicDirection: any; songTitle: string; userId: string }) {
+function CinematicDirectionCard({
+  cinematicDirection,
+  songTitle,
+  userId,
+  projectId,
+  onImageGenerationStatusChange,
+}: {
+  cinematicDirection: any;
+  songTitle: string;
+  userId: string;
+  projectId: string | null;
+  onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
+}) {
   const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
   const [danceId, setDanceId] = useState<string | null>(null);
+  const [imagesHydrated, setImagesHydrated] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const imageGenerationStartedRef = useRef(false);
   const fitTabImageT0Ref = useRef<number | null>(null);
   const fitTabImageMs = useCallback(() => fitTabImageT0Ref.current === null
     ? "0ms"
@@ -241,7 +258,11 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
         .order("created_at", { ascending: false })
         .limit(1);
 
-      if (cancelled || !dances?.[0]) return;
+      if (cancelled) return;
+      if (!dances?.[0]) {
+        setImagesHydrated(true);
+        return;
+      }
       setDanceId(dances[0].id);
 
       const imgs = dances[0].section_images;
@@ -249,6 +270,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
         setSectionImages(imgs);
       }
       // Don't auto-poll — let the user click "Generate Images" or wait for publish event
+      setImagesHydrated(true);
     })();
     return () => {
       cancelled = true;
@@ -293,20 +315,20 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
   }, [sections.length]);
 
   const handleGenerateImages = useCallback(async () => {
-    console.log("[SectionImages] Generate clicked", { generating, sectionsLen: sections.length, danceId });
-    fitTabImageT0Ref.current = performance.now();
-    console.log(`[FitTab Debug] ${fitTabImageMs()} starting image generation for ${sections.length} sections`);
     if (generating || !sections.length) return;
     if (!danceId) {
       toast.error("Publish a Dance first to generate section images");
+      onImageGenerationStatusChange?.("error");
       return;
     }
+    setGenerationError(null);
+    console.log("[SectionImages] Generate clicked", { generating, sectionsLen: sections.length, danceId });
+    fitTabImageT0Ref.current = performance.now();
+    console.log(`[FitTab Debug] starting image generation (${sections.length} sections)`);
     setGenerating(true);
+    onImageGenerationStatusChange?.("running");
     setGenProgress({ done: 0, total: sections.length });
     try {
-      sections.forEach((_, index) => {
-        console.log(`[FitTab Debug] ${fitTabImageMs()} image ${index + 1}/${sections.length} starting`);
-      });
       const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
         body: { lyric_dance_id: danceId, force: true },
       });
@@ -316,17 +338,48 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
         const preview = typeof url === "string" ? `${url.slice(0, 50)}...` : "null";
         console.log(`[FitTab Debug] ${fitTabImageMs()} image ${index + 1}/${sections.length} done, url=${preview}`);
       });
-      console.log(`[FitTab Debug] ${fitTabImageMs()} all images complete`);
+      console.log(`[FitTab Debug] image generation complete in ${fitTabImageMs()}`);
       setSectionImages(urls);
       setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
+      onImageGenerationStatusChange?.("done");
+
+      if (projectId && urls.length > 0) {
+        void supabase
+          .from("saved_lyrics")
+          .update({ section_images: urls as any })
+          .eq("id", projectId);
+      }
+
       toast.success(`Generated ${urls.filter(Boolean).length}/${sections.length} section images`);
     } catch (e: any) {
       console.error("[SectionImages] Error:", e);
+      setGenerationError(e?.message || "Failed to generate section images");
+      onImageGenerationStatusChange?.("error");
       toast.error(e?.message || "Failed to generate section images");
     } finally {
       setGenerating(false);
     }
-  }, [generating, sections, danceId, fitTabImageMs]);
+  }, [generating, sections, danceId, fitTabImageMs, onImageGenerationStatusChange, projectId]);
+
+  useEffect(() => {
+    if (!cinematicDirection) return;
+    if (!sections.length) return;
+    if (!danceId) return;
+    if (!imagesHydrated) return;
+    if (sectionImages.length > 0) return;
+    if (imageGenerationStartedRef.current) return;
+
+    imageGenerationStartedRef.current = true;
+    console.log(`[FitTab Debug] ${fitTabImageMs()} auto-starting image generation for ${sections.length} sections`);
+    void handleGenerateImages();
+  }, [cinematicDirection, danceId, imagesHydrated, sections.length, sectionImages.length, handleGenerateImages, fitTabImageMs]);
+
+  useEffect(() => {
+    if (sectionImages.length > 0) {
+      imageGenerationStartedRef.current = true;
+      onImageGenerationStatusChange?.("done");
+    }
+  }, [sectionImages.length, onImageGenerationStatusChange]);
 
   return (
     <div className="glass-card rounded-xl p-3 space-y-2">
@@ -345,6 +398,11 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
               <>
                 <Loader2 size={9} className="animate-spin" />
                 {genProgress ? `${genProgress.done}/${genProgress.total}` : "Generating…"}
+              </>
+            ) : generationError ? (
+              <>
+                <RefreshCw size={9} />
+                Retry Images
               </>
             ) : sectionImages.length > 0 ? (
               <>
@@ -968,7 +1026,13 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
               {/* Visual system info now shown via Cinematic Direction card below */}
 
               {cinematicDirection && (
-                <CinematicDirectionCard cinematicDirection={cinematicDirection} songTitle={lyricData.title} userId={user?.id || ""} />
+                <CinematicDirectionCard
+                  cinematicDirection={cinematicDirection}
+                  songTitle={lyricData.title}
+                  userId={user?.id || ""}
+                  projectId={savedId}
+                  onImageGenerationStatusChange={onImageGenerationStatusChange}
+                />
               )}
 
               {beatGrid && (
