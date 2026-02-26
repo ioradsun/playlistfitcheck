@@ -704,6 +704,7 @@ export class LyricDancePlayer {
   private songEndSec = 0;
   private playing = false;
   private destroyed = false;
+  private audioContext: AudioContext | null = null;
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
 
 
@@ -806,6 +807,7 @@ export class LyricDancePlayer {
     this.audio.play().catch(() => {});
     this.playing = true;
     this.startHealthMonitor();
+    if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
     this.rafHandle = requestAnimationFrame(this.tick);
   }
 
@@ -960,6 +962,7 @@ export class LyricDancePlayer {
     if (this.destroyed) return;
     this.playing = true;
     this.audio.play().catch(() => {});
+    this.startHealthMonitor();
     // Restart the RAF loop — it stops when playing becomes false
     if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
     this.rafHandle = requestAnimationFrame(this.tick);
@@ -967,6 +970,11 @@ export class LyricDancePlayer {
 
   pause(): void {
     this.playing = false;
+    if (this.rafHandle) {
+      cancelAnimationFrame(this.rafHandle);
+      this.rafHandle = 0;
+    }
+    this.stopHealthMonitor();
     this.audio.pause();
   }
 
@@ -1089,10 +1097,14 @@ export class LyricDancePlayer {
   }
 
   destroy(): void {
-    
+    if (this.destroyed) return;
     this.destroyed = true;
+    this.playing = false;
     this.stopHealthMonitor();
-    cancelAnimationFrame(this.rafHandle);
+    if (this.rafHandle) {
+      cancelAnimationFrame(this.rafHandle);
+      this.rafHandle = 0;
+    }
 
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -1108,6 +1120,20 @@ export class LyricDancePlayer {
 
     this.audio.pause();
     this.audio.src = "";
+
+    if (this.audioContext) {
+      void this.audioContext.close().catch(() => {});
+      this.audioContext = null;
+    }
+
+    this.currentSimCanvases = [];
+    this.chapterSims = [];
+    this.chapterImages = [];
+        this.ctx = null as any;
+    this.canvas = null as any;
+    this.bgCanvas = null as any;
+    this.textCanvas = null as any;
+    this.container = null as any;
   }
 
   // ────────────────────────────────────────────────────────────
@@ -1115,6 +1141,7 @@ export class LyricDancePlayer {
   // ────────────────────────────────────────────────────────────
 
   private startHealthMonitor(): void {
+    if (this.healthCheckInterval) return;
     this.healthCheckInterval = setInterval(() => {
       const fps = this.frameCount / 5;
       this.frameCount = 0;
@@ -1132,6 +1159,10 @@ export class LyricDancePlayer {
 
   private tick = (timestamp: number): void => {
     if (this.destroyed) return; // truly dead — no reschedule
+    if (!this.playing) {
+      this.rafHandle = 0;
+      return;
+    }
 
     try {
       const deltaMs = Math.min(timestamp - (this.lastTimestamp || timestamp), 100);

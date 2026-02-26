@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
+import { withInitLimit } from "@/engine/initQueue";
 
 const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,artist_dna";
 
@@ -101,39 +102,42 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
     initRef.current = true;
     let destroyed = false;
 
-    const player = new LyricDancePlayer(
-      data,
-      canvasRef.current,
-      textCanvasRef.current,
-      containerRef.current as HTMLDivElement,
-      { bootMode: "minimal" },
-    );
-    playerRef.current = player;
+    let ro: ResizeObserver | null = null;
 
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0) player.resize(width, height);
-    });
-    ro.observe(containerRef.current);
+    withInitLimit(async () => {
+      if (destroyed) return;
+      const player = new LyricDancePlayer(
+        data,
+        canvasRef.current!,
+        textCanvasRef.current!,
+        containerRef.current as HTMLDivElement,
+        { bootMode: "minimal" },
+      );
+      playerRef.current = player;
 
-    player.init()
-      .then(() => {
-        if (!destroyed) {
-          player.audio.muted = true;
-          player.play();
-          console.info("[InlineLyricDance boot]", player.getBootMetrics());
-        }
-      })
-      .catch((err) => {
-        console.error("[InlineLyricDance] init failed:", err);
+      ro = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) player.resize(width, height);
       });
+      ro.observe(containerRef.current!);
+
+      await player.init();
+
+      if (!destroyed) {
+        player.audio.muted = true;
+        player.play();
+        console.info("[InlineLyricDance boot]", player.getBootMetrics());
+      }
+    }).catch((err) => {
+      console.error("[InlineLyricDance] init failed:", err);
+    });
 
     return () => {
       destroyed = true;
-      ro.disconnect();
-      player.destroy();
+      ro?.disconnect();
+      playerRef.current?.destroy();
       playerRef.current = null;
       initRef.current = false;
     };
