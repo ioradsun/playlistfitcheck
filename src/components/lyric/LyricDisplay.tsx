@@ -687,16 +687,23 @@ export function LyricDisplay({
       beatAudioContextRef.current = null;
     }
 
-    // Single RAF loop — runs continuously, only reads currentTime when playing.
-    // Using rafRef so cleanup always cancels the correct frame, even across re-renders.
+    // Single RAF loop — only updates currentTime when audio is actually playing.
     let isRunning = true;
+    let lastReportedTime = -1;
     const tick = () => {
       if (!isRunning) return;
-      setCurrentTime(audio.currentTime);
-      // Loop-region enforcement (doesn't need separate timeupdate)
-      const region = loopRegionRef.current;
-      if (region && audio.currentTime >= region.end) {
-        audio.currentTime = region.start;
+      // Only update React state when playing AND the value actually changed
+      if (!audio.paused) {
+        const t = audio.currentTime;
+        if (Math.abs(t - lastReportedTime) > 0.016) {
+          lastReportedTime = t;
+          setCurrentTime(t);
+        }
+        // Loop-region enforcement
+        const region = loopRegionRef.current;
+        if (region && t >= region.end) {
+          audio.currentTime = region.start;
+        }
       }
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -710,11 +717,12 @@ export function LyricDisplay({
 
     audio.addEventListener("ended", handleEnded);
 
-    if (audioFile.size > 0) {
+    // Only decode audio if we actually need the waveform or buffer for playback features
+    // Skip decode entirely if waveform is already loaded from DB (prevents main-thread freeze)
+    if (audioFile.size > 0 && !initialWaveform) {
       decodeFile(audioFile)
         .then(({ buffer, waveform: decoded }) => {
-          // Only set waveform if not already provided via prop
-          if (!initialWaveform) setWaveform(decoded);
+          setWaveform(decoded);
           setAudioBuffer(buffer);
         })
         .catch(() => {});
@@ -888,7 +896,7 @@ export function LyricDisplay({
               confidence: beatGrid.confidence,
             } as any)
           : null,
-        song_signature: null,
+        // Note: song_signature is NOT overwritten here — it's managed by the analysis pipeline
         ...(renderData ? { render_data: renderData as any } : {}),
         updated_at: new Date().toISOString(),
       };
