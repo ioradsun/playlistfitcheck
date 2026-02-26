@@ -138,7 +138,7 @@ export function getTextShadow(
   beatIntensity: number,
 ): { offsetX: number; offsetY: number; blur: number; color: string } {
   const lightSource = getLightType(manifest);
-  const paletteShadow = `${manifest.palette[0] ?? "#000000"}aa`;
+  const paletteShadow = `${manifest.palette?.[0] ?? "#000000"}aa`;
   const beat = clamp01(beatIntensity);
 
   if (lightSource.includes("flickering left")) {
