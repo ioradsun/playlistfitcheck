@@ -893,7 +893,7 @@ export default function ShareableLyricDance() {
           renderData: {
             cinematic_direction: data.cinematic_direction as any,
           },
-          beatGrid: null, lines: data.lyrics,
+          beatGrid: data.beat_grid ? { bpm: (data.beat_grid as any).bpm ?? 0, beats: (data.beat_grid as any).beats ?? [], confidence: (data.beat_grid as any).confidence ?? 0 } : null, lines: data.lyrics,
           title: data.song_name, artist: data.artist_name,
           overrides: {},  fingerprint: null,
           section_images: data.section_images,
