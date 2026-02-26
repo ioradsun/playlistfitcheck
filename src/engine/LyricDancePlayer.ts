@@ -3389,3 +3389,78 @@ export class LyricDancePlayer {
       }
     }
   }
+
+  // ─── Scaling helpers ──────────────────────────────────────────────
+
+  private scaleTimeline(baked: Keyframe[]): ScaledKeyframe[] {
+    const sx = this.width / BASE_W;
+    const sy = this.height / BASE_H;
+    return baked.map((kf) => ({
+      ...kf,
+      cameraX: kf.cameraX * sx,
+      cameraY: kf.cameraY * sy,
+      chunks: kf.chunks.map((c) => ({
+        ...c,
+        x: c.x * sx,
+        y: c.y * sy,
+        fontSize: c.fontSize ? c.fontSize * Math.min(sx, sy) : undefined,
+        entryOffsetY: c.entryOffsetY ? c.entryOffsetY * sy : undefined,
+        entryOffsetX: c.entryOffsetX ? c.entryOffsetX * sx : undefined,
+        exitOffsetY: c.exitOffsetY ? c.exitOffsetY * sy : undefined,
+      })),
+      particles: kf.particles.map((p) => ({
+        ...p,
+        x: p.x * sx,
+        y: p.y * sy,
+        size: p.size * Math.min(sx, sy),
+      })),
+    }));
+  }
+
+  private unscaleTimeline(): Keyframe[] {
+    const sx = this.width / BASE_W;
+    const sy = this.height / BASE_H;
+    if (sx === 0 || sy === 0) return [];
+    return this.timeline.map((kf) => ({
+      ...kf,
+      cameraX: kf.cameraX / sx,
+      cameraY: kf.cameraY / sy,
+      chunks: kf.chunks.map((c) => ({
+        ...c,
+        x: c.x / sx,
+        y: c.y / sy,
+        fontSize: c.fontSize ? c.fontSize / Math.min(sx, sy) : 24,
+        entryOffsetY: (c.entryOffsetY ?? 0) / sy,
+        entryOffsetX: (c.entryOffsetX ?? 0) / sx,
+        entryScale: c.entryScale ?? 1,
+        exitOffsetY: (c.exitOffsetY ?? 0) / sy,
+        exitScale: c.exitScale ?? 1,
+        skewX: c.skewX ?? 0,
+        isAnchor: c.isAnchor ?? false,
+        color: c.color ?? '#ffffff',
+      })),
+      particles: kf.particles.map((p) => ({
+        ...p,
+        x: p.x / sx,
+        y: p.y / sy,
+        size: p.size / Math.min(sx, sy),
+      })),
+    })) as Keyframe[];
+  }
+
+  private getFrame(timeMs: number): ScaledKeyframe | null {
+    if (!this.timeline.length) return null;
+    // Binary search for the frame just at or before timeMs
+    let lo = 0;
+    let hi = this.timeline.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >>> 1;
+      if (this.timeline[mid].timeMs <= timeMs) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return this.timeline[lo];
+  }
+}
