@@ -386,6 +386,7 @@ export function LyricDisplay({
     savedId ?? null,
   );
   const autosaveTimerRef = useRef<number | null>(null);
+  const initialLoadRef = useRef(true);
 
   // Timestamps for version toggle
   const [explicitLastEdited, setExplicitLastEdited] = useState<Date | null>(
@@ -945,6 +946,11 @@ export function LyricDisplay({
   }, [user, performSave]);
 
   useEffect(() => {
+    // Skip the initial render — don't autosave when data is just loaded from DB
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      return;
+    }
     scheduleAutosave();
   }, [explicitLines, fmlyLines, explicitMeta, fmlyMeta, beatGrid, renderData]);
 

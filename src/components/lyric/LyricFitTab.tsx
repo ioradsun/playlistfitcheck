@@ -83,6 +83,7 @@ export function LyricFitTab({
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const savedIdRef = useRef<string | null>(null);
+  const renderDataLoadedFromDbRef = useRef(false);
   const [lines, setLines] = useState<LyricLine[]>([]);
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
   const [versionMeta, setVersionMeta] = useState<any | null>(null);
@@ -278,6 +279,7 @@ export function LyricFitTab({
         null;
 
       if (loadedRenderData) {
+        renderDataLoadedFromDbRef.current = true;
         setRenderData(loadedRenderData);
         setGenerationStatus(prev => ({ ...prev, renderData: "done" }));
 
@@ -383,17 +385,19 @@ export function LyricFitTab({
   // Persist render_data whenever we have both a saved project and computed DNA
   // Only persist when renderData changes (not cinematicDirection alone — that's handled in startCinematicDirection)
   useEffect(() => {
-    if (savedIdRef.current && renderData) {
-      const payload = { ...renderData };
-      // Only include cinematicDirection if it's not null (avoid overwriting a deliberate clear)
-      if (cinematicDirection) payload.cinematicDirection = cinematicDirection;
-      // Persist waveform peaks so they load instantly without audio decode
-      if (waveformData && waveformData.peaks.length > 0) {
-        payload.waveformPeaks = waveformData.peaks;
-        payload.waveformDuration = waveformData.duration;
-      }
-      persistRenderData(savedIdRef.current, payload);
+    if (!savedIdRef.current || !renderData) return;
+    // Skip the first trigger after loading from DB — no actual change occurred
+    if (renderDataLoadedFromDbRef.current) {
+      renderDataLoadedFromDbRef.current = false;
+      return;
     }
+    const payload = { ...renderData };
+    if (cinematicDirection) payload.cinematicDirection = cinematicDirection;
+    if (waveformData && waveformData.peaks.length > 0) {
+      payload.waveformPeaks = waveformData.peaks;
+      payload.waveformDuration = waveformData.duration;
+    }
+    persistRenderData(savedIdRef.current, payload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedId, renderData, waveformData, persistRenderData]);
 
