@@ -161,11 +161,11 @@ const Index = () => {
         .maybeSingle();
 
       if (error || !data) { setLoadingProjectType(null); return; }
+      projectLoadedRef.current = projectId;
       startTransition(() => {
         setLoadedLyric(data);
-        setLoadingProjectType(null);
       });
-      projectLoadedRef.current = projectId;
+      setLoadingProjectType(null);
     })();
   }, [activeTab, projectId, user?.id]);
 
