@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import type { DreamComment, Dream } from "./types";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
@@ -258,6 +258,7 @@ export function DreamComments({ dreamId, dream, onClose, onCommentAdded }: Props
   return (
     <Sheet open={!!dreamId} onOpenChange={(open) => { if (!open) onClose(); }}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0">
+        <SheetTitle className="sr-only">Comments</SheetTitle>
 
         {/* ── Post identity header — no title, poster + idea pushed to top ── */}
         <div className="shrink-0 px-5 pt-5 pb-4 border-b border-border/40 space-y-4">
