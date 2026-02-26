@@ -34,7 +34,7 @@ import {
   type PhysicsState,
 } from "./PhysicsIntegrator";
 export type { PhysicsState } from "./PhysicsIntegrator";
-import type { FrameRenderState } from "./FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 
 export interface BeatTick {
   time: number;       // seconds

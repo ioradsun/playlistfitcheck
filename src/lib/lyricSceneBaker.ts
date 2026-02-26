@@ -2,7 +2,7 @@ import type { CinematicDirection, CinematicSection } from "@/types/CinematicDire
 import { enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
-import type { FrameRenderState } from "@/engine/FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 
 export type LineBeatMap = {
   lineIndex: number;

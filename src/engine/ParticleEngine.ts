@@ -1,5 +1,5 @@
 // removed duplicate import line
-import type { ParticleConfig, FrameRenderState } from "./FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 import {
   drawAsh,
   drawBubble,
@@ -127,6 +127,17 @@ function getMaxParticles(): number {
 const MAX_PARTICLES = Math.max(PARTICLE_LIMITS.highEnd, 200);
 const FOREGROUND_ALLOWED = new Set(["snow", "petals", "ash", "confetti", "crystals"]);
 
+export interface ParticleRuntimeConfig {
+  system: string;
+  density: number;
+  speed: number;
+  opacity: number;
+  beatReactive: boolean;
+  foreground?: boolean;
+  renderStyle?: string;
+  color?: string;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -150,8 +161,7 @@ export class ParticleEngine {
     aux: 0,
     aux2: 0,
   }));
-  private config: ParticleConfig;
-  private manifest: FrameRenderState;
+  private config: ParticleRuntimeConfig;
   private bounds: Rect = { x: 0, y: 0, w: 1, h: 1 };
   private safeZone: Rect = { x: -1, y: -1, w: 0, h: 0 };
   private beatBoostFrames = 0;
@@ -165,23 +175,40 @@ export class ParticleEngine {
   private updateFrameSkip = 1;
   private updateFrameCounter = 0;
 
-  constructor(manifest: FrameRenderState) {
-    this.manifest = manifest;
-    this.config = manifest.particleConfig;
+  constructor(frame: FrameRenderState) {
+    this.config = ParticleEngine.fromFrameState(frame);
   }
 
-  setManifest(manifest: FrameRenderState): void {
-    this.manifest = manifest;
-    this.config = manifest.particleConfig;
+  static fromFrameState(frame: FrameRenderState): ParticleRuntimeConfig {
+    const system = frame.particleSystem;
+    return {
+      system,
+      density: frame.particleDensity,
+      speed: frame.particleSpeed,
+      opacity: frame.particleOpacity,
+      beatReactive: frame.particleBeatReactive,
+      foreground: FOREGROUND_ALLOWED.has(system),
+      renderStyle: ParticleEngine.getRenderStyle(system),
+      color: "#ffffff",
+    };
   }
 
-  setConfig(config: ParticleConfig): void {
-    this.config = config;
+  setFrameState(frame: FrameRenderState): void {
+    this.config = ParticleEngine.fromFrameState(frame);
+  }
+
+  setConfig(config: ParticleRuntimeConfig): void {
+    this.config = {
+      ...config,
+      foreground: config.foreground ?? FOREGROUND_ALLOWED.has(config.system),
+      renderStyle: config.renderStyle ?? ParticleEngine.getRenderStyle(config.system),
+      color: config.color ?? "#ffffff",
+    };
   }
 
 
   setSystem(system: string): void {
-    this.config = { ...this.config, system: system as ParticleConfig["system"] };
+    this.config = { ...this.config, system, foreground: FOREGROUND_ALLOWED.has(system) };
     this.clear();
     if (!this.hasValidBounds()) return;
     // Warm-spawn initial particles for the new system
@@ -243,14 +270,14 @@ export class ParticleEngine {
   }
 
   /** Public accessor: current config snapshot */
-  getConfig(): ParticleConfig {
+  getConfig(): ParticleRuntimeConfig {
     return this.config;
   }
 
 
-  init(config: ParticleConfig, manifest: FrameRenderState): void {
-    this.config = config;
-    this.manifest = manifest;
+  init(config: ParticleRuntimeConfig, frame: FrameRenderState): void {
+    this.config = { ...config, foreground: config.foreground ?? FOREGROUND_ALLOWED.has(config.system), renderStyle: config.renderStyle ?? ParticleEngine.getRenderStyle(config.system), color: config.color ?? "#ffffff" };
+    this.setFrameState(frame);
     this.maxParticles = getMaxParticles();
     this.clear();
 
@@ -282,7 +309,7 @@ export class ParticleEngine {
     this.safeZone.h = h;
   }
 
-  update(deltaMs: number, beatIntensity: number, nextConfig?: ParticleConfig): void {
+  update(deltaMs: number, beatIntensity: number, nextConfig?: ParticleRuntimeConfig): void {
     this.maxParticles = getMaxParticles();
     this.enforceParticleLimit();
     this.time += deltaMs;
@@ -447,6 +474,12 @@ export class ParticleEngine {
     return this.config.foreground && FOREGROUND_ALLOWED.has(this.config.system);
   }
 
+
+  private static getRenderStyle(system: string): string | undefined {
+    if (system === "rain") return "rain-drizzle";
+    if (system === "burn" || system === "smoke") return "burn-smoke";
+    return undefined;
+  }
   private targetActiveCount(): number {
     const d = clamp(this.config.density * this.densityMultiplier, 0, 1.5);
     return Math.floor(20 + d * 520);
@@ -913,11 +946,11 @@ export class ParticleEngine {
   }
 
   private getWindDirection(): number {
-    const source = this.manifest.lightSource.toLowerCase();
-    if (source.includes("east") || source.includes("right")) return 1;
-    if (source.includes("west") || source.includes("left")) return -1;
-    if (source.includes("north")) return 0.6;
-    if (source.includes("south")) return -0.6;
-    return source.length % 2 === 0 ? 1 : -1;
+    const hint = `${this.behaviorHint ?? ""}:${this.config.system}`.toLowerCase();
+    if (hint.includes("east") || hint.includes("right")) return 1;
+    if (hint.includes("west") || hint.includes("left")) return -1;
+    if (hint.includes("north")) return 0.6;
+    if (hint.includes("south")) return -0.6;
+    return this.config.system.length % 2 === 0 ? 1 : -1;
   }
 }

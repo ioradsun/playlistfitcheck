@@ -8,7 +8,7 @@
 
 import type { PhysicsState } from "./PhysicsIntegrator";
 import { ParticleEngine, type Rect } from "./ParticleEngine";
-import type { FrameRenderState } from "./FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 
 export interface BackgroundState {
   system: string;
@@ -740,7 +740,7 @@ function getParticleEngine(ctx: CanvasRenderingContext2D, manifest: FrameRenderS
     engine = new ParticleEngine(manifest);
     particleEngines.set(ctx, engine);
   }
-  engine.setManifest(manifest);
+  engine.setFrameState(manifest);
   return engine;
 }
 
@@ -748,11 +748,11 @@ function getParticleEngine(ctx: CanvasRenderingContext2D, manifest: FrameRenderS
 
 function applyManifest(ctx: CanvasRenderingContext2D, manifest: FrameRenderState): ParticleEngine {
   const engine = getParticleEngine(ctx, manifest);
-  const signature = JSON.stringify(manifest.particleConfig);
+  const signature = JSON.stringify({ system: manifest.particleSystem, density: manifest.particleDensity, speed: manifest.particleSpeed, opacity: manifest.particleOpacity, beatReactive: manifest.particleBeatReactive });
 
   if (particleSignatures.get(ctx) !== signature) {
-    if (manifest.particleConfig?.system && manifest.particleConfig.system !== "none") {
-      engine.init(manifest.particleConfig, manifest);
+    if (manifest.particleSystem && manifest.particleSystem !== "none") {
+      engine.init(ParticleEngine.fromFrameState(manifest), manifest);
     } else {
       engine.clear();
     }
@@ -833,7 +833,7 @@ export function drawSystemBackground(ctx: CanvasRenderingContext2D, s: Backgroun
     engine.setBounds({ x: 0, y: 0, w: s.w, h: s.h });
     if (s.lyricSafeZone) engine.setLyricSafeZone(s.lyricSafeZone.x, s.lyricSafeZone.y, s.lyricSafeZone.w, s.lyricSafeZone.h);
     engine.update(s.deltaMs ?? 16.67, s.beatIntensity ?? 0);
-    if (!s.manifest.particleConfig.foreground) engine.draw(ctx);
+    if (!ParticleEngine.fromFrameState(s.manifest).foreground) engine.draw(ctx);
   }
 
   const focusGrad = ctx.createRadialGradient(

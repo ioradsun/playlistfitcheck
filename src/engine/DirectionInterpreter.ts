@@ -15,8 +15,6 @@ import {
   findSectionByProgress,
   findSectionIndexByProgress,
   buildWordDirectiveMap,
-  toRenderSection,
-  type RenderSection,
 } from "@/engine/directionResolvers";
 import {
   getIntensityCurve,
@@ -40,6 +38,14 @@ export interface EvolutionProps {
   glowRadius: number;
   opacityMultiplier: number;
   yOffset: number;
+}
+
+export interface SectionRenderInput {
+  dominantColor: string;
+  intensity: number;
+  lightBehavior: string;
+  backgroundDirective: string;
+  particleDirective: string;
 }
 
 export function applyEvolutionRule(
@@ -131,28 +137,22 @@ export class DirectionInterpreter {
     return findSectionByProgress(this.enrichedSections, songProgress);
   }
 
-  /** Get a RenderSection suitable for BackgroundDirector/LightingDirector */
-  getRenderSection(songProgress: number, palette: string[]): RenderSection {
+  getSectionRenderInput(songProgress: number, palette: string[]): SectionRenderInput {
     const idx = findSectionIndexByProgress(this.enrichedSections, songProgress);
-    return toRenderSection(
-      this.enrichedSections[idx] ?? null,
-      idx,
-      this.enrichedSections.length,
-      palette,
-      this.direction?.atmosphere,
-    );
+    const section = this.enrichedSections[idx] ?? null;
+    const atmosphere = section?.atmosphere ?? this.direction?.atmosphere ?? "cinematic";
+    return {
+      dominantColor: palette[idx % Math.max(1, palette.length)] ?? "#111111",
+      intensity: this.getIntensity(songProgress),
+      lightBehavior: atmosphere === "haze" ? "soft" : "cinematic",
+      backgroundDirective: section?.description ?? "",
+      particleDirective: section?.texture ?? "dust",
+    };
   }
 
   /** @deprecated Use getCurrentSection — kept for exporter compat */
-  getCurrentChapter(songProgress: number): RenderSection | null {
-    const idx = findSectionIndexByProgress(this.enrichedSections, songProgress);
-    return toRenderSection(
-      this.enrichedSections[idx] ?? null,
-      idx,
-      this.enrichedSections.length,
-      [],
-      this.direction?.atmosphere,
-    );
+  getCurrentChapter(songProgress: number): SectionRenderInput | null {
+    return this.getSectionRenderInput(songProgress, []);
   }
 
   getWordDirective(word: string): WordDirective | null {

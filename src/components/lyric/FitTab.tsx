@@ -16,7 +16,7 @@ import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
-import type { FrameRenderState as FullFrameRenderState } from "@/engine/FrameRenderState";
+import type { FrameRenderState as FullFrameRenderState } from "@/engine/presetDerivation";
 import type { AudioSection } from "@/engine/sectionDetector";
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus } from "./LyricFitTab";
