@@ -137,6 +137,7 @@ export function LyricFitTab({
 
   useEffect(() => {
     const done = timestampedLines.length > 0;
+    if (done) console.log(`[Transcribe Debug] transcriptionDone=true, lines=${timestampedLines.length}`);
     setTranscriptionDone(done);
   }, [timestampedLines]);
 
@@ -167,6 +168,7 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (!detectedGrid || beatGrid) return;
+    console.log(`[Transcribe Debug] beatGridDone=true, bpm=${detectedGrid.bpm}`);
     setBeatGrid(detectedGrid);
     setBeatGridDone(true);
     setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
@@ -183,6 +185,7 @@ export function LyricFitTab({
     audioFile.arrayBuffer().then((ab) =>
       ctx.decodeAudioData(ab).then((buf) => {
         if (!cancelled) {
+          console.log(`[Transcribe Debug] audioBufferReady=true, duration=${buf.duration.toFixed(1)}s`);
           setAudioBuffer(buf);
           setAudioBufferReady(true);
           setWaveformData(extractPeaksFromBuffer(buf));
@@ -504,10 +507,12 @@ export function LyricFitTab({
   const sectionPipelineDoneRef = useRef(false);
 
   const maybeRunSectionPipeline = useCallback(async () => {
+    console.log(`[Transcribe Debug] maybeRunSectionPipeline called, flags: t=${transcriptionDone} b=${beatGridDone} a=${audioBufferReady}`);
     if (!transcriptionDone || !beatGridDone) return;
     if (!audioBufferReady || !audioBuffer || !beatGrid) return;
     if (sectionPipelineRunningRef.current || sectionPipelineDoneRef.current) return;
 
+    console.log(`[Transcribe Debug] section pipeline RUNNING`);
     sectionPipelineRunningRef.current = true;
     try {
       const lyricsText = timestampedLines.map((line) => line.text).join("\n");
@@ -521,6 +526,7 @@ export function LyricFitTab({
       }
 
       const nextSections = detectSections(signature, beatGrid, timestampedLines, audioDurationSec);
+      console.log(`[Transcribe Debug] sections computed: ${nextSections.length} sections`);
       setAudioSections(nextSections);
       sectionPipelineDoneRef.current = true;
     } catch (error) {
@@ -541,6 +547,7 @@ export function LyricFitTab({
     if (!sectionsReady || !lines?.length) return;
     if (cinematicTriggeredRef.current && pipelineRetryCount === 0) return;
     cinematicTriggeredRef.current = true;
+    console.log(`[Transcribe Debug] starting cinematic direction`);
     void startCinematicDirection(lines, pipelineRetryCount > 0);
   }, [sectionsReady, lines, pipelineRetryCount, startCinematicDirection]);
 

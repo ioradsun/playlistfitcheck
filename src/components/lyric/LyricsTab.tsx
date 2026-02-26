@@ -127,6 +127,8 @@ export function LyricsTab({
         return;
       }
       const t0 = performance.now();
+      const ms = () => `${(performance.now() - t0).toFixed(0)}ms`;
+      console.log(`[Transcribe Debug] ${ms()} ENTRY file="${file.name}" size=${(file.size / 1024 / 1024).toFixed(2)}MB type=${file.type}`);
       console.log(`[LyricUpload] START file="${file.name}" size=${(file.size / 1024 / 1024).toFixed(2)}MB`);
       setLoading(true);
 
@@ -169,12 +171,14 @@ export function LyricsTab({
 
       try {
         // Only compress if over 25MB
+        console.log(`[Transcribe Debug] ${ms()} compression check (threshold=${(MAX_RAW_UPLOAD_BYTES/1024/1024).toFixed(0)}MB, file=${(file.size/1024/1024).toFixed(2)}MB)`);
         let uploadFile: File;
         if (file.size > MAX_RAW_UPLOAD_BYTES) {
           try {
             const ct0 = performance.now();
             uploadFile = await compressAudioFile(file);
-            console.log(`[LyricUpload] COMPRESS done in ${(performance.now() - ct0).toFixed(0)}ms => ${(uploadFile.size / 1024 / 1024).toFixed(2)}MB`);
+          console.log(`[Transcribe Debug] ${ms()} compressed to ${(uploadFile.size / 1024 / 1024).toFixed(2)}MB`);
+          console.log(`[LyricUpload] COMPRESS done in ${(performance.now() - ct0).toFixed(0)}ms => ${(uploadFile.size / 1024 / 1024).toFixed(2)}MB`);
           } catch (compErr) {
             toast.error(compErr instanceof Error ? compErr.message : "Compression failed");
             setLoading(false);
@@ -185,6 +189,7 @@ export function LyricsTab({
           uploadFile = file;
         }
 
+        console.log(`[Transcribe Debug] ${ms()} starting fetch to lyric-transcribe`);
         console.log(`[LyricUpload] FETCH START (elapsed ${(performance.now() - t0).toFixed(0)}ms)`);
 
         const formData = new FormData();
@@ -207,6 +212,7 @@ export function LyricsTab({
           },
         );
 
+        console.log(`[Transcribe Debug] ${ms()} fetch returned status=${response.status}`);
         console.log(`[LyricUpload] FETCH DONE (elapsed ${(performance.now() - t0).toFixed(0)}ms) status=${response.status}`);
 
         if (!response.ok) {
@@ -215,11 +221,15 @@ export function LyricsTab({
         }
 
         const data = await response.json();
+        console.log("[Transcribe Debug]", ms(), "raw response keys:", Object.keys(data));
+        console.log("[Transcribe Debug]", ms(), "raw response:", JSON.stringify(data).slice(0, 500));
+        console.log(`[Transcribe Debug] ${ms()} parsed JSON, lines=${data.lines?.length}, words=${data.words?.length}`);
 
         if (data.error) throw new Error(data.error);
         if (!data.lines) throw new Error("Invalid response format");
 
         if (user && projectId) {
+          console.log(`[Transcribe Debug] ${ms()} starting DB save`);
           // Non-blocking — don't let DB persist block the UI
           void supabase.from("saved_lyrics").upsert({
             id: projectId,
@@ -234,6 +244,7 @@ export function LyricsTab({
           });
         }
 
+        console.log(`[Transcribe Debug] ${ms()} setting lyric data`);
         const newLyricData: LyricData = {
           title: resolveProjectTitle(data.title, file.name),
           artist: data.artist || undefined,
@@ -258,9 +269,11 @@ export function LyricsTab({
         }
         await quota.increment();
       } catch (e) {
+        console.log(`[Transcribe Debug] ${ms()} ERROR: ${e instanceof Error ? e.message : String(e)}`);
         console.error("Transcription error:", e);
         toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");
       } finally {
+        console.log(`[Transcribe Debug] ${ms()} DONE, setting loading=false`);
         console.log(`[LyricUpload] DONE (total ${(performance.now() - t0).toFixed(0)}ms)`);
         setLoading(false);
       }
