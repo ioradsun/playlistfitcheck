@@ -126,6 +126,16 @@ export interface LiveDebugState {
   evolutionBubbles: number;
   evolutionSinkPx: number;
 
+  // Image diagnostics
+  imgCount: number;
+  imgActiveIdx: number;
+  imgNextIdx: number;
+  imgCrossfade: number;
+  imgChapterSpan: number;
+  imgLocalProgress: number;
+  imgOpacity: number;
+  imgOverlap: boolean;
+
   fps: number;
   drawCalls: number;
   cacheHits: number;
