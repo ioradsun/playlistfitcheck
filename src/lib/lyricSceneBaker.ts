@@ -2,7 +2,7 @@ import type { CinematicDirection, CinematicSection } from "@/types/CinematicDire
 import { enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
-import type { SceneManifest } from "@/engine/SceneManifest";
+import type { FrameRenderState } from "@/engine/FrameRenderState";
 
 export type LineBeatMap = {
   lineIndex: number;
@@ -19,8 +19,8 @@ export type ScenePayload = {
   words?: Array<{ word: string; start: number; end: number }>;
   bpm?: number | null;
   beat_grid: { bpm: number; beats: number[]; confidence: number };
-  physics_spec: PhysicsSpec;
-  scene_manifest: SceneManifest | null;
+  motion_profile_spec: PhysicsSpec;
+  frame_state: FrameRenderState | null;
   cinematic_direction: CinematicDirection | null;
   auto_palettes?: string[][];
   palette: string[];
@@ -400,8 +400,8 @@ const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {
 };
 
 const getVisualMode = (payload: ScenePayload): VisualMode => {
-  const sceneManifest = payload.scene_manifest ?? null;
-  const manifestMode = (sceneManifest as any)?.visualMode;
+  const frameState = payload.frame_state ?? null;
+  const manifestMode = (frameState as any)?.visualMode;
   if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
   if (!payload.cinematic_direction) return 'cinematic';
 
@@ -1205,7 +1205,7 @@ function resolveWorldDefaults(payload: ScenePayload, chapters: ChapterLike[]) {
 
   const motionProfile: MotionProfile = ((cd?.motion as MotionProfile | undefined) && MOTION_DEFAULTS[cd.motion as MotionProfile])
     ? (cd.motion as MotionProfile)
-    : ((payload.scene_manifest as any)?.motionProfile as MotionProfile | undefined) ?? 'fluid';
+    : ((payload.frame_state as any)?.motionProfile as MotionProfile | undefined) ?? 'fluid';
 
   const sceneTone = (cd?.sceneTone as SceneTone | undefined) ?? 'dark';
   const luminanceTriplet = SCENE_TONE_LUMINANCE[sceneTone] ?? SCENE_TONE_LUMINANCE.dark;
@@ -1279,7 +1279,7 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   const resolved = resolveWorldDefaults(payload, chapters);
   const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
   const tensionCurve = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
-  const physSpec = payload.physics_spec as unknown as Record<string, unknown> | null;
+  const physSpec = payload.motion_profile_spec as unknown as Record<string, unknown> | null;
   const energy = Number(physSpec?.energy ?? 0.5);
   const density = Number(physSpec?.density ?? 0.5);
   const storyboards = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
@@ -1407,11 +1407,11 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
     }
   }
   // Pre-compute phrase groups, motion profile, and layouts ONCE
-  const sceneManifest = (payload.scene_manifest ?? null) as unknown as Record<string, unknown> | null;
-  const manifestWordDirectives = (sceneManifest?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
-  const manifestLineLayouts = (sceneManifest?.lineLayouts ?? {}) as Record<string, ManifestLineLayout>;
-  const manifestChapters = (sceneManifest?.chapters ?? []) as ManifestChapter[];
-  const manifestStagger = typeof sceneManifest?.stagger === 'number' ? sceneManifest.stagger : null;
+  const frameState = (payload.frame_state ?? null) as unknown as Record<string, unknown> | null;
+  const manifestWordDirectives = (frameState?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
+  const manifestLineLayouts = (frameState?.lineLayouts ?? {}) as Record<string, ManifestLineLayout>;
+  const manifestChapters = (frameState?.chapters ?? []) as ManifestChapter[];
+  const manifestStagger = typeof frameState?.stagger === 'number' ? frameState.stagger : null;
   const storyboard = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
 
   const motionProfile = resolved.motionProfile;
@@ -2108,7 +2108,7 @@ export function bakeSceneChunked(
   {
     const mp = deriveMotionProfile(payload);
     const md = MOTION_DEFAULTS[mp];
-    const ps = payload.physics_spec as unknown as Record<string, unknown> | null;
+    const ps = payload.motion_profile_spec as unknown as Record<string, unknown> | null;
     const motionDiag = (payload.cinematic_direction as any)?.motion as string | undefined;
     const h = payload.cinematic_direction?.visualWorld?.physicsProfile?.heat ?? HEAT_FROM_MOTION[motionDiag ?? ''] ?? 0.5;
     const br = payload.cinematic_direction?.visualWorld?.physicsProfile?.beatResponse ?? BEAT_FROM_MOTION[motionDiag ?? ''] ?? 'slam';
@@ -2122,7 +2122,7 @@ export function bakeSceneChunked(
 
     const pg = payload.words?.length > 0 ? buildPhraseGroups(pre.wordMeta) : null;
     const sb = payload.cinematic_direction?.storyboard ?? [];
-    const sm = (payload.scene_manifest ?? null) as unknown as Record<string, unknown> | null;
+    const sm = (payload.frame_state ?? null) as unknown as Record<string, unknown> | null;
     const mwd = (sm?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
     pg?.slice(0, 5).forEach((group, i) => {
       const anchor = group.words[group.anchorWordIdx];

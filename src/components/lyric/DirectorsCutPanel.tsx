@@ -3,7 +3,7 @@ import { Loader2, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
-import type { SceneManifest } from "@/engine/SceneManifest";
+import type { FrameRenderState } from "@/engine/FrameRenderState";
 import { PaletteEditor } from "./PaletteEditor";
 
 const PARTICLE_SYSTEMS = [
@@ -25,7 +25,7 @@ const PARTICLE_SYSTEMS = [
   "moths",
 ] as const;
 
-const TYPOGRAPHY_PERSONAS: SceneManifest["typographyProfile"]["personality"][] = [
+const TYPOGRAPHY_PERSONAS: FrameRenderState["typographyProfile"]["personality"][] = [
   "MONUMENTAL",
   "ELEGANT DECAY",
   "RAW TRANSCRIPT",
@@ -35,12 +35,12 @@ const TYPOGRAPHY_PERSONAS: SceneManifest["typographyProfile"]["personality"][] =
 ];
 
 export interface DirectorsCutPanelProps {
-  manifest: SceneManifest;
+  manifest: FrameRenderState;
   isOpen: boolean;
   isRegenerating: boolean;
   onClose: () => void;
   onRegenerateWithDirection: (direction: string) => Promise<void>;
-  onFieldOverride: (field: keyof SceneManifest | string, value: unknown) => void;
+  onFieldOverride: (field: keyof FrameRenderState | string, value: unknown) => void;
   onApply: () => void;
   diff?: Array<{ field: string; from: string; to: string }>;
 }

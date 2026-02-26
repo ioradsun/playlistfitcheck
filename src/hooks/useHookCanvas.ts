@@ -9,10 +9,10 @@ import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSystemStyle } from "@/engine/SystemStyles";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
-import type { SceneManifest } from "@/engine/SceneManifest";
+import type { FrameRenderState } from "@/engine/FrameRenderState";
 import { animationResolver, type WordAnimation } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect, applyWordMark, getWordMarkColor } from "@/engine/LyricAnimations";
-import { deriveCanvasManifest, logManifestDiagnostics } from "@/engine/deriveCanvasManifest";
+import { deriveFrameState, logManifestDiagnostics } from "@/engine/deriveFrameState";
 import { resolveEffectKey } from "@/engine/EffectRegistry";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -82,7 +82,7 @@ export interface HookData {
   song_name: string;
   hook_phrase: string;
   artist_dna: ArtistDNA | null;
-  physics_spec: PhysicsSpec;
+  motion_profile_spec: PhysicsSpec;
   beat_grid: { bpm: number; beats: number[]; confidence: number };
   hook_start: number;
   hook_end: number;
@@ -132,7 +132,7 @@ export const RIVER_ROWS = [
 ];
 
 export const HOOK_COLUMNS =
-  "id,user_id,artist_slug,song_slug,hook_slug,artist_name,song_name,hook_phrase,artist_dna,physics_spec,beat_grid,hook_start,hook_end,lyrics,audio_url,fire_count,vote_count,system_type,palette,signature_line,battle_id,battle_position,hook_label";
+  "id,user_id,artist_slug,song_slug,hook_slug,artist_name,song_name,hook_phrase,artist_dna,motion_profile_spec,beat_grid,hook_start,hook_end,lyrics,audio_url,fire_count,vote_count,system_type,palette,signature_line,battle_id,battle_position,hook_label";
 
 // ── Hook ────────────────────────────────────────────────────────────────────
 
@@ -192,8 +192,8 @@ export function useHookCanvas(
     const safeW = Math.max(1, w - safePad * 2);
     const safeH = Math.max(1, h - safePad * 2);
     const palette = hd.palette || ["#ffffff", "#a855f7", "#ec4899"];
-    const { manifest, textColor, contrastRatio, textPalette } = deriveCanvasManifest({
-      physicsSpec: hd.physics_spec as PhysicsSpec,
+    const { manifest, textColor, contrastRatio, textPalette } = deriveFrameState({
+      motionProfileSpec: hd.motion_profile_spec as PhysicsSpec,
       fallbackPalette: palette,
       systemType: hd.system_type,
     });
@@ -219,7 +219,7 @@ export function useHookCanvas(
     const lines = hd.lyrics as LyricLine[];
     const activeLine = lines.find(l => ct >= l.start && ct < l.end);
     const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
-    const spec = hd.physics_spec as PhysicsSpec;
+    const spec = hd.motion_profile_spec as PhysicsSpec;
     let currentEffectKey = "STATIC_RESOLVE";
     if (activeLine && spec.effect_pool && spec.effect_pool.length > 0 && spec.logic_seed != null) {
       const isLastHookLine = activeLine.end >= hd.hook_end - 0.5;
@@ -345,7 +345,7 @@ export function useHookCanvas(
       const fs = layoutResult?.fontSize ?? baseFs;
 
       // Use shared manifest derived at the top of drawCanvas
-      // (manifest variable is already available from deriveCanvasManifest)
+      // (manifest variable is already available from deriveFrameState)
 
       // AnimationResolver is a singleton — always available after loadFromDna()
       const anim = animationResolver.resolveLine(
@@ -644,7 +644,7 @@ export function useHookCanvas(
       }
     }
 
-    const spec = hookData.physics_spec as PhysicsSpec;
+    const spec = hookData.motion_profile_spec as PhysicsSpec;
     const beats: BeatTick[] = hookData.beat_grid.beats.map((t: number, i: number) => ({
       time: t, isDownbeat: i % 4 === 0, strength: i % 4 === 0 ? 1 : 0.6,
     }));
@@ -706,7 +706,7 @@ export function useHookCanvas(
     if (!hookData) return;
     animationResolver.loadFromDna(
       {
-        physics_spec: hookData.physics_spec,
+        motion_profile_spec: hookData.motion_profile_spec,
         hottest_hooks: hookData.hottest_hooks ?? [],
       },
       hookData.lyrics,

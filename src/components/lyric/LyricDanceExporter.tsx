@@ -13,7 +13,7 @@ import { renderText, type TextState, type TextInput } from "@/engine/renderText"
 import { getParticleConfigForTime, renderParticles, type ParticleState } from "@/engine/renderFrame";
 import { animationResolver } from "@/engine/AnimationResolver";
 import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
-import type { SceneManifest } from "@/engine/SceneManifest";
+import type { FrameRenderState } from "@/engine/FrameRenderState";
 import type { LyricLine } from "./LyricDisplay";
 import { getTypography, getParticles } from "@/engine/presetDerivation";
 import { enrichSections, resolveTypography } from "@/engine/directionResolvers";
@@ -67,7 +67,7 @@ export function LyricDanceExporter({
   spec,
   audioUrl,
   cinematicDirection,
-  sceneManifest,
+  frameState,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -78,7 +78,7 @@ export function LyricDanceExporter({
   spec: any;
   audioUrl: string;
   cinematicDirection: CinematicDirection | null;
-  sceneManifest: SceneManifest | null;
+  frameState: FrameRenderState | null;
 }) {
   const [stage, setStage] = useState<"idle" | "rendering" | "encoding" | "done">("idle");
   const [progress, setProgress] = useState(0);
@@ -96,7 +96,7 @@ export function LyricDanceExporter({
   const seed = cinematicDirection?.sceneTone ?? "default-seed";
 
   // Use base manifest with fallbacks
-  const baseManifest: SceneManifest = sceneManifest ?? {
+  const baseManifest: FrameRenderState = frameState ?? {
     world: "void",
     coreEmotion: "neutral",
     gravity: "normal",
@@ -305,7 +305,7 @@ export function LyricDanceExporter({
             particleEngine,
             baseParticleConfig: baseManifest.particleConfig,
             timelineManifest: baseManifest,
-            physicsSpec: spec,
+            motionProfileSpec: spec,
             songProgress,
             beatIntensity: currentBeatIntensity,
             deltaMs,

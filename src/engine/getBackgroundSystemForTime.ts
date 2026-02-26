@@ -1,7 +1,7 @@
-import type { SceneManifest } from "@/engine/SceneManifest";
+import type { FrameRenderState } from "@/engine/FrameRenderState";
 
 export function getBackgroundSystemForTime(
-  manifest: SceneManifest,
+  manifest: FrameRenderState,
   songProgress: number,
   _beatIntensity: number,
 ): string {

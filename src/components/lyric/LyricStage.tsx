@@ -1,14 +1,14 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-export interface SceneManifest {
+export interface FrameRenderState {
   palette: string[];
   contrastMode: "brutal" | "soft" | "neon" | "ghost" | "raw";
   backgroundIntensity: number;
   lightSource: string;
 }
 
-export const COMPOSITING_DECISION_TABLE: Record<SceneManifest["contrastMode"], { maskOpacity: number; bloomIntensity: number; vignetteStrength: number }> = {
+export const COMPOSITING_DECISION_TABLE: Record<FrameRenderState["contrastMode"], { maskOpacity: number; bloomIntensity: number; vignetteStrength: number }> = {
   brutal: { maskOpacity: 0.0, bloomIntensity: 0.05, vignetteStrength: 0.5 },
   soft: { maskOpacity: 0.55, bloomIntensity: 0.15, vignetteStrength: 0.35 },
   neon: { maskOpacity: 0.35, bloomIntensity: 0.25, vignetteStrength: 0.45 },
@@ -17,7 +17,7 @@ export const COMPOSITING_DECISION_TABLE: Record<SceneManifest["contrastMode"], {
 };
 
 interface LyricStageProps {
-  manifest: SceneManifest;
+  manifest: FrameRenderState;
   backgroundImageUrl: string | null;
   isPlaying: boolean;
   beatIntensity: number;
@@ -25,7 +25,7 @@ interface LyricStageProps {
   children: ReactNode;
 }
 
-function BackgroundPlaceholder({ manifest }: { manifest: SceneManifest }) {
+function BackgroundPlaceholder({ manifest }: { manifest: FrameRenderState }) {
   const sourceAnchor = manifest.lightSource.includes("left")
     ? "20% 40%"
     : manifest.lightSource.includes("right")

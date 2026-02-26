@@ -18,7 +18,7 @@ interface Props {
   secondHook?: LyricHook | null;
   hookLabel?: string;
   secondHookLabel?: string;
-  physicsSpec: PhysicsSpec;
+  motionProfileSpec: PhysicsSpec;
   lines: LyricLine[];
   beatGrid: { bpm: number; beats: number[]; confidence: number };
   audioFile: File;
@@ -34,7 +34,7 @@ export function PublishHookButton({
   secondHook,
   hookLabel,
   secondHookLabel,
-  physicsSpec,
+  motionProfileSpec,
   lines,
   beatGrid,
   audioFile,
@@ -115,7 +115,7 @@ export function PublishHookButton({
           song_name: songTitle,
           hook_phrase: hookPhrase,
           artist_dna: fingerprint || null,
-          physics_spec: physicsSpec,
+          motion_profile_spec: motionProfileSpec,
           beat_grid: beatGrid,
           hook_start: hook.start,
           hook_end: hook.end,
@@ -149,7 +149,7 @@ export function PublishHookButton({
             song_name: songTitle,
             hook_phrase: secondHookPhrase,
             artist_dna: fingerprint || null,
-            physics_spec: physicsSpec,
+            motion_profile_spec: motionProfileSpec,
             beat_grid: beatGrid,
             hook_start: secondHook.start,
             hook_end: secondHook.end,
@@ -201,7 +201,7 @@ export function PublishHookButton({
     } finally {
       setPublishing(false);
     }
-  }, [user, hook, secondHook, hookLabel, secondHookLabel, physicsSpec, lines, beatGrid, audioFile, songTitle, system, palette, fingerprint, publishing]);
+  }, [user, hook, secondHook, hookLabel, secondHookLabel, motionProfileSpec, lines, beatGrid, audioFile, songTitle, system, palette, fingerprint, publishing]);
 
   if (!user) return null;
 

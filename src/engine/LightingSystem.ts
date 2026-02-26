@@ -1,4 +1,4 @@
-import type { SceneManifest } from "@/engine/SceneManifest";
+import type { FrameRenderState } from "@/engine/FrameRenderState";
 
 interface WordPosition {
   x: number;
@@ -37,14 +37,14 @@ function getColdArcState(songProgress: number): "overcast" | "storm" | "clearing
   return "clearing";
 }
 
-function getLightType(manifest: SceneManifest): string {
+function getLightType(manifest: FrameRenderState): string {
   return (manifest.lightSource || "").toLowerCase();
 }
 
 export function drawLighting(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  manifest: SceneManifest,
+  manifest: FrameRenderState,
   songProgress: number,
   beatIntensity: number,
   activeWordPosition: WordPosition,
@@ -134,7 +134,7 @@ export function drawLighting(
 }
 
 export function getTextShadow(
-  manifest: SceneManifest,
+  manifest: FrameRenderState,
   beatIntensity: number,
 ): { offsetX: number; offsetY: number; blur: number; color: string } {
   const lightSource = getLightType(manifest);

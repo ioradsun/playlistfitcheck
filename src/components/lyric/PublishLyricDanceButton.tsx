@@ -2,7 +2,7 @@
  * PublishLyricDanceButton — Publishes a full-song lyric dance to a shareable page.
  * Route: /:artistSlug/:songSlug/lyric-dance
  *
- * Now also derives a SceneManifest from Song DNA + PhysicsSpec,
+ * Now also derives a FrameRenderState from Song DNA + PhysicsSpec,
  * calls lyric-video-bg to generate an AI cinematic background,
  * and persists both alongside the lyric dance record.
  */
@@ -13,13 +13,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
-// deriveSceneManifestFromSpec fallback removed — sceneManifest must come from props
+// deriveFrameRenderStateFromSpec fallback removed — frameState must come from props
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "./LyricDisplay";
 import type { ArtistDNA } from "./ArtistFingerprintTypes";
 
 interface Props {
-  physicsSpec: PhysicsSpec;
+  motionProfileSpec: PhysicsSpec;
   lines: LyricLine[];
   beatGrid: { bpm: number; beats: number[]; confidence: number };
   audioFile: File;
@@ -28,12 +28,12 @@ interface Props {
   palette: string[];
   fingerprint?: ArtistDNA | null;
   seed: string;
-  songDna?: Record<string, any> | null;
+  renderData?: Record<string, any> | null;
   words?: Array<{ word: string; start: number; end: number }> | null;
 }
 
 export function PublishLyricDanceButton({
-  physicsSpec,
+  motionProfileSpec,
   lines,
   beatGrid,
   audioFile,
@@ -42,7 +42,7 @@ export function PublishLyricDanceButton({
   palette,
   fingerprint,
   seed,
-  songDna,
+  renderData,
   words,
 }: Props) {
   const { user } = useAuth();
@@ -92,23 +92,23 @@ export function PublishLyricDanceButton({
 
       // ── Scene manifest from props (no fallback derivation) ────────
       setStatus("Building scene…");
-      const sceneManifest =
-        songDna?.scene_manifest ||
-        songDna?.sceneManifest ||
+      const frameState =
+        renderData?.frame_state ||
+        renderData?.frameState ||
         null;
 
       const backgroundUrl: string | null = null;
 
-      // ── Cinematic direction from songDna ──────────────────────────
+      // ── Cinematic direction from renderData ──────────────────────────
       const cinematicDirection =
-        songDna?.cinematicDirection ??
-        songDna?.cinematic_direction ??
+        renderData?.cinematicDirection ??
+        renderData?.cinematic_direction ??
         null;
 
-      // ── Scene context from songDna ────────────────────────────────
+      // ── Scene context from renderData ────────────────────────────────
       const sceneContext =
-        songDna?.scene_context ??
-        songDna?.sceneContext ??
+        renderData?.scene_context ??
+        renderData?.sceneContext ??
         null;
 
       // ── Filter to main lines ──────────────────────────────────────
@@ -126,13 +126,13 @@ export function PublishLyricDanceButton({
           song_name: songTitle,
           audio_url: audioUrl,
           lyrics: mainLines,
-          physics_spec: physicsSpec,
+          motion_profile_spec: motionProfileSpec,
           beat_grid: beatGrid,
           palette,
           system_type: system,
           artist_dna: fingerprint || null,
           seed,
-          scene_manifest: sceneManifest,
+          frame_state: frameState,
           background_url: backgroundUrl,
           words: words ?? null,
           cinematic_direction: cinematicDirection,
@@ -206,7 +206,7 @@ export function PublishLyricDanceButton({
 
       // Fire-and-forget: generate section background images
       // Need the actual shareable dance ID for the edge function
-      const cinematicDir = songDna?.cinematicDirection ?? songDna?.cinematic_direction;
+      const cinematicDir = renderData?.cinematicDirection ?? renderData?.cinematic_direction;
       const sections = cinematicDir?.sections;
       if (Array.isArray(sections) && sections.length > 0) {
         // Fetch the dance ID we just upserted
@@ -237,7 +237,7 @@ export function PublishLyricDanceButton({
       setPublishing(false);
       setStatus("");
     }
-  }, [user, physicsSpec, lines, beatGrid, audioFile, songTitle, system, palette, fingerprint, seed, publishing, songDna]);
+  }, [user, motionProfileSpec, lines, beatGrid, audioFile, songTitle, system, palette, fingerprint, seed, publishing, renderData]);
 
   if (!user) return null;
 

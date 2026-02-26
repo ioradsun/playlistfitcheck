@@ -16,7 +16,7 @@ import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
-import type { SceneManifest as FullSceneManifest } from "@/engine/SceneManifest";
+import type { FrameRenderState as FullFrameRenderState } from "@/engine/FrameRenderState";
 import type { AudioSection } from "@/engine/sectionDetector";
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus } from "./LyricFitTab";
@@ -45,14 +45,14 @@ interface Props {
   audioFile: File;
   hasRealAudio: boolean;
   savedId: string | null;
-  songDna: any | null;
-  setSongDna: (d: any) => void;
+  renderData: any | null;
+  setRenderData: (d: any) => void;
   beatGrid: BeatGridData | null;
   setBeatGrid: (g: BeatGridData | null) => void;
   songSignature: SongSignature | null;
   setSongSignature: (s: SongSignature | null) => void;
-  sceneManifest: FullSceneManifest | null;
-  setSceneManifest: (m: FullSceneManifest | null) => void;
+  frameState: FullFrameRenderState | null;
+  setFrameRenderState: (m: FullFrameRenderState | null) => void;
   cinematicDirection: any | null;
   setCinematicDirection: (d: any) => void;
   bgImageUrl: string | null;
@@ -70,14 +70,14 @@ export function FitTab({
   audioFile,
   hasRealAudio,
   savedId,
-  songDna,
-  setSongDna,
+  renderData,
+  setRenderData,
   beatGrid,
   setBeatGrid,
   songSignature,
   setSongSignature,
-  sceneManifest,
-  setSceneManifest,
+  frameState,
+  setFrameRenderState,
   cinematicDirection,
   setCinematicDirection,
   bgImageUrl,
@@ -430,9 +430,9 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
 
 
   const handleDance = useCallback(async () => {
-    console.log("[FitTab] handleDance called", { user: !!user, sceneManifest: !!sceneManifest, lyricData: !!lyricData, audioFile: !!audioFile, publishing });
+    console.log("[FitTab] handleDance called", { user: !!user, frameState: !!frameState, lyricData: !!lyricData, audioFile: !!audioFile, publishing });
     if (!user) { toast.error("Sign in to publish your Dance"); return; }
-    if (!sceneManifest || !lyricData || !audioFile || publishing) return;
+    if (!frameState || !lyricData || !audioFile || publishing) return;
     setPublishing(true);
     setPublishStatus("Preparing…");
 
@@ -457,7 +457,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       let backgroundUrl: string | null = null;
       try {
         const { data: bgResult } = await supabase.functions.invoke("lyric-video-bg", {
-          body: { manifest: sceneManifest, userDirection: `Song: ${lyricData.title}` },
+          body: { manifest: frameState, userDirection: `Song: ${lyricData.title}` },
         });
         backgroundUrl = bgResult?.imageUrl ?? null;
         setBgImageUrl(backgroundUrl);
@@ -476,7 +476,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
 
       setPublishStatus("Publishing…");
       const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
-      const physicsSpec = songDna?.physicsSpec || {};
+      const motionProfileSpec = renderData?.motionProfileSpec || {};
 
       const { error: insertError } = await supabase
         .from("shareable_lyric_dances" as any)
@@ -488,12 +488,12 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
           song_name: lyricData.title,
           audio_url: audioUrl,
           lyrics: mainLines,
-          physics_spec: physicsSpec,
+          motion_profile_spec: motionProfileSpec,
           beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
-          palette: physicsSpec.palette || ["#ffffff", "#a855f7", "#ec4899"],
-          system_type: physicsSpec.system || "fracture",
+          palette: motionProfileSpec.palette || ["#ffffff", "#a855f7", "#ec4899"],
+          system_type: motionProfileSpec.system || "fracture",
           seed: `${lyricData.title}-lyric-dance`,
-          scene_manifest: sceneManifest,
+          frame_state: frameState,
           background_url: backgroundUrl,
           cinematic_direction: cinematicDirection || null,
           words: words ?? null,
@@ -581,12 +581,12 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       setPublishing(false);
       setPublishStatus("");
     }
-  }, [user, sceneManifest, lyricData, audioFile, publishing, songDna, beatGrid, cinematicDirection, setBgImageUrl]);
+  }, [user, frameState, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection, setBgImageUrl]);
 
   // ── Battle publish handler ──────────────────────────────────────────
   const handleStartBattle = useCallback(async () => {
     if (!user || battlePublishing) return;
-    if (!songDna?.hook || !songDna?.secondHook || !audioFile || !lyricData) return;
+    if (!renderData?.hook || !renderData?.secondHook || !audioFile || !lyricData) return;
     setBattlePublishing(true);
 
     try {
@@ -607,7 +607,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
         return slugify(hookPhrase);
       };
 
-      const hookSlug = deriveHookSlug(songDna.hook);
+      const hookSlug = deriveHookSlug(renderData.hook);
 
       if (!artistSlug || !songSlug || !hookSlug) {
         toast.error("Couldn't generate a valid URL — check song/artist name");
@@ -627,7 +627,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       const audioUrl = urlData.publicUrl;
 
       const battleId = crypto.randomUUID();
-      const pSpec = songDna?.physicsSpec || {};
+      const pSpec = renderData?.motionProfileSpec || {};
       const bg = beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {};
       const palette = pSpec.palette || ["#ffffff", "#a855f7", "#ec4899"];
       const system = pSpec.system || "fracture";
@@ -646,7 +646,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
           song_name: lyricData.title,
           hook_phrase: hookPhrase,
           artist_dna: null,
-          physics_spec: pSpec,
+          motion_profile_spec: pSpec,
           beat_grid: bg,
           hook_start: h.start,
           hook_end: h.end,
@@ -664,14 +664,14 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       // Upsert hook 1
       const { error: e1 } = await supabase
         .from("shareable_hooks" as any)
-        .upsert(buildHookPayload(songDna.hook, hookSlug, 1, songDna.hookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
+        .upsert(buildHookPayload(renderData.hook, hookSlug, 1, renderData.hookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
       if (e1) throw e1;
 
       // Upsert hook 2
-      const secondHookSlug = deriveHookSlug(songDna.secondHook);
+      const secondHookSlug = deriveHookSlug(renderData.secondHook);
       const { error: e2 } = await supabase
         .from("shareable_hooks" as any)
-        .upsert(buildHookPayload(songDna.secondHook, secondHookSlug || `${hookSlug}-2`, 2, songDna.secondHookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
+        .upsert(buildHookPayload(renderData.secondHook, secondHookSlug || `${hookSlug}-2`, 2, renderData.secondHookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
       if (e2) throw e2;
 
       // Upsert hookfit_posts
@@ -742,24 +742,24 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
     } finally {
       setBattlePublishing(false);
     }
-  }, [user, battlePublishing, songDna, audioFile, lyricData, beatGrid]);
+  }, [user, battlePublishing, renderData, audioFile, lyricData, beatGrid]);
 
   const allReady =
     generationStatus.beatGrid === "done" &&
-    generationStatus.songDna === "done" &&
+    generationStatus.renderData === "done" &&
     generationStatus.cinematicDirection === "done";
   const hasErrors = Object.values(generationStatus).includes("error");
-  const danceDisabled = !sceneManifest || publishing || !allReady;
+  const danceDisabled = !frameState || publishing || !allReady;
   // Republish only needs auth + not currently publishing (data already exists on server)
   const republishDisabled = publishing;
-  const hasBattle = !!(songDna?.hook && songDna?.secondHook);
+  const hasBattle = !!(renderData?.hook && renderData?.secondHook);
   const battleDisabled = !allReady || battlePublishing || !hasBattle;
 
   
 
-  // ── Sections derived from songDna ─────────────────────────────────────
-  const physicsSpec = songDna?.physicsSpec;
-  const meaning = songDna?.meaning;
+  // ── Sections derived from renderData ─────────────────────────────────────
+  const motionProfileSpec = renderData?.motionProfileSpec;
+  const meaning = renderData?.meaning;
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -793,7 +793,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
               </p>
               <div className="space-y-1.5 text-xs text-muted-foreground">
                 <div>Rhythm: {generationStatus.beatGrid}</div>
-                <div>Song DNA: {generationStatus.songDna}</div>
+                <div>Song DNA: {generationStatus.renderData}</div>
                 <div>Cinematic direction: {generationStatus.cinematicDirection}</div>
               </div>
               {onRetry && (
@@ -808,18 +808,18 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
             </div>
           )}
 
-          {songDna?.description && (
+          {renderData?.description && (
             <div className="glass-card rounded-xl p-4 space-y-2">
-              <p className="text-sm text-muted-foreground italic leading-relaxed">{songDna.description}</p>
-              {songDna.mood && (
+              <p className="text-sm text-muted-foreground italic leading-relaxed">{renderData.description}</p>
+              {renderData.mood && (
                 <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                  {songDna.mood}
+                  {renderData.mood}
                 </span>
               )}
             </div>
           )}
 
-          {songDna && (
+          {renderData && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Song DNA</span>
@@ -852,29 +852,29 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
                 </div>
               )}
 
-              {(songDna.hook || songDna.secondHook) && (
+              {(renderData.hook || renderData.secondHook) && (
                 <div className="glass-card rounded-xl p-3 space-y-2">
                   <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
                     <Zap size={10} />
                     Hottest Hooks
                   </div>
-                  {songDna.hook && (
+                  {renderData.hook && (
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">{songDna.hookLabel || "Hook 1"}</span>
-                        <span className="text-[9px] text-muted-foreground">{songDna.hook.start?.toFixed(1)}s – {songDna.hook.end?.toFixed(1)}s</span>
-                        {songDna.hook.score && <span className="text-[9px] font-mono text-primary">{songDna.hook.score}%</span>}
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">{renderData.hookLabel || "Hook 1"}</span>
+                        <span className="text-[9px] text-muted-foreground">{renderData.hook.start?.toFixed(1)}s – {renderData.hook.end?.toFixed(1)}s</span>
+                        {renderData.hook.score && <span className="text-[9px] font-mono text-primary">{renderData.hook.score}%</span>}
                       </div>
-                      {songDna.hookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.hookJustification}</p>}
+                      {renderData.hookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{renderData.hookJustification}</p>}
                 </div>
               )}
-              {songDna.secondHook && (
+              {renderData.secondHook && (
                 <div className="space-y-1 pt-1 border-t border-border/20">
                   <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/50 text-accent-foreground">{songDna.secondHookLabel || "Hook 2"}</span>
-                    <span className="text-[9px] text-muted-foreground">{songDna.secondHook.start?.toFixed(1)}s – {songDna.secondHook.end?.toFixed(1)}s</span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/50 text-accent-foreground">{renderData.secondHookLabel || "Hook 2"}</span>
+                    <span className="text-[9px] text-muted-foreground">{renderData.secondHook.start?.toFixed(1)}s – {renderData.secondHook.end?.toFixed(1)}s</span>
                   </div>
-                  {songDna.secondHookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{songDna.secondHookJustification}</p>}
+                  {renderData.secondHookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{renderData.secondHookJustification}</p>}
                 </div>
               )}
 
@@ -913,27 +913,27 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
                 </div>
               )}
 
-              {physicsSpec && (
+              {motionProfileSpec && (
                 <div className="glass-card rounded-xl p-3 space-y-2">
                   <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
                     <Palette size={10} />
                     Visual System
                   </div>
-                  {physicsSpec.system && (
+                  {motionProfileSpec.system && (
                     <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
-                      {physicsSpec.system}
+                      {motionProfileSpec.system}
                     </span>
                   )}
-                  {physicsSpec.palette && Array.isArray(physicsSpec.palette) && (
+                  {motionProfileSpec.palette && Array.isArray(motionProfileSpec.palette) && (
                     <div className="flex items-center gap-1">
-                      {physicsSpec.palette.map((c: string, i: number) => (
+                      {motionProfileSpec.palette.map((c: string, i: number) => (
                         <div key={i} className="w-5 h-5 rounded-full border border-border/40" style={{ backgroundColor: c }} title={c} />
                       ))}
                     </div>
                   )}
-                  {physicsSpec.typography && (
+                  {motionProfileSpec.typography && (
                     <p className="text-[10px] text-muted-foreground">
-                      Font: <span className="text-foreground">{physicsSpec.typography.fontFamily || physicsSpec.typography}</span>
+                      Font: <span className="text-foreground">{motionProfileSpec.typography.fontFamily || motionProfileSpec.typography}</span>
                     </p>
                   )}
                 </div>

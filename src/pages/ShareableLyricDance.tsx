@@ -56,8 +56,8 @@ function extractAudioSectionsFromDirection(
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
 interface DanceComment { id: string; text: string; submitted_at: string; }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,physics_spec,beat_grid,palette,system_type,artist_dna,seed,scene_manifest,section_images,scene_context";
-const DIRECTION_COLUMNS = "cinematic_direction,scene_manifest";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,motion_profile_spec,beat_grid,palette,system_type,artist_dna,seed,frame_state,section_images,scene_context";
+const DIRECTION_COLUMNS = "cinematic_direction,frame_state";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
 
@@ -847,14 +847,14 @@ export default function ShareableLyricDance() {
           }
         }}
         data={{
-          songDna: {
-            mood: (data.physics_spec as any)?.mood, description: (data.physics_spec as any)?.description,
-            meaning: (data.physics_spec as any)?.meaning, hook: (data.physics_spec as any)?.hook,
-            secondHook: (data.physics_spec as any)?.secondHook, hookLabel: (data.physics_spec as any)?.hookLabel,
-            secondHookLabel: (data.physics_spec as any)?.secondHookLabel,
-            hookJustification: (data.physics_spec as any)?.hookJustification,
-            secondHookJustification: (data.physics_spec as any)?.secondHookJustification,
-            physicsSpec: data.physics_spec as any, scene_manifest: data.scene_manifest,
+          renderData: {
+            mood: (data.motion_profile_spec as any)?.mood, description: (data.motion_profile_spec as any)?.description,
+            meaning: (data.motion_profile_spec as any)?.meaning, hook: (data.motion_profile_spec as any)?.hook,
+            secondHook: (data.motion_profile_spec as any)?.secondHook, hookLabel: (data.motion_profile_spec as any)?.hookLabel,
+            secondHookLabel: (data.motion_profile_spec as any)?.secondHookLabel,
+            hookJustification: (data.motion_profile_spec as any)?.hookJustification,
+            secondHookJustification: (data.motion_profile_spec as any)?.secondHookJustification,
+            motionProfileSpec: data.motion_profile_spec as any, frame_state: data.frame_state,
             cinematic_direction: data.cinematic_direction as any,
           },
           beatGrid: data.beat_grid as any, lines: data.lyrics,
