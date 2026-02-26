@@ -364,12 +364,7 @@ function CinematicDirectionCard({
       setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
       onImageGenerationStatusChange?.("done");
 
-      if (projectId && urls.length > 0) {
-        void supabase
-          .from("saved_lyrics")
-          .update({ section_images: urls as any })
-          .eq("id", projectId);
-      }
+      // section_images are stored on shareable_lyric_dances, not saved_lyrics
 
       toast.success(`Generated ${urls.filter(Boolean).length}/${sections.length} section images`);
     } catch (e: any) {
