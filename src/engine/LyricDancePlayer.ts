@@ -106,7 +106,7 @@ export interface LiveDebugState {
   tensionStage: string;
   tensionMotion: number;
   tensionParticles: number;
-  tensionTypo: number;
+  tensionTypo: string;
 
   wordDirectiveWord: string;
   wordDirectiveBehavior: string;
