@@ -268,7 +268,7 @@ export function LyricFitTab({
         setFitUnlocked(true);
 
         // Derive frameState from loaded cinematic direction presets
-        import("@/engine/deriveFrameState").then(({ deriveFrameState }) => {
+        import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
           import("@/engine/presetDerivation").then(({ getTypography }) => {
             const typoPreset = loadedCinematicDirection.typography || "clean-modern";
             const typo = getTypography(typoPreset);
@@ -277,25 +277,7 @@ export function LyricFitTab({
               grain: "static", wash: "breath", glass: "pressure", clean: "void",
             };
             const atm = loadedCinematicDirection.atmosphere || "cinematic";
-            const derivedSpec = {
-              ...(loadedRenderData?.motionProfileSpec || {}),
-              system: bgSystemMap[atm] || "fracture",
-              palette: loadedRenderData?.motionProfileSpec?.palette || ["#0a0a0a", "#a855f7", "#ec4899"],
-              typographyProfile: {
-                fontFamily: typo.fontFamily,
-                fontWeight: typo.fontWeight,
-                letterSpacing: typo.letterSpacing,
-                textTransform: typo.textTransform,
-                lineHeightMultiplier: typo.lineHeight,
-                hasSerif: ["Playfair Display", "Cormorant Garamond"].includes(typo.fontFamily),
-                personality: "RAW TRANSCRIPT" as const,
-              },
-            };
-            const { manifest } = deriveFrameState({
-              motionProfileSpec: derivedSpec,
-              fallbackPalette: derivedSpec.palette,
-              systemType: derivedSpec.system,
-            });
+            const manifest = deriveFrameState(loadedCinematicDirection, 0, 0.5);
             setFrameRenderState(manifest);
           });
         });
@@ -481,7 +463,7 @@ export function LyricFitTab({
         setCinematicDirection(enrichedDirection);
 
         // Derive FrameRenderState from cinematic direction presets
-        const { deriveFrameState } = await import("@/engine/deriveFrameState");
+        const { deriveFrameState } = await import("@/engine/presetDerivation");
         const { getTypography } = await import("@/engine/presetDerivation");
 
         const typoPreset = enrichedDirection.typography || "clean-modern";
@@ -493,27 +475,7 @@ export function LyricFitTab({
         };
         const atmospherePreset = enrichedDirection.atmosphere || "cinematic";
 
-        const derivedSpec = {
-          ...(renderData?.motionProfileSpec || {}),
-          system: bgSystemMap[atmospherePreset] || "fracture",
-          palette: renderData?.motionProfileSpec?.palette || ["#0a0a0a", "#a855f7", "#ec4899"],
-          typographyProfile: {
-            fontFamily: typo.fontFamily,
-            fontWeight: typo.fontWeight,
-            letterSpacing: typo.letterSpacing,
-            textTransform: typo.textTransform,
-            lineHeightMultiplier: typo.lineHeight,
-            hasSerif: ["Playfair Display", "Cormorant Garamond"].includes(typo.fontFamily),
-            personality: "RAW TRANSCRIPT" as const,
-          },
-        };
-
-        const { manifest } = deriveFrameState({
-          motionProfileSpec: derivedSpec,
-          fallbackPalette: derivedSpec.palette,
-          systemType: derivedSpec.system,
-        });
-
+        const manifest = deriveFrameState(enrichedDirection, 0, 0.5);
         setFrameRenderState(manifest);
 
         // Persist cinematic direction back to render_data in DB

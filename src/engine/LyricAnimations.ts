@@ -3,7 +3,7 @@
  */
 
 import type { WordAnimation } from "./AnimationResolver";
-import type { FrameRenderState } from "./FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 import { getSafeTextColor } from "./SystemStyles";
 
 function easeOutCubic(t: number): number {

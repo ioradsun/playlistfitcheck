@@ -9,10 +9,10 @@ import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSystemStyle } from "@/engine/SystemStyles";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
-import type { FrameRenderState } from "@/engine/FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 import { animationResolver, type WordAnimation } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect, applyWordMark, getWordMarkColor } from "@/engine/LyricAnimations";
-import { deriveFrameState, logManifestDiagnostics } from "@/engine/deriveFrameState";
+import { deriveFrameState } from "@/engine/presetDerivation";
 import { resolveEffectKey } from "@/engine/EffectRegistry";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -192,11 +192,17 @@ export function useHookCanvas(
     const safeW = Math.max(1, w - safePad * 2);
     const safeH = Math.max(1, h - safePad * 2);
     const palette = hd.palette || ["#ffffff", "#a855f7", "#ec4899"];
-    const { manifest, textColor, contrastRatio, textPalette } = deriveFrameState({
-      motionProfileSpec: hd.motion_profile_spec as PhysicsSpec,
-      fallbackPalette: palette,
-      systemType: hd.system_type,
-    });
+    const frame = deriveFrameState({}, 0, Math.max(0, Math.min(1, ct / Math.max(1, hd.hook_end - hd.hook_start))));
+    const manifest: any = {
+      palette,
+      typographyProfile: { fontFamily: frame.fontFamily, personality: "RAW TRANSCRIPT" },
+      particleConfig: { system: frame.particleSystem },
+      lyricEntrance: "fades",
+      lyricExit: "fades",
+    };
+    const textColor = "#ffffff";
+    const contrastRatio = 4.5;
+    const textPalette = palette;
 
     // Keep physics motion budgets tied to real lyric container dimensions.
     engineRef.current?.setViewportBounds(w, h);
@@ -357,18 +363,7 @@ export function useHookCanvas(
         manifest.palette,
       );
       // 1Hz diagnostic log
-      logManifestDiagnostics("HookDance", {
-        palette: manifest.palette as string[],
-        fontFamily: manifest.typographyProfile?.fontFamily ?? "—",
-        particleSystem: manifest.particleConfig?.system ?? "none",
-        beatIntensity: beatIntensityRef.current,
-        activeMod: anim.activeMod,
-        entryProgress: anim.entryProgress,
-        exitProgress: anim.exitProgress,
-        textColor,
-        contrastRatio,
-        effectKey: currentEffectKey,
-      });
+
 
       ctx.save();
       const lineX = w / 2;

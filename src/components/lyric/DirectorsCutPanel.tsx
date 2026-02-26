@@ -3,7 +3,7 @@ import { Loader2, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
-import type { FrameRenderState } from "@/engine/FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 import { PaletteEditor } from "./PaletteEditor";
 
 const PARTICLE_SYSTEMS = [

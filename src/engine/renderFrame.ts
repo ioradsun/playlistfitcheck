@@ -1,98 +1,40 @@
-// ============= Full file contents =============
-
-import type { Chapter, CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
-import type { ParticleConfig, FrameRenderState } from "@/engine/FrameRenderState";
-import type { ParticleEngine } from "@/engine/ParticleEngine";
-import type { DirectionInterpreter, WordHistory } from "@/engine/DirectionInterpreter";
-import type { HookDanceEngine } from "@/engine/HookDanceEngine";
+import type { FrameRenderState } from "@/engine/presetDerivation";
+import type { ParticleEngine, ParticleRuntimeConfig } from "@/engine/ParticleEngine";
+import type { DirectionInterpreter } from "@/engine/DirectionInterpreter";
 import { renderSectionBackground } from "@/engine/BackgroundDirector";
 import { renderSectionLighting } from "@/engine/LightingDirector";
-import { renderText, type TextState, type TextInput } from "@/engine/renderText";
-import type { RenderSection } from "@/engine/directionResolvers";
 
-// ─── Types ──────────────────────────────────────────────────────────
-
-export interface LyricLine {
-  start: number;
-  end: number;
-  text: string;
-  tag?: "main" | "adlib";
-}
-
-export interface LineBeatMap {
-  lineIndex: number;
-  beats: number[];
-  strongBeats: number[];
-  beatCount: number;
-  beatsPerSecond: number;
-  firstBeat: number;
-  lastBeat: number;
-}
-
-export interface ConstellationNode {
-  id: string;
-  text: string;
-  submittedAt: number;
-  seedX: number;
-  seedY: number;
-  x: number;
-  y: number;
-  driftSpeed: number;
-  driftAngle: number;
-  phase: "constellation" | "river" | "center" | "transitioning";
-  phaseStartTime: number;
-  riverRowIndex: number;
-  currentSize: number;
-  baseOpacity: number;
-}
-
-/** Mutable background-layer state — persisted across frames by the caller. */
 export interface BackgroundState {
-  lastChapterTitle: string;
+  lastSectionKey: string;
   lastBeatIntensity: number;
   lastProgress: number;
   lastDrawTime: number;
 }
 
-/** Mutable state for particle + text layers. */
 export interface ParticleState {
-  configCache: { bucket: number; config: ParticleConfig | null };
+  configCache: { bucket: number; config: ParticleRuntimeConfig | null };
   slowFrameCount: number;
   adaptiveMaxParticles: number;
   frameCount: number;
 }
 
-export interface RendererState {
-  background: BackgroundState;
-  particle: ParticleState;
-  text: TextState;
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────
-
 export function getParticleConfigForTime(
-  baseConfig: ParticleConfig,
-  _manifest: FrameRenderState,
+  baseConfig: ParticleRuntimeConfig,
+  _frame: FrameRenderState,
   songProgress: number,
-  cache: { bucket: number; config: ParticleConfig | null },
-): ParticleConfig {
-  const bucket = Math.floor(songProgress * 20); // 5% buckets
-  if (cache.bucket === bucket && cache.config) {
-    return cache.config;
-  }
-
-  // Clone base config — section overrides are now handled by the interpreter
+  cache: { bucket: number; config: ParticleRuntimeConfig | null },
+): ParticleRuntimeConfig {
+  const bucket = Math.floor(songProgress * 20);
+  if (cache.bucket === bucket && cache.config) return cache.config;
   const config = { ...baseConfig };
-
   cache.bucket = bucket;
   cache.config = config;
   return config;
 }
 
-// ─── Section 1: Background layer ────────────────────────────────────
-
 export interface BackgroundRenderInput {
-  chapter: RenderSection;
+  background: { dominantColor: string; intensity: number; backgroundDirective: string };
+  lighting: { lightBehavior: string; intensity: number };
   songProgress: number;
   beatIntensity: number;
   now: number;
@@ -108,80 +50,39 @@ export function renderBackground(
   bgState: BackgroundState,
   input: BackgroundRenderInput,
 ): number {
-  const {
-    chapter, songProgress, beatIntensity,
-    now, lightIntensity, activeWordPosition,
-  } = input;
-
-  // Dirty check — same logic as the original rAF loop
+  const { background, lighting, songProgress, beatIntensity, now, lightIntensity, activeWordPosition } = input;
+  const sectionKey = `${background.backgroundDirective}:${background.dominantColor}`;
   const timeSinceLastDraw = now - bgState.lastDrawTime;
   const needsUpdate =
-    chapter.title !== bgState.lastChapterTitle ||
-    (timeSinceLastDraw > 100 && (
-      Math.abs(beatIntensity - bgState.lastBeatIntensity) > 0.2 ||
-      Math.abs(songProgress - bgState.lastProgress) > 0.05
-    )) ||
+    sectionKey !== bgState.lastSectionKey ||
+    (timeSinceLastDraw > 100 &&
+      (Math.abs(beatIntensity - bgState.lastBeatIntensity) > 0.2 || Math.abs(songProgress - bgState.lastProgress) > 0.05)) ||
     (bgState.lastBeatIntensity <= 0.2 && beatIntensity > 0.2) ||
     (bgState.lastBeatIntensity > 0.2 && beatIntensity <= 0.2);
 
   if (needsUpdate) {
-    const cw = bgCanvas.width;
-    const ch = bgCanvas.height;
     bgCtx.fillStyle = "#0a0a0a";
-    bgCtx.fillRect(0, 0, cw, ch);
-
-    renderSectionBackground(
-      bgCtx,
-      bgCanvas,
-      chapter,
-      songProgress,
-      beatIntensity,
-      now, // currentTime
-    );
-
-    renderSectionLighting(
-      bgCtx,
-      bgCanvas,
-      chapter,
-      activeWordPosition,
-      songProgress,
-      beatIntensity * lightIntensity,
-      now,
-    );
-
-    bgState.lastChapterTitle = chapter.title;
+    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+    renderSectionBackground(bgCtx, bgCanvas, background, songProgress, beatIntensity, now);
+    renderSectionLighting(bgCtx, bgCanvas, lighting, activeWordPosition, songProgress, beatIntensity * lightIntensity, now);
+    bgState.lastSectionKey = sectionKey;
     bgState.lastBeatIntensity = beatIntensity;
     bgState.lastProgress = songProgress;
     bgState.lastDrawTime = now;
   }
 
-  // Always render lighting on the text canvas (cheap — no budget gate)
-  renderSectionLighting(
-    textCtx,
-    textCanvas,
-    chapter,
-    activeWordPosition,
-    songProgress,
-    beatIntensity * lightIntensity,
-    now,
-  );
-
-  return 2; // draw-call accounting (bg + text lighting)
+  renderSectionLighting(textCtx, textCanvas, lighting, activeWordPosition, songProgress, beatIntensity * lightIntensity, now);
+  return 2;
 }
-
-// ─── Section 2: Particle layer ──────────────────────────────────────
 
 export interface ParticleRenderInput {
   particleEngine: ParticleEngine;
-  baseParticleConfig: ParticleConfig;
-  timelineManifest: FrameRenderState;
+  baseParticleConfig: ParticleRuntimeConfig;
+  frameState: FrameRenderState;
   motionProfileSpec: any;
   songProgress: number;
   beatIntensity: number;
   deltaMs: number;
-  cw: number;
-  ch: number;
-  chapterDirective: RenderSection | null;
   isClimax: boolean;
   climaxMaxParticleDensity: number | null;
   tensionParticleDensity: number | null;
@@ -189,44 +90,38 @@ export interface ParticleRenderInput {
   hasLineAnim: boolean;
   particleBehavior: string | null;
   interpreter: DirectionInterpreter | null;
-  activeLineIndex: number;
 }
 
 export function renderParticles(
-  particleCtx: CanvasRenderingContext2D, // Unused but kept for signature
-  textCtx: CanvasRenderingContext2D, // Particles draw to text canvas now
+  _particleCtx: CanvasRenderingContext2D,
+  textCtx: CanvasRenderingContext2D,
   input: ParticleRenderInput,
   state: ParticleState,
 ): { lightIntensity: number; drawCalls: number } {
   const {
-    particleEngine, baseParticleConfig, timelineManifest, motionProfileSpec,
-    songProgress, beatIntensity, deltaMs, cw, ch,
-    chapterDirective, isClimax, climaxMaxParticleDensity,
-    tensionParticleDensity, tensionLightBrightness, hasLineAnim,
-    particleBehavior, interpreter, activeLineIndex,
+    particleEngine,
+    baseParticleConfig,
+    frameState,
+    motionProfileSpec,
+    songProgress,
+    beatIntensity,
+    deltaMs,
+    isClimax,
+    climaxMaxParticleDensity,
+    tensionParticleDensity,
+    tensionLightBrightness,
+    hasLineAnim,
   } = input;
 
-  let lightIntensity = 0.5;
-  let drawCalls = 0;
-
-  // Particle config
-  const pConfig = getParticleConfigForTime(baseParticleConfig, timelineManifest, songProgress, state.configCache);
-  const directiveSystem = interpreter?.getParticleDirective(songProgress) ?? null;
-  if (directiveSystem && directiveSystem !== "ambient") {
-    // Override system if directive is explicit
-    // (In a real implementation, we'd map this string to a system ID)
-  }
-
+  const pConfig = getParticleConfigForTime(baseParticleConfig, frameState, songProgress, state.configCache);
   particleEngine.setConfig(pConfig);
 
-  // Density control
   let densityMult = 1.0;
   if (motionProfileSpec?.density) densityMult *= motionProfileSpec.density;
   if (isClimax && climaxMaxParticleDensity) densityMult *= climaxMaxParticleDensity;
   if (tensionParticleDensity) densityMult *= tensionParticleDensity;
-  if (!hasLineAnim) densityMult *= 0.2; // Idle state
+  if (!hasLineAnim) densityMult *= 0.2;
 
-  // Perf throttling
   if (deltaMs > 22) state.slowFrameCount++;
   else state.slowFrameCount = Math.max(0, state.slowFrameCount - 1);
 
@@ -234,17 +129,9 @@ export function renderParticles(
   else if (state.slowFrameCount === 0 && state.adaptiveMaxParticles < 200) state.adaptiveMaxParticles = 200;
 
   particleEngine.setDensityMultiplier(densityMult);
-  // Max particles controlled internally by ParticleEngine based on hardware
+  particleEngine.update(deltaMs, beatIntensity);
+  particleEngine.draw(textCtx);
 
-  // Update & Draw
-  particleEngine.update(deltaMs / 1000, beatIntensity);
-  particleEngine.draw(textCtx); // Draw to text context (mid-layer)
-  drawCalls += 1;
-
-  // Light intensity calculation
   const baseBright = tensionLightBrightness ?? 0.5;
-  const beatBright = beatIntensity * 0.3;
-  lightIntensity = Math.min(1, baseBright + beatBright);
-
-  return { lightIntensity, drawCalls };
+  return { lightIntensity: Math.min(1, baseBright + beatIntensity * 0.3), drawCalls: 1 };
 }

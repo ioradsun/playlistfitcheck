@@ -1,14 +1,12 @@
-import type { RenderSection } from "@/engine/directionResolvers";
-
 export function renderSectionBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  section: RenderSection,
+  section: { dominantColor: string; intensity: number; backgroundDirective: string },
   songProgress: number,
   beatIntensity: number,
   currentTime: number,
 ): void {
-  const intensity = section.emotionalIntensity;
+  const intensity = section.intensity;
   const color = section.dominantColor;
 
   ctx.fillStyle = color;
@@ -36,7 +34,7 @@ export function renderSectionBackground(
 export function renderChapterBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  chapter: RenderSection,
+  chapter: { dominantColor: string; intensity: number; backgroundDirective: string },
   songProgress: number,
   beatIntensity: number,
   currentTime: number,
@@ -55,12 +53,12 @@ export function getSymbolStateForProgress(
 function renderOceanBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  section: RenderSection,
+  section: { dominantColor: string; intensity: number; backgroundDirective: string },
   _songProgress: number,
   _beatIntensity: number,
   currentTime: number,
 ): void {
-  const intensity = section.emotionalIntensity;
+  const intensity = section.intensity;
   for (let w = 0; w < 3; w++) {
     ctx.beginPath();
     const waveY = canvas.height * (0.3 + w * 0.2);
@@ -106,12 +104,12 @@ function renderOceanBackground(
 function renderFireBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  section: RenderSection,
+  section: { dominantColor: string; intensity: number; backgroundDirective: string },
   _songProgress: number,
   beatIntensity: number,
   currentTime: number,
 ): void {
-  const intensity = section.emotionalIntensity;
+  const intensity = section.intensity;
   for (let i = 0; i < 4; i++) {
     const y = canvas.height * (0.75 + i * 0.05);
     ctx.beginPath();
@@ -141,12 +139,12 @@ function renderFireBackground(
 function renderNeonBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  section: RenderSection,
+  section: { dominantColor: string; intensity: number; backgroundDirective: string },
   _songProgress: number,
   beatIntensity: number,
   _currentTime: number,
 ): void {
-  const intensity = section.emotionalIntensity;
+  const intensity = section.intensity;
   ctx.strokeStyle = `rgba(138,74,240,${0.06 + intensity * 0.06})`;
   ctx.lineWidth = 1;
 
@@ -173,7 +171,7 @@ function renderNeonBackground(
 function renderAmbientBackground(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  _section: RenderSection,
+  _section: { dominantColor: string; intensity: number; backgroundDirective: string },
   _songProgress: number,
   _beatIntensity: number,
   currentTime: number,

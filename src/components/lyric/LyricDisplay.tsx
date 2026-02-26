@@ -51,7 +51,7 @@ import type { CinematicDirection, WordDirective } from "@/types/CinematicDirecti
 import { LyricStage } from "./LyricStage";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { DirectorsCutPanel } from "./DirectorsCutPanel";
-import type { FrameRenderState as FullFrameRenderState } from "@/engine/FrameRenderState";
+import type { FrameRenderState as FullFrameRenderState } from "@/engine/presetDerivation";
 import { HookDanceExporter } from "./HookDanceExporter";
 import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";

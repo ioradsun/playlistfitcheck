@@ -7,7 +7,7 @@
  */
 
 import type { Chapter, CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
-import type { FrameRenderState } from "@/engine/FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 import type { DirectionInterpreter, WordHistory } from "@/engine/DirectionInterpreter";
 import type { LineAnimation } from "@/engine/AnimationResolver";
 import { animationResolver } from "@/engine/AnimationResolver";

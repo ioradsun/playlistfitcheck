@@ -13,10 +13,11 @@ import { renderText, type TextState, type TextInput } from "@/engine/renderText"
 import { getParticleConfigForTime, renderParticles, type ParticleState } from "@/engine/renderFrame";
 import { animationResolver } from "@/engine/AnimationResolver";
 import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
-import type { FrameRenderState } from "@/engine/FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 import type { LyricLine } from "./LyricDisplay";
 import { getTypography, getParticles } from "@/engine/presetDerivation";
-import { enrichSections, resolveTypography } from "@/engine/directionResolvers";
+import type { ParticleRuntimeConfig } from "@/engine/ParticleEngine";
+import { enrichSections } from "@/engine/directionResolvers";
 
 // ── Aspect ratio → canvas dimensions ────────────────────────────────────────
 
@@ -97,33 +98,30 @@ export function LyricDanceExporter({
 
   // Use base manifest with fallbacks
   const baseManifest: FrameRenderState = frameState ?? {
-    world: "void",
-    coreEmotion: "neutral",
+    fontFamily: "Montserrat",
+    fontWeight: 500,
+    letterSpacing: "0.02em",
+    textTransform: "none",
+    lineHeight: 1.4,
     gravity: "normal",
     tension: 0.5,
-    decay: "linger",
-    lightSource: "ambient",
-    palette: ["#000", "#fff", "#888"],
-    contrastMode: "soft",
-    letterPersonality: "static",
-    stackBehavior: "centered",
+    damping: 0.5,
     beatResponse: "pulse",
-    lyricEntrance: "fades",
-    lyricExit: "fades",
-    backgroundSystem: "void",
-    backgroundIntensity: 0.3,
-    typographyProfile: {
-      fontFamily: "Montserrat",
-      fontWeight: 500,
-      letterSpacing: "0.02em",
-      textTransform: "none",
-      lineHeightMultiplier: 1.4,
-      hasSerif: false,
-      personality: "RAW TRANSCRIPT",
-    },
-    particleConfig: { system: "dust", density: 0.3, speed: 0.15, opacity: 0.2, color: "#fff", beatReactive: false, foreground: false },
-    songTitle: "",
-    generatedAt: Date.now(),
+    beatResponseScale: 0.5,
+    particleSystem: "dust",
+    particleDensity: 0.3,
+    particleSpeed: 0.15,
+    particleOpacity: 0.2,
+    particleBeatReactive: false,
+    particleDirection: "drift",
+    imageOpacity: 0.2,
+    vignetteStrength: 0.2,
+    blurRadius: 0,
+    grainOpacity: 0,
+    tintStrength: 0,
+    tone: "dark",
+    intensity: 0.5,
+    transitionType: "cross-dissolve",
   };
 
   const startExport = async () => {
@@ -194,7 +192,7 @@ export function LyricDanceExporter({
 
     // Particle engine
     let particleEngine: ParticleEngine | null = null;
-    if (baseManifest.particleConfig?.system !== "none") {
+    if (baseManifest.particleSystem !== "none") {
       particleEngine = new ParticleEngine(baseManifest);
       particleEngine.setBounds({ x: 0, y: 0, w: cw, h: ch });
       // Apply texture preset from cinematic direction
@@ -202,7 +200,7 @@ export function LyricDanceExporter({
         const pConfig = getParticles(cinematicDirection.texture);
         particleEngine.setSystem(pConfig.system);
       }
-      particleEngine.init(baseManifest.particleConfig, baseManifest);
+      particleEngine.init(ParticleEngine.fromFrameState(baseManifest), baseManifest);
     }
 
     let interpreter: DirectionInterpreter | null = null;
@@ -274,14 +272,12 @@ export function LyricDanceExporter({
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
       const currentBeatIntensity = Math.max(state.glow, state.shake * 2, 0);
 
-      const renderSection = interpreter?.getRenderSection(songProgress, effectivePalette) ?? {
-        title: "default",
-        emotionalIntensity: 0.5,
+      const renderSection = interpreter?.getSectionRenderInput(songProgress, effectivePalette) ?? {
         dominantColor: effectivePalette[0],
-        lightBehavior: "steady",
+        intensity: baseManifest.intensity,
+        lightBehavior: "cinematic",
         particleDirective: "ambient",
         backgroundDirective: "default",
-        typographyShift: null,
       };
 
       const isClimax = interpreter?.isClimaxMoment(songProgress) ?? false;
@@ -303,14 +299,12 @@ export function LyricDanceExporter({
           particleCtx, ctx,
           {
             particleEngine,
-            baseParticleConfig: baseManifest.particleConfig,
-            timelineManifest: baseManifest,
+            baseParticleConfig: ParticleEngine.fromFrameState(baseManifest) as ParticleRuntimeConfig,
+            frameState: baseManifest,
             motionProfileSpec: spec,
             songProgress,
             beatIntensity: currentBeatIntensity,
             deltaMs,
-            cw, ch,
-            chapterDirective: renderSection,
             isClimax,
             climaxMaxParticleDensity: null,
             tensionParticleDensity: null,
@@ -318,7 +312,6 @@ export function LyricDanceExporter({
             hasLineAnim: !!activeLine,
             particleBehavior: lineDir?.particleBehavior ?? null,
             interpreter,
-            activeLineIndex,
           },
           particleState,
         );

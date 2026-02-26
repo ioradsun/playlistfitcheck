@@ -1,4 +1,4 @@
-import type { FrameRenderState } from "@/engine/FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 
 export function getBackgroundSystemForTime(
   manifest: FrameRenderState,

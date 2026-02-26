@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Bug, ChevronDown, ChevronRight, Copy, X, RefreshCw, Sparkles, Clapperboard, Play, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
-import type { FrameRenderState } from "@/engine/FrameRenderState";
+import type { FrameRenderState } from "@/engine/presetDerivation";
 import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "./LyricDisplay";
 import type { LyricDancePlayer, LiveDebugState } from "@/engine/LyricDancePlayer";

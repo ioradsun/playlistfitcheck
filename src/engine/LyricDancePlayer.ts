@@ -11,7 +11,7 @@ import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
-import { resolveTypography, resolveTypographyFont } from "@/engine/directionResolvers";
+import { getTypography } from "@/engine/presetDerivation";
 import { drawIcon, type IconGlyph, type IconStyle } from "@/lib/lyricIcons";
 import {
   bakeSceneChunked,
@@ -1968,7 +1968,7 @@ export class LyricDancePlayer {
     const measureCtx = measureCanvas.getContext('2d')!;
 
     const cd = payload.cinematic_direction;
-    const typoResolved = resolveTypography(cd?.typography);
+    const typoResolved = getTypography(cd?.typography ?? "clean-modern");
     const fontFamily = typoResolved.fontFamily?.trim() || 'Montserrat';
     const fontWeight = typoResolved.fontWeight || 800;
     const textTransform = typoResolved.textTransform || 'uppercase';

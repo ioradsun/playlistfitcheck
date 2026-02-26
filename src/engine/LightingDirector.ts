@@ -1,16 +1,14 @@
-import type { RenderSection } from "@/engine/directionResolvers";
-
 export function renderSectionLighting(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  section: RenderSection,
+  section: { lightBehavior: string; intensity: number },
   activeWordPosition: { x: number; y: number },
   songProgress: number,
   beatIntensity: number,
   _currentTime: number,
 ): void {
   const lightBehavior = section.lightBehavior.toLowerCase();
-  const intensity = section.emotionalIntensity;
+  const intensity = section.intensity;
 
   if (
     lightBehavior.includes("bioluminescent") ||
@@ -81,7 +79,7 @@ export function renderSectionLighting(
 export function renderChapterLighting(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  chapter: RenderSection,
+  chapter: { lightBehavior: string; intensity: number },
   activeWordPosition: { x: number; y: number },
   songProgress: number,
   beatIntensity: number,
