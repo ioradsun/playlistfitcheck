@@ -7,7 +7,7 @@
  *
  * Protocol:
  *   Main → Worker:
- *     INIT   { canvas, width, height, cinematicDirection, lines, beatGrid, songDna, totalDuration }
+ *     INIT   { canvas, width, height, cinematicDirection, lines, beatGrid, renderData, totalDuration }
  *     FRAME  { currentTime, beatIntensity }
  *     RESIZE { width, height }
  *
@@ -35,7 +35,7 @@ type InitMessage = {
   cinematicDirection: CinematicDirection | null;
   lines: LyricLine[];
   beatGrid: any;
-  songDna: any;
+  renderData: any;
   totalDuration: number;
 };
 
@@ -63,7 +63,7 @@ let state: {
   cinematicDirection: CinematicDirection | null;
   lines: LyricLine[];
   beatGrid: any;
-  songDna: any;
+  renderData: any;
   totalDuration: number;
   precomputed: ReturnType<typeof precomputeAll>;
 } | null = null;
@@ -114,7 +114,7 @@ self.onmessage = (e: MessageEvent<Incoming>) => {
       cinematicDirection: msg.cinematicDirection,
       lines: msg.lines,
       beatGrid: msg.beatGrid,
-      songDna: msg.songDna,
+      renderData: msg.renderData,
       totalDuration: msg.totalDuration,
       precomputed: precomputeAll({
         cinematicDirection: msg.cinematicDirection,

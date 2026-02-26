@@ -9,7 +9,7 @@ CREATE TABLE public.shareable_lyric_dances (
   song_name TEXT NOT NULL,
   audio_url TEXT NOT NULL,
   lyrics JSONB NOT NULL,
-  physics_spec JSONB NOT NULL,
+  motion_profile_spec JSONB NOT NULL,
   beat_grid JSONB NOT NULL,
   palette JSONB NOT NULL DEFAULT '["#ffffff", "#a855f7", "#ec4899"]'::jsonb,
   system_type TEXT NOT NULL DEFAULT 'fracture',

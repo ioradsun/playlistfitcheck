@@ -35,13 +35,13 @@ export interface LyricDanceData {
   audio_url: string;
   lyrics: LyricLine[];
   words?: Array<{ word: string; start: number; end: number }>;
-  physics_spec: PhysicsSpec;
+  motion_profile_spec: PhysicsSpec;
   beat_grid: { bpm: number; beats: number[]; confidence: number };
   palette: string[];
   system_type: string;
   artist_dna: any;
   seed: string;
-  scene_manifest: any;
+  frame_state: any;
   cinematic_direction: CinematicDirection | null;
   section_images?: string[];
   auto_palettes?: string[][];
@@ -1405,7 +1405,7 @@ export class LyricDancePlayer {
       physGlow: simulatedBeat * 0.6,
       lastBeatForce: simulatedBeat * 0.8,
       physicsActive: this.playing,
-      heat: (this.payload as any)?.physicsSpec?.params?.heat ?? 0,
+      heat: (this.payload as any)?.motionProfileSpec?.params?.heat ?? 0,
       velocity: simulatedBeat * 0.5,
       wordCount: lines.length,
       effectKey: visibleChunks.length > 0 ? "baked" : "—",
@@ -1944,8 +1944,8 @@ export class LyricDancePlayer {
       words: this.data.words ?? [],
       bpm: this.data.beat_grid?.bpm ?? null,
       beat_grid: this.data.beat_grid,
-      physics_spec: this.data.physics_spec,
-      scene_manifest: this.data.scene_manifest ?? null,
+      motion_profile_spec: this.data.motion_profile_spec,
+      frame_state: this.data.frame_state ?? null,
       cinematic_direction: this.data.cinematic_direction ?? null,
       auto_palettes: this.data.auto_palettes,
       palette: this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"],

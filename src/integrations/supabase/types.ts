@@ -988,7 +988,7 @@ export type Database = {
           fmly_lines: Json | null
           id: string
           lines: Json
-          song_dna: Json | null
+          render_data: Json | null
           song_signature: Json | null
           title: string
           updated_at: string
@@ -1006,7 +1006,7 @@ export type Database = {
           fmly_lines?: Json | null
           id?: string
           lines?: Json
-          song_dna?: Json | null
+          render_data?: Json | null
           song_signature?: Json | null
           title?: string
           updated_at?: string
@@ -1024,7 +1024,7 @@ export type Database = {
           fmly_lines?: Json | null
           id?: string
           lines?: Json
-          song_dna?: Json | null
+          render_data?: Json | null
           song_signature?: Json | null
           title?: string
           updated_at?: string
@@ -1175,7 +1175,7 @@ export type Database = {
           id: string
           lyrics: Json
           palette: Json
-          physics_spec: Json
+          motion_profile_spec: Json
           signature_line: string | null
           song_name: string
           song_slug: string
@@ -1202,7 +1202,7 @@ export type Database = {
           id?: string
           lyrics: Json
           palette?: Json
-          physics_spec: Json
+          motion_profile_spec: Json
           signature_line?: string | null
           song_name: string
           song_slug: string
@@ -1229,7 +1229,7 @@ export type Database = {
           id?: string
           lyrics?: Json
           palette?: Json
-          physics_spec?: Json
+          motion_profile_spec?: Json
           signature_line?: string | null
           song_name?: string
           song_slug?: string
@@ -1262,9 +1262,9 @@ export type Database = {
           id: string
           lyrics: Json
           palette: Json
-          physics_spec: Json
+          motion_profile_spec: Json
           scene_context: Json | null
-          scene_manifest: Json | null
+          frame_state: Json | null
           section_images: Json | null
           seed: string
           song_name: string
@@ -1287,9 +1287,9 @@ export type Database = {
           id?: string
           lyrics: Json
           palette?: Json
-          physics_spec: Json
+          motion_profile_spec: Json
           scene_context?: Json | null
-          scene_manifest?: Json | null
+          frame_state?: Json | null
           section_images?: Json | null
           seed?: string
           song_name: string
@@ -1312,9 +1312,9 @@ export type Database = {
           id?: string
           lyrics?: Json
           palette?: Json
-          physics_spec?: Json
+          motion_profile_spec?: Json
           scene_context?: Json | null
-          scene_manifest?: Json | null
+          frame_state?: Json | null
           section_images?: Json | null
           seed?: string
           song_name?: string

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Bug, ChevronDown, ChevronRight, Copy, X, RefreshCw, Sparkles, Clapperboard, Play, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
-import type { SceneManifest } from "@/engine/SceneManifest";
+import type { FrameRenderState } from "@/engine/FrameRenderState";
 import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "./LyricDisplay";
 import type { LyricDancePlayer, LiveDebugState } from "@/engine/LyricDancePlayer";
@@ -183,7 +183,7 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
 // ─── DATA Tab (received data with copy) ─────────────────────────────
 
 interface DebugData {
-  songDna: {
+  renderData: {
     mood?: string;
     description?: string;
     meaning?: { theme?: string; summary?: string; imagery?: string[] };
@@ -193,8 +193,8 @@ interface DebugData {
     secondHookLabel?: string;
     hookJustification?: string;
     secondHookJustification?: string;
-    physicsSpec?: Record<string, unknown> | null;
-    scene_manifest?: SceneManifest | null;
+    motionProfileSpec?: Record<string, unknown> | null;
+    frame_state?: FrameRenderState | null;
     cinematic_direction?: CinematicDirection | null;
   } | null;
   beatGrid: { bpm: number; beats: number[]; confidence: number } | null;
@@ -210,10 +210,10 @@ interface DebugData {
 }
 
 function DataTab({ data }: { data: DebugData }) {
-  const { songDna, beatGrid, lines, title, artist, overrides, fingerprint } = data;
-  const spec = songDna?.physicsSpec;
-  const manifest = songDna?.scene_manifest;
-  const direction = songDna?.cinematic_direction;
+  const { renderData, beatGrid, lines, title, artist, overrides, fingerprint } = data;
+  const spec = renderData?.motionProfileSpec;
+  const manifest = renderData?.frame_state;
+  const direction = renderData?.cinematic_direction;
 
   return (
     <div className="space-y-0">
@@ -231,15 +231,15 @@ function DataTab({ data }: { data: DebugData }) {
       {/* Mood & Meaning */}
       <CollapsibleSection title="Mood & Meaning">
         <div className="space-y-1">
-          <KV label="Mood" value={songDna?.mood} />
-          <KV label="Description" value={songDna?.description} />
-          <KV label="Theme" value={songDna?.meaning?.theme} />
-          <KV label="Summary" value={songDna?.meaning?.summary} />
-          {songDna?.meaning?.imagery && songDna.meaning.imagery.length > 0 && (
+          <KV label="Mood" value={renderData?.mood} />
+          <KV label="Description" value={renderData?.description} />
+          <KV label="Theme" value={renderData?.meaning?.theme} />
+          <KV label="Summary" value={renderData?.meaning?.summary} />
+          {renderData?.meaning?.imagery && renderData.meaning.imagery.length > 0 && (
             <div className="text-[11px]">
               <span className="font-mono text-muted-foreground/60">Imagery:</span>
               <ul className="ml-3 mt-0.5 space-y-0.5">
-                {songDna.meaning.imagery.map((img, i) => (
+                {renderData.meaning.imagery.map((img, i) => (
                   <li key={i} className="font-mono text-foreground/80 text-[10px]">• {img}</li>
                 ))}
               </ul>
@@ -251,22 +251,22 @@ function DataTab({ data }: { data: DebugData }) {
       {/* Hooks */}
       <CollapsibleSection title="Hooks">
         <div className="space-y-2">
-          {songDna?.hook ? (
+          {renderData?.hook ? (
             <div className="space-y-1 rounded bg-background/50 p-2">
               <p className="text-[10px] font-mono font-semibold text-primary">Primary Hook</p>
-              <KV label="Label" value={songDna.hookLabel} />
-              <KV label="Preview" value={songDna.hook.previewText} />
-              <KV label="Range" value={`${songDna.hook.start.toFixed(2)}s → ${songDna.hook.end.toFixed(2)}s`} />
-              <KV label="Duration" value={`${(songDna.hook.end - songDna.hook.start).toFixed(2)}s`} />
-              {songDna.hookJustification && <KV label="Why" value={songDna.hookJustification} />}
+              <KV label="Label" value={renderData.hookLabel} />
+              <KV label="Preview" value={renderData.hook.previewText} />
+              <KV label="Range" value={`${renderData.hook.start.toFixed(2)}s → ${renderData.hook.end.toFixed(2)}s`} />
+              <KV label="Duration" value={`${(renderData.hook.end - renderData.hook.start).toFixed(2)}s`} />
+              {renderData.hookJustification && <KV label="Why" value={renderData.hookJustification} />}
             </div>
           ) : <p className="text-[10px] text-muted-foreground">No hook detected</p>}
-          {songDna?.secondHook && (
+          {renderData?.secondHook && (
             <div className="space-y-1 rounded bg-background/50 p-2">
               <p className="text-[10px] font-mono font-semibold text-primary/70">Secondary Hook</p>
-              <KV label="Label" value={songDna.secondHookLabel} />
-              <KV label="Preview" value={songDna.secondHook.previewText} />
-              <KV label="Range" value={`${songDna.secondHook.start.toFixed(2)}s → ${songDna.secondHook.end.toFixed(2)}s`} />
+              <KV label="Label" value={renderData.secondHookLabel} />
+              <KV label="Preview" value={renderData.secondHook.previewText} />
+              <KV label="Range" value={`${renderData.secondHook.start.toFixed(2)}s → ${renderData.secondHook.end.toFixed(2)}s`} />
             </div>
           )}
         </div>
@@ -538,7 +538,7 @@ function DataTab({ data }: { data: DebugData }) {
         {direction ? <JsonBlock value={direction} /> : <p className="text-[10px] text-muted-foreground">No cinematic direction data</p>}
       </CollapsibleSection>
       <CollapsibleSection title="Raw Song DNA">
-        <JsonBlock value={songDna} />
+        <JsonBlock value={renderData} />
       </CollapsibleSection>
     </div>
   );
@@ -548,7 +548,7 @@ function DataTab({ data }: { data: DebugData }) {
 
 function PromptTab({ data, onRunCustomPrompt, isRunning }: { data: DebugData; onRunCustomPrompt?: (systemPrompt: string) => void; isRunning?: boolean }) {
   const { lines, title, artist } = data;
-  const direction = data.songDna?.cinematic_direction;
+  const direction = data.renderData?.cinematic_direction;
 
   const sceneCtx = data.scene_context;
   const scenePrefix = sceneCtx

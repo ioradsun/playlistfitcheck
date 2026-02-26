@@ -10,7 +10,7 @@ CREATE TABLE public.shareable_hooks (
   song_name TEXT NOT NULL,
   hook_phrase TEXT NOT NULL,
   artist_dna JSONB,
-  physics_spec JSONB NOT NULL,
+  motion_profile_spec JSONB NOT NULL,
   beat_grid JSONB NOT NULL,
   hook_start NUMERIC NOT NULL,
   hook_end NUMERIC NOT NULL,

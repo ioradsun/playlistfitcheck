@@ -1,7 +1,7 @@
 // ============= Full file contents =============
 
 import type { Chapter, CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
-import type { ParticleConfig, SceneManifest } from "@/engine/SceneManifest";
+import type { ParticleConfig, FrameRenderState } from "@/engine/FrameRenderState";
 import type { ParticleEngine } from "@/engine/ParticleEngine";
 import type { DirectionInterpreter, WordHistory } from "@/engine/DirectionInterpreter";
 import type { HookDanceEngine } from "@/engine/HookDanceEngine";
@@ -72,7 +72,7 @@ export interface RendererState {
 
 export function getParticleConfigForTime(
   baseConfig: ParticleConfig,
-  _manifest: SceneManifest,
+  _manifest: FrameRenderState,
   songProgress: number,
   cache: { bucket: number; config: ParticleConfig | null },
 ): ParticleConfig {
@@ -174,8 +174,8 @@ export function renderBackground(
 export interface ParticleRenderInput {
   particleEngine: ParticleEngine;
   baseParticleConfig: ParticleConfig;
-  timelineManifest: SceneManifest;
-  physicsSpec: any;
+  timelineManifest: FrameRenderState;
+  motionProfileSpec: any;
   songProgress: number;
   beatIntensity: number;
   deltaMs: number;
@@ -199,7 +199,7 @@ export function renderParticles(
   state: ParticleState,
 ): { lightIntensity: number; drawCalls: number } {
   const {
-    particleEngine, baseParticleConfig, timelineManifest, physicsSpec,
+    particleEngine, baseParticleConfig, timelineManifest, motionProfileSpec,
     songProgress, beatIntensity, deltaMs, cw, ch,
     chapterDirective, isClimax, climaxMaxParticleDensity,
     tensionParticleDensity, tensionLightBrightness, hasLineAnim,
@@ -221,7 +221,7 @@ export function renderParticles(
 
   // Density control
   let densityMult = 1.0;
-  if (physicsSpec?.density) densityMult *= physicsSpec.density;
+  if (motionProfileSpec?.density) densityMult *= motionProfileSpec.density;
   if (isClimax && climaxMaxParticleDensity) densityMult *= climaxMaxParticleDensity;
   if (tensionParticleDensity) densityMult *= tensionParticleDensity;
   if (!hasLineAnim) densityMult *= 0.2; // Idle state

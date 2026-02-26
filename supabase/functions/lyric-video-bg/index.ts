@@ -15,7 +15,7 @@ type BackgroundSystem =
   | "burn"
   | "void";
 
-interface SceneManifest {
+interface FrameRenderState {
   world: string;
   backgroundSystem: BackgroundSystem | string;
   lightSource: string;
@@ -111,7 +111,7 @@ the anchor should be in the lower third.
 
 function enhanceWorldDescription(
   world: string,
-  manifest: SceneManifest,
+  manifest: FrameRenderState,
 ): string {
   const worldText = typeof world === "string" ? world.trim() : "";
 
@@ -189,7 +189,7 @@ function enhanceWorldDescription(
 }
 
 function buildCinematicImagePrompt(
-  manifest: SceneManifest,
+  manifest: FrameRenderState,
   userDirection?: string,
 ): string {
   const systemCinema: Record<string, string> = {
@@ -292,7 +292,7 @@ serve(async (req) => {
       });
     }
 
-    const sceneManifest: SceneManifest = {
+    const frameState: FrameRenderState = {
       world: String(manifest.world || ""),
       backgroundSystem: String(manifest.backgroundSystem || "void"),
       lightSource: String(manifest.lightSource || "moonlight"),
@@ -306,12 +306,12 @@ serve(async (req) => {
     };
 
     const enhancedWorld = enhanceWorldDescription(
-      sceneManifest.world,
-      sceneManifest,
+      frameState.world,
+      frameState,
     );
     const fullPrompt = [
       buildCinematicImagePrompt(
-        { ...sceneManifest, world: enhancedWorld },
+        { ...frameState, world: enhancedWorld },
         userDirection,
       ),
       iconicFrameInstruction,

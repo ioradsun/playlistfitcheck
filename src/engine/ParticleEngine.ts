@@ -1,5 +1,5 @@
 // removed duplicate import line
-import type { ParticleConfig, SceneManifest } from "./SceneManifest";
+import type { ParticleConfig, FrameRenderState } from "./FrameRenderState";
 import {
   drawAsh,
   drawBubble,
@@ -151,7 +151,7 @@ export class ParticleEngine {
     aux2: 0,
   }));
   private config: ParticleConfig;
-  private manifest: SceneManifest;
+  private manifest: FrameRenderState;
   private bounds: Rect = { x: 0, y: 0, w: 1, h: 1 };
   private safeZone: Rect = { x: -1, y: -1, w: 0, h: 0 };
   private beatBoostFrames = 0;
@@ -165,12 +165,12 @@ export class ParticleEngine {
   private updateFrameSkip = 1;
   private updateFrameCounter = 0;
 
-  constructor(manifest: SceneManifest) {
+  constructor(manifest: FrameRenderState) {
     this.manifest = manifest;
     this.config = manifest.particleConfig;
   }
 
-  setManifest(manifest: SceneManifest): void {
+  setManifest(manifest: FrameRenderState): void {
     this.manifest = manifest;
     this.config = manifest.particleConfig;
   }
@@ -248,7 +248,7 @@ export class ParticleEngine {
   }
 
 
-  init(config: ParticleConfig, manifest: SceneManifest): void {
+  init(config: ParticleConfig, manifest: FrameRenderState): void {
     this.config = config;
     this.manifest = manifest;
     this.maxParticles = getMaxParticles();

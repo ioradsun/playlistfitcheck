@@ -34,7 +34,7 @@ import {
   type PhysicsState,
 } from "./PhysicsIntegrator";
 export type { PhysicsState } from "./PhysicsIntegrator";
-import type { SceneManifest } from "./SceneManifest";
+import type { FrameRenderState } from "./FrameRenderState";
 
 export interface BeatTick {
   time: number;       // seconds
@@ -87,7 +87,7 @@ export class HookDanceEngine {
   private syntheticStart = 0; // performance.now() when engine started
   private boundTimeUpdate: (() => void) | null = null;
   private boundEnded: (() => void) | null = null;
-  private activeManifest: SceneManifest | null = null;
+  private activeManifest: FrameRenderState | null = null;
   private lastExternalBeatIntensity = 0;
   private lastState: PhysicsState;
 
@@ -231,7 +231,7 @@ export class HookDanceEngine {
 
 
 
-  loadManifest(manifest: SceneManifest): void {
+  loadManifest(manifest: FrameRenderState): void {
     this.activeManifest = manifest;
   }
 

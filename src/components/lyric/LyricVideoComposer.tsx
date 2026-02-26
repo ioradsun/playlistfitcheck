@@ -12,10 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { safeManifest } from "@/engine/validateManifest";
+import { safeManifest } from "@/engine/validateFrameState";
 import type { LyricLine, LyricHook, LyricMetadata } from "./LyricDisplay";
 
-interface SceneManifest {
+interface FrameRenderState {
   world: string;
   backgroundSystem:
     | "fracture"
@@ -30,11 +30,11 @@ interface SceneManifest {
   coreEmotion: string;
 }
 
-function buildSceneManifest(metadata?: LyricMetadata | null): SceneManifest {
+function buildFrameRenderState(metadata?: LyricMetadata | null): FrameRenderState {
   const mood = metadata?.mood?.toLowerCase() || "brooding";
   const description = metadata?.description || "dark emotional space";
 
-  const moodToSystem: Record<string, SceneManifest["backgroundSystem"]> = {
+  const moodToSystem: Record<string, FrameRenderState["backgroundSystem"]> = {
     aggressive: "fracture",
     energetic: "pressure",
     melancholic: "breath",
@@ -45,7 +45,7 @@ function buildSceneManifest(metadata?: LyricMetadata | null): SceneManifest {
     happy: "breath",
   };
 
-  let backgroundSystem: SceneManifest["backgroundSystem"] = "void";
+  let backgroundSystem: FrameRenderState["backgroundSystem"] = "void";
   for (const [key, value] of Object.entries(moodToSystem)) {
     if (mood.includes(key)) {
       backgroundSystem = value;
@@ -53,7 +53,7 @@ function buildSceneManifest(metadata?: LyricMetadata | null): SceneManifest {
     }
   }
 
-  const lightBySystem: Record<SceneManifest["backgroundSystem"], string> = {
+  const lightBySystem: Record<FrameRenderState["backgroundSystem"], string> = {
     fracture: "harsh overhead",
     pressure: "fluorescent",
     breath: "golden hour",
@@ -839,7 +839,7 @@ export function LyricVideoComposer({
         "lyric-video-bg",
         {
           body: {
-            manifest: safeManifest(buildSceneManifest(metadata)).manifest,
+            manifest: safeManifest(buildFrameRenderState(metadata)).manifest,
             userDirection: [
               `Song: ${title} by ${artist}`,
               bgPrompt?.trim() ? `Custom direction: ${bgPrompt.trim()}` : "",

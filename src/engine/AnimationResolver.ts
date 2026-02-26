@@ -31,7 +31,7 @@ export class AnimationResolver {
     this.repetitionByLineIndex.clear();
     this.repetitionScales.clear();
 
-    const lexicon = (dna?.physics_spec as any)?.lexicon ?? (dna?.physicsSpec as any)?.lexicon;
+    const lexicon = (dna?.motion_profile_spec as any)?.lexicon ?? (dna?.motionProfileSpec as any)?.lexicon;
 
     for (const mod of lexicon?.line_mods ?? []) {
       this.lineMods.set(mod.t_lyric, mod.mods);

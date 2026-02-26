@@ -8,7 +8,7 @@
 
 import type { PhysicsState } from "./PhysicsIntegrator";
 import { ParticleEngine, type Rect } from "./ParticleEngine";
-import type { SceneManifest } from "./SceneManifest";
+import type { FrameRenderState } from "./FrameRenderState";
 
 export interface BackgroundState {
   system: string;
@@ -21,7 +21,7 @@ export interface BackgroundState {
   palette: string[];
   hookStart: number;
   hookEnd: number;
-  manifest?: SceneManifest;
+  manifest?: FrameRenderState;
   deltaMs?: number;
   beatIntensity?: number;
   lyricSafeZone?: Rect;
@@ -734,7 +734,7 @@ const BG_RENDERERS: Record<string, (ctx: CanvasRenderingContext2D, s: Background
   glass: drawGlassBackground,
 };
 
-function getParticleEngine(ctx: CanvasRenderingContext2D, manifest: SceneManifest): ParticleEngine {
+function getParticleEngine(ctx: CanvasRenderingContext2D, manifest: FrameRenderState): ParticleEngine {
   let engine = particleEngines.get(ctx);
   if (!engine) {
     engine = new ParticleEngine(manifest);
@@ -746,7 +746,7 @@ function getParticleEngine(ctx: CanvasRenderingContext2D, manifest: SceneManifes
 
 
 
-function applyManifest(ctx: CanvasRenderingContext2D, manifest: SceneManifest): ParticleEngine {
+function applyManifest(ctx: CanvasRenderingContext2D, manifest: FrameRenderState): ParticleEngine {
   const engine = getParticleEngine(ctx, manifest);
   const signature = JSON.stringify(manifest.particleConfig);
 

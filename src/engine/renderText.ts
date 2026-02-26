@@ -7,7 +7,7 @@
  */
 
 import type { Chapter, CinematicDirection, TensionStage, WordDirective } from "@/types/CinematicDirection";
-import type { SceneManifest } from "@/engine/SceneManifest";
+import type { FrameRenderState } from "@/engine/FrameRenderState";
 import type { DirectionInterpreter, WordHistory } from "@/engine/DirectionInterpreter";
 import type { LineAnimation } from "@/engine/AnimationResolver";
 import { animationResolver } from "@/engine/AnimationResolver";
@@ -150,7 +150,7 @@ export interface TextInput {
   ch: number;
   effectivePalette: string[];
   effectiveSystem: string;
-  resolvedManifest: SceneManifest;
+  resolvedManifest: FrameRenderState;
   textPalette: string[];
   spec: any;
   state: {

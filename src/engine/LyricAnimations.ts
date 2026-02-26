@@ -3,7 +3,7 @@
  */
 
 import type { WordAnimation } from "./AnimationResolver";
-import type { SceneManifest } from "./SceneManifest";
+import type { FrameRenderState } from "./FrameRenderState";
 import { getSafeTextColor } from "./SystemStyles";
 
 function easeOutCubic(t: number): number {
@@ -136,7 +136,7 @@ export function applyWordMark(
   ctx: CanvasRenderingContext2D,
   anim: WordAnimation,
   time: number,
-  manifest: SceneManifest,
+  manifest: FrameRenderState,
 ): void {
   switch (anim.mark) {
     case "SHATTER":
@@ -165,7 +165,7 @@ export function applyWordMark(
   }
 }
 
-export function getWordMarkColor(mark: string, manifest: SceneManifest): string {
+export function getWordMarkColor(mark: string, manifest: FrameRenderState): string {
   switch (mark) {
     case "GLOW":
     case "SHIMMER":
