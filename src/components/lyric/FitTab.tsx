@@ -364,7 +364,14 @@ function CinematicDirectionCard({
       setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
       onImageGenerationStatusChange?.("done");
 
-      // section_images are stored on shareable_lyric_dances, not saved_lyrics
+      // Persist to saved_lyrics so images survive tab switches / remounts
+      if (projectId && urls.length > 0) {
+        void supabase
+          .from("saved_lyrics")
+          .update({ section_images: urls as any })
+          .eq("id", projectId);
+        console.log(`[FitTab Debug] saved ${urls.filter(Boolean).length} section images to DB`);
+      }
 
       toast.success(`Generated ${urls.filter(Boolean).length}/${sections.length} section images`);
     } catch (e: any) {
