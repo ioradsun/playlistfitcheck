@@ -441,11 +441,12 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
     setPublishing(true);
     setPublishStatus("Preparing…");
 
-    const PUBLISH_TIMEOUT = 30_000;
-    const timeoutId = setTimeout(() => {
-      setPublishStatus("Publish timed out — please try again");
-      setPublishing(false);
-    }, PUBLISH_TIMEOUT);
+    // Show a slow-publish warning after 30s but do NOT abort — storage uploads
+    // can legitimately take longer and calling setPublishing(false) here would
+    // trigger a React re-render that aborts the in-flight Supabase request.
+    const slowWarningId = setTimeout(() => {
+      setPublishStatus("Still working — large files take longer…");
+    }, 30_000);
 
     try {
       const { data: profile } = await supabase
@@ -609,7 +610,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
       console.error("Dance publish error:", e);
       toast.error(e.message || "Failed to publish lyric dance");
     } finally {
-      clearTimeout(timeoutId);
+      clearTimeout(slowWarningId);
       setPublishing(false);
       setPublishStatus("");
     }
@@ -621,11 +622,9 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
     if (!renderData?.hook || !renderData?.secondHook || !audioFile || !lyricData) return;
     setBattlePublishing(true);
 
-    const BATTLE_TIMEOUT = 30_000;
-    const timeoutId = setTimeout(() => {
-      toast.error("Battle publish timed out — please try again");
-      setBattlePublishing(false);
-    }, BATTLE_TIMEOUT);
+    const slowWarningId2 = setTimeout(() => {
+      toast("Still uploading — large files take longer…");
+    }, 30_000);
 
     try {
       const { data: profile } = await supabase
@@ -791,7 +790,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
       console.error("Battle publish error:", e);
       toast.error(e.message || "Failed to publish battle");
     } finally {
-      clearTimeout(timeoutId);
+      clearTimeout(slowWarningId2);
       setBattlePublishing(false);
     }
   }, [user, battlePublishing, renderData, audioFile, lyricData, beatGrid]);
