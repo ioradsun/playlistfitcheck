@@ -178,7 +178,7 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
       style={{ touchAction: "none" }}
     >
       <div className="absolute inset-0 bg-white/5" />
-      <div className="absolute left-0 top-0 h-full transition-none" style={{ width: `${progress * 100}%`, background: palette[1] || "#a855f7", opacity: 0.6 }} />
+      <div className="absolute left-0 top-0 h-full transition-none" style={{ width: `${progress * 100}%`, background: palette?.[1] ?? "#a855f7", opacity: 0.6 }} />
       <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity" style={{ left: `calc(${progress * 100}% - 6px)` }} />
     </div>
   );

@@ -169,9 +169,9 @@ export function getWordMarkColor(mark: string, manifest: FrameRenderState): stri
   switch (mark) {
     case "GLOW":
     case "SHIMMER":
-      return manifest.palette[2];
+      return manifest.palette?.[2] ?? "#ec4899";
     case "GLITCH":
-      return Math.random() > 0.5 ? manifest.palette[2] : manifest.palette[1];
+      return Math.random() > 0.5 ? (manifest.palette?.[2] ?? "#ec4899") : (manifest.palette?.[1] ?? "#a855f7");
     default:
       return getSafeTextColor(manifest.palette);
   }

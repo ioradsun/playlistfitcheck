@@ -636,7 +636,7 @@ export function renderText(
       // Hero words use accent color from palette
       props.color = effectivePalette[1] ?? props.color;
       const heroGlow = ctx.createRadialGradient(0, -fontSize * 0.35, 0, 0, -fontSize * 0.35, fontSize * 1.8);
-      heroGlow.addColorStop(0, effectivePalette[1] ?? resolvedManifest.palette[2]);
+      heroGlow.addColorStop(0, effectivePalette[1] ?? resolvedManifest.palette?.[2] ?? "#ec4899");
       heroGlow.addColorStop(1, "rgba(0,0,0,0)");
       ctx.save();
       ctx.globalAlpha *= 0.14;
