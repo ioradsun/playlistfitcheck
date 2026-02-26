@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
 import { LyricDisplay, type LyricData, type LyricLine } from "./LyricDisplay";
 import { LyricSkeleton } from "./LyricSkeleton";
+import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { ReactNode } from "react";
 
 const MAX_RAW_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -42,6 +43,7 @@ interface Props {
   setVersionMeta: (v: any | null) => void;
   beatGrid?: BeatGridData | null;
   setWords?: (w: Array<{ word: string; start: number; end: number }> | null) => void;
+  waveformData?: WaveformData | null;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;
@@ -69,6 +71,7 @@ export function LyricsTab({
   setVersionMeta,
   beatGrid,
   setWords,
+  waveformData,
   onProjectSaved,
   onNewProject,
   onHeaderProject,
@@ -283,6 +286,7 @@ export function LyricsTab({
           hasRealAudio={hasRealAudio}
           savedId={savedId}
           initialBeatGrid={beatGrid}
+          initialWaveform={waveformData}
           fmlyLines={fmlyLines}
           versionMeta={versionMeta}
           debugData={debugData}
@@ -314,6 +318,7 @@ export function LyricsTab({
           title={lyricData.title}
           fileName={audioFile.name}
           loading={loading}
+          waveformData={waveformData}
           onRetry={() => handleTranscribe(audioFile)}
           onBack={handleBack}
         />
