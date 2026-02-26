@@ -58,8 +58,7 @@ const DEFAULT_FEATURES: FeaturesState = {
 
 async function patchFeatures(patch: Partial<FeaturesState & Record<string, any>>) {
   const { data: existing } = await supabase.from("site_copy").select("id, copy_json").limit(1).single();
-  if (!existing) throw new Error("No site_copy row found");
-  const prev = (existing.copy_json as any) || {};
+  const prev = (existing?.copy_json as any) || {};
   const updated = {
     ...prev,
     features: { ...(prev.features || {}), ...patch },
