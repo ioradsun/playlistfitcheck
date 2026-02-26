@@ -443,6 +443,12 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
     setPublishing(true);
     setPublishStatus("Preparing…");
 
+    const PUBLISH_TIMEOUT = 30_000;
+    const timeoutId = setTimeout(() => {
+      setPublishStatus("Publish timed out — please try again");
+      setPublishing(false);
+    }, PUBLISH_TIMEOUT);
+
     try {
       const { data: profile } = await supabase
         .from("profiles")
@@ -459,6 +465,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
         setPublishing(false);
         return;
       }
+
       // Check for existing dance to reuse audio_url and palettes
       const { data: existingDance }: any = await supabase
         .from("shareable_lyric_dances" as any)
@@ -468,8 +475,11 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
         .eq("song_slug", songSlug)
         .maybeSingle();
 
-      let audioUrl = existingDance?.audio_url as string | undefined;
-      if (!audioUrl) {
+      let audioUrl: string;
+      if (existingDance?.audio_url) {
+        setPublishStatus("Using existing audio…");
+        audioUrl = existingDance.audio_url;
+      } else {
         setPublishStatus("Uploading audio…");
         const fileExt = audioFile.name.split(".").pop() || "webm";
         const storagePath = `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${fileExt}`;
@@ -485,20 +495,39 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       setPublishStatus("Publishing…");
       const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
 
+      // Compute auto palettes from existing section images (non-blocking)
       let publishAutoPalettes: string[][] | null = null;
-      try {
-        if (Array.isArray(existingDance?.auto_palettes) && existingDance.auto_palettes.length > 0) {
-          publishAutoPalettes = existingDance.auto_palettes;
-        } else {
-          const urls = (existingDance?.section_images ?? []).filter((u: unknown): u is string => typeof u === "string" && Boolean(u));
-          if (urls.length > 0) {
-            publishAutoPalettes = await computeAutoPalettesFromUrls(urls);
+      if (!danceNeedsRegeneration) {
+        try {
+          if (Array.isArray(existingDance?.auto_palettes) && existingDance.auto_palettes.length > 0) {
+            publishAutoPalettes = existingDance.auto_palettes;
+          } else {
+            const urls = (existingDance?.section_images ?? []).filter((u: unknown): u is string => typeof u === "string" && Boolean(u));
+            if (urls.length > 0) {
+              publishAutoPalettes = await computeAutoPalettesFromUrls(urls);
+            }
           }
+        } catch (paletteError) {
+          console.warn("[FitTab] failed to precompute auto palettes (non-blocking):", paletteError);
         }
-      } catch (paletteError) {
-        console.warn("[FitTab] failed to precompute auto palettes (non-blocking):", paletteError);
       }
+      // When regenerating, both section_images and auto_palettes are nullified
+      // so fresh images + palettes are generated post-publish
 
+      // Upsert fields:
+      // user_id            — from auth (required)
+      // artist_slug        — from profile slug (required)
+      // song_slug          — from title slug (required)
+      // artist_name        — from profile (required)
+      // song_name          — from state (required)
+      // audio_url          — from existing or fresh upload (required)
+      // lyrics             — from state, adlibs filtered (required)
+      // cinematic_direction — from state (nullable)
+      // words              — from state (nullable)
+      // auto_palettes      — null if regenerating, preserved if not
+      // beat_grid          — from state with fallback (required, NOT NULL)
+      // palette            — from direction with fallback (required, NOT NULL)
+      // section_images     — null if regenerating, preserved if not
       const { error: insertError } = await supabase
         .from("shareable_lyric_dances" as any)
         .upsert({
@@ -506,12 +535,12 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
           artist_slug: artistSlug,
           song_slug: songSlug,
           artist_name: displayName,
-          song_name: lyricData.title,
+          song_name: lyricData.title || "Untitled",
           audio_url: audioUrl,
           lyrics: mainLines,
           cinematic_direction: cinematicDirection || null,
           words: words ?? null,
-          auto_palettes: publishAutoPalettes,
+          auto_palettes: danceNeedsRegeneration ? null : (publishAutoPalettes ?? null),
           beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
           palette: cinematicDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
           section_images: danceNeedsRegeneration ? null : (existingDance?.section_images ?? null),
@@ -582,10 +611,11 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       console.error("Dance publish error:", e);
       toast.error(e.message || "Failed to publish lyric dance");
     } finally {
+      clearTimeout(timeoutId);
       setPublishing(false);
       setPublishStatus("");
     }
-  }, [user, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection]);
+  }, [user, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection, words, danceNeedsRegeneration, currentLyricsHash]);
 
   // ── Battle publish handler ──────────────────────────────────────────
   const handleStartBattle = useCallback(async () => {
