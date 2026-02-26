@@ -1,5 +1,5 @@
 import type { CinematicDirection, CinematicSection } from "@/types/CinematicDirection";
-import { enrichSections } from "@/engine/directionResolvers";
+import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { FrameRenderState } from "@/engine/presetDerivation";
@@ -820,6 +820,28 @@ type StoryboardEntryLike = {
   iconScale?: number;
 };
 
+function buildWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives']): Record<string, WordDirectiveLike> {
+  const map: Record<string, WordDirectiveLike> = {};
+  if (!wordDirectives) return map;
+
+  if (Array.isArray(wordDirectives)) {
+    for (const directive of wordDirectives) {
+      const key = String(directive?.word ?? '').trim().toLowerCase();
+      if (!key) continue;
+      map[key] = directive as WordDirectiveLike;
+    }
+    return map;
+  }
+
+  for (const [word, directive] of Object.entries(wordDirectives)) {
+    const key = word.trim().toLowerCase();
+    if (!key || !directive) continue;
+    map[key] = directive as WordDirectiveLike;
+  }
+
+  return map;
+}
+
 type ChapterLike = {
   startRatio?: number;
   endRatio?: number;
@@ -1277,8 +1299,10 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
         mood: s.mood,
       } as ChapterLike));
   const resolved = resolveWorldDefaults(payload, chapters);
-  const wordDirectivesMap = (payload.cinematic_direction?.wordDirectives ?? {}) as Record<string, WordDirectiveLike>;
-  const tensionCurve = (payload.cinematic_direction?.tensionCurve ?? []) as TensionStageLike[];
+  const wordDirectivesMap = buildWordDirectivesMap(payload.cinematic_direction?.wordDirectives);
+  const tensionCurve = ((payload.cinematic_direction?.tensionCurve as TensionStageLike[] | undefined)?.length
+    ? payload.cinematic_direction?.tensionCurve
+    : deriveTensionCurve(payload.cinematic_direction?.emotionalArc)) as TensionStageLike[];
   const physSpec = payload.motion_profile_spec as unknown as Record<string, unknown> | null;
   const energy = Number(physSpec?.energy ?? 0.5);
   const density = Number(physSpec?.density ?? 0.5);

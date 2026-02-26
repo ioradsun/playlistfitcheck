@@ -20,6 +20,7 @@ import {
   type ScenePayload,
   type WordEmitterType,
 } from "@/lib/lyricSceneBaker";
+import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
@@ -326,6 +327,18 @@ type ChunkState = {
   font: string;
   color: string;
   width: number;
+};
+
+type ResolvedPlayerState = {
+  chapters: any[];
+  tensionCurve: any[];
+  wordDirectivesMap: Record<string, any>;
+  particleConfig: {
+    texture: string;
+    system: string;
+    density: number;
+    speed: number;
+  };
 };
 
 type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
@@ -742,6 +755,12 @@ export class LyricDancePlayer {
 
   // Public debug surface (React reads this)
   public debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
+  public resolvedState: ResolvedPlayerState = {
+    chapters: [],
+    tensionCurve: [],
+    wordDirectivesMap: {},
+    particleConfig: { texture: 'dust', system: 'dust', density: 0.35, speed: 0.35 },
+  };
   
 
   // Public writeable surface (React pushes comments here)
@@ -933,6 +952,7 @@ export class LyricDancePlayer {
       globalBakePromise = (async () => {
         const payload = this.buildScenePayload();
         this.payload = payload;
+        this.resolvePlayerState(payload);
         await this.preloadFonts();
         this.songStartSec = payload.songStart;
         this.songEndSec = payload.songEnd;
@@ -1020,6 +1040,7 @@ export class LyricDancePlayer {
   async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<Map<string, ChunkState>> {
     try {
       this.payload = payload;
+      this.resolvePlayerState(payload);
       this.songStartSec = payload.songStart;
       this.songEndSec = payload.songEnd;
 
@@ -1162,6 +1183,7 @@ export class LyricDancePlayer {
     this.data = { ...this.data, cinematic_direction: direction };
     if (!this.payload) return;
     this.payload = { ...this.payload, cinematic_direction: direction };
+    this.resolvePlayerState(this.payload);
     this.buildChunkCache(this.payload);
     this.buildBgCache();
     this.deriveVisualSystems();
@@ -1506,10 +1528,10 @@ export class LyricDancePlayer {
     const duration = this.songEndSec - this.songStartSec;
     const songProgress = duration > 0 ? Math.max(0, Math.min(1, (clamped - this.songStartSec) / duration)) : 0;
     const cd = this.payload?.cinematic_direction;
-    const chapters = cd?.chapters ?? [];
+    const chapters = this.resolvedState.chapters;
     const currentChapter = this.resolveChapter(chapters, clamped - this.songStartSec, duration);
 
-    const tensionCurve = (cd as any)?.tensionCurve ?? [];
+    const tensionCurve = this.resolvedState.tensionCurve;
     const currentTension = tensionCurve.find(
       (ts: any) => songProgress >= (ts.startRatio ?? 0) && songProgress <= (ts.endRatio ?? 1)
     ) ?? tensionCurve[0];
@@ -1542,9 +1564,9 @@ export class LyricDancePlayer {
       scale: frame?.cameraZoom ?? 1,
       zoom: frame?.cameraZoom ?? 1,
       lineColor: (visibleChunks[0] as any)?.color ?? "#ffffff",
-      particleSystem: (cd as any)?.presetDerivation?.particleConfig?.system ?? "—",
-      particleDensity: (cd as any)?.presetDerivation?.particleConfig?.density ?? 0,
-      particleSpeed: (cd as any)?.presetDerivation?.particleConfig?.speed ?? 0,
+      particleSystem: this.resolvedState.particleConfig.texture ?? "—",
+      particleDensity: this.resolvedState.particleConfig.density ?? 0,
+      particleSpeed: this.resolvedState.particleConfig.speed ?? 0,
       dirThesis: (cd as any)?.thesis ?? "—",
       dirChapter: currentChapter?.title ?? "—",
       dirChapterProgress: currentChapter ? Math.max(0, Math.min(1, (songProgress - (currentChapter.startRatio ?? 0)) / Math.max(0.001, (currentChapter.endRatio ?? 1) - (currentChapter.startRatio ?? 0)))) : 0,
@@ -1556,13 +1578,13 @@ export class LyricDancePlayer {
       tensionStage: currentTension?.stage ?? "—",
       tensionMotion: currentTension?.motionIntensity ?? 0,
       tensionParticles: currentTension?.particleDensity ?? 0,
-      backgroundSystem: (cd as any)?.presetDerivation?.backgroundSystem ?? "—",
+      backgroundSystem: this.backgroundSystem ?? "—",
       lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
       lineIntent: currentChapter?.emotionalArc ?? "—",
 
       // Section boundaries
       ...(() => {
-        const sections = (cd as any)?.sections ?? [];
+        const sections = this.resolvedState.chapters ?? [];
         const secIdx = sections.length > 0 ? this.resolveSectionIndex(sections, clamped - this.songStartSec, duration) : -1;
         const sec = secIdx >= 0 ? sections[secIdx] : null;
         const secStart = sec?.startSec ?? 0;
@@ -1578,7 +1600,7 @@ export class LyricDancePlayer {
           secDuration: secDur,
           secProgress: secDur > 0 ? Math.min(1, secElapsed / secDur) : 0,
           secMood: sec?.mood ?? "—",
-          secTexture: sec?.texture ?? (cd as any)?.texture ?? "—",
+          secTexture: sec?.texture ?? this.resolveParticleTexture(secIdx >= 0 ? secIdx : 0, cd) ?? "—",
           secHasImage: !!(this.data.section_images?.[secIdx]),
         };
       })(),
@@ -1614,8 +1636,7 @@ export class LyricDancePlayer {
         const t = clamped;
         const w = words.find((w: any) => t >= w.start && t <= w.end);
         if (!w) return { activeWord: "—", activeWordEntry: "—", activeWordExit: "—", activeWordEmphasis: 0, activeWordTrail: "none" };
-        const wds = (cd as any)?.wordDirectives;
-        const directive = Array.isArray(wds) ? wds.find((d: any) => d.word?.toLowerCase() === w.word?.toLowerCase()) : null;
+        const directive = this.resolvedState.wordDirectivesMap[w.word?.toLowerCase()] ?? null;
         return {
           activeWord: w.word ?? "—",
           activeWordEntry: directive?.entry ?? "—",
@@ -2184,6 +2205,75 @@ export class LyricDancePlayer {
     return payload;
   }
 
+  private toLegacyChapters(direction: CinematicDirection | null | undefined): any[] {
+    if (!direction) return [];
+    if (Array.isArray(direction.chapters) && direction.chapters.length > 0) {
+      return direction.chapters;
+    }
+    return enrichSections(direction.sections).map((section) => ({
+      title: section.description ?? `Section ${section.sectionIndex}`,
+      startSec: section.startSec,
+      endSec: section.endSec,
+      startRatio: section.startRatio,
+      endRatio: section.endRatio,
+      emotionalArc: section.mood ?? '',
+      motion: section.motion,
+      texture: section.texture,
+      atmosphere: section.atmosphere,
+      backgroundDirective: section.description ?? '',
+      sectionIndex: section.sectionIndex,
+      mood: section.mood,
+      zoom: 1,
+      driftIntensity: direction.motion === 'fluid' ? 0.3 : 0.1,
+    }));
+  }
+
+  private toWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives']): Record<string, any> {
+    const map: Record<string, any> = {};
+    if (!wordDirectives) return map;
+    if (Array.isArray(wordDirectives)) {
+      for (const directive of wordDirectives) {
+        const key = String(directive?.word ?? '').trim().toLowerCase();
+        if (!key) continue;
+        map[key] = directive;
+      }
+      return map;
+    }
+    for (const [key, value] of Object.entries(wordDirectives)) {
+      const clean = key.trim().toLowerCase();
+      if (!clean) continue;
+      map[clean] = value;
+    }
+    return map;
+  }
+
+  private resolveParticleTexture(sectionIndex: number, direction: CinematicDirection | null | undefined): string {
+    const sectionTexture = direction?.sections?.[sectionIndex]?.texture;
+    return sectionTexture ?? direction?.texture ?? 'dust';
+  }
+
+  private resolvePlayerState(payload: ScenePayload): void {
+    const direction = payload.cinematic_direction;
+    const chapters = this.toLegacyChapters(direction);
+    const tensionCurve = Array.isArray((direction as any)?.tensionCurve) && (direction as any).tensionCurve.length > 0
+      ? (direction as any).tensionCurve
+      : deriveTensionCurve(direction?.emotionalArc);
+    const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives);
+    const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
+    const texture = this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, direction);
+    this.resolvedState = {
+      chapters,
+      tensionCurve,
+      wordDirectivesMap,
+      particleConfig: {
+        texture,
+        system: texture,
+        density: 0.35,
+        speed: 0.35,
+      },
+    };
+  }
+
   private buildChunkCache(payload: ScenePayload): void {
     this.chunks.clear();
 
@@ -2306,7 +2396,7 @@ export class LyricDancePlayer {
       this.chunks.clear();
 
       if (this.phraseGroups && this.phraseGroups.length > 0) {
-        const wordDirectives = (this.payload?.cinematic_direction?.wordDirectives ?? {}) as Record<string, any>;
+        const wordDirectives = this.resolvedState.wordDirectivesMap;
         for (const group of this.phraseGroups) {
           let anchorIdx = group.words.length - 1;
           let maxEmp = -1;
@@ -2434,7 +2524,7 @@ export class LyricDancePlayer {
     }
 
     // Dark crush overlay — always on top of image
-    const chapters = (this.payload?.cinematic_direction?.chapters ?? []) as any[];
+    const chapters = this.resolvedState.chapters ?? [];
     const currentChapterObj = this.resolveChapter(chapters, this.audio.currentTime, this.audio.duration || 1);
     const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
     const atmosphereCrush: Record<string, number> = {
@@ -2504,7 +2594,7 @@ export class LyricDancePlayer {
   private buildBgCache(): void {
     
     try {
-      const chapters = this.payload?.cinematic_direction?.chapters ?? [];
+      const chapters = this.resolvedState.chapters ?? [];
       const count = Math.max(1, chapters.length);
       this.bgCaches = [];
       this.chapterParticleSystems = [];
@@ -2520,8 +2610,8 @@ export class LyricDancePlayer {
         const resolvedPal = this.getResolvedPalette();
         const bgColor = resolvedPal[0];
         const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
-        const particleDesc = chapter?.particles ?? '';
-        this.chapterParticleSystems.push(this.mapParticleSystem(particleDesc + ' ' + bgDesc));
+        const sectionTexture = this.resolveParticleTexture(ci, this.payload?.cinematic_direction);
+        this.chapterParticleSystems.push(sectionTexture);
 
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, off.width, off.height);
@@ -2646,7 +2736,7 @@ export class LyricDancePlayer {
   }
 
   private deriveVisualSystems(): void {
-    const chapter0 = this.payload?.cinematic_direction?.chapters?.[0] as any;
+    const chapter0 = this.resolvedState.chapters?.[0] as any;
     const bgDesc = chapter0?.backgroundDirective ?? chapter0?.background ?? '';
     this.backgroundSystem = this.mapBackgroundSystem(bgDesc);
   }
@@ -2654,7 +2744,7 @@ export class LyricDancePlayer {
   private buildChapterSims(): void {
     
     try {
-      const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
+      const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
       const palette = this.getResolvedPalette();
       const accentColor = palette[1] ?? '#FFD700';
       const bgSystem = this.backgroundSystem;
@@ -2682,9 +2772,9 @@ export class LyricDancePlayer {
     if (!cd) return;
     const events: EmotionalEvent[] = [];
     if (cd.climax?.timeRatio) events.push({ type: 'light-break', triggerRatio: cd.climax.timeRatio, intensity: cd.climax.maxLightIntensity ?? 1, duration: 1.2, triggered: false });
-    if (cd.chapters?.length >= 3) events.push({ type: 'world-shift', triggerRatio: cd.chapters[2].startRatio ?? 0.6, intensity: 0.8, duration: 2.0, triggered: false });
+    if (this.resolvedState.chapters?.length >= 3) events.push({ type: 'world-shift', triggerRatio: this.resolvedState.chapters[2].startRatio ?? 0.6, intensity: 0.8, duration: 2.0, triggered: false });
     events.push({ type: 'lens-breath', triggerRatio: 0.05, intensity: 0.5, duration: 3.0, triggered: false });
-    const peakChapter = cd.chapters?.reduce((max: any, ch: any) => (ch.emotionalIntensity ?? 0) > (max?.emotionalIntensity ?? 0) ? ch : max, null);
+    const peakChapter = this.resolvedState.chapters?.reduce((max: any, ch: any) => (ch.emotionalIntensity ?? 0) > (max?.emotionalIntensity ?? 0) ? ch : max, null);
     if (peakChapter) events.push({ type: 'void-moment', triggerRatio: (peakChapter.startRatio ?? 0.6) + 0.05, intensity: 1.0, duration: 0.4, triggered: false });
     events.push({ type: 'halo-ring', triggerRatio: 0.82, intensity: 0.9, duration: 1.5, triggered: false });
     this.emotionalEvents = events;
@@ -2696,7 +2786,7 @@ export class LyricDancePlayer {
       const simFrame = Math.floor(tSec * 24);
       if (simFrame === this.lastSimFrame) return;
       this.lastSimFrame = simFrame;
-      const chapters = this.payload?.cinematic_direction?.chapters ?? [{}];
+      const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
       const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
       const isClimaxZone = songProgress >= 0.75 && songProgress <= 0.85;
       const climaxCurve = isClimaxZone
