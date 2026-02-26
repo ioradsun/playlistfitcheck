@@ -263,12 +263,11 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
       setGenProgress({ done: 0, total: sections.length });
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = setInterval(async () => {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData?.user) return;
+        if (!userId) return;
         const { data: dances }: any = await supabase
           .from("shareable_lyric_dances" as any)
           .select("id, section_images")
-          .eq("user_id", userData.user.id)
+          .eq("user_id", userId)
           .eq("song_slug", songSlug)
           .limit(1);
         if (!dances?.[0]) return;
