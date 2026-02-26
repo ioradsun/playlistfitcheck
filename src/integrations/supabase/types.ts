@@ -1177,8 +1177,8 @@ export type Database = {
           hook_start: number
           id: string
           lyrics: Json
+          motion_profile_spec: Json
           palette: Json
-          physics_spec: Json
           signature_line: string | null
           song_name: string
           song_slug: string
@@ -1204,8 +1204,8 @@ export type Database = {
           hook_start: number
           id?: string
           lyrics: Json
+          motion_profile_spec: Json
           palette?: Json
-          physics_spec: Json
           signature_line?: string | null
           song_name: string
           song_slug: string
@@ -1231,8 +1231,8 @@ export type Database = {
           hook_start?: number
           id?: string
           lyrics?: Json
+          motion_profile_spec?: Json
           palette?: Json
-          physics_spec?: Json
           signature_line?: string | null
           song_name?: string
           song_slug?: string
