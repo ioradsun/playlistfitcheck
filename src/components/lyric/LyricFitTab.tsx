@@ -73,21 +73,32 @@ export function LyricFitTab({
 }: Props) {
   const { user } = useAuth();
   const artistNameRef = useRef<string>("artist");
+  // Compute initial values synchronously from initialLyric to avoid flash of uploader
+  const initLyricData = useMemo<LyricData | null>(() => {
+    if (!initialLyric) return null;
+    const filename = initialLyric.filename || "saved-lyrics.mp3";
+    const normalizedTitle = (initialLyric.title || "").trim();
+    const title = (normalizedTitle && normalizedTitle.toLowerCase() !== "unknown" && normalizedTitle.toLowerCase() !== "untitled")
+      ? normalizedTitle
+      : filename.replace(/\.[^/.]+$/, "").trim() || "Untitled";
+    return { title, lines: initialLyric.lines as any[] };
+  }, [initialLyric]);
+
   const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
   const [sceneDescription, setSceneDescription] = useState('');
   const [resolvedScene, setResolvedScene] = useState<SceneContextResult | null>(null);
   const [resolvingScene, setResolvingScene] = useState(false);
   const [fitUnlocked, setFitUnlocked] = useState(false);
-  const [lyricData, setLyricData] = useState<LyricData | null>(null);
+  const [lyricData, setLyricData] = useState<LyricData | null>(initLyricData);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [hasRealAudio, setHasRealAudio] = useState(false);
-  const [savedId, setSavedId] = useState<string | null>(null);
-  const savedIdRef = useRef<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(initialLyric?.id ?? null);
+  const savedIdRef = useRef<string | null>(initialLyric?.id ?? null);
   const renderDataLoadedFromDbRef = useRef(false);
-  const [lines, setLines] = useState<LyricLine[]>([]);
-  const [fmlyLines, setFmlyLines] = useState<any[] | null>(null);
-  const [versionMeta, setVersionMeta] = useState<any | null>(null);
-  const [words, setWords] = useState<Array<{ word: string; start: number; end: number }> | null>(null);
+  const [lines, setLines] = useState<LyricLine[]>(initialLyric?.lines as any[] ?? []);
+  const [fmlyLines, setFmlyLines] = useState<any[] | null>(initialLyric?.fmly_lines ?? null);
+  const [versionMeta, setVersionMeta] = useState<any | null>(initialLyric?.version_meta ?? null);
+  const [words, setWords] = useState<Array<{ word: string; start: number; end: number }> | null>(initialLyric?.words ?? null);
 
   const [renderData, setRenderData] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
@@ -248,109 +259,97 @@ export function LyricFitTab({
 
   // (persist effect moved below persistRenderData definition)
 
+  // Hydrate remaining state from initialLyric (analysis data, audio file, etc.)
+  // lyricData/lines/savedId/fmlyLines/versionMeta/words are already set via useState initializers
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    if (initialLyric && !lyricData) {
-      const filename = initialLyric.filename || "saved-lyrics.mp3";
-      const newData: LyricData = {
-        title: resolveProjectTitle(initialLyric.title, filename),
-        lines: initialLyric.lines as any[],
-      };
-      setLyricData(newData);
-      setLines(initialLyric.lines as any[]);
-      setSavedId(initialLyric.id);
-      savedIdRef.current = initialLyric.id;
-      setFmlyLines((initialLyric as any).fmly_lines ?? null);
-      setVersionMeta((initialLyric as any).version_meta ?? null);
-      setWords((initialLyric as any).words ?? null);
-      setTranscriptionDone(Array.isArray(initialLyric.lines) && initialLyric.lines.length > 0);
+    if (!initialLyric || hydratedRef.current) return;
+    hydratedRef.current = true;
 
-      const savedBg = (initialLyric as any).beat_grid;
-      if (savedBg) {
-        setBeatGrid(savedBg as BeatGridData);
-        setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
-        setBeatGridDone(true);
-      }
+    const filename = initialLyric.filename || "saved-lyrics.mp3";
+    setTranscriptionDone(Array.isArray(initialLyric.lines) && initialLyric.lines.length > 0);
 
-      const loadedRenderData = (initialLyric as any).render_data ?? null;
-      const loadedCinematicDirection =
-        (initialLyric as any).cinematic_direction ??
-        (loadedRenderData as any)?.cinematicDirection ??
-        (loadedRenderData as any)?.cinematic_direction ??
-        null;
+    const savedBg = (initialLyric as any).beat_grid;
+    if (savedBg) {
+      setBeatGrid(savedBg as BeatGridData);
+      setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
+      setBeatGridDone(true);
+    }
 
-      if (loadedRenderData) {
-        renderDataLoadedFromDbRef.current = true;
-        setRenderData(loadedRenderData);
-        setGenerationStatus(prev => ({ ...prev, renderData: "done" }));
+    const loadedRenderData = (initialLyric as any).render_data ?? null;
+    const loadedCinematicDirection =
+      (initialLyric as any).cinematic_direction ??
+      (loadedRenderData as any)?.cinematicDirection ??
+      (loadedRenderData as any)?.cinematic_direction ??
+      null;
 
-        // Restore persisted waveform peaks so waveform renders instantly without audio decode
-        const savedPeaks = (loadedRenderData as any)?.waveformPeaks;
-        const savedDuration = (loadedRenderData as any)?.waveformDuration;
-        if (Array.isArray(savedPeaks) && savedPeaks.length > 0 && savedDuration > 0) {
-          setWaveformData({ peaks: savedPeaks, duration: savedDuration });
-        }
-      }
+    if (loadedRenderData) {
+      renderDataLoadedFromDbRef.current = true;
+      setRenderData(loadedRenderData);
+      setGenerationStatus(prev => ({ ...prev, renderData: "done" }));
 
-      if (loadedCinematicDirection) {
-        setCinematicDirection(loadedCinematicDirection);
-        setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
-      }
-
-      // If all three analysis results exist, lock the pipeline gate immediately
-      if (savedBg && loadedCinematicDirection) {
-        pipelineTriggeredRef.current = true;
-        setFitReadiness("ready");
-        setFitProgress(100);
-        setFitUnlocked(true);
-
-        // Derive frameState from loaded cinematic direction presets
-        import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
-          import("@/engine/presetDerivation").then(({ getTypography }) => {
-            const typoPreset = loadedCinematicDirection.typography || "clean-modern";
-            const typo = getTypography(typoPreset);
-            const bgSystemMap: Record<string, string> = {
-              void: "void", cinematic: "fracture", haze: "breath", split: "static",
-              grain: "static", wash: "breath", glass: "pressure", clean: "void",
-            };
-            const atm = loadedCinematicDirection.atmosphere || "cinematic";
-            deriveFrameState(loadedCinematicDirection, 0, 0.5); // warm up cache
-          });
-        });
-      }
-
-      const savedSignature = (initialLyric as any).song_signature;
-      if (savedSignature) setSongSignature(savedSignature as SongSignature);
-      const savedSections = (initialLyric as any).cinematic_direction?.sections;
-      if (Array.isArray(savedSections)) setAudioSections(savedSections);
-
-      // bgImageUrl removed — V3
-
-      const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
-      if (cachedAudio) {
-        setAudioFile(cachedAudio);
-        setHasRealAudio(true);
-      } else if ((initialLyric as any).audio_url) {
-        const audioUrl = (initialLyric as any).audio_url as string;
-        fetch(audioUrl)
-          .then((res) => res.blob())
-          .then((blob) => {
-            const file = new File([blob], filename, { type: blob.type || "audio/mpeg" });
-            setAudioFile(file);
-            setHasRealAudio(true);
-            if (initialLyric.id) sessionAudio.set("lyric", initialLyric.id, file);
-          })
-          .catch(() => {
-            const dummyFile = new File([], filename, { type: "audio/mpeg" });
-            setAudioFile(dummyFile);
-            setHasRealAudio(false);
-          });
-      } else {
-        const dummyFile = new File([], filename, { type: "audio/mpeg" });
-        setAudioFile(dummyFile);
-        setHasRealAudio(false);
+      const savedPeaks = (loadedRenderData as any)?.waveformPeaks;
+      const savedDuration = (loadedRenderData as any)?.waveformDuration;
+      if (Array.isArray(savedPeaks) && savedPeaks.length > 0 && savedDuration > 0) {
+        setWaveformData({ peaks: savedPeaks, duration: savedDuration });
       }
     }
-  }, [initialLyric, lyricData, resolveProjectTitle]);
+
+    if (loadedCinematicDirection) {
+      setCinematicDirection(loadedCinematicDirection);
+      setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
+    }
+
+    if (savedBg && loadedCinematicDirection) {
+      pipelineTriggeredRef.current = true;
+      setFitReadiness("ready");
+      setFitProgress(100);
+      setFitUnlocked(true);
+
+      import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
+        import("@/engine/presetDerivation").then(({ getTypography }) => {
+          const typoPreset = loadedCinematicDirection.typography || "clean-modern";
+          const typo = getTypography(typoPreset);
+          const bgSystemMap: Record<string, string> = {
+            void: "void", cinematic: "fracture", haze: "breath", split: "static",
+            grain: "static", wash: "breath", glass: "pressure", clean: "void",
+          };
+          const atm = loadedCinematicDirection.atmosphere || "cinematic";
+          deriveFrameState(loadedCinematicDirection, 0, 0.5);
+        });
+      });
+    }
+
+    const savedSignature = (initialLyric as any).song_signature;
+    if (savedSignature) setSongSignature(savedSignature as SongSignature);
+    const savedSections = (initialLyric as any).cinematic_direction?.sections;
+    if (Array.isArray(savedSections)) setAudioSections(savedSections);
+
+    const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
+    if (cachedAudio) {
+      setAudioFile(cachedAudio);
+      setHasRealAudio(true);
+    } else if ((initialLyric as any).audio_url) {
+      const audioUrl = (initialLyric as any).audio_url as string;
+      fetch(audioUrl)
+        .then((res) => res.blob())
+        .then((blob) => {
+          const file = new File([blob], filename, { type: blob.type || "audio/mpeg" });
+          setAudioFile(file);
+          setHasRealAudio(true);
+          if (initialLyric.id) sessionAudio.set("lyric", initialLyric.id, file);
+        })
+        .catch(() => {
+          const dummyFile = new File([], filename, { type: "audio/mpeg" });
+          setAudioFile(dummyFile);
+          setHasRealAudio(false);
+        });
+    } else {
+      const dummyFile = new File([], filename, { type: "audio/mpeg" });
+      setAudioFile(dummyFile);
+      setHasRealAudio(false);
+    }
+  }, [initialLyric]);
 
   const persistRenderData = useCallback(async (id: string, payload: Record<string, unknown>, attempt = 1): Promise<boolean> => {
     try {
