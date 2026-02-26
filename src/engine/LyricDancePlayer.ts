@@ -3307,23 +3307,21 @@ export class LyricDancePlayer {
           break;
         }
         case 'dust-impact': {
-          // Tiny 1px dots, slow drift, very low opacity
-          const count = 16;
+          const hw = (em.wordWidth || 60) / 2;
+          const count = 6;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
             const seed2 = (i * 0.381966) % 1;
-            const life = 0.4 + seed * 0.4;
+            const life = 0.3 + seed * 0.4;
             const age = (elapsed * (0.5 + seed2 * 0.4)) % life;
             const agePct = age / life;
-            const angle = (seed - 0.5) * Math.PI;
-            const dist = agePct * 35 * (0.5 + seed) * pScale;
-            const px = em.x + Math.cos(angle) * dist + (seed2 - 0.5) * 60 * pScale;
-            const py = em.y + Math.sin(angle) * dist * 0.3 - agePct * 15 * pScale;
-            const alpha = 0.10 * (1 - agePct) * fadeAlpha;
-            if (alpha <= 0.005) continue;
+            const px = em.x - hw + seed * hw * 2 + (seed2 - 0.5) * 20 * pScale;
+            const py = em.y - agePct * 12 * pScale;
+            const alpha = 0.06 * (1 - agePct) * fadeAlpha;
+            if (alpha <= 0.003) continue;
 
             this.ctx.beginPath();
-            this.ctx.arc(px, py, 0.8 * pScale, 0, Math.PI * 2);
+            this.ctx.arc(px, py, 0.5 * pScale, 0, Math.PI * 2);
             this.ctx.fillStyle = `rgba(255,255,240,${alpha})`;
             this.ctx.fill();
           }
