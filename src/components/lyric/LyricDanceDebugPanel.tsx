@@ -73,20 +73,66 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
 
   return (
     <div className="space-y-0">
-      <Section title="Beat">
+      <Section title="Section">
         <div className="space-y-0.5">
-          <KV label="Intensity" value={f(snap.beatIntensity)} />
-          <KV label="Phys Glow" value={f(snap.physGlow)} />
-          <KV label="Last Beat Force" value={f(snap.lastBeatForce)} />
+          <KV label="Active" value={`${snap.secIndex >= 0 ? snap.secIndex + 1 : '—'}/${snap.secTotal}`} />
+          <KV label="Time Range" value={`${f(snap.secStartSec)}s → ${f(snap.secEndSec)}s`} />
+          <KV label="Elapsed" value={`${f(snap.secElapsed)}s / ${f(snap.secDuration)}s`} />
+          <KV label="Progress" value={f(snap.secProgress * 100, 0) + "%"} />
+          <KV label="Mood" value={snap.secMood} />
+          <KV label="Texture" value={snap.secTexture} />
+          <KV label="Has Image" value={snap.secHasImage ? "✓" : "✗"} />
         </div>
       </Section>
-      <Section title="Physics">
+      <Section title="Direction Defaults">
         <div className="space-y-0.5">
-          <KV label="Active" value={snap.physicsActive ? "yes" : "no"} />
-          <KV label="Heat" value={f(snap.heat)} />
-          <KV label="Velocity" value={f(snap.velocity)} />
-          <KV label="Rotation" value={f(snap.rotation)} />
-          <KV label="Words" value={snap.wordCount} />
+          <KV label="Scene Tone" value={snap.cdSceneTone} />
+          <KV label="Atmosphere" value={snap.cdAtmosphere} />
+          <KV label="Motion" value={snap.cdMotion} />
+          <KV label="Typography" value={snap.cdTypography} />
+          <KV label="Texture" value={snap.cdTexture} />
+          <KV label="Emot. Arc" value={snap.cdEmotionalArc} />
+          <KV label="Thesis" value={snap.dirThesis} />
+        </div>
+      </Section>
+      <Section title="Beat Grid">
+        <div className="space-y-0.5">
+          <KV label="BPM" value={snap.bgBpm} />
+          <KV label="Beats" value={snap.bgBeatsTotal} />
+          <KV label="Confidence" value={f(snap.bgConfidence)} />
+          <KV label="Next Beat" value={snap.bgNextBeat > 0 ? `${f(snap.bgNextBeat)}s` : "—"} />
+          <KV label="Beat Phase" value={f(snap.bgBeatPhase)} />
+          <KV label="Intensity" value={f(snap.beatIntensity)} />
+          <KV label="Last Force" value={f(snap.lastBeatForce)} />
+        </div>
+      </Section>
+      <Section title="Active Word">
+        <div className="space-y-0.5">
+          <KV label="Word" value={snap.activeWord} />
+          <KV label="Entry" value={snap.activeWordEntry} />
+          <KV label="Exit" value={snap.activeWordExit} />
+          <KV label="Emphasis" value={snap.activeWordEmphasis} />
+          <KV label="Trail" value={snap.activeWordTrail} />
+        </div>
+      </Section>
+      <Section title="Particles">
+        <div className="space-y-0.5">
+          <KV label="System" value={snap.particleSystem} />
+          <KV label="Count" value={snap.particleCount} />
+          <KV label="Density" value={f(snap.particleDensity)} />
+          <KV label="Speed" value={f(snap.particleSpeed)} />
+        </div>
+      </Section>
+      <Section title="Images">
+        <div className="space-y-0.5">
+          <KV label="Loaded" value={snap.imgCount} />
+          <KV label="Active Idx" value={snap.imgActiveIdx} />
+          <KV label="Next Idx" value={snap.imgNextIdx} />
+          <KV label="Crossfade" value={f(snap.imgCrossfade)} />
+          <KV label="Ch Span" value={f(snap.imgChapterSpan) + "s"} />
+          <KV label="Local %" value={f(snap.imgLocalProgress * 100, 0) + "%"} />
+          <KV label="Opacity" value={f(snap.imgOpacity)} />
+          <KV label="Overlap" value={snap.imgOverlap ? "⚠️ YES" : "no"} />
         </div>
       </Section>
       <Section title="Animation">
@@ -101,26 +147,8 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
           <KV label="Hook" value={snap.isHookLine ? "yes" : "no"} />
         </div>
       </Section>
-      <Section title="Particles">
+      <Section title="Chapter">
         <div className="space-y-0.5">
-          <KV label="System" value={snap.particleSystem} />
-          <KV label="Count" value={snap.particleCount} />
-          <KV label="Density" value={f(snap.particleDensity)} />
-          <KV label="Speed" value={f(snap.particleSpeed)} />
-        </div>
-      </Section>
-      <Section title="Position">
-        <div className="space-y-0.5">
-          <KV label="X Offset" value={f(snap.xOffset)} />
-          <KV label="Y Base" value={f(snap.yBase)} />
-          <KV label="X Nudge" value={f(snap.xNudge)} />
-          <KV label="Shake" value={f(snap.shake)} />
-          <KV label="Zoom" value={f(snap.zoom)} />
-        </div>
-      </Section>
-      <Section title="Direction">
-        <div className="space-y-0.5">
-          <KV label="Thesis" value={snap.dirThesis} />
           <KV label="Chapter" value={snap.dirChapter} />
           <KV label="Chapter %" value={f(snap.dirChapterProgress * 100, 0) + "%"} />
           <KV label="Intensity" value={f(snap.dirIntensity)} />
@@ -136,13 +164,6 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
           <KV label="Motion" value={f(snap.tensionMotion)} />
           <KV label="Particles" value={f(snap.tensionParticles)} />
           <KV label="Typo" value={f(snap.tensionTypo)} />
-        </div>
-      </Section>
-      <Section title="Symbols">
-        <div className="space-y-0.5">
-          <KV label="Primary" value={snap.symbolPrimary} />
-          <KV label="Secondary" value={snap.symbolSecondary} />
-          <KV label="State" value={snap.symbolState} />
         </div>
       </Section>
       <Section title="Word Directive">
@@ -163,16 +184,20 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
           <KV label="Shot" value={snap.shotType} />
         </div>
       </Section>
-      <Section title="Images">
+      <Section title="Position">
         <div className="space-y-0.5">
-          <KV label="Count" value={snap.imgCount} />
-          <KV label="Active Idx" value={snap.imgActiveIdx} />
-          <KV label="Next Idx" value={snap.imgNextIdx} />
-          <KV label="Crossfade" value={f(snap.imgCrossfade)} />
-          <KV label="Ch Span" value={f(snap.imgChapterSpan) + "s"} />
-          <KV label="Local %" value={f(snap.imgLocalProgress * 100, 0) + "%"} />
-          <KV label="Opacity" value={f(snap.imgOpacity)} />
-          <KV label="Overlap" value={snap.imgOverlap ? "⚠️ YES" : "no"} />
+          <KV label="X Offset" value={f(snap.xOffset)} />
+          <KV label="Y Base" value={f(snap.yBase)} />
+          <KV label="X Nudge" value={f(snap.xNudge)} />
+          <KV label="Shake" value={f(snap.shake)} />
+          <KV label="Zoom" value={f(snap.zoom)} />
+        </div>
+      </Section>
+      <Section title="Symbols">
+        <div className="space-y-0.5">
+          <KV label="Primary" value={snap.symbolPrimary} />
+          <KV label="Secondary" value={snap.symbolSecondary} />
+          <KV label="State" value={snap.symbolState} />
         </div>
       </Section>
       <Section title="Performance">

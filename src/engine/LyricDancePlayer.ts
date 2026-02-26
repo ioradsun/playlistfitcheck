@@ -136,6 +136,40 @@ export interface LiveDebugState {
   imgOpacity: number;
   imgOverlap: boolean;
 
+  // Section boundaries
+  secIndex: number;
+  secTotal: number;
+  secStartSec: number;
+  secEndSec: number;
+  secElapsed: number;
+  secDuration: number;
+  secProgress: number;
+  secMood: string;
+  secTexture: string;
+  secHasImage: boolean;
+
+  // Cinematic direction defaults
+  cdSceneTone: string;
+  cdAtmosphere: string;
+  cdMotion: string;
+  cdTypography: string;
+  cdTexture: string;
+  cdEmotionalArc: string;
+
+  // Beat grid phase
+  bgBpm: number;
+  bgBeatsTotal: number;
+  bgConfidence: number;
+  bgNextBeat: number;
+  bgBeatPhase: number;
+
+  // Active word
+  activeWord: string;
+  activeWordEntry: string;
+  activeWordExit: string;
+  activeWordEmphasis: number;
+  activeWordTrail: string;
+
   fps: number;
   drawCalls: number;
   cacheHits: number;
@@ -238,6 +272,36 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   imgLocalProgress: 0,
   imgOpacity: 0,
   imgOverlap: false,
+
+  secIndex: -1,
+  secTotal: 0,
+  secStartSec: 0,
+  secEndSec: 0,
+  secElapsed: 0,
+  secDuration: 0,
+  secProgress: 0,
+  secMood: "—",
+  secTexture: "—",
+  secHasImage: false,
+
+  cdSceneTone: "—",
+  cdAtmosphere: "—",
+  cdMotion: "—",
+  cdTypography: "—",
+  cdTexture: "—",
+  cdEmotionalArc: "—",
+
+  bgBpm: 0,
+  bgBeatsTotal: 0,
+  bgConfidence: 0,
+  bgNextBeat: 0,
+  bgBeatPhase: 0,
+
+  activeWord: "—",
+  activeWordEntry: "—",
+  activeWordExit: "—",
+  activeWordEmphasis: 0,
+  activeWordTrail: "none",
 
   fps: 60,
   drawCalls: 0,
@@ -1495,6 +1559,71 @@ export class LyricDancePlayer {
       backgroundSystem: (cd as any)?.presetDerivation?.backgroundSystem ?? "—",
       lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
       lineIntent: currentChapter?.emotionalArc ?? "—",
+
+      // Section boundaries
+      ...(() => {
+        const sections = (cd as any)?.sections ?? [];
+        const secIdx = sections.length > 0 ? this.resolveSectionIndex(sections, clamped - this.songStartSec, duration) : -1;
+        const sec = secIdx >= 0 ? sections[secIdx] : null;
+        const secStart = sec?.startSec ?? 0;
+        const secEnd = sec?.endSec ?? 0;
+        const secDur = secEnd - secStart;
+        const secElapsed = Math.max(0, (clamped - this.songStartSec) - secStart);
+        return {
+          secIndex: secIdx,
+          secTotal: sections.length,
+          secStartSec: secStart,
+          secEndSec: secEnd,
+          secElapsed,
+          secDuration: secDur,
+          secProgress: secDur > 0 ? Math.min(1, secElapsed / secDur) : 0,
+          secMood: sec?.mood ?? "—",
+          secTexture: sec?.texture ?? (cd as any)?.texture ?? "—",
+          secHasImage: !!(this.data.section_images?.[secIdx]),
+        };
+      })(),
+
+      // Cinematic direction defaults
+      cdSceneTone: (cd as any)?.sceneTone ?? "—",
+      cdAtmosphere: (cd as any)?.atmosphere ?? "—",
+      cdMotion: (cd as any)?.motion ?? "—",
+      cdTypography: (cd as any)?.typography ?? "—",
+      cdTexture: (cd as any)?.texture ?? "—",
+      cdEmotionalArc: (cd as any)?.emotionalArc ?? "—",
+
+      // Beat grid phase
+      ...(() => {
+        const bg = this.data.beat_grid;
+        if (!bg || !bg.beats?.length) return { bgBpm: 0, bgBeatsTotal: 0, bgConfidence: 0, bgNextBeat: 0, bgBeatPhase: 0 };
+        const t = clamped;
+        const beats = bg.beats;
+        let nextBeat = 0;
+        let lastBeat = 0;
+        for (let i = 0; i < beats.length; i++) {
+          if (beats[i] > t) { nextBeat = beats[i]; lastBeat = i > 0 ? beats[i - 1] : 0; break; }
+          lastBeat = beats[i];
+        }
+        const interval = nextBeat > lastBeat ? nextBeat - lastBeat : 60 / (bg.bpm || 120);
+        const phase = interval > 0 ? (t - lastBeat) / interval : 0;
+        return { bgBpm: bg.bpm, bgBeatsTotal: beats.length, bgConfidence: bg.confidence, bgNextBeat: nextBeat, bgBeatPhase: Math.min(1, Math.max(0, phase)) };
+      })(),
+
+      // Active word
+      ...(() => {
+        const words = this.data.words ?? [];
+        const t = clamped;
+        const w = words.find((w: any) => t >= w.start && t <= w.end);
+        if (!w) return { activeWord: "—", activeWordEntry: "—", activeWordExit: "—", activeWordEmphasis: 0, activeWordTrail: "none" };
+        const wds = (cd as any)?.wordDirectives;
+        const directive = Array.isArray(wds) ? wds.find((d: any) => d.word?.toLowerCase() === w.word?.toLowerCase()) : null;
+        return {
+          activeWord: w.word ?? "—",
+          activeWordEntry: directive?.entry ?? "—",
+          activeWordExit: directive?.exit ?? "—",
+          activeWordEmphasis: directive?.emphasis ?? 0,
+          activeWordTrail: directive?.trail ?? "none",
+        };
+      })(),
     };
   }
 
