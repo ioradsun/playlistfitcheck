@@ -88,11 +88,12 @@ export interface AppSidebarProps {
   onNewProject?: () => void;
   onLoadProject?: (type: string, data: any) => void;
   refreshKey?: number;
+  optimisticItem?: RecentItem | null;
 }
 
 export { TOOLS };
 
-export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }: AppSidebarProps) {
+export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey, optimisticItem }: AppSidebarProps) {
   const siteCopy = useSiteCopy();
   const isHookMode = siteCopy.features?.crowdfit_mode === "hook_review";
   const { user, loading: authLoading, profile } = useAuth();
@@ -299,6 +300,16 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey }
     fetchRecents();
     fetchTrashed();
   }, [fetchRecents, fetchTrashed, refreshKey]);
+
+  // Optimistically inject a new project into the sidebar immediately (no DB round-trip)
+  useEffect(() => {
+    if (!optimisticItem) return;
+    setRecentItems((prev) => {
+      // Avoid duplicates
+      if (prev.some((i) => i.id === optimisticItem.id)) return prev;
+      return [optimisticItem, ...prev];
+    });
+  }, [optimisticItem]);
 
   const closeMobileIfNeeded = () => {
     if (isMobile) setOpenMobile(false);

@@ -246,6 +246,7 @@ const Index = () => {
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const refreshSidebar = useCallback(() => setSidebarRefreshKey(k => k + 1), []);
   const [deferSidebarReady, setDeferSidebarReady] = useState(false);
+  const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
 
   // Shared header UI persists across route transitions, so clear route-scoped
   // project chrome immediately whenever the pathname changes.
@@ -637,7 +638,7 @@ const Index = () => {
     <>
       {deferSidebarReady && (
         <Suspense fallback={null}>
-          <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} refreshKey={sidebarRefreshKey} />
+          <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} refreshKey={sidebarRefreshKey} optimisticItem={optimisticSidebarItem} />
         </Suspense>
       )}
       <SidebarInset className="h-svh !min-h-0 overflow-hidden">
@@ -683,7 +684,18 @@ const Index = () => {
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("lyric") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
-              <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} /></Suspense>
+              <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onProjectSaved={refreshSidebar} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
+                if (payload.projectId) {
+                  setOptimisticSidebarItem({
+                    id: payload.projectId,
+                    label: payload.title || "Untitled",
+                    meta: "just now",
+                    type: "lyric",
+                    rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
+                  });
+                  navigateToProject("lyric", payload.projectId);
+                }
+              }} /></Suspense>
             </div>
           )}
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
