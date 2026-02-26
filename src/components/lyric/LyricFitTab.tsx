@@ -509,23 +509,36 @@ export function LyricFitTab({
   const maybeRunSectionPipeline = useCallback(async () => {
     console.log(`[Transcribe Debug] maybeRunSectionPipeline called, flags: t=${transcriptionDone} b=${beatGridDone} a=${audioBufferReady}`);
     if (!transcriptionDone || !beatGridDone) return;
-    if (!audioBufferReady || !audioBuffer || !beatGrid) return;
+    if (!beatGrid) return;
     if (sectionPipelineRunningRef.current || sectionPipelineDoneRef.current) return;
+
+    // If we already have both songSignature and audioSections from DB, skip entirely
+    if (songSignature && audioSections.length > 0) {
+      console.log(`[Transcribe Debug] section pipeline SKIPPED — data loaded from DB`);
+      sectionPipelineDoneRef.current = true;
+      return;
+    }
+
+    // songSignature analysis requires audioBuffer — wait for it only if we need to compute
+    if (!songSignature && (!audioBufferReady || !audioBuffer)) return;
 
     console.log(`[Transcribe Debug] section pipeline RUNNING`);
     sectionPipelineRunningRef.current = true;
     try {
-      const lyricsText = timestampedLines.map((line) => line.text).join("\n");
-      const signature = await songSignatureAnalyzer.analyze(audioBuffer, beatGrid, lyricsText, audioDurationSec);
-      setSongSignature(signature);
-      if (savedIdRef.current) {
-        await supabase
-          .from("saved_lyrics")
-          .update({ song_signature: signature as any, updated_at: new Date().toISOString() })
-          .eq("id", savedIdRef.current);
+      let sig = songSignature;
+      if (!sig) {
+        const lyricsText = timestampedLines.map((line) => line.text).join("\n");
+        sig = await songSignatureAnalyzer.analyze(audioBuffer!, beatGrid, lyricsText, audioDurationSec);
+        setSongSignature(sig);
+        if (savedIdRef.current) {
+          await supabase
+            .from("saved_lyrics")
+            .update({ song_signature: sig as any, updated_at: new Date().toISOString() })
+            .eq("id", savedIdRef.current);
+        }
       }
 
-      const nextSections = detectSections(signature, beatGrid, timestampedLines, audioDurationSec);
+      const nextSections = detectSections(sig, beatGrid, timestampedLines, audioDurationSec);
       console.log(`[Transcribe Debug] sections computed: ${nextSections.length} sections`);
       setAudioSections(nextSections);
       sectionPipelineDoneRef.current = true;
@@ -534,7 +547,7 @@ export function LyricFitTab({
     } finally {
       sectionPipelineRunningRef.current = false;
     }
-  }, [transcriptionDone, beatGridDone, audioBufferReady, audioBuffer, beatGrid, timestampedLines, audioDurationSec]);
+  }, [transcriptionDone, beatGridDone, audioBufferReady, audioBuffer, beatGrid, timestampedLines, audioDurationSec, songSignature, audioSections.length]);
 
   useEffect(() => {
     void maybeRunSectionPipeline();
