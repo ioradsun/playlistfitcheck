@@ -3360,35 +3360,24 @@ export class LyricDancePlayer {
           break;
         }
         case 'gold-coins': {
-          const count = 16;
+          // Tiny warm glints drifting down, barely visible
+          const count = 12;
           for (let i = 0; i < count; i++) {
             const seed = (i * 0.618033) % 1;
             const seed2 = (i * 0.381966) % 1;
-            const fallSpeed = 0.25 + seed * 0.35;
-            const px = em.x + (seed - 0.5) * 120 * pScale;
-            const py = em.y + elapsed * fallSpeed * 100 * seed2 * pScale;
-            const alpha = Math.max(0, fadeAlpha - seed2 * 0.3) * 0.9;
-            const coinSize = (4 + seed * 3) * pScale;
-            const flipPhase = Math.cos(elapsed * 8 + i * 2.3);
-            const coinWidth = coinSize * Math.abs(flipPhase);
-            const glint = Math.abs(flipPhase) > 0.85;
+            const life = 0.5 + seed * 0.5;
+            const age = (elapsed * (0.3 + seed2 * 0.3)) % life;
+            const agePct = age / life;
+            const px = em.x + (seed - 0.5) * 100 * pScale;
+            const py = em.y + agePct * 30 * pScale;
+            const alpha = 0.15 * (1 - agePct) * fadeAlpha;
+            if (alpha <= 0.005) continue;
 
-            this.ctx.save();
-            this.ctx.translate(px, py);
-            this.ctx.globalAlpha = alpha;
-            this.ctx.shadowColor = '#FFD700';
-            this.ctx.shadowBlur = coinSize * (glint ? 4 : 2);
-            this.ctx.fillStyle = glint ? '#FFFACD' : '#FFD700';
             this.ctx.beginPath();
-            this.ctx.ellipse(0, 0, Math.max(1, coinWidth), coinSize, 0, 0, Math.PI * 2);
+            this.ctx.arc(px, py, 0.6 * pScale, 0, Math.PI * 2);
+            this.ctx.fillStyle = `rgba(255,215,0,${alpha})`;
             this.ctx.fill();
-            this.ctx.strokeStyle = '#DAA520';
-            this.ctx.lineWidth = 0.5 * pScale;
-            this.ctx.stroke();
-            this.ctx.restore();
           }
-          this.ctx.shadowBlur = 0;
-          this.ctx.globalAlpha = 1;
           break;
         }
         case 'memory-orbs': {
