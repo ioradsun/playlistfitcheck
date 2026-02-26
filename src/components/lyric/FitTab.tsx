@@ -619,16 +619,27 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
         return;
       }
 
-      // Upload audio
-      const fileExt = audioFile.name.split(".").pop() || "webm";
-      const storagePath = `${user.id}/${artistSlug}/${songSlug}/${hookSlug}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("audio-clips")
-        .upload(storagePath, audioFile, { upsert: true });
-      if (uploadError) throw uploadError;
+      // Check for existing hook to reuse audio_url
+      const { data: existingHook }: any = await supabase
+        .from("shareable_hooks" as any)
+        .select("audio_url")
+        .eq("artist_slug", artistSlug)
+        .eq("song_slug", songSlug)
+        .eq("hook_slug", hookSlug)
+        .maybeSingle();
 
-      const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
-      const audioUrl = urlData.publicUrl;
+      let audioUrl = existingHook?.audio_url as string | undefined;
+      if (!audioUrl) {
+        const fileExt = audioFile.name.split(".").pop() || "webm";
+        const storagePath = `${user.id}/${artistSlug}/${songSlug}/${hookSlug}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("audio-clips")
+          .upload(storagePath, audioFile, { upsert: true });
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+        audioUrl = urlData.publicUrl;
+      }
 
       const battleId = crypto.randomUUID();
       const pSpec = renderData?.motionProfileSpec || {};
