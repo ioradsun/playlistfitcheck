@@ -1304,8 +1304,8 @@ export class LyricDancePlayer {
     return Math.max(0, sections.length - 1);
   }
 
-  private resolveChapterIndex(chapters: any[], currentTimeSec: number, _totalDurationSec: number): number {
-    return this.resolveSectionIndex(chapters, currentTimeSec);
+  private resolveChapterIndex(chapters: any[], currentTimeSec: number, totalDurationSec: number): number {
+    return this.resolveSectionIndex(chapters, currentTimeSec, totalDurationSec);
   }
 
   private resolveChapter(chapters: any[], currentTimeSec: number, totalDurationSec: number): any {
