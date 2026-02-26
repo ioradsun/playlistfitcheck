@@ -603,6 +603,7 @@ serve(async (req) => {
 
     const contentType = req.headers.get("content-type") || "";
     let audioBase64: string | undefined;
+    let audioRawBytes: Uint8Array | undefined; // raw bytes — avoids base64 round-trip for Scribe
     let format: string | undefined;
     let analysisModel: string | undefined;
     let transcriptionModel: string | undefined;
@@ -626,16 +627,8 @@ serve(async (req) => {
       format = ext;
 
       console.log(`[Transcribe Debug] ${ms()} reading arrayBuffer`);
-      const uint8 = new Uint8Array(await audio.arrayBuffer());
-      console.log(`[Transcribe Debug] ${ms()} arrayBuffer read, ${uint8.length} bytes`);
-      console.log(`[Transcribe Debug] ${ms()} base64 encoding start`);
-      let binary = "";
-      const chunkSize = 8192;
-      for (let i = 0; i < uint8.length; i += chunkSize) {
-        binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
-      }
-      audioBase64 = btoa(binary);
-      console.log(`[Transcribe Debug] ${ms()} base64 encoding done, ${(audioBase64.length/1024/1024).toFixed(2)}MB base64`);
+      audioRawBytes = new Uint8Array(await audio.arrayBuffer());
+      console.log(`[Transcribe Debug] ${ms()} arrayBuffer read, ${audioRawBytes.length} bytes`);
     } else {
       let payload: any;
       try {
@@ -658,16 +651,8 @@ serve(async (req) => {
         if (!audioResp.ok) {
           throw new Error(`Failed to fetch audio from storage: ${audioResp.status}`);
         }
-        const audioBytes = new Uint8Array(await audioResp.arrayBuffer());
-        console.log(`[Transcribe Debug] ${ms()} fetched ${(audioBytes.length/1024/1024).toFixed(2)}MB from storage`);
-        console.log(`[Transcribe Debug] ${ms()} base64 encoding start`);
-        let binary = "";
-        const chunkSize = 8192;
-        for (let i = 0; i < audioBytes.length; i += chunkSize) {
-          binary += String.fromCharCode(...audioBytes.subarray(i, i + chunkSize));
-        }
-        audioBase64 = btoa(binary);
-        console.log(`[Transcribe Debug] ${ms()} base64 encoding done, ${(audioBase64.length/1024/1024).toFixed(2)}MB base64`);
+        audioRawBytes = new Uint8Array(await audioResp.arrayBuffer());
+        console.log(`[Transcribe Debug] ${ms()} fetched ${(audioRawBytes.length/1024/1024).toFixed(2)}MB from storage`);
       } else {
         audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : undefined;
       }
@@ -680,7 +665,7 @@ serve(async (req) => {
 
     const editorMode = typeof referenceLyrics === "string" && referenceLyrics.trim().length > 0;
     if (editorMode) console.log(`[editor-mode] Reference lyrics provided (${referenceLyrics!.trim().split("\n").length} lines)`);
-    if (!audioBase64) throw new Error("No audio data provided");
+    if (!audioBase64 && !audioRawBytes) throw new Error("No audio data provided");
 
     // Resolve transcription engine
     const useGeminiTranscription = transcriptionModel === "gemini";
@@ -704,7 +689,14 @@ serve(async (req) => {
       ? transcriptionModel!
       : resolvedAnalysisModel;
 
-    const estimatedBytes = audioBase64.length * 0.75;
+    // Ensure we have raw bytes (decode from base64 only if needed)
+    if (!audioRawBytes && audioBase64) {
+      const binaryStr = atob(audioBase64);
+      audioRawBytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) audioRawBytes[i] = binaryStr.charCodeAt(i);
+    }
+
+    const estimatedBytes = audioRawBytes ? audioRawBytes.length : (audioBase64 ? audioBase64.length * 0.75 : 0);
     if (estimatedBytes > 25 * 1024 * 1024) {
       return new Response(
         JSON.stringify({ error: `File too large (~${(estimatedBytes / 1024 / 1024).toFixed(0)} MB). Max is 25 MB.` }),
@@ -727,11 +719,30 @@ serve(async (req) => {
       `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
     );
 
-    // ── Stage 1: Transcription only (Song DNA is now a separate on-demand call) ──
+    // ── Stage 1: Transcription ──
+    // For Scribe: pass raw bytes directly (no base64 round-trip)
+    // For Gemini: encode to base64 only when needed (data: URI format)
     console.log(`[Transcribe Debug] ${ms()} starting transcription (engine=${transcriptionEngine})`);
-    const transcribePromise = useGeminiTranscription
-      ? runGeminiTranscribe(audioBase64, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined)
-      : runScribe(audioBase64, ext, mimeType, ELEVENLABS_API_KEY!);
+    let transcribePromise: Promise<{ words: WhisperWord[]; segments: Array<{ start: number; end: number; text: string }>; rawText: string; duration: number }>;
+
+    if (useGeminiTranscription) {
+      // Gemini needs base64 — encode only here
+      if (!audioBase64 && audioRawBytes) {
+        console.log(`[Transcribe Debug] ${ms()} base64 encoding for Gemini`);
+        let binary = "";
+        const chunkSize = 8192;
+        for (let i = 0; i < audioRawBytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...audioRawBytes.subarray(i, i + chunkSize));
+        }
+        audioBase64 = btoa(binary);
+        console.log(`[Transcribe Debug] ${ms()} base64 encoding done, ${(audioBase64.length/1024/1024).toFixed(2)}MB`);
+      }
+      transcribePromise = runGeminiTranscribe(audioBase64!, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined);
+    } else {
+      // Scribe: raw bytes, no base64 needed
+      console.log(`[Transcribe Debug] ${ms()} using raw bytes for Scribe (skipping base64)`);
+      transcribePromise = runScribe(audioRawBytes!, ext, mimeType, ELEVENLABS_API_KEY!);
+    }
 
     const [transcribeResult] = await Promise.allSettled([transcribePromise]);
     console.log(`[Transcribe Debug] ${ms()} transcription settled, status=${transcribeResult.status}`);
