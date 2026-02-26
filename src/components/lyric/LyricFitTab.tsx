@@ -629,7 +629,7 @@ export function LyricFitTab({
                       lyrics: mainLines,
                       cinematic_direction: enrichedDirection,
                       words: words ?? null,
-                      beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
+                      beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : { bpm: 0, beats: [], confidence: 0 },
                       palette: enrichedDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
                       section_images: null,
                     } as any, { onConflict: "artist_slug,song_slug" });
