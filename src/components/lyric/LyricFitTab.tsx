@@ -178,8 +178,12 @@ export function LyricFitTab({
 
   // Ensure audioBuffer is decoded when audioFile exists (e.g. loaded from DB)
   // songSignature needs audioBuffer even if beatGrid was loaded from saved data
+  // PERF: Skip eager decode when all analysis data is already loaded — decode on demand
+  const allAnalysisLoaded = !!(beatGrid && songSignature && cinematicDirection);
   useEffect(() => {
     if (audioBuffer || !audioFile || audioFile.size === 0) return;
+    // If all analysis data is loaded from DB, defer decode until user needs playback
+    if (allAnalysisLoaded) return;
     let cancelled = false;
     const ctx = new AudioContext();
     audioFile.arrayBuffer().then((ab) =>
@@ -194,8 +198,24 @@ export function LyricFitTab({
       })
     ).catch(() => ctx.close());
     return () => { cancelled = true; };
-  }, [audioFile, audioBuffer]);
+  }, [audioFile, audioBuffer, allAnalysisLoaded]);
 
+
+  // Lazy decode for playback — called when user hits play but audioBuffer isn't ready
+  const decodeAudioOnDemand = useCallback(async () => {
+    if (audioBuffer || !audioFile || audioFile.size === 0) return;
+    try {
+      const ctx = new AudioContext();
+      const ab = await audioFile.arrayBuffer();
+      const buf = await ctx.decodeAudioData(ab);
+      setAudioBuffer(buf);
+      setAudioBufferReady(true);
+      setWaveformData(extractPeaksFromBuffer(buf));
+      ctx.close();
+    } catch {
+      console.warn("[Pipeline] On-demand AudioBuffer decode failed");
+    }
+  }, [audioFile, audioBuffer]);
 
   const resolveProjectTitle = useCallback(
     (title: string | null | undefined, filename: string) => {
