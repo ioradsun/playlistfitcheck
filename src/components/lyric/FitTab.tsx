@@ -253,7 +253,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
       cancelled = true;
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [songSlug, sections.length]);
+  }, [songSlug, sections.length, userId]);
 
   // Listen for dance-published event to refresh images
   useEffect(() => {
