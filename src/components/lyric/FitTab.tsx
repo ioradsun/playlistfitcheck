@@ -320,7 +320,7 @@ export function FitTab({
           cinematic_direction: cinematicDirection || null,
           words: words ?? null,
           auto_palettes: danceNeedsRegeneration ? null : (publishAutoPalettes ?? null),
-          beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
+          beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : { bpm: 0, beats: [], confidence: 0 },
           palette: cinematicDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
           section_images: danceNeedsRegeneration ? null : (existingDance?.section_images ?? null),
         }, { onConflict: "artist_slug,song_slug" });
