@@ -16,7 +16,7 @@ import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
-import type { FrameRenderState as FullFrameRenderState } from "@/engine/presetDerivation";
+// FrameRenderState import removed — V3 derives from cinematicDirection
 import type { AudioSection } from "@/engine/sectionDetector";
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus } from "./LyricFitTab";
@@ -51,12 +51,8 @@ interface Props {
   setBeatGrid: (g: BeatGridData | null) => void;
   songSignature: SongSignature | null;
   setSongSignature: (s: SongSignature | null) => void;
-  frameState: FullFrameRenderState | null;
-  setFrameRenderState: (m: FullFrameRenderState | null) => void;
   cinematicDirection: any | null;
   setCinematicDirection: (d: any) => void;
-  bgImageUrl: string | null;
-  setBgImageUrl: (u: string | null) => void;
   generationStatus: GenerationStatus;
   audioSections?: AudioSection[];
   words?: Array<{ word: string; start: number; end: number }> | null;
@@ -76,11 +72,8 @@ export function FitTab({
   setBeatGrid,
   songSignature,
   setSongSignature,
-  frameState,
-  setFrameRenderState,
   cinematicDirection,
   setCinematicDirection,
-  bgImageUrl,
   generationStatus,
   audioSections,
   words,
@@ -429,9 +422,9 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
 
 
   const handleDance = useCallback(async () => {
-    console.log("[FitTab] handleDance called", { user: !!user, frameState: !!frameState, lyricData: !!lyricData, audioFile: !!audioFile, publishing });
+    console.log("[FitTab] handleDance called", { user: !!user, lyricData: !!lyricData, audioFile: !!audioFile, publishing });
     if (!user) { toast.error("Sign in to publish your Dance"); return; }
-    if (!frameState || !lyricData || !audioFile || publishing) return;
+    if (!cinematicDirection || !lyricData || !audioFile || publishing) return;
     setPublishing(true);
     setPublishStatus("Preparing…");
 
@@ -548,7 +541,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       setPublishing(false);
       setPublishStatus("");
     }
-  }, [user, frameState, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection]);
+  }, [user, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection]);
 
   // ── Battle publish handler ──────────────────────────────────────────
   const handleStartBattle = useCallback(async () => {
@@ -716,7 +709,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
     generationStatus.renderData === "done" &&
     generationStatus.cinematicDirection === "done";
   const hasErrors = Object.values(generationStatus).includes("error");
-  const danceDisabled = !frameState || publishing || !allReady;
+  const danceDisabled = !cinematicDirection || publishing || !allReady;
   // Republish only needs auth + not currently publishing (data already exists on server)
   const republishDisabled = publishing;
   const hasBattle = !!(renderData?.hook && renderData?.secondHook);
@@ -725,7 +718,6 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
   
 
   // ── Sections derived from renderData ─────────────────────────────────────
-  const motionProfileSpec = renderData?.motionProfileSpec;
   const meaning = renderData?.meaning;
 
   const formatTime = (sec: number) => {
@@ -880,31 +872,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
                 </div>
               )}
 
-              {motionProfileSpec && (
-                <div className="glass-card rounded-xl p-3 space-y-2">
-                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                    <Palette size={10} />
-                    Visual System
-                  </div>
-                  {motionProfileSpec.system && (
-                    <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
-                      {motionProfileSpec.system}
-                    </span>
-                  )}
-                  {motionProfileSpec.palette && Array.isArray(motionProfileSpec.palette) && (
-                    <div className="flex items-center gap-1">
-                      {motionProfileSpec.palette.map((c: string, i: number) => (
-                        <div key={i} className="w-5 h-5 rounded-full border border-border/40" style={{ backgroundColor: c }} title={c} />
-                      ))}
-                    </div>
-                  )}
-                  {motionProfileSpec.typography && (
-                    <p className="text-[10px] text-muted-foreground">
-                      Font: <span className="text-foreground">{motionProfileSpec.typography.fontFamily || motionProfileSpec.typography}</span>
-                    </p>
-                  )}
-                </div>
-              )}
+              {/* Visual system info now shown via Cinematic Direction card below */}
 
               {cinematicDirection && (
                 <CinematicDirectionCard cinematicDirection={cinematicDirection} songTitle={lyricData.title} />

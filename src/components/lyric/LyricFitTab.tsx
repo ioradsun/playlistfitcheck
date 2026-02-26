@@ -71,8 +71,7 @@ export function LyricFitTab({
   const [songSignature, setSongSignature] = useState<SongSignature | null>(null);
   const [audioSections, setAudioSections] = useState<any[]>([]);
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
-  const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
-  const [frameState, setFrameRenderState] = useState<any | null>(null);
+  // bgImageUrl and frameState removed — V3 derives from cinematicDirection
 
   const [fitReadiness, setFitReadiness] = useState<FitReadiness>("not_started");
   const [fitProgress, setFitProgress] = useState(0);
@@ -255,8 +254,7 @@ export function LyricFitTab({
               grain: "static", wash: "breath", glass: "pressure", clean: "void",
             };
             const atm = loadedCinematicDirection.atmosphere || "cinematic";
-            const manifest = deriveFrameState(loadedCinematicDirection, 0, 0.5);
-            setFrameRenderState(manifest);
+            deriveFrameState(loadedCinematicDirection, 0, 0.5); // warm up cache
           });
         });
       }
@@ -266,7 +264,7 @@ export function LyricFitTab({
       const savedSections = (initialLyric as any).cinematic_direction?.sections;
       if (Array.isArray(savedSections)) setAudioSections(savedSections);
 
-      setBgImageUrl((initialLyric as any).background_image_url ?? null);
+      // bgImageUrl removed — V3
 
       const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
       if (cachedAudio) {
@@ -457,8 +455,7 @@ export function LyricFitTab({
         };
         const atmospherePreset = enrichedDirection.atmosphere || "cinematic";
 
-        const manifest = deriveFrameState(enrichedDirection, 0, 0.5);
-        setFrameRenderState(manifest);
+        deriveFrameState(enrichedDirection, 0, 0.5); // warm up cache
 
         // Persist cinematic direction back to render_data in DB
         if (savedIdRef.current) {
@@ -588,7 +585,7 @@ export function LyricFitTab({
     setCinematicDirection(null);
     setBeatGrid(null);
     setSongSignature(null);
-    setFrameRenderState(null);
+    // frameState removed — V3 derives from cinematicDirection
     setAudioBuffer(null);
     setTranscriptionDone(false);
     setBeatGridDone(false);
@@ -691,8 +688,6 @@ export function LyricFitTab({
             setBeatGrid(null);
             setSongSignature(null);
             setCinematicDirection(null);
-            setBgImageUrl(null);
-            setFrameRenderState(null);
             setLines([]);
             setAudioBuffer(null);
             setTranscriptionDone(false);
@@ -731,12 +726,8 @@ export function LyricFitTab({
           setBeatGrid={setBeatGrid}
           songSignature={songSignature}
           setSongSignature={setSongSignature}
-          frameState={frameState}
-          setFrameRenderState={setFrameRenderState}
           cinematicDirection={cinematicDirection}
           setCinematicDirection={setCinematicDirection}
-          bgImageUrl={bgImageUrl}
-          setBgImageUrl={setBgImageUrl}
           generationStatus={generationStatus}
           audioSections={audioSections}
           words={words}

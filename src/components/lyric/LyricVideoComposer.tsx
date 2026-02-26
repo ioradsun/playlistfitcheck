@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { safeManifest } from "@/engine/validateFrameState";
+// safeManifest removed — V3 derives state from cinematicDirection via presetDerivation
 import type { LyricLine, LyricHook, LyricMetadata } from "./LyricDisplay";
 
 interface FrameRenderState {
@@ -831,43 +831,7 @@ export function LyricVideoComposer({
     }
   }, [open, step, isPlaying, drawPreview, regionStart]);
 
-  // ── Generate AI background ────────────────────────────────────────────────
-  const generateBackground = useCallback(async () => {
-    setGeneratingBg(true);
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        "lyric-video-bg",
-        {
-          body: {
-            manifest: safeManifest(buildFrameRenderState(metadata)).manifest,
-            userDirection: [
-              `Song: ${title} by ${artist}`,
-              bgPrompt?.trim() ? `Custom direction: ${bgPrompt.trim()}` : "",
-            ]
-              .filter(Boolean)
-              .join(". "),
-          },
-        },
-      );
-      if (error) throw error;
-      if (!data?.imageUrl) throw new Error("No image returned");
-
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("Failed to load image"));
-        img.src = data.imageUrl;
-      });
-      setBgImage(img);
-      toast.success("Background generated");
-    } catch (e) {
-      console.error("BG generation error:", e);
-      toast.error("Failed to generate background");
-    } finally {
-      setGeneratingBg(false);
-    }
-  }, [title, artist, metadata, bgPrompt]);
+  // lyric-video-bg removed — V3 uses section images from cinematic direction
 
   // ── Record & download ──────────────────────────────────────────────────────
   const handleRecord = useCallback(async () => {
@@ -1106,23 +1070,7 @@ export function LyricVideoComposer({
                     </p>
                     <p className="text-sm font-medium mt-0.5">{title}</p>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={generateBackground}
-                    disabled={generatingBg}
-                    className="text-[13px] font-semibold tracking-[0.15em] uppercase"
-                  >
-                    {generatingBg ? (
-                      <>
-                        <Loader2 size={12} className="animate-spin mr-2" />
-                        Generating
-                      </>
-                    ) : bgImage ? (
-                      "Regenerate"
-                    ) : (
-                      "Generate Background"
-                    )}
-                  </Button>
+                  {/* AI background generation removed — V3 uses section images */}
                 </div>
               </div>
             )}
