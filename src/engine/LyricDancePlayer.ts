@@ -720,6 +720,7 @@ interface WordEmitter {
   type: WordEmitterType;
   x: number;
   y: number;
+  wordWidth: number;
   color: string;
   startTime: number;
   duration: number;
