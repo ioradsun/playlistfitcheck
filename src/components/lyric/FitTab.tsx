@@ -875,7 +875,7 @@ function CinematicDirectionCard({
   const [danceId, setDanceId] = useState<string | null>(null);
   const [imagesHydrated, setImagesHydrated] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoImageTriggered = useRef(false);
+  // autoImageTriggered ref removed — auto-trigger now lives in LyricFitTab pipeline
   const fitTabImageT0Ref = useRef<number | null>(null);
   const fitTabImageMs = useCallback(() => fitTabImageT0Ref.current === null
     ? "0ms"
