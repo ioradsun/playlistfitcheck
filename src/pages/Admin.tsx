@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music } from "lucide-react";
+import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music, Bomb } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -43,6 +43,9 @@ export default function Admin() {
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [nukeOpen, setNukeOpen] = useState(false);
+  const [nuking, setNuking] = useState(false);
+  const [nukeConfirmText, setNukeConfirmText] = useState("");
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
   const fetchUsers = useCallback(async () => {
@@ -118,6 +121,22 @@ export default function Admin() {
     finally { setDeleting(false); setDeleteTarget(null); }
   };
 
+  const handleNukeAllData = async () => {
+    setNuking(true);
+    try {
+      const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", {
+        body: { action: "delete_all_data" },
+      });
+      if (fnError) throw fnError;
+      if (result?.error) throw new Error(result.error);
+      toast.success(`All data deleted. ${result.deletedUsers} users removed.${result.errors?.length ? ` ${result.errors.length} warnings.` : ""}`);
+      setUsers([]);
+      setData(null);
+      setDataLoaded(false);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Delete failed"); }
+    finally { setNuking(false); setNukeOpen(false); setNukeConfirmText(""); }
+  };
+
   const refreshButton = (
     <button
       onClick={handleRefresh}
@@ -159,7 +178,16 @@ export default function Admin() {
                   <Users size={14} className="text-primary" />
                   <span className="text-sm font-mono font-medium">All Users</span>
                 </div>
-                <span className="text-xs font-mono text-muted-foreground">{users.length} total</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setNukeOpen(true)}
+                    className="flex items-center gap-1.5 text-[11px] font-mono font-bold tracking-wider uppercase text-destructive/60 hover:text-destructive transition-colors"
+                  >
+                    <Bomb size={12} />
+                    Delete All Data
+                  </button>
+                  <span className="text-xs font-mono text-muted-foreground">{users.length} total</span>
+                </div>
               </div>
 
               {/* Table header */}
@@ -363,7 +391,7 @@ export default function Admin() {
         </Tabs>
       </div>
 
-      {/* Delete confirmation */}
+      {/* Delete user confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -376,6 +404,39 @@ export default function Admin() {
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteUser} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Nuke all data confirmation */}
+      <AlertDialog open={nukeOpen} onOpenChange={(open) => { if (!open) { setNukeOpen(false); setNukeConfirmText(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <Bomb size={18} /> Delete ALL data?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">This will permanently delete <strong>all rows from every table</strong> and <strong>all users except you</strong>. This cannot be undone.</span>
+              <span className="block text-destructive font-medium">Type "DELETE" to confirm:</span>
+              <input
+                type="text"
+                value={nukeConfirmText}
+                onChange={(e) => setNukeConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="w-full bg-background border border-destructive/30 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-destructive"
+                autoFocus
+              />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={nuking}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleNukeAllData}
+              disabled={nuking || nukeConfirmText !== "DELETE"}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-40"
+            >
+              {nuking ? "Deleting everything…" : "Delete All Data"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
