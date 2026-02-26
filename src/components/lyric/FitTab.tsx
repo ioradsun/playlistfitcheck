@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
+import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { LyricWaveform } from "./LyricWaveform";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
@@ -459,6 +460,28 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
       setPublishStatus("Publishing…");
       const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
 
+      let publishAutoPalettes: string[][] | null = null;
+      try {
+        const { data: existingDance }: any = await supabase
+          .from("shareable_lyric_dances" as any)
+          .select("section_images, auto_palettes")
+          .eq("user_id", user.id)
+          .eq("artist_slug", artistSlug)
+          .eq("song_slug", songSlug)
+          .maybeSingle();
+
+        if (Array.isArray(existingDance?.auto_palettes) && existingDance.auto_palettes.length > 0) {
+          publishAutoPalettes = existingDance.auto_palettes;
+        } else {
+          const urls = (existingDance?.section_images ?? []).filter((u: unknown): u is string => typeof u === "string" && Boolean(u));
+          if (urls.length > 0) {
+            publishAutoPalettes = await computeAutoPalettesFromUrls(urls);
+          }
+        }
+      } catch (paletteError) {
+        console.warn("[FitTab] failed to precompute auto palettes (non-blocking):", paletteError);
+      }
+
       const { error: insertError } = await supabase
         .from("shareable_lyric_dances" as any)
         .upsert({
@@ -471,6 +494,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
           lyrics: mainLines,
           cinematic_direction: cinematicDirection || null,
           words: words ?? null,
+          auto_palettes: publishAutoPalettes,
         }, { onConflict: "artist_slug,song_slug" });
 
       if (insertError) throw insertError;

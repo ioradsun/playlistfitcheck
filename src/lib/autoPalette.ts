@@ -17,16 +17,22 @@ export interface AutoPalette {
 
 type Pixel = { r: number; g: number; b: number; h: number; s: number; l: number };
 
-export function sampleChapterImage(img: CanvasImageSource): ImageSample {
-  const size = 32;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
+const SAMPLE_SIZE = 32;
+
+export function sampleChapterImage(
+  img: CanvasImageSource,
+  reusableCtx?: CanvasRenderingContext2D,
+  sampleSize: number = SAMPLE_SIZE,
+): ImageSample {
+  const canvas = reusableCtx?.canvas ?? document.createElement('canvas');
+  canvas.width = sampleSize;
+  canvas.height = sampleSize;
+  const ctx = reusableCtx ?? canvas.getContext('2d');
   if (!ctx) throw new Error('2d canvas unavailable');
 
-  ctx.drawImage(img, 0, 0, size, size);
-  const { data } = ctx.getImageData(0, 0, size, size);
+  ctx.clearRect(0, 0, sampleSize, sampleSize);
+  ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+  const { data } = ctx.getImageData(0, 0, sampleSize, sampleSize);
 
   const pixels: Pixel[] = [];
   for (let i = 0; i < data.length; i += 4) {
@@ -141,12 +147,19 @@ export function generateAutoPalette(sample: ImageSample): string[] {
 }
 
 export async function computeAutoPalettesFromUrls(urls: string[]): Promise<string[][]> {
+  const canvas = document.createElement('canvas');
+  canvas.width = SAMPLE_SIZE;
+  canvas.height = SAMPLE_SIZE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2d canvas unavailable');
+
   const palettes: string[][] = [];
   for (const url of urls) {
     if (!url) continue;
     const img = await loadImage(url);
-    const sample = sampleChapterImage(img);
+    const sample = sampleChapterImage(img, ctx, SAMPLE_SIZE);
     palettes.push(generateAutoPalette(sample));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
   return palettes;
 }
