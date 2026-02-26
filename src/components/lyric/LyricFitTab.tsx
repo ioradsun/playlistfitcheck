@@ -331,6 +331,13 @@ export function LyricFitTab({
     const savedSections = (initialLyric as any).cinematic_direction?.sections;
     if (Array.isArray(savedSections)) setAudioSections(savedSections);
 
+    // Hydrate section_images from saved_lyrics — survives tab switches
+    const savedSectionImages = (initialLyric as any).section_images;
+    if (Array.isArray(savedSectionImages) && savedSectionImages.length > 0 && savedSectionImages.some(Boolean)) {
+      console.log(`[Pipeline] Hydrated ${savedSectionImages.filter(Boolean).length} section images from saved_lyrics`);
+      setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+    }
+
     const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
     if (cachedAudio) {
       setAudioFile(cachedAudio);
