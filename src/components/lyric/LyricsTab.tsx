@@ -220,7 +220,8 @@ export function LyricsTab({
         if (!data.lines) throw new Error("Invalid response format");
 
         if (user && projectId) {
-          await supabase.from("saved_lyrics").upsert({
+          // Non-blocking — don't let DB persist block the UI
+          void supabase.from("saved_lyrics").upsert({
             id: projectId,
             user_id: user.id,
             title: resolveProjectTitle(data.title, file.name),
@@ -228,7 +229,9 @@ export function LyricsTab({
             words: data.words ?? null,
             filename: file.name,
             updated_at: new Date().toISOString(),
-          } as any);
+          } as any).then(({ error }) => {
+            if (error) console.warn("[LyricUpload] post-transcription upsert failed:", error.message);
+          });
         }
 
         const newLyricData: LyricData = {
