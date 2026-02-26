@@ -610,7 +610,7 @@ function CinematicDirectionCard({ cinematicDirection, songTitle, userId }: { cin
       console.error("Dance publish error:", e);
       toast.error(e.message || "Failed to publish lyric dance");
     } finally {
-      clearTimeout(timeoutId);
+      clearTimeout(slowWarningId);
       setPublishing(false);
       setPublishStatus("");
     }
