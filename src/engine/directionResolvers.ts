@@ -4,7 +4,7 @@ import type {
   TensionStage,
 } from "@/types/CinematicDirection";
 
-export function enrichSections(sections: CinematicSection[] | undefined): CinematicSection[] {
+export function enrichSections(sections: CinematicSection[] | undefined, totalDurationSec?: number): CinematicSection[] {
   if (!sections || sections.length === 0) {
     return [
       { sectionIndex: 0, description: "Opening", startRatio: 0, endRatio: 0.33 },
@@ -13,11 +13,25 @@ export function enrichSections(sections: CinematicSection[] | undefined): Cinema
     ];
   }
   const count = sections.length;
-  return sections.map((s, i) => ({
-    ...s,
-    startRatio: s.startRatio ?? i / count,
-    endRatio: s.endRatio ?? (i + 1) / count,
-  }));
+  const dur = totalDurationSec && totalDurationSec > 0 ? totalDurationSec : null;
+  return sections.map((s, i) => {
+    // If sections have absolute time boundaries, compute ratios from them
+    const hasAbsTime = s.startSec != null && s.endSec != null;
+    let startRatio = s.startRatio ?? i / count;
+    let endRatio = s.endRatio ?? (i + 1) / count;
+    let startSec = s.startSec;
+    let endSec = s.endSec;
+
+    if (hasAbsTime && dur) {
+      startRatio = s.startSec! / dur;
+      endRatio = s.endSec! / dur;
+    } else if (!hasAbsTime && dur) {
+      startSec = startRatio * dur;
+      endSec = endRatio * dur;
+    }
+
+    return { ...s, startRatio, endRatio, startSec, endSec };
+  });
 }
 
 export function findSectionByProgress(sections: CinematicSection[] | undefined, progress: number): CinematicSection | null {

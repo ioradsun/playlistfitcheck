@@ -526,6 +526,18 @@ export function LyricFitTab({
         const enrichedDirection = beatGrid
           ? { ...dirResult.cinematicDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
           : dirResult.cinematicDirection;
+
+        // Merge audioSections time boundaries into direction sections
+        if (audioSections.length > 0 && Array.isArray(enrichedDirection.sections)) {
+          enrichedDirection.sections = enrichedDirection.sections.map((s: any, i: number) => ({
+            ...s,
+            startSec: audioSections[i]?.startSec ?? s.startSec,
+            endSec: audioSections[i]?.endSec ?? s.endSec,
+          }));
+          console.log('[Pipeline] Merged audioSections time boundaries into direction sections:', 
+            enrichedDirection.sections.map((s: any, i: number) => ({ index: i, startSec: s.startSec, endSec: s.endSec })));
+        }
+
         setCinematicDirection(enrichedDirection);
 
         // Derive FrameRenderState from cinematic direction presets
@@ -617,7 +629,7 @@ export function LyricFitTab({
                       lyrics: mainLines,
                       cinematic_direction: enrichedDirection,
                       words: words ?? null,
-                      beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
+                      beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : { bpm: 0, beats: [], confidence: 0 },
                       palette: enrichedDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
                       section_images: null,
                     } as any, { onConflict: "artist_slug,song_slug" });
