@@ -16,6 +16,26 @@ import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
 import type { SceneContextResult } from "@/lib/sceneContexts";
+import type { WaveformData } from "@/hooks/useAudioEngine";
+
+const WAVEFORM_PEAK_COUNT = 200;
+
+function extractPeaksFromBuffer(buf: AudioBuffer): WaveformData {
+  const channel = buf.getChannelData(0);
+  const blockSize = Math.floor(channel.length / WAVEFORM_PEAK_COUNT);
+  const peaks: number[] = [];
+  for (let i = 0; i < WAVEFORM_PEAK_COUNT; i++) {
+    let max = 0;
+    const start = i * blockSize;
+    for (let j = 0; j < blockSize; j++) {
+      const v = Math.abs(channel[start + j]);
+      if (v > max) max = v;
+    }
+    peaks.push(max);
+  }
+  const maxPeak = Math.max(...peaks, 0.01);
+  return { peaks: peaks.map(p => p / maxPeak), duration: buf.duration };
+}
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 export type GenerationJobStatus = "idle" | "running" | "done" | "error";
@@ -86,6 +106,7 @@ export function LyricFitTab({
   });
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
   const [transcriptionDone, setTranscriptionDone] = useState(false);
   const [beatGridDone, setBeatGridDone] = useState(false);
   const [audioBufferReady, setAudioBufferReady] = useState(false);
@@ -159,7 +180,11 @@ export function LyricFitTab({
     const ctx = new AudioContext();
     audioFile.arrayBuffer().then((ab) =>
       ctx.decodeAudioData(ab).then((buf) => {
-        if (!cancelled) { setAudioBuffer(buf); setAudioBufferReady(true); }
+        if (!cancelled) {
+          setAudioBuffer(buf);
+          setAudioBufferReady(true);
+          setWaveformData(extractPeaksFromBuffer(buf));
+        }
         ctx.close();
       })
     ).catch(() => ctx.close());
@@ -346,6 +371,7 @@ export function LyricFitTab({
         const buf = await ctx.decodeAudioData(ab);
         setAudioBuffer(buf);
         setAudioBufferReady(true);
+        setWaveformData(extractPeaksFromBuffer(buf));
         ctx.close();
       } catch {
         console.warn("[Pipeline] AudioBuffer decode failed");
@@ -676,6 +702,7 @@ export function LyricFitTab({
           savedId={savedId}
           setSavedId={setSavedId}
           setLines={setLines}
+          waveformData={waveformData}
           fmlyLines={fmlyLines}
           setFmlyLines={setFmlyLines}
           versionMeta={versionMeta}
@@ -690,6 +717,7 @@ export function LyricFitTab({
             setCinematicDirection(null);
             setLines([]);
             setAudioBuffer(null);
+            setWaveformData(null);
             setTranscriptionDone(false);
             setBeatGridDone(false);
             setAudioBufferReady(false);

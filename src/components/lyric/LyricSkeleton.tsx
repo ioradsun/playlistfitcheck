@@ -1,21 +1,30 @@
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, AlertCircle, ArrowLeft, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LyricWaveform } from "./LyricWaveform";
+import type { WaveformData } from "@/hooks/useAudioEngine";
 
 interface Props {
   title: string;
   fileName?: string;
   loading: boolean;
+  waveformData?: WaveformData | null;
   onRetry?: () => void;
   onBack?: () => void;
 }
 
-export function LyricSkeleton({ title, fileName, loading, onRetry, onBack }: Props) {
+export function LyricSkeleton({ title, fileName, loading, waveformData, onRetry, onBack }: Props) {
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+
   const lineWidths = useMemo(
     () => Array.from({ length: 14 }, () => 40 + Math.random() * 50),
     [],
   );
+
+  const handleSeek = useCallback((time: number) => setCurrentTime(time), []);
+  const handleTogglePlay = useCallback(() => setIsPlaying(p => !p), []);
 
   return (
     <div className="flex-1 px-4 py-6 space-y-5 max-w-2xl mx-auto w-full">
@@ -35,8 +44,20 @@ export function LyricSkeleton({ title, fileName, loading, onRetry, onBack }: Pro
         {title}
       </h2>
 
-      {/* Waveform placeholder */}
-      <Skeleton className="h-10 w-full rounded-md" />
+      {/* Waveform: real if available, skeleton placeholder otherwise */}
+      {waveformData ? (
+        <div className="glass-card rounded-xl p-3">
+          <LyricWaveform
+            waveform={waveformData}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            onSeek={handleSeek}
+            onTogglePlay={handleTogglePlay}
+          />
+        </div>
+      ) : (
+        <Skeleton className="h-[88px] w-full rounded-xl" />
+      )}
 
       {/* Status indicator */}
       <div className="flex items-center justify-center gap-2 py-2">

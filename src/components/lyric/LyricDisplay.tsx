@@ -150,6 +150,7 @@ interface Props {
   } | null;
   debugData?: any | null;
   initialBeatGrid?: BeatGridData | null;
+  initialWaveform?: WaveformData | null;
   initialRenderData?: any | null;
   initialBackgroundImageUrl?: string | null;
   onBack: () => void;
@@ -315,6 +316,7 @@ export function LyricDisplay({
   versionMeta: initVersionMeta,
   debugData,
   initialBeatGrid,
+  initialWaveform,
   initialRenderData,
   initialBackgroundImageUrl,
   onBack,
@@ -337,7 +339,7 @@ export function LyricDisplay({
   const audioUrlRef = useRef<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [waveform, setWaveform] = useState<WaveformData | null>(null);
+  const [waveform, setWaveform] = useState<WaveformData | null>(initialWaveform ?? null);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   // Beat grid from props only (no useBeatGrid hook — that's in FitTab now)
   const beatGrid = initialBeatGrid ?? null;
@@ -709,8 +711,9 @@ export function LyricDisplay({
 
     if (audioFile.size > 0) {
       decodeFile(audioFile)
-        .then(({ buffer, waveform }) => {
-          setWaveform(waveform);
+        .then(({ buffer, waveform: decoded }) => {
+          // Only set waveform if not already provided via prop
+          if (!initialWaveform) setWaveform(decoded);
           setAudioBuffer(buffer);
         })
         .catch(() => {});
