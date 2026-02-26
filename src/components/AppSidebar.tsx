@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -93,7 +93,7 @@ export interface AppSidebarProps {
 
 export { TOOLS };
 
-export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey, optimisticItem }: AppSidebarProps) {
+export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey, optimisticItem }: AppSidebarProps) {
   const siteCopy = useSiteCopy();
   const isHookMode = siteCopy.features?.crowdfit_mode === "hook_review";
   const { user, loading: authLoading, profile } = useAuth();
@@ -791,4 +791,4 @@ export function AppSidebar({ activeTab, onTabChange, onLoadProject, refreshKey, 
       <VerificationModal open={showVerify} onOpenChange={setShowVerify} />
     </Sidebar>
   );
-}
+});
