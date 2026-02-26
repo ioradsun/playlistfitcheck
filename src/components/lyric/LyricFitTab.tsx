@@ -744,6 +744,11 @@ export function LyricFitTab({
 
     if (savedIdRef.current) {
       persistRenderData(savedIdRef.current, { cinematicDirection: null });
+      // Clear section_images in DB — they no longer match
+      void supabase
+        .from("saved_lyrics")
+        .update({ section_images: null } as any)
+        .eq("id", savedIdRef.current);
     }
 
     // Restart beat grid immediately, then bump retry counter for waterfall
