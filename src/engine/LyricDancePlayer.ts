@@ -3331,39 +3331,19 @@ export class LyricDancePlayer {
           break;
         }
         case 'light-rays': {
-          const rayCount = 8;
-          for (let i = 0; i < rayCount; i++) {
-            const angle = (i / rayCount) * Math.PI * 2 + elapsed * 0.15;
-            const rayLen = progress * 120 * em.intensity * pScale;
-            const alpha = fadeAlpha * 0.6;
-            const tipX = em.x + Math.cos(angle) * rayLen;
-            const tipY = em.y + Math.sin(angle) * rayLen;
-            const perpX = Math.cos(angle + Math.PI / 2);
-            const perpY = Math.sin(angle + Math.PI / 2);
-            const baseWidth = 3 * pScale;
-
-            this.ctx.save();
-            this.ctx.globalAlpha = alpha;
-            this.ctx.shadowColor = em.color;
-            this.ctx.shadowBlur = 12 * pScale;
-            this.ctx.fillStyle = em.color;
+          // Soft radial gradient glow — barely visible bloom
+          const bloomRadius = progress * 60 * em.intensity * pScale;
+          const alpha = fadeAlpha * 0.08;
+          if (alpha > 0.005 && bloomRadius > 1) {
+            const grad = this.ctx.createRadialGradient(em.x, em.y, 0, em.x, em.y, bloomRadius);
+            grad.addColorStop(0, `rgba(255,240,220,${alpha})`);
+            grad.addColorStop(0.4, `rgba(255,220,180,${alpha * 0.5})`);
+            grad.addColorStop(1, 'rgba(255,220,180,0)');
+            this.ctx.fillStyle = grad;
             this.ctx.beginPath();
-            this.ctx.moveTo(em.x + perpX * baseWidth, em.y + perpY * baseWidth);
-            this.ctx.lineTo(tipX, tipY);
-            this.ctx.lineTo(em.x - perpX * baseWidth, em.y - perpY * baseWidth);
-            this.ctx.closePath();
+            this.ctx.arc(em.x, em.y, bloomRadius, 0, Math.PI * 2);
             this.ctx.fill();
-
-            this.ctx.strokeStyle = '#FFFFFF';
-            this.ctx.lineWidth = 1 * pScale;
-            this.ctx.globalAlpha = alpha * 0.7;
-            this.ctx.beginPath();
-            this.ctx.moveTo(em.x, em.y);
-            this.ctx.lineTo(tipX, tipY);
-            this.ctx.stroke();
-            this.ctx.restore();
           }
-          this.ctx.lineWidth = 1;
           break;
         }
         case 'shockwave-ring': {
