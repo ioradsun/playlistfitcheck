@@ -476,7 +476,6 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
 
       setPublishStatus("Publishing…");
       const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
-      const motionProfileSpec = renderData?.motionProfileSpec || {};
 
       const { error: insertError } = await supabase
         .from("shareable_lyric_dances" as any)
@@ -488,24 +487,12 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
           song_name: lyricData.title,
           audio_url: audioUrl,
           lyrics: mainLines,
-          motion_profile_spec: motionProfileSpec,
-          beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
-          palette: motionProfileSpec.palette || ["#ffffff", "#a855f7", "#ec4899"],
-          system_type: motionProfileSpec.system || "fracture",
-          seed: `${lyricData.title}-lyric-dance`,
-          frame_state: frameState,
-          background_url: backgroundUrl,
           cinematic_direction: cinematicDirection || null,
           words: words ?? null,
         }, { onConflict: "artist_slug,song_slug" });
 
       if (insertError) throw insertError;
 
-      const url = `/${artistSlug}/${songSlug}/lyric-dance`;
-      setPublishedUrl(url);
-      setPublishedLyricsHash(currentLyricsHash);
-      // ── Generate section images (blocking – the dance video needs them) ──
-      setPublishStatus("Generating scene images…");
       const { data: danceRow }: any = await supabase
         .from("shareable_lyric_dances" as any)
         .select("id")
@@ -513,18 +500,9 @@ function CinematicDirectionCard({ cinematicDirection, songTitle }: { cinematicDi
         .eq("song_slug", songSlug)
         .single();
 
-      if (danceRow?.id) {
-        const danceId = danceRow.id;
-        try {
-          const { data: imgResult } = await supabase.functions.invoke("generate-section-images", {
-            body: { lyric_dance_id: danceId, force: true },
-          });
-          console.log("[FitTab] Section images generated:", imgResult?.generated ?? 0);
-        } catch (e: any) {
-          console.warn("[FitTab] Section images failed (non-blocking):", e?.message);
-        }
-      }
-
+      const url = `/${artistSlug}/${songSlug}/lyric-dance`;
+      setPublishedUrl(url);
+      setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
 
       // ── Auto-post to CrowdFit (fire-and-forget) ──
