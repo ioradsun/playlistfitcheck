@@ -169,10 +169,11 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
       <Section title="Word Directive">
         <div className="space-y-0.5">
           <KV label="Word" value={snap.wordDirectiveWord} />
-          <KV label="Kinetic" value={snap.wordDirectiveKinetic} />
-          <KV label="Elemental" value={snap.wordDirectiveElemental} />
+          <KV label="Behavior" value={snap.wordDirectiveBehavior} />
+          <KV label="Entry" value={snap.wordDirectiveEntry} />
+          <KV label="Exit" value={snap.wordDirectiveExit} />
           <KV label="Emphasis" value={f(snap.wordDirectiveEmphasis)} />
-          <KV label="Evolution" value={snap.wordDirectiveEvolution} />
+          <KV label="Ghost" value={snap.wordDirectiveGhostTrail ? `${snap.wordDirectiveGhostDir === 'up' ? '↑' : snap.wordDirectiveGhostDir === 'down' ? '↓' : snap.wordDirectiveGhostDir === 'left' ? '←' : snap.wordDirectiveGhostDir === 'right' ? '→' : snap.wordDirectiveGhostDir === 'radial' ? '◎' : '—'} trail` : '—'} />
         </div>
       </Section>
       <Section title="Line">

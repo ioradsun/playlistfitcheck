@@ -109,10 +109,12 @@ export interface LiveDebugState {
   tensionTypo: number;
 
   wordDirectiveWord: string;
-  wordDirectiveKinetic: string;
-  wordDirectiveElemental: string;
+  wordDirectiveBehavior: string;
+  wordDirectiveEntry: string;
   wordDirectiveEmphasis: number;
-  wordDirectiveEvolution: string;
+  wordDirectiveExit: string;
+  wordDirectiveGhostTrail: boolean;
+  wordDirectiveGhostDir: string;
 
   lineHeroWord: string;
   lineEntry: string;
@@ -247,10 +249,12 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   tensionTypo: 0,
 
   wordDirectiveWord: "",
-  wordDirectiveKinetic: "—",
-  wordDirectiveElemental: "—",
+  wordDirectiveBehavior: "—",
+  wordDirectiveEntry: "—",
   wordDirectiveEmphasis: 0,
-  wordDirectiveEvolution: "—",
+  wordDirectiveExit: "—",
+  wordDirectiveGhostTrail: false,
+  wordDirectiveGhostDir: "—",
 
   lineHeroWord: "",
   lineEntry: "fades",
@@ -1646,10 +1650,12 @@ export class LyricDancePlayer {
       lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
       lineIntent: currentChapter?.emotionalArc ?? "—",
       wordDirectiveWord: activeWordDirective?.word ?? activeWordClean ?? "—",
-      wordDirectiveKinetic: activeWordDirective?.entry ?? activeWordDirective?.kineticClass ?? "—",
-      wordDirectiveElemental: activeWordDirective?.exit ?? activeWordDirective?.elementalClass ?? "—",
+      wordDirectiveBehavior: activeWordDirective?.behavior ?? "—",
+      wordDirectiveEntry: activeWordDirective?.entry ?? "—",
       wordDirectiveEmphasis: activeWordDirective?.emphasisLevel ?? 0,
-      wordDirectiveEvolution: activeWordDirective?.behavior ?? activeWordDirective?.evolution ?? "—",
+      wordDirectiveExit: activeWordDirective?.exit ?? "—",
+      wordDirectiveGhostTrail: activeWordDirective?.ghostTrail ?? false,
+      wordDirectiveGhostDir: activeWordDirective?.ghostDirection ?? "—",
 
       // Section boundaries
       ...(() => {
@@ -2326,7 +2332,7 @@ export class LyricDancePlayer {
     console.log('[Player] wordDirectivesMap keys:', Object.keys(this.resolvedState?.wordDirectivesMap ?? {}));
   }
 
-  private getActiveWord(timeSec: number): AnyWord | null {
+  private getActiveWord(timeSec: number): { word?: string; start: number; end: number } | null {
     const words = this.data.words ?? [];
     for (let i = words.length - 1; i >= 0; i--) {
       const word = words[i];

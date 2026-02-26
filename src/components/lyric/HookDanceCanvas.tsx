@@ -258,9 +258,12 @@ export const HookDanceCanvas = forwardRef<HTMLDivElement, Props>(function HookDa
           dirChapterProgress: sectionProgress,
           dirIntensity: currentSection ? di?.getIntensity(songProg01) : 0,
           wordDirectiveWord: heroWordText,
-          wordDirectiveKinetic: di?.getWordDirective(heroWordText)?.kineticClass ?? "—",
-          wordDirectiveElemental: di?.getWordDirective(heroWordText)?.elementalClass ?? "—",
+          wordDirectiveBehavior: di?.getWordDirective(heroWordText)?.behavior ?? "—",
+          wordDirectiveEntry: di?.getWordDirective(heroWordText)?.entry ?? "—",
           wordDirectiveEmphasis: di?.getWordDirective(heroWordText)?.emphasisLevel ?? 0,
+          wordDirectiveExit: di?.getWordDirective(heroWordText)?.exit ?? "—",
+          wordDirectiveGhostTrail: di?.getWordDirective(heroWordText)?.ghostTrail ?? false,
+          wordDirectiveGhostDir: di?.getWordDirective(heroWordText)?.ghostDirection ?? "—",
         };
       }
 
