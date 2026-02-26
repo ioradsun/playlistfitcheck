@@ -586,6 +586,15 @@ async function runGeminiTranscribe(
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const isKeepAlive = req.headers.get("x-keep-alive") === "true";
+  if (isKeepAlive) {
+    try { await req.json(); } catch {}
+    return new Response(JSON.stringify({ ok: true, keepAlive: true }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const T0 = Date.now();
   const ms = () => `${Date.now() - T0}ms`;
   console.log(`[Transcribe Debug] ${ms()} edge function ENTRY`);
