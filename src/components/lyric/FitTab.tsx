@@ -229,6 +229,7 @@ function CinematicDirectionCard({
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
+  const [imageTimestamps, setImageTimestamps] = useState<(string | null)[]>([]);
   const [danceId, setDanceId] = useState<string | null>(null);
   const [imagesHydrated, setImagesHydrated] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -241,6 +242,21 @@ function CinematicDirectionCard({
   const sections: any[] = cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
     ? cinematicDirection.sections
     : [];
+
+  const formatImageTimestamp = useCallback((raw: unknown): string | null => {
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      if (raw <= 0) return "just now";
+      return `${raw.toFixed(1)}s`;
+    }
+    if (typeof raw === "string") {
+      const normalized = raw.trim();
+      if (!normalized) return null;
+      if (normalized === "0" || normalized === "0.0" || normalized === "0s") return "just now";
+      if (/^\d+(\.\d+)?$/.test(normalized)) return `${normalized}s`;
+      return normalized;
+    }
+    return null;
+  }, []);
 
   const songSlug = slugify(songTitle || "untitled");
 
@@ -268,6 +284,7 @@ function CinematicDirectionCard({
       const imgs = dances[0].section_images;
       if (Array.isArray(imgs) && imgs.length > 0 && imgs.some(Boolean)) {
         setSectionImages(imgs);
+        setImageTimestamps(Array.from({ length: imgs.length }, () => null));
       }
       // Don't auto-poll — let the user click "Generate Images" or wait for publish event
       setImagesHydrated(true);
@@ -298,6 +315,7 @@ function CinematicDirectionCard({
         const imgs = dances[0].section_images;
         if (Array.isArray(imgs) && imgs.some(Boolean)) {
           setSectionImages(imgs);
+          setImageTimestamps(Array.from({ length: imgs.length }, () => null));
           setGenProgress({ done: imgs.filter(Boolean).length, total: sections.length });
           setGenerating(false);
           if (pollRef.current) clearInterval(pollRef.current);
@@ -334,12 +352,15 @@ function CinematicDirectionCard({
       });
       if (error) throw error;
       const urls = result?.urls || result?.section_images || [];
+      const timingCandidates = result?.image_timestamps || result?.timings || result?.durations || [];
+      const normalizedTimestamps = Array.from({ length: urls.length }, (_, idx) => formatImageTimestamp(timingCandidates[idx]));
       urls.forEach((url: string | null | undefined, index: number) => {
         const preview = typeof url === "string" ? `${url.slice(0, 50)}...` : "null";
         console.log(`[FitTab Debug] ${fitTabImageMs()} image ${index + 1}/${sections.length} done, url=${preview}`);
       });
       console.log(`[FitTab Debug] image generation complete in ${fitTabImageMs()}`);
       setSectionImages(urls);
+      setImageTimestamps(normalizedTimestamps);
       setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
       onImageGenerationStatusChange?.("done");
 
@@ -359,7 +380,7 @@ function CinematicDirectionCard({
     } finally {
       setGenerating(false);
     }
-  }, [generating, sections, danceId, fitTabImageMs, onImageGenerationStatusChange, projectId]);
+  }, [danceId, fitTabImageMs, formatImageTimestamp, generating, onImageGenerationStatusChange, projectId, sections]);
 
   useEffect(() => {
     if (!cinematicDirection) return;
@@ -447,41 +468,57 @@ function CinematicDirectionCard({
           <span className="text-[9px] font-mono text-muted-foreground/60 uppercase">Sections · {sections.length}</span>
           {sections.map((s: any, i: number) => {
             const imgUrl = sectionImages[i] ?? null;
+            const imageTimestamp = imageTimestamps[i] ?? null;
             return (
-              <div key={i} className="space-y-0.5">
-                <div className="flex items-start gap-2">
-                  <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap">§{s.sectionIndex ?? i}</span>
-                  <p className="text-[10px] text-muted-foreground leading-tight flex-1">{s.description || s.mood || "No description"}</p>
-                  {generating && !imgUrl && (
-                    <Loader2 size={9} className="animate-spin text-muted-foreground/50 shrink-0 mt-0.5" />
-                  )}
-                  {imgUrl && (
+              <div key={i} className="flex items-start gap-3">
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <div className="flex items-start gap-2">
+                    <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap">§{s.sectionIndex ?? i}</span>
+                    <p className="text-[10px] text-muted-foreground leading-tight flex-1">{s.description || s.mood || "No description"}</p>
+                    {imgUrl && (
+                      <a
+                        href={imgUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-0.5 text-[8px] font-mono text-primary hover:text-primary/80 shrink-0 mt-0.5"
+                        title={`Section ${i + 1} image — click to open full size`}
+                      >
+                        <ExternalLink size={8} />
+                        View
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="shrink-0 w-16 flex flex-col items-center gap-1">
+                  {imgUrl ? (
                     <a
                       href={imgUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-0.5 text-[8px] font-mono text-primary hover:text-primary/80 shrink-0 mt-0.5"
+                      title={`Section ${i + 1} image — click to open full size`}
+                      className="block"
                     >
-                      <ExternalLink size={8} />
-                      View
-                    </a>
-                  )}
-                </div>
-                {imgUrl && (
-                  <div className="ml-6">
-                    <a href={imgUrl} target="_blank" rel="noopener noreferrer">
                       <img
                         src={imgUrl}
                         alt={`Section ${s.sectionIndex ?? i} background`}
-                        className="w-full max-w-[200px] h-auto rounded border border-border/30 opacity-80 hover:opacity-100 transition-opacity"
-                        loading="lazy"
+                        className="w-16 h-16 rounded-md object-cover border border-white/10 hover:border-purple-400 transition-colors cursor-pointer"
                       />
                     </a>
-                  </div>
-                )}
+                  ) : (
+                    <div className="w-16 h-16 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-xs text-white/30">
+                      {generating ? <Loader2 size={14} className="animate-spin" /> : "—"}
+                    </div>
+                  )}
+                  <span className="text-[10px] text-white/30 leading-none h-[10px]">
+                    {imgUrl ? (imageTimestamp ?? "just now") : ""}
+                  </span>
+                </div>
               </div>
             );
           })}
+          <div className="text-xs text-white/40 mt-2">
+            {sectionImages.filter(Boolean).length}/{sections.length} images generated
+          </div>
         </div>
       )}
 
