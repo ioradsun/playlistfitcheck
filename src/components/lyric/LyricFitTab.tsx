@@ -60,6 +60,7 @@ interface Props {
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onSavedId?: (id: string) => void;
+  onUploadStarted?: (payload: { file: File; projectId: string | null; title: string }) => void;
 }
 
 export function LyricFitTab({
@@ -68,6 +69,7 @@ export function LyricFitTab({
   onNewProject,
   onHeaderProject,
   onSavedId,
+  onUploadStarted: onUploadStartedProp,
 }: Props) {
   const { user } = useAuth();
   const artistNameRef = useRef<string>("artist");
@@ -737,9 +739,10 @@ export function LyricFitTab({
           transcriptionModel={transcriptionModel}
           sceneInput={sceneInputNode}
           onAudioSubmitted={handleAudioSubmitted}
-          onUploadStarted={() => {
+          onUploadStarted={(payload) => {
             setActiveTab("lyrics");
             setPipelineStages(prev => ({ ...prev, transcript: "running" }));
+            onUploadStartedProp?.(payload);
           }}
         />
       ) : lyricData && audioFile ? (
