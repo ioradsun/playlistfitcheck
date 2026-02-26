@@ -745,6 +745,48 @@ type WordDirectiveLike = {
   exit?: string;
 };
 
+function resolveV3EmitterType(directive: WordDirectiveLike | null): WordEmitterType {
+  if (!directive) return 'none';
+
+  // Priority 1: ghostTrail → memory-orbs (ghost rendering handled separately via chunk.ghostTrail)
+  if (directive.ghostTrail) return 'memory-orbs';
+
+  // Priority 2: visualMetaphor keyword matching
+  const meta = (directive.visualMetaphor ?? '').toLowerCase();
+  if (meta) {
+    if (meta.includes('smoke') || meta.includes('dissipat')) return 'ember';
+    if (meta.includes('fire') || meta.includes('ember')) return 'ember';
+    if (meta.includes('frost') || meta.includes('ice') || meta.includes('cold')) return 'frost';
+    if (meta.includes('ripple') || meta.includes('wave')) return 'spark-burst';
+    if (meta.includes('weight') || meta.includes('drop')) return 'dust-impact';
+    if (meta.includes('photograph') || meta.includes('fad')) return 'memory-orbs';
+    if (meta.includes('petal') || meta.includes('bloom') || meta.includes('flower')) return 'light-rays';
+    if (meta.includes('glow') || meta.includes('radiat')) return 'ember';
+    if (meta.includes('path') || meta.includes('wind')) return 'dust-impact';
+  }
+
+  // Priority 3: entry style
+  if (directive.entry === 'bloom') return 'light-rays';
+  if (directive.entry === 'rise') return 'ember';
+  if (directive.entry === 'burst' || directive.entry === 'explode-in') return 'spark-burst';
+  if (directive.entry === 'shake' || directive.entry === 'slam-down') return 'dust-impact';
+
+  // Priority 4: behavior
+  if (directive.behavior === 'float') return 'dust-impact';
+  if (directive.behavior === 'pulse') return 'spark-burst';
+
+  return 'none';
+}
+
+function resolveV3EmitterDirection(directive: WordDirectiveLike | null): 'up' | 'down' | 'left' | 'right' | 'radial' {
+  if (directive?.ghostDirection) return directive.ghostDirection;
+  if (directive?.behavior === 'float') return 'up';
+  if (directive?.entry === 'rise') return 'up';
+  if (directive?.entry === 'bloom') return 'radial';
+  if (directive?.entry === 'burst' || directive?.entry === 'explode-in') return 'radial';
+  return 'up';
+}
+
 
 type ManifestWordDirective = {
   position?: [number, number];
