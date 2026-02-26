@@ -44,6 +44,7 @@ export interface GenerationStatus {
   beatGrid: GenerationJobStatus;
   renderData: GenerationJobStatus;
   cinematicDirection: GenerationJobStatus;
+  sectionImages: GenerationJobStatus;
 }
 
 export type PipelineStageStatus = "pending" | "running" | "done";
@@ -117,6 +118,7 @@ export function LyricFitTab({
     beatGrid: "idle",
     renderData: "idle",
     cinematicDirection: "idle",
+    sectionImages: "idle",
   });
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
@@ -471,7 +473,7 @@ export function LyricFitTab({
     }
     if (!force && (generationStatus.cinematicDirection === "running" || generationStatus.cinematicDirection === "done")) return;
 
-    setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running" }));
+    setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running", sectionImages: "idle" }));
     setPipelineStages(prev => ({ ...prev, cinematic: "running" }));
 
     console.log(`[FitTab Debug] ${fitPipelineMs()} starting cinematic direction`);
@@ -547,7 +549,7 @@ export function LyricFitTab({
       setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
       setFitProgress(prev => Math.max(prev, 85));
     } catch {
-      setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error" }));
+      setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error", sectionImages: "idle" }));
     }
   }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, renderData, persistRenderData, songSignature, audioSections, fitPipelineMs]);
 
@@ -657,7 +659,7 @@ export function LyricFitTab({
     // If all data already loaded from DB, skip pipeline entirely
     if (renderData && beatGrid && cinematicDirection) {
       pipelineTriggeredRef.current = true;
-      setGenerationStatus({ beatGrid: "done", renderData: "done", cinematicDirection: "done" });
+      setGenerationStatus({ beatGrid: "done", renderData: "done", cinematicDirection: "done", sectionImages: "done" });
       return;
     }
     if (!pipelineTriggeredRef.current || pipelineRetryCount > 0) {
@@ -684,7 +686,15 @@ export function LyricFitTab({
     }
     if (hasRunning) {
       setFitReadiness("running");
-      setFitStageLabel("Building your Fit…");
+      if (generationStatus.renderData === "running" || generationStatus.beatGrid === "running") {
+        setFitStageLabel("Analyzing song...");
+      } else if (generationStatus.cinematicDirection === "running") {
+        setFitStageLabel("Creating cinematic direction...");
+      } else if (generationStatus.sectionImages === "running") {
+        setFitStageLabel("Generating artwork...");
+      } else {
+        setFitStageLabel("Building your Fit…");
+      }
       setPipelineStages(prev => ({ ...prev, transcript: "running" }));
       return;
     }
@@ -719,7 +729,7 @@ export function LyricFitTab({
     setBeatGridDone(false);
     setAudioBufferReady(false);
     setAudioSections([]);
-    setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle" });
+    setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle", sectionImages: "idle" });
     pipelineTriggeredRef.current = false;
     cinematicTriggeredRef.current = false;
     sectionPipelineRunningRef.current = false;
@@ -844,7 +854,7 @@ export function LyricFitTab({
             setBeatGridDone(false);
             setAudioBufferReady(false);
             setAudioSections([]);
-            setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle" });
+            setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle", sectionImages: "idle" });
             setFitReadiness("not_started");
             setFitUnlocked(false);
             cinematicTriggeredRef.current = false;
@@ -885,6 +895,9 @@ export function LyricFitTab({
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
           onBack={() => handleViewChange("lyrics")}
+          onImageGenerationStatusChange={(status) => {
+            setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
+          }}
         />
       ) : null}
     </div>
