@@ -19,6 +19,16 @@ import {
   type Keyframe,
   type ScenePayload,
 } from "@/lib/lyricSceneBaker";
+import {
+  compileScene,
+  computeEntryState,
+  computeExitState,
+  computeBehaviorState,
+  type CompiledScene,
+  type CompiledPhraseGroup,
+  type CompiledWord,
+  type AnimState,
+} from "@/lib/sceneCompiler";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 
@@ -385,6 +395,11 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
     iconScale?: number;
     behavior?: string;
+    emitterType?: string;
+    letterIndex?: number;
+    letterTotal?: number;
+    letterDelay?: number;
+    isLetterChunk?: boolean;
     visible: boolean;
     entryOffsetY?: number;
     entryOffsetX?: number;
@@ -432,6 +447,7 @@ const BAKER_VERSION = 3;
 let globalBakeLock = false;
 let globalBakePromise: Promise<void> | null = null;
 let globalTimelineCache: ScaledKeyframe[] | null = null;
+let globalCompiledScene: CompiledScene | null = null;
 let globalChunkCache: Map<string, ChunkState> | null = null;
 let globalHasCinematicDirection = false;
 let globalSongStartSec = 0;
@@ -441,6 +457,7 @@ let globalSessionKey = '';
 
 const SIM_W = 96;
 const SIM_H = 54;
+const SPLIT_EXIT_STYLES = new Set(['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up']);
 
 interface PixelSim {
   canvas: HTMLCanvasElement;
@@ -850,6 +867,27 @@ export class LyricDancePlayer {
   private _solvedBounds: ChunkBounds[] = [];
   private _solvedWalls = { left: 0, right: 0, top: 0, bottom: 0 };
 
+  // ═══ Compiled Scene (replaces timeline) ═══
+  private compiledScene: CompiledScene | null = null;
+
+  // Runtime evaluator state
+  private _evalChunkPool: Array<ScaledKeyframe['chunks'][number]> = [];
+  private _activeGroupIndices: number[] = [];
+
+  // Beat-reactive state (evaluated incrementally)
+  private _beatCursor = 0;
+  private _springOffset = 0;
+  private _springVelocity = 0;
+  private _glowBudget = 0;
+  private _lastBeatIndex = -1;
+  private _currentZoom = 1.0;
+
+  // Viewport scale (replaces timelineScale for runtime use)
+  private _viewportSx = 1;
+  private _viewportSy = 1;
+  private _viewportFontScale = 1;
+  private _evalFrame: ScaledKeyframe | null = null;
+
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
   private bgCacheCount = 0;
@@ -938,22 +976,23 @@ export class LyricDancePlayer {
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
-      globalTimelineCache &&
+      (globalTimelineCache || globalCompiledScene) &&
       (globalSessionKey !== `v15-${songId}` || globalBakerVersion !== BAKER_VERSION)
     ) {
       globalTimelineCache = null;
+      globalCompiledScene = null;
     }
     const sessionKey = `v15-${data.id}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;
       globalTimelineCache = null;
+      globalCompiledScene = null;
       globalChunkCache = null;
       globalBakeLock = false;
       globalHasCinematicDirection = false;
       globalBakerVersion = 0;
     }
-    this.data = data;
     this.data = data;
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
@@ -1067,9 +1106,10 @@ export class LyricDancePlayer {
   private async ensureTimelineReady(): Promise<void> {
 
     // Cache exists but was baked without cinematic direction — invalidate before promise reuse
-    if (globalTimelineCache && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
+    if ((globalCompiledScene || globalTimelineCache) && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
       globalBakePromise = null;
       globalTimelineCache = null;
+      globalCompiledScene = null;
       globalChunkCache = null;
       globalBakeLock = false;
     }
@@ -1085,18 +1125,18 @@ export class LyricDancePlayer {
         this.songStartSec = payload.songStart;
         this.songEndSec = payload.songEnd;
 
-        // Build and capture chunks BEFORE the async bake
-        // so Strict Mode destroy() can't wipe them
-        this.buildChunkCache(payload);
-        const localChunkSnapshot = new Map(this.chunks);
+        // Compile the scene — produces lightweight schedule, not 15,000 frames
+        const compiled = compileScene(payload);
+        this.compiledScene = compiled;
 
-        const baked = await bakeSceneChunked(payload);
+        // Build chunk cache from compiled scene
+        this._buildChunkCacheFromScene(compiled);
 
-        // Use the local snapshot not this.chunks (which destroy() may have wiped)
-        this.timelineBase = baked;
-        this.updateTimelineScale();
-        globalTimelineCache = this.timeline;
-        globalChunkCache = localChunkSnapshot;
+        // Compute viewport scale
+        this._updateViewportScale();
+
+        globalCompiledScene = compiled;
+        globalChunkCache = new Map(this.chunks);
         globalHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
         globalSongStartSec = payload.songStart;
         globalSongEndSec = payload.songEnd;
@@ -1109,10 +1149,11 @@ export class LyricDancePlayer {
     await globalBakePromise;
 
     // Now cache is guaranteed to exist for every instance
-    this.timeline = globalTimelineCache!.slice();
+    this.compiledScene = globalCompiledScene;
     this.chunks = new Map(globalChunkCache!);
     this.songStartSec = globalSongStartSec;
     this.songEndSec = globalSongEndSec;
+    this._updateViewportScale();
     if (this.audio.currentTime <= 0) {
       this.audio.currentTime = this.songStartSec;
     }
@@ -1176,13 +1217,11 @@ export class LyricDancePlayer {
       this.songEndSec = payload.songEnd;
 
       this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
-      this.buildChunkCache(payload);
-      // Snapshot chunks NOW before the async yield — destroy() may replace this.chunks
+      const compiled = compileScene(payload);
+      this.compiledScene = compiled;
+      this._buildChunkCacheFromScene(compiled);
+      this._updateViewportScale();
       const chunkSnapshot = new Map(this.chunks);
-      const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
-
-      this.timelineBase = baked;
-      this.updateTimelineScale();
       this.buildBgCache();
       this.deriveVisualSystems();
       this.buildChapterSims();
@@ -1219,6 +1258,12 @@ export class LyricDancePlayer {
     this.audio.currentTime = timeSec;
     const t = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (t - this.songStartSec) * 1000);
+    this._beatCursor = 0;
+    this._lastBeatIndex = -1;
+    this._glowBudget = 0;
+    this._springOffset = 0;
+    this._springVelocity = 0;
+    this._currentZoom = 1.0;
   }
 
   seekTo(timeSec: number): void {
@@ -1308,8 +1353,7 @@ export class LyricDancePlayer {
     this._haloStamps.clear();
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
-    if (this.timelineBase.length) this.updateTimelineScale();
-    this.invalidateFrameCache();
+    this._updateViewportScale();
     this._textMetricsCache.clear();
     this._lastVisibleChunkIds = '';
   }
@@ -1325,7 +1369,8 @@ export class LyricDancePlayer {
     if (!this.payload) return;
     this.payload = { ...this.payload, cinematic_direction: direction };
     this.resolvePlayerState(this.payload);
-    this.buildChunkCache(this.payload);
+    this.compiledScene = compileScene(this.payload);
+    this._buildChunkCacheFromScene(this.compiledScene);
     this.buildBgCache();
     this.deriveVisualSystems();
     this.buildChapterSims();
@@ -1764,7 +1809,7 @@ export class LyricDancePlayer {
       : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
     const climaxRatio = (cd as any)?.climax?.timeRatio ?? 0.75;
     const simulatedBeat = Math.max(0.1, 1 - Math.abs(songProgress - climaxRatio) * 2);
-    const frame = this.getFrame(this.currentTimeMs);
+    const frame = this.evaluateFrame(clamped);
     const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
 
     const activeWord = this.getActiveWord(clamped);
@@ -1814,7 +1859,7 @@ export class LyricDancePlayer {
     }
     this._lastLoggedTSec = tSec;
 
-    const frame = this.getFrame(this.currentTimeMs);
+    const frame = this.evaluateFrame(tSec);
     if (!frame) return;
 
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
@@ -2413,8 +2458,7 @@ export class LyricDancePlayer {
     this._lightingOverlayKey = '';
     this._haloStamps.clear();
     this.lastSimFrame = -1;
-    if (this.timelineBase.length) this.updateTimelineScale();
-    this.invalidateFrameCache();
+    this._updateViewportScale();
     this._textMetricsCache.clear();
     this._lastVisibleChunkIds = '';
   }
@@ -2727,6 +2771,57 @@ export class LyricDancePlayer {
     this.activeSectionIndex = -1;
     this.activeSectionTexture = texture;
   }
+
+  private _buildChunkCacheFromScene(scene: CompiledScene): void {
+    this.chunks.clear();
+    const measureCanvas = document.createElement('canvas');
+    measureCanvas.width = 1;
+    measureCanvas.height = 1;
+    const measureCtx = measureCanvas.getContext('2d')!;
+
+    for (const group of scene.phraseGroups) {
+      for (const word of group.words) {
+        const fontStr = `${word.fontWeight} 42px ${word.fontFamily}`;
+        if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
+        this.chunks.set(word.id, {
+          id: word.id,
+          text: word.text,
+          color: word.color,
+          font: fontStr,
+          width: measureCtx.measureText(word.text).width,
+        });
+      }
+    }
+  }
+
+  private _updateViewportScale(): void {
+    const sx = this.width / 960;
+    const sy = this.height / 540;
+    const isPortrait = this.height > this.width;
+    const fontScale = isPortrait
+      ? Math.min(this.width / 360, 1.35)
+      : (() => {
+        const base = Math.min(sx, sy);
+        if (this.height >= 1080) return base;
+        const deficit = (1080 - this.height) / 1080;
+        return Math.min(base * (1 + deficit * 0.45), base * 1.25);
+      })();
+    this._viewportSx = sx;
+    this._viewportSy = sy;
+    this._viewportFontScale = fontScale;
+  }
+
+  private _getArcFunction(arcName: string): (p: number) => number {
+    const curves: Record<string, (p: number) => number> = {
+      'slow-burn': (p) => p * p,
+      'explosive-peak': (p) => Math.sin(p * Math.PI),
+      'steady-rise': (p) => p,
+      'wave': (p) => (Math.sin(p * Math.PI * 2 - Math.PI / 2) + 1) / 2,
+      'double-peak': (p) => Math.sin(p * Math.PI * 2) * 0.5 + 0.5,
+    };
+    return curves[arcName] ?? curves['slow-burn'];
+  }
+
 
   private getActiveWord(timeSec: number): { word?: string; start: number; end: number } | null {
     const words = this.data.words ?? [];
@@ -3554,6 +3649,198 @@ export class LyricDancePlayer {
         this.ctx.restore();
       }
     }
+  }
+
+  private evaluateFrame(tSec: number): ScaledKeyframe | null {
+    const scene = this.compiledScene;
+    if (!scene) return null;
+
+    const songDuration = Math.max(0.01, scene.durationSec);
+    const songProgress = Math.max(0, Math.min(1, (tSec - scene.songStartSec) / songDuration));
+    const { _viewportSx: sx, _viewportSy: sy, _viewportFontScale: fontScale } = this;
+
+    const beats = scene.beatEvents;
+    while (this._beatCursor + 1 < beats.length && beats[this._beatCursor + 1].time <= tSec) this._beatCursor++;
+    while (this._beatCursor > 0 && beats[this._beatCursor].time > tSec) this._beatCursor--;
+    const beatIndex = beats.length > 0 ? this._beatCursor : -1;
+
+    if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {
+      this._lastBeatIndex = beatIndex;
+      this._glowBudget = 13;
+      this._springVelocity = beats[beatIndex]?.springVelocity ?? 0;
+    }
+    if (this._glowBudget > 0) this._glowBudget -= 1;
+    const glow = Math.pow(this._glowBudget / 13, 0.6);
+
+    this._springOffset += this._springVelocity;
+    this._springVelocity *= 0.82;
+    this._springOffset *= 0.88;
+
+    let currentChapterIdx = 0;
+    for (let i = 0; i < scene.chapters.length; i++) {
+      if (songProgress >= scene.chapters[i].startRatio && songProgress < scene.chapters[i].endRatio) {
+        currentChapterIdx = i;
+        break;
+      }
+    }
+    const chapter = scene.chapters[currentChapterIdx] ?? scene.chapters[0];
+    const targetZoom = chapter?.targetZoom ?? 1.0;
+    this._currentZoom += (targetZoom - this._currentZoom) * 0.06;
+    const effectiveZoom = this._currentZoom * (1.0 + Math.max(0, this._springOffset));
+
+    const arcFn = this._getArcFunction(scene.emotionalArc);
+    const intensity = Math.max(0, Math.min(1, arcFn(songProgress)));
+    const intensityGlowMult = 0.5 + intensity * 1.0;
+    const intensityScaleMult = 0.95 + intensity * 0.1;
+
+    const driftX = Math.sin(tSec * 0.15) * 8 * sx;
+    const driftY = Math.cos(tSec * 0.12) * 5 * sy;
+
+    const groups = scene.phraseGroups;
+    const activeGroups = this._activeGroupIndices;
+    activeGroups.length = 0;
+    for (let gi = 0; gi < groups.length; gi++) {
+      const group = groups[gi];
+      const visStart = group.start - group.entryDuration - group.staggerDelay * group.words.length;
+      const visEnd = group.end + group.lingerDuration + group.exitDuration;
+      if (tSec < visStart) {
+        if (tSec < visStart - 2.0) break;
+        continue;
+      }
+      if (tSec > visEnd) continue;
+      activeGroups.push(gi);
+    }
+
+    const chunks = this._evalChunkPool;
+    let ci = 0;
+    const bpm = scene.bpm;
+
+    for (let ai = 0; ai < activeGroups.length; ai++) {
+      const groupIdx = activeGroups[ai];
+      const group = groups[groupIdx];
+      const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
+      const groupEnd = Math.min(group.end + group.lingerDuration, nextGroupStart);
+
+      for (let wi = 0; wi < group.words.length; wi++) {
+        const word = group.words[wi];
+        const isAnchor = wi === group.anchorWordIdx;
+        const staggerDelay = isAnchor ? 0 : Math.abs(wi - group.anchorWordIdx) * group.staggerDelay;
+        const letterTotal = word.letterTotal ?? 1;
+
+        for (let li = 0; li < letterTotal; li++) {
+          const letterDelay = word.isLetterChunk ? li * 0.06 : 0;
+          const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay - letterDelay);
+          const effectiveEntryDuration = group.entryDuration * word.entryDurationMult;
+          const entryProgress = Math.min(1, Math.max(0, adjustedElapsed / Math.max(0.01, effectiveEntryDuration)));
+
+          const effectiveExitDuration = Math.min(group.exitDuration, Math.max(0.05, nextGroupStart - group.end));
+          const exitDelay = word.isLetterChunk && SPLIT_EXIT_STYLES.has(word.exitStyle) ? letterDelay : 0;
+          const exitProgress = Math.max(0, (tSec - groupEnd - exitDelay) / Math.max(0.01, effectiveExitDuration));
+
+          const entryState = computeEntryState(word.entryStyle as any, entryProgress, group.behaviorIntensity);
+          const exitState = computeExitState(word.exitStyle as any, exitProgress, group.behaviorIntensity, li, letterTotal);
+          const beatPhase = beatIndex >= 0 ? ((tSec - (beats[beatIndex]?.time ?? 0)) / (60 / Math.max(1, bpm))) % 1 : 0;
+          const behaviorState = computeBehaviorState(word.behaviorStyle as any, tSec, group.start, beatPhase, group.behaviorIntensity);
+
+          const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
+          const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
+          const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1) * word.semanticScaleX;
+          const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1) * word.semanticScaleY;
+
+          const isEntryComplete = entryProgress >= 1.0;
+          const isExiting = exitProgress > 0;
+          const rawAlpha = isExiting
+            ? Math.max(0, exitState.alpha)
+            : isEntryComplete
+              ? 1.0 * (behaviorState.alpha ?? 1)
+              : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
+          const finalAlpha = Math.min(word.semanticAlphaMax, rawAlpha);
+
+          const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
+          const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
+          const finalBlur = (entryState.blur ?? 0) + (exitState.blur ?? 0) + (behaviorState.blur ?? 0);
+          const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
+          const isFrozen = word.behaviorStyle === 'freeze' && (tSec - group.start) > 0.3;
+
+          const charW = word.isLetterChunk ? word.baseFontSize * 0.6 : 0;
+          const wordSpan = charW * letterTotal;
+          const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
+
+          const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult;
+
+          const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
+          chunks[ci] = chunk;
+          chunk.id = word.id;
+          chunk.text = word.text;
+          chunk.x = Math.round(word.layoutX + finalOffsetX + letterOffsetX) * sx;
+          chunk.y = Math.round(word.layoutY + finalOffsetY) * sy;
+          chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
+          chunk.scaleX = finalScaleX * intensityScaleMult;
+          chunk.scaleY = finalScaleY * intensityScaleMult;
+          chunk.scale = 1;
+          chunk.visible = finalAlpha > 0.01;
+          chunk.fontSize = word.baseFontSize * fontScale;
+          chunk.fontWeight = word.fontWeight;
+          chunk.fontFamily = word.fontFamily;
+          chunk.isAnchor = isAnchor;
+          chunk.color = word.color;
+          chunk.glow = wordGlow;
+          chunk.emitterType = word.emitterType !== 'none' ? word.emitterType : undefined;
+          chunk.trail = word.trail;
+          chunk.entryStyle = word.entryStyle;
+          chunk.exitStyle = word.exitStyle;
+          chunk.emphasisLevel = word.emphasisLevel;
+          chunk.entryProgress = entryProgress;
+          chunk.exitProgress = Math.min(1, exitProgress);
+          chunk.behavior = word.behaviorStyle;
+          chunk.skewX = finalSkewX;
+          chunk.blur = Math.max(0, Math.min(1, finalBlur));
+          chunk.rotation = finalRotation;
+          chunk.ghostTrail = word.ghostTrail;
+          chunk.ghostCount = word.ghostCount;
+          chunk.ghostSpacing = word.ghostSpacing;
+          chunk.ghostDirection = word.ghostDirection as any;
+          chunk.letterIndex = word.letterIndex;
+          chunk.letterTotal = word.letterTotal;
+          chunk.letterDelay = word.letterDelay ?? 0;
+          chunk.isLetterChunk = word.isLetterChunk;
+          chunk.frozen = isFrozen;
+          chunk.iconGlyph = isAnchor ? word.iconGlyph : undefined;
+          chunk.iconStyle = isAnchor ? word.iconStyle : undefined;
+          chunk.iconPosition = isAnchor ? word.iconPosition : undefined;
+          chunk.iconScale = isAnchor ? word.iconScale : undefined;
+          chunk.entryOffsetY = 0;
+          chunk.entryOffsetX = 0;
+          chunk.entryScale = 1;
+          chunk.exitOffsetY = 0;
+          chunk.exitScale = 1;
+          ci++;
+        }
+      }
+    }
+    chunks.length = ci;
+
+    if (!this._evalFrame) {
+      this._evalFrame = {
+        timeMs: 0, beatIndex: 0, sectionIndex: 0,
+        cameraX: 0, cameraY: 0, cameraZoom: 1, bgBlend: 0,
+        particleColor: '#ffffff', atmosphere: chapter?.atmosphere ?? 'cinematic',
+        chunks: [], particles: [],
+      } as ScaledKeyframe;
+    }
+
+    const frame = this._evalFrame;
+    frame.timeMs = (tSec - scene.songStartSec) * 1000;
+    frame.beatIndex = beatIndex;
+    frame.sectionIndex = currentChapterIdx;
+    frame.cameraX = driftX;
+    frame.cameraY = driftY;
+    frame.cameraZoom = effectiveZoom;
+    frame.bgBlend = 0;
+    frame.atmosphere = chapter?.atmosphere ?? 'cinematic';
+    frame.chunks = chunks;
+    frame.particles = [];
+    return frame;
   }
 
   // ─── Scaling helpers ──────────────────────────────────────────────
