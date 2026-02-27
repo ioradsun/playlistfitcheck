@@ -96,6 +96,7 @@ export type Keyframe = {
 
 export type BakedTimeline = Keyframe[];
 
+export const BAKER_VERSION = 4;
 const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
@@ -1114,6 +1115,9 @@ function getGroupLayout(
   canvasW: number,
   canvasH: number,
   baseFontSize: number,
+  fontWeight: number,
+  fontFamily: string,
+  measureCtx: OffscreenCanvasRenderingContext2D,
 ): GroupPosition[] {
   const count = group.words.length;
   const anchorIdx = group.anchorWordIdx;
@@ -1162,9 +1166,17 @@ function getGroupLayout(
     }
   }
 
-  // Approximate character width as fontSize * 0.6 (monospace-ish heuristic for sans-serif)
-  const approxWordWidth = (word: string, fontSize: number) => word.length * fontSize * 0.6;
-  const spaceWidth = (fontSize: number) => fontSize * 0.3;
+  const getWordWidth = (word: string, fontSize: number) => {
+    const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
+    return measureCtx.measureText(word).width;
+  };
+
+  const getSpaceWidth = (fontSize: number) => {
+    const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
+    return measureCtx.measureText(' ').width;
+  };
 
   // All non-anchor words stay on one baseline in original word order (left-to-right readable phrase).
   // The anchor word gets its own prominent position; the rest form a centered phrase line below it.
@@ -1184,9 +1196,9 @@ function getGroupLayout(
     // Calculate per-word widths + total group width, then lay out from the group's left edge.
     // This prevents all support words from collapsing to the same center x.
     const phraseWordWidths = supportIndices.map((idx) =>
-      approxWordWidth(group.words[idx].word, phraseFontSize),
+      getWordWidth(group.words[idx].word, phraseFontSize),
     );
-    const interWordSpace = spaceWidth(phraseFontSize);
+    const interWordSpace = getSpaceWidth(phraseFontSize);
     const totalWidth = phraseWordWidths.reduce((sum, width) => sum + width, 0)
       + interWordSpace * Math.max(0, supportIndices.length - 1);
 
@@ -1497,6 +1509,8 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   };
 
   const phraseGroups = words.length > 0 ? buildPhraseGroups(wordMeta) : null;
+  const measureCanvas = new OffscreenCanvas(1, 1);
+  const measureCtx = measureCanvas.getContext('2d')!;
 
   const groupLayouts = new Map<string, GroupPosition[]>();
   if (phraseGroups) {
@@ -1504,7 +1518,19 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
       const group = phraseGroups[gi];
       const key = `${group.lineIndex}-${group.groupIndex}`;
       const baseFontSize = lineFontSizes[group.lineIndex] ?? 36;
-      groupLayouts.set(key, getGroupLayout(group, visualMode, 960, 540, baseFontSize));
+      groupLayouts.set(
+        key,
+        getGroupLayout(
+          group,
+          visualMode,
+          960,
+          540,
+          baseFontSize,
+          resolved.baseTypography.fontWeight,
+          resolved.baseTypography.fontFamily,
+          measureCtx,
+        ),
+      );
     }
   }
 
