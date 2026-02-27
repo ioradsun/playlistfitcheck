@@ -409,6 +409,7 @@ function lerpColor(a: string, b: string, t: number): string {
 
 const BASE_W = 960;
 const BASE_H = 540;
+const BAKER_VERSION = 2;
 let globalBakeLock = false;
 let globalBakePromise: Promise<void> | null = null;
 let globalTimelineCache: ScaledKeyframe[] | null = null;
@@ -416,6 +417,7 @@ let globalChunkCache: Map<string, ChunkState> | null = null;
 let globalHasCinematicDirection = false;
 let globalSongStartSec = 0;
 let globalSongEndSec = 0;
+let globalBakerVersion = 0;
 let globalSessionKey = '';
 
 const SIM_W = 96;
@@ -895,6 +897,13 @@ export class LyricDancePlayer {
     options?: { bootMode?: "minimal" | "full" },
   ) {
     // Invalidate cache if song changed (survives HMR)
+    const songId = data.id;
+    if (
+      globalTimelineCache &&
+      (globalSessionKey !== `v15-${songId}` || globalBakerVersion !== BAKER_VERSION)
+    ) {
+      globalTimelineCache = null;
+    }
     const sessionKey = `v15-${data.id}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
@@ -903,6 +912,7 @@ export class LyricDancePlayer {
       globalChunkCache = null;
       globalBakeLock = false;
       globalHasCinematicDirection = false;
+      globalBakerVersion = 0;
     }
     this.data = data;
     this.data = data;
@@ -1046,6 +1056,7 @@ export class LyricDancePlayer {
         globalHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
         globalSongStartSec = payload.songStart;
         globalSongEndSec = payload.songEnd;
+        globalBakerVersion = BAKER_VERSION;
         globalBakeLock = false;
       })();
     }
