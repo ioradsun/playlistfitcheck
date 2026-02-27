@@ -199,11 +199,11 @@ const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
 };
 
 const EMPHASIS_CURVE: Record<number, number> = {
-  1: 0.90,
-  2: 1.00,
-  3: 1.20,
-  4: 1.45,
-  5: 1.75,
+  1: 0.78,
+  2: 0.92,
+  3: 1.18,
+  4: 1.55,
+  5: 1.95,
 };
 
 const TYPOGRAPHY_FONT_WEIGHTS: Record<string, number> = {
@@ -507,7 +507,7 @@ function computeEntryState(style: EntryStyle, progress: number, intensity: numbe
   switch (style) {
     case 'slam-down': return { offsetX: 0, offsetY: -(1 - ep) * 80 * intensity, scaleX: 1 + (1 - ep) * 0.3 * intensity, scaleY: ep < 0.9 ? 1 : 1 - (1 - ep) * 10 * intensity, alpha: Math.min(1, progress * 8), skewX: 0, glowMult: ep > 0.85 ? (1 - ep) * 4 : 0, blur: 0, rotation: 0 };
     case 'punch-in': return { offsetX: (1 - eb) * -120 * intensity, offsetY: 0, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 6), skewX: (1 - ep) * -8 * intensity, glowMult: 0, blur: 0, rotation: 0 };
-    case 'explode-in': return { offsetX: 0, offsetY: 0, scaleX: 1 + (1 - ep) * 2.5 * intensity, scaleY: 1 + (1 - ep) * 2.5 * intensity, alpha: Math.min(1, progress * 4), skewX: 0, glowMult: (1 - ep) * 2, blur: 0, rotation: 0 };
+    case 'explode-in': { const mult = Math.min(2.0, 2.5 * intensity); return { offsetX: 0, offsetY: 0, scaleX: 1 + (1 - ep) * mult, scaleY: 1 + (1 - ep) * mult, alpha: Math.min(1, progress * 4), skewX: 0, glowMult: (1 - ep) * 2, blur: 0, rotation: 0 }; }
     case 'snap-in': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: progress > 0.01 ? 1 : 0, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
     case 'rise': return { offsetX: 0, offsetY: (1 - ep) * 45 * intensity, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
     case 'materialize': return { offsetX: 0, offsetY: 0, scaleX: 0.75 + ep * 0.25, scaleY: 0.75 + ep * 0.25, alpha: easeOut(Math.min(1, progress * 1.5)), skewX: 0, glowMult: (1 - ep) * 0.8, blur: 0, rotation: 0 };
@@ -998,15 +998,19 @@ function getWordFontSize(
   _visualMode: VisualMode,
 ): number {
   const clean = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
-  if (isFillerWord(clean)) return Math.round(baseFontSize * 0.65);
+  if (isFillerWord(clean)) return Math.round(baseFontSize * 0.72);
 
   const emphasisLevel = directive?.emphasisLevel ?? 2;
   const scale = EMPHASIS_CURVE[emphasisLevel] ?? 1.0;
   // Clamp: hero word never exceeds 32% of reference canvas height (540)
-  const maxFontSize = 540 * 0.32; // 172.8px at reference
+  const maxWidthPx = 960 * 0.85;
+  const avgCharWidth = 0.55;
+  const charCount = Math.max(1, clean.length || word.length || 1);
+  const maxFontByWidth = maxWidthPx / (charCount * avgCharWidth);
+  const maxFontSize = Math.min(540 * 0.38, maxFontByWidth);
   const sized = Math.min(Math.round(baseFontSize * scale), maxFontSize);
   // Filler words are always subordinate — cap at base regardless of emphasis
-  if (isFillerWord(clean)) return Math.min(sized, Math.round(baseFontSize * 0.60));
+  if (isFillerWord(clean)) return Math.min(sized, Math.round(baseFontSize * 0.72));
   return sized;
 }
 
@@ -1143,8 +1147,12 @@ function getGroupLayout(
   ];
   const posVariant = anchorPositions[group.lineIndex % anchorPositions.length];
   const deterministicSpread = ((group.lineIndex * 0.618033) % 0.2) - 0.1;
-  const cx = canvasW * (posVariant[0] + (visualMode === 'explosive' ? deterministicSpread : 0));
-  const cy = canvasH * (posVariant[1] + (visualMode === 'explosive' ? deterministicSpread : 0));
+  const cxBase = canvasW * (posVariant[0] + (visualMode === 'explosive' ? deterministicSpread : 0));
+  const cyBase = canvasH * (posVariant[1] + (visualMode === 'explosive' ? deterministicSpread : 0));
+  const slot = (group as any)._positionSlot ?? 0;
+  const lineOffset = (group as any)._lineOffset ?? 0;
+  const cx = cxBase + slot * canvasW * 0.16;
+  const cy = cyBase + lineOffset;
 
   const MIN_FONT = 30;
 
@@ -1173,7 +1181,7 @@ function getGroupLayout(
     if (isAnchor) {
       wordFontSizes.push(Math.max(MIN_FONT, baseFontSize * (EMPHASIS_CURVE[emp] ?? 1.0)));
     } else {
-      wordFontSizes.push(Math.max(MIN_FONT, isFiller ? baseFontSize * 0.60 : baseFontSize * 0.80));
+      wordFontSizes.push(Math.max(MIN_FONT, isFiller ? baseFontSize * 0.72 : baseFontSize * 0.88));
     }
   }
 
@@ -1202,7 +1210,7 @@ function getGroupLayout(
   // Layout remaining words as a single readable phrase on one baseline below the anchor
   if (supportIndices.length > 0) {
     // Use a uniform font size for the phrase line (the non-filler support size) for consistency
-    const phraseFontSize = Math.max(MIN_FONT, baseFontSize * 0.75);
+    const phraseFontSize = Math.max(MIN_FONT, baseFontSize * 0.82);
 
     // Calculate per-word widths + total group width, then lay out from the group's left edge.
     // This prevents all support words from collapsing to the same center x.
@@ -1216,8 +1224,11 @@ function getGroupLayout(
     // Center the phrase block on cx, then place each word by cumulative width.
     // Use anchor fontSize directly — stable across line transitions
     const anchorFontSize = positions[anchorIdx]?.fontSize ?? baseFontSize;
-    const phraseY = Math.round(cy + anchorFontSize * 1.0);
-    const startX = cx - totalWidth * 0.5;
+    const phraseY = Math.round(cy + anchorFontSize * 1.25);
+    const supportMargin = 80;
+    const minLeft = supportMargin;
+    const maxLeft = canvasW - supportMargin - totalWidth;
+    const startX = Math.max(minLeft, Math.min(maxLeft, cx - totalWidth * 0.5));
     let cumulativeWidth = 0;
     for (let j = 0; j < supportIndices.length; j++) {
       const idx = supportIndices[j];
@@ -1243,8 +1254,13 @@ function getGroupLayout(
   }
 
   const margin = 80;
-  for (const pos of positions) {
-    pos.x = Math.max(margin, Math.min(canvasW - margin, pos.x));
+  for (let i = 0; i < positions.length; i += 1) {
+    const pos = positions[i];
+    const word = group.words[i]?.word ?? '';
+    const halfW = getWordWidth(word, pos.fontSize) * 0.5;
+    const minX = margin + halfW;
+    const maxX = canvasW - margin - halfW;
+    pos.x = Math.max(minX, Math.min(maxX, pos.x));
     pos.y = Math.round(Math.max(margin, Math.min(canvasH - margin, pos.y)));
   }
 
@@ -1422,8 +1438,8 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
 
     const useCinematicSizes = payload.cinematic_direction != null;
     const shotFontSizes: Record<string, number> = useCinematicSizes
-      ? { Wide: 48, Medium: 62, Close: 74, CloseUp: 84, ExtremeClose: 96, FloatingInWorld: 52 }
-      : { Wide: 30, Medium: 38, Close: 46, CloseUp: 50, ExtremeClose: 56, FloatingInWorld: 32 };
+      ? { Wide: 56, Medium: 72, Close: 88, CloseUp: 104, ExtremeClose: 120, FloatingInWorld: 60 }
+      : { Wide: 34, Medium: 44, Close: 54, CloseUp: 62, ExtremeClose: 72, FloatingInWorld: 36 };
 
     const baseFontSize = shotFontSizes[shot] ?? 36;
     const actBaseFontSize = baseFontSize * actSizeMultiplier;
@@ -1522,6 +1538,50 @@ function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMo
   };
 
   const phraseGroups = words.length > 0 ? buildPhraseGroups(wordMeta) : null;
+  if (phraseGroups) {
+    const slotStarts: number[] = [];
+    const slotEnds: number[] = [];
+    for (let gi = 0; gi < phraseGroups.length; gi += 1) {
+      const group = phraseGroups[gi];
+      const visStart = group.start - animParams.entryDuration - animParams.stagger * group.words.length;
+      const visEnd = group.end + animParams.linger + animParams.exitDuration;
+      let slot = 0;
+      for (; slot < slotEnds.length; slot += 1) {
+        if (visStart >= slotEnds[slot]) break;
+      }
+      if (slot === slotEnds.length) {
+        slotStarts.push(visStart);
+        slotEnds.push(visEnd);
+      } else {
+        slotStarts[slot] = visStart;
+        slotEnds[slot] = visEnd;
+      }
+      (group as any)._positionSlot = slot % 3;
+    }
+
+    const byLine = new Map<number, PhraseGroup[]>();
+    for (let gi = 0; gi < phraseGroups.length; gi += 1) {
+      const group = phraseGroups[gi];
+      const arr = byLine.get(group.lineIndex) ?? [];
+      arr.push(group);
+      byLine.set(group.lineIndex, arr);
+    }
+    for (const [, groups] of byLine) {
+      for (let gi = 0; gi < groups.length; gi += 1) {
+        const g = groups[gi];
+        const t = g.start;
+        const visibleLineIndices: number[] = [];
+        for (let li = 0; li < payload.lines.length; li += 1) {
+          const line = payload.lines[li];
+          if (t >= (line.start ?? 0) && t < (line.end ?? 0)) visibleLineIndices.push(li);
+        }
+        const visibleCount = Math.max(1, visibleLineIndices.length);
+        const lineSpacing = 72;
+        const linePos = Math.max(0, visibleLineIndices.indexOf(g.lineIndex));
+        (g as any)._lineOffset = (linePos - (visibleCount - 1) * 0.5) * lineSpacing;
+      }
+    }
+  }
   const measureCanvas = new OffscreenCanvas(1, 1);
   const measureCtx = measureCanvas.getContext('2d')!;
 
@@ -1847,8 +1907,12 @@ function bakeFrame(
             ?? getLayoutForMode(pre.visualMode, wm.wordIndex, totalWords, chapterEmotionalIntensity);
           const [nx, ny] = position;
 
-          const canvasX = nx * 960;
-          const canvasY = ny * 540;
+          const baseFontSizeForClamp = pre.lineFontSizes[wm.lineIndex] ?? 36;
+          const widthForClamp = Math.max(1, wm.word.length * baseFontSizeForClamp * 0.55);
+          const halfWForClamp = widthForClamp * 0.5;
+          const marginClamp = 80;
+          const canvasX = Math.max(marginClamp + halfWForClamp, Math.min(960 - marginClamp - halfWForClamp, nx * 960));
+          const canvasY = Math.max(marginClamp, Math.min(540 - marginClamp, ny * 540));
           const elapsed = tSec - wm.start;
 
           const stagger = wm.wordIndex * (pre.manifestStagger ?? lineLayout?.stagger ?? 0);

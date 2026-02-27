@@ -394,6 +394,23 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
   }>;
 };
 
+interface ChunkBounds {
+  chunk: ScaledKeyframe['chunks'][number];
+  cx: number;
+  cy: number;
+  halfW: number;
+  halfH: number;
+  priority: number;
+  fontSize: number;
+  minFont: number;
+  text: string;
+  family: string;
+  weight: number;
+  baseTextWidth: number;
+  scaleX: number;
+  scaleY: number;
+}
+
 function lerpColor(a: string, b: string, t: number): string {
   const clamp = Math.max(0, Math.min(1, t));
   const parse = (hex: string): [number, number, number] => {
@@ -826,6 +843,8 @@ export class LyricDancePlayer {
   private _interpFrame: ScaledKeyframe | null = null;
   private _interpChunkPool: ScaledKeyframe['chunks'] = [];
   private _interpParticlePool: ScaledKeyframe['particles'] = [];
+  private _sortBuffer: ScaledKeyframe['chunks'] = [];
+  private _boundsBuffer: ChunkBounds[] = [];
 
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
@@ -1787,25 +1806,121 @@ export class LyricDancePlayer {
 
     let drawCalls = 0;
     const palette = this.getBurstPalette(songProgress);
-    const sortedChunks = frame.chunks;
-    sortedChunks.sort((a, b) => {
-      const aIsExiting = (a.exitProgress ?? 0) > 0 ? 1 : 0;
-      const bIsExiting = (b.exitProgress ?? 0) > 0 ? 1 : 0;
-      return bIsExiting - aIsExiting;
-    });
+    const sortBuf = this._sortBuffer;
+    sortBuf.length = 0;
+    for (let i = 0; i < frame.chunks.length; i += 1) sortBuf.push(frame.chunks[i]);
+    for (let i = 1; i < sortBuf.length; i += 1) {
+      const v = sortBuf[i];
+      const vKey = ((v.exitProgress ?? 0) > 0) ? 1 : 0;
+      let j = i - 1;
+      while (j >= 0) {
+        const jKey = ((sortBuf[j].exitProgress ?? 0) > 0) ? 1 : 0;
+        if (jKey >= vKey) break;
+        sortBuf[j + 1] = sortBuf[j];
+        j -= 1;
+      }
+      sortBuf[j + 1] = v;
+    }
     const nowSec = performance.now() / 1000;
     this.drawDecompositions(this.ctx, nowSec);
 
-    const visibleLines = this.payload?.lines?.filter((l: any) => tSec >= (l.start ?? 0) && tSec < (l.end ?? 0)) ?? [];
-    const activeLine = visibleLines.length === 0
-      ? null
-      : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
-    const rowLastRightEdge = new Map<number, number>();
+    const isPortraitLocal = this.height > this.width;
+    const viewportMinFont = isPortraitLocal
+      ? Math.max(30, this.width * 0.085)
+      : Math.max(36, this.height * 0.055);
+    const margin = 4;
+    const wallLeft = -safeCameraX + margin;
+    const wallRight = this.width - safeCameraX - margin;
+    const wallTop = -safeCameraY + margin;
+    const wallBottom = this.height - safeCameraY - margin;
 
-    for (const chunk of sortedChunks) {
+    const bounds = this._boundsBuffer;
+    bounds.length = 0;
+    const resolvedFont = this.getResolvedFont();
+    for (let i = 0; i < sortBuf.length; i += 1) {
+      const chunk = sortBuf[i];
+      if (!chunk.visible) continue;
+      const obj = this.chunks.get(chunk.id);
+      if (!obj) continue;
+      const text = chunk.text ?? obj.text;
+      const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
+      const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
+      const cx = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
+      const cy = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
+      const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
+      const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
+      const fontSize = Math.max(viewportMinFont, Math.round(baseFontSize * zoom) || 36);
+      const weight = chunk.fontWeight ?? 700;
+      const family = chunk.fontFamily ?? resolvedFont;
+      const measureFont = `${weight} ${fontSize}px ${family}`;
+      if (measureFont !== this._lastFont) {
+        this.ctx.font = measureFont;
+        this._lastFont = measureFont;
+      }
+      const m = this.ctx.measureText(text);
+      const baseTextWidth = m.width;
+      const asc = m.actualBoundingBoxAscent ?? (fontSize * 0.45);
+      const desc = m.actualBoundingBoxDescent ?? (fontSize * 0.15);
+      const halfTextH = (asc + desc) / 2;
+      const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
+      const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
+      const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
+      const scaleX = Number.isFinite(sxRaw) ? sxRaw : 1;
+      const scaleY = Number.isFinite(syRaw) ? syRaw : 1;
+      bounds.push({
+        chunk,
+        cx,
+        cy,
+        halfW: (baseTextWidth * Math.abs(scaleX)) / 2 + 6,
+        halfH: (halfTextH * Math.abs(scaleY)) + 3,
+        priority: chunk.isAnchor ? 0 : ((chunk.exitProgress ?? 0) > 0 ? 2 : 1),
+        fontSize,
+        minFont: viewportMinFont,
+        text,
+        family,
+        weight,
+        baseTextWidth,
+        scaleX,
+        scaleY,
+      });
+    }
+
+    this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+
+    let shrinkOccurred = false;
+    for (let passPriority = 2; passPriority >= 0; passPriority -= 1) {
+      for (let bi = 0; bi < bounds.length; bi += 1) {
+        const b = bounds[bi];
+        if (b.priority !== passPriority) continue;
+        const availW = wallRight - wallLeft;
+        const availH = wallBottom - wallTop;
+        const tooWide = b.halfW * 2 > availW;
+        const tooTall = b.halfH * 2 > availH;
+        if (!tooWide && !tooTall) continue;
+        const shrinkRatioW = tooWide ? (availW / (b.halfW * 2)) : 1;
+        const shrinkRatioH = tooTall ? (availH / (b.halfH * 2)) : 1;
+        const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
+        b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
+        const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
+        if (this.ctx.font !== newFontStr) this.ctx.font = newFontStr;
+        this._lastFont = newFontStr;
+        const m2 = this.ctx.measureText(b.text);
+        b.baseTextWidth = m2.width;
+        const asc2 = m2.actualBoundingBoxAscent ?? (b.fontSize * 0.45);
+        const desc2 = m2.actualBoundingBoxDescent ?? (b.fontSize * 0.15);
+        const halfTextH2 = (asc2 + desc2) / 2;
+        b.halfW = (b.baseTextWidth * Math.abs(b.scaleX)) / 2 + 6;
+        b.halfH = (halfTextH2 * Math.abs(b.scaleY)) + 3;
+        shrinkOccurred = true;
+      }
+    }
+
+    if (shrinkOccurred) this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+
+    for (let ci = 0; ci < sortBuf.length; ci += 1) {
+      const chunk = sortBuf[ci];
       if (!chunk.visible) continue;
 
-      // Spawn ambient burst trails as words exit.
       const isExiting = (chunk.exitScale !== 1) || (chunk.exitOffsetY !== 0) || ((chunk.entryProgress ?? 0) >= 1 && chunk.alpha < 0.85);
       if (chunk.trail && chunk.trail !== 'none' && isExiting) {
         this.spawnBurstEmitter(
@@ -1823,9 +1938,7 @@ export class LyricDancePlayer {
       const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
       const exit = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
       if (entry >= 1.0 && exit === 0) {
-        if (!this.chunkActiveSinceMs.has(chunk.id)) {
-          this.chunkActiveSinceMs.set(chunk.id, performance.now());
-        }
+        if (!this.chunkActiveSinceMs.has(chunk.id)) this.chunkActiveSinceMs.set(chunk.id, performance.now());
       }
       const activeSince = this.chunkActiveSinceMs.get(chunk.id);
       const visibleMs = activeSince != null ? performance.now() - activeSince : 0;
@@ -1833,66 +1946,63 @@ export class LyricDancePlayer {
       const allowDecomp = exit === 0 || visibleMs >= 1000;
       const currentExitProgress = exit;
       this.lastExitProgressByChunk.set(chunk.id, currentExitProgress);
-
-      // Fire when exitProgress first crosses 0 — but also pre-spawn
-      // by watching entryProgress hitting 1 (word fully entered) AND
-      // alpha starting to drop, which happens just before exitProgress > 0
       const wordJustExited = prevExitProgress <= 0 && currentExitProgress > 0;
-      if (wordJustExited) {
+      let hasActiveDecomp = false;
+      for (let di = 0; di < this.activeDecomps.length; di += 1) {
+        if (this.activeDecomps[di].id === chunk.id) {
+          hasActiveDecomp = true;
+          break;
+        }
       }
-      const wordFadingOut = currentExitProgress === 0 &&
-        (chunk.alpha ?? 1) < 0.75 &&
-        (chunk.entryProgress ?? 0) >= 1.0 &&
-        !this.activeDecomps.some(d => d.id === chunk.id) &&
-        !this.lastExitProgressByChunk.get(`pre_${chunk.id}`);
-      if (wordFadingOut) {
-        this.lastExitProgressByChunk.set(`pre_${chunk.id}`, 1);
-      }
+      const wordFadingOut = currentExitProgress === 0 && (chunk.alpha ?? 1) < 0.75 && (chunk.entryProgress ?? 0) >= 1.0 && !hasActiveDecomp && !this.lastExitProgressByChunk.get(`pre_${chunk.id}`);
+      if (wordFadingOut) this.lastExitProgressByChunk.set(`pre_${chunk.id}`, 1);
       const shouldSpawnDecomp = wordJustExited || wordFadingOut;
       const obj = this.chunks.get(chunk.id);
-      if (!obj) {
-        continue;
-      }
+      if (!obj) continue;
+
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
       const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
       const rawDrawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
-      const drawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
-      const finalDrawY = drawY;
+      const rawDrawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
+
+      let bound: ChunkBounds | null = null;
+      for (let bi = 0; bi < bounds.length; bi += 1) {
+        if (bounds[bi].chunk === chunk) {
+          bound = bounds[bi];
+          break;
+        }
+      }
+
       const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
-      const fontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
+      const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
+      let safeFontSize = Math.max(viewportMinFont, Math.round(baseFontSize * zoom) || 36);
       const fontWeight = chunk.fontWeight ?? 700;
-      const viewportMinFont = Math.max(16, Math.min(this.width, this.height) * 0.055);
-      const safeFontSize = Math.max(viewportMinFont, Math.round(fontSize * zoom) || 36);
-      const resolvedFont = this.getResolvedFont();
       const family = chunk.fontFamily ?? resolvedFont;
+      const text = chunk.text ?? obj.text;
+      if (bound) safeFontSize = bound.fontSize;
+
       const measureFont = `${fontWeight} ${safeFontSize}px ${family}`;
       if (measureFont !== this._lastFont) {
         this.ctx.font = measureFont;
         this._lastFont = measureFont;
       }
-      const text = chunk.text ?? obj.text;
       const textWidth = this.ctx.measureText(text).width;
-      const spaceWidth = Math.max(4, this.ctx.measureText(' ').width || safeFontSize * 0.25);
-      const rowKey = Math.round(finalDrawY / 20) * 20;
-      const previousRightEdge = rowLastRightEdge.get(rowKey);
-      let drawX = rawDrawX;
-      if (previousRightEdge != null && drawX < previousRightEdge + spaceWidth) {
-        const overlap = (previousRightEdge + spaceWidth) - drawX;
-        drawX += overlap * 0.5;
-      }
-      rowLastRightEdge.set(rowKey, drawX + textWidth);
-      const wordCenterX = drawX + textWidth / 2;
+      const centerX = bound ? bound.cx : rawDrawX;
+      const centerY = bound ? bound.cy : rawDrawY;
+      let drawX = centerX - textWidth * 0.5;
+      const drawY = centerY;
+      const finalDrawY = drawY;
+
       const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
       const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
       const sx = Number.isFinite(sxRaw) ? sxRaw : 1;
       const sy = Number.isFinite(syRaw) ? syRaw : 1;
 
-      // Hierarchical halo — anchor vs supporting
       const isAnchor = chunk.isAnchor ?? false;
       const haloPal = this.getResolvedPalette();
       const chapterColor = haloPal[1];
-      this.drawWordHalo(wordCenterX, finalDrawY, fontSize, isAnchor, chapterColor, chunk.alpha);
+      this.drawWordHalo(centerX, finalDrawY, safeFontSize, isAnchor, chapterColor, chunk.alpha);
 
       const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
       const iconScaleMult = chunk.iconScale ?? 2.0;
@@ -1903,102 +2013,57 @@ export class LyricDancePlayer {
         replace: iconScaleMult * 0.9,
       };
       const effectiveScale = positionScaleOverride[chunk.iconPosition ?? 'behind'] ?? iconScaleMult;
-      const iconBaseSize = (chunk.fontSize ?? 36) * effectiveScale;
+      const iconBaseSize = safeFontSize * effectiveScale;
       const iconColor = chunk.color ?? chapterColor;
       const now = performance.now() / 1000;
       let iconPulse = 1.0;
-      if (chunk.iconPosition === 'behind') {
-        iconPulse = 1.0 + Math.sin(now * 1.5) * 0.08;
-      } else if (chunk.behavior === 'pulse') {
-        iconPulse = 1.0 + Math.sin(now * 3) * 0.04;
-      }
+      if (chunk.iconPosition === 'behind') iconPulse = 1.0 + Math.sin(now * 1.5) * 0.08;
+      else if (chunk.behavior === 'pulse') iconPulse = 1.0 + Math.sin(now * 3) * 0.04;
       const iconSize = iconBaseSize * iconPulse;
-      let iconX = wordCenterX;
+      let iconX = centerX;
       let iconY = finalDrawY;
       let iconOpacity = drawAlpha * 0.45;
       let iconGlow = 0;
 
       switch (chunk.iconPosition) {
-        case 'behind':
-          iconX = wordCenterX;
-          iconY = finalDrawY;
-          iconOpacity = drawAlpha * 0.45;
-          iconGlow = 12;
-          break;
-        case 'above':
-          iconX = wordCenterX;
-          iconY = finalDrawY - (chunk.fontSize ?? 36) * 1.3;
-          iconOpacity = drawAlpha * 0.85;
-          iconGlow = 6;
-          break;
-        case 'beside':
-          iconX = wordCenterX - iconSize * 0.7;
-          iconY = finalDrawY;
-          iconOpacity = drawAlpha * 0.9;
-          iconGlow = 6;
-          break;
-        case 'replace':
-          iconX = wordCenterX;
-          iconY = finalDrawY;
-          iconOpacity = drawAlpha * 1.0;
-          iconGlow = 16;
-          break;
+        case 'behind': iconX = centerX; iconY = finalDrawY; iconOpacity = drawAlpha * 0.45; iconGlow = 12; break;
+        case 'above': iconX = centerX; iconY = finalDrawY - safeFontSize * 1.3; iconOpacity = drawAlpha * 0.85; iconGlow = 6; break;
+        case 'beside': iconX = centerX - iconSize * 0.7; iconY = finalDrawY; iconOpacity = drawAlpha * 0.9; iconGlow = 6; break;
+        case 'replace': iconX = centerX; iconY = finalDrawY; iconOpacity = drawAlpha * 1.0; iconGlow = 16; break;
       }
 
       const drawBefore = chunk.iconPosition === 'behind' || chunk.iconPosition === 'replace';
       if (chunk.iconGlyph && chunk.visible && drawBefore) {
-        if (iconGlow > 0) {
-          this.ctx.save();
-          this.ctx.shadowColor = iconColor;
-          this.ctx.shadowBlur = iconGlow;
-        }
+        if (iconGlow > 0) { this.ctx.save(); this.ctx.shadowColor = iconColor; this.ctx.shadowBlur = iconGlow; }
         drawIcon(this.ctx, chunk.iconGlyph as IconGlyph, iconX, iconY, iconSize, iconColor, (chunk.iconStyle as IconStyle) ?? 'ghost', iconOpacity);
-        if (iconGlow > 0) {
-          this.ctx.restore();
-        }
+        if (iconGlow > 0) this.ctx.restore();
       }
 
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
       if (DECOMP_ENABLED && shouldSpawnDecomp && allowDecomp) {
         const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
-        this.tryStartDecomposition({
-          chunkId: chunk.id,
-          text,
-          drawX: wordCenterX,
-          drawY: drawY,
-          fontSize: safeFontSize,
-          fontWeight,
-          fontFamily: chunk.fontFamily,
-          color: this.getTextColor(chunk.color ?? chapterColor),
-          directive: decompDirective,
-        });
+        this.tryStartDecomposition({ chunkId: chunk.id, text, drawX: centerX, drawY, fontSize: safeFontSize, fontWeight, fontFamily: chunk.fontFamily, color: this.getTextColor(chunk.color ?? chapterColor), directive: decompDirective });
       }
 
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
         const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
-        if (drawFont !== this._lastFont) {
-          this.ctx.font = drawFont;
-          this._lastFont = drawFont;
-        }
+        if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         if (chunk.glow > 0) {
           this.ctx.shadowColor = chunk.color ?? '#ffffff';
           this.ctx.shadowBlur = chunk.glow * 32;
         }
 
         let filterApplied = false;
-        if ((chunk.blur ?? 0) > 0.01) {
-          this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
-          filterApplied = true;
-        }
+        if ((chunk.blur ?? 0) > 0.01) { this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`; filterApplied = true; }
 
         if (chunk.ghostTrail && chunk.visible) {
           const count = chunk.ghostCount ?? 3;
           const spacing = chunk.ghostSpacing ?? 8;
           const dir = chunk.ghostDirection ?? 'up';
-          for (let g = count; g >= 1; g--) {
+          for (let g = count; g >= 1; g -= 1) {
             const ghostAlpha = drawAlpha * (0.12 + (count - g) * 0.06);
             const offset = g * spacing;
             let gx = 0, gy = 0;
@@ -2007,10 +2072,7 @@ export class LyricDancePlayer {
               case 'down': gy = -offset; break;
               case 'left': gx = offset; break;
               case 'right': gx = -offset; break;
-              case 'radial':
-                gx = Math.cos(g * 1.2) * offset;
-                gy = Math.sin(g * 1.2) * offset;
-                break;
+              case 'radial': gx = Math.cos(g * 1.2) * offset; gy = Math.sin(g * 1.2) * offset; break;
             }
             this.ctx.globalAlpha = ghostAlpha;
             this.ctx.save();
@@ -2026,35 +2088,23 @@ export class LyricDancePlayer {
 
         this.ctx.save();
         this.ctx.translate(drawX, finalDrawY);
-        if (chunk.rotation) {
-          this.ctx.rotate(chunk.rotation);
-        }
+        if (chunk.rotation) this.ctx.rotate(chunk.rotation);
         this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
         this.ctx.scale(sx, sy);
         this.ctx.fillText(text, 0, 0);
         this.ctx.restore();
-
-        if (filterApplied) {
-          this.ctx.filter = 'none';
-        }
+        if (filterApplied) this.ctx.filter = 'none';
       }
 
       if (chunk.iconGlyph && chunk.visible && !drawBefore) {
-        if (iconGlow > 0) {
-          this.ctx.save();
-          this.ctx.shadowColor = iconColor;
-          this.ctx.shadowBlur = iconGlow;
-        }
+        if (iconGlow > 0) { this.ctx.save(); this.ctx.shadowColor = iconColor; this.ctx.shadowBlur = iconGlow; }
         drawIcon(this.ctx, chunk.iconGlyph as IconGlyph, iconX, iconY, iconSize, iconColor, (chunk.iconStyle as IconStyle) ?? 'outline', iconOpacity);
-        if (iconGlow > 0) {
-          this.ctx.restore();
-        }
+        if (iconGlow > 0) this.ctx.restore();
       }
       this.ctx.shadowBlur = 0;
       this.ctx.globalAlpha = 1;
       drawCalls += 1;
     }
-
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
@@ -3374,8 +3424,13 @@ export class LyricDancePlayer {
     const sy = this.height / BASE_H;
     const isPortrait = this.height > this.width;
     const fontScale = isPortrait
-      ? Math.min(this.width / BASE_H, this.height / BASE_W)
-      : Math.min(sx, sy);
+      ? Math.min(this.width / 360, 1.35)
+      : (() => {
+        const base = Math.min(sx, sy);
+        if (this.height >= 1080) return base;
+        const deficit = (1080 - this.height) / 1080;
+        return Math.min(base * (1 + deficit * 0.45), base * 1.25);
+      })();
     this.timelineScale = { sx, sy, fontScale };
     this.timeline = this.scaleTimeline(this.timelineBase);
     this.invalidateFrameCache();
@@ -3403,6 +3458,82 @@ export class LyricDancePlayer {
         size: p.size * Math.min(sx, sy),
       })),
     }));
+  }
+
+  private solveConstraints(
+    bounds: ChunkBounds[],
+    wallLeft: number,
+    wallRight: number,
+    wallTop: number,
+    wallBottom: number,
+  ): void {
+    const MAX_ITERS = 4;
+    for (let iter = 0; iter < MAX_ITERS; iter += 1) {
+      let hadCollision = false;
+      let hadWallProjection = false;
+
+      for (let i = 0; i < bounds.length; i += 1) {
+        const b = bounds[i];
+        const minX = wallLeft + b.halfW;
+        const maxX = wallRight - b.halfW;
+        const minY = wallTop + b.halfH;
+        const maxY = wallBottom - b.halfH;
+        const nextX = Math.max(minX, Math.min(maxX, b.cx));
+        const nextY = Math.max(minY, Math.min(maxY, b.cy));
+        if (nextX !== b.cx || nextY !== b.cy) {
+          b.cx = nextX;
+          b.cy = nextY;
+          hadWallProjection = true;
+        }
+      }
+
+      for (let i = 0; i < bounds.length; i += 1) {
+        const a = bounds[i];
+        for (let j = i + 1; j < bounds.length; j += 1) {
+          const b = bounds[j];
+          const dx = a.cx - b.cx;
+          const dy = a.cy - b.cy;
+          const overlapX = (a.halfW + b.halfW) - Math.abs(dx);
+          const overlapY = (a.halfH + b.halfH) - Math.abs(dy);
+          if (overlapX <= 0 || overlapY <= 0) continue;
+          hadCollision = true;
+
+          let moveA = 0.5;
+          let moveB = 0.5;
+          if (a.priority < b.priority) {
+            moveA = 0.2;
+            moveB = 0.8;
+          } else if (b.priority < a.priority) {
+            moveA = 0.8;
+            moveB = 0.2;
+          }
+
+          if (overlapX < overlapY) {
+            const sign = dx >= 0 ? 1 : -1;
+            const sep = overlapX;
+            a.cx += sign * sep * moveA;
+            b.cx -= sign * sep * moveB;
+          } else {
+            const sign = dy >= 0 ? 1 : -1;
+            const sep = overlapY;
+            a.cy += sign * sep * moveA;
+            b.cy -= sign * sep * moveB;
+          }
+        }
+      }
+
+      if (!hadCollision && !hadWallProjection) break;
+    }
+
+    for (let i = 0; i < bounds.length; i += 1) {
+      const b = bounds[i];
+      const minX = wallLeft + b.halfW;
+      const maxX = wallRight - b.halfW;
+      const minY = wallTop + b.halfH;
+      const maxY = wallBottom - b.halfH;
+      b.cx = Math.max(minX, Math.min(maxX, b.cx));
+      b.cy = Math.max(minY, Math.min(maxY, b.cy));
+    }
   }
 
   private invalidateFrameCache(): void {
