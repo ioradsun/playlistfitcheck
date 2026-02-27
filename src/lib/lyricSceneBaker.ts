@@ -402,32 +402,9 @@ const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {
   6: [[0.12, 0.28], [0.42, 0.18], [0.82, 0.25], [0.15, 0.72], [0.55, 0.8], [0.85, 0.7]],
 };
 
-const getVisualMode = (payload: ScenePayload): VisualMode => {
-  const frameState = payload.frame_state ?? null;
-  const manifestMode = (frameState as any)?.visualMode;
-  if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
-  if (!payload.cinematic_direction) return 'cinematic';
-
-  // New prompt: derive from motion + texture
-  const motion = (payload.cinematic_direction as any)?.motion as string | undefined;
-  const texture = (payload.cinematic_direction as any)?.texture as string | undefined;
-  if (motion) {
-    if (motion === 'weighted' || motion === 'glitch' || texture === 'storm' || texture === 'fire') return 'explosive';
-    if (motion === 'drift' || texture === 'petals' || texture === 'snow') return 'intimate';
-    return 'cinematic';
-  }
-
-  // Fallback: old visualWorld path
-  const physicsProfile = payload.cinematic_direction.visualWorld?.physicsProfile;
-  const backgroundSystem = payload.cinematic_direction.visualWorld?.backgroundSystem ?? 'default';
-  const heat = physicsProfile?.heat ?? 0.5;
-  const beatResponse = physicsProfile?.beatResponse ?? 'pulse';
-
-  return heat > 0.7 || backgroundSystem === 'storm' || beatResponse === 'slam'
-    ? 'explosive'
-    : heat > 0.4 || backgroundSystem === 'cosmic' || backgroundSystem === 'urban'
-      ? 'cinematic'
-      : 'intimate';
+const getVisualMode = (_payload: ScenePayload): VisualMode => {
+  // Karaoke renderer is single-mode: always use cinematic layout behavior.
+  return 'cinematic';
 };
 
 

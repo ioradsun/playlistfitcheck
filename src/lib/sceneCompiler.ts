@@ -150,14 +150,8 @@ const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {1:[[0.5,0.5]
 
 function isFillerWord(word: string): boolean { return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase()); }
 
-function getVisualMode(payload: ScenePayload): VisualMode {
-  const frameState = payload.frame_state ?? null;
-  const manifestMode = (frameState as any)?.visualMode;
-  if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
-  const motion = (payload.cinematic_direction as any)?.motion as string | undefined;
-  const texture = (payload.cinematic_direction as any)?.texture as string | undefined;
-  if (motion === 'weighted' || motion === 'glitch' || texture === 'storm' || texture === 'fire') return 'explosive';
-  if (motion === 'drift' || texture === 'petals' || texture === 'snow') return 'intimate';
+function getVisualMode(_payload: ScenePayload): VisualMode {
+  // Karaoke renderer is single-mode: always use cinematic layout behavior.
   return 'cinematic';
 }
 

@@ -292,7 +292,7 @@ const EXPORT_OPTIONS: { format: ExportFormat; label: string; desc: string }[] =
 
 const DEFAULT_VERSION_META: VersionMeta = {
   lineFormat: "natural",
-  socialPreset: "general",
+  socialPreset: "karaoke",
   strictness: "standard",
 };
 
@@ -364,14 +364,19 @@ export function LyricDisplay({
   const [fmlyReport, setFmlyReport] = useState<ProfanityReport | null>(null);
 
   // Per-version meta
+  const normalizeVersionMeta = (meta?: Partial<VersionMeta>): Partial<VersionMeta> => ({
+    ...(meta ?? {}),
+    socialPreset: "karaoke",
+  });
+
   const [explicitMeta, setExplicitMeta] = useState<VersionMeta>({
     ...DEFAULT_VERSION_META,
-    ...(initVersionMeta?.explicit ?? {}),
+    ...normalizeVersionMeta(initVersionMeta?.explicit),
   });
   const [fmlyMeta, setFmlyMeta] = useState<VersionMeta>({
     ...DEFAULT_VERSION_META,
     strictness: "standard",
-    ...(initVersionMeta?.fmly ?? {}),
+    ...normalizeVersionMeta(initVersionMeta?.fmly),
   });
 
   // Editing
@@ -1017,11 +1022,12 @@ export function LyricDisplay({
 
   // ── Format / meta updaters ────────────────────────────────────────────────
   const updateMeta = (version: ActiveVersion, patch: Partial<VersionMeta>) => {
+    const nextPatch = { ...patch, socialPreset: "karaoke" as const };
     if (version === "explicit") {
-      setExplicitMeta((m) => ({ ...m, ...patch }));
+      setExplicitMeta((m) => ({ ...m, ...nextPatch }));
       setExplicitLastEdited(new Date());
     } else {
-      setFmlyMeta((m) => ({ ...m, ...patch }));
+      setFmlyMeta((m) => ({ ...m, ...nextPatch }));
       setFmlyLastEdited(new Date());
     }
   };
