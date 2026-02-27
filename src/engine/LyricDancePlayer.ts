@@ -896,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: decomp-pos-v5');
+    console.log('[LyricDancePlayer] build: clean-v6');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1642,11 +1642,6 @@ export class LyricDancePlayer {
         opacity: 0.4,
         beatReactive: true,
       });
-      console.log('[Player] section changed:', {
-        index: sectionIndex,
-        texture,
-        tension: currentTension?.stage ?? "—",
-      });
     }
     this.activeTension = currentTension;
     this.ambientParticleEngine?.setDensityMultiplier((currentTension?.particleDensity ?? 0.5) * 2);
@@ -1979,6 +1974,9 @@ export class LyricDancePlayer {
       // by watching entryProgress hitting 1 (word fully entered) AND
       // alpha starting to drop, which happens just before exitProgress > 0
       const wordJustExited = prevExitProgress <= 0 && currentExitProgress > 0;
+      if (wordJustExited) {
+        console.log('[Decomp trigger]', chunk.id, 'exitP:', currentExitProgress.toFixed(2), 'alpha:', (chunk.alpha ?? 1).toFixed(2));
+      }
       const wordFadingOut = currentExitProgress === 0 &&
         (chunk.alpha ?? 1) < 0.75 &&
         (chunk.entryProgress ?? 0) >= 1.0 &&
@@ -1990,7 +1988,7 @@ export class LyricDancePlayer {
       const shouldSpawnDecomp = wordJustExited || wordFadingOut;
       const obj = this.chunks.get(chunk.id);
       if (!obj) {
-        console.warn('[Decomp] chunk miss:', chunk.id, 'registered:', [...this.chunks.keys()].slice(0, 5));
+        console.warn('chunk miss:', chunk.id, 'registered:', [...this.chunks.keys()].slice(0, 5));
         continue;
       }
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
@@ -2490,6 +2488,7 @@ export class LyricDancePlayer {
     const effect = this.resolveDecompEffect(input.directive);
     if (!effect || this.activeDecomps.some((d) => d.id === input.chunkId)) return;
     if (this.activeDecomps.length >= 3) this.activeDecomps.shift();
+    console.log('[Decomp spawn]', input.text, 'effect:', effect, 'y:', Math.round(input.drawY));
     const particles = this.captureWordParticles(input, effect);
     const decomp: PixelDecomp = {
       id: input.chunkId, particles, effect, startTime: performance.now() / 1000,
@@ -2497,7 +2496,6 @@ export class LyricDancePlayer {
       wordWidth: this.ctx.measureText(input.text).width, fontSize: input.fontSize, word: input.text,
       color: input.color, phase: 0,
     };
-    console.log(`[Decomp] "${input.text}" → ${effect}, ${particles.length} particles`);
     this.activeDecomps.push(decomp);
   }
 
@@ -2670,7 +2668,6 @@ export class LyricDancePlayer {
     };
     this.activeSectionIndex = -1;
     this.activeSectionTexture = texture;
-    console.log('[Player] wordDirectivesMap keys:', Object.keys(this.resolvedState?.wordDirectivesMap ?? {}));
   }
 
   private getActiveWord(timeSec: number): { word?: string; start: number; end: number } | null {
