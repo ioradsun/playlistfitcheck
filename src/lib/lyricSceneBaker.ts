@@ -1181,29 +1181,31 @@ function getGroupLayout(
     // Use a uniform font size for the phrase line (the non-filler support size) for consistency
     const phraseFontSize = Math.max(MIN_FONT, baseFontSize * 0.75);
 
-    // Calculate total width of phrase line
-    let totalWidth = 0;
-    for (let j = 0; j < supportIndices.length; j++) {
-      const idx = supportIndices[j];
-      totalWidth += approxWordWidth(group.words[idx].word, phraseFontSize);
-      if (j < supportIndices.length - 1) totalWidth += spaceWidth(phraseFontSize);
-    }
+    // Calculate per-word widths + total group width, then lay out from the group's left edge.
+    // This prevents all support words from collapsing to the same center x.
+    const phraseWordWidths = supportIndices.map((idx) =>
+      approxWordWidth(group.words[idx].word, phraseFontSize),
+    );
+    const interWordSpace = spaceWidth(phraseFontSize);
+    const totalWidth = phraseWordWidths.reduce((sum, width) => sum + width, 0)
+      + interWordSpace * Math.max(0, supportIndices.length - 1);
 
-    // Center the phrase horizontally on cx, place below anchor
+    // Center the phrase block on cx, then place each word by cumulative width.
     const phraseY = cy + baseFontSize * 1.0;
-    let cursor = cx - totalWidth * 0.5;
+    const startX = cx - totalWidth * 0.5;
+    let cumulativeWidth = 0;
     for (let j = 0; j < supportIndices.length; j++) {
       const idx = supportIndices[j];
-      const ww = approxWordWidth(group.words[idx].word, phraseFontSize);
+      const ww = phraseWordWidths[j];
       const isFiller = isFillerWord(group.words[idx].word);
       positions[idx] = {
-        x: cursor + ww * 0.5,
+        x: startX + cumulativeWidth + ww * 0.5,
         y: phraseY,
         fontSize: phraseFontSize,
         isAnchor: false,
         isFiller,
       };
-      cursor += ww + spaceWidth(phraseFontSize);
+      cumulativeWidth += ww + interWordSpace;
     }
   }
 

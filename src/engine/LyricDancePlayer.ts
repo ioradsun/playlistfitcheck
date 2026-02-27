@@ -896,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: decomp-overlay-v7');
+    console.log('[LyricDancePlayer] build: word-x-spacing-v8');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
