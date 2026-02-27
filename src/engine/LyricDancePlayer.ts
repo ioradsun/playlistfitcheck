@@ -1676,6 +1676,39 @@ export class LyricDancePlayer {
     return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
   }
 
+  /**
+   * Computes a combined 2D affine matrix for:
+   *   translate(tx, ty) → rotate(r) → skewX(s) → scale(sx, sy)
+   * Returns the 6 parameters for ctx.setTransform(a, b, c, d, e, f)
+   * Pre-multiplied by DPR.
+   */
+  private computeTransformMatrix(
+    tx: number,
+    ty: number,
+    rotation: number,
+    skewXDeg: number,
+    sx: number,
+    sy: number,
+  ): [number, number, number, number, number, number] {
+    const dpr = this.dpr;
+    if (rotation === 0 && skewXDeg === 0 && sx === 1 && sy === 1) {
+      return [dpr, 0, 0, dpr, tx * dpr, ty * dpr];
+    }
+
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const skewTan = skewXDeg !== 0 ? Math.tan((skewXDeg * Math.PI) / 180) : 0;
+
+    const a = cos * sx * dpr;
+    const b = sin * sx * dpr;
+    const c = (cos * skewTan - sin) * sy * dpr;
+    const d = (sin * skewTan + cos) * sy * dpr;
+    const e = tx * dpr;
+    const f = ty * dpr;
+
+    return [a, b, c, d, e, f];
+  }
+
   private update(deltaMs: number): void {
     const t = this.audio.currentTime;
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
@@ -1854,12 +1887,17 @@ export class LyricDancePlayer {
     for (let i = 1; i < sortBuf.length; i += 1) {
       const v = sortBuf[i];
       const vKey = ((v.exitProgress ?? 0) > 0) ? 1 : 0;
+      const vFont = `${v.fontWeight ?? 700}|${v.fontSize ?? 36}|${v.fontFamily ?? ''}`;
       let j = i - 1;
       while (j >= 0) {
         const jKey = ((sortBuf[j].exitProgress ?? 0) > 0) ? 1 : 0;
-        if (jKey >= vKey) break;
-        sortBuf[j + 1] = sortBuf[j];
-        j -= 1;
+        const jFont = `${sortBuf[j].fontWeight ?? 700}|${sortBuf[j].fontSize ?? 36}|${sortBuf[j].fontFamily ?? ''}`;
+        if (jKey > vKey || (jKey === vKey && jFont > vFont)) {
+          sortBuf[j + 1] = sortBuf[j];
+          j -= 1;
+        } else {
+          break;
+        }
       }
       sortBuf[j + 1] = v;
     }
@@ -2107,8 +2145,11 @@ export class LyricDancePlayer {
           this.ctx.shadowBlur = chunk.glow * 32;
         }
 
-        let filterApplied = false;
-        if ((chunk.blur ?? 0) > 0.01) { this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`; filterApplied = true; }
+        const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01;
+        if (needsFilterSaveRestore) {
+          this.ctx.save();
+          this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
+        }
 
         if (chunk.ghostTrail && chunk.visible) {
           const count = chunk.ghostCount ?? 3;
@@ -2126,25 +2167,34 @@ export class LyricDancePlayer {
               case 'radial': gx = Math.cos(g * 1.2) * offset; gy = Math.sin(g * 1.2) * offset; break;
             }
             this.ctx.globalAlpha = ghostAlpha;
-            this.ctx.save();
-            this.ctx.translate(drawX + gx, finalDrawY + gy);
-            if (chunk.rotation) this.ctx.rotate(chunk.rotation);
-            this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
-            this.ctx.scale(sx, sy);
+            const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
+              drawX + gx,
+              finalDrawY + gy,
+              chunk.rotation ?? 0,
+              chunk.skewX ?? 0,
+              sx,
+              sy,
+            );
+            this.ctx.setTransform(ga, gb, gc, gd, ge, gf);
             this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
-            this.ctx.restore();
           }
           this.ctx.globalAlpha = drawAlpha;
         }
 
-        this.ctx.save();
-        this.ctx.translate(drawX, finalDrawY);
-        if (chunk.rotation) this.ctx.rotate(chunk.rotation);
-        this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
-        this.ctx.scale(sx, sy);
+        const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
+          drawX,
+          finalDrawY,
+          chunk.rotation ?? 0,
+          chunk.skewX ?? 0,
+          sx,
+          sy,
+        );
+        this.ctx.setTransform(ma, mb, mc, md, me, mf);
         this.ctx.fillText(text, 0, 0);
-        this.ctx.restore();
-        if (filterApplied) this.ctx.filter = 'none';
+        if (needsFilterSaveRestore) {
+          this.ctx.filter = 'none';
+          this.ctx.restore();
+        }
       }
 
       if (chunk.iconGlyph && chunk.visible && !drawBefore) {
