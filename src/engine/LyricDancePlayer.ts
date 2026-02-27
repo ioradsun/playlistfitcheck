@@ -896,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: dissolve-slow-v9');
+    console.log('[LyricDancePlayer] build: word-is-particle-v10');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -2087,7 +2087,7 @@ export class LyricDancePlayer {
           chunkId: chunk.id,
           text: chunk.text ?? obj.text,
           drawX,
-          drawY: finalDrawY + (chunk.exitOffsetY ?? 0),
+          drawY: drawY,
           fontSize: safeFontSize,
           fontWeight,
           fontFamily: chunk.fontFamily,
@@ -2095,7 +2095,9 @@ export class LyricDancePlayer {
           directive: decompDirective,
         });
       }
-      // Don't suppress word — let exit animation handle fade, particles overlay on top
+      const decompActive = this.activeDecomps.some(d => d.id === chunk.id);
+      if (decompActive) continue;
+
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
@@ -2542,11 +2544,11 @@ export class LyricDancePlayer {
       p.gravity = 60 + Math.random() * 40; p.drag = 0.96; p.shape = 'shard'; p.rotSpeed = (Math.random() - 0.5) * 8;
       p.burstDelay = effect === 'shockwave' ? 0.08 : 0;
     } else if (effect === 'dissolve') {
-      p.vx = (Math.random()-0.5)*8;
-      p.vy = -2 - Math.random()*6;
-      p.gravity = -1;
-      p.drag = 0.98;
-      p.dissolveDelay = Math.random()*0.6;
+      p.vx = (Math.random()-0.5)*4;
+      p.vy = -1 - Math.random()*3;
+      p.gravity = -0.5;
+      p.drag = 0.99;
+      p.dissolveDelay = Math.random()*0.8;
     }
     else if (effect === 'melt') { const xNorm=(p.x-(cx-wordWidth/2))/Math.max(1,wordWidth); p.dripDelay=Math.random()*0.5+Math.abs(xNorm-0.5)*0.3; p.gravity=120+Math.random()*80; p.drag=0.92; p.shape='streak'; }
     else if (effect === 'ascend') { p.vx=(Math.random()-0.5)*30; p.vy=-40-Math.random()*60; p.gravity=-10; p.drag=0.97; p.riseDelay=(1-((p.y-(cy-fontSize/2))/Math.max(1,fontSize)))*0.3; }
