@@ -47,7 +47,7 @@ async function runScribe(
   const scribeT0 = Date.now();
   const sms = () => `${Date.now() - scribeT0}ms`;
 
-  const blob = new Blob([audioBytes.buffer], { type: mimeType });
+  const blob = new Blob([new Uint8Array(audioBytes.buffer)], { type: mimeType });
   console.log(`[Transcribe Debug] [scribe] ${sms()} blob created, ${(blob.size/1024/1024).toFixed(2)}MB`);
 
   const form = new FormData();

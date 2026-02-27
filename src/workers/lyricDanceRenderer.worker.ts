@@ -237,7 +237,7 @@ const applyInterpolatedFrame = (pair: FramePair) => {
     );
   }
 
-  app.stage.scale.set(cameraZoom, cameraZoom);
+  (app.stage as any).scale?.set?.(cameraZoom, cameraZoom) ?? ((app.stage as any).scaleX = cameraZoom, (app.stage as any).scaleY = cameraZoom);
   app.stage.pivot.set(cameraX, cameraY);
 
   if (DEBUG_INTERPOLATION) {
