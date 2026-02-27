@@ -409,7 +409,7 @@ function lerpColor(a: string, b: string, t: number): string {
 
 const BASE_W = 960;
 const BASE_H = 540;
-const BAKER_VERSION = 2;
+const BAKER_VERSION = 3;
 let globalBakeLock = false;
 let globalBakePromise: Promise<void> | null = null;
 let globalTimelineCache: ScaledKeyframe[] | null = null;

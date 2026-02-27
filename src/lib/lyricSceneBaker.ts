@@ -1699,7 +1699,8 @@ function bakeFrame(
             const rawEntryProgress = adjustedElapsed / Math.max(0.01, effectiveEntryDuration);
             const entryProgress = Math.min(1, Math.max(0, rawEntryProgress));
             const exitDelay = isLetterSequence && splitExitStyles.includes(effectiveExit) ? letterDelay : 0;
-            const exitProgress = Math.max(0, (tSec - group.end - exitDelay) / Math.max(0.01, animParams.exitDuration));
+            const effectiveExitDuration = Math.min(animParams.exitDuration, Math.max(0.05, nextGroupStart - group.end));
+            const exitProgress = Math.max(0, (tSec - group.end - exitDelay) / Math.max(0.01, effectiveExitDuration));
 
             const entryState = computeEntryState(effectiveEntry, entryProgress, motionDefaults.behaviorIntensity);
             const exitState = computeExitState(effectiveExit, exitProgress, motionDefaults.behaviorIntensity, li, letterTotal);
