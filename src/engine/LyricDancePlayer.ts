@@ -2022,18 +2022,27 @@ export class LyricDancePlayer {
       });
     }
 
-    // Only re-solve constraints when the set of visible chunks changes
-    const visibleIds = bounds.map(b => b.chunk.id).join(',');
-    if (visibleIds !== this._lastVisibleChunkIds ||
-        wallLeft !== this._solvedWalls.left ||
-        wallRight !== this._solvedWalls.right) {
-      // this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
-      this._lastVisibleChunkIds = visibleIds;
-      this._solvedWalls = { left: wallLeft, right: wallRight, top: wallTop, bottom: wallBottom };
-      // Save solved positions
-      this._solvedBounds = bounds.map(b => ({ ...b }));
+    // Build a signature of which chunks are visible — only re-solve when this changes
+    let visibleSig = '';
+    for (let i = 0; i < bounds.length; i++) {
+      visibleSig += bounds[i].chunk.id;
+      visibleSig += ',';
+    }
+    if (visibleSig !== this._lastVisibleChunkIds) {
+      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+      this._lastVisibleChunkIds = visibleSig;
+      // Cache the solved positions
+      this._solvedBounds.length = bounds.length;
+      for (let i = 0; i < bounds.length; i++) {
+        if (!this._solvedBounds[i]) {
+          this._solvedBounds[i] = { ...bounds[i] };
+        } else {
+          this._solvedBounds[i].cx = bounds[i].cx;
+          this._solvedBounds[i].cy = bounds[i].cy;
+        }
+      }
     } else {
-      // Reapply saved solved positions
+      // Reuse cached solved positions
       for (let i = 0; i < bounds.length && i < this._solvedBounds.length; i++) {
         bounds[i].cx = this._solvedBounds[i].cx;
         bounds[i].cy = this._solvedBounds[i].cy;
