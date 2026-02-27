@@ -1112,6 +1112,7 @@ export class LyricDancePlayer {
         // Compile the scene — produces lightweight schedule, not 15,000 frames
         const compiled = compileScene(payload);
         this.compiledScene = compiled;
+        this._layoutsAreViewportScaled = false;
 
         // Build chunk cache from compiled scene
         this._buildChunkCacheFromScene(compiled);
@@ -1136,6 +1137,7 @@ export class LyricDancePlayer {
 
     // Now cache is guaranteed to exist for every instance
     this.compiledScene = globalCompiledScene;
+    this._layoutsAreViewportScaled = false;
     this.chunks = new Map(globalChunkCache!);
     this.songStartSec = globalSongStartSec;
     this.songEndSec = globalSongEndSec;
@@ -1207,6 +1209,7 @@ export class LyricDancePlayer {
       this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
       const compiled = compileScene(payload);
       this.compiledScene = compiled;
+      this._layoutsAreViewportScaled = false;
       this._buildChunkCacheFromScene(compiled);
       this._updateViewportScale();
       this.recomputeLayouts();
@@ -1361,6 +1364,7 @@ export class LyricDancePlayer {
     this.payload = { ...this.payload, cinematic_direction: direction };
     this.resolvePlayerState(this.payload);
     this.compiledScene = compileScene(this.payload);
+    this._layoutsAreViewportScaled = false;
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
     this.recomputeLayouts();
@@ -1916,6 +1920,13 @@ export class LyricDancePlayer {
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
     const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
     this.ctx.translate(safeCameraX, safeCameraY);
+    if (Math.abs(frame.cameraZoom - 1.0) > 0.001) {
+      const cx = this.width / 2 - safeCameraX;
+      const cy = this.height / 2 - safeCameraY;
+      this.ctx.translate(cx, cy);
+      this.ctx.scale(frame.cameraZoom, frame.cameraZoom);
+      this.ctx.translate(-cx, -cy);
+    }
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'middle';
 
@@ -1967,9 +1978,8 @@ export class LyricDancePlayer {
       const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
       const cx = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
       const cy = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
-      const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
       const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
-      const fontSize = Math.max(viewportMinFont, Math.round(baseFontSize * zoom) || 36);
+      const fontSize = Math.max(viewportMinFont, Math.round(baseFontSize) || 36);
       const weight = chunk.fontWeight ?? 700;
       const family = chunk.fontFamily ?? resolvedFont;
       const measureFont = `${weight} ${fontSize}px ${family}`;
@@ -2106,9 +2116,8 @@ export class LyricDancePlayer {
         }
       }
 
-      const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
       const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
-      let safeFontSize = Math.max(viewportMinFont, Math.round(baseFontSize * zoom) || 36);
+      let safeFontSize = Math.max(viewportMinFont, Math.round(baseFontSize) || 36);
       const fontWeight = chunk.fontWeight ?? 700;
       const family = chunk.fontFamily ?? resolvedFont;
       const text = chunk.text ?? obj.text;
@@ -3541,6 +3550,7 @@ export class LyricDancePlayer {
     const songDuration = Math.max(0.01, scene.durationSec);
     const songProgress = Math.max(0, Math.min(1, (tSec - scene.songStartSec) / songDuration));
     const { _viewportSx: sx, _viewportSy: sy, _viewportFontScale: fontScale } = this;
+    const viewportLayouts = this._layoutsAreViewportScaled;
 
     const beats = scene.beatEvents;
     while (this._beatCursor + 1 < beats.length && beats[this._beatCursor + 1].time <= tSec) this._beatCursor++;
@@ -3645,7 +3655,8 @@ export class LyricDancePlayer {
           const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
           const isFrozen = word.behaviorStyle === 'freeze' && (tSec - group.start) > 0.3;
 
-          const charW = word.isLetterChunk ? word.baseFontSize * 0.6 : 0;
+          const effectiveFontSize = viewportLayouts ? word.baseFontSize : word.baseFontSize * fontScale;
+          const charW = word.isLetterChunk ? effectiveFontSize * 0.6 : 0;
           const wordSpan = charW * letterTotal;
           const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
 
@@ -3655,22 +3666,20 @@ export class LyricDancePlayer {
           chunks[ci] = chunk;
           chunk.id = word.id;
           chunk.text = word.text;
-          const applyScale = !this._layoutsAreViewportScaled;
-          const scaledX = applyScale
-            ? (word.layoutX + finalOffsetX + letterOffsetX) * sx
-            : (word.layoutX + finalOffsetX + letterOffsetX);
-          const scaledY = applyScale
-            ? (word.layoutY + finalOffsetY) * sy
-            : (word.layoutY + finalOffsetY);
-          const scaledFontSize = applyScale ? word.baseFontSize * fontScale : word.baseFontSize;
-          chunk.x = Math.round(scaledX);
-          chunk.y = Math.round(scaledY);
+          if (viewportLayouts) {
+            chunk.x = word.layoutX + Math.round(finalOffsetX + letterOffsetX) * sx;
+            chunk.y = word.layoutY + Math.round(finalOffsetY) * sy;
+            chunk.fontSize = word.baseFontSize;
+          } else {
+            chunk.x = Math.round(word.layoutX + finalOffsetX + letterOffsetX) * sx;
+            chunk.y = Math.round(word.layoutY + finalOffsetY) * sy;
+            chunk.fontSize = word.baseFontSize * fontScale;
+          }
           chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
           chunk.scaleX = finalScaleX * intensityScaleMult;
           chunk.scaleY = finalScaleY * intensityScaleMult;
           chunk.scale = 1;
           chunk.visible = finalAlpha > 0.01;
-          chunk.fontSize = scaledFontSize;
           chunk.fontWeight = word.fontWeight;
           chunk.fontFamily = word.fontFamily;
           chunk.isAnchor = isAnchor;
