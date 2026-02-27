@@ -94,11 +94,11 @@ interface TypographyProfile {
   heroWeight: number;
 }
 
-type VisualMode = 'intimate' | 'cinematic' | 'explosive';
+export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
 interface WordDirectiveLike { word?: string; kineticClass?: string; colorOverride?: string; emphasisLevel?: number; visualMetaphor?: string; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: 'up'|'down'|'left'|'right'|'radial'; letterSequence?: boolean; trail?: string; entry?: string; behavior?: string; exit?: string; }
 interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; }
-interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; }
-interface GroupPosition { x: number; y: number; fontSize: number; isAnchor: boolean; isFiller: boolean; }
+export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; }
+export interface GroupPosition { x: number; y: number; fontSize: number; isAnchor: boolean; isFiller: boolean; }
 type StoryboardEntryLike = { lineIndex?: number; entryStyle?: string; exitStyle?: string; heroWord?: string; shotType?: string; iconGlyph?: string; iconStyle?: 'outline'|'filled'|'ghost'; iconPosition?: 'behind'|'above'|'beside'|'replace'; iconScale?: number; };
 
 type ManifestWordDirective = { entryStyle?: EntryStyle; behavior?: BehaviorStyle; exitStyle?: ExitStyle };
@@ -202,7 +202,16 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[]): PhraseGroup[] {
   return mergeShortGroups(groups).map((group) => ({ ...group, end: Math.max(group.end, group.start + MIN_GROUP_DURATION) }));
 }
 
-function getGroupLayout(group: PhraseGroup, visualMode: VisualMode, canvasW: number, canvasH: number, baseFontSize: number, fontWeight: number, fontFamily: string, measureCtx: OffscreenCanvasRenderingContext2D): GroupPosition[] {
+export function getGroupLayout(
+  group: PhraseGroup,
+  visualMode: VisualMode,
+  canvasW: number,
+  canvasH: number,
+  baseFontSize: number,
+  fontWeight: number,
+  fontFamily: string,
+  measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+): GroupPosition[] {
   const count = group.words.length;
   const anchorIdx = group.anchorWordIdx;
   const anchorPositions: Array<[number, number]> = [[0.5,0.5],[0.5,0.38],[0.5,0.62],[0.42,0.5],[0.58,0.5],[0.5,0.45],[0.5,0.55]];
@@ -315,7 +324,7 @@ export interface CompiledWord { id: string; text: string; clean: string; wordInd
 export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
-export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; }
+export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
 
@@ -445,6 +454,7 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     bpm,
     chapters: compiledChapters,
     emotionalArc: ((payload.cinematic_direction as any)?.emotionalArc as string | undefined) ?? 'slow-burn',
+    visualMode,
     baseFontFamily: baseTypography.fontFamily,
     baseFontWeight: baseTypography.fontWeight,
     baseTextTransform: baseTypography.textTransform,

@@ -11,23 +11,18 @@ import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
-import { getTypography } from "@/engine/presetDerivation";
 import { drawIcon, type IconGlyph, type IconStyle } from "@/lib/lyricIcons";
-import {
-  bakeSceneChunked,
-  type BakedTimeline,
-  type Keyframe,
-  type ScenePayload,
-} from "@/lib/lyricSceneBaker";
+import { type Keyframe, type ScenePayload } from "@/lib/lyricSceneBaker";
 import {
   compileScene,
   computeEntryState,
   computeExitState,
   computeBehaviorState,
+  getGroupLayout,
   type CompiledScene,
-  type CompiledPhraseGroup,
-  type CompiledWord,
-  type AnimState,
+  type GroupPosition,
+  type PhraseGroup,
+  type VisualMode,
 } from "@/lib/sceneCompiler";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
@@ -441,12 +436,9 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BASE_W = 960;
-const BASE_H = 540;
 const BAKER_VERSION = 3;
 let globalBakeLock = false;
 let globalBakePromise: Promise<void> | null = null;
-let globalTimelineCache: ScaledKeyframe[] | null = null;
 let globalCompiledScene: CompiledScene | null = null;
 let globalChunkCache: Map<string, ChunkState> | null = null;
 let globalHasCinematicDirection = false;
@@ -849,17 +841,9 @@ export class LyricDancePlayer {
   private data: LyricDanceData;
   private payload: ScenePayload | null = null;
 
-  // Baked
-  private timeline: ScaledKeyframe[] = [];
+  // Runtime chunks
   private chunks: Map<string, ChunkState> = new Map();
-  private timelineBase: Keyframe[] = [];
-  private timelineScale = { sx: 1, sy: 1, fontScale: 1 };
   private _lastFont = '';
-  private _frameCacheTimeMs = Number.NaN;
-  private _frameCacheValue: ScaledKeyframe | null = null;
-  private _interpFrame: ScaledKeyframe | null = null;
-  private _interpChunkPool: ScaledKeyframe['chunks'] = [];
-  private _interpParticlePool: ScaledKeyframe['particles'] = [];
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
   private _boundsBuffer: ChunkBounds[] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
@@ -886,11 +870,14 @@ export class LyricDancePlayer {
   private _viewportSx = 1;
   private _viewportSy = 1;
   private _viewportFontScale = 1;
+  private _layoutsAreViewportScaled = false;
+  private _layoutMeasureCanvas: OffscreenCanvas | null = null;
   private _evalFrame: ScaledKeyframe | null = null;
 
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
   private bgCacheCount = 0;
+  public chapterParticleSystems: (string | null)[] = [];
 
   private backgroundSystem = 'default';
   private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim }> = [];
@@ -976,17 +963,15 @@ export class LyricDancePlayer {
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
-      (globalTimelineCache || globalCompiledScene) &&
+      globalCompiledScene &&
       (globalSessionKey !== `v15-${songId}` || globalBakerVersion !== BAKER_VERSION)
     ) {
-      globalTimelineCache = null;
       globalCompiledScene = null;
     }
     const sessionKey = `v15-${data.id}`;
     if (globalSessionKey !== sessionKey) {
       globalSessionKey = sessionKey;
       globalBakePromise = null;
-      globalTimelineCache = null;
       globalCompiledScene = null;
       globalChunkCache = null;
       globalBakeLock = false;
@@ -1106,9 +1091,8 @@ export class LyricDancePlayer {
   private async ensureTimelineReady(): Promise<void> {
 
     // Cache exists but was baked without cinematic direction — invalidate before promise reuse
-    if ((globalCompiledScene || globalTimelineCache) && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
+    if (globalCompiledScene && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
       globalBakePromise = null;
-      globalTimelineCache = null;
       globalCompiledScene = null;
       globalChunkCache = null;
       globalBakeLock = false;
@@ -1134,6 +1118,8 @@ export class LyricDancePlayer {
 
         // Compute viewport scale
         this._updateViewportScale();
+        this.recomputeLayouts();
+        this._textMetricsCache.clear();
 
         globalCompiledScene = compiled;
         globalChunkCache = new Map(this.chunks);
@@ -1154,6 +1140,8 @@ export class LyricDancePlayer {
     this.songStartSec = globalSongStartSec;
     this.songEndSec = globalSongEndSec;
     this._updateViewportScale();
+    this.recomputeLayouts();
+    this._textMetricsCache.clear();
     if (this.audio.currentTime <= 0) {
       this.audio.currentTime = this.songStartSec;
     }
@@ -1221,6 +1209,8 @@ export class LyricDancePlayer {
       this.compiledScene = compiled;
       this._buildChunkCacheFromScene(compiled);
       this._updateViewportScale();
+      this.recomputeLayouts();
+      this._textMetricsCache.clear();
       const chunkSnapshot = new Map(this.chunks);
       this.buildBgCache();
       this.deriveVisualSystems();
@@ -1354,6 +1344,7 @@ export class LyricDancePlayer {
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
     this._updateViewportScale();
+    this.recomputeLayouts();
     this._textMetricsCache.clear();
     this._lastVisibleChunkIds = '';
   }
@@ -1371,6 +1362,9 @@ export class LyricDancePlayer {
     this.resolvePlayerState(this.payload);
     this.compiledScene = compileScene(this.payload);
     this._buildChunkCacheFromScene(this.compiledScene);
+    this._updateViewportScale();
+    this.recomputeLayouts();
+    this._textMetricsCache.clear();
     this.buildBgCache();
     this.deriveVisualSystems();
     this.buildChapterSims();
@@ -1406,7 +1400,6 @@ export class LyricDancePlayer {
 
     // Only clear local reference, not the global cache
     this.chunks = new Map();
-    this.timeline = [];
     this.bgCaches = [];
     this.bgCacheCount = 0;
 
@@ -2461,6 +2454,7 @@ export class LyricDancePlayer {
     this._haloStamps.clear();
     this.lastSimFrame = -1;
     this._updateViewportScale();
+    this.recomputeLayouts();
     this._textMetricsCache.clear();
     this._lastVisibleChunkIds = '';
   }
@@ -2813,6 +2807,66 @@ export class LyricDancePlayer {
     this._viewportFontScale = fontScale;
   }
 
+  private recomputeLayouts(): void {
+    const scene = this.compiledScene;
+    if (!scene) return;
+
+    const canvasW = this.width;
+    const canvasH = this.height;
+    const fontScale = this._viewportFontScale;
+
+    if (!this._layoutMeasureCanvas) {
+      this._layoutMeasureCanvas = new OffscreenCanvas(1, 1);
+    }
+    const measureCtx = this._layoutMeasureCanvas.getContext('2d');
+    if (!measureCtx) return;
+
+    for (const group of scene.phraseGroups) {
+      const visualMode: VisualMode = scene.visualMode ?? 'cinematic';
+      const anchorWord = group.words[group.anchorWordIdx];
+      if (!anchorWord) continue;
+      const baseFontSize = anchorWord.baseFontSize * fontScale;
+      const fontWeight = anchorWord.fontWeight;
+      const fontFamily = anchorWord.fontFamily;
+      const phraseGroup: PhraseGroup = {
+        words: group.words.map((w) => ({
+          word: w.text,
+          start: group.start,
+          end: group.end,
+          clean: w.clean,
+          directive: null,
+          lineIndex: group.lineIndex,
+          wordIndex: w.wordIndex,
+        })),
+        start: group.start,
+        end: group.end,
+        anchorWordIdx: group.anchorWordIdx,
+        lineIndex: group.lineIndex,
+        groupIndex: group.groupIndex,
+      };
+
+      const newPositions: GroupPosition[] = getGroupLayout(
+        phraseGroup,
+        visualMode,
+        canvasW,
+        canvasH,
+        baseFontSize,
+        fontWeight,
+        fontFamily,
+        measureCtx,
+      );
+
+      for (let wi = 0; wi < group.words.length && wi < newPositions.length; wi += 1) {
+        group.words[wi].layoutX = newPositions[wi].x;
+        group.words[wi].layoutY = newPositions[wi].y;
+        group.words[wi].baseFontSize = newPositions[wi].fontSize;
+      }
+    }
+
+    this._layoutsAreViewportScaled = true;
+  }
+
+
   private _getArcFunction(arcName: string): (p: number) => number {
     const curves: Record<string, (p: number) => number> = {
       'slow-burn': (p) => p * p,
@@ -2839,177 +2893,6 @@ export class LyricDancePlayer {
     return null;
   }
 
-  private buildChunkCache(payload: ScenePayload): void {
-    this.chunks.clear();
-
-    // Use a throwaway offscreen canvas for measurement
-    // so we never depend on the main canvas being sized
-    const measureCanvas = document.createElement('canvas');
-    measureCanvas.width = 960;
-    measureCanvas.height = 540;
-    const measureCtx = measureCanvas.getContext('2d')!;
-
-    const cd = payload.cinematic_direction;
-    const typoResolved = getTypography(cd?.typography ?? "clean-modern");
-    const fontFamily = typoResolved.fontFamily?.trim() || 'Montserrat';
-    const fontWeight = typoResolved.fontWeight || 800;
-    const textTransform = typoResolved.textTransform || 'uppercase';
-    const baseFontPx = 42;
-    const font = `${fontWeight} ${baseFontPx}px ${fontFamily}`;
-    measureCtx.font = font;
-
-    const words = payload.words ?? [];
-    const lines = payload.lines ?? [];
-
-    if (words.length > 0) {
-      // Replicate the baker's exact phrase-grouping (including mergeShortGroups)
-      // to generate matching 3-part keys: ${lineIndex}-${groupIndex}-${wordIndex}
-      const MAX_GROUP_SIZE = 5;
-      const MIN_GROUP_DURATION = 0.4; // must match baker
-
-      type WordEntry = { word: string; start: number; end: number };
-      type PhraseGroup = {
-        words: WordEntry[];
-        start: number;
-        end: number;
-        lineIndex: number;
-        groupIndex: number;
-      };
-
-      // Step 1: Assign each word to a line (same logic as baker)
-      const lineMap = new Map<number, WordEntry[]>();
-      for (const w of words) {
-        const lineIndex = lines.findIndex(
-          (l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999),
-        );
-        const li = Math.max(0, lineIndex);
-        if (!lineMap.has(li)) lineMap.set(li, []);
-        lineMap.get(li)!.push(w);
-      }
-
-      // Step 2: Build phrase groups per line (same as baker's buildPhraseGroups)
-      const allGroups: PhraseGroup[] = [];
-      for (const [lineIdx, lineWords] of lineMap) {
-        let current: WordEntry[] = [];
-        let groupIdx = 0;
-
-        const flushGroup = () => {
-          if (current.length === 0) return;
-          allGroups.push({
-            words: [...current],
-            start: current[0].start,
-            end: current[current.length - 1].end,
-            lineIndex: lineIdx,
-            groupIndex: groupIdx,
-          });
-          groupIdx += 1;
-          current = [];
-        };
-
-        for (let i = 0; i < lineWords.length; i++) {
-          current.push(lineWords[i]);
-          const duration = current[current.length - 1].end - current[0].start;
-          const isNaturalBreak = /[,\.!?;]$/.test(lineWords[i].word);
-          const isMaxSize = current.length >= MAX_GROUP_SIZE;
-          const isLast = i === lineWords.length - 1;
-
-          if (isLast) {
-            flushGroup();
-          } else if ((isNaturalBreak || isMaxSize) && duration >= MIN_GROUP_DURATION) {
-            flushGroup();
-          }
-        }
-      }
-
-      // Sort by start time (same as baker)
-      allGroups.sort((a, b) => a.start - b.start);
-
-      // Step 3: Merge short groups (same as baker's mergeShortGroups)
-      const merged: PhraseGroup[] = [];
-      let gi = 0;
-      while (gi < allGroups.length) {
-        const g = allGroups[gi];
-        const duration = g.end - g.start;
-        if (duration < MIN_GROUP_DURATION && gi < allGroups.length - 1) {
-          const next = allGroups[gi + 1];
-          if (next.lineIndex === g.lineIndex && (g.words.length + next.words.length) <= MAX_GROUP_SIZE) {
-            merged.push({
-              words: [...g.words, ...next.words],
-              start: g.start,
-              end: next.end,
-              lineIndex: g.lineIndex,
-              groupIndex: g.groupIndex,
-            });
-            gi += 2;
-            continue;
-          }
-        }
-        merged.push(g);
-        gi += 1;
-      }
-
-      // Step 4: Enforce min duration (same as baker)
-      const finalGroups = merged.map((g) => ({
-        ...g,
-        end: Math.max(g.end, g.start + MIN_GROUP_DURATION),
-      }));
-
-      // Store phrase groups on the instance
-      this.phraseGroups = finalGroups;
-
-      // Clear and rebuild chunk map from ALL phrase groups
-      this.chunks.clear();
-
-      if (this.phraseGroups && this.phraseGroups.length > 0) {
-        const wordDirectives = this.resolvedState.wordDirectivesMap;
-        for (const group of this.phraseGroups) {
-          let anchorIdx = group.words.length - 1;
-          let maxEmp = -1;
-          for (let i = 0; i < group.words.length; i++) {
-            const clean = group.words[i].word.replace(/[^a-zA-Z]/g, '').toLowerCase();
-            const emp = wordDirectives[clean]?.emphasisLevel ?? 1;
-            if (emp > maxEmp) { maxEmp = emp; anchorIdx = i; }
-          }
-          for (let wi = 0; wi < group.words.length; wi++) {
-            const wm = group.words[wi];
-            const clean = wm.word.replace(/[^a-zA-Z]/g, '').toLowerCase();
-            const shouldSplit = wi === anchorIdx && wordDirectives[clean]?.letterSequence === true;
-            if (shouldSplit) {
-              const letters = Array.from(wm.word);
-              for (let li = 0; li < letters.length; li++) {
-                const displayLetter = textTransform === 'uppercase' ? letters[li].toUpperCase() : letters[li];
-                const key = `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}`;
-                this.chunks.set(key, { id: key, text: displayLetter, color: '#ffffff', font, width: measureCtx.measureText(displayLetter).width });
-              }
-            } else {
-              const key = `${group.lineIndex}-${group.groupIndex}-${wi}`;
-              const displayWord = textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word;
-              this.chunks.set(key, { id: key, text: displayWord, color: '#ffffff', font, width: measureCtx.measureText(displayWord).width });
-            }
-          }
-        }
-      }
-
-
-      return;
-    }
-
-    if (lines.length > 0) {
-      lines.forEach((line, lineIndex) => {
-        const lineText = line.text ?? '';
-        const displayText = textTransform === 'uppercase' ? lineText.toUpperCase() : lineText;
-        const key = `${lineIndex}-0-0`;
-        this.chunks.set(key, {
-          id: key,
-          text: displayText,
-          color: '#ffffff',
-          font,
-          width: measureCtx.measureText(displayText).width,
-        });
-      });
-    }
-  }
-
   private mapBackgroundSystem(desc: string): string {
     const lower = (desc || '').toLowerCase();
     if (lower.includes('fire') || lower.includes('ember') || lower.includes('flame') || lower.includes('burn')) return 'fire';
@@ -3031,8 +2914,6 @@ export class LyricDancePlayer {
     return null;
   }
 
-  // Per-chapter particle systems derived from cinematic direction
-  public chapterParticleSystems: (string | null)[] = [];
 
   private async loadSectionImages(): Promise<void> {
     const urls = this.data.section_images ?? [];
@@ -3774,14 +3655,22 @@ export class LyricDancePlayer {
           chunks[ci] = chunk;
           chunk.id = word.id;
           chunk.text = word.text;
-          chunk.x = Math.round(word.layoutX + finalOffsetX + letterOffsetX) * sx;
-          chunk.y = Math.round(word.layoutY + finalOffsetY) * sy;
+          const applyScale = !this._layoutsAreViewportScaled;
+          const scaledX = applyScale
+            ? (word.layoutX + finalOffsetX + letterOffsetX) * sx
+            : (word.layoutX + finalOffsetX + letterOffsetX);
+          const scaledY = applyScale
+            ? (word.layoutY + finalOffsetY) * sy
+            : (word.layoutY + finalOffsetY);
+          const scaledFontSize = applyScale ? word.baseFontSize * fontScale : word.baseFontSize;
+          chunk.x = Math.round(scaledX);
+          chunk.y = Math.round(scaledY);
           chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
           chunk.scaleX = finalScaleX * intensityScaleMult;
           chunk.scaleY = finalScaleY * intensityScaleMult;
           chunk.scale = 1;
           chunk.visible = finalAlpha > 0.01;
-          chunk.fontSize = word.baseFontSize * fontScale;
+          chunk.fontSize = scaledFontSize;
           chunk.fontWeight = word.fontWeight;
           chunk.fontFamily = word.fontFamily;
           chunk.isAnchor = isAnchor;
@@ -3843,49 +3732,6 @@ export class LyricDancePlayer {
     frame.chunks = chunks;
     frame.particles = [];
     return frame;
-  }
-
-  // ─── Scaling helpers ──────────────────────────────────────────────
-
-  private updateTimelineScale(): void {
-    const sx = this.width / BASE_W;
-    const sy = this.height / BASE_H;
-    const isPortrait = this.height > this.width;
-    const fontScale = isPortrait
-      ? Math.min(this.width / 360, 1.35)
-      : (() => {
-        const base = Math.min(sx, sy);
-        if (this.height >= 1080) return base;
-        const deficit = (1080 - this.height) / 1080;
-        return Math.min(base * (1 + deficit * 0.45), base * 1.25);
-      })();
-    this.timelineScale = { sx, sy, fontScale };
-    this.timeline = this.scaleTimeline(this.timelineBase);
-    this.invalidateFrameCache();
-  }
-
-  private scaleTimeline(baked: Keyframe[]): ScaledKeyframe[] {
-    const { sx, sy, fontScale } = this.timelineScale;
-    return baked.map((kf) => ({
-      ...kf,
-      cameraX: kf.cameraX * sx,
-      cameraY: kf.cameraY * sy,
-      chunks: kf.chunks.map((c) => ({
-        ...c,
-        x: c.x * sx,
-        y: c.y * sy,
-        fontSize: c.fontSize ? c.fontSize * fontScale : undefined,
-        entryOffsetY: c.entryOffsetY ? c.entryOffsetY * sy : undefined,
-        entryOffsetX: c.entryOffsetX ? c.entryOffsetX * sx : undefined,
-        exitOffsetY: c.exitOffsetY ? c.exitOffsetY * sy : undefined,
-      })).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
-      particles: kf.particles.map((p) => ({
-        ...p,
-        x: p.x * sx,
-        y: p.y * sy,
-        size: p.size * Math.min(sx, sy),
-      })),
-    }));
   }
 
   private solveConstraints(
@@ -3964,123 +3810,6 @@ export class LyricDancePlayer {
     }
   }
 
-  private invalidateFrameCache(): void {
-    this._frameCacheTimeMs = Number.NaN;
-    this._frameCacheValue = null;
-  }
-
-  private lerpNum(a: number | undefined, b: number | undefined, t: number, fallback = 0): number {
-    const av = Number.isFinite(a) ? (a as number) : fallback;
-    const bv = Number.isFinite(b) ? (b as number) : av;
-    return av + (bv - av) * t;
-  }
-
-  private lerpFrames(frameA: ScaledKeyframe, frameB: ScaledKeyframe, t: number): ScaledKeyframe {
-    const tt = Math.max(0, Math.min(1, t));
-    if (!this._interpFrame) {
-      this._interpFrame = { ...frameA, chunks: [], particles: [] };
-    }
-    const out = this._interpFrame;
-    out.timeMs = this.lerpNum(frameA.timeMs, frameB.timeMs, tt, frameA.timeMs);
-    out.beatIndex = tt < 0.5 ? frameA.beatIndex : frameB.beatIndex;
-    out.sectionIndex = tt < 0.5 ? frameA.sectionIndex : frameB.sectionIndex;
-    out.cameraX = this.lerpNum(frameA.cameraX, frameB.cameraX, tt);
-    out.cameraY = this.lerpNum(frameA.cameraY, frameB.cameraY, tt);
-    out.cameraZoom = this.lerpNum(frameA.cameraZoom, frameB.cameraZoom, tt, 1);
-    out.bgBlend = this.lerpNum(frameA.bgBlend, frameB.bgBlend, tt);
-    out.particleColor = tt < 0.5 ? frameA.particleColor : frameB.particleColor;
-    out.atmosphere = tt < 0.5 ? frameA.atmosphere : frameB.atmosphere;
-
-    const chunksA = frameA.chunks;
-    const chunksB = frameB.chunks;
-    let ai = 0;
-    let bi = 0;
-    let ci = 0;
-
-    while (ai < chunksA.length || bi < chunksB.length) {
-      const a = ai < chunksA.length ? chunksA[ai] : null;
-      const b = bi < chunksB.length ? chunksB[bi] : null;
-
-      const outChunk = this._interpChunkPool[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
-      this._interpChunkPool[ci] = outChunk;
-
-      if (a && b && a.id === b.id) {
-        Object.assign(outChunk, b);
-        outChunk.id = a.id;
-        outChunk.x = this.lerpNum(a.x, b.x, tt, a.x);
-        outChunk.y = this.lerpNum(a.y, b.y, tt, a.y);
-        outChunk.alpha = this.lerpNum(a.alpha, b.alpha, tt, a.alpha);
-        outChunk.glow = this.lerpNum(a.glow, b.glow, tt, a.glow ?? 0);
-        outChunk.scale = this.lerpNum(a.scale, b.scale, tt, a.scale ?? 1);
-        outChunk.scaleX = this.lerpNum(a.scaleX, b.scaleX, tt, outChunk.scale);
-        outChunk.scaleY = this.lerpNum(a.scaleY, b.scaleY, tt, outChunk.scale);
-        outChunk.fontSize = this.lerpNum(a.fontSize, b.fontSize, tt, a.fontSize ?? 36);
-        outChunk.skewX = this.lerpNum(a.skewX, b.skewX, tt, a.skewX ?? 0);
-        outChunk.blur = this.lerpNum(a.blur, b.blur, tt, a.blur ?? 0);
-        outChunk.rotation = this.lerpNum(a.rotation, b.rotation, tt, a.rotation ?? 0);
-        outChunk.entryProgress = this.lerpNum(a.entryProgress, b.entryProgress, tt, a.entryProgress ?? 0);
-        outChunk.exitProgress = this.lerpNum(a.exitProgress, b.exitProgress, tt, a.exitProgress ?? 0);
-        outChunk.entryOffsetY = this.lerpNum(a.entryOffsetY, b.entryOffsetY, tt, a.entryOffsetY ?? 0);
-        outChunk.entryOffsetX = this.lerpNum(a.entryOffsetX, b.entryOffsetX, tt, a.entryOffsetX ?? 0);
-        outChunk.entryScale = this.lerpNum(a.entryScale, b.entryScale, tt, a.entryScale ?? 1);
-        outChunk.exitOffsetY = this.lerpNum(a.exitOffsetY, b.exitOffsetY, tt, a.exitOffsetY ?? 0);
-        outChunk.exitScale = this.lerpNum(a.exitScale, b.exitScale, tt, a.exitScale ?? 1);
-        outChunk.visible = a.visible || b.visible;
-        ai += 1;
-        bi += 1;
-      } else if (!b || (a && a.id < b.id)) {
-        Object.assign(outChunk, a);
-        outChunk.alpha = Math.max(0, (a.alpha ?? 1) * (1 - tt));
-        ai += 1;
-      } else {
-        Object.assign(outChunk, b);
-        outChunk.alpha = (b.alpha ?? 1) * tt;
-        bi += 1;
-      }
-      ci += 1;
-    }
-    this._interpChunkPool.length = ci;
-    out.chunks = this._interpChunkPool;
-
-    const pCount = Math.min(frameA.particles.length, frameB.particles.length);
-    let pi = 0;
-    for (; pi < pCount; pi += 1) {
-      const a = frameA.particles[pi];
-      const b = frameB.particles[pi];
-      const outP = this._interpParticlePool[pi] ?? ({ ...a } as ScaledKeyframe['particles'][number]);
-      this._interpParticlePool[pi] = outP;
-      outP.x = this.lerpNum(a.x, b.x, tt, a.x);
-      outP.y = this.lerpNum(a.y, b.y, tt, a.y);
-      outP.size = this.lerpNum(a.size, b.size, tt, a.size);
-      outP.alpha = this.lerpNum(a.alpha, b.alpha, tt, a.alpha);
-      outP.shape = tt < 0.5 ? a.shape : b.shape;
-    }
-    this._interpParticlePool.length = pi;
-    out.particles = this._interpParticlePool;
-    return out;
-  }
-
-  private getFrame(timeMs: number): ScaledKeyframe | null {
-    if (!this.timeline.length) return null;
-    if (this._frameCacheValue && Math.abs(timeMs - this._frameCacheTimeMs) <= 1) {
-      return this._frameCacheValue;
-    }
-    let lo = 0;
-    let hi = this.timeline.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >>> 1;
-      if (this.timeline[mid].timeMs <= timeMs) lo = mid;
-      else hi = mid - 1;
-    }
-    const frameA = this.timeline[lo];
-    const frameB = this.timeline[lo + 1];
-    const result = (!frameB || frameB.timeMs === frameA.timeMs)
-      ? frameA
-      : this.lerpFrames(frameA, frameB, (timeMs - frameA.timeMs) / (frameB.timeMs - frameA.timeMs));
-    this._frameCacheTimeMs = timeMs;
-    this._frameCacheValue = result;
-    return result;
-  }
 
   private drawBackground(frame: ScaledKeyframe): void {
     const chapters = this.resolvedState.chapters ?? [];
