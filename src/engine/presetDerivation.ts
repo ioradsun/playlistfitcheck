@@ -318,11 +318,6 @@ export interface FrameRenderState {
     beatReactive?: boolean;
     direction?: string;
   };
-
-  // Cinematic lyricFocus debug/dev flags
-  debugHud?: boolean;
-  enableEchoLine?: boolean;
-  wordFeatherMs?: number;
 }
 
 export function deriveFrameState(

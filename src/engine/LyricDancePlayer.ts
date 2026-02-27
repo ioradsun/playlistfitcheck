@@ -29,8 +29,6 @@ import {
   resolveCinematicState,
   type ResolvedLineSettings,
   type ResolvedWordSettings,
-  type SectionGrade,
-  blendSectionGrade,
 } from "@/engine/cinematicResolver";
 
 const DECOMP_ENABLED = false; // set to true to re-enable word-to-particle
@@ -182,31 +180,12 @@ export interface LiveDebugState {
   bgBeatPhase: number;
   bgBeatPulse: number;
 
-  rackFocusEnabled: boolean;
-  rackFocusPrimaryBlurPx: number;
-  rackFocusEchoBlurPx: number;
-  heroSweepActive: boolean;
-  heroSweepProgress: number;
-  sectionGradeTemperature: number;
-  ghostTrailActiveCount: number;
-
   // Active word
   activeWord: string;
   activeWordEntry: string;
   activeWordExit: string;
   activeWordEmphasis: number;
   activeWordTrail: string;
-  activeWordWindow: string;
-  activeWordStart: number;
-  activeWordEnd: number;
-  primaryLineIndex: number;
-  echoLineIndex: number;
-  lyricFocusActiveWordIndex: number;
-  lyricFocusMismatchWarnings: string;
-  heroWordMatch: boolean;
-  tierActiveOpacity: number;
-  tierPastOpacity: number;
-  tierFutureOpacity: number;
   resolvedLineStyle: string;
   resolvedWordStyle: string;
   layoutStable: boolean;
@@ -342,30 +321,11 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   bgBeatPhase: 0,
   bgBeatPulse: 0,
 
-  rackFocusEnabled: true,
-  rackFocusPrimaryBlurPx: 0,
-  rackFocusEchoBlurPx: 0,
-  heroSweepActive: false,
-  heroSweepProgress: 0,
-  sectionGradeTemperature: 0,
-  ghostTrailActiveCount: 0,
-
   activeWord: "—",
   activeWordEntry: "—",
   activeWordExit: "—",
   activeWordEmphasis: 0,
   activeWordTrail: "none",
-  activeWordWindow: "—",
-  activeWordStart: -1,
-  activeWordEnd: -1,
-  primaryLineIndex: -1,
-  echoLineIndex: -1,
-  lyricFocusActiveWordIndex: -1,
-  lyricFocusMismatchWarnings: "none",
-  heroWordMatch: false,
-  tierActiveOpacity: 1,
-  tierPastOpacity: 0.9,
-  tierFutureOpacity: 0.52,
   resolvedLineStyle: "—",
   resolvedWordStyle: "—",
   layoutStable: true,
@@ -401,7 +361,6 @@ type ResolvedPlayerState = {
   wordDirectivesMap: Record<string, any>;
   lineSettings: Record<number, ResolvedLineSettings>;
   wordSettings: Record<string, ResolvedWordSettings>;
-  sectionGrades: SectionGrade[];
   particleConfig: {
     texture: string;
     system: string;
@@ -431,16 +390,6 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     ghostSpacing?: number;
     ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial';
     frozen?: boolean;
-    isHeroWord?: boolean;
-    isActiveWord?: boolean;
-    wordStart?: number;
-    wordEnd?: number;
-    lineStart?: number;
-    isEcho?: boolean;
-    sectionIndex?: number;
-    glowColor?: string;
-    heroSweepProgress?: number;
-    heroSweepBandFrac?: number;
     fontSize?: number;
     fontWeight?: number;
     fontFamily?: string;
@@ -488,25 +437,6 @@ interface ChunkBounds {
   scaleY: number;
 }
 
-function easeInOutCubic(t: number): number {
-  const x = Math.max(0, Math.min(1, t));
-  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-}
-
-function easeOutCubic(t: number): number {
-  const x = Math.max(0, Math.min(1, t));
-  return 1 - Math.pow(1 - x, 3);
-}
-
-function hexToRgba(hex: string, alpha: number): string {
-  const clean = String(hex || '#ffffff').replace('#', '');
-  const normalized = clean.length === 6 ? clean : 'ffffff';
-  const r = Number.parseInt(normalized.slice(0, 2), 16);
-  const g = Number.parseInt(normalized.slice(2, 4), 16);
-  const b = Number.parseInt(normalized.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
-}
-
 function lerpColor(a: string, b: string, t: number): string {
   const clamp = Math.max(0, Math.min(1, t));
   const parse = (hex: string): [number, number, number] => {
@@ -536,7 +466,6 @@ let globalSessionKey = '';
 const SIM_W = 96;
 const SIM_H = 54;
 const SPLIT_EXIT_STYLES = new Set(['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up']);
-const CONNECTIVE_WORDS = new Set(['i','ive','a','an','to','of','my','oh','in','on','at','so','no','do','me','we','us','ya']);
 
 interface PixelSim {
   canvas: HTMLCanvasElement;
@@ -919,7 +848,6 @@ export class LyricDancePlayer {
     wordDirectivesMap: {},
     lineSettings: {},
     wordSettings: {},
-    sectionGrades: [],
     particleConfig: { texture: 'dust', system: 'dust', density: 0.35, speed: 0.35 },
   };
   
@@ -1027,10 +955,6 @@ export class LyricDancePlayer {
   private _lastLoggedTSec = 0;
   private _stalledFrames = 0;
   private _lastSimChapterIdx = -1;
-  private readonly isDebugMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1";
-  private heroSweepByChunk = new Map<string, { startSec: number; durationSec: number; activeUntilSec: number }>();
-  private anchorInvariantByChunk = new Map<string, number>();
-  private anchorInvariantLogged = new Set<string>();
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
@@ -1074,8 +998,6 @@ export class LyricDancePlayer {
       globalBakerVersion = 0;
     }
     this.data = data;
-    if (import.meta.env.DEV) {
-    }
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
     this.container = container;
@@ -1904,11 +1826,9 @@ export class LyricDancePlayer {
       this.activeSectionTexture = texture;
       const mapped = (PARTICLE_SYSTEM_MAP as Record<string, string | undefined>)[texture?.toLowerCase?.() ?? ""]?.toLowerCase?.() ?? texture;
       this.ambientParticleEngine?.setSystem(mapped);
-      const sectionTexture = String(section?.texture ?? '').toLowerCase();
-      const textureDensity = sectionTexture.includes('stars') ? 0.78 : (sectionTexture.includes('petals') ? 0.64 : (sectionTexture.includes('dust') ? 0.58 : 0.5));
       this.ambientParticleEngine?.setConfig({
         system: mapped,
-        density: (this.resolvedState.particleConfig.density ?? 0.35) * textureDensity,
+        density: this.resolvedState.particleConfig.density ?? 0.35,
         speed: this.resolvedState.particleConfig.speed ?? 0.35,
         opacity: 0.4,
         beatReactive: true,
@@ -1918,16 +1838,16 @@ export class LyricDancePlayer {
     this.ambientParticleEngine?.setDensityMultiplier((currentTension?.particleDensity ?? 0.5) * 2);
     this.ambientParticleEngine?.setSpeedMultiplier((currentTension?.motionIntensity ?? 0.5) * 2);
 
-    const primaryLineIndex = this.getPrimaryLineIndex(clamped);
-    const activeLine = primaryLineIndex >= 0 ? (lines[primaryLineIndex] ?? null) : null;
+    const visibleLines = lines.filter((l: any) => clamped >= (l.start ?? 0) && clamped < (l.end ?? 0));
+    const activeLine = visibleLines.length === 0
+      ? null
+      : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
     const climaxRatio = (cd as any)?.climax?.timeRatio ?? 0.75;
     const simulatedBeat = Math.max(0.1, 1 - Math.abs(songProgress - climaxRatio) * 2);
     const frame = this.evaluateFrame(clamped);
     const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
 
-    const lyricFocusConfig = this.getLyricFocusConfig();
-    const activeLineIdx = primaryLineIndex;
-    const activeWord = this.getActiveWord(clamped, activeLineIdx);
+    const activeWord = this.getActiveWord(clamped);
     const activeWordClean = normalizeToken(activeWord?.word ?? '');
     const activeWordDirective = activeWordClean ? this.resolvedState.wordDirectivesMap[activeWordClean] ?? null : null;
 
@@ -1945,7 +1865,7 @@ export class LyricDancePlayer {
 
     // ── Section boundaries ──
     ds.secIndex = sectionIndex;
-    ds.lineIndex = activeLineIdx;
+    ds.lineIndex = activeLine ? lines.indexOf(activeLine) : -1;
     ds.secTotal = chapters.length;
     const secStartRatio = section?.startRatio ?? 0;
     const secEndRatio = section?.endRatio ?? 1;
@@ -1990,16 +1910,6 @@ export class LyricDancePlayer {
     ds.bgBeatPhase = beatSpine.beatPhase;
     ds.bgBeatPulse = beatSpine.beatPulse;
     ds.beatIntensity = Math.max(ds.beatIntensity, beatSpine.beatPulse);
-    const activeChunk = visibleChunks.find((c: any) => c.isActiveWord && !c.isEcho) as any;
-    const ghostTrailActiveCount = visibleChunks.filter((c: any) => c.ghostTrail && c.visible).length;
-    ds.rackFocusEnabled = true;
-    ds.rackFocusPrimaryBlurPx = +(Math.max(0, ((activeChunk?.blur ?? 0) * 12) - (activeChunk?.isEcho ? 1.5 : 0))).toFixed(2);
-    ds.rackFocusEchoBlurPx = +((visibleChunks.find((c: any) => c.isEcho)?.blur ?? 0) * 12).toFixed(2);
-    ds.heroSweepActive = Boolean(activeChunk && (activeChunk.heroSweepProgress ?? -1) >= 0 && (activeChunk.heroSweepProgress ?? -1) <= 1);
-    ds.heroSweepProgress = ds.heroSweepActive ? +(activeChunk.heroSweepProgress ?? 0).toFixed(3) : -1;
-    const sectionGrade = this.resolvedState.sectionGrades?.[sectionIndex];
-    ds.sectionGradeTemperature = +(sectionGrade?.temperature ?? 0).toFixed(2);
-    ds.ghostTrailActiveCount = ghostTrailActiveCount;
 
     // ── Active word ──
     ds.activeWord = activeWordClean || '—';
@@ -2007,17 +1917,6 @@ export class LyricDancePlayer {
     ds.activeWordExit = activeWordDirective?.exit ?? '—';
     ds.activeWordEmphasis = activeWordDirective?.emphasisLevel ?? 0;
     ds.activeWordTrail = activeWordDirective?.trail ?? 'none';
-    ds.activeWordStart = activeWord?.start ?? -1;
-    ds.activeWordEnd = activeWord?.end ?? -1;
-    ds.activeWordWindow = activeWord ? `[${activeWord.start.toFixed(3)}, ${activeWord.end.toFixed(3)}]` : '—';
-    ds.primaryLineIndex = activeLineIdx;
-    ds.echoLineIndex = lyricFocusConfig.enableEchoLine && activeLineIdx > 0 ? activeLineIdx - 1 : -1;
-    ds.lyricFocusActiveWordIndex = activeWord?.index ?? -1;
-    const mismatchList = this.compiledScene?.lineTokenMismatches ?? [];
-    ds.lyricFocusMismatchWarnings = mismatchList.length > 0 ? mismatchList.map((m) => `L${m.lineIndex}:${m.tokenCount}/${m.timingCount}`).join(', ') : 'none';
-    ds.tierActiveOpacity = 1;
-    ds.tierPastOpacity = 0.9;
-    ds.tierFutureOpacity = 0.52;
 
     // ── Word directive (from cinematic direction) ──
     ds.wordDirectiveWord = activeWordClean || '';
@@ -2030,6 +1929,7 @@ export class LyricDancePlayer {
 
     // ── Line / storyboard ──
     const storyboard = cd?.storyboard ?? [];
+    const activeLineIdx = activeLine ? lines.indexOf(activeLine) : -1;
     const lineStory = activeLineIdx >= 0 ? (storyboard as any[])[activeLineIdx] : null;
     ds.lineHeroWord = lineStory?.heroWord ?? '';
     ds.lineEntry = lineStory?.entryStyle ?? 'fades';
@@ -2045,16 +1945,7 @@ export class LyricDancePlayer {
     ds.resolvedWordStyle = resolvedWord
       ? `${resolvedWord.behavior} e${resolvedWord.emphasisLevel} pulse:${resolvedWord.pulseAmp.toFixed(2)}`
       : '—';
-    const primaryVisibleChunks = visibleChunks.filter((c: any) => !c.isEcho && c.visible && (c.alpha ?? 0) > 0.02);
-    const echoVisibleChunks = visibleChunks.filter((c: any) => c.isEcho && c.visible && (c.alpha ?? 0) > 0.02);
-    const avgY = (chunks: any[]) => chunks.length > 0
-      ? chunks.reduce((sum, chunk) => sum + (chunk.y ?? 0), 0) / chunks.length
-      : null;
-    const primaryY = avgY(primaryVisibleChunks);
-    const echoY = avgY(echoVisibleChunks);
-    const lyricFocusSlotCollision = primaryY != null && echoY != null && Math.abs(primaryY - echoY) < 2;
-    ds.layoutStable = !lyricFocusSlotCollision;
-    ds.heroWordMatch = Boolean(activeWordClean && resolvedLine?.heroToken && activeWordClean === resolvedLine.heroToken);
+    ds.layoutStable = true;
 
     // ── Camera & tension ──
     ds.cameraDistance = ds.cdTypography;
@@ -2175,7 +2066,6 @@ export class LyricDancePlayer {
 
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
-    this.drawSectionGradeOverlay(frame.sectionIndex);
 
     try {
       this.checkEmotionalEvents(tSec, songProgress);
@@ -2474,17 +2364,8 @@ export class LyricDancePlayer {
         const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
         if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         if (chunk.glow > 0) {
-          this.ctx.shadowColor = chunk.glowColor ?? chunk.color ?? '#ffffff';
+          this.ctx.shadowColor = chunk.color ?? '#ffffff';
           this.ctx.shadowBlur = chunk.glow * 32;
-        }
-
-        if (this.isDebugMode && chunk.isActiveWord && !chunk.isEcho) {
-          const prev = this.anchorInvariantByChunk.get(chunk.id);
-          if (prev != null && Math.abs(prev - centerX) > 0.25 && !this.anchorInvariantLogged.has(chunk.id)) {
-            console.warn('[cinematic-lyricFocus] no-jank invariant violated', { chunkId: chunk.id, prevCenterX: prev, nextCenterX: centerX, dtSec: this.currentTSec });
-            this.anchorInvariantLogged.add(chunk.id);
-          }
-          this.anchorInvariantByChunk.set(chunk.id, centerX);
         }
 
         const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01;
@@ -2494,46 +2375,33 @@ export class LyricDancePlayer {
         }
 
         if (chunk.ghostTrail && chunk.visible) {
-          const trailAge = Math.max(0, this.currentTSec - (chunk.wordStart ?? this.currentTSec));
-          const ghostWindow = this.currentTSec <= (chunk.wordEnd ?? this.currentTSec) + 0.12;
-          if (ghostWindow) {
-            const count = Math.min(5, Math.max(3, chunk.ghostCount ?? 4));
-            const spacing = Math.max(4, chunk.ghostSpacing ?? 8);
-            const dir = chunk.ghostDirection ?? 'up';
-            const drift = easeOutCubic(Math.min(1, trailAge / 0.25));
-            const radialAngles = [0, 72, 144, 216, 288];
-            for (let g = count; g >= 1; g -= 1) {
-              const offset = drift * spacing * g;
-              const ghostAlpha = drawAlpha * (0.02 + (g / count) * 0.08);
-              const scaleGhost = 0.92 + (g / count) * 0.06;
-              let gx = 0, gy = 0;
-              switch (dir) {
-                case 'up': gy = -offset; break;
-                case 'down': gy = offset; break;
-                case 'left': gx = -offset; break;
-                case 'right': gx = offset; break;
-                case 'radial': {
-                  const angle = radialAngles[(g - 1) % radialAngles.length] * (Math.PI / 180);
-                  gx = Math.cos(angle) * offset;
-                  gy = Math.sin(angle) * offset;
-                  break;
-                }
-              }
-              this.ctx.globalAlpha = ghostAlpha;
-              this.ctx.shadowBlur = (chunk.blur ?? 0) * 12 + g * 0.8;
-              const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
-                drawX + gx,
-                finalDrawY + gy,
-                chunk.rotation ?? 0,
-                chunk.skewX ?? 0,
-                sx * scaleGhost,
-                sy * scaleGhost,
-              );
-              this.ctx.setTransform(ga, gb, gc, gd, ge, gf);
-              this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
+          const count = chunk.ghostCount ?? 3;
+          const spacing = chunk.ghostSpacing ?? 8;
+          const dir = chunk.ghostDirection ?? 'up';
+          for (let g = count; g >= 1; g -= 1) {
+            const ghostAlpha = drawAlpha * (0.12 + (count - g) * 0.06);
+            const offset = g * spacing;
+            let gx = 0, gy = 0;
+            switch (dir) {
+              case 'up': gy = offset; break;
+              case 'down': gy = -offset; break;
+              case 'left': gx = offset; break;
+              case 'right': gx = -offset; break;
+              case 'radial': gx = Math.cos(g * 1.2) * offset; gy = Math.sin(g * 1.2) * offset; break;
             }
-            this.ctx.globalAlpha = drawAlpha;
+            this.ctx.globalAlpha = ghostAlpha;
+            const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
+              drawX + gx,
+              finalDrawY + gy,
+              chunk.rotation ?? 0,
+              chunk.skewX ?? 0,
+              sx,
+              sy,
+            );
+            this.ctx.setTransform(ga, gb, gc, gd, ge, gf);
+            this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
           }
+          this.ctx.globalAlpha = drawAlpha;
         }
 
         const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
@@ -2546,25 +2414,6 @@ export class LyricDancePlayer {
         );
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
         this.ctx.fillText(text, 0, 0);
-
-        if ((chunk.heroSweepProgress ?? -1) >= 0 && (chunk.heroSweepProgress ?? 0) <= 1 && !chunk.isEcho) {
-          const sweepProgress = chunk.heroSweepProgress ?? 0;
-          const bandFrac = chunk.heroSweepBandFrac ?? 0.22;
-          const bandW = Math.max(8, textWidth * bandFrac);
-          const minX = drawX - textWidth * 0.5;
-          const sweepX = minX + textWidth * sweepProgress;
-          this.ctx.save();
-          this.ctx.globalAlpha = drawAlpha * 0.16;
-          this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-          this.ctx.beginPath();
-          this.ctx.rect(sweepX - bandW * 0.5, finalDrawY - safeFontSize * 1.2, bandW, safeFontSize * 1.8);
-          this.ctx.clip();
-          this.ctx.setTransform(ma, mb, mc, md, me, mf);
-          this.ctx.fillStyle = hexToRgba(chunk.glowColor ?? '#ffffff', 1);
-          this.ctx.fillText(text, 0, 0);
-          this.ctx.restore();
-        }
-
         if (needsFilterSaveRestore) {
           this.ctx.filter = 'none';
           this.ctx.restore();
@@ -2597,29 +2446,6 @@ export class LyricDancePlayer {
 
     this.drawWatermark();
     this.debugState.drawCalls = drawCalls;
-  }
-
-
-  private drawSectionGradeOverlay(sectionIndex: number): void {
-    const grade = this.resolvedState.sectionGrades?.[sectionIndex];
-    if (!grade) return;
-    const alphaBase = 0.035 + Math.max(0, grade.hazeLift) * 0.04;
-    this.ctx.save();
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    if (grade.overlayStyle === 'haze') {
-      this.ctx.fillStyle = hexToRgba(grade.activeTextColor, alphaBase * 0.55);
-      this.ctx.fillRect(0, 0, this.width, this.height);
-    } else if (grade.overlayStyle === 'glass') {
-      const grad = this.ctx.createLinearGradient(0, 0, this.width, this.height);
-      grad.addColorStop(0, hexToRgba(grade.glowColor, alphaBase * 0.45));
-      grad.addColorStop(1, hexToRgba(grade.futureTextColor, alphaBase * 0.2));
-      this.ctx.fillStyle = grad;
-      this.ctx.fillRect(0, 0, this.width, this.height);
-    } else if (grade.overlayStyle === 'grain') {
-      this.ctx.fillStyle = hexToRgba(grade.baseTextColor, alphaBase * 0.25);
-      this.ctx.fillRect(0, 0, this.width, this.height);
-    }
-    this.ctx.restore();
   }
 
   private drawWatermark(): void {
@@ -3113,7 +2939,7 @@ export class LyricDancePlayer {
       : deriveTensionCurve(direction?.emotionalArc);
     const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives);
     const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
-    const resolved = resolveCinematicState(direction, payload.lines as any[], durationSec, this.data.auto_palettes);
+    const resolved = resolveCinematicState(direction, payload.lines as any[], durationSec);
     const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
     const texture = this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, direction);
     this.resolvedState = {
@@ -3122,7 +2948,6 @@ export class LyricDancePlayer {
       wordDirectivesMap,
       lineSettings: resolved.lineSettings,
       wordSettings: resolved.wordSettings,
-      sectionGrades: resolved.sectionGrades,
       particleConfig: {
         texture,
         system: texture,
@@ -3196,52 +3021,16 @@ export class LyricDancePlayer {
   }
 
 
-  private getLyricFocusConfig() {
-    const sceneLyricFocus = this.compiledScene?.lyricFocus;
-    const frameState = (this.data?.frame_state ?? {}) as Record<string, unknown>;
-    const bool = (key: string, fallback: boolean) => typeof frameState[key] === 'boolean' ? (frameState[key] as boolean) : fallback;
-    const featherRaw = Number(frameState.wordFeatherMs);
-    const num = (key: string, fallback: number) => {
-      const raw = Number(frameState[key]);
-      return Number.isFinite(raw) ? raw : fallback;
-    };
-    return {
-      debugHud: this.isDebugMode || sceneLyricFocus?.debugHud || bool('debugHud', false),
-      enableEchoLine: sceneLyricFocus?.enableEchoLine ?? bool('enableEchoLine', true),
-      wordFeatherMs: sceneLyricFocus?.wordFeatherMs ?? (Number.isFinite(featherRaw) ? Math.min(120, Math.max(40, featherRaw)) : 75),
-      focusInMs: Math.max(140, Math.min(220, num('focusInMs', 160))),
-      echoBlurPx: Math.max(1.5, Math.min(4.5, num('echoBlurPx', 3.0))),
-      primaryEntryBlurPx: Math.max(1.0, Math.min(4.0, num('primaryEntryBlurPx', 2.5))),
-      heroSweepEnabled: bool('heroSweepEnabled', true),
-      heroSweepDurationMs: Math.max(220, Math.min(320, num('heroSweepDurationMs', 260))),
-      heroSweepBandFrac: Math.max(0.12, Math.min(0.4, num('heroSweepBandFrac', 0.22))),
-      sectionGradeCrossfadeMs: Math.max(300, Math.min(500, num('sectionGradeCrossfadeMs', 420))),
-    };
-  }
-
-  private getPrimaryLineIndex(timeSec: number): number {
-    const lines = this.data.lyrics ?? [];
-    for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      if (timeSec >= line.start && timeSec < line.end) return i;
-    }
-    for (let i = lines.length - 1; i >= 0; i -= 1) {
-      if (timeSec >= lines[i].start) return i;
-    }
-    return -1;
-  }
-
-  private getActiveWord(timeSec: number, activeLineIndex: number): { word?: string; start: number; end: number; index: number } | null {
+  private getActiveWord(timeSec: number): { word?: string; start: number; end: number } | null {
     const words = this.data.words ?? [];
     for (let i = words.length - 1; i >= 0; i--) {
       const word = words[i];
-      const inActiveWindow = word.start <= timeSec && word.end >= timeSec;
-      if (!inActiveWindow) continue;
-      if (activeLineIndex >= 0) {
-        const line = this.data.lyrics?.[activeLineIndex];
-        if (line && !(word.start >= line.start - 0.08 && word.end <= line.end + 0.08)) continue;
+      if (word.start <= timeSec && word.end >= timeSec) {
+        return word;
       }
-      return { ...word, index: i };
+      if (word.start <= timeSec) {
+        return word;
+      }
     }
     return null;
   }
@@ -3891,7 +3680,6 @@ export class LyricDancePlayer {
     const scene = this.compiledScene;
     if (!scene) return null;
 
-    const lyricFocusConfig = this.getLyricFocusConfig();
     const songDuration = Math.max(0.01, scene.durationSec);
     const songProgress = Math.max(0, Math.min(1, (tSec - scene.songStartSec) / songDuration));
     const { _viewportSx: sx, _viewportSy: sy, _viewportFontScale: fontScale } = this;
@@ -3910,8 +3698,9 @@ export class LyricDancePlayer {
     if (this._glowBudget > 0) this._glowBudget -= 1;
     const glow = Math.pow(this._glowBudget / 13, 0.6);
 
-    this._springVelocity = 0;
-    this._springOffset = 0;
+    this._springOffset += this._springVelocity;
+    this._springVelocity *= 0.82;
+    this._springOffset *= 0.88;
 
     let currentChapterIdx = 0;
     for (let i = 0; i < scene.chapters.length; i++) {
@@ -3930,28 +3719,8 @@ export class LyricDancePlayer {
     const intensityGlowMult = 0.5 + intensity * 1.0;
     const intensityScaleMult = 0.95 + intensity * 0.1;
 
-    const driftX = 0;
-    const driftY = 0;
-
-    const primaryLineIndex = this.getPrimaryLineIndex(tSec);
-    const primaryLine = primaryLineIndex >= 0 ? this.data.lyrics?.[primaryLineIndex] : null;
-    const echoLineIndex = lyricFocusConfig.enableEchoLine && primaryLineIndex > 0 ? primaryLineIndex - 1 : -1;
-    const echoLine = echoLineIndex >= 0 ? this.data.lyrics?.[echoLineIndex] : null;
-    const echoFade = echoLine ? Math.max(0, 1 - (tSec - (primaryLine?.start ?? tSec)) / 0.35) : 0;
-    const focusInSec = lyricFocusConfig.focusInMs / 1000;
-    const primaryFocusProgress = primaryLine ? Math.max(0, Math.min(1, (tSec - primaryLine.start) / Math.max(0.001, focusInSec))) : 1;
-    const primaryBlurPx = lyricFocusConfig.primaryEntryBlurPx * (1 - easeOutCubic(primaryFocusProgress));
-    const primaryEntryLift = (1 - easeOutCubic(primaryFocusProgress)) * 2;
-    const echoBlurPx = echoLine ? (1.5 + (lyricFocusConfig.echoBlurPx - 1.5) * Math.min(1, (tSec - (primaryLine?.start ?? tSec)) / 0.2)) : 0;
-
-    const grades = this.resolvedState.sectionGrades;
-    const currentGrade = grades[currentChapterIdx] ?? {
-      baseTextColor: '#d8deea', futureTextColor: '#6f788f', activeTextColor: '#f5f7ff', glowColor: '#bed0ff', echoColor: '#98a2bf', overlayStyle: 'none' as const, temperature: 0, contrast: 0.62, hazeLift: 0.12,
-    };
-    const prevGrade = currentChapterIdx > 0 ? grades[currentChapterIdx - 1] ?? currentGrade : currentGrade;
-    const chapterStartSec = scene.songStartSec + songDuration * (chapter?.startRatio ?? 0);
-    const gradeBlend = Math.max(0, Math.min(1, (tSec - chapterStartSec) / Math.max(0.001, lyricFocusConfig.sectionGradeCrossfadeMs / 1000)));
-    const sectionGrade = blendSectionGrade(prevGrade, currentGrade, gradeBlend);
+    let driftX = Math.sin(tSec * 0.15) * 8 * sx;
+    let driftY = Math.cos(tSec * 0.12) * 5 * sy;
 
     const groups = scene.phraseGroups;
     const activeGroups = this._activeGroupIndices;
@@ -3975,10 +3744,6 @@ export class LyricDancePlayer {
     for (let ai = 0; ai < activeGroups.length; ai++) {
       const groupIdx = activeGroups[ai];
       const group = groups[groupIdx];
-      // Cinematic mode: render ALL time-visible groups, not just primary + echo.
-      // Groups outside their visibility window are already excluded by the activeGroups filter above.
-      // Entry/exit animations handle fading. _lineOffset handles vertical separation.
-      const isEchoGroup = group.lineIndex < primaryLineIndex;
       const resolvedLine = this.resolvedState.lineSettings[group.lineIndex];
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
       const groupEnd = Math.min(group.end + group.lingerDuration, nextGroupStart);
@@ -4004,27 +3769,18 @@ export class LyricDancePlayer {
         const beatPhase = beatIndex >= 0 ? ((tSec - (beats[beatIndex]?.time ?? 0)) / (60 / Math.max(1, bpm))) % 1 : 0;
         const behaviorState = computeBehaviorState(word.behaviorStyle as any, tSec, group.start, beatPhase, group.behaviorIntensity);
 
-        const directiveBehavior = String(resolvedWord?.behavior ?? '').toLowerCase();
-        const behaviorOffsetY = directiveBehavior === 'float' ? Math.max(-2, Math.min(2, behaviorState.offsetY ?? 0)) : 0;
-        const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0);
-        const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + behaviorOffsetY;
+        const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
+        const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
         let finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1) * word.semanticScaleX;
         let finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1) * word.semanticScaleY;
 
-        const isPast = word.end < tSec;
-        const isFuture = word.start > tSec;
-        const isActive = !isPast && !isFuture;
-        const featherSec = lyricFocusConfig.wordFeatherMs / 1000;
-        const alphaIn = Math.max(0, Math.min(1, (tSec - word.start) / Math.max(0.001, featherSec)));
-        const alphaOut = Math.max(0, Math.min(1, (word.end - tSec) / Math.max(0.001, featherSec)));
-        const windowFeather = isActive ? Math.min(alphaIn, alphaOut) : 1;
-        const tierAlpha = isActive ? 1 : (isPast ? 0.9 : 0.52);
-        let rawAlpha = tierAlpha * windowFeather;
-        if (isEchoGroup) rawAlpha *= 0.55; // Cinematic: past-line words visible but dimmer; exit animations handle fade-out
-        if (!isEchoGroup && primaryLine && tSec >= primaryLine.start && tSec <= primaryLine.start + focusInSec) {
-          rawAlpha *= 0.94 + easeOutCubic(primaryFocusProgress) * 0.06;
-        }
-
+        const isEntryComplete = entryProgress >= 1.0;
+        const isExiting = exitProgress > 0;
+        const rawAlpha = isExiting
+          ? Math.max(0, exitState.alpha)
+          : isEntryComplete
+            ? 1.0 * (behaviorState.alpha ?? 1)
+            : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
         const finalAlpha = Math.min(word.semanticAlphaMax, rawAlpha);
 
         const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
@@ -4038,56 +3794,40 @@ export class LyricDancePlayer {
         const wordSpan = charW * lt;
         const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
 
-        const token = normalizeToken(word.text);
-        const isHeroWord = isExactHeroTokenMatch(word.text, resolvedLine?.heroWord ?? '');
-        const directiveEmphasis = resolvedWord?.emphasisLevel ?? 0;
-        const isConnective = token.length <= 2 || CONNECTIVE_WORDS.has(token);
-        const suppressHeavyFx = isConnective && directiveEmphasis < 4 && !isHeroWord;
-
-        const basePulse = resolvedWord?.pulseAmp ?? 0;
-        const activePulse = isActive ? basePulse : 0;
-        const pulseAmp = suppressHeavyFx ? activePulse * 0.35 : activePulse;
-        const beatScale = 1 + beatSpine.beatPulse * pulseAmp;
+        const emphasisPulse = resolvedWord?.pulseAmp ?? 0;
+        const beatScale = 1 + beatSpine.beatPulse * emphasisPulse;
         finalScaleX *= beatScale;
         finalScaleY *= beatScale;
 
-        const isHeroBeatHit = isHeroWord && beatSpine.beatPulse > 0.35;
-        if (isHeroBeatHit && isActive) {
+        const isHeroBeatHit = isExactHeroTokenMatch(word.text, resolvedLine?.heroWord ?? '') && beatSpine.beatPulse > 0.35;
+        if (isHeroBeatHit) {
           const push = resolvedWord?.microCamPush ?? 0.04;
           finalScaleX *= 1 + push;
           finalScaleY *= 1 + push;
+          driftY += push * 16;
         }
 
-        const glowGainBase = resolvedWord?.glowGain ?? 0;
-        const glowGain = suppressHeavyFx ? glowGainBase * 0.45 : glowGainBase;
-        const activeGlowBoost = isActive ? 1.3 : 0.6;
-        const heroGlowBoost = isHeroWord && isActive ? 1.35 : 1;
-        const wordGlow = (((isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.2) * word.semanticGlowMult * intensityGlowMult)
-          + beatSpine.beatPulse * glowGain) * activeGlowBoost * heroGlowBoost * (isEchoGroup ? 0.2 : 1);
+        const glowGain = resolvedWord?.glowGain ?? 0;
+        const wordGlow = ((isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult)
+          + beatSpine.beatPulse * glowGain;
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
         chunk.id = word.id;
         chunk.text = word.text;
         chunk.x = (word.layoutX + finalOffsetX + letterOffsetX) * sx;
-        const hookLine = Boolean((this.data.cinematic_direction as any)?.storyboard?.[group.lineIndex]?.isHookLine || resolvedLine?.texture === 'hook');
-        const hookScale = hookLine && !isEchoGroup ? 1.05 : 1;
-        const hookLift = hookLine && !isEchoGroup ? -6 * sy : 0;
-        chunk.y = (word.layoutY + finalOffsetY) * sy + hookLift;
+        chunk.y = (word.layoutY + finalOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * hookScale;
-        chunk.scaleY = finalScaleY * intensityScaleMult * hookScale;
+        chunk.scaleX = finalScaleX * intensityScaleMult;
+        chunk.scaleY = finalScaleY * intensityScaleMult;
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = word.fontWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
-        chunk.color = isEchoGroup
-          ? sectionGrade.echoColor
-          : (isActive ? sectionGrade.activeTextColor : (isPast ? sectionGrade.baseTextColor : sectionGrade.futureTextColor));
+        chunk.color = word.color;
         chunk.glow = wordGlow;
-        chunk.glowColor = sectionGrade.glowColor;
         chunk.emitterType = word.emitterType !== 'none' ? word.emitterType : undefined;
         chunk.trail = word.trail;
         chunk.entryStyle = word.entryStyle;
@@ -4097,42 +3837,12 @@ export class LyricDancePlayer {
         chunk.exitProgress = Math.min(1, exitProgress);
         chunk.behavior = word.behaviorStyle;
         chunk.skewX = finalSkewX;
-        const rackBlurPx = isEchoGroup ? echoBlurPx : primaryBlurPx;
-        chunk.blur = Math.max(0, Math.min(1, (rackBlurPx / 12) + (isEchoGroup ? 0.12 : 0) + finalBlur));
+        chunk.blur = Math.max(0, Math.min(1, finalBlur));
         chunk.rotation = finalRotation;
         chunk.ghostTrail = resolvedWord?.ghostTrail ?? word.ghostTrail;
-        chunk.ghostCount = Math.min(5, Math.max(0, word.ghostCount ?? 3));
+        chunk.ghostCount = word.ghostCount;
         chunk.ghostSpacing = word.ghostSpacing;
         chunk.ghostDirection = (resolvedWord?.ghostDirection ?? word.ghostDirection) as any;
-        chunk.isHeroWord = isHeroWord;
-        chunk.isActiveWord = isActive;
-        chunk.wordStart = word.start;
-        chunk.wordEnd = word.end;
-        chunk.lineStart = group.start;
-        chunk.isEcho = isEchoGroup;
-        chunk.sectionIndex = currentChapterIdx;
-        if (!isEchoGroup && primaryEntryLift > 0 && tSec >= (primaryLine?.start ?? 0) && tSec <= (primaryLine?.start ?? 0) + focusInSec) {
-          chunk.y -= primaryEntryLift * sy;
-        }
-        if (lyricFocusConfig.heroSweepEnabled && isHeroWord && isActive && !isEchoGroup) {
-          const sweepKey = chunk.id;
-          let sweep = this.heroSweepByChunk.get(sweepKey);
-          if (!sweep || tSec > sweep.activeUntilSec) {
-            let startSec = word.start;
-            for (let bi = 0; bi < beats.length; bi += 1) {
-              if (beats[bi].time >= word.start) { startSec = beats[bi].time; break; }
-            }
-            const durationSec = lyricFocusConfig.heroSweepDurationMs / 1000;
-            sweep = { startSec, durationSec, activeUntilSec: word.end + 0.25 };
-            this.heroSweepByChunk.set(sweepKey, sweep);
-          }
-          const sweepProgress = (tSec - sweep.startSec) / Math.max(0.001, sweep.durationSec);
-          chunk.heroSweepProgress = sweepProgress >= 0 && sweepProgress <= 1 ? easeInOutCubic(sweepProgress) : -1;
-          chunk.heroSweepBandFrac = lyricFocusConfig.heroSweepBandFrac;
-        } else {
-          chunk.heroSweepProgress = -1;
-          chunk.heroSweepBandFrac = lyricFocusConfig.heroSweepBandFrac;
-        }
         chunk.letterIndex = word.letterIndex;
         chunk.letterTotal = word.letterTotal;
         chunk.letterDelay = word.letterDelay ?? 0;

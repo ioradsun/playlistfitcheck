@@ -113,23 +113,6 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
           <KV label="Exit" value={snap.activeWordExit} />
           <KV label="Emphasis" value={snap.activeWordEmphasis} />
           <KV label="Trail" value={snap.activeWordTrail} />
-          <KV label="Window" value={snap.activeWordWindow} />
-        </div>
-      </Section>
-
-      <Section title="Cinematic LyricFocus">
-        <div className="space-y-0.5">
-          <KV label="Primary Line" value={snap.primaryLineIndex} />
-          <KV label="Echo Line" value={snap.echoLineIndex} />
-          <KV label="Active Word Index" value={snap.lyricFocusActiveWordIndex} />
-          <KV label="Hero Match" value={snap.heroWordMatch ? "yes" : "no"} />
-          <KV label="Tier α (A/P/F)" value={`${f(snap.tierActiveOpacity)}/${f(snap.tierPastOpacity)}/${f(snap.tierFutureOpacity)}`} />
-          <KV label="Layout Stable" value={snap.layoutStable ? "✓" : "✗"} />
-          <KV label="Rack Focus" value={`${snap.rackFocusEnabled ? 'on' : 'off'} p:${f(snap.rackFocusPrimaryBlurPx)} e:${f(snap.rackFocusEchoBlurPx)}`} />
-          <KV label="Hero Sweep" value={snap.heroSweepActive ? `active ${f(snap.heroSweepProgress)}` : 'idle'} />
-          <KV label="Section Temp" value={f(snap.sectionGradeTemperature)} />
-          <KV label="Ghost Trails" value={snap.ghostTrailActiveCount} />
-          <KV label="Mismatches" value={snap.lyricFocusMismatchWarnings} />
         </div>
       </Section>
       <Section title="Particles">

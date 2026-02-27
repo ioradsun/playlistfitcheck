@@ -221,13 +221,13 @@ export function LyricDanceExporter({
     const textState: TextState = {
       xOffset: 0,
       yBase: 0,
+      beatScale: 1,
       wordCounts: new Map(),
       seenAppearances: new Set(),
       wordHistory: new Map(),
       directiveCache: new Map(),
       evolutionCache: new Map(),
       stableLineLayoutCache: new Map(),
-      layoutLockCache: new Map(),
       measurementCache: new Map(),
       scratchVisibleWordIndices: [],
     };
