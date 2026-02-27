@@ -32,30 +32,21 @@ export type ScenePayload = {
 
 
 type KaraokeConfig = {
-  karaokeMode: boolean;
-  karaokeStrictTiming: boolean;
-  karaokeDisableShake: boolean;
-  karaokeDisableBaselineEase: boolean;
-  karaokeDisableBeatSnap: boolean;
-  karaokeFadeMs: number;
-  karaokeDebug: boolean;
+  debugHud: boolean;
+  enableEchoLine: boolean;
+  wordFeatherMs: number;
 };
 
 const KARAOKE_LINE_EPSILON_SEC = 0.08;
 
 function resolveKaraokeConfig(frameState: FrameRenderState | null | undefined): KaraokeConfig {
   const fs = (frameState ?? {}) as Record<string, unknown>;
-  const karaokeMode = fs.karaokeMode === true;
   const bool = (key: string, fallback: boolean) => typeof fs[key] === 'boolean' ? (fs[key] as boolean) : fallback;
-  const karaokeFadeMsRaw = Number(fs.karaokeFadeMs);
+  const wordFeatherRaw = Number(fs.wordFeatherMs);
   return {
-    karaokeMode,
-    karaokeStrictTiming: bool('karaokeStrictTiming', karaokeMode),
-    karaokeDisableShake: bool('karaokeDisableShake', true),
-    karaokeDisableBaselineEase: bool('karaokeDisableBaselineEase', true),
-    karaokeDisableBeatSnap: bool('karaokeDisableBeatSnap', true),
-    karaokeFadeMs: Number.isFinite(karaokeFadeMsRaw) ? Math.max(0, karaokeFadeMsRaw) : 60,
-    karaokeDebug: bool('karaokeDebug', false),
+    debugHud: bool('debugHud', false),
+    enableEchoLine: bool('enableEchoLine', true),
+    wordFeatherMs: Number.isFinite(wordFeatherRaw) ? Math.min(120, Math.max(40, wordFeatherRaw)) : 75,
   };
 }
 const deterministicSign = (seed: number): number => (Math.sin(seed * 127.1 + 311.7) > 0 ? 1 : -1);
@@ -432,25 +423,19 @@ export function compileScene(payload: ScenePayload): CompiledScene {
   const words = payload.words ?? [];
   const karaoke = resolveKaraokeConfig(payload.frame_state);
   const lineTokenMismatches: Array<{ lineIndex: number; tokenCount: number; timingCount: number }> = [];
-  const wordMeta: WordMetaEntry[] = karaoke.karaokeMode
-    ? payload.lines.flatMap((line, lineIndex) => {
-      const lineWords = words.filter((w) => w.start >= (line.start ?? 0) - KARAOKE_LINE_EPSILON_SEC && w.end <= (line.end ?? 0) + KARAOKE_LINE_EPSILON_SEC);
-      const lineTokens = String(line.text ?? '').split(/\s+/).filter(Boolean);
-      if (lineTokens.length !== lineWords.length) {
-        const mismatch = { lineIndex, tokenCount: lineTokens.length, timingCount: lineWords.length };
-        lineTokenMismatches.push(mismatch);
-        console.warn('[karaokeMode] token/timing mismatch — using AI timestamp words as source of truth', mismatch);
-      }
-      return lineWords.map((w) => {
-        const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-        return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
-      });
-    })
-    : words.map((w) => {
+  const wordMeta: WordMetaEntry[] = payload.lines.flatMap((line, lineIndex) => {
+    const lineWords = words.filter((w) => w.start >= (line.start ?? 0) - KARAOKE_LINE_EPSILON_SEC && w.end <= (line.end ?? 0) + KARAOKE_LINE_EPSILON_SEC);
+    const lineTokens = String(line.text ?? '').split(/\s+/).filter(Boolean);
+    if (lineTokens.length !== lineWords.length) {
+      const mismatch = { lineIndex, tokenCount: lineTokens.length, timingCount: lineWords.length };
+      lineTokenMismatches.push(mismatch);
+      console.warn('[cinematic-karaoke] token/timing mismatch — using AI timestamp words as source of truth', mismatch);
+    }
+    return lineWords.map((w) => {
       const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-      const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999)));
       return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
     });
+  });
   const lineWordCounters: Record<number, number> = {};
   for (const wm of wordMeta) { lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0; wm.wordIndex = lineWordCounters[wm.lineIndex]++; }
 

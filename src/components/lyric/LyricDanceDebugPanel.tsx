@@ -117,15 +117,14 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
         </div>
       </Section>
 
-      <Section title="Karaoke">
+      <Section title="Cinematic Karaoke">
         <div className="space-y-0.5">
-          <KV label="Mode" value={snap.karaokeMode ? "on" : "off"} />
-          <KV label="Active Line" value={snap.karaokeActiveLineIndex} />
+          <KV label="Primary Line" value={snap.primaryLineIndex} />
+          <KV label="Echo Line" value={snap.echoLineIndex} />
           <KV label="Active Word Index" value={snap.karaokeActiveWordIndex} />
+          <KV label="Hero Match" value={snap.heroWordMatch ? "yes" : "no"} />
+          <KV label="Tier α (A/P/F)" value={`${f(snap.tierActiveOpacity)}/${f(snap.tierPastOpacity)}/${f(snap.tierFutureOpacity)}`} />
           <KV label="Layout Stable" value={snap.layoutStable ? "✓" : "✗"} />
-          <KV label="Disable Baseline Ease" value={snap.karaokeDisableBaselineEase ? "✓" : "✗"} />
-          <KV label="Disable Shake" value={snap.karaokeDisableShake ? "✓" : "✗"} />
-          <KV label="Disable Beat Snap" value={snap.karaokeDisableBeatSnap ? "✓" : "✗"} />
           <KV label="Mismatches" value={snap.karaokeMismatchWarnings} />
         </div>
       </Section>
