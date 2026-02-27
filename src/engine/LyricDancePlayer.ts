@@ -3557,98 +3557,96 @@ export class LyricDancePlayer {
         const word = group.words[wi];
         const isAnchor = wi === group.anchorWordIdx;
         const staggerDelay = isAnchor ? 0 : Math.abs(wi - group.anchorWordIdx) * group.staggerDelay;
-        const letterTotal = word.letterTotal ?? 1;
+        const li = word.letterIndex ?? 0;
+        const lt = word.letterTotal ?? 1;
+        const letterDelay = word.isLetterChunk ? li * 0.06 : 0;
+        const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay - letterDelay);
+        const effectiveEntryDuration = group.entryDuration * word.entryDurationMult;
+        const entryProgress = Math.min(1, Math.max(0, adjustedElapsed / Math.max(0.01, effectiveEntryDuration)));
 
-        for (let li = 0; li < letterTotal; li++) {
-          const letterDelay = word.isLetterChunk ? li * 0.06 : 0;
-          const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay - letterDelay);
-          const effectiveEntryDuration = group.entryDuration * word.entryDurationMult;
-          const entryProgress = Math.min(1, Math.max(0, adjustedElapsed / Math.max(0.01, effectiveEntryDuration)));
+        const effectiveExitDuration = Math.min(group.exitDuration, Math.max(0.05, nextGroupStart - group.end));
+        const exitDelay = word.isLetterChunk && SPLIT_EXIT_STYLES.has(word.exitStyle) ? letterDelay : 0;
+        const exitProgress = Math.max(0, (tSec - groupEnd - exitDelay) / Math.max(0.01, effectiveExitDuration));
 
-          const effectiveExitDuration = Math.min(group.exitDuration, Math.max(0.05, nextGroupStart - group.end));
-          const exitDelay = word.isLetterChunk && SPLIT_EXIT_STYLES.has(word.exitStyle) ? letterDelay : 0;
-          const exitProgress = Math.max(0, (tSec - groupEnd - exitDelay) / Math.max(0.01, effectiveExitDuration));
+        const entryState = computeEntryState(word.entryStyle as any, entryProgress, group.behaviorIntensity);
+        const exitState = computeExitState(word.exitStyle as any, exitProgress, group.behaviorIntensity, li, lt);
+        const beatPhase = beatIndex >= 0 ? ((tSec - (beats[beatIndex]?.time ?? 0)) / (60 / Math.max(1, bpm))) % 1 : 0;
+        const behaviorState = computeBehaviorState(word.behaviorStyle as any, tSec, group.start, beatPhase, group.behaviorIntensity);
 
-          const entryState = computeEntryState(word.entryStyle as any, entryProgress, group.behaviorIntensity);
-          const exitState = computeExitState(word.exitStyle as any, exitProgress, group.behaviorIntensity, li, letterTotal);
-          const beatPhase = beatIndex >= 0 ? ((tSec - (beats[beatIndex]?.time ?? 0)) / (60 / Math.max(1, bpm))) % 1 : 0;
-          const behaviorState = computeBehaviorState(word.behaviorStyle as any, tSec, group.start, beatPhase, group.behaviorIntensity);
+        const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
+        const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
+        const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1) * word.semanticScaleX;
+        const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1) * word.semanticScaleY;
 
-          const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
-          const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
-          const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1) * word.semanticScaleX;
-          const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1) * word.semanticScaleY;
+        const isEntryComplete = entryProgress >= 1.0;
+        const isExiting = exitProgress > 0;
+        const rawAlpha = isExiting
+          ? Math.max(0, exitState.alpha)
+          : isEntryComplete
+            ? 1.0 * (behaviorState.alpha ?? 1)
+            : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
+        const finalAlpha = Math.min(word.semanticAlphaMax, rawAlpha);
 
-          const isEntryComplete = entryProgress >= 1.0;
-          const isExiting = exitProgress > 0;
-          const rawAlpha = isExiting
-            ? Math.max(0, exitState.alpha)
-            : isEntryComplete
-              ? 1.0 * (behaviorState.alpha ?? 1)
-              : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
-          const finalAlpha = Math.min(word.semanticAlphaMax, rawAlpha);
+        const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
+        const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
+        const finalBlur = (entryState.blur ?? 0) + (exitState.blur ?? 0) + (behaviorState.blur ?? 0);
+        const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
+        const isFrozen = word.behaviorStyle === 'freeze' && (tSec - group.start) > 0.3;
 
-          const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
-          const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
-          const finalBlur = (entryState.blur ?? 0) + (exitState.blur ?? 0) + (behaviorState.blur ?? 0);
-          const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
-          const isFrozen = word.behaviorStyle === 'freeze' && (tSec - group.start) > 0.3;
+        const effectiveFontSize = word.baseFontSize * fontScale;
+        const charW = word.isLetterChunk ? effectiveFontSize * 0.6 : 0;
+        const wordSpan = charW * lt;
+        const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
 
-          const effectiveFontSize = word.baseFontSize * fontScale;
-          const charW = word.isLetterChunk ? effectiveFontSize * 0.6 : 0;
-          const wordSpan = charW * letterTotal;
-          const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
+        const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult;
 
-          const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult;
-
-          const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
-          chunks[ci] = chunk;
-          chunk.id = word.id;
-          chunk.text = word.text;
-          chunk.x = (word.layoutX + finalOffsetX + letterOffsetX) * sx;
-          chunk.y = (word.layoutY + finalOffsetY) * sy;
-          chunk.fontSize = effectiveFontSize;
-          chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-          chunk.scaleX = finalScaleX * intensityScaleMult;
-          chunk.scaleY = finalScaleY * intensityScaleMult;
-          chunk.scale = 1;
-          chunk.visible = finalAlpha > 0.01;
-          chunk.fontWeight = word.fontWeight;
-          chunk.fontFamily = word.fontFamily;
-          chunk.isAnchor = isAnchor;
-          chunk.color = word.color;
-          chunk.glow = wordGlow;
-          chunk.emitterType = word.emitterType !== 'none' ? word.emitterType : undefined;
-          chunk.trail = word.trail;
-          chunk.entryStyle = word.entryStyle;
-          chunk.exitStyle = word.exitStyle;
-          chunk.emphasisLevel = word.emphasisLevel;
-          chunk.entryProgress = entryProgress;
-          chunk.exitProgress = Math.min(1, exitProgress);
-          chunk.behavior = word.behaviorStyle;
-          chunk.skewX = finalSkewX;
-          chunk.blur = Math.max(0, Math.min(1, finalBlur));
-          chunk.rotation = finalRotation;
-          chunk.ghostTrail = word.ghostTrail;
-          chunk.ghostCount = word.ghostCount;
-          chunk.ghostSpacing = word.ghostSpacing;
-          chunk.ghostDirection = word.ghostDirection as any;
-          chunk.letterIndex = word.letterIndex;
-          chunk.letterTotal = word.letterTotal;
-          chunk.letterDelay = word.letterDelay ?? 0;
-          chunk.isLetterChunk = word.isLetterChunk;
-          chunk.frozen = isFrozen;
-          chunk.iconGlyph = isAnchor ? word.iconGlyph : undefined;
-          chunk.iconStyle = isAnchor ? word.iconStyle : undefined;
-          chunk.iconPosition = isAnchor ? word.iconPosition : undefined;
-          chunk.iconScale = isAnchor ? word.iconScale : undefined;
-          chunk.entryOffsetY = 0;
-          chunk.entryOffsetX = 0;
-          chunk.entryScale = 1;
-          chunk.exitOffsetY = 0;
-          chunk.exitScale = 1;
-          ci++;
-        }
+        const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
+        chunks[ci] = chunk;
+        chunk.id = word.id;
+        chunk.text = word.text;
+        chunk.x = (word.layoutX + finalOffsetX + letterOffsetX) * sx;
+        chunk.y = (word.layoutY + finalOffsetY) * sy;
+        chunk.fontSize = effectiveFontSize;
+        chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
+        chunk.scaleX = finalScaleX * intensityScaleMult;
+        chunk.scaleY = finalScaleY * intensityScaleMult;
+        chunk.scale = 1;
+        chunk.visible = finalAlpha > 0.01;
+        chunk.fontWeight = word.fontWeight;
+        chunk.fontFamily = word.fontFamily;
+        chunk.isAnchor = isAnchor;
+        chunk.color = word.color;
+        chunk.glow = wordGlow;
+        chunk.emitterType = word.emitterType !== 'none' ? word.emitterType : undefined;
+        chunk.trail = word.trail;
+        chunk.entryStyle = word.entryStyle;
+        chunk.exitStyle = word.exitStyle;
+        chunk.emphasisLevel = word.emphasisLevel;
+        chunk.entryProgress = entryProgress;
+        chunk.exitProgress = Math.min(1, exitProgress);
+        chunk.behavior = word.behaviorStyle;
+        chunk.skewX = finalSkewX;
+        chunk.blur = Math.max(0, Math.min(1, finalBlur));
+        chunk.rotation = finalRotation;
+        chunk.ghostTrail = word.ghostTrail;
+        chunk.ghostCount = word.ghostCount;
+        chunk.ghostSpacing = word.ghostSpacing;
+        chunk.ghostDirection = word.ghostDirection as any;
+        chunk.letterIndex = word.letterIndex;
+        chunk.letterTotal = word.letterTotal;
+        chunk.letterDelay = word.letterDelay ?? 0;
+        chunk.isLetterChunk = word.isLetterChunk;
+        chunk.frozen = isFrozen;
+        chunk.iconGlyph = isAnchor ? word.iconGlyph : undefined;
+        chunk.iconStyle = isAnchor ? word.iconStyle : undefined;
+        chunk.iconPosition = isAnchor ? word.iconPosition : undefined;
+        chunk.iconScale = isAnchor ? word.iconScale : undefined;
+        chunk.entryOffsetY = 0;
+        chunk.entryOffsetX = 0;
+        chunk.entryScale = 1;
+        chunk.exitOffsetY = 0;
+        chunk.exitScale = 1;
+        ci++;
       }
     }
     chunks.length = ci;
