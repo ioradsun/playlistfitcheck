@@ -22,6 +22,10 @@ import * as WordClassifier from "@/engine/WordClassifier";
 const STRONG_MODS = ["PULSE_STRONG", "HEAT_SPIKE", "ERUPT", "FLAME_BURST", "EXPLODE"] as const;
 const SOFT_MODS = ["BLUR_OUT", "ECHO_FADE", "DISSOLVE", "FADE_OUT", "FADE_OUT_FAST"] as const;
 
+function normalizeToken(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
+}
+
 interface StableLineLayout {
   wordWidths: number[];
   wordXOffsets: number[];
@@ -729,6 +733,14 @@ export function renderText(
       wordXOffsets,
     };
     textState.stableLineLayoutCache.set(lineLayoutKey, stableLayout);
+    if (textState.stableLineLayoutCache.size > 600) {
+      const first = textState.stableLineLayoutCache.keys().next().value;
+      if (first) textState.stableLineLayoutCache.delete(first);
+    }
+    if (textState.measurementCache.size > 2400) {
+      const first = textState.measurementCache.keys().next().value;
+      if (first) textState.measurementCache.delete(first);
+    }
   }
 
   if (visibleWordIndices.length > 0) {
@@ -811,7 +823,7 @@ export function renderText(
       wordY += Math.sin(currentTime * fallSpeed) * 3;
     }
 
-    const isHeroWord = Boolean(lineDirection?.heroWord && wordText.toLowerCase().includes(lineDirection.heroWord.toLowerCase()));
+    const isHeroWord = Boolean(lineDirection?.heroWord && normalizeToken(wordText) === normalizeToken(lineDirection.heroWord));
     const modeOpacity = resolvedDisplayMode === "phrase_stack"
       ? (renderedIndex === visibleWordIndices.length - 1 ? 1 : 0.4)
       : 1;
