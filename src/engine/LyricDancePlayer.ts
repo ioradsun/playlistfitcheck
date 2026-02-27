@@ -860,7 +860,6 @@ export class LyricDancePlayer {
   private activeSectionTexture = 'dust';
   private activeTension: any = null;
   private lastExitProgressByChunk = new Map<string, number>();
-  private lastFrameHasActiveChunks = false;
 
 
   // Health monitor
@@ -897,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: spacing-particles-v13');
+    console.log('[LyricDancePlayer] build: hard-cancel-v14');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1899,10 +1898,15 @@ export class LyricDancePlayer {
     const anyChunkActive = sortedChunks.some(
       (c: any) => c.visible && (c.exitProgress ?? 0) === 0 && (c.alpha ?? 0) > 0.1
     );
-    this.lastFrameHasActiveChunks = anyChunkActive;
+    if (anyChunkActive) {
+      this.activeDecomps.length = 0;
+      this.lastExitProgressByChunk.clear();
+    }
 
     const nowSec = performance.now() / 1000;
-    this.drawDecompositions(this.ctx, nowSec);
+    if (!anyChunkActive) {
+      this.drawDecompositions(this.ctx, nowSec);
+    }
 
     const visibleLines = this.payload?.lines?.filter((l: any) => tSec >= (l.start ?? 0) && tSec < (l.end ?? 0)) ?? [];
     const activeLine = visibleLines.length === 0
@@ -2580,14 +2584,12 @@ export class LyricDancePlayer {
 
   private drawDecompositions(ctx: CanvasRenderingContext2D, time: number): void {
     const dt = 1 / 60;
-    const anyActive = this.activeDecomps.length > 0 && this.lastFrameHasActiveChunks;
     for (const d of this.activeDecomps) {
       const elapsed = time - d.startTime;
       if (elapsed > d.duration) continue;
       for (const p of d.particles) {
         if (!p.active || p.life <= 0 || p.a <= 0) continue;
         this.updateDecompParticle(d, p, elapsed, dt);
-        if (anyActive) continue;
         const alpha = p.a * p.life;
         if (alpha < 0.01) continue;
         if (p.shape === 'shard') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation); ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.fillRect(-p.size*0.4,-p.size,p.size*0.8,p.size*2); ctx.restore(); }
@@ -2595,7 +2597,7 @@ export class LyricDancePlayer {
         else if (p.shape === 'ember') { ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+p.vx*0.015,p.y+p.vy*0.015); ctx.lineWidth=p.size*0.4; ctx.strokeStyle=`rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.stroke(); }
         else { ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size); }
       }
-      if (!anyActive && d.effect === 'shockwave') {
+      if (d.effect === 'shockwave') {
         const ringRadius = elapsed * 150;
         const ringAlpha = Math.max(0, 0.3 * (1 - elapsed / 0.5));
         ctx.beginPath(); ctx.arc(d.centerX, d.centerY, ringRadius, 0, Math.PI * 2);
