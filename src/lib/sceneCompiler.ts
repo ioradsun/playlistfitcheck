@@ -425,12 +425,26 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     (group as any)._positionSlot = slot % 3;
   }
 
-  const lineFontSizes = payload.lines.map(() => 72);
+  const shotTypeToFontSize: Record<string, number> = {
+    Wide: 56,
+    Medium: 68,
+    Close: 84,
+    CloseUp: 96,
+    ExtremeClose: 108,
+    FloatingInWorld: 64,
+  };
+  const lineFontSizes = payload.lines.map((_, lineIndex) => {
+    const storyEntry = storyboard[lineIndex];
+    const shotType = (storyEntry as any)?.shotType ?? 'Medium';
+    const baseSizeForShot = shotTypeToFontSize[shotType] ?? 68;
+    return baseSizeForShot;
+  });
   const measureCanvas = new OffscreenCanvas(1, 1);
   const measureCtx = measureCanvas.getContext('2d')!;
   const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
   const compiledGroups: CompiledPhraseGroup[] = phraseGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
+    const lineStory = storyboard[group.lineIndex];
     const positions = getGroupLayout(group, visualMode, 960, 540, lineFontSizes[group.lineIndex] ?? 36, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx);
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const manifestDirective = manifestWordDirectives[key]?.[wi] ?? null;
@@ -465,6 +479,10 @@ export function compileScene(payload: ScenePayload): CompiledScene {
         ghostCount: wm.directive?.ghostCount,
         ghostSpacing: wm.directive?.ghostSpacing,
         ghostDirection: wm.directive?.ghostDirection,
+        iconGlyph: lineStory?.iconGlyph,
+        iconStyle: lineStory?.iconStyle,
+        iconPosition: lineStory?.iconPosition,
+        iconScale: lineStory?.iconScale,
       };
       if (wm.directive?.letterSequence) {
         const letters = wm.word.split('');
