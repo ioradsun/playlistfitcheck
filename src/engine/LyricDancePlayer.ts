@@ -896,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: word-x-spacing-v8');
+    console.log('[LyricDancePlayer] build: dissolve-slow-v9');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -2541,7 +2541,13 @@ export class LyricDancePlayer {
       p.vy = Math.sin(ang) * force + (Math.random() - 0.5) * 40;
       p.gravity = 60 + Math.random() * 40; p.drag = 0.96; p.shape = 'shard'; p.rotSpeed = (Math.random() - 0.5) * 8;
       p.burstDelay = effect === 'shockwave' ? 0.08 : 0;
-    } else if (effect === 'dissolve') { p.vx = (Math.random()-0.5)*20; p.vy=-8-Math.random()*15; p.gravity=-3; p.drag=0.97; p.dissolveDelay=Math.random()*0.4; }
+    } else if (effect === 'dissolve') {
+      p.vx = (Math.random()-0.5)*8;
+      p.vy = -2 - Math.random()*6;
+      p.gravity = -1;
+      p.drag = 0.98;
+      p.dissolveDelay = Math.random()*0.6;
+    }
     else if (effect === 'melt') { const xNorm=(p.x-(cx-wordWidth/2))/Math.max(1,wordWidth); p.dripDelay=Math.random()*0.5+Math.abs(xNorm-0.5)*0.3; p.gravity=120+Math.random()*80; p.drag=0.92; p.shape='streak'; }
     else if (effect === 'ascend') { p.vx=(Math.random()-0.5)*30; p.vy=-40-Math.random()*60; p.gravity=-10; p.drag=0.97; p.riseDelay=(1-((p.y-(cy-fontSize/2))/Math.max(1,fontSize)))*0.3; }
     else if (effect === 'burn-away') { const yNorm=(p.y-(cy-fontSize/2))/Math.max(1,fontSize); p.burnDelay=(1-Math.max(0,Math.min(1,yNorm)))*0.6; p.shape='ember'; }
