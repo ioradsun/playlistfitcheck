@@ -137,7 +137,9 @@ export default function LyricDanceBottomPanel({ danceId, constellationRef, onCom
   }, [commentText, wouldReplay, danceId, constellationRef, onCommentAdded, submitting, fetchSignalStrength]);
 
   const handleShare = useCallback(() => {
-    navigator.clipboard.writeText(window.location.href);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("karaoke");
+    navigator.clipboard.writeText(url.toString());
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, []);
