@@ -860,6 +860,11 @@ export class LyricDancePlayer {
   private currentSimCanvases: HTMLCanvasElement[] = [];
   private chapterImages: HTMLImageElement[] = [];
   private chapterImageLuminance = new WeakMap<HTMLImageElement, number>();
+  private _haloStamps: Map<string, HTMLCanvasElement> = new Map();
+  private _crushOverlayCanvas: HTMLCanvasElement | null = null;
+  private _crushOverlayKey = '';
+  private _lightingOverlayCanvas: HTMLCanvasElement | null = null;
+  private _lightingOverlayKey = '';
   private _prevImgIdx = -1;
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
@@ -1296,6 +1301,11 @@ export class LyricDancePlayer {
     this.textCanvas.style.height = `${h}px`;
 
     if (this.payload) this.buildBgCache();
+    this._crushOverlayCanvas = null;
+    this._crushOverlayKey = '';
+    this._lightingOverlayCanvas = null;
+    this._lightingOverlayKey = '';
+    this._haloStamps.clear();
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
     if (this.timelineBase.length) this.updateTimelineScale();
@@ -1367,6 +1377,9 @@ export class LyricDancePlayer {
     this.ambientParticleEngine?.clear();
     this.chapterSims = [];
     this.chapterImages = [];
+    this._crushOverlayCanvas = null;
+    this._lightingOverlayCanvas = null;
+    this._haloStamps.clear();
         this.ctx = null as any;
     this.canvas = null as any;
     this.bgCanvas = null as any;
@@ -1422,6 +1435,37 @@ export class LyricDancePlayer {
     }
   };
 
+  private getHaloStamp(radius: number, isAnchor: boolean, chapterColor: string): HTMLCanvasElement {
+    const bucketedRadius = Math.ceil(radius / 8) * 8;
+    const key = `${bucketedRadius}-${isAnchor ? 1 : 0}-${chapterColor}`;
+
+    let stamp = this._haloStamps.get(key);
+    if (stamp) return stamp;
+
+    const size = bucketedRadius * 2;
+    stamp = document.createElement('canvas');
+    stamp.width = size;
+    stamp.height = size;
+    const ctx = stamp.getContext('2d')!;
+
+    const innerAlpha = isAnchor ? 0.72 : 0.45;
+    const innerColor = isAnchor
+      ? this.blendWithBlack(chapterColor, 0.85)
+      : '#000000';
+
+    const halo = ctx.createRadialGradient(bucketedRadius, bucketedRadius, 0, bucketedRadius, bucketedRadius, bucketedRadius);
+    halo.addColorStop(0, this.hexWithAlpha(innerColor, innerAlpha));
+    halo.addColorStop(0.6, this.hexWithAlpha(innerColor, innerAlpha * 0.6));
+    halo.addColorStop(1, this.hexWithAlpha(innerColor, 0));
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(bucketedRadius, bucketedRadius, bucketedRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    this._haloStamps.set(key, stamp);
+    return stamp;
+  }
+
   private drawWordHalo(
     x: number,
     y: number,
@@ -1430,21 +1474,13 @@ export class LyricDancePlayer {
     chapterColor: string,
     alpha: number
   ): void {
+    if (alpha < 0.01) return;
     const baseRadius = fontSize * (isAnchor ? 1.8 : 1.2);
-    const innerAlpha = isAnchor ? 0.72 : 0.45;
-    const innerColor = isAnchor
-      ? this.blendWithBlack(chapterColor, 0.85)
-      : '#000000';
-
-    const halo = this.ctx.createRadialGradient(x, y, 0, x, y, baseRadius);
-    halo.addColorStop(0, this.hexWithAlpha(innerColor, innerAlpha * alpha));
-    halo.addColorStop(0.6, this.hexWithAlpha(innerColor, innerAlpha * alpha * 0.6));
-    halo.addColorStop(1, this.hexWithAlpha(innerColor, 0));
-
-    this.ctx.fillStyle = halo;
-    this.ctx.beginPath();
-    this.ctx.arc(x, y, baseRadius, 0, Math.PI * 2);
-    this.ctx.fill();
+    const stamp = this.getHaloStamp(baseRadius, isAnchor, chapterColor);
+    const size = baseRadius * 2;
+    this.ctx.globalAlpha = alpha;
+    this.ctx.drawImage(stamp, x - baseRadius, y - baseRadius, size, size);
+    this.ctx.globalAlpha = 1;
   }
 
   private blendWithBlack(hex: string, blackAmount: number): string {
@@ -2321,6 +2357,11 @@ export class LyricDancePlayer {
 
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.buildBgCache();
+    this._crushOverlayCanvas = null;
+    this._crushOverlayKey = '';
+    this._lightingOverlayCanvas = null;
+    this._lightingOverlayKey = '';
+    this._haloStamps.clear();
     this.lastSimFrame = -1;
     if (this.timelineBase.length) this.updateTimelineScale();
     this.invalidateFrameCache();
@@ -2901,7 +2942,7 @@ export class LyricDancePlayer {
       this.ctx.globalAlpha = 1;
     }
 
-    // Dark crush overlay — always on top of image
+    // Dark crush overlay — cached per chapter+atmosphere
     const chapters = this.resolvedState.chapters ?? [];
     const currentChapterObj = this.resolveChapter(chapters, this.audio.currentTime, this.audio.duration || 1);
     const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
@@ -2925,20 +2966,30 @@ export class LyricDancePlayer {
       : currentLum ?? nextLum;
     const luminanceCrushAlpha = blendLum != null && blendLum > 0.72 ? baseCrushAlpha + 0.06 : baseCrushAlpha;
     const crushAlpha = Math.max(0.10, luminanceCrushAlpha);
+    const isLight = sceneCtx?.baseLuminance === 'light';
 
-    const crushColor = sceneCtx?.baseLuminance === 'light'
-      ? `rgba(255,255,255,${crushAlpha * 0.4})`
-      : `rgba(0,0,0,${crushAlpha})`;
-
-    const crush = this.ctx.createLinearGradient(0, 0, 0, this.height);
-    const crushColorMid = sceneCtx?.baseLuminance === 'light'
-      ? `rgba(255,255,255,${Math.max(0.20, crushAlpha * 0.4 - 0.06)})`
-      : `rgba(0,0,0,${Math.max(0.10, crushAlpha - 0.06)})`;
-    crush.addColorStop(0, crushColor);
-    crush.addColorStop(0.5, crushColorMid);
-    crush.addColorStop(1, crushColor);
-    this.ctx.fillStyle = crush;
-    this.ctx.fillRect(0, 0, this.width, this.height);
+    const crushKey = `${this.width}-${this.height}-${isLight ? 1 : 0}-${Math.round(crushAlpha * 100)}`;
+    if (this._crushOverlayKey !== crushKey || !this._crushOverlayCanvas) {
+      const off = document.createElement('canvas');
+      off.width = this.width;
+      off.height = this.height;
+      const octx = off.getContext('2d')!;
+      const crushColor = isLight
+        ? `rgba(255,255,255,${crushAlpha * 0.4})`
+        : `rgba(0,0,0,${crushAlpha})`;
+      const crushColorMid = isLight
+        ? `rgba(255,255,255,${Math.max(0.20, crushAlpha * 0.4 - 0.06)})`
+        : `rgba(0,0,0,${Math.max(0.10, crushAlpha - 0.06)})`;
+      const crush = octx.createLinearGradient(0, 0, 0, this.height);
+      crush.addColorStop(0, crushColor);
+      crush.addColorStop(0.5, crushColorMid);
+      crush.addColorStop(1, crushColor);
+      octx.fillStyle = crush;
+      octx.fillRect(0, 0, this.width, this.height);
+      this._crushOverlayCanvas = off;
+      this._crushOverlayKey = crushKey;
+    }
+    this.ctx.drawImage(this._crushOverlayCanvas, 0, 0);
   }
 
   private getAverageLuminance(img: HTMLImageElement | undefined): number | null {
@@ -2976,6 +3027,7 @@ export class LyricDancePlayer {
       const count = Math.max(1, chapters.length);
       this.bgCaches = [];
       this.chapterParticleSystems = [];
+      this._haloStamps.clear();
 
       for (let ci = 0; ci < count; ci++) {
         const chapter = chapters[ci] as any;
@@ -3716,19 +3768,30 @@ export class LyricDancePlayer {
     const climaxRatio = cd.climax?.timeRatio ?? 0.75;
     const climaxRange = 0.08;
     const distToClimax = Math.abs(songProgress - climaxRatio);
-    if (distToClimax < climaxRange) {
-      const intensity = (1 - distToClimax / climaxRange) * (cd.climax?.maxLightIntensity ?? 0.6);
-      this.ctx.save();
-      const grad = this.ctx.createRadialGradient(
+    if (distToClimax >= climaxRange) return;
+
+    const intensity = (1 - distToClimax / climaxRange) * (cd.climax?.maxLightIntensity ?? 0.6);
+    const alphaKey = Math.round(intensity * 100);
+    const key = `${this.width}-${this.height}-${alphaKey}`;
+
+    if (key !== this._lightingOverlayKey || !this._lightingOverlayCanvas) {
+      const off = document.createElement('canvas');
+      off.width = this.width;
+      off.height = this.height;
+      const octx = off.getContext('2d')!;
+      const grad = octx.createRadialGradient(
         this.width / 2, this.height / 2, 0,
         this.width / 2, this.height / 2, this.width * 0.6
       );
       grad.addColorStop(0, `rgba(255,255,240,${intensity * 0.15})`);
       grad.addColorStop(1, 'rgba(255,255,240,0)');
-      this.ctx.fillStyle = grad;
-      this.ctx.fillRect(0, 0, this.width, this.height);
-      this.ctx.restore();
+      octx.fillStyle = grad;
+      octx.fillRect(0, 0, this.width, this.height);
+      this._lightingOverlayCanvas = off;
+      this._lightingOverlayKey = key;
     }
+
+    this.ctx.drawImage(this._lightingOverlayCanvas, 0, 0);
   }
 
   private checkEmotionalEvents(tSec: number, songProgress: number): void {
