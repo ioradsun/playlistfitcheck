@@ -21,7 +21,7 @@ import {
 } from "@/lib/lyricSceneBaker";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
-import { cinematicFontSize, getCinematicLayout } from "@/engine/SystemStyles";
+import { cinematicFontSize } from "@/engine/SystemStyles";
 
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
@@ -900,7 +900,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: jump-detect-v19');
+    console.log('[LyricDancePlayer] build: clean-revert-v21');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1898,19 +1898,8 @@ export class LyricDancePlayer {
       const bIsExiting = (b.exitProgress ?? 0) > 0 ? 1 : 0;
       return bIsExiting - aIsExiting;
     });
-    // If any chunk has exitProgress === 0 in this frame, suppress all exiting chunks
-    const anyChunkActive = sortedChunks.some(
-      (c: any) => c.visible && (c.exitProgress ?? 0) === 0 && (c.alpha ?? 0) > 0.1
-    );
-    if (anyChunkActive) {
-      this.activeDecomps.length = 0;
-      this.chunkActiveSinceMs.clear();
-    }
-
     const nowSec = performance.now() / 1000;
-    if (!anyChunkActive) {
-      this.drawDecompositions(this.ctx, nowSec);
-    }
+    this.drawDecompositions(this.ctx, nowSec);
 
     const visibleLines = this.payload?.lines?.filter((l: any) => tSec >= (l.start ?? 0) && tSec < (l.end ?? 0)) ?? [];
     const activeLine = visibleLines.length === 0
@@ -1954,13 +1943,10 @@ export class LyricDancePlayer {
       }
     }
 
-    const layout = getCinematicLayout(this.width, this.height);
-    const opticalOffset = layout.baselineY - (this.height * 0.5);
     const rowLastRightEdge = new Map<number, number>();
 
     for (const chunk of sortedChunks) {
       if (!chunk.visible) continue;
-      if ((chunk.exitProgress ?? 0) > 0 && anyChunkActive) continue;
 
       // Spawn ambient burst trails as words exit.
       const isExiting = (chunk.exitScale !== 1) || (chunk.exitOffsetY !== 0) || ((chunk.entryProgress ?? 0) >= 1 && chunk.alpha < 0.85);
@@ -2016,8 +2002,7 @@ export class LyricDancePlayer {
       const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
       const rawDrawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
       const drawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
-      // Apply opticalOffset always — no position snap on exit
-      const finalDrawY = drawY + opticalOffset;
+      const finalDrawY = drawY;
       const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
       const fontSize = cinematicSizingV2
         ? ((chunk as any)._resolvedFontSize ?? baseFontSize ?? 36)
