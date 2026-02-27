@@ -138,7 +138,7 @@ export default function LyricDanceBottomPanel({ danceId, constellationRef, onCom
 
   const handleShare = useCallback(() => {
     const url = new URL(window.location.href);
-    url.searchParams.delete("karaoke");
+    url.searchParams.delete("lyricFocus");
     navigator.clipboard.writeText(url.toString());
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);

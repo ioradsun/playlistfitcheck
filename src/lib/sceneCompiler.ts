@@ -31,15 +31,15 @@ export type ScenePayload = {
 
 
 
-type KaraokeConfig = {
+type LyricFocusConfig = {
   debugHud: boolean;
   enableEchoLine: boolean;
   wordFeatherMs: number;
 };
 
-const KARAOKE_LINE_EPSILON_SEC = 0.08;
+const LYRIC_FOCUS_LINE_EPSILON_SEC = 0.08;
 
-function resolveKaraokeConfig(frameState: FrameRenderState | null | undefined): KaraokeConfig {
+function resolveLyricFocusConfig(frameState: FrameRenderState | null | undefined): LyricFocusConfig {
   const fs = (frameState ?? {}) as Record<string, unknown>;
   const bool = (key: string, fallback: boolean) => typeof fs[key] === 'boolean' ? (fs[key] as boolean) : fallback;
   const wordFeatherRaw = Number(fs.wordFeatherMs);
@@ -151,7 +151,7 @@ const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {1:[[0.5,0.5]
 function isFillerWord(word: string): boolean { return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase()); }
 
 function getVisualMode(_payload: ScenePayload): VisualMode {
-  // Karaoke renderer is single-mode: always use cinematic layout behavior.
+  // LyricFocus renderer is single-mode: always use cinematic layout behavior.
   return 'cinematic';
 }
 
@@ -387,7 +387,7 @@ export interface CompiledWord { id: string; text: string; clean: string; wordInd
 export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
-export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; karaoke: KaraokeConfig; lineTokenMismatches: Array<{ lineIndex: number; tokenCount: number; timingCount: number }>; }
+export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; lyricFocus: LyricFocusConfig; lineTokenMismatches: Array<{ lineIndex: number; tokenCount: number; timingCount: number }>; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
 
@@ -415,15 +415,15 @@ export function compileScene(payload: ScenePayload): CompiledScene {
   const directives = new Map<string, WordDirectiveLike>();
   if (Array.isArray(wordDirectives)) for (const d of wordDirectives) directives.set(String(d?.word ?? '').trim().toLowerCase(), d as WordDirectiveLike);
   const words = payload.words ?? [];
-  const karaoke = resolveKaraokeConfig(payload.frame_state);
+  const lyricFocus = resolveLyricFocusConfig(payload.frame_state);
   const lineTokenMismatches: Array<{ lineIndex: number; tokenCount: number; timingCount: number }> = [];
   const wordMeta: WordMetaEntry[] = payload.lines.flatMap((line, lineIndex) => {
-    const lineWords = words.filter((w) => w.start >= (line.start ?? 0) - KARAOKE_LINE_EPSILON_SEC && w.end <= (line.end ?? 0) + KARAOKE_LINE_EPSILON_SEC);
+    const lineWords = words.filter((w) => w.start >= (line.start ?? 0) - LYRIC_FOCUS_LINE_EPSILON_SEC && w.end <= (line.end ?? 0) + LYRIC_FOCUS_LINE_EPSILON_SEC);
     const lineTokens = String(line.text ?? '').split(/\s+/).filter(Boolean);
     if (lineTokens.length !== lineWords.length) {
       const mismatch = { lineIndex, tokenCount: lineTokens.length, timingCount: lineWords.length };
       lineTokenMismatches.push(mismatch);
-      console.warn('[cinematic-karaoke] token/timing mismatch — using AI timestamp words as source of truth', mismatch);
+      console.warn('[cinematic-lyricFocus] token/timing mismatch — using AI timestamp words as source of truth', mismatch);
     }
     return lineWords.map((w) => {
       const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
@@ -553,7 +553,7 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     baseTextTransform: baseTypography.textTransform,
     palettes,
     animParams,
-    karaoke,
+    lyricFocus,
     lineTokenMismatches,
   };
 }

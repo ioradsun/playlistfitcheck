@@ -201,8 +201,8 @@ export interface LiveDebugState {
   activeWordEnd: number;
   primaryLineIndex: number;
   echoLineIndex: number;
-  karaokeActiveWordIndex: number;
-  karaokeMismatchWarnings: string;
+  lyricFocusActiveWordIndex: number;
+  lyricFocusMismatchWarnings: string;
   heroWordMatch: boolean;
   tierActiveOpacity: number;
   tierPastOpacity: number;
@@ -360,8 +360,8 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   activeWordEnd: -1,
   primaryLineIndex: -1,
   echoLineIndex: -1,
-  karaokeActiveWordIndex: -1,
-  karaokeMismatchWarnings: "none",
+  lyricFocusActiveWordIndex: -1,
+  lyricFocusMismatchWarnings: "none",
   heroWordMatch: false,
   tierActiveOpacity: 1,
   tierPastOpacity: 0.9,
@@ -1925,7 +1925,7 @@ export class LyricDancePlayer {
     const frame = this.evaluateFrame(clamped);
     const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
 
-    const karaokeConfig = this.getKaraokeConfig();
+    const lyricFocusConfig = this.getLyricFocusConfig();
     const activeLineIdx = primaryLineIndex;
     const activeWord = this.getActiveWord(clamped, activeLineIdx);
     const activeWordClean = normalizeToken(activeWord?.word ?? '');
@@ -2011,10 +2011,10 @@ export class LyricDancePlayer {
     ds.activeWordEnd = activeWord?.end ?? -1;
     ds.activeWordWindow = activeWord ? `[${activeWord.start.toFixed(3)}, ${activeWord.end.toFixed(3)}]` : '—';
     ds.primaryLineIndex = activeLineIdx;
-    ds.echoLineIndex = karaokeConfig.enableEchoLine && activeLineIdx > 0 ? activeLineIdx - 1 : -1;
-    ds.karaokeActiveWordIndex = activeWord?.index ?? -1;
+    ds.echoLineIndex = lyricFocusConfig.enableEchoLine && activeLineIdx > 0 ? activeLineIdx - 1 : -1;
+    ds.lyricFocusActiveWordIndex = activeWord?.index ?? -1;
     const mismatchList = this.compiledScene?.lineTokenMismatches ?? [];
-    ds.karaokeMismatchWarnings = mismatchList.length > 0 ? mismatchList.map((m) => `L${m.lineIndex}:${m.tokenCount}/${m.timingCount}`).join(', ') : 'none';
+    ds.lyricFocusMismatchWarnings = mismatchList.length > 0 ? mismatchList.map((m) => `L${m.lineIndex}:${m.tokenCount}/${m.timingCount}`).join(', ') : 'none';
     ds.tierActiveOpacity = 1;
     ds.tierPastOpacity = 0.9;
     ds.tierFutureOpacity = 0.52;
@@ -2052,8 +2052,8 @@ export class LyricDancePlayer {
       : null;
     const primaryY = avgY(primaryVisibleChunks);
     const echoY = avgY(echoVisibleChunks);
-    const karaokeSlotCollision = primaryY != null && echoY != null && Math.abs(primaryY - echoY) < 2;
-    ds.layoutStable = !karaokeSlotCollision;
+    const lyricFocusSlotCollision = primaryY != null && echoY != null && Math.abs(primaryY - echoY) < 2;
+    ds.layoutStable = !lyricFocusSlotCollision;
     ds.heroWordMatch = Boolean(activeWordClean && resolvedLine?.heroToken && activeWordClean === resolvedLine.heroToken);
 
     // ── Camera & tension ──
@@ -2481,7 +2481,7 @@ export class LyricDancePlayer {
         if (this.isDebugMode && chunk.isActiveWord && !chunk.isEcho) {
           const prev = this.anchorInvariantByChunk.get(chunk.id);
           if (prev != null && Math.abs(prev - centerX) > 0.25 && !this.anchorInvariantLogged.has(chunk.id)) {
-            console.warn('[cinematic-karaoke] no-jank invariant violated', { chunkId: chunk.id, prevCenterX: prev, nextCenterX: centerX, dtSec: this.currentTSec });
+            console.warn('[cinematic-lyricFocus] no-jank invariant violated', { chunkId: chunk.id, prevCenterX: prev, nextCenterX: centerX, dtSec: this.currentTSec });
             this.anchorInvariantLogged.add(chunk.id);
           }
           this.anchorInvariantByChunk.set(chunk.id, centerX);
@@ -3196,8 +3196,8 @@ export class LyricDancePlayer {
   }
 
 
-  private getKaraokeConfig() {
-    const sceneKaraoke = this.compiledScene?.karaoke;
+  private getLyricFocusConfig() {
+    const sceneLyricFocus = this.compiledScene?.lyricFocus;
     const frameState = (this.data?.frame_state ?? {}) as Record<string, unknown>;
     const bool = (key: string, fallback: boolean) => typeof frameState[key] === 'boolean' ? (frameState[key] as boolean) : fallback;
     const featherRaw = Number(frameState.wordFeatherMs);
@@ -3206,9 +3206,9 @@ export class LyricDancePlayer {
       return Number.isFinite(raw) ? raw : fallback;
     };
     return {
-      debugHud: this.isDebugMode || sceneKaraoke?.debugHud || bool('debugHud', false),
-      enableEchoLine: sceneKaraoke?.enableEchoLine ?? bool('enableEchoLine', true),
-      wordFeatherMs: sceneKaraoke?.wordFeatherMs ?? (Number.isFinite(featherRaw) ? Math.min(120, Math.max(40, featherRaw)) : 75),
+      debugHud: this.isDebugMode || sceneLyricFocus?.debugHud || bool('debugHud', false),
+      enableEchoLine: sceneLyricFocus?.enableEchoLine ?? bool('enableEchoLine', true),
+      wordFeatherMs: sceneLyricFocus?.wordFeatherMs ?? (Number.isFinite(featherRaw) ? Math.min(120, Math.max(40, featherRaw)) : 75),
       focusInMs: Math.max(140, Math.min(220, num('focusInMs', 160))),
       echoBlurPx: Math.max(1.5, Math.min(4.5, num('echoBlurPx', 3.0))),
       primaryEntryBlurPx: Math.max(1.0, Math.min(4.0, num('primaryEntryBlurPx', 2.5))),
@@ -3891,7 +3891,7 @@ export class LyricDancePlayer {
     const scene = this.compiledScene;
     if (!scene) return null;
 
-    const karaokeConfig = this.getKaraokeConfig();
+    const lyricFocusConfig = this.getLyricFocusConfig();
     const songDuration = Math.max(0.01, scene.durationSec);
     const songProgress = Math.max(0, Math.min(1, (tSec - scene.songStartSec) / songDuration));
     const { _viewportSx: sx, _viewportSy: sy, _viewportFontScale: fontScale } = this;
@@ -3935,14 +3935,14 @@ export class LyricDancePlayer {
 
     const primaryLineIndex = this.getPrimaryLineIndex(tSec);
     const primaryLine = primaryLineIndex >= 0 ? this.data.lyrics?.[primaryLineIndex] : null;
-    const echoLineIndex = karaokeConfig.enableEchoLine && primaryLineIndex > 0 ? primaryLineIndex - 1 : -1;
+    const echoLineIndex = lyricFocusConfig.enableEchoLine && primaryLineIndex > 0 ? primaryLineIndex - 1 : -1;
     const echoLine = echoLineIndex >= 0 ? this.data.lyrics?.[echoLineIndex] : null;
     const echoFade = echoLine ? Math.max(0, 1 - (tSec - (primaryLine?.start ?? tSec)) / 0.35) : 0;
-    const focusInSec = karaokeConfig.focusInMs / 1000;
+    const focusInSec = lyricFocusConfig.focusInMs / 1000;
     const primaryFocusProgress = primaryLine ? Math.max(0, Math.min(1, (tSec - primaryLine.start) / Math.max(0.001, focusInSec))) : 1;
-    const primaryBlurPx = karaokeConfig.primaryEntryBlurPx * (1 - easeOutCubic(primaryFocusProgress));
+    const primaryBlurPx = lyricFocusConfig.primaryEntryBlurPx * (1 - easeOutCubic(primaryFocusProgress));
     const primaryEntryLift = (1 - easeOutCubic(primaryFocusProgress)) * 2;
-    const echoBlurPx = echoLine ? (1.5 + (karaokeConfig.echoBlurPx - 1.5) * Math.min(1, (tSec - (primaryLine?.start ?? tSec)) / 0.2)) : 0;
+    const echoBlurPx = echoLine ? (1.5 + (lyricFocusConfig.echoBlurPx - 1.5) * Math.min(1, (tSec - (primaryLine?.start ?? tSec)) / 0.2)) : 0;
 
     const grades = this.resolvedState.sectionGrades;
     const currentGrade = grades[currentChapterIdx] ?? {
@@ -3950,7 +3950,7 @@ export class LyricDancePlayer {
     };
     const prevGrade = currentChapterIdx > 0 ? grades[currentChapterIdx - 1] ?? currentGrade : currentGrade;
     const chapterStartSec = scene.songStartSec + songDuration * (chapter?.startRatio ?? 0);
-    const gradeBlend = Math.max(0, Math.min(1, (tSec - chapterStartSec) / Math.max(0.001, karaokeConfig.sectionGradeCrossfadeMs / 1000)));
+    const gradeBlend = Math.max(0, Math.min(1, (tSec - chapterStartSec) / Math.max(0.001, lyricFocusConfig.sectionGradeCrossfadeMs / 1000)));
     const sectionGrade = blendSectionGrade(prevGrade, currentGrade, gradeBlend);
 
     const groups = scene.phraseGroups;
@@ -4012,7 +4012,7 @@ export class LyricDancePlayer {
         const isPast = word.end < tSec;
         const isFuture = word.start > tSec;
         const isActive = !isPast && !isFuture;
-        const featherSec = karaokeConfig.wordFeatherMs / 1000;
+        const featherSec = lyricFocusConfig.wordFeatherMs / 1000;
         const alphaIn = Math.max(0, Math.min(1, (tSec - word.start) / Math.max(0.001, featherSec)));
         const alphaOut = Math.max(0, Math.min(1, (word.end - tSec) / Math.max(0.001, featherSec)));
         const windowFeather = isActive ? Math.min(alphaIn, alphaOut) : 1;
@@ -4112,7 +4112,7 @@ export class LyricDancePlayer {
         if (!isEchoGroup && primaryEntryLift > 0 && tSec >= (primaryLine?.start ?? 0) && tSec <= (primaryLine?.start ?? 0) + focusInSec) {
           chunk.y -= primaryEntryLift * sy;
         }
-        if (karaokeConfig.heroSweepEnabled && isHeroWord && isActive && !isEchoGroup) {
+        if (lyricFocusConfig.heroSweepEnabled && isHeroWord && isActive && !isEchoGroup) {
           const sweepKey = chunk.id;
           let sweep = this.heroSweepByChunk.get(sweepKey);
           if (!sweep || tSec > sweep.activeUntilSec) {
@@ -4120,16 +4120,16 @@ export class LyricDancePlayer {
             for (let bi = 0; bi < beats.length; bi += 1) {
               if (beats[bi].time >= word.start) { startSec = beats[bi].time; break; }
             }
-            const durationSec = karaokeConfig.heroSweepDurationMs / 1000;
+            const durationSec = lyricFocusConfig.heroSweepDurationMs / 1000;
             sweep = { startSec, durationSec, activeUntilSec: word.end + 0.25 };
             this.heroSweepByChunk.set(sweepKey, sweep);
           }
           const sweepProgress = (tSec - sweep.startSec) / Math.max(0.001, sweep.durationSec);
           chunk.heroSweepProgress = sweepProgress >= 0 && sweepProgress <= 1 ? easeInOutCubic(sweepProgress) : -1;
-          chunk.heroSweepBandFrac = karaokeConfig.heroSweepBandFrac;
+          chunk.heroSweepBandFrac = lyricFocusConfig.heroSweepBandFrac;
         } else {
           chunk.heroSweepProgress = -1;
-          chunk.heroSweepBandFrac = karaokeConfig.heroSweepBandFrac;
+          chunk.heroSweepBandFrac = lyricFocusConfig.heroSweepBandFrac;
         }
         chunk.letterIndex = word.letterIndex;
         chunk.letterTotal = word.letterTotal;

@@ -805,7 +805,7 @@ export default function ShareableLyricDance() {
       <LiveDebugHUD player={playerInstance} enabled={debugEnabled} />
       {data?.frame_state?.debugHud ? (
         <div className="fixed top-3 right-3 z-[210] rounded-md border border-white/20 bg-black/70 px-3 py-2 text-[11px] leading-4 text-white/90 backdrop-blur-sm font-mono">
-          <div>Cinematic karaoke debug</div>
+          <div>Cinematic lyricFocus debug</div>
           <div>toggle: ?debug=1</div>
         </div>
       ) : null}
