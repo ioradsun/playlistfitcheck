@@ -896,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: overlap-hardcut-v4');
+    console.log('[LyricDancePlayer] build: decomp-pos-v5');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -2090,7 +2090,7 @@ export class LyricDancePlayer {
           chunkId: chunk.id,
           text: chunk.text ?? obj.text,
           drawX,
-          drawY: finalDrawY,
+          drawY: finalDrawY + (chunk.exitOffsetY ?? 0),
           fontSize: safeFontSize,
           fontWeight,
           fontFamily: chunk.fontFamily,
@@ -2098,11 +2098,10 @@ export class LyricDancePlayer {
           directive: decompDirective,
         });
       }
-      // Allow word to render alongside particles for first 80ms — creates "bursts into particles" effect
       const nowForDecomp = performance.now() / 1000;
-      const decompActive = this.activeDecomps.some(
-        (d) => d.id === chunk.id && (nowForDecomp - d.startTime) > 0.1,
-      );
+      const decompEntry = this.activeDecomps.find(d => d.id === chunk.id);
+      // Word stays visible for first 120ms of decomp — bursts INTO particles
+      const decompActive = decompEntry != null && (nowForDecomp - decompEntry.startTime) > 0.12;
 
       if (chunk.iconPosition !== 'replace' && !decompActive) {
         this.ctx.globalAlpha = drawAlpha;
