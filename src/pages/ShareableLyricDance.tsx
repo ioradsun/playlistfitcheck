@@ -281,7 +281,7 @@ export default function ShareableLyricDance() {
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
-  const karaokeEnabled = new URLSearchParams(location.search).get("karaoke") === "1";
+  const karaokeEnabled = true; // hardcoded for testing
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
