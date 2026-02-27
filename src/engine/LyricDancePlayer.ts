@@ -860,6 +860,7 @@ export class LyricDancePlayer {
   private activeSectionTexture = 'dust';
   private activeTension: any = null;
   private lastExitProgressByChunk = new Map<string, number>();
+  private lastFrameHasActiveChunks = false;
 
 
   // Health monitor
@@ -896,7 +897,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: dissolve-fixed-v12');
+    console.log('[LyricDancePlayer] build: spacing-particles-v13');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1883,11 +1884,8 @@ export class LyricDancePlayer {
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
     const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
     this.ctx.translate(safeCameraX, safeCameraY);
-    this.ctx.textAlign = 'center';
+    this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'middle';
-
-    const nowSec = performance.now() / 1000;
-    this.drawDecompositions(this.ctx, nowSec);
 
     let drawCalls = 0;
     const palette = this.getBurstPalette(songProgress);
@@ -1901,6 +1899,10 @@ export class LyricDancePlayer {
     const anyChunkActive = sortedChunks.some(
       (c: any) => c.visible && (c.exitProgress ?? 0) === 0 && (c.alpha ?? 0) > 0.1
     );
+    this.lastFrameHasActiveChunks = anyChunkActive;
+
+    const nowSec = performance.now() / 1000;
+    this.drawDecompositions(this.ctx, nowSec);
 
     const visibleLines = this.payload?.lines?.filter((l: any) => tSec >= (l.start ?? 0) && tSec < (l.end ?? 0)) ?? [];
     const activeLine = visibleLines.length === 0
@@ -1946,6 +1948,7 @@ export class LyricDancePlayer {
 
     const layout = getCinematicLayout(this.width, this.height);
     const opticalOffset = layout.baselineY - (this.height * 0.5);
+    const rowLastRightEdge = new Map<number, number>();
 
     for (const chunk of sortedChunks) {
       if (!chunk.visible) continue;
@@ -1992,7 +1995,7 @@ export class LyricDancePlayer {
       }
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
       const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
-      const drawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
+      const rawDrawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
       const drawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
       const isExitingChunk = (chunk.exitProgress ?? 0) > 0;
       const finalDrawY = isExitingChunk ? drawY : drawY + opticalOffset;
@@ -2003,6 +2006,23 @@ export class LyricDancePlayer {
       const fontWeight = chunk.fontWeight ?? 700;
       const viewportMinFont = Math.max(16, Math.min(this.width, this.height) * 0.055);
       const safeFontSize = Math.max(viewportMinFont, Math.round(fontSize * zoom) || 36);
+      const resolvedFont = this.getResolvedFont();
+      const family = chunk.fontFamily ?? resolvedFont;
+      this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
+      if (!this.ctx.font.includes('px')) {
+        this.ctx.font = `700 36px ${resolvedFont}`;
+      }
+      const text = chunk.text ?? obj.text;
+      const textWidth = this.ctx.measureText(text).width;
+      const spaceWidth = Math.max(4, this.ctx.measureText(' ').width || safeFontSize * 0.25);
+      const rowKey = Math.round(finalDrawY);
+      const previousRightEdge = rowLastRightEdge.get(rowKey);
+      let drawX = rawDrawX;
+      if (previousRightEdge != null && drawX <= previousRightEdge) {
+        drawX = previousRightEdge + spaceWidth;
+      }
+      rowLastRightEdge.set(rowKey, drawX + textWidth);
+      const wordCenterX = drawX + textWidth / 2;
       const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
       const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
@@ -2013,7 +2033,7 @@ export class LyricDancePlayer {
       const isAnchor = chunk.isAnchor ?? false;
       const haloPal = this.getResolvedPalette();
       const chapterColor = haloPal[1];
-      this.drawWordHalo(drawX, finalDrawY, fontSize, isAnchor, chapterColor, chunk.alpha);
+      this.drawWordHalo(wordCenterX, finalDrawY, fontSize, isAnchor, chapterColor, chunk.alpha);
 
       const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
       const iconScaleMult = chunk.iconScale ?? 2.0;
@@ -2034,32 +2054,32 @@ export class LyricDancePlayer {
         iconPulse = 1.0 + Math.sin(now * 3) * 0.04;
       }
       const iconSize = iconBaseSize * iconPulse;
-      let iconX = drawX;
+      let iconX = wordCenterX;
       let iconY = finalDrawY;
       let iconOpacity = drawAlpha * 0.45;
       let iconGlow = 0;
 
       switch (chunk.iconPosition) {
         case 'behind':
-          iconX = drawX;
+          iconX = wordCenterX;
           iconY = finalDrawY;
           iconOpacity = drawAlpha * 0.45;
           iconGlow = 12;
           break;
         case 'above':
-          iconX = drawX;
+          iconX = wordCenterX;
           iconY = finalDrawY - (chunk.fontSize ?? 36) * 1.3;
           iconOpacity = drawAlpha * 0.85;
           iconGlow = 6;
           break;
         case 'beside':
-          iconX = drawX - iconSize * 0.7;
+          iconX = wordCenterX - iconSize * 0.7;
           iconY = finalDrawY;
           iconOpacity = drawAlpha * 0.9;
           iconGlow = 6;
           break;
         case 'replace':
-          iconX = drawX;
+          iconX = wordCenterX;
           iconY = finalDrawY;
           iconOpacity = drawAlpha * 1.0;
           iconGlow = 16;
@@ -2085,8 +2105,8 @@ export class LyricDancePlayer {
         const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
         this.tryStartDecomposition({
           chunkId: chunk.id,
-          text: chunk.text ?? obj.text,
-          drawX,
+          text,
+          drawX: wordCenterX,
           drawY: drawY,
           fontSize: safeFontSize,
           fontWeight,
@@ -2101,8 +2121,6 @@ export class LyricDancePlayer {
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
-        const resolvedFont = this.getResolvedFont();
-        const family = chunk.fontFamily ?? resolvedFont;
         this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
         if (!this.ctx.font.includes('px')) {
           this.ctx.font = `700 36px ${resolvedFont}`;
@@ -2155,7 +2173,7 @@ export class LyricDancePlayer {
         }
         this.ctx.transform(1, 0, Math.tan(((chunk.skewX ?? 0) * Math.PI) / 180), 1, 0, 0);
         this.ctx.scale(sx, sy);
-        this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
+        this.ctx.fillText(text, 0, 0);
         this.ctx.restore();
 
         if (filterApplied) {
@@ -2562,12 +2580,14 @@ export class LyricDancePlayer {
 
   private drawDecompositions(ctx: CanvasRenderingContext2D, time: number): void {
     const dt = 1 / 60;
+    const anyActive = this.activeDecomps.length > 0 && this.lastFrameHasActiveChunks;
     for (const d of this.activeDecomps) {
       const elapsed = time - d.startTime;
       if (elapsed > d.duration) continue;
       for (const p of d.particles) {
         if (!p.active || p.life <= 0 || p.a <= 0) continue;
         this.updateDecompParticle(d, p, elapsed, dt);
+        if (anyActive) continue;
         const alpha = p.a * p.life;
         if (alpha < 0.01) continue;
         if (p.shape === 'shard') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation); ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.fillRect(-p.size*0.4,-p.size,p.size*0.8,p.size*2); ctx.restore(); }
@@ -2575,7 +2595,7 @@ export class LyricDancePlayer {
         else if (p.shape === 'ember') { ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+p.vx*0.015,p.y+p.vy*0.015); ctx.lineWidth=p.size*0.4; ctx.strokeStyle=`rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.stroke(); }
         else { ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size); }
       }
-      if (d.effect === 'shockwave') {
+      if (!anyActive && d.effect === 'shockwave') {
         const ringRadius = elapsed * 150;
         const ringAlpha = Math.max(0, 0.3 * (1 - elapsed / 0.5));
         ctx.beginPath(); ctx.arc(d.centerX, d.centerY, ringRadius, 0, Math.PI * 2);
