@@ -11,13 +11,6 @@ export type LineFormat =
   | "break_on_pause";
 
 export type SocialPreset =
-  | "general"
-  | "instagram_reels"
-  | "tiktok"
-  | "youtube_shorts"
-  | "musixmatch"
-  | "live_performance"
-  | "spotify_canvas"
   | "karaoke";
 
 interface LyricFormatControlsProps {
@@ -66,13 +59,6 @@ export function LyricFormatControls({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="general" className="text-xs">General</SelectItem>
-            <SelectItem value="instagram_reels" className="text-xs">Instagram Reels</SelectItem>
-            <SelectItem value="tiktok" className="text-xs">TikTok</SelectItem>
-            <SelectItem value="youtube_shorts" className="text-xs">YouTube Shorts</SelectItem>
-            <SelectItem value="musixmatch" className="text-xs">Musixmatch</SelectItem>
-            <SelectItem value="live_performance" className="text-xs">Live Performance</SelectItem>
-            <SelectItem value="spotify_canvas" className="text-xs">Spotify Canvas</SelectItem>
             <SelectItem value="karaoke" className="text-xs">Karaoke</SelectItem>
           </SelectContent>
         </Select>

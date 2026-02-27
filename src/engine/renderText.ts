@@ -347,7 +347,7 @@ export function renderText(
   let frameXNudge = 0;
   let frameSectionZone = "chorus";
 
-  const karaokeMode = (resolvedManifest as { karaokeMode?: boolean }).karaokeMode === true;
+  const karaokeMode = true;
   const karaokeStrictTiming = (resolvedManifest as { karaokeStrictTiming?: boolean }).karaokeStrictTiming ?? karaokeMode;
   const karaokeDisableBaselineEase = karaokeMode && ((resolvedManifest as { karaokeDisableBaselineEase?: boolean }).karaokeDisableBaselineEase ?? false);
   const karaokeDisableShake = karaokeMode && ((resolvedManifest as { karaokeDisableShake?: boolean }).karaokeDisableShake ?? true);
@@ -603,11 +603,6 @@ export function renderText(
   let visibleWordCount = 0;
   if (snappedStarts && snappedStarts.length > 0) {
     while (visibleWordCount < snappedStarts.length && currentTime >= snappedStarts[visibleWordCount]) visibleWordCount += 1;
-  } else if (!karaokeMode) {
-    const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
-    const wordsPerSecond = words.length > 0 ? words.length / lineDuration : 1;
-    const wordDelay = wordsPerSecond > 0 ? 1 / wordsPerSecond : lineDuration;
-    while (visibleWordCount < words.length && currentTime >= activeLine.start + visibleWordCount * wordDelay) visibleWordCount += 1;
   } else if (karaokeStrictTiming) {
     // Karaoke mode never falls back to even distribution timing.
     visibleWordCount = 0;
