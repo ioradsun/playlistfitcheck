@@ -896,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: camera-space-v11');
+    console.log('[LyricDancePlayer] build: dissolve-fixed-v12');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -2475,7 +2475,7 @@ export class LyricDancePlayer {
 
   private effectDuration(effect: DecompEffect): number {
     const m: Record<DecompEffect, number> = {
-      'explode': 1.2, 'ice-shatter': 1.5, 'burn-away': 1.5, 'dissolve': 2.0, 'melt': 1.5,
+      'explode': 1.2, 'ice-shatter': 1.5, 'burn-away': 1.5, 'dissolve': 0.4, 'melt': 1.5,
       'ascend': 1.8, 'glitch': 0.8, 'bloom': 2.0, 'crush': 0.8, 'shockwave': 1.0, 'magnetize': 1.2,
     };
     return m[effect];
@@ -2544,11 +2544,11 @@ export class LyricDancePlayer {
       p.gravity = 60 + Math.random() * 40; p.drag = 0.96; p.shape = 'shard'; p.rotSpeed = (Math.random() - 0.5) * 8;
       p.burstDelay = effect === 'shockwave' ? 0.08 : 0;
     } else if (effect === 'dissolve') {
-      p.vx = (Math.random()-0.5)*4;
-      p.vy = -1 - Math.random()*3;
-      p.gravity = -0.5;
-      p.drag = 0.99;
-      p.dissolveDelay = Math.random()*0.8;
+      p.vx = 0;
+      p.vy = 0;
+      p.gravity = 0;
+      p.drag = 1.0;
+      p.dissolveDelay = Math.random() * 0.15;
     }
     else if (effect === 'melt') { const xNorm=(p.x-(cx-wordWidth/2))/Math.max(1,wordWidth); p.dripDelay=Math.random()*0.5+Math.abs(xNorm-0.5)*0.3; p.gravity=120+Math.random()*80; p.drag=0.92; p.shape='streak'; }
     else if (effect === 'ascend') { p.vx=(Math.random()-0.5)*30; p.vy=-40-Math.random()*60; p.gravity=-10; p.drag=0.97; p.riseDelay=(1-((p.y-(cy-fontSize/2))/Math.max(1,fontSize)))*0.3; }
@@ -2621,7 +2621,8 @@ export class LyricDancePlayer {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.rotation += p.rotSpeed * dt;
-      p.life -= dt * (1 / Math.max(0.2, d.duration));
+      const duration = d.effect === 'dissolve' ? 0.4 : d.duration;
+      p.life -= dt * (1 / Math.max(0.2, duration));
     }
   }
 
