@@ -139,14 +139,6 @@ function drawBubbles(
   ctx.restore();
 }
 
-function snapToNearestBeat(timestamp: number, beats: number[], tolerance: number = 0.1): number {
-  if (beats.length === 0) return timestamp;
-  const nearest = beats.reduce((prev, curr) => (
-    Math.abs(curr - timestamp) < Math.abs(prev - timestamp) ? curr : prev
-  ));
-  return Math.abs(nearest - timestamp) <= tolerance ? nearest : timestamp;
-}
-
 
 function ellipsizeToWidth(
   ctx: CanvasRenderingContext2D,
@@ -308,7 +300,7 @@ export function renderText(
 ): TextResult {
   const {
     lines, activeLine, activeLineIndex, visibleLines,
-    currentTime, songProgress, beatIntensity, beatIndex, sortedBeats,
+    currentTime, songProgress, beatIntensity, beatIndex,
     cw, ch, effectivePalette, effectiveSystem, resolvedManifest, textPalette, spec,
     state, interpreter, shot, tensionStage, chapterDirective, cinematicDirection,
     isClimax, particleEngine, rng, getWordWidth, isMobile, fontSize: providedFontSize, hardwareConcurrency, devicePixelRatio, precomputedLine,
@@ -348,10 +340,8 @@ export function renderText(
   let frameSectionZone = "chorus";
 
   const karaokeMode = true;
-  const karaokeStrictTiming = (resolvedManifest as { karaokeStrictTiming?: boolean }).karaokeStrictTiming ?? karaokeMode;
   const karaokeDisableBaselineEase = karaokeMode && ((resolvedManifest as { karaokeDisableBaselineEase?: boolean }).karaokeDisableBaselineEase ?? false);
   const karaokeDisableShake = karaokeMode && ((resolvedManifest as { karaokeDisableShake?: boolean }).karaokeDisableShake ?? true);
-  const karaokeDisableBeatSnap = karaokeMode && ((resolvedManifest as { karaokeDisableBeatSnap?: boolean }).karaokeDisableBeatSnap ?? true);
 
   if (!activeLine) {
     return {
@@ -516,14 +506,8 @@ export function renderText(
   const karaokeSlottingActive = karaokeMode && karaokeEchoLine != null;
   const karaokeSlotCollision = karaokeSlottingActive && Math.abs(karaokePrimarySlotY - karaokeEchoSlotY) < 0.5;
 
-  if (karaokeMode) {
-    // Karaoke uses fixed slot reservation so incoming/outgoing lines never contend for the same Y slot.
-    targetYBase = karaokePrimarySlotY;
-  } else {
-    const visibleIndex = Math.max(0, visibleLines.findIndex(l => l.start === activeLine.start && l.end === activeLine.end && l.text === activeLine.text));
-    const yLineOffset = (visibleIndex - (visibleLines.length - 1) / 2) * lineSpacing;
-    targetYBase += yLineOffset;
-  }
+  // Karaoke uses fixed slot reservation so incoming/outgoing lines never contend for the same Y slot.
+  targetYBase = karaokePrimarySlotY;
   if (activeLineAnim.isHookLine) {
     targetYBase -= ch * 0.03;
   }
@@ -586,10 +570,11 @@ export function renderText(
   if (Math.abs(state.rotation) > 0.0001) {
     ctx.rotate(state.rotation);
   }
-  ctx.scale(activeLineAnim.scale * state.scale * textState.beatScale, activeLineAnim.scale * state.scale * textState.beatScale);
+  const lineScale = activeLineAnim.scale * state.scale;
+  ctx.scale(lineScale, lineScale);
   ctx.translate(-lineX, -lineY);
 
-  if (activeLineAnim.activeMod) {
+  if (activeLineAnim.activeMod && !STRONG_MODS.includes(activeLineAnim.activeMod as (typeof STRONG_MODS)[number])) {
     applyModEffect(ctx, activeLineAnim.activeMod, currentTime, beatIntensity);
   }
 
@@ -603,8 +588,7 @@ export function renderText(
   let visibleWordCount = 0;
   if (snappedStarts && snappedStarts.length > 0) {
     while (visibleWordCount < snappedStarts.length && currentTime >= snappedStarts[visibleWordCount]) visibleWordCount += 1;
-  } else if (karaokeStrictTiming) {
-    // Karaoke mode never falls back to even distribution timing.
+  } else {
     visibleWordCount = 0;
     console.warn('[karaokeMode] strict timing enabled but no AI word timing data for active line', { start: activeLine.start, end: activeLine.end, text: activeLine.text });
   }
@@ -730,7 +714,7 @@ export function renderText(
     for (let i = 0; i < visibleWordCount; i += 1) visibleWordIndices.push(i);
   }
 
-  const layoutFontSize = fs * baseWordScale;
+  const layoutFontSize = computedFontSize;
   const lineLayoutKey = [
     activeLine.start,
     activeLine.end,
@@ -744,10 +728,13 @@ export function renderText(
 
   let stableLayout = textState.stableLineLayoutCache.get(lineLayoutKey);
   if (!stableLayout) {
+    ctx.save();
+    ctx.font = buildWordFont(layoutFontSize);
+
     const spaceMeasureKey = `${resolvedWordFont}|${layoutFontSize.toFixed(3)}|${resolvedLetterSpacingEm.toFixed(4)}| `;
     let cachedSpaceWidth = textState.measurementCache.get(spaceMeasureKey);
     if (cachedSpaceWidth == null) {
-      cachedSpaceWidth = getWordWidth(" ", layoutFontSize, resolvedWordFont);
+      cachedSpaceWidth = measureTextWithSpacing(ctx, " ", layoutFontSize, resolvedLetterSpacingEm);
       textState.measurementCache.set(spaceMeasureKey, cachedSpaceWidth);
     }
 
@@ -757,7 +744,7 @@ export function renderText(
       const measureKey = `${resolvedWordFont}|${layoutFontSize.toFixed(3)}|${resolvedLetterSpacingEm.toFixed(4)}|${displayWord}`;
       let cachedWidth = textState.measurementCache.get(measureKey);
       if (cachedWidth == null) {
-        cachedWidth = getWordWidth(displayWord, layoutFontSize, resolvedWordFont);
+        cachedWidth = measureTextWithSpacing(ctx, displayWord, layoutFontSize, resolvedLetterSpacingEm);
         textState.measurementCache.set(measureKey, cachedWidth);
       }
       wordWidths[i] = cachedWidth;
@@ -784,6 +771,8 @@ export function renderText(
       const first = textState.measurementCache.keys().next().value;
       if (first) textState.measurementCache.delete(first);
     }
+
+    ctx.restore();
   }
 
   if (visibleWordIndices.length > 0) {
@@ -808,9 +797,10 @@ export function renderText(
     const wordText = words[sourceWordIndex] ?? "";
     const displayWord = getDisplayWord(wordText);
     const normalizedWord = normalizedWords[sourceWordIndex] ?? wordText.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
-    const fallbackWordStart = activeLine.start + (Math.max(0, sourceWordIndex) * Math.max(0.001, activeLine.end - activeLine.start)) / Math.max(1, words.length);
-    const resolvedWordStartTime = snappedStarts?.[Math.max(0, sourceWordIndex)]
-      ?? (karaokeDisableBeatSnap ? fallbackWordStart : snapToNearestBeat(fallbackWordStart, sortedBeats));
+    const resolvedWordStartTime = snappedStarts?.[Math.max(0, sourceWordIndex)];
+    if (resolvedWordStartTime == null) {
+      return;
+    }
     const appearanceKey = `${activeLine.start}:${Math.max(0, sourceWordIndex)}:${normalizedWord}`;
 
     if (!textState.seenAppearances.has(appearanceKey) && currentTime >= resolvedWordStartTime) {
@@ -868,9 +858,23 @@ export function renderText(
     }
 
     const isHeroWord = Boolean(lineDirection?.heroWord && normalizeToken(wordText) === normalizeToken(lineDirection.heroWord));
+    const isActiveWord = renderedIndex === visibleWordIndices.length - 1;
     const modeOpacity = resolvedDisplayMode === "phrase_stack"
-      ? (renderedIndex === visibleWordIndices.length - 1 ? 1 : 0.4)
+      ? (isActiveWord ? 1 : 0.4)
       : 1;
+
+    if (karaokeMode) {
+      if (isActiveWord) {
+        props.yOffset -= Math.min(6, fontSize * 0.12);
+        props.opacity = Math.max(props.opacity, 0.9);
+        props.glowRadius = Math.max(props.glowRadius, fontSize * 0.18);
+      } else {
+        props.xOffset = 0;
+        props.yOffset = 0;
+        props.scale = 1;
+        props.glowRadius = 0;
+      }
+    }
 
     const fragmentationX = useLetterFragmentation ? (rng() - 0.5) * 6 : 0;
     const fragmentationY = useLetterFragmentation ? (rng() - 0.5) * 4 : 0;
