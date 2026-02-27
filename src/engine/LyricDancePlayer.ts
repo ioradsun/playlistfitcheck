@@ -896,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: clean-v6');
+    console.log('[LyricDancePlayer] build: decomp-overlay-v7');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1897,10 +1897,9 @@ export class LyricDancePlayer {
       const bIsExiting = (b.exitProgress ?? 0) > 0 ? 1 : 0;
       return bIsExiting - aIsExiting;
     });
-    // Hard-cut exiting chunks when any active chunk is already visible.
-    // Prevents exit fades from bleeding over incoming phrase groups.
-    const hasActiveChunks = sortedChunks.some(
-      c => c.visible && (c.exitProgress ?? 0) === 0 && (c.entryProgress ?? 0) > 0
+    // If any chunk has exitProgress === 0 in this frame, suppress all exiting chunks
+    const anyChunkActive = frame.chunks.some(
+      (c: any) => (c.exitProgress ?? 0) === 0 && (c.alpha ?? 0) > 0.1
     );
 
     const visibleLines = this.payload?.lines?.filter((l: any) => tSec >= (l.start ?? 0) && tSec < (l.end ?? 0)) ?? [];
@@ -1950,7 +1949,7 @@ export class LyricDancePlayer {
 
     for (const chunk of sortedChunks) {
       if (!chunk.visible) continue;
-      if ((chunk.exitProgress ?? 0) > 0 && hasActiveChunks) continue;
+      if ((chunk.exitProgress ?? 0) > 0 && anyChunkActive) continue;
 
       // Spawn ambient burst trails as words exit.
       const isExiting = (chunk.exitScale !== 1) || (chunk.exitOffsetY !== 0) || ((chunk.entryProgress ?? 0) >= 1 && chunk.alpha < 0.85);
@@ -2096,12 +2095,8 @@ export class LyricDancePlayer {
           directive: decompDirective,
         });
       }
-      const nowForDecomp = performance.now() / 1000;
-      const decompEntry = this.activeDecomps.find(d => d.id === chunk.id);
-      // Word stays visible for first 120ms of decomp — bursts INTO particles
-      const decompActive = decompEntry != null && (nowForDecomp - decompEntry.startTime) > 0.12;
-
-      if (chunk.iconPosition !== 'replace' && !decompActive) {
+      // Don't suppress word — let exit animation handle fade, particles overlay on top
+      if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
         const resolvedFont = this.getResolvedFont();
