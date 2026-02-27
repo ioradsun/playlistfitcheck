@@ -96,7 +96,7 @@ export type Keyframe = {
 
 export type BakedTimeline = Keyframe[];
 
-export const BAKER_VERSION = 5;
+export const BAKER_VERSION = 6;
 const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
@@ -1141,7 +1141,7 @@ function getGroupLayout(
     const isFiller = isFillerWord(group.words[0].word);
     return [{
       x: Math.max(80, Math.min(canvasW - 80, cx)),
-      y: Math.max(80, Math.min(canvasH - 80, cy)),
+      y: Math.round(Math.max(80, Math.min(canvasH - 80, cy))),
       fontSize: Math.max(MIN_FONT, isFiller ? baseFontSize * 0.9 : baseFontSize * 1.2),
       isAnchor: true,
       isFiller,
@@ -1185,7 +1185,7 @@ function getGroupLayout(
   // Place anchor word prominently
   {
     const isFiller = isFillerWord(group.words[anchorIdx].word);
-    positions[anchorIdx] = { x: cx, y: cy, fontSize: wordFontSizes[anchorIdx], isAnchor: true, isFiller };
+    positions[anchorIdx] = { x: cx, y: Math.round(cy), fontSize: wordFontSizes[anchorIdx], isAnchor: true, isFiller };
   }
 
   // Layout remaining words as a single readable phrase on one baseline below the anchor
@@ -1203,7 +1203,7 @@ function getGroupLayout(
       + interWordSpace * Math.max(0, supportIndices.length - 1);
 
     // Center the phrase block on cx, then place each word by cumulative width.
-    const phraseY = cy + baseFontSize * 1.0;
+    const phraseY = Math.round(cy + baseFontSize * 1.0);
     const startX = cx - totalWidth * 0.5;
     let cumulativeWidth = 0;
     for (let j = 0; j < supportIndices.length; j++) {
@@ -1225,14 +1225,14 @@ function getGroupLayout(
   for (let i = 0; i < count; i += 1) {
     if (!positions[i]) {
       const isFiller = isFillerWord(group.words[i].word);
-      positions[i] = { x: cx, y: cy, fontSize: wordFontSizes[i], isAnchor: false, isFiller };
+      positions[i] = { x: cx, y: Math.round(cy), fontSize: wordFontSizes[i], isAnchor: false, isFiller };
     }
   }
 
   const margin = 80;
   for (const pos of positions) {
     pos.x = Math.max(margin, Math.min(canvasW - margin, pos.x));
-    pos.y = Math.max(margin, Math.min(canvasH - margin, pos.y));
+    pos.y = Math.round(Math.max(margin, Math.min(canvasH - margin, pos.y)));
   }
 
   return positions;
