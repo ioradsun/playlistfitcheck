@@ -228,10 +228,15 @@ export function getGroupLayout(
 ): GroupPosition[] {
   const count = group.words.length;
   const anchorIdx = group.anchorWordIdx;
-  const anchorPositions: Array<[number, number]> = [[0.5,0.5],[0.5,0.38],[0.5,0.62],[0.42,0.5],[0.58,0.5],[0.5,0.45],[0.5,0.55]];
-  const posVariant = anchorPositions[group.lineIndex % anchorPositions.length];
+  const anchorPositions: Array<[number, number]> = [
+    [0.50, 0.42], [0.30, 0.38], [0.70, 0.38],
+    [0.35, 0.60], [0.65, 0.60], [0.50, 0.55],
+    [0.42, 0.45], [0.58, 0.45], [0.25, 0.50], [0.75, 0.50],
+  ];
+  const posVariant = anchorPositions[(group.lineIndex * 3 + group.groupIndex * 5) % anchorPositions.length];
   const deterministicSpread = ((group.lineIndex * 0.618033) % 0.2) - 0.1;
-  const cx = canvasW * (posVariant[0] + (visualMode === 'explosive' ? deterministicSpread : 0)) + (((group as any)._positionSlot ?? 0) * canvasW * 0.16);
+  const slotSpacing = canvasW * 0.22;
+  const cx = canvasW * (posVariant[0] + (visualMode === 'explosive' ? deterministicSpread : 0)) + (((group as any)._positionSlot ?? 0) * slotSpacing);
   const cy = canvasH * (posVariant[1] + (visualMode === 'explosive' ? deterministicSpread : 0)) + (((group as any)._lineOffset ?? 0));
   const MIN_FONT = 30;
   const getWordWidth = (word: string, fontSize: number) => { const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`; if (measureCtx.font !== fontStr) measureCtx.font = fontStr; return measureCtx.measureText(word).width; };
@@ -449,6 +454,32 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     (group as any)._positionSlot = slot % 3;
   }
 
+  // ─── Compute _lineOffset: vertical separation for simultaneously-visible lines ───
+  {
+    const byLine = new Map<number, PhraseGroup[]>();
+    for (const group of phraseGroups) {
+      const arr = byLine.get(group.lineIndex) ?? [];
+      arr.push(group);
+      byLine.set(group.lineIndex, arr);
+    }
+    for (const [, lineGroups] of byLine) {
+      for (const g of lineGroups) {
+        const t = g.start;
+        const visibleLineIndices: number[] = [];
+        for (let li = 0; li < payload.lines.length; li++) {
+          const line = payload.lines[li];
+          if (t >= (line.start ?? 0) && t < (line.end ?? 0)) {
+            visibleLineIndices.push(li);
+          }
+        }
+        const visibleCount = Math.max(1, visibleLineIndices.length);
+        const lineSpacing = 90;
+        const linePos = Math.max(0, visibleLineIndices.indexOf(g.lineIndex));
+        (g as any)._lineOffset = (linePos - (visibleCount - 1) * 0.5) * lineSpacing;
+      }
+    }
+  }
+
   const shotTypeToFontSize: Record<string, number> = {
     Wide: 56,
     Medium: 68,
@@ -518,6 +549,66 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     });
     return { lineIndex: group.lineIndex, groupIndex: group.groupIndex, anchorWordIdx: group.anchorWordIdx, start: group.start, end: group.end, words: wordsCompiled, staggerDelay: animParams.stagger, entryDuration: animParams.entryDuration, exitDuration: animParams.exitDuration, lingerDuration: animParams.linger, behaviorIntensity: motionDefaults.behaviorIntensity };
   }).sort((a, b) => a.start - b.start);
+
+  // ─── Compile-time collision resolution ───
+  // Nudge overlapping groups apart so anchor words don't collide.
+  {
+    const COL_PADDING = 24;
+    const COL_MAX_PASSES = 6;
+    interface GroupBBox { groupIdx: number; cx: number; cy: number; halfW: number; halfH: number; priority: number; }
+    const bboxes: GroupBBox[] = compiledGroups.map((cg, gi) => {
+      const aw = cg.words.find((w) => w.isAnchor) ?? cg.words[0];
+      if (!aw) return null!;
+      const fontStr = `${aw.fontWeight} ${aw.baseFontSize}px ${aw.fontFamily}`;
+      if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
+      const textW = measureCtx.measureText(aw.text).width;
+      return { groupIdx: gi, cx: aw.layoutX, cy: aw.layoutY, halfW: textW / 2 + COL_PADDING, halfH: aw.baseFontSize * 0.7 + COL_PADDING, priority: aw.emphasisLevel };
+    }).filter(Boolean);
+    for (let pass = 0; pass < COL_MAX_PASSES; pass++) {
+      let hadCollision = false;
+      for (let i = 0; i < bboxes.length; i++) {
+        for (let j = i + 1; j < bboxes.length; j++) {
+          const a = bboxes[i], b = bboxes[j];
+          const ag = compiledGroups[a.groupIdx], bg = compiledGroups[b.groupIdx];
+          const aVisEnd = ag.end + ag.lingerDuration + ag.exitDuration;
+          const bVisStart = bg.start - bg.entryDuration - bg.staggerDelay * bg.words.length;
+          if (aVisEnd < bVisStart) continue;
+          const bVisEnd = bg.end + bg.lingerDuration + bg.exitDuration;
+          const aVisStart = ag.start - ag.entryDuration - ag.staggerDelay * ag.words.length;
+          if (bVisEnd < aVisStart) continue;
+          const dx = a.cx - b.cx, dy = a.cy - b.cy;
+          const overlapX = (a.halfW + b.halfW) - Math.abs(dx);
+          const overlapY = (a.halfH + b.halfH) - Math.abs(dy);
+          if (overlapX <= 0 || overlapY <= 0) continue;
+          hadCollision = true;
+          const moveA = a.priority >= b.priority ? 0.3 : 0.7;
+          const moveB = 1 - moveA;
+          if (overlapX < overlapY) {
+            const sign = dx >= 0 ? 1 : -1;
+            a.cx += sign * overlapX * moveA;
+            b.cx -= sign * overlapX * moveB;
+          } else {
+            const sign = dy >= 0 ? 1 : -1;
+            a.cy += sign * overlapY * moveA;
+            b.cy -= sign * overlapY * moveB;
+          }
+          a.cx = Math.max(a.halfW + 40, Math.min(960 - a.halfW - 40, a.cx));
+          a.cy = Math.max(a.halfH + 40, Math.min(540 - a.halfH - 40, a.cy));
+          b.cx = Math.max(b.halfW + 40, Math.min(960 - b.halfW - 40, b.cx));
+          b.cy = Math.max(b.halfH + 40, Math.min(540 - b.halfH - 40, b.cy));
+        }
+      }
+      if (!hadCollision) break;
+    }
+    for (const bbox of bboxes) {
+      const cg = compiledGroups[bbox.groupIdx];
+      const aw = cg.words.find((w) => w.isAnchor);
+      if (!aw) continue;
+      const deltaX = bbox.cx - aw.layoutX, deltaY = bbox.cy - aw.layoutY;
+      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) continue;
+      for (const word of cg.words) { word.layoutX += deltaX; word.layoutY += deltaY; }
+    }
+  }
 
   const beats = payload.beat_grid?.beats ?? [];
   const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
