@@ -29,6 +29,35 @@ export type ScenePayload = {
   songEnd: number;
 };
 
+
+
+type KaraokeConfig = {
+  karaokeMode: boolean;
+  karaokeStrictTiming: boolean;
+  karaokeDisableShake: boolean;
+  karaokeDisableBaselineEase: boolean;
+  karaokeDisableBeatSnap: boolean;
+  karaokeFadeMs: number;
+  karaokeDebug: boolean;
+};
+
+const KARAOKE_LINE_EPSILON_SEC = 0.08;
+
+function resolveKaraokeConfig(frameState: FrameRenderState | null | undefined): KaraokeConfig {
+  const fs = (frameState ?? {}) as Record<string, unknown>;
+  const karaokeMode = fs.karaokeMode === true;
+  const bool = (key: string, fallback: boolean) => typeof fs[key] === 'boolean' ? (fs[key] as boolean) : fallback;
+  const karaokeFadeMsRaw = Number(fs.karaokeFadeMs);
+  return {
+    karaokeMode,
+    karaokeStrictTiming: bool('karaokeStrictTiming', karaokeMode),
+    karaokeDisableShake: bool('karaokeDisableShake', true),
+    karaokeDisableBaselineEase: bool('karaokeDisableBaselineEase', true),
+    karaokeDisableBeatSnap: bool('karaokeDisableBeatSnap', true),
+    karaokeFadeMs: Number.isFinite(karaokeFadeMsRaw) ? Math.max(0, karaokeFadeMsRaw) : 60,
+    karaokeDebug: bool('karaokeDebug', false),
+  };
+}
 const deterministicSign = (seed: number): number => (Math.sin(seed * 127.1 + 311.7) > 0 ? 1 : -1);
 export function easeOut(t: number): number { return 1 - Math.pow(1 - t, 3); }
 export function easeIn(t: number): number { return Math.pow(t, 3); }
@@ -369,11 +398,11 @@ const SEMANTIC_EFFECTS: Record<VisualMetaphor, SemanticEffect> = {
   'motion-streak': { entry: 'punch-in', behavior: 'lean', exit: 'cut-out', colorOverride: null, glowMultiplier: 1.2, scaleX: 1.15, scaleY: 0.9, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 700 },
 };
 
-export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
+export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; start: number; end: number; layoutX: number; layoutY: number; baseFontSize: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
 export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
-export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; }
+export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; karaoke: KaraokeConfig; lineTokenMismatches: Array<{ lineIndex: number; tokenCount: number; timingCount: number }>; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
 
@@ -401,11 +430,27 @@ export function compileScene(payload: ScenePayload): CompiledScene {
   const directives = new Map<string, WordDirectiveLike>();
   if (Array.isArray(wordDirectives)) for (const d of wordDirectives) directives.set(String(d?.word ?? '').trim().toLowerCase(), d as WordDirectiveLike);
   const words = payload.words ?? [];
-  const wordMeta: WordMetaEntry[] = words.map((w) => {
-    const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999)));
-    return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
-  });
+  const karaoke = resolveKaraokeConfig(payload.frame_state);
+  const lineTokenMismatches: Array<{ lineIndex: number; tokenCount: number; timingCount: number }> = [];
+  const wordMeta: WordMetaEntry[] = karaoke.karaokeMode
+    ? payload.lines.flatMap((line, lineIndex) => {
+      const lineWords = words.filter((w) => w.start >= (line.start ?? 0) - KARAOKE_LINE_EPSILON_SEC && w.end <= (line.end ?? 0) + KARAOKE_LINE_EPSILON_SEC);
+      const lineTokens = String(line.text ?? '').split(/\s+/).filter(Boolean);
+      if (lineTokens.length !== lineWords.length) {
+        const mismatch = { lineIndex, tokenCount: lineTokens.length, timingCount: lineWords.length };
+        lineTokenMismatches.push(mismatch);
+        console.warn('[karaokeMode] token/timing mismatch — using AI timestamp words as source of truth', mismatch);
+      }
+      return lineWords.map((w) => {
+        const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
+      });
+    })
+    : words.map((w) => {
+      const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999)));
+      return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
+    });
   const lineWordCounters: Record<number, number> = {};
   for (const wm of wordMeta) { lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0; wm.wordIndex = lineWordCounters[wm.lineIndex]++; }
 
@@ -456,6 +501,8 @@ export function compileScene(payload: ScenePayload): CompiledScene {
         text: baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word,
         clean: wm.clean,
         wordIndex: wi,
+        start: wm.start,
+        end: wm.end,
         layoutX: pos.x,
         layoutY: pos.y,
         baseFontSize: pos.fontSize,
@@ -527,5 +574,7 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     baseTextTransform: baseTypography.textTransform,
     palettes,
     animParams,
+    karaoke,
+    lineTokenMismatches,
   };
 }
