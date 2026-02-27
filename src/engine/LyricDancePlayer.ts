@@ -896,6 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
+    console.log('[LyricDancePlayer] build: decomp-timing-v1');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1967,6 +1968,17 @@ export class LyricDancePlayer {
       const prevExitProgress = this.lastExitProgressByChunk.get(chunk.id) ?? 0;
       const currentExitProgress = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
       const wordJustExited = prevExitProgress <= 0 && currentExitProgress > 0;
+      const msUntilExit = chunk.exitStartTime != null
+        ? (chunk.exitStartTime - (performance.now() / 1000)) * 1000
+        : -1;
+      const wordAboutToExit = !wordJustExited &&
+        msUntilExit > 0 && msUntilExit < 120 &&
+        !this.activeDecomps.some(d => d.id === chunk.id) &&
+        !this.lastExitProgressByChunk.has(`pre_${chunk.id}`);
+      if (wordAboutToExit) {
+        this.lastExitProgressByChunk.set(`pre_${chunk.id}`, 1);
+      }
+      const shouldSpawnDecomp = wordJustExited || wordAboutToExit;
       this.lastExitProgressByChunk.set(chunk.id, currentExitProgress);
       const obj = this.chunks.get(chunk.id);
       if (!obj) {
@@ -2064,7 +2076,7 @@ export class LyricDancePlayer {
 
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
-      if (wordJustExited) {
+      if (shouldSpawnDecomp) {
         const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
         this.tryStartDecomposition({
           chunkId: chunk.id,
@@ -2081,7 +2093,7 @@ export class LyricDancePlayer {
       // Allow word to render alongside particles for first 80ms — creates "bursts into particles" effect
       const nowForDecomp = performance.now() / 1000;
       const decompActive = this.activeDecomps.some(
-        (d) => d.id === chunk.id && nowForDecomp - d.startTime > 0.08,
+        (d) => d.id === chunk.id && (nowForDecomp - d.startTime) > 0.1,
       );
 
       if (chunk.iconPosition !== 'replace' && !decompActive) {
