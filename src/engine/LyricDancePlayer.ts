@@ -1890,7 +1890,8 @@ export class LyricDancePlayer {
       for (let bi = 0; bi < beatsArr.length; bi++) {
         if (beatsArr[bi] > clamped) { nextBeatTime = beatsArr[bi]; break; }
       }
-      const lastBeatBefore = beatsArr.findLast?.((b: number) => b <= clamped) ?? 0;
+      let lastBeatBefore = 0;
+      for (let bi2 = beatsArr.length - 1; bi2 >= 0; bi2--) { if (beatsArr[bi2] <= clamped) { lastBeatBefore = beatsArr[bi2]; break; } }
       beatPhase = beatPeriod > 0 ? ((clamped - lastBeatBefore) / beatPeriod) % 1 : 0;
     }
     ds.bgNextBeat = nextBeatTime;
