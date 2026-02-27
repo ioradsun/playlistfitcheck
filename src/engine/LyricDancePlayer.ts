@@ -896,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: decomp-timing-v1');
+    console.log('[LyricDancePlayer] build: overlap-lineindex-v3');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1902,6 +1902,11 @@ export class LyricDancePlayer {
       const bIsExiting = (b.exitProgress ?? 0) > 0 ? 1 : 0;
       return bIsExiting - aIsExiting;
     });
+    const activeLineIndices = new Set(
+      sortedChunks
+        .filter(c => c.visible && (c.exitProgress ?? 0) === 0)
+        .map(c => c.lineIndex)
+    );
 
     const visibleLines = this.payload?.lines?.filter((l: any) => tSec >= (l.start ?? 0) && tSec < (l.end ?? 0)) ?? [];
     const activeLine = visibleLines.length === 0
@@ -1950,6 +1955,8 @@ export class LyricDancePlayer {
 
     for (const chunk of sortedChunks) {
       if (!chunk.visible) continue;
+      const chunkIsExiting = (chunk.exitProgress ?? 0) > 0;
+      if (chunkIsExiting && activeLineIndices.has(chunk.lineIndex)) continue;
 
       // Spawn ambient burst trails as words exit.
       const isExiting = (chunk.exitScale !== 1) || (chunk.exitOffsetY !== 0) || ((chunk.entryProgress ?? 0) >= 1 && chunk.alpha < 0.85);
