@@ -292,7 +292,7 @@ const EXPORT_OPTIONS: { format: ExportFormat; label: string; desc: string }[] =
 
 const DEFAULT_VERSION_META: VersionMeta = {
   lineFormat: "natural",
-  socialPreset: "lyricFocus",
+  socialPreset: "general",
   strictness: "standard",
 };
 
@@ -364,19 +364,14 @@ export function LyricDisplay({
   const [fmlyReport, setFmlyReport] = useState<ProfanityReport | null>(null);
 
   // Per-version meta
-  const normalizeVersionMeta = (meta?: Partial<VersionMeta>): Partial<VersionMeta> => ({
-    ...(meta ?? {}),
-    socialPreset: "lyricFocus",
-  });
-
   const [explicitMeta, setExplicitMeta] = useState<VersionMeta>({
     ...DEFAULT_VERSION_META,
-    ...normalizeVersionMeta(initVersionMeta?.explicit),
+    ...(initVersionMeta?.explicit ?? {}),
   });
   const [fmlyMeta, setFmlyMeta] = useState<VersionMeta>({
     ...DEFAULT_VERSION_META,
     strictness: "standard",
-    ...normalizeVersionMeta(initVersionMeta?.fmly),
+    ...(initVersionMeta?.fmly ?? {}),
   });
 
   // Editing
@@ -1022,12 +1017,11 @@ export function LyricDisplay({
 
   // ── Format / meta updaters ────────────────────────────────────────────────
   const updateMeta = (version: ActiveVersion, patch: Partial<VersionMeta>) => {
-    const nextPatch = { ...patch, socialPreset: "lyricFocus" as const };
     if (version === "explicit") {
-      setExplicitMeta((m) => ({ ...m, ...nextPatch }));
+      setExplicitMeta((m) => ({ ...m, ...patch }));
       setExplicitLastEdited(new Date());
     } else {
-      setFmlyMeta((m) => ({ ...m, ...nextPatch }));
+      setFmlyMeta((m) => ({ ...m, ...patch }));
       setFmlyLastEdited(new Date());
     }
   };

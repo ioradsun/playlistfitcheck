@@ -137,9 +137,7 @@ export default function LyricDanceBottomPanel({ danceId, constellationRef, onCom
   }, [commentText, wouldReplay, danceId, constellationRef, onCommentAdded, submitting, fetchSignalStrength]);
 
   const handleShare = useCallback(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("lyricFocus");
-    navigator.clipboard.writeText(url.toString());
+    navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, []);

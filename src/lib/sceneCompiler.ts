@@ -29,26 +29,6 @@ export type ScenePayload = {
   songEnd: number;
 };
 
-
-
-type LyricFocusConfig = {
-  debugHud: boolean;
-  enableEchoLine: boolean;
-  wordFeatherMs: number;
-};
-
-const LYRIC_FOCUS_LINE_EPSILON_SEC = 0.08;
-
-function resolveLyricFocusConfig(frameState: FrameRenderState | null | undefined): LyricFocusConfig {
-  const fs = (frameState ?? {}) as Record<string, unknown>;
-  const bool = (key: string, fallback: boolean) => typeof fs[key] === 'boolean' ? (fs[key] as boolean) : fallback;
-  const wordFeatherRaw = Number(fs.wordFeatherMs);
-  return {
-    debugHud: bool('debugHud', false),
-    enableEchoLine: bool('enableEchoLine', true),
-    wordFeatherMs: Number.isFinite(wordFeatherRaw) ? Math.min(120, Math.max(40, wordFeatherRaw)) : 75,
-  };
-}
 const deterministicSign = (seed: number): number => (Math.sin(seed * 127.1 + 311.7) > 0 ? 1 : -1);
 export function easeOut(t: number): number { return 1 - Math.pow(1 - t, 3); }
 export function easeIn(t: number): number { return Math.pow(t, 3); }
@@ -150,8 +130,14 @@ const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {1:[[0.5,0.5]
 
 function isFillerWord(word: string): boolean { return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase()); }
 
-function getVisualMode(_payload: ScenePayload): VisualMode {
-  // LyricFocus renderer is single-mode: always use cinematic layout behavior.
+function getVisualMode(payload: ScenePayload): VisualMode {
+  const frameState = payload.frame_state ?? null;
+  const manifestMode = (frameState as any)?.visualMode;
+  if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
+  const motion = (payload.cinematic_direction as any)?.motion as string | undefined;
+  const texture = (payload.cinematic_direction as any)?.texture as string | undefined;
+  if (motion === 'weighted' || motion === 'glitch' || texture === 'storm' || texture === 'fire') return 'explosive';
+  if (motion === 'drift' || texture === 'petals' || texture === 'snow') return 'intimate';
   return 'cinematic';
 }
 
@@ -228,15 +214,10 @@ export function getGroupLayout(
 ): GroupPosition[] {
   const count = group.words.length;
   const anchorIdx = group.anchorWordIdx;
-  const anchorPositions: Array<[number, number]> = [
-    [0.50, 0.42], [0.30, 0.38], [0.70, 0.38],
-    [0.35, 0.60], [0.65, 0.60], [0.50, 0.55],
-    [0.42, 0.45], [0.58, 0.45], [0.25, 0.50], [0.75, 0.50],
-  ];
-  const posVariant = anchorPositions[(group.lineIndex * 3 + group.groupIndex * 5) % anchorPositions.length];
+  const anchorPositions: Array<[number, number]> = [[0.5,0.5],[0.5,0.38],[0.5,0.62],[0.42,0.5],[0.58,0.5],[0.5,0.45],[0.5,0.55]];
+  const posVariant = anchorPositions[group.lineIndex % anchorPositions.length];
   const deterministicSpread = ((group.lineIndex * 0.618033) % 0.2) - 0.1;
-  const slotSpacing = canvasW * 0.22;
-  const cx = canvasW * (posVariant[0] + (visualMode === 'explosive' ? deterministicSpread : 0)) + (((group as any)._positionSlot ?? 0) * slotSpacing);
+  const cx = canvasW * (posVariant[0] + (visualMode === 'explosive' ? deterministicSpread : 0)) + (((group as any)._positionSlot ?? 0) * canvasW * 0.16);
   const cy = canvasH * (posVariant[1] + (visualMode === 'explosive' ? deterministicSpread : 0)) + (((group as any)._lineOffset ?? 0));
   const MIN_FONT = 30;
   const getWordWidth = (word: string, fontSize: number) => { const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`; if (measureCtx.font !== fontStr) measureCtx.font = fontStr; return measureCtx.measureText(word).width; };
@@ -388,11 +369,11 @@ const SEMANTIC_EFFECTS: Record<VisualMetaphor, SemanticEffect> = {
   'motion-streak': { entry: 'punch-in', behavior: 'lean', exit: 'cut-out', colorOverride: null, glowMultiplier: 1.2, scaleX: 1.15, scaleY: 0.9, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 700 },
 };
 
-export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; start: number; end: number; layoutX: number; layoutY: number; baseFontSize: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
+export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
 export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
-export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; lyricFocus: LyricFocusConfig; lineTokenMismatches: Array<{ lineIndex: number; tokenCount: number; timingCount: number }>; }
+export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
 
@@ -420,20 +401,10 @@ export function compileScene(payload: ScenePayload): CompiledScene {
   const directives = new Map<string, WordDirectiveLike>();
   if (Array.isArray(wordDirectives)) for (const d of wordDirectives) directives.set(String(d?.word ?? '').trim().toLowerCase(), d as WordDirectiveLike);
   const words = payload.words ?? [];
-  const lyricFocus = resolveLyricFocusConfig(payload.frame_state);
-  const lineTokenMismatches: Array<{ lineIndex: number; tokenCount: number; timingCount: number }> = [];
-  const wordMeta: WordMetaEntry[] = payload.lines.flatMap((line, lineIndex) => {
-    const lineWords = words.filter((w) => w.start >= (line.start ?? 0) - LYRIC_FOCUS_LINE_EPSILON_SEC && w.end <= (line.end ?? 0) + LYRIC_FOCUS_LINE_EPSILON_SEC);
-    const lineTokens = String(line.text ?? '').split(/\s+/).filter(Boolean);
-    if (lineTokens.length !== lineWords.length) {
-      const mismatch = { lineIndex, tokenCount: lineTokens.length, timingCount: lineWords.length };
-      lineTokenMismatches.push(mismatch);
-      console.warn('[cinematic-lyricFocus] token/timing mismatch — using AI timestamp words as source of truth', mismatch);
-    }
-    return lineWords.map((w) => {
-      const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-      return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
-    });
+  const wordMeta: WordMetaEntry[] = words.map((w) => {
+    const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999)));
+    return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
   });
   const lineWordCounters: Record<number, number> = {};
   for (const wm of wordMeta) { lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0; wm.wordIndex = lineWordCounters[wm.lineIndex]++; }
@@ -452,32 +423,6 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     let slot = 0; for (; slot < slotEnds.length; slot += 1) if (visStart >= slotEnds[slot]) break;
     if (slot === slotEnds.length) slotEnds.push(visEnd); else slotEnds[slot] = visEnd;
     (group as any)._positionSlot = slot % 3;
-  }
-
-  // ─── Compute _lineOffset: vertical separation for simultaneously-visible lines ───
-  {
-    const byLine = new Map<number, PhraseGroup[]>();
-    for (const group of phraseGroups) {
-      const arr = byLine.get(group.lineIndex) ?? [];
-      arr.push(group);
-      byLine.set(group.lineIndex, arr);
-    }
-    for (const [, lineGroups] of byLine) {
-      for (const g of lineGroups) {
-        const t = g.start;
-        const visibleLineIndices: number[] = [];
-        for (let li = 0; li < payload.lines.length; li++) {
-          const line = payload.lines[li];
-          if (t >= (line.start ?? 0) && t < (line.end ?? 0)) {
-            visibleLineIndices.push(li);
-          }
-        }
-        const visibleCount = Math.max(1, visibleLineIndices.length);
-        const lineSpacing = 90;
-        const linePos = Math.max(0, visibleLineIndices.indexOf(g.lineIndex));
-        (g as any)._lineOffset = (linePos - (visibleCount - 1) * 0.5) * lineSpacing;
-      }
-    }
   }
 
   const shotTypeToFontSize: Record<string, number> = {
@@ -511,8 +456,6 @@ export function compileScene(payload: ScenePayload): CompiledScene {
         text: baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word,
         clean: wm.clean,
         wordIndex: wi,
-        start: wm.start,
-        end: wm.end,
         layoutX: pos.x,
         layoutY: pos.y,
         baseFontSize: pos.fontSize,
@@ -550,66 +493,6 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     return { lineIndex: group.lineIndex, groupIndex: group.groupIndex, anchorWordIdx: group.anchorWordIdx, start: group.start, end: group.end, words: wordsCompiled, staggerDelay: animParams.stagger, entryDuration: animParams.entryDuration, exitDuration: animParams.exitDuration, lingerDuration: animParams.linger, behaviorIntensity: motionDefaults.behaviorIntensity };
   }).sort((a, b) => a.start - b.start);
 
-  // ─── Compile-time collision resolution ───
-  // Nudge overlapping groups apart so anchor words don't collide.
-  {
-    const COL_PADDING = 24;
-    const COL_MAX_PASSES = 6;
-    interface GroupBBox { groupIdx: number; cx: number; cy: number; halfW: number; halfH: number; priority: number; }
-    const bboxes: GroupBBox[] = compiledGroups.map((cg, gi) => {
-      const aw = cg.words.find((w) => w.isAnchor) ?? cg.words[0];
-      if (!aw) return null!;
-      const fontStr = `${aw.fontWeight} ${aw.baseFontSize}px ${aw.fontFamily}`;
-      if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
-      const textW = measureCtx.measureText(aw.text).width;
-      return { groupIdx: gi, cx: aw.layoutX, cy: aw.layoutY, halfW: textW / 2 + COL_PADDING, halfH: aw.baseFontSize * 0.7 + COL_PADDING, priority: aw.emphasisLevel };
-    }).filter(Boolean);
-    for (let pass = 0; pass < COL_MAX_PASSES; pass++) {
-      let hadCollision = false;
-      for (let i = 0; i < bboxes.length; i++) {
-        for (let j = i + 1; j < bboxes.length; j++) {
-          const a = bboxes[i], b = bboxes[j];
-          const ag = compiledGroups[a.groupIdx], bg = compiledGroups[b.groupIdx];
-          const aVisEnd = ag.end + ag.lingerDuration + ag.exitDuration;
-          const bVisStart = bg.start - bg.entryDuration - bg.staggerDelay * bg.words.length;
-          if (aVisEnd < bVisStart) continue;
-          const bVisEnd = bg.end + bg.lingerDuration + bg.exitDuration;
-          const aVisStart = ag.start - ag.entryDuration - ag.staggerDelay * ag.words.length;
-          if (bVisEnd < aVisStart) continue;
-          const dx = a.cx - b.cx, dy = a.cy - b.cy;
-          const overlapX = (a.halfW + b.halfW) - Math.abs(dx);
-          const overlapY = (a.halfH + b.halfH) - Math.abs(dy);
-          if (overlapX <= 0 || overlapY <= 0) continue;
-          hadCollision = true;
-          const moveA = a.priority >= b.priority ? 0.3 : 0.7;
-          const moveB = 1 - moveA;
-          if (overlapX < overlapY) {
-            const sign = dx >= 0 ? 1 : -1;
-            a.cx += sign * overlapX * moveA;
-            b.cx -= sign * overlapX * moveB;
-          } else {
-            const sign = dy >= 0 ? 1 : -1;
-            a.cy += sign * overlapY * moveA;
-            b.cy -= sign * overlapY * moveB;
-          }
-          a.cx = Math.max(a.halfW + 40, Math.min(960 - a.halfW - 40, a.cx));
-          a.cy = Math.max(a.halfH + 40, Math.min(540 - a.halfH - 40, a.cy));
-          b.cx = Math.max(b.halfW + 40, Math.min(960 - b.halfW - 40, b.cx));
-          b.cy = Math.max(b.halfH + 40, Math.min(540 - b.halfH - 40, b.cy));
-        }
-      }
-      if (!hadCollision) break;
-    }
-    for (const bbox of bboxes) {
-      const cg = compiledGroups[bbox.groupIdx];
-      const aw = cg.words.find((w) => w.isAnchor);
-      if (!aw) continue;
-      const deltaX = bbox.cx - aw.layoutX, deltaY = bbox.cy - aw.layoutY;
-      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) continue;
-      for (const word of cg.words) { word.layoutX += deltaX; word.layoutY += deltaY; }
-    }
-  }
-
   const beats = payload.beat_grid?.beats ?? [];
   const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
   const heat = physicsProfile?.heat ?? 0.5;
@@ -644,7 +527,5 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     baseTextTransform: baseTypography.textTransform,
     palettes,
     animParams,
-    lyricFocus,
-    lineTokenMismatches,
   };
 }

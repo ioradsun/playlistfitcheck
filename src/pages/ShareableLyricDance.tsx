@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download } from "lucide-react";
@@ -58,17 +58,6 @@ interface DanceComment { id: string; text: string; submitted_at: string; }
 
 const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,auto_palettes,beat_grid,palette,system_type,seed,artist_dna,physics_spec";
 const DIRECTION_COLUMNS = "cinematic_direction";
-
-function applyDebugQueryToggle(payload: LyricDanceData, debugEnabled: boolean): LyricDanceData {
-  if (!debugEnabled) return payload;
-  return {
-    ...payload,
-    frame_state: {
-      ...(payload.frame_state ?? {}),
-      debugHud: true,
-    },
-  };
-}
 
 // ─── Progress Bar ───────────────────────────────────────────────────
 
@@ -197,12 +186,11 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
 
 // ─── Live Debug HUD ─────────────────────────────────────────────────
 
-function LiveDebugHUD({ player, enabled }: { player: LyricDancePlayer | null; enabled: boolean }) {
-  const [open, setOpen] = useState(enabled);
+function LiveDebugHUD({ player }: { player: LyricDancePlayer | null }) {
+  const [open, setOpen] = useState(false);
   const [snap, setSnap] = useState<LiveDebugState>(DEFAULT_DEBUG_STATE);
 
   useEffect(() => {
-    if (!enabled) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "d" || e.key === "D") {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -211,7 +199,7 @@ function LiveDebugHUD({ player, enabled }: { player: LyricDancePlayer | null; en
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [enabled]);
+  }, []);
 
   useEffect(() => {
     if (!open || !player) return;
@@ -219,7 +207,7 @@ function LiveDebugHUD({ player, enabled }: { player: LyricDancePlayer | null; en
     return () => clearInterval(id);
   }, [open, player]);
 
-  if (!enabled || !open) return null;
+  if (!open) return null;
 
   const f = (v: number, d = 2) => v.toFixed(d);
   const Row = ({ label, value }: { label: string; value: string }) => (
@@ -263,7 +251,6 @@ function LiveDebugHUD({ player, enabled }: { player: LyricDancePlayer | null; en
 export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
 
 
   const [data, setData] = useState<LyricDanceData | null>(null);
@@ -276,7 +263,6 @@ export default function ShareableLyricDance() {
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
-  const debugEnabled = new URLSearchParams(window.location.search).get("debug") === "1";
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -313,7 +299,7 @@ export default function ShareableLyricDance() {
       .maybeSingle()
       .then(async ({ data: row, error }) => {
         if (error || !row) { setNotFound(true); setLoading(false); return; }
-        const d = applyDebugQueryToggle(row as any as LyricDanceData, debugEnabled);
+        const d = row as any as LyricDanceData;
         setData({ ...d, cinematic_direction: null });
         setLoading(false);
 
@@ -398,7 +384,7 @@ export default function ShareableLyricDance() {
         ]);
         if (profileResult.data) setProfile(profileResult.data as ProfileInfo);
       });
-  }, [artistSlug, songSlug, debugEnabled]);
+  }, [artistSlug, songSlug]);
 
   useEffect(() => {
     if (!data) return;
@@ -802,13 +788,7 @@ export default function ShareableLyricDance() {
       </div>
 
       {/* Debug */}
-      <LiveDebugHUD player={playerInstance} enabled={debugEnabled} />
-      {data?.frame_state?.debugHud ? (
-        <div className="fixed top-3 right-3 z-[210] rounded-md border border-white/20 bg-black/70 px-3 py-2 text-[11px] leading-4 text-white/90 backdrop-blur-sm font-mono">
-          <div>Cinematic lyricFocus debug</div>
-          <div>toggle: ?debug=1</div>
-        </div>
-      ) : null}
+      <LiveDebugHUD player={playerInstance} />
       <LyricDanceDebugPanel
         player={playerInstance}
         onRegenerateSong={() => {
