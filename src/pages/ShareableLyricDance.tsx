@@ -476,6 +476,9 @@ export default function ShareableLyricDance() {
       .then((autoPalettes) => {
         if (cancelled || autoPalettes.length === 0) return;
         setData(prev => (prev ? { ...prev, auto_palettes: autoPalettes } : prev));
+        if (playerRef.current) {
+          playerRef.current.updateAutoPalettes(autoPalettes);
+        }
         void savePalettesToDb(data.id, autoPalettes);
       })
       .catch((error) => {
