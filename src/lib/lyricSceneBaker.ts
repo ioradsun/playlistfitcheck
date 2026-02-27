@@ -96,7 +96,7 @@ export type Keyframe = {
 
 export type BakedTimeline = Keyframe[];
 
-export const BAKER_VERSION = 6;
+export const BAKER_VERSION = 7;
 const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
@@ -1203,7 +1203,9 @@ function getGroupLayout(
       + interWordSpace * Math.max(0, supportIndices.length - 1);
 
     // Center the phrase block on cx, then place each word by cumulative width.
-    const phraseY = Math.round(cy + baseFontSize * 1.0);
+    // Use anchor fontSize directly — stable across line transitions
+    const anchorFontSize = positions[anchorIdx]?.fontSize ?? baseFontSize;
+    const phraseY = Math.round(cy + anchorFontSize * 1.0);
     const startX = cx - totalWidth * 0.5;
     let cumulativeWidth = 0;
     for (let j = 0; j < supportIndices.length; j++) {
