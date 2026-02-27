@@ -18,11 +18,7 @@ import {
   computeEntryState,
   computeExitState,
   computeBehaviorState,
-  getGroupLayout,
   type CompiledScene,
-  type GroupPosition,
-  type PhraseGroup,
-  type VisualMode,
 } from "@/lib/sceneCompiler";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
@@ -870,8 +866,6 @@ export class LyricDancePlayer {
   private _viewportSx = 1;
   private _viewportSy = 1;
   private _viewportFontScale = 1;
-  private _layoutsAreViewportScaled = false;
-  private _layoutMeasureCanvas: OffscreenCanvas | null = null;
   private _evalFrame: ScaledKeyframe | null = null;
 
   // Background cache
@@ -1112,14 +1106,12 @@ export class LyricDancePlayer {
         // Compile the scene — produces lightweight schedule, not 15,000 frames
         const compiled = compileScene(payload);
         this.compiledScene = compiled;
-        this._layoutsAreViewportScaled = false;
 
         // Build chunk cache from compiled scene
         this._buildChunkCacheFromScene(compiled);
 
         // Compute viewport scale
         this._updateViewportScale();
-        this.recomputeLayouts();
         this._textMetricsCache.clear();
 
         globalCompiledScene = compiled;
@@ -1137,12 +1129,10 @@ export class LyricDancePlayer {
 
     // Now cache is guaranteed to exist for every instance
     this.compiledScene = globalCompiledScene;
-    this._layoutsAreViewportScaled = false;
     this.chunks = new Map(globalChunkCache!);
     this.songStartSec = globalSongStartSec;
     this.songEndSec = globalSongEndSec;
     this._updateViewportScale();
-    this.recomputeLayouts();
     this._textMetricsCache.clear();
     if (this.audio.currentTime <= 0) {
       this.audio.currentTime = this.songStartSec;
@@ -1209,10 +1199,8 @@ export class LyricDancePlayer {
       this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
       const compiled = compileScene(payload);
       this.compiledScene = compiled;
-      this._layoutsAreViewportScaled = false;
       this._buildChunkCacheFromScene(compiled);
       this._updateViewportScale();
-      this.recomputeLayouts();
       this._textMetricsCache.clear();
       const chunkSnapshot = new Map(this.chunks);
       this.buildBgCache();
@@ -1347,7 +1335,6 @@ export class LyricDancePlayer {
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
     this._updateViewportScale();
-    this.recomputeLayouts();
     this._textMetricsCache.clear();
     this._lastVisibleChunkIds = '';
   }
@@ -1364,10 +1351,8 @@ export class LyricDancePlayer {
     this.payload = { ...this.payload, cinematic_direction: direction };
     this.resolvePlayerState(this.payload);
     this.compiledScene = compileScene(this.payload);
-    this._layoutsAreViewportScaled = false;
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
-    this.recomputeLayouts();
     this._textMetricsCache.clear();
     this.buildBgCache();
     this.deriveVisualSystems();
@@ -1919,14 +1904,9 @@ export class LyricDancePlayer {
 
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
     const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
-    this.ctx.translate(safeCameraX, safeCameraY);
-    if (Math.abs(frame.cameraZoom - 1.0) > 0.001) {
-      const cx = this.width / 2 - safeCameraX;
-      const cy = this.height / 2 - safeCameraY;
-      this.ctx.translate(cx, cy);
-      this.ctx.scale(frame.cameraZoom, frame.cameraZoom);
-      this.ctx.translate(-cx, -cy);
-    }
+    // Apply camera zoom as a canvas-level transform — NOT per-word font resize.
+    // This keeps collision bounds stable across beat pulses.
+    const applyZoom = Math.abs(frame.cameraZoom - 1.0) > 0.001;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'middle';
 
@@ -2058,6 +2038,15 @@ export class LyricDancePlayer {
     if (shrinkOccurred) {
       this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
       this._solvedBounds = bounds.map(b => ({ ...b }));
+    }
+
+    this.ctx.save();
+    if (applyZoom) {
+      const zoomCx = this.width / 2;
+      const zoomCy = this.height / 2;
+      this.ctx.translate(zoomCx, zoomCy);
+      this.ctx.scale(frame.cameraZoom, frame.cameraZoom);
+      this.ctx.translate(-zoomCx, -zoomCy);
     }
 
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
@@ -2255,6 +2244,7 @@ export class LyricDancePlayer {
       this.ctx.globalAlpha = 1;
       drawCalls += 1;
     }
+    this.ctx.restore();
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
@@ -2463,7 +2453,6 @@ export class LyricDancePlayer {
     this._haloStamps.clear();
     this.lastSimFrame = -1;
     this._updateViewportScale();
-    this.recomputeLayouts();
     this._textMetricsCache.clear();
     this._lastVisibleChunkIds = '';
   }
@@ -2802,79 +2791,30 @@ export class LyricDancePlayer {
   private _updateViewportScale(): void {
     const sx = this.width / 960;
     const sy = this.height / 540;
+    const baseScale = Math.min(sx, sy);
     const isPortrait = this.height > this.width;
-    const fontScale = isPortrait
-      ? Math.min(this.width / 360, 1.35)
-      : (() => {
-        const base = Math.min(sx, sy);
-        if (this.height >= 1080) return base;
+
+    // fontScale must stay proportional to position scale.
+    // Allow slight boost for readability on small screens,
+    // but never more than 1.4× the base scale.
+    let fontScale: number;
+    if (isPortrait) {
+      // Portrait (phone): base scale is tiny (0.4). Allow up to 1.4× for readability.
+      fontScale = Math.max(baseScale, Math.min(this.width / 540, baseScale * 1.4));
+    } else {
+      // Landscape: scale proportionally, slight boost on small screens
+      if (this.height >= 1080) {
+        fontScale = baseScale;
+      } else {
         const deficit = (1080 - this.height) / 1080;
-        return Math.min(base * (1 + deficit * 0.45), base * 1.25);
-      })();
+        fontScale = Math.min(baseScale * (1 + deficit * 0.3), baseScale * 1.2);
+      }
+    }
+
     this._viewportSx = sx;
     this._viewportSy = sy;
     this._viewportFontScale = fontScale;
   }
-
-  private recomputeLayouts(): void {
-    const scene = this.compiledScene;
-    if (!scene) return;
-
-    const canvasW = this.width;
-    const canvasH = this.height;
-    const fontScale = this._viewportFontScale;
-
-    if (!this._layoutMeasureCanvas) {
-      this._layoutMeasureCanvas = new OffscreenCanvas(1, 1);
-    }
-    const measureCtx = this._layoutMeasureCanvas.getContext('2d');
-    if (!measureCtx) return;
-
-    for (const group of scene.phraseGroups) {
-      const visualMode: VisualMode = scene.visualMode ?? 'cinematic';
-      const anchorWord = group.words[group.anchorWordIdx];
-      if (!anchorWord) continue;
-      const baseFontSize = anchorWord.baseFontSize * fontScale;
-      const fontWeight = anchorWord.fontWeight;
-      const fontFamily = anchorWord.fontFamily;
-      const phraseGroup: PhraseGroup = {
-        words: group.words.map((w) => ({
-          word: w.text,
-          start: group.start,
-          end: group.end,
-          clean: w.clean,
-          directive: null,
-          lineIndex: group.lineIndex,
-          wordIndex: w.wordIndex,
-        })),
-        start: group.start,
-        end: group.end,
-        anchorWordIdx: group.anchorWordIdx,
-        lineIndex: group.lineIndex,
-        groupIndex: group.groupIndex,
-      };
-
-      const newPositions: GroupPosition[] = getGroupLayout(
-        phraseGroup,
-        visualMode,
-        canvasW,
-        canvasH,
-        baseFontSize,
-        fontWeight,
-        fontFamily,
-        measureCtx,
-      );
-
-      for (let wi = 0; wi < group.words.length && wi < newPositions.length; wi += 1) {
-        group.words[wi].layoutX = newPositions[wi].x;
-        group.words[wi].layoutY = newPositions[wi].y;
-        group.words[wi].baseFontSize = newPositions[wi].fontSize;
-      }
-    }
-
-    this._layoutsAreViewportScaled = true;
-  }
-
 
   private _getArcFunction(arcName: string): (p: number) => number {
     const curves: Record<string, (p: number) => number> = {
@@ -3550,7 +3490,6 @@ export class LyricDancePlayer {
     const songDuration = Math.max(0.01, scene.durationSec);
     const songProgress = Math.max(0, Math.min(1, (tSec - scene.songStartSec) / songDuration));
     const { _viewportSx: sx, _viewportSy: sy, _viewportFontScale: fontScale } = this;
-    const viewportLayouts = this._layoutsAreViewportScaled;
 
     const beats = scene.beatEvents;
     while (this._beatCursor + 1 < beats.length && beats[this._beatCursor + 1].time <= tSec) this._beatCursor++;
@@ -3655,7 +3594,7 @@ export class LyricDancePlayer {
           const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
           const isFrozen = word.behaviorStyle === 'freeze' && (tSec - group.start) > 0.3;
 
-          const effectiveFontSize = viewportLayouts ? word.baseFontSize : word.baseFontSize * fontScale;
+          const effectiveFontSize = word.baseFontSize * fontScale;
           const charW = word.isLetterChunk ? effectiveFontSize * 0.6 : 0;
           const wordSpan = charW * letterTotal;
           const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
@@ -3666,15 +3605,9 @@ export class LyricDancePlayer {
           chunks[ci] = chunk;
           chunk.id = word.id;
           chunk.text = word.text;
-          if (viewportLayouts) {
-            chunk.x = word.layoutX + Math.round(finalOffsetX + letterOffsetX) * sx;
-            chunk.y = word.layoutY + Math.round(finalOffsetY) * sy;
-            chunk.fontSize = word.baseFontSize;
-          } else {
-            chunk.x = Math.round(word.layoutX + finalOffsetX + letterOffsetX) * sx;
-            chunk.y = Math.round(word.layoutY + finalOffsetY) * sy;
-            chunk.fontSize = word.baseFontSize * fontScale;
-          }
+          chunk.x = (word.layoutX + finalOffsetX + letterOffsetX) * sx;
+          chunk.y = (word.layoutY + finalOffsetY) * sy;
+          chunk.fontSize = effectiveFontSize;
           chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
           chunk.scaleX = finalScaleX * intensityScaleMult;
           chunk.scaleY = finalScaleY * intensityScaleMult;
