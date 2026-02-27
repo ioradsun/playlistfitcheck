@@ -1974,19 +1974,21 @@ export class LyricDancePlayer {
 
       const prevExitProgress = this.lastExitProgressByChunk.get(chunk.id) ?? 0;
       const currentExitProgress = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
+      this.lastExitProgressByChunk.set(chunk.id, currentExitProgress);
+
+      // Fire when exitProgress first crosses 0 — but also pre-spawn
+      // by watching entryProgress hitting 1 (word fully entered) AND
+      // alpha starting to drop, which happens just before exitProgress > 0
       const wordJustExited = prevExitProgress <= 0 && currentExitProgress > 0;
-      const msUntilExit = chunk.exitStartTime != null
-        ? (chunk.exitStartTime - (performance.now() / 1000)) * 1000
-        : -1;
-      const wordAboutToExit = !wordJustExited &&
-        msUntilExit > 0 && msUntilExit < 120 &&
+      const wordFadingOut = currentExitProgress === 0 &&
+        (chunk.alpha ?? 1) < 0.75 &&
+        (chunk.entryProgress ?? 0) >= 1.0 &&
         !this.activeDecomps.some(d => d.id === chunk.id) &&
-        !this.lastExitProgressByChunk.has(`pre_${chunk.id}`);
-      if (wordAboutToExit) {
+        !this.lastExitProgressByChunk.get(`pre_${chunk.id}`);
+      if (wordFadingOut) {
         this.lastExitProgressByChunk.set(`pre_${chunk.id}`, 1);
       }
-      const shouldSpawnDecomp = wordJustExited || wordAboutToExit;
-      this.lastExitProgressByChunk.set(chunk.id, currentExitProgress);
+      const shouldSpawnDecomp = wordJustExited || wordFadingOut;
       const obj = this.chunks.get(chunk.id);
       if (!obj) {
         console.warn('[Decomp] chunk miss:', chunk.id, 'registered:', [...this.chunks.keys()].slice(0, 5));
