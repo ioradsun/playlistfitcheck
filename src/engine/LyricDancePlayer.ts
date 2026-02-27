@@ -1862,30 +1862,7 @@ export class LyricDancePlayer {
     const frame = this.evaluateFrame(tSec);
     if (!frame) return;
 
-    if (this.frameCount === 60) {
-      const scene = this.compiledScene;
-      let maxBase = 0;
-      if (scene) {
-        for (const g of scene.phraseGroups) {
-          for (const w of g.words) {
-            if (w.baseFontSize > maxBase) maxBase = w.baseFontSize;
-          }
-        }
-      }
-      console.log('[DIAG]', JSON.stringify({
-        beats: scene?.beatEvents?.length,
-        bpm: scene?.bpm,
-        zoom: +(frame.cameraZoom ?? 1).toFixed(2),
-        fontScale: +this._viewportFontScale.toFixed(2),
-        maxBaseFontCompiler: maxBase,
-        bigText: frame.chunks[0]?.text,
-        bigFont: +(frame.chunks[0]?.fontSize ?? 0).toFixed(0),
-        groups: this._activeGroupIndices.length,
-        visible: frame.chunks.filter(c => c.visible).length,
-        linger: scene?.phraseGroups?.[0]?.lingerDuration,
-        exitDur: scene?.phraseGroups?.[0]?.exitDuration,
-      }));
-    }
+
 
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
