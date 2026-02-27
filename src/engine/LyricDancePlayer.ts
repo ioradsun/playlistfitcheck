@@ -1397,6 +1397,20 @@ export class LyricDancePlayer {
     this.data = { ...this.data, scene_context: sceneCtx };
   }
 
+  /** Hot-patch auto_palettes and recompile scene so word colors update */
+  updateAutoPalettes(palettes: string[][]): void {
+    if (!palettes?.length) return;
+    this.data = { ...this.data, auto_palettes: palettes };
+    // Recompile scene with fresh palette data
+    if (this.payload) {
+      this.payload = { ...this.payload, auto_palettes: palettes };
+      const compiled = compileScene(this.payload);
+      this.compiledScene = compiled;
+      this._buildChunkCacheFromScene(compiled);
+      this._textMetricsCache.clear();
+    }
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -2173,24 +2187,26 @@ export class LyricDancePlayer {
       visibleSig += bounds[i].chunk.id;
       visibleSig += ',';
     }
-    if (visibleSig !== this._lastVisibleChunkIds) {
-      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
-      this._lastVisibleChunkIds = visibleSig;
-      // Cache the solved positions
-      this._solvedBounds.length = bounds.length;
-      for (let i = 0; i < bounds.length; i++) {
-        if (!this._solvedBounds[i]) {
-          this._solvedBounds[i] = { ...bounds[i] };
-        } else {
-          this._solvedBounds[i].cx = bounds[i].cx;
-          this._solvedBounds[i].cy = bounds[i].cy;
-        }
-      }
-    } else {
-      // Reuse cached solved positions
-      for (let i = 0; i < bounds.length && i < this._solvedBounds.length; i++) {
-        bounds[i].cx = this._solvedBounds[i].cx;
-        bounds[i].cy = this._solvedBounds[i].cy;
+    // Compile-time solver in sceneCompiler handles collision avoidance.
+    // Runtime solver caused frame-to-frame jitter by re-solving every time
+    // a word entered/exited. Now we only wall-clamp to keep words on-screen.
+    for (let i = 0; i < bounds.length; i++) {
+      const b = bounds[i];
+      const minX = wallLeft + b.halfW;
+      const maxX = wallRight - b.halfW;
+      const minY = wallTop + b.halfH;
+      const maxY = wallBottom - b.halfH;
+      b.cx = Math.max(minX, Math.min(maxX, b.cx));
+      b.cy = Math.max(minY, Math.min(maxY, b.cy));
+    }
+    this._lastVisibleChunkIds = visibleSig;
+    this._solvedBounds.length = bounds.length;
+    for (let i = 0; i < bounds.length; i++) {
+      if (!this._solvedBounds[i]) {
+        this._solvedBounds[i] = { ...bounds[i] };
+      } else {
+        this._solvedBounds[i].cx = bounds[i].cx;
+        this._solvedBounds[i].cy = bounds[i].cy;
       }
     }
 
@@ -3827,6 +3843,12 @@ export class LyricDancePlayer {
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
         chunk.color = word.color;
+        // Runtime palette override: use chapter-resolved text color so words
+        // shift color as chapters change (auto_palettes may arrive after compile)
+        if (!word.hasSemanticColor) {
+          const runtimePal = this.getResolvedPalette();
+          if (runtimePal?.[2]) chunk.color = runtimePal[2];
+        }
         chunk.glow = wordGlow;
         chunk.emitterType = word.emitterType !== 'none' ? word.emitterType : undefined;
         chunk.trail = word.trail;
