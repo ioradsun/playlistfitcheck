@@ -3450,7 +3450,7 @@ export class LyricDancePlayer {
         entryOffsetY: c.entryOffsetY ? c.entryOffsetY * sy : undefined,
         entryOffsetX: c.entryOffsetX ? c.entryOffsetX * sx : undefined,
         exitOffsetY: c.exitOffsetY ? c.exitOffsetY * sy : undefined,
-      })),
+      })).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
       particles: kf.particles.map((p) => ({
         ...p,
         x: p.x * sx,
@@ -3563,44 +3563,52 @@ export class LyricDancePlayer {
     out.particleColor = tt < 0.5 ? frameA.particleColor : frameB.particleColor;
     out.atmosphere = tt < 0.5 ? frameA.atmosphere : frameB.atmosphere;
 
-    const chunkBById = new Map(frameB.chunks.map((c) => [c.id, c]));
-    const usedB = new Set<string>();
+    const chunksA = frameA.chunks;
+    const chunksB = frameB.chunks;
+    let ai = 0;
+    let bi = 0;
     let ci = 0;
-    for (const a of frameA.chunks) {
-      const b = chunkBById.get(a.id);
-      const base = b ?? a;
-      const outChunk = this._interpChunkPool[ci] ?? ({ ...base } as ScaledKeyframe['chunks'][number]);
+
+    while (ai < chunksA.length || bi < chunksB.length) {
+      const a = ai < chunksA.length ? chunksA[ai] : null;
+      const b = bi < chunksB.length ? chunksB[bi] : null;
+
+      const outChunk = this._interpChunkPool[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
       this._interpChunkPool[ci] = outChunk;
-      Object.assign(outChunk, base);
-      outChunk.id = a.id;
-      outChunk.x = this.lerpNum(a.x, b?.x, tt, a.x);
-      outChunk.y = this.lerpNum(a.y, b?.y, tt, a.y);
-      outChunk.alpha = b ? this.lerpNum(a.alpha, b.alpha, tt, a.alpha) : Math.max(0, (a.alpha ?? 1) * (1 - tt));
-      outChunk.glow = this.lerpNum(a.glow, b?.glow, tt, a.glow ?? 0);
-      outChunk.scale = this.lerpNum(a.scale, b?.scale, tt, a.scale ?? 1);
-      outChunk.scaleX = this.lerpNum(a.scaleX, b?.scaleX, tt, outChunk.scale);
-      outChunk.scaleY = this.lerpNum(a.scaleY, b?.scaleY, tt, outChunk.scale);
-      outChunk.fontSize = this.lerpNum(a.fontSize, b?.fontSize, tt, a.fontSize ?? 36);
-      outChunk.skewX = this.lerpNum(a.skewX, b?.skewX, tt, a.skewX ?? 0);
-      outChunk.blur = this.lerpNum(a.blur, b?.blur, tt, a.blur ?? 0);
-      outChunk.rotation = this.lerpNum(a.rotation, b?.rotation, tt, a.rotation ?? 0);
-      outChunk.entryProgress = this.lerpNum(a.entryProgress, b?.entryProgress, tt, a.entryProgress ?? 0);
-      outChunk.exitProgress = this.lerpNum(a.exitProgress, b?.exitProgress, tt, a.exitProgress ?? 0);
-      outChunk.entryOffsetY = this.lerpNum(a.entryOffsetY, b?.entryOffsetY, tt, a.entryOffsetY ?? 0);
-      outChunk.entryOffsetX = this.lerpNum(a.entryOffsetX, b?.entryOffsetX, tt, a.entryOffsetX ?? 0);
-      outChunk.entryScale = this.lerpNum(a.entryScale, b?.entryScale, tt, a.entryScale ?? 1);
-      outChunk.exitOffsetY = this.lerpNum(a.exitOffsetY, b?.exitOffsetY, tt, a.exitOffsetY ?? 0);
-      outChunk.exitScale = this.lerpNum(a.exitScale, b?.exitScale, tt, a.exitScale ?? 1);
-      outChunk.visible = b ? (a.visible || b.visible) : a.visible;
-      if (b) usedB.add(a.id);
-      ci += 1;
-    }
-    for (const b of frameB.chunks) {
-      if (usedB.has(b.id)) continue;
-      const outChunk = this._interpChunkPool[ci] ?? ({ ...b } as ScaledKeyframe['chunks'][number]);
-      this._interpChunkPool[ci] = outChunk;
-      Object.assign(outChunk, b);
-      outChunk.alpha = (b.alpha ?? 1) * tt;
+
+      if (a && b && a.id === b.id) {
+        Object.assign(outChunk, b);
+        outChunk.id = a.id;
+        outChunk.x = this.lerpNum(a.x, b.x, tt, a.x);
+        outChunk.y = this.lerpNum(a.y, b.y, tt, a.y);
+        outChunk.alpha = this.lerpNum(a.alpha, b.alpha, tt, a.alpha);
+        outChunk.glow = this.lerpNum(a.glow, b.glow, tt, a.glow ?? 0);
+        outChunk.scale = this.lerpNum(a.scale, b.scale, tt, a.scale ?? 1);
+        outChunk.scaleX = this.lerpNum(a.scaleX, b.scaleX, tt, outChunk.scale);
+        outChunk.scaleY = this.lerpNum(a.scaleY, b.scaleY, tt, outChunk.scale);
+        outChunk.fontSize = this.lerpNum(a.fontSize, b.fontSize, tt, a.fontSize ?? 36);
+        outChunk.skewX = this.lerpNum(a.skewX, b.skewX, tt, a.skewX ?? 0);
+        outChunk.blur = this.lerpNum(a.blur, b.blur, tt, a.blur ?? 0);
+        outChunk.rotation = this.lerpNum(a.rotation, b.rotation, tt, a.rotation ?? 0);
+        outChunk.entryProgress = this.lerpNum(a.entryProgress, b.entryProgress, tt, a.entryProgress ?? 0);
+        outChunk.exitProgress = this.lerpNum(a.exitProgress, b.exitProgress, tt, a.exitProgress ?? 0);
+        outChunk.entryOffsetY = this.lerpNum(a.entryOffsetY, b.entryOffsetY, tt, a.entryOffsetY ?? 0);
+        outChunk.entryOffsetX = this.lerpNum(a.entryOffsetX, b.entryOffsetX, tt, a.entryOffsetX ?? 0);
+        outChunk.entryScale = this.lerpNum(a.entryScale, b.entryScale, tt, a.entryScale ?? 1);
+        outChunk.exitOffsetY = this.lerpNum(a.exitOffsetY, b.exitOffsetY, tt, a.exitOffsetY ?? 0);
+        outChunk.exitScale = this.lerpNum(a.exitScale, b.exitScale, tt, a.exitScale ?? 1);
+        outChunk.visible = a.visible || b.visible;
+        ai += 1;
+        bi += 1;
+      } else if (!b || (a && a.id < b.id)) {
+        Object.assign(outChunk, a);
+        outChunk.alpha = Math.max(0, (a.alpha ?? 1) * (1 - tt));
+        ai += 1;
+      } else {
+        Object.assign(outChunk, b);
+        outChunk.alpha = (b.alpha ?? 1) * tt;
+        bi += 1;
+      }
       ci += 1;
     }
     this._interpChunkPool.length = ci;
