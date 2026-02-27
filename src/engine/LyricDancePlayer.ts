@@ -21,7 +21,6 @@ import {
 } from "@/lib/lyricSceneBaker";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
-import { cinematicFontSize } from "@/engine/SystemStyles";
 
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
@@ -816,6 +815,14 @@ export class LyricDancePlayer {
   // Baked
   private timeline: ScaledKeyframe[] = [];
   private chunks: Map<string, ChunkState> = new Map();
+  private timelineBase: Keyframe[] = [];
+  private timelineScale = { sx: 1, sy: 1, fontScale: 1 };
+  private _lastFont = '';
+  private _frameCacheTimeMs = Number.NaN;
+  private _frameCacheValue: ScaledKeyframe | null = null;
+  private _interpFrame: ScaledKeyframe | null = null;
+  private _interpChunkPool: ScaledKeyframe['chunks'] = [];
+  private _interpParticlePool: ScaledKeyframe['particles'] = [];
 
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
@@ -873,9 +880,6 @@ export class LyricDancePlayer {
   private _lastLoggedTSec = 0;
   private _stalledFrames = 0;
   private _lastSimChapterIdx = -1;
-  private _lastChunkX: Map<string, number> | null = null;
-  private _lastChunkY: Map<string, number> | null = null;
-  private _lastChunkFs: Map<string, number> | null = null;
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
@@ -900,7 +904,6 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: clean-revert-v21');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1056,7 +1059,9 @@ export class LyricDancePlayer {
         const baked = await bakeSceneChunked(payload);
 
         // Use the local snapshot not this.chunks (which destroy() may have wiped)
-        globalTimelineCache = this.scaleTimeline(baked);
+        this.timelineBase = baked;
+        this.updateTimelineScale();
+        globalTimelineCache = this.timeline;
         globalChunkCache = localChunkSnapshot;
         globalHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
         globalSongStartSec = payload.songStart;
@@ -1142,7 +1147,8 @@ export class LyricDancePlayer {
       const chunkSnapshot = new Map(this.chunks);
       const baked = await bakeSceneChunked(payload, (p) => onProgress(Math.round(p * 100)));
 
-      this.timeline = this.scaleTimeline(baked);
+      this.timelineBase = baked;
+      this.updateTimelineScale();
       this.buildBgCache();
       this.deriveVisualSystems();
       this.buildChapterSims();
@@ -1263,7 +1269,8 @@ export class LyricDancePlayer {
     if (this.payload) this.buildBgCache();
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
-    if (this.timeline.length) this.timeline = this.scaleTimeline(this.unscaleTimeline());
+    if (this.timelineBase.length) this.updateTimelineScale();
+    this.invalidateFrameCache();
   }
 
   setMuted(muted: boolean): void {
@@ -1664,124 +1671,23 @@ export class LyricDancePlayer {
     const activeWordClean = activeWord?.word?.toLowerCase()?.replace(/[.,!?'"]/g, '') ?? '';
     const activeWordDirective = activeWordClean ? this.resolvedState.wordDirectivesMap[activeWordClean] ?? null : null;
 
-    this.debugState = {
-      ...this.debugState,
-      time: clamped,
-      fps: Math.round(this.fpsAccum.fps),
-      songProgress,
-      perfTotal: deltaMs,
-      perfBg: 0,
-      perfText: 0,
-      beatIntensity: simulatedBeat,
-      physGlow: simulatedBeat * 0.6,
-      lastBeatForce: simulatedBeat * 0.8,
-      physicsActive: this.playing,
-      heat: (this.payload as any)?.motionProfileSpec?.params?.heat ?? 0,
-      velocity: simulatedBeat * 0.5,
-      wordCount: lines.length,
-      effectKey: visibleChunks.length > 0 ? "baked" : "—",
-      entryProgress: activeLine ? Math.min(1, (clamped - activeLine.start) / Math.max(0.1, activeLine.end - activeLine.start)) : 0,
-      exitProgress: activeLine ? Math.max(0, 1 - (activeLine.end - clamped) / Math.max(0.1, activeLine.end - activeLine.start)) : 0,
-      fontScale: frame?.cameraZoom ?? 1,
-      scale: frame?.cameraZoom ?? 1,
-      zoom: frame?.cameraZoom ?? 1,
-      lineColor: (visibleChunks[0] as any)?.color ?? "#ffffff",
-      particleSystem: this.activeSectionTexture ?? this.resolvedState.particleConfig.texture ?? "—",
-      particleDensity: this.resolvedState.particleConfig.density ?? 0,
-      particleSpeed: this.resolvedState.particleConfig.speed ?? 0,
-      dirThesis: (cd as any)?.thesis ?? "—",
-      dirChapter: currentChapter?.title ?? "—",
-      dirChapterProgress: currentChapter ? Math.max(0, Math.min(1, (songProgress - (currentChapter.startRatio ?? 0)) / Math.max(0.001, (currentChapter.endRatio ?? 1) - (currentChapter.startRatio ?? 0)))) : 0,
-      dirIntensity: simulatedBeat,
-      dirBgDirective: currentChapter?.backgroundDirective ?? "—",
-      dirLightBehavior: currentChapter?.lightBehavior ?? "—",
-      cameraDistance: section?.atmosphere ?? (cd as any)?.atmosphere ?? "cinematic",
-      cameraMovement: section?.motion ?? (cd as any)?.motion ?? "fluid",
-      tensionStage: currentTension?.stage ?? "—",
-      tensionMotion: currentTension?.motionIntensity ?? 0,
-      tensionParticles: currentTension?.particleDensity ?? 0,
-      tensionTypo: section?.typography ?? (cd as any)?.typography ?? "clean-modern",
-      backgroundSystem: this.backgroundSystem ?? "—",
-      lineHeroWord: activeLine?.text?.split(" ")[0] ?? "—",
-      lineIntent: currentChapter?.emotionalArc ?? "—",
-      wordDirectiveWord: activeWordDirective?.word ?? activeWordClean ?? "—",
-      wordDirectiveBehavior: activeWordDirective?.behavior ?? "—",
-      wordDirectiveEntry: activeWordDirective?.entry ?? "—",
-      wordDirectiveEmphasis: activeWordDirective?.emphasisLevel ?? 0,
-      wordDirectiveExit: activeWordDirective?.exit ?? "—",
-      wordDirectiveGhostTrail: activeWordDirective?.ghostTrail ?? false,
-      wordDirectiveGhostDir: activeWordDirective?.ghostDirection ?? "—",
+    const ds = this.debugState;
+    ds.time = clamped;
+    ds.fps = Math.round(this.fpsAccum.fps);
+    ds.songProgress = songProgress;
+    ds.perfTotal = deltaMs;
+    ds.perfBg = 0;
+    ds.perfText = 0;
+    ds.beatIntensity = simulatedBeat;
+    ds.physGlow = simulatedBeat * 0.6;
+    ds.lastBeatForce = simulatedBeat * 0.8;
+    ds.physicsActive = this.playing;
 
-      // Section boundaries
-      ...(() => {
-        const sections = this.resolvedState.chapters ?? [];
-        const secIdx = sections.length > 0 ? this.resolveSectionIndex(sections, clamped - this.songStartSec, duration) : -1;
-        const sec = secIdx >= 0 ? sections[secIdx] : null;
-        const secStart = sec?.startSec ?? 0;
-        const secEnd = sec?.endSec ?? 0;
-        const secDur = secEnd - secStart;
-        const secElapsed = Math.max(0, (clamped - this.songStartSec) - secStart);
-        return {
-          secIndex: secIdx,
-          secTotal: sections.length,
-          secStartSec: secStart,
-          secEndSec: secEnd,
-          secElapsed,
-          secDuration: secDur,
-          secProgress: secDur > 0 ? Math.min(1, secElapsed / secDur) : 0,
-          secMood: sec?.mood ?? "—",
-          secTexture: this.activeSectionTexture ?? sec?.texture ?? this.resolveParticleTexture(secIdx >= 0 ? secIdx : 0, cd) ?? "—",
-          secHasImage: !!(this.data.section_images?.[secIdx]),
-        };
-      })(),
-
-      // Cinematic direction defaults
-      cdSceneTone: (cd as any)?.sceneTone ?? "—",
-      cdAtmosphere: (cd as any)?.atmosphere ?? "—",
-      cdMotion: (cd as any)?.motion ?? "—",
-      cdTypography: (cd as any)?.typography ?? "—",
-      cdTexture: (cd as any)?.texture ?? "—",
-      cdEmotionalArc: (cd as any)?.emotionalArc ?? "—",
-
-      // Beat grid phase
-      ...(() => {
-        const bg = this.data.beat_grid;
-        if (!bg || !bg.beats?.length) return { bgBpm: 0, bgBeatsTotal: 0, bgConfidence: 0, bgNextBeat: 0, bgBeatPhase: 0 };
-        const t = clamped;
-        const beats = bg.beats;
-        let nextBeat = 0;
-        let lastBeat = 0;
-        for (let i = 0; i < beats.length; i++) {
-          if (beats[i] > t) { nextBeat = beats[i]; lastBeat = i > 0 ? beats[i - 1] : 0; break; }
-          lastBeat = beats[i];
-        }
-        const interval = nextBeat > lastBeat ? nextBeat - lastBeat : 60 / (bg.bpm || 120);
-        const phase = interval > 0 ? (t - lastBeat) / interval : 0;
-        return { bgBpm: bg.bpm, bgBeatsTotal: beats.length, bgConfidence: bg.confidence, bgNextBeat: nextBeat, bgBeatPhase: Math.min(1, Math.max(0, phase)) };
-      })(),
-
-      // Active word
-      ...(() => {
-        const w = activeWord;
-        if (!w) return { activeWord: "—", activeWordEntry: "—", activeWordExit: "—", activeWordEmphasis: 0, activeWordTrail: "none" };
-        const directive = activeWordDirective;
-        return {
-          activeWord: w.word ?? "—",
-          activeWordEntry: directive?.entry ?? "—",
-          activeWordExit: directive?.exit ?? "—",
-          activeWordEmphasis: directive?.emphasis ?? 0,
-          activeWordTrail: directive?.trail ?? "none",
-        };
-      })(),
-    };
 
     const beatIntensity = Math.max(0, Math.min(1, simulatedBeat));
     this.ambientParticleEngine?.update(deltaMs, beatIntensity);
-    this.debugState = {
-      ...this.debugState,
-      particleCount: this.ambientParticleEngine?.getActiveCount() ?? 0,
-      tensionStage: this.activeTension?.stage ?? this.debugState.tensionStage,
-    };
+    this.debugState.particleCount = this.ambientParticleEngine?.getActiveCount() ?? 0;
+    this.debugState.tensionStage = this.activeTension?.stage ?? this.debugState.tensionStage;
   }
 
   private draw(tSec: number): void {
@@ -1836,37 +1742,20 @@ export class LyricDancePlayer {
 
     // Image diagnostics — log section transitions
     if (imgIdx !== this._prevImgIdx && this.chapterImages.length > 0) {
-      const currentUrl = this.data.section_images?.[imgIdx];
-      const prevUrl = this._prevImgIdx >= 0 ? this.data.section_images?.[this._prevImgIdx] : undefined;
-      if (this._prevImgIdx >= 0 && prevUrl) {
-        console.log('[Player Image Hide]', { sectionIndex: this._prevImgIdx, time: tSec.toFixed(2) });
-      }
-      if (currentUrl) {
-        console.log('[Player Image Show]', { sectionIndex: imgIdx, time: tSec.toFixed(2), opacity: 1, url: currentUrl.slice(-30) });
-      }
-      console.log('[Player Section Change]', {
-        time: tSec.toFixed(2),
-        from: this._prevImgIdx,
-        to: imgIdx,
-        imageUrl: currentUrl ? currentUrl.slice(-30) : 'none',
-      });
       this._prevImgIdx = imgIdx;
     }
 
     // Update image debug state
     const atmosphere = this.getAtmosphere();
     const atmosphereOpacityMap: Record<string, number> = { void: 0.10, cinematic: 0.65, haze: 0.50, split: 0.75, grain: 0.60, wash: 0.55, glass: 0.45, clean: 0.85 };
-    this.debugState = {
-      ...this.debugState,
-      imgCount: this.chapterImages.length,
-      imgActiveIdx: imgIdx,
-      imgNextIdx: nextImgIdx,
-      imgCrossfade: crossfade,
-      imgChapterSpan: chapterSpan,
-      imgLocalProgress: chapterLocalProgress,
-      imgOpacity: atmosphereOpacityMap[atmosphere] ?? 0.65,
-      imgOverlap: false,
-    };
+    this.debugState.imgCount = this.chapterImages.length;
+    this.debugState.imgActiveIdx = imgIdx;
+    this.debugState.imgNextIdx = nextImgIdx;
+    this.debugState.imgCrossfade = crossfade;
+    this.debugState.imgChapterSpan = chapterSpan;
+    this.debugState.imgLocalProgress = chapterLocalProgress;
+    this.debugState.imgOpacity = atmosphereOpacityMap[atmosphere] ?? 0.65;
+    this.debugState.imgOverlap = false;
 
     this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
 
@@ -1892,8 +1781,8 @@ export class LyricDancePlayer {
 
     let drawCalls = 0;
     const palette = this.getBurstPalette(songProgress);
-    const cinematicSizingV2 = true;
-    const sortedChunks = [...frame.chunks].sort((a, b) => {
+    const sortedChunks = frame.chunks;
+    sortedChunks.sort((a, b) => {
       const aIsExiting = (a.exitProgress ?? 0) > 0 ? 1 : 0;
       const bIsExiting = (b.exitProgress ?? 0) > 0 ? 1 : 0;
       return bIsExiting - aIsExiting;
@@ -1905,44 +1794,6 @@ export class LyricDancePlayer {
     const activeLine = visibleLines.length === 0
       ? null
       : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
-    const activeLineText = activeLine?.text ?? null;
-
-    let baseFontSize: number | null = null;
-    if (cinematicSizingV2 && activeLineText) {
-      const { fs } = cinematicFontSize(
-        this.ctx,
-        activeLineText,
-        this.width,
-        this.height,
-        this.getResolvedFont(),
-        700,
-      );
-      baseFontSize = fs;
-
-      const activeChunks = sortedChunks.filter((c) => (c.exitProgress ?? 0) === 0 && c.visible);
-      const bakedSizes = activeChunks
-        .map((c) => c.fontSize)
-        .filter((size): size is number => typeof size === 'number' && size > 0);
-      const sortedSizes = [...bakedSizes].sort((a, b) => a - b);
-      const medianBaked = sortedSizes.length > 0
-        ? sortedSizes[Math.floor(sortedSizes.length / 2)]
-        : null;
-
-      for (const chunk of activeChunks) {
-        const emphasisRatio = medianBaked != null && (chunk.fontSize ?? 0) > 0
-          ? (chunk.fontSize as number) / medianBaked
-          : 1.0;
-        const clamped = Math.max(0.85, Math.min(1.25, emphasisRatio));
-        (chunk as any)._resolvedFontSize = Math.round(fs * clamped);
-      }
-
-      for (const chunk of sortedChunks) {
-        if ((chunk.exitProgress ?? 0) > 0 && (chunk as any)._resolvedFontSize == null && baseFontSize != null) {
-          (chunk as any)._resolvedFontSize = baseFontSize;
-        }
-      }
-    }
-
     const rowLastRightEdge = new Map<number, number>();
 
     for (const chunk of sortedChunks) {
@@ -1982,7 +1833,6 @@ export class LyricDancePlayer {
       // alpha starting to drop, which happens just before exitProgress > 0
       const wordJustExited = prevExitProgress <= 0 && currentExitProgress > 0;
       if (wordJustExited) {
-        console.log('[Decomp trigger]', chunk.id, 'exitP:', currentExitProgress.toFixed(2), 'alpha:', (chunk.alpha ?? 1).toFixed(2));
       }
       const wordFadingOut = currentExitProgress === 0 &&
         (chunk.alpha ?? 1) < 0.75 &&
@@ -1995,7 +1845,6 @@ export class LyricDancePlayer {
       const shouldSpawnDecomp = wordJustExited || wordFadingOut;
       const obj = this.chunks.get(chunk.id);
       if (!obj) {
-        console.warn('chunk miss:', chunk.id, 'registered:', [...this.chunks.keys()].slice(0, 5));
         continue;
       }
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
@@ -2004,26 +1853,26 @@ export class LyricDancePlayer {
       const drawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
       const finalDrawY = drawY;
       const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
-      const fontSize = cinematicSizingV2
-        ? ((chunk as any)._resolvedFontSize ?? baseFontSize ?? 36)
-        : (Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36);
+      const fontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
       const fontWeight = chunk.fontWeight ?? 700;
       const viewportMinFont = Math.max(16, Math.min(this.width, this.height) * 0.055);
       const safeFontSize = Math.max(viewportMinFont, Math.round(fontSize * zoom) || 36);
       const resolvedFont = this.getResolvedFont();
       const family = chunk.fontFamily ?? resolvedFont;
-      this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
-      if (!this.ctx.font.includes('px')) {
-        this.ctx.font = `700 36px ${resolvedFont}`;
+      const measureFont = `${fontWeight} ${safeFontSize}px ${family}`;
+      if (measureFont !== this._lastFont) {
+        this.ctx.font = measureFont;
+        this._lastFont = measureFont;
       }
       const text = chunk.text ?? obj.text;
       const textWidth = this.ctx.measureText(text).width;
       const spaceWidth = Math.max(4, this.ctx.measureText(' ').width || safeFontSize * 0.25);
-      const rowKey = Math.round(finalDrawY);
+      const rowKey = Math.round(finalDrawY / 20) * 20;
       const previousRightEdge = rowLastRightEdge.get(rowKey);
       let drawX = rawDrawX;
-      if (previousRightEdge != null && drawX <= previousRightEdge) {
-        drawX = previousRightEdge + spaceWidth;
+      if (previousRightEdge != null && drawX < previousRightEdge + spaceWidth) {
+        const overlap = (previousRightEdge + spaceWidth) - drawX;
+        drawX += overlap * 0.5;
       }
       rowLastRightEdge.set(rowKey, drawX + textWidth);
       const wordCenterX = drawX + textWidth / 2;
@@ -2123,25 +1972,10 @@ export class LyricDancePlayer {
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
-        // Temporary jump detector
-        const _prevX = this._lastChunkX?.get(chunk.id);
-        const _prevY = this._lastChunkY?.get(chunk.id);
-        const _prevFs = this._lastChunkFs?.get(chunk.id);
-        if (!this._lastChunkX) { this._lastChunkX = new Map(); this._lastChunkY = new Map(); this._lastChunkFs = new Map(); }
-        if (_prevX != null && (Math.abs(drawX - _prevX) > 5 || Math.abs(finalDrawY - _prevY) > 5 || Math.abs(safeFontSize - _prevFs) > 5)) {
-          console.log('[JUMP]', chunk.text, {
-            dx: Math.round(drawX - _prevX),
-            dy: Math.round(finalDrawY - _prevY),
-            dfs: Math.round(safeFontSize - _prevFs),
-            exitP: (chunk.exitProgress ?? 0).toFixed(2),
-          });
-        }
-        this._lastChunkX.set(chunk.id, drawX);
-        this._lastChunkY.set(chunk.id, finalDrawY);
-        this._lastChunkFs.set(chunk.id, safeFontSize);
-        this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
-        if (!this.ctx.font.includes('px')) {
-          this.ctx.font = `700 36px ${resolvedFont}`;
+        const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
+        if (drawFont !== this._lastFont) {
+          this.ctx.font = drawFont;
+          this._lastFont = drawFont;
         }
         if (chunk.glow > 0) {
           this.ctx.shadowColor = chunk.color ?? '#ffffff';
@@ -2230,7 +2064,7 @@ export class LyricDancePlayer {
     this.drawComments(performance.now() / 1000);
 
     this.drawWatermark();
-    this.debugState = { ...this.debugState, drawCalls };
+    this.debugState.drawCalls = drawCalls;
   }
 
   private drawWatermark(): void {
@@ -2416,7 +2250,8 @@ export class LyricDancePlayer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.buildBgCache();
     this.lastSimFrame = -1;
-    if (this.timeline.length) this.timeline = this.scaleTimeline(this.unscaleTimeline());
+    if (this.timelineBase.length) this.updateTimelineScale();
+    this.invalidateFrameCache();
   }
 
   // ────────────────────────────────────────────────────────────
@@ -2521,7 +2356,6 @@ export class LyricDancePlayer {
     const effect = this.resolveDecompEffect(input.directive);
     if (!effect || this.activeDecomps.some((d) => d.id === input.chunkId)) return;
     if (this.activeDecomps.length >= 3) this.activeDecomps.shift();
-    console.log('[Decomp spawn]', input.text, 'effect:', effect, 'y:', Math.round(input.drawY));
     const particles = this.captureWordParticles(input, effect);
     const decomp: PixelDecomp = {
       id: input.chunkId, particles, effect, startTime: performance.now() / 1000,
@@ -2925,25 +2759,15 @@ export class LyricDancePlayer {
     const duration = this.audio?.duration || 1;
     const totalChapters = urls.length || 1;
     const chapterSpan = duration / totalChapters;
-    console.log('[Player Sections]', urls.map((url: string, i: number) => ({
-      index: i,
-      start: (i * chapterSpan).toFixed(2),
-      end: ((i + 1) * chapterSpan).toFixed(2),
-      duration: chapterSpan.toFixed(2),
-      hasImage: !!url,
-      imageUrl: url ? url.slice(-30) : 'none',
-    })));
     this.chapterImages = await Promise.all(
       urls.map((url: string, i: number) => new Promise<HTMLImageElement>((resolve) => {
         if (!url) { resolve(new Image()); return; }
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
-          console.log('[Player Image Preload]', { index: i, url: url.slice(-30), loaded: true });
           resolve(img);
         };
         img.onerror = () => {
-          console.log('[Player Image Preload]', { index: i, url: url.slice(-30), loaded: false });
           resolve(new Image());
         };
         img.src = url;
@@ -3539,13 +3363,20 @@ export class LyricDancePlayer {
 
   // ─── Scaling helpers ──────────────────────────────────────────────
 
-  private scaleTimeline(baked: Keyframe[]): ScaledKeyframe[] {
+  private updateTimelineScale(): void {
     const sx = this.width / BASE_W;
     const sy = this.height / BASE_H;
     const isPortrait = this.height > this.width;
     const fontScale = isPortrait
       ? Math.min(this.width / BASE_H, this.height / BASE_W)
       : Math.min(sx, sy);
+    this.timelineScale = { sx, sy, fontScale };
+    this.timeline = this.scaleTimeline(this.timelineBase);
+    this.invalidateFrameCache();
+  }
+
+  private scaleTimeline(baked: Keyframe[]): ScaledKeyframe[] {
+    const { sx, sy, fontScale } = this.timelineScale;
     return baked.map((kf) => ({
       ...kf,
       cameraX: kf.cameraX * sx,
@@ -3568,55 +3399,114 @@ export class LyricDancePlayer {
     }));
   }
 
-  private unscaleTimeline(): Keyframe[] {
-    const sx = this.width / BASE_W;
-    const sy = this.height / BASE_H;
-    const isPortrait = this.height > this.width;
-    const fontScale = isPortrait
-      ? Math.min(this.width / BASE_H, this.height / BASE_W)
-      : Math.min(sx, sy);
-    if (sx === 0 || sy === 0 || fontScale === 0) return [];
-    return this.timeline.map((kf) => ({
-      ...kf,
-      cameraX: kf.cameraX / sx,
-      cameraY: kf.cameraY / sy,
-      chunks: kf.chunks.map((c) => ({
-        ...c,
-        x: c.x / sx,
-        y: c.y / sy,
-        fontSize: c.fontSize ? c.fontSize / fontScale : 24,
-        entryOffsetY: (c.entryOffsetY ?? 0) / sy,
-        entryOffsetX: (c.entryOffsetX ?? 0) / sx,
-        entryScale: c.entryScale ?? 1,
-        exitOffsetY: (c.exitOffsetY ?? 0) / sy,
-        exitScale: c.exitScale ?? 1,
-        skewX: c.skewX ?? 0,
-        isAnchor: c.isAnchor ?? false,
-        color: c.color ?? '#ffffff',
-      })),
-      particles: kf.particles.map((p) => ({
-        ...p,
-        x: p.x / sx,
-        y: p.y / sy,
-        size: p.size / Math.min(sx, sy),
-      })),
-    })) as Keyframe[];
+  private invalidateFrameCache(): void {
+    this._frameCacheTimeMs = Number.NaN;
+    this._frameCacheValue = null;
+  }
+
+  private lerpNum(a: number | undefined, b: number | undefined, t: number, fallback = 0): number {
+    const av = Number.isFinite(a) ? (a as number) : fallback;
+    const bv = Number.isFinite(b) ? (b as number) : av;
+    return av + (bv - av) * t;
+  }
+
+  private lerpFrames(frameA: ScaledKeyframe, frameB: ScaledKeyframe, t: number): ScaledKeyframe {
+    const tt = Math.max(0, Math.min(1, t));
+    if (!this._interpFrame) {
+      this._interpFrame = { ...frameA, chunks: [], particles: [] };
+    }
+    const out = this._interpFrame;
+    out.timeMs = this.lerpNum(frameA.timeMs, frameB.timeMs, tt, frameA.timeMs);
+    out.beatIndex = tt < 0.5 ? frameA.beatIndex : frameB.beatIndex;
+    out.sectionIndex = tt < 0.5 ? frameA.sectionIndex : frameB.sectionIndex;
+    out.cameraX = this.lerpNum(frameA.cameraX, frameB.cameraX, tt);
+    out.cameraY = this.lerpNum(frameA.cameraY, frameB.cameraY, tt);
+    out.cameraZoom = this.lerpNum(frameA.cameraZoom, frameB.cameraZoom, tt, 1);
+    out.bgBlend = this.lerpNum(frameA.bgBlend, frameB.bgBlend, tt);
+    out.particleColor = tt < 0.5 ? frameA.particleColor : frameB.particleColor;
+    out.atmosphere = tt < 0.5 ? frameA.atmosphere : frameB.atmosphere;
+
+    const chunkBById = new Map(frameB.chunks.map((c) => [c.id, c]));
+    const usedB = new Set<string>();
+    let ci = 0;
+    for (const a of frameA.chunks) {
+      const b = chunkBById.get(a.id);
+      const base = b ?? a;
+      const outChunk = this._interpChunkPool[ci] ?? ({ ...base } as ScaledKeyframe['chunks'][number]);
+      this._interpChunkPool[ci] = outChunk;
+      Object.assign(outChunk, base);
+      outChunk.id = a.id;
+      outChunk.x = this.lerpNum(a.x, b?.x, tt, a.x);
+      outChunk.y = this.lerpNum(a.y, b?.y, tt, a.y);
+      outChunk.alpha = b ? this.lerpNum(a.alpha, b.alpha, tt, a.alpha) : Math.max(0, (a.alpha ?? 1) * (1 - tt));
+      outChunk.glow = this.lerpNum(a.glow, b?.glow, tt, a.glow ?? 0);
+      outChunk.scale = this.lerpNum(a.scale, b?.scale, tt, a.scale ?? 1);
+      outChunk.scaleX = this.lerpNum(a.scaleX, b?.scaleX, tt, outChunk.scale);
+      outChunk.scaleY = this.lerpNum(a.scaleY, b?.scaleY, tt, outChunk.scale);
+      outChunk.fontSize = this.lerpNum(a.fontSize, b?.fontSize, tt, a.fontSize ?? 36);
+      outChunk.skewX = this.lerpNum(a.skewX, b?.skewX, tt, a.skewX ?? 0);
+      outChunk.blur = this.lerpNum(a.blur, b?.blur, tt, a.blur ?? 0);
+      outChunk.rotation = this.lerpNum(a.rotation, b?.rotation, tt, a.rotation ?? 0);
+      outChunk.entryProgress = this.lerpNum(a.entryProgress, b?.entryProgress, tt, a.entryProgress ?? 0);
+      outChunk.exitProgress = this.lerpNum(a.exitProgress, b?.exitProgress, tt, a.exitProgress ?? 0);
+      outChunk.entryOffsetY = this.lerpNum(a.entryOffsetY, b?.entryOffsetY, tt, a.entryOffsetY ?? 0);
+      outChunk.entryOffsetX = this.lerpNum(a.entryOffsetX, b?.entryOffsetX, tt, a.entryOffsetX ?? 0);
+      outChunk.entryScale = this.lerpNum(a.entryScale, b?.entryScale, tt, a.entryScale ?? 1);
+      outChunk.exitOffsetY = this.lerpNum(a.exitOffsetY, b?.exitOffsetY, tt, a.exitOffsetY ?? 0);
+      outChunk.exitScale = this.lerpNum(a.exitScale, b?.exitScale, tt, a.exitScale ?? 1);
+      outChunk.visible = b ? (a.visible || b.visible) : a.visible;
+      if (b) usedB.add(a.id);
+      ci += 1;
+    }
+    for (const b of frameB.chunks) {
+      if (usedB.has(b.id)) continue;
+      const outChunk = this._interpChunkPool[ci] ?? ({ ...b } as ScaledKeyframe['chunks'][number]);
+      this._interpChunkPool[ci] = outChunk;
+      Object.assign(outChunk, b);
+      outChunk.alpha = (b.alpha ?? 1) * tt;
+      ci += 1;
+    }
+    this._interpChunkPool.length = ci;
+    out.chunks = this._interpChunkPool;
+
+    const pCount = Math.min(frameA.particles.length, frameB.particles.length);
+    let pi = 0;
+    for (; pi < pCount; pi += 1) {
+      const a = frameA.particles[pi];
+      const b = frameB.particles[pi];
+      const outP = this._interpParticlePool[pi] ?? ({ ...a } as ScaledKeyframe['particles'][number]);
+      this._interpParticlePool[pi] = outP;
+      outP.x = this.lerpNum(a.x, b.x, tt, a.x);
+      outP.y = this.lerpNum(a.y, b.y, tt, a.y);
+      outP.size = this.lerpNum(a.size, b.size, tt, a.size);
+      outP.alpha = this.lerpNum(a.alpha, b.alpha, tt, a.alpha);
+      outP.shape = tt < 0.5 ? a.shape : b.shape;
+    }
+    this._interpParticlePool.length = pi;
+    out.particles = this._interpParticlePool;
+    return out;
   }
 
   private getFrame(timeMs: number): ScaledKeyframe | null {
     if (!this.timeline.length) return null;
-    // Binary search for the frame just at or before timeMs
+    if (this._frameCacheValue && Math.abs(timeMs - this._frameCacheTimeMs) <= 1) {
+      return this._frameCacheValue;
+    }
     let lo = 0;
     let hi = this.timeline.length - 1;
     while (lo < hi) {
       const mid = (lo + hi + 1) >>> 1;
-      if (this.timeline[mid].timeMs <= timeMs) {
-        lo = mid;
-      } else {
-        hi = mid - 1;
-      }
+      if (this.timeline[mid].timeMs <= timeMs) lo = mid;
+      else hi = mid - 1;
     }
-    return this.timeline[lo];
+    const frameA = this.timeline[lo];
+    const frameB = this.timeline[lo + 1];
+    const result = (!frameB || frameB.timeMs === frameA.timeMs)
+      ? frameA
+      : this.lerpFrames(frameA, frameB, (timeMs - frameA.timeMs) / (frameB.timeMs - frameA.timeMs));
+    this._frameCacheTimeMs = timeMs;
+    this._frameCacheValue = result;
+    return result;
   }
 
   private drawBackground(frame: ScaledKeyframe): void {
