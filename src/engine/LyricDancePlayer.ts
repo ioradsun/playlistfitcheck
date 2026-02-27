@@ -3842,9 +3842,9 @@ export class LyricDancePlayer {
       this._evalFrame = {
         timeMs: 0, beatIndex: 0, sectionIndex: 0,
         cameraX: 0, cameraY: 0, cameraZoom: 1, bgBlend: 0,
-        particleColor: '#ffffff', atmosphere: chapter?.atmosphere ?? 'cinematic',
+        particleColor: '#ffffff', atmosphere: chapter?.atmosphere ?? 'cinematic' as any,
         chunks: [], particles: [],
-      } as ScaledKeyframe;
+      } as unknown as ScaledKeyframe;
     }
 
     const frame = this._evalFrame;
