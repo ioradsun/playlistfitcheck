@@ -259,25 +259,74 @@ export function computeEntryState(style: EntryStyle, progress: number, intensity
     case 'slam-down': return { offsetX: 0, offsetY: -(1 - ep) * 80 * intensity, scaleX: 1 + (1 - ep) * 0.3 * intensity, scaleY: ep < 0.9 ? 1 : 1 - (1 - ep) * 10 * intensity, alpha: Math.min(1, progress * 8), skewX: 0, glowMult: ep > 0.85 ? (1 - ep) * 4 : 0, blur: 0, rotation: 0 };
     case 'punch-in': return { offsetX: (1 - eb) * -120 * intensity, offsetY: 0, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 6), skewX: (1 - ep) * -8 * intensity, glowMult: 0, blur: 0, rotation: 0 };
     case 'explode-in': { const mult = Math.min(2.0, 2.5 * intensity); return { offsetX: 0, offsetY: 0, scaleX: 1 + (1 - ep) * mult, scaleY: 1 + (1 - ep) * mult, alpha: Math.min(1, progress * 4), skewX: 0, glowMult: (1 - ep) * 2, blur: 0, rotation: 0 }; }
-    default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 4), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'snap-in': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: progress > 0.01 ? 1 : 0, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'rise': return { offsetX: 0, offsetY: (1 - ep) * 45 * intensity, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'materialize': return { offsetX: 0, offsetY: 0, scaleX: 0.75 + ep * 0.25, scaleY: 0.75 + ep * 0.25, alpha: easeOut(Math.min(1, progress * 1.5)), skewX: 0, glowMult: (1 - ep) * 0.8, blur: 0, rotation: 0 };
+    case 'breathe-in': return { offsetX: 0, offsetY: 0, scaleX: 0.9 + ee * 0.1, scaleY: 0.9 + ee * 0.1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'drift-in': return { offsetX: (1 - ep) * -30, offsetY: (1 - ep) * 10, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 1.5)), skewX: (1 - ep) * -3, glowMult: 0, blur: 0, rotation: 0 };
+    case 'surface': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: easeIn(Math.min(1, progress * 1.2)), skewX: 0, glowMult: (1 - ep) * 1.5, blur: 0, rotation: 0 };
+    case 'drop': return { offsetX: 0, offsetY: -(1 - ep) * 60 * intensity, scaleX: 1, scaleY: 1, alpha: progress > 0.1 ? 1 : 0, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'plant': return { offsetX: 0, offsetY: 0, scaleX: 1 + (1 - ep) * 0.2, scaleY: 1 + (1 - ep) * 0.2, alpha: progress > 0.05 ? 1 : 0, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'stomp': { const wipeProgress = Math.min(1, progress * 3); return { offsetX: 0, offsetY: (1 - wipeProgress) * 20, scaleX: 1, scaleY: wipeProgress, alpha: wipeProgress, skewX: 0, glowMult: 0, blur: 0, rotation: 0 }; }
+    case 'cut-in': return { offsetX: (1 - ep) * -40, offsetY: 0, scaleX: 1, scaleY: 1, alpha: Math.min(1, progress * 5), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'whisper': return { offsetX: 0, offsetY: 0, scaleX: 0.95 + ep * 0.05, scaleY: 0.95 + ep * 0.05, alpha: easeIn(Math.min(1, progress * 0.8)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'bloom': return { offsetX: 0, offsetY: 0, scaleX: 0.5 + ep * 0.5, scaleY: 0.5 + ep * 0.5, alpha: easeOut(Math.min(1, progress * 1.2)), skewX: 0, glowMult: (1 - ep) * 2.5, blur: 0, rotation: 0 };
+    case 'melt-in': return { offsetX: 0, offsetY: (1 - ep) * 15, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 1.8)), skewX: (1 - ep) * 2, glowMult: 0, blur: 0, rotation: 0 };
+    case 'ink-drop': return { offsetX: 0, offsetY: 0, scaleX: ep < 0.5 ? ep * 2 : 1, scaleY: ep < 0.5 ? ep * 2 : 1, alpha: Math.min(1, progress * 3), skewX: 0, glowMult: (1 - ep) * 0.5, blur: 0, rotation: 0 };
+    case 'shatter-in': return { offsetX: (1 - ep) * (30 * deterministicSign(progress * 13.37)), offsetY: (1 - ep) * (20 * deterministicSign(progress * 7.91)), scaleX: 0.8 + ep * 0.2, scaleY: 0.8 + ep * 0.2, alpha: Math.min(1, progress * 4), skewX: (1 - ep) * 5, glowMult: 0, blur: 0, rotation: 0 };
+    case 'focus-in': { const focusScale = 1 + (1 - ep) * 0.6; return { offsetX: 0, offsetY: 0, scaleX: focusScale, scaleY: focusScale, alpha: easeOut(Math.min(1, progress * 1.5)), skewX: 0, glowMult: (1 - ep) * 2, blur: (1 - ep) * 1.0, rotation: 0 }; }
+    case 'spin-in': { const spin = (1 - ep) * 25; return { offsetX: (1 - ep) * -60, offsetY: 0, scaleX: 0.6 + ep * 0.4, scaleY: 0.6 + ep * 0.4, alpha: easeOut(Math.min(1, progress * 2)), skewX: spin, glowMult: 0, blur: 0, rotation: (1 - ep) * Math.PI * 2 }; }
+    case 'tumble-in': { const fallY = (1 - eb) * -80; const tumble = (1 - ep) * 20; return { offsetX: (1 - ep) * 30, offsetY: fallY, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2.5)), skewX: tumble, glowMult: 0, blur: 0, rotation: (1 - ep) * Math.PI }; }
+    default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
   }
 }
 export function computeExitState(style: ExitStyle, progress: number, intensity: number, letterIndex = 0, letterTotal = 1): AnimState {
   const ep = easeIn(Math.min(1, progress)); const ei = easeIn(Math.min(1, progress));
   switch (style) {
     case 'shatter': return { offsetX: ep * 40 * deterministicSign(progress * 9.43), offsetY: ep * -30, scaleX: 1 + ep * 0.4, scaleY: 1 - ep * 0.3, alpha: 1 - ei, skewX: ep * 10, glowMult: ep * 1.5, blur: 0, rotation: 0 };
-    case 'scatter-letters': {
-      const phase = (letterIndex / Math.max(1, letterTotal - 1)) * Math.PI * 2;
-      return { offsetX: ep * Math.cos(phase) * 70, offsetY: ep * (Math.sin(phase) * 40 - 20), scaleX: 1 - ep * 0.15, scaleY: 1 - ep * 0.15, alpha: 1 - ei, skewX: 0, glowMult: ep * 0.8, blur: ep * 2.5, rotation: ep * (deterministicSign(letterIndex + 1) * 22) };
-    }
-    default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ei, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'snap-out': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: progress > 0.02 ? 0 : 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'burn-out': return { offsetX: 0, offsetY: 0, scaleX: 1 + ep * 0.1, scaleY: 1 + ep * 0.1, alpha: 1 - ei, skewX: 0, glowMult: ep * 3, blur: 0, rotation: 0 };
+    case 'punch-out': return { offsetX: ep * 150 * intensity, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 3), skewX: ep * 8, glowMult: 0, blur: 0, rotation: 0 };
+    case 'dissolve': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'drift-up': return { offsetX: 0, offsetY: -ep * 35, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'exhale': return { offsetX: 0, offsetY: 0, scaleX: 1 - ep * 0.1, scaleY: 1 - ep * 0.1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'sink': return { offsetX: 0, offsetY: ep * 40, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'drop-out': return { offsetX: 0, offsetY: ep * 200 * intensity, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 4), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'cut-out': return { offsetX: ep * 60, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 5), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'vanish': return { offsetX: 0, offsetY: 0, scaleX: 1 - ei * 0.8, scaleY: 1 - ei * 0.8, alpha: 1 - ei, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'linger': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 0.28, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'evaporate': return { offsetX: 0, offsetY: -ep * 12, scaleX: 1, scaleY: 1, alpha: 1 - easeIn(Math.min(1, progress * 0.7)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'whisper-out': return { offsetX: 0, offsetY: 0, scaleX: 1 - ep * 0.08, scaleY: 1 - ep * 0.08, alpha: 1 - easeIn(Math.min(1, progress * 0.9)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+    case 'gravity-fall': { const gravity = ep * ep * ep; return { offsetX: Math.sin(progress * 3) * 4, offsetY: gravity * 600, scaleX: 1, scaleY: 1 + ep * 0.15, alpha: 1 - easeIn(Math.min(1, progress * 1.2)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 }; }
+    case 'soar': { const arc = easeIn(ep); return { offsetX: arc * 150, offsetY: -arc * 250, scaleX: 1 - ep * 0.3, scaleY: 1 - ep * 0.3, alpha: 1 - easeIn(Math.min(1, progress * 1.5)), skewX: -arc * 8, glowMult: 0, blur: 0, rotation: 0 }; }
+    case 'launch': { const thrust = ep * ep; return { offsetX: Math.sin(progress * 12) * 3, offsetY: -thrust * 400, scaleX: 1, scaleY: 1 + ep * 0.2, alpha: 1 - easeIn(Math.min(1, progress * 2)), skewX: 0, glowMult: ep * 0.5, blur: 0, rotation: 0 }; }
+    case 'scatter-fly': { const arc = easeIn(ep); return { offsetX: Math.sin(progress * 4) * 80 * arc, offsetY: -arc * 200, scaleX: 1 - ep * 0.5, scaleY: 1 - ep * 0.5, alpha: 1 - ep, skewX: Math.sin(progress * 6) * 12, glowMult: 0, blur: 0, rotation: 0 }; }
+    case 'melt': { const drip = easeIn(ep); return { offsetX: Math.sin(progress * 2) * 3, offsetY: drip * 120, scaleX: 1 + ep * 0.3, scaleY: 1 - ep * 0.4, alpha: 1 - easeIn(Math.min(1, progress * 0.9)), skewX: progress * 6, glowMult: 0, blur: 0, rotation: 0 }; }
+    case 'freeze-crack': { const hold = progress < 0.7; const breakProgress = hold ? 0 : (progress - 0.7) / 0.3; const bp = easeIn(Math.min(1, breakProgress)); return { offsetX: hold ? 0 : bp * 60 * (progress % 2 < 1 ? 1 : -1), offsetY: hold ? 0 : bp * 40, scaleX: 1, scaleY: 1, alpha: hold ? 1.0 : 1 - bp, skewX: hold ? 0 : bp * 15, glowMult: 0, blur: 0, rotation: 0 }; }
+    case 'scatter-letters': { const burst = easeIn(ep); const angle = (progress * 7.3) % (Math.PI * 2); return { offsetX: Math.cos(angle) * burst * 100, offsetY: Math.sin(angle) * burst * 80 + burst * 40, scaleX: 1 - ep * 0.3, scaleY: 1 - ep * 0.3, alpha: 1 - ei, skewX: burst * 20 * Math.sin(angle), glowMult: 0, blur: 0, rotation: ep * (angle > Math.PI ? 0.5 : -0.5) }; }
+    case 'cascade-down': { const fall = easeIn(ep); return { offsetX: 0, offsetY: fall * 300, scaleX: 1, scaleY: 1, alpha: 1 - easeIn(Math.min(1, progress * 1.5)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 }; }
+    case 'cascade-up': { const rise = easeIn(ep); return { offsetX: 0, offsetY: -rise * 300, scaleX: 1, scaleY: 1, alpha: 1 - easeIn(Math.min(1, progress * 1.5)), skewX: 0, glowMult: 0, blur: 0, rotation: 0 }; }
+    case 'blur-out': return { offsetX: 0, offsetY: 0, scaleX: 1 + ep * 0.25, scaleY: 1 + ep * 0.25, alpha: 1 - ep, skewX: 0, glowMult: ep * 2, blur: ep * 1.0, rotation: 0 };
+    case 'spin-out': return { offsetX: ep * 80, offsetY: 0, scaleX: 1 - ep * 0.4, scaleY: 1 - ep * 0.4, alpha: 1 - ei, skewX: ep * 30, glowMult: 0, blur: 0, rotation: ep * Math.PI * 2 };
+    case 'peel-off': return { offsetX: ep * 120, offsetY: ep * -20, scaleX: 1 - ep * 0.2, scaleY: 1, alpha: 1 - ei, skewX: ep * 15, glowMult: 0, blur: 0, rotation: 0 };
+    case 'peel-reverse': return { offsetX: -ep * 120, offsetY: ep * -20, scaleX: 1 - ep * 0.2, scaleY: 1, alpha: 1 - ei, skewX: -ep * 15, glowMult: 0, blur: 0, rotation: 0 };
+    default: return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - ep, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
   }
 }
 export function computeBehaviorState(style: BehaviorStyle, tSec: number, wordStart: number, beatPhase: number, intensity: number): Partial<AnimState> {
-  const localT = tSec - wordStart;
   switch (style) {
-    case 'pulse': { const s = 1 + Math.sin(localT * 8 + beatPhase * Math.PI * 2) * 0.03 * intensity; return { scaleX: s, scaleY: s, glowMult: Math.max(0, Math.sin(localT * 6)) * 0.5 * intensity }; }
-    case 'float': return { offsetY: Math.sin(localT * 2) * 4 * intensity };
+    case 'pulse': { const pulse = Math.sin(beatPhase * Math.PI * 2) * 0.03 * intensity; return { scaleX: 1 + pulse, scaleY: 1 + pulse }; }
+    case 'vibrate': return { offsetX: Math.sin(tSec * 18) * 1.2 * intensity };
+    case 'float': return { offsetY: Math.sin((tSec - wordStart) * 1.8) * 4 * intensity };
+    case 'grow': { const growScale = 1 + Math.min(0.15, (tSec - wordStart) * 0.04) * intensity; return { scaleX: growScale, scaleY: growScale }; }
+    case 'contract': { const contractScale = 1 - Math.min(0.1, (tSec - wordStart) * 0.03) * intensity; return { scaleX: contractScale, scaleY: contractScale }; }
+    case 'flicker': { const f = Math.sin(tSec * 6) * 0.5 + Math.sin(tSec * 13) * 0.5; return { alpha: 0.88 + f * 0.12 }; }
+    case 'orbit': { const angle = (tSec - wordStart) * 1.2; return { offsetX: Math.sin(angle) * 2 * intensity, offsetY: Math.cos(angle) * 1.5 * intensity }; }
+    case 'lean': return { skewX: Math.sin((tSec - wordStart) * 0.8) * 4 * intensity };
+    case 'freeze': { if ((tSec - wordStart) > 0.3) return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, blur: 0, rotation: 0 }; const pulse = Math.sin(beatPhase * Math.PI * 2) * 0.04 * intensity; return { scaleX: 1 + pulse, scaleY: 1 + pulse }; }
+    case 'tilt': return { rotation: Math.sin((tSec - wordStart) * 2) * 0.14 * intensity };
+    case 'pendulum': return { rotation: Math.sin((tSec - wordStart) * 0.8) * 0.26 * intensity };
+    case 'pulse-focus': { const focusPulse = Math.sin(beatPhase * Math.PI * 2) * 0.3; return { blur: Math.max(0, focusPulse) }; }
     default: return {};
   }
 }
