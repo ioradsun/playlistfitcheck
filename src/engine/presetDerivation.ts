@@ -319,14 +319,10 @@ export interface FrameRenderState {
     direction?: string;
   };
 
-  // Karaoke mode flags (strict master-timestamp rendering)
-  karaokeMode?: boolean;
-  karaokeStrictTiming?: boolean;
-  karaokeDisableShake?: boolean;
-  karaokeDisableBaselineEase?: boolean;
-  karaokeDisableBeatSnap?: boolean;
-  karaokeFadeMs?: number;
-  karaokeDebug?: boolean;
+  // Cinematic karaoke debug/dev flags
+  debugHud?: boolean;
+  enableEchoLine?: boolean;
+  wordFeatherMs?: number;
 }
 
 export function deriveFrameState(
