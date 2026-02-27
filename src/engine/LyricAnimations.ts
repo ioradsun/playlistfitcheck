@@ -54,7 +54,7 @@ export function applyEntrance(
       ctx.globalAlpha *= e;
       return e;
     case "fractures-in":
-      ctx.translate((Math.random() - 0.5) * (1 - progress) * 5, (Math.random() - 0.5) * (1 - progress) * 5);
+      ctx.translate(Math.sin(progress * 43.2) * (1 - progress) * 2.5, Math.cos(progress * 37.7) * (1 - progress) * 2.5);
       ctx.globalAlpha *= e;
       return e;
     case "cuts":
@@ -78,7 +78,7 @@ export function applyExit(
       ctx.translate(0, -e * 22);
       return remaining;
     case "shatters":
-      ctx.translate((Math.random() - 0.5) * e * 10, (Math.random() - 0.5) * e * 10);
+      ctx.translate(Math.sin(progress * 52.4) * e * 5, Math.cos(progress * 47.9) * e * 5);
       return remaining;
     case "drops":
       ctx.translate(0, e * 22);
@@ -140,7 +140,7 @@ export function applyWordMark(
 ): void {
   switch (anim.mark) {
     case "SHATTER":
-      ctx.translate((Math.random() - 0.5) * (1 - anim.intensity) * 5, (Math.random() - 0.5) * (1 - anim.intensity) * 5);
+      ctx.translate(Math.sin(time * 18 + anim.intensity * 3) * (1 - anim.intensity) * 2.5, Math.cos(time * 16 + anim.intensity * 5) * (1 - anim.intensity) * 2.5);
       break;
     case "GLOW":
       ctx.shadowColor = manifest.palette?.[2] ?? "#ec4899";

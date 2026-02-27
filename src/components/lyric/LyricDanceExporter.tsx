@@ -227,6 +227,9 @@ export function LyricDanceExporter({
       wordHistory: new Map(),
       directiveCache: new Map(),
       evolutionCache: new Map(),
+      stableLineLayoutCache: new Map(),
+      measurementCache: new Map(),
+      scratchVisibleWordIndices: [],
     };
 
     const wordWidthCache = new Map<string, number>();
