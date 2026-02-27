@@ -22,6 +22,9 @@ import {
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 
+const DECOMP_ENABLED = false; // set to true to re-enable word-to-particle
+const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: no-decomp-v23';
+
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
 // ──────────────────────────────────────────────────────────────
@@ -941,6 +944,9 @@ export class LyricDancePlayer {
     this.audio.muted = true;
     this.audio.preload = "auto";
     this.bootMode = options?.bootMode ?? "full";
+    this.activeDecomps.length = 0;
+
+    console.info(LYRIC_DANCE_PLAYER_BUILD_STAMP);
 
     this.ambientParticleEngine = new ParticleEngine({
       particleSystem: this.resolvedState.particleConfig.system,
@@ -1954,7 +1960,7 @@ export class LyricDancePlayer {
 
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
-      if (shouldSpawnDecomp && allowDecomp) {
+      if (DECOMP_ENABLED && shouldSpawnDecomp && allowDecomp) {
         const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
         this.tryStartDecomposition({
           chunkId: chunk.id,
