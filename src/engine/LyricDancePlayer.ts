@@ -1514,11 +1514,11 @@ export class LyricDancePlayer {
 
     // Lerp toward real time — smooths out audio buffer jitter
     // 0.15 = responsive enough to not drift, smooth enough to hide jitter
-    const alpha = 0.15;
+    const alpha = 0.5;
     this._smoothedTime += (rawTime - this._smoothedTime) * alpha;
 
     // Never drift more than 100ms from real time
-    if (Math.abs(this._smoothedTime - rawTime) > 0.1) {
+    if (Math.abs(this._smoothedTime - rawTime) > 0.05) {
       this._smoothedTime = rawTime;
     }
 
@@ -2027,7 +2027,7 @@ export class LyricDancePlayer {
     if (visibleIds !== this._lastVisibleChunkIds ||
         wallLeft !== this._solvedWalls.left ||
         wallRight !== this._solvedWalls.right) {
-      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+      // this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
       this._lastVisibleChunkIds = visibleIds;
       this._solvedWalls = { left: wallLeft, right: wallRight, top: wallTop, bottom: wallBottom };
       // Save solved positions
@@ -2067,7 +2067,7 @@ export class LyricDancePlayer {
     }
 
     if (shrinkOccurred) {
-      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+      // this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
       this._solvedBounds = bounds.map(b => ({ ...b }));
     }
 
