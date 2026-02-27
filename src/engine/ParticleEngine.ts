@@ -174,7 +174,6 @@ export class ParticleEngine {
   private behaviorHint: string | null = null;
   private updateFrameSkip = 1;
   private updateFrameCounter = 0;
-  private lastDebugUpdateLogMs = 0;
 
   constructor(frame: FrameRenderState) {
     this.config = ParticleEngine.fromFrameState(frame);
@@ -344,18 +343,8 @@ export class ParticleEngine {
     const target = Math.min(this.maxParticles, this.targetActiveCount());
     let activeBeforeSpawn = 0;
     for (let i = 0; i < this.pool.length; i++) if (this.pool[i].active) activeBeforeSpawn++;
-    const spawning = activeBeforeSpawn < target;
 
     this.spawnParticles(beatIntensity);
-
-    if (this.time - this.lastDebugUpdateLogMs >= 1000) {
-      this.lastDebugUpdateLogMs = this.time;
-      console.log("[Particles] update:", {
-        count: this.getActiveCount(),
-        spawning,
-        deltaTime: dt,
-      });
-    }
 
     if (this.config.system === "lightning" && beatIntensity > 0.8 && this.lastBeatIntensity <= 0.8) {
       this.lightning.push(this.createLightningBolt());
