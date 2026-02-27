@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download } from "lucide-react";
@@ -56,8 +56,25 @@ function extractAudioSectionsFromDirection(
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
 interface DanceComment { id: string; text: string; submitted_at: string; }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,auto_palettes,beat_grid,palette,system_type,seed,artist_dna,physics_spec";
+const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,auto_palettes,beat_grid,palette,system_type,seed,artist_dna,physics_spec,frame_state";
 const DIRECTION_COLUMNS = "cinematic_direction";
+
+function applyKaraokeQueryToggle(payload: LyricDanceData, karaokeEnabled: boolean): LyricDanceData {
+  if (!karaokeEnabled) return payload;
+  return {
+    ...payload,
+    frame_state: {
+      ...(payload.frame_state ?? {}),
+      karaokeMode: true,
+      karaokeStrictTiming: true,
+      karaokeDisableShake: true,
+      karaokeDisableBaselineEase: true,
+      karaokeDisableBeatSnap: true,
+      karaokeFadeMs: 70,
+      karaokeDebug: true,
+    },
+  };
+}
 
 // ─── Progress Bar ───────────────────────────────────────────────────
 
@@ -251,6 +268,7 @@ function LiveDebugHUD({ player }: { player: LyricDancePlayer | null }) {
 export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
 
   const [data, setData] = useState<LyricDanceData | null>(null);
@@ -263,6 +281,7 @@ export default function ShareableLyricDance() {
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
+  const karaokeEnabled = new URLSearchParams(location.search).get("karaoke") === "1";
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -299,7 +318,7 @@ export default function ShareableLyricDance() {
       .maybeSingle()
       .then(async ({ data: row, error }) => {
         if (error || !row) { setNotFound(true); setLoading(false); return; }
-        const d = row as any as LyricDanceData;
+        const d = applyKaraokeQueryToggle(row as any as LyricDanceData, karaokeEnabled);
         setData({ ...d, cinematic_direction: null });
         setLoading(false);
 
@@ -384,7 +403,7 @@ export default function ShareableLyricDance() {
         ]);
         if (profileResult.data) setProfile(profileResult.data as ProfileInfo);
       });
-  }, [artistSlug, songSlug]);
+  }, [artistSlug, songSlug, karaokeEnabled]);
 
   useEffect(() => {
     if (!data) return;
@@ -789,6 +808,14 @@ export default function ShareableLyricDance() {
 
       {/* Debug */}
       <LiveDebugHUD player={playerInstance} />
+      {data?.frame_state?.karaokeDebug ? (
+        <div className="fixed top-3 right-3 z-[210] rounded-md border border-white/20 bg-black/70 px-3 py-2 text-[11px] leading-4 text-white/90 backdrop-blur-sm font-mono">
+          <div>Karaoke: ON</div>
+          <div>Strict: {String(data.frame_state?.karaokeStrictTiming === true)}</div>
+          <div>DisableShake: {String(data.frame_state?.karaokeDisableShake === true)}</div>
+          <div>DisableBaselineEase: {String(data.frame_state?.karaokeDisableBaselineEase === true)}</div>
+        </div>
+      ) : null}
       <LyricDanceDebugPanel
         player={playerInstance}
         onRegenerateSong={() => {

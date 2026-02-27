@@ -1018,6 +1018,9 @@ export class LyricDancePlayer {
       globalBakerVersion = 0;
     }
     this.data = data;
+    if (import.meta.env.DEV) {
+      console.log("Karaoke Mode Active:", this.data?.frame_state?.karaokeMode === true);
+    }
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
     this.container = container;
