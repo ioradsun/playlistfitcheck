@@ -1862,22 +1862,29 @@ export class LyricDancePlayer {
     const frame = this.evaluateFrame(tSec);
     if (!frame) return;
 
-    if (this.frameCount % 120 === 0) {
+    if (this.frameCount === 60) {
       const scene = this.compiledScene;
-      const biggest = frame.chunks.reduce((max, c) => (c.fontSize ?? 0) > (max.fontSize ?? 0) ? c : max, frame.chunks[0]);
-      console.log('[DIAG]', {
-        beatEvents: scene?.beatEvents?.length,
+      let maxBase = 0;
+      if (scene) {
+        for (const g of scene.phraseGroups) {
+          for (const w of g.words) {
+            if (w.baseFontSize > maxBase) maxBase = w.baseFontSize;
+          }
+        }
+      }
+      console.log('[DIAG]', JSON.stringify({
+        beats: scene?.beatEvents?.length,
         bpm: scene?.bpm,
-        zoom: frame.cameraZoom?.toFixed(2),
-        fontScale: this._viewportFontScale.toFixed(2),
-        biggestText: biggest?.text,
-        biggestFontSize: biggest?.fontSize?.toFixed(0),
-        biggestBaseFontInCompiler: scene?.phraseGroups?.flatMap(g => g.words).reduce((max, w) => w.baseFontSize > max ? w.baseFontSize : max, 0),
-        activeGroups: this._activeGroupIndices.length,
-        visibleChunks: frame.chunks.filter(c => c.visible).length,
-        sampleLinger: scene?.phraseGroups?.[0]?.lingerDuration,
-        sampleExitDur: scene?.phraseGroups?.[0]?.exitDuration,
-      });
+        zoom: +(frame.cameraZoom ?? 1).toFixed(2),
+        fontScale: +this._viewportFontScale.toFixed(2),
+        maxBaseFontCompiler: maxBase,
+        bigText: frame.chunks[0]?.text,
+        bigFont: +(frame.chunks[0]?.fontSize ?? 0).toFixed(0),
+        groups: this._activeGroupIndices.length,
+        visible: frame.chunks.filter(c => c.visible).length,
+        linger: scene?.phraseGroups?.[0]?.lingerDuration,
+        exitDur: scene?.phraseGroups?.[0]?.exitDuration,
+      }));
     }
 
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
