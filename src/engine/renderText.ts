@@ -345,6 +345,12 @@ export function renderText(
   let frameXNudge = 0;
   let frameSectionZone = "chorus";
 
+  const karaokeMode = (resolvedManifest as { karaokeMode?: boolean }).karaokeMode === true;
+  const karaokeStrictTiming = (resolvedManifest as { karaokeStrictTiming?: boolean }).karaokeStrictTiming ?? karaokeMode;
+  const karaokeDisableBaselineEase = karaokeMode && ((resolvedManifest as { karaokeDisableBaselineEase?: boolean }).karaokeDisableBaselineEase ?? true);
+  const karaokeDisableShake = karaokeMode && ((resolvedManifest as { karaokeDisableShake?: boolean }).karaokeDisableShake ?? true);
+  const karaokeDisableBeatSnap = karaokeMode && ((resolvedManifest as { karaokeDisableBeatSnap?: boolean }).karaokeDisableBeatSnap ?? true);
+
   if (!activeLine) {
     return {
       drawCalls,
@@ -507,7 +513,8 @@ export function renderText(
   }
 
   textState.xOffset += (0 - textState.xOffset) * 0.05;
-  textState.yBase += (targetYBase - textState.yBase) * 0.05;
+  if (karaokeDisableBaselineEase) textState.yBase = targetYBase;
+  else textState.yBase += (targetYBase - textState.yBase) * 0.05;
 
   const nudge = beatIntensity * 3;
   let xNudge = 0;
@@ -538,8 +545,8 @@ export function renderText(
 
   // Physics-driven shake
   const physShakeAngle = (beatIndex * 2.3 + currentTime * 7.1) % (Math.PI * 2);
-  const physShakeX = Math.cos(physShakeAngle) * state.shake;
-  const physShakeY = Math.sin(physShakeAngle) * state.shake;
+  const physShakeX = karaokeDisableShake ? 0 : Math.cos(physShakeAngle) * state.shake;
+  const physShakeY = karaokeDisableShake ? 0 : Math.sin(physShakeAngle) * state.shake;
   const lineX = cw / 2 + textState.xOffset + xNudge + state.offsetX + physShakeX;
   const lineY = textState.yBase + yNudge + state.offsetY + physShakeY;
   activeWordPosition = { x: lineX, y: lineY };
@@ -580,11 +587,15 @@ export function renderText(
   let visibleWordCount = 0;
   if (snappedStarts && snappedStarts.length > 0) {
     while (visibleWordCount < snappedStarts.length && currentTime >= snappedStarts[visibleWordCount]) visibleWordCount += 1;
-  } else {
+  } else if (!karaokeMode) {
     const lineDuration = Math.max(0.001, activeLine.end - activeLine.start);
     const wordsPerSecond = words.length > 0 ? words.length / lineDuration : 1;
     const wordDelay = wordsPerSecond > 0 ? 1 / wordsPerSecond : lineDuration;
     while (visibleWordCount < words.length && currentTime >= activeLine.start + visibleWordCount * wordDelay) visibleWordCount += 1;
+  } else if (karaokeStrictTiming) {
+    // Karaoke mode never falls back to even distribution timing.
+    visibleWordCount = 0;
+    console.warn('[karaokeMode] strict timing enabled but no AI word timing data for active line', { start: activeLine.start, end: activeLine.end, text: activeLine.text });
   }
 
   const wordCount = words.length;
@@ -765,8 +776,9 @@ export function renderText(
     const wordText = words[sourceWordIndex] ?? "";
     const displayWord = getDisplayWord(wordText);
     const normalizedWord = normalizedWords[sourceWordIndex] ?? wordText.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
+    const fallbackWordStart = activeLine.start + (Math.max(0, sourceWordIndex) * Math.max(0.001, activeLine.end - activeLine.start)) / Math.max(1, words.length);
     const resolvedWordStartTime = snappedStarts?.[Math.max(0, sourceWordIndex)]
-      ?? snapToNearestBeat(activeLine.start + (Math.max(0, sourceWordIndex) * Math.max(0.001, activeLine.end - activeLine.start)) / Math.max(1, words.length), sortedBeats);
+      ?? (karaokeDisableBeatSnap ? fallbackWordStart : snapToNearestBeat(fallbackWordStart, sortedBeats));
     const appearanceKey = `${activeLine.start}:${Math.max(0, sourceWordIndex)}:${normalizedWord}`;
 
     if (!textState.seenAppearances.has(appearanceKey) && currentTime >= resolvedWordStartTime) {

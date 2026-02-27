@@ -186,6 +186,16 @@ export interface LiveDebugState {
   activeWordExit: string;
   activeWordEmphasis: number;
   activeWordTrail: string;
+  activeWordWindow: string;
+  activeWordStart: number;
+  activeWordEnd: number;
+  karaokeMode: boolean;
+  karaokeActiveLineIndex: number;
+  karaokeActiveWordIndex: number;
+  karaokeMismatchWarnings: string;
+  karaokeDisableBaselineEase: boolean;
+  karaokeDisableShake: boolean;
+  karaokeDisableBeatSnap: boolean;
   resolvedLineStyle: string;
   resolvedWordStyle: string;
   layoutStable: boolean;
@@ -326,6 +336,16 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   activeWordExit: "—",
   activeWordEmphasis: 0,
   activeWordTrail: "none",
+  activeWordWindow: "—",
+  activeWordStart: -1,
+  activeWordEnd: -1,
+  karaokeMode: false,
+  karaokeActiveLineIndex: -1,
+  karaokeActiveWordIndex: -1,
+  karaokeMismatchWarnings: "none",
+  karaokeDisableBaselineEase: false,
+  karaokeDisableShake: false,
+  karaokeDisableBeatSnap: false,
   resolvedLineStyle: "—",
   resolvedWordStyle: "—",
   layoutStable: true,
@@ -1847,7 +1867,9 @@ export class LyricDancePlayer {
     const frame = this.evaluateFrame(clamped);
     const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
 
-    const activeWord = this.getActiveWord(clamped);
+    const karaokeConfig = this.getKaraokeConfig();
+    const activeLineIdx = activeLine ? lines.indexOf(activeLine) : -1;
+    const activeWord = this.getActiveWord(clamped, activeLineIdx, karaokeConfig.karaokeMode ? true : karaokeConfig.karaokeStrictTiming);
     const activeWordClean = normalizeToken(activeWord?.word ?? '');
     const activeWordDirective = activeWordClean ? this.resolvedState.wordDirectivesMap[activeWordClean] ?? null : null;
 
@@ -1917,6 +1939,17 @@ export class LyricDancePlayer {
     ds.activeWordExit = activeWordDirective?.exit ?? '—';
     ds.activeWordEmphasis = activeWordDirective?.emphasisLevel ?? 0;
     ds.activeWordTrail = activeWordDirective?.trail ?? 'none';
+    ds.activeWordStart = activeWord?.start ?? -1;
+    ds.activeWordEnd = activeWord?.end ?? -1;
+    ds.activeWordWindow = activeWord ? `[${activeWord.start.toFixed(3)}, ${activeWord.end.toFixed(3)}]` : '—';
+    ds.karaokeMode = karaokeConfig.karaokeMode;
+    ds.karaokeActiveLineIndex = activeLineIdx;
+    ds.karaokeActiveWordIndex = activeWord?.index ?? -1;
+    const mismatchList = this.compiledScene?.lineTokenMismatches ?? [];
+    ds.karaokeMismatchWarnings = mismatchList.length > 0 ? mismatchList.map((m) => `L${m.lineIndex}:${m.tokenCount}/${m.timingCount}`).join(', ') : 'none';
+    ds.karaokeDisableBaselineEase = karaokeConfig.karaokeMode && karaokeConfig.karaokeDisableBaselineEase;
+    ds.karaokeDisableShake = karaokeConfig.karaokeMode && karaokeConfig.karaokeDisableShake;
+    ds.karaokeDisableBeatSnap = karaokeConfig.karaokeMode && karaokeConfig.karaokeDisableBeatSnap;
 
     // ── Word directive (from cinematic direction) ──
     ds.wordDirectiveWord = activeWordClean || '';
@@ -1929,7 +1962,6 @@ export class LyricDancePlayer {
 
     // ── Line / storyboard ──
     const storyboard = cd?.storyboard ?? [];
-    const activeLineIdx = activeLine ? lines.indexOf(activeLine) : -1;
     const lineStory = activeLineIdx >= 0 ? (storyboard as any[])[activeLineIdx] : null;
     ds.lineHeroWord = lineStory?.heroWord ?? '';
     ds.lineEntry = lineStory?.entryStyle ?? 'fades';
@@ -1945,7 +1977,7 @@ export class LyricDancePlayer {
     ds.resolvedWordStyle = resolvedWord
       ? `${resolvedWord.behavior} e${resolvedWord.emphasisLevel} pulse:${resolvedWord.pulseAmp.toFixed(2)}`
       : '—';
-    ds.layoutStable = true;
+    ds.layoutStable = !(karaokeConfig.karaokeMode && (Math.abs(frame?.cameraX ?? 0) > 0.001 || Math.abs(frame?.cameraY ?? 0) > 0.001));
 
     // ── Camera & tension ──
     ds.cameraDistance = ds.cdTypography;
@@ -3021,16 +3053,39 @@ export class LyricDancePlayer {
   }
 
 
-  private getActiveWord(timeSec: number): { word?: string; start: number; end: number } | null {
+  private getKaraokeConfig() {
+    const sceneKaraoke = this.compiledScene?.karaoke;
+    const frameState = (this.data?.frame_state ?? {}) as Record<string, unknown>;
+    const karaokeMode = sceneKaraoke?.karaokeMode === true || frameState.karaokeMode === true;
+    const bool = (key: string, fallback: boolean) => typeof frameState[key] === 'boolean' ? (frameState[key] as boolean) : fallback;
+    const fadeRaw = Number(frameState.karaokeFadeMs);
+    return {
+      karaokeMode,
+      karaokeStrictTiming: sceneKaraoke?.karaokeStrictTiming ?? bool('karaokeStrictTiming', karaokeMode),
+      karaokeDisableShake: sceneKaraoke?.karaokeDisableShake ?? bool('karaokeDisableShake', true),
+      karaokeDisableBaselineEase: sceneKaraoke?.karaokeDisableBaselineEase ?? bool('karaokeDisableBaselineEase', true),
+      karaokeDisableBeatSnap: sceneKaraoke?.karaokeDisableBeatSnap ?? bool('karaokeDisableBeatSnap', true),
+      karaokeFadeMs: sceneKaraoke?.karaokeFadeMs ?? (Number.isFinite(fadeRaw) ? Math.max(0, fadeRaw) : 60),
+      karaokeDebug: sceneKaraoke?.karaokeDebug ?? bool('karaokeDebug', false),
+    };
+  }
+
+  private getActiveWord(timeSec: number, activeLineIndex: number, strictTiming: boolean): { word?: string; start: number; end: number; index: number } | null {
     const words = this.data.words ?? [];
     for (let i = words.length - 1; i >= 0; i--) {
       const word = words[i];
-      if (word.start <= timeSec && word.end >= timeSec) {
-        return word;
+      const inActiveWindow = word.start <= timeSec && word.end >= timeSec;
+      if (!inActiveWindow) continue;
+      if (activeLineIndex >= 0) {
+        const line = this.data.lyrics?.[activeLineIndex];
+        if (line && !(word.start >= line.start - 0.08 && word.end <= line.end + 0.08)) continue;
       }
-      if (word.start <= timeSec) {
-        return word;
-      }
+      return { ...word, index: i };
+    }
+    if (strictTiming) return null;
+    for (let i = words.length - 1; i >= 0; i--) {
+      const word = words[i];
+      if (word.start <= timeSec) return { ...word, index: i };
     }
     return null;
   }
@@ -3680,6 +3735,7 @@ export class LyricDancePlayer {
     const scene = this.compiledScene;
     if (!scene) return null;
 
+    const karaokeConfig = this.getKaraokeConfig();
     const songDuration = Math.max(0.01, scene.durationSec);
     const songProgress = Math.max(0, Math.min(1, (tSec - scene.songStartSec) / songDuration));
     const { _viewportSx: sx, _viewportSy: sy, _viewportFontScale: fontScale } = this;
@@ -3698,9 +3754,14 @@ export class LyricDancePlayer {
     if (this._glowBudget > 0) this._glowBudget -= 1;
     const glow = Math.pow(this._glowBudget / 13, 0.6);
 
-    this._springOffset += this._springVelocity;
-    this._springVelocity *= 0.82;
-    this._springOffset *= 0.88;
+    if (karaokeConfig.karaokeMode && karaokeConfig.karaokeDisableShake) {
+      this._springVelocity = 0;
+      this._springOffset = 0;
+    } else {
+      this._springOffset += this._springVelocity;
+      this._springVelocity *= 0.82;
+      this._springOffset *= 0.88;
+    }
 
     let currentChapterIdx = 0;
     for (let i = 0; i < scene.chapters.length; i++) {
@@ -3719,8 +3780,8 @@ export class LyricDancePlayer {
     const intensityGlowMult = 0.5 + intensity * 1.0;
     const intensityScaleMult = 0.95 + intensity * 0.1;
 
-    let driftX = Math.sin(tSec * 0.15) * 8 * sx;
-    let driftY = Math.cos(tSec * 0.12) * 5 * sy;
+    let driftX = karaokeConfig.karaokeMode ? 0 : Math.sin(tSec * 0.15) * 8 * sx;
+    let driftY = karaokeConfig.karaokeMode ? 0 : Math.cos(tSec * 0.12) * 5 * sy;
 
     const groups = scene.phraseGroups;
     const activeGroups = this._activeGroupIndices;
@@ -3776,11 +3837,30 @@ export class LyricDancePlayer {
 
         const isEntryComplete = entryProgress >= 1.0;
         const isExiting = exitProgress > 0;
-        const rawAlpha = isExiting
+        let rawAlpha = isExiting
           ? Math.max(0, exitState.alpha)
           : isEntryComplete
             ? 1.0 * (behaviorState.alpha ?? 1)
             : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
+
+        if (karaokeConfig.karaokeMode && karaokeConfig.karaokeStrictTiming) {
+          // Strict karaoke timing: visibility is driven only by AI master timestamps.
+          const withinWindow = tSec >= word.start && tSec <= word.end;
+          if (!withinWindow) {
+            rawAlpha = 0;
+          } else {
+            const fadeSec = Math.max(0, karaokeConfig.karaokeFadeMs / 1000);
+            if (fadeSec > 0) {
+              const alphaIn = Math.max(0, Math.min(1, (tSec - word.start) / fadeSec));
+              const alphaOut = Math.max(0, Math.min(1, (word.end - tSec) / fadeSec));
+              const smooth = (v: number) => v * v * (3 - 2 * v);
+              rawAlpha = Math.min(smooth(alphaIn), smooth(alphaOut));
+            } else {
+              rawAlpha = 1;
+            }
+          }
+        }
+
         const finalAlpha = Math.min(word.semanticAlphaMax, rawAlpha);
 
         const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
@@ -3800,7 +3880,7 @@ export class LyricDancePlayer {
         finalScaleY *= beatScale;
 
         const isHeroBeatHit = isExactHeroTokenMatch(word.text, resolvedLine?.heroWord ?? '') && beatSpine.beatPulse > 0.35;
-        if (isHeroBeatHit) {
+        if (isHeroBeatHit && !karaokeConfig.karaokeMode) {
           const push = resolvedWord?.microCamPush ?? 0.04;
           finalScaleX *= 1 + push;
           finalScaleY *= 1 + push;

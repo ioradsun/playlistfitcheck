@@ -318,6 +318,15 @@ export interface FrameRenderState {
     beatReactive?: boolean;
     direction?: string;
   };
+
+  // Karaoke mode flags (strict master-timestamp rendering)
+  karaokeMode?: boolean;
+  karaokeStrictTiming?: boolean;
+  karaokeDisableShake?: boolean;
+  karaokeDisableBaselineEase?: boolean;
+  karaokeDisableBeatSnap?: boolean;
+  karaokeFadeMs?: number;
+  karaokeDebug?: boolean;
 }
 
 export function deriveFrameState(
