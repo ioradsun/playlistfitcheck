@@ -97,7 +97,7 @@ export type Keyframe = {
 export type BakedTimeline = Keyframe[];
 
 export const BAKER_VERSION = 7;
-const FRAME_STEP_MS = 16;
+const FRAME_STEP_MS = 1000 / 60;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
 const deterministicSign = (seed: number): number => (Math.sin(seed * 127.1 + 311.7) > 0 ? 1 : -1);
