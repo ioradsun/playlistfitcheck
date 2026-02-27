@@ -295,6 +295,8 @@ export interface TextResult {
   xNudge: number;
   sectionZone: string;
   wordsProcessed: number;
+  karaokeSlottingActive: boolean;
+  karaokeSlotCollision: boolean;
 }
 
 // ─── Main function ──────────────────────────────────────────────────
@@ -347,7 +349,7 @@ export function renderText(
 
   const karaokeMode = (resolvedManifest as { karaokeMode?: boolean }).karaokeMode === true;
   const karaokeStrictTiming = (resolvedManifest as { karaokeStrictTiming?: boolean }).karaokeStrictTiming ?? karaokeMode;
-  const karaokeDisableBaselineEase = karaokeMode && ((resolvedManifest as { karaokeDisableBaselineEase?: boolean }).karaokeDisableBaselineEase ?? true);
+  const karaokeDisableBaselineEase = karaokeMode && ((resolvedManifest as { karaokeDisableBaselineEase?: boolean }).karaokeDisableBaselineEase ?? false);
   const karaokeDisableShake = karaokeMode && ((resolvedManifest as { karaokeDisableShake?: boolean }).karaokeDisableShake ?? true);
   const karaokeDisableBeatSnap = karaokeMode && ((resolvedManifest as { karaokeDisableBeatSnap?: boolean }).karaokeDisableBeatSnap ?? true);
 
@@ -370,6 +372,8 @@ export function renderText(
       xNudge: frameXNudge,
       sectionZone: frameSectionZone,
       wordsProcessed: 0,
+      karaokeSlottingActive: false,
+      karaokeSlotCollision: false,
     };
   }
 
@@ -505,9 +509,21 @@ export function renderText(
       ? ch * 0.09
       : ch * 0.07;
 
-  const visibleIndex = Math.max(0, visibleLines.findIndex(l => l.start === activeLine.start && l.end === activeLine.end && l.text === activeLine.text));
-  const yLineOffset = (visibleIndex - (visibleLines.length - 1) / 2) * lineSpacing;
-  targetYBase += yLineOffset;
+  const karaokeOverlapActive = karaokeMode && activeLineAnim.entryProgress < 0.98;
+  const karaokeEchoLine = karaokeOverlapActive && activeLineIndex > 0 ? (lines[activeLineIndex - 1] ?? null) : null;
+  const karaokePrimarySlotY = cinematicLayout.baselineY - lineSpacing * 0.5;
+  const karaokeEchoSlotY = cinematicLayout.baselineY + lineSpacing * 0.5;
+  const karaokeSlottingActive = karaokeMode && karaokeEchoLine != null;
+  const karaokeSlotCollision = karaokeSlottingActive && Math.abs(karaokePrimarySlotY - karaokeEchoSlotY) < 0.5;
+
+  if (karaokeMode) {
+    // Karaoke uses fixed slot reservation so incoming/outgoing lines never contend for the same Y slot.
+    targetYBase = karaokePrimarySlotY;
+  } else {
+    const visibleIndex = Math.max(0, visibleLines.findIndex(l => l.start === activeLine.start && l.end === activeLine.end && l.text === activeLine.text));
+    const yLineOffset = (visibleIndex - (visibleLines.length - 1) / 2) * lineSpacing;
+    targetYBase += yLineOffset;
+  }
   if (activeLineAnim.isHookLine) {
     targetYBase -= ch * 0.03;
   }
@@ -633,6 +649,25 @@ export function renderText(
     ctx.restore();
   }
 
+  if (karaokeSlottingActive && karaokeEchoLine) {
+    const echoAlpha = Math.min(0.35, compositeAlpha * 0.35);
+    if (echoAlpha > 0.01) {
+      ctx.save();
+      ctx.font = buildWordFont(Math.max(14, fontSize * 0.9));
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = textPalette[2] ?? "#cbd5e1";
+      ctx.globalAlpha = echoAlpha;
+      if (resolvedLetterSpacingEm !== 0) {
+        drawTextWithSpacing(ctx, karaokeEchoLine.text, lineX, karaokeEchoSlotY + yNudge + state.offsetY, fontSize, resolvedLetterSpacingEm, "center");
+      } else {
+        ctx.fillText(karaokeEchoLine.text, lineX, karaokeEchoSlotY + yNudge + state.offsetY);
+      }
+      ctx.restore();
+      drawCalls += 1;
+    }
+  }
+
   const getDisplayWord = (text: string) => (
     cinematicTextTransform === "uppercase" ? text.toUpperCase() : text
   );
@@ -685,6 +720,8 @@ export function renderText(
       xNudge: frameXNudge,
       sectionZone: frameSectionZone,
       wordsProcessed: renderLines.length,
+      karaokeSlottingActive,
+      karaokeSlotCollision,
     };
   }
 
@@ -1109,5 +1146,7 @@ export function renderText(
     xNudge: frameXNudge,
     sectionZone: frameSectionZone,
     wordsProcessed: visibleWordIndices.length,
+    karaokeSlottingActive,
+    karaokeSlotCollision,
   };
 }

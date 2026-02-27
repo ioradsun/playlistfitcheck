@@ -2045,7 +2045,15 @@ export class LyricDancePlayer {
     ds.resolvedWordStyle = resolvedWord
       ? `${resolvedWord.behavior} e${resolvedWord.emphasisLevel} pulse:${resolvedWord.pulseAmp.toFixed(2)}`
       : '—';
-    ds.layoutStable = !(Math.abs(frame?.cameraX ?? 0) > 0.001 || Math.abs(frame?.cameraY ?? 0) > 0.001);
+    const primaryVisibleChunks = visibleChunks.filter((c: any) => !c.isEcho && c.visible && (c.alpha ?? 0) > 0.02);
+    const echoVisibleChunks = visibleChunks.filter((c: any) => c.isEcho && c.visible && (c.alpha ?? 0) > 0.02);
+    const avgY = (chunks: any[]) => chunks.length > 0
+      ? chunks.reduce((sum, chunk) => sum + (chunk.y ?? 0), 0) / chunks.length
+      : null;
+    const primaryY = avgY(primaryVisibleChunks);
+    const echoY = avgY(echoVisibleChunks);
+    const karaokeSlotCollision = primaryY != null && echoY != null && Math.abs(primaryY - echoY) < 2;
+    ds.layoutStable = !karaokeSlotCollision;
     ds.heroWordMatch = Boolean(activeWordClean && resolvedLine?.heroToken && activeWordClean === resolvedLine.heroToken);
 
     // ── Camera & tension ──
