@@ -292,7 +292,7 @@ const EXPORT_OPTIONS: { format: ExportFormat; label: string; desc: string }[] =
 
 const DEFAULT_VERSION_META: VersionMeta = {
   lineFormat: "natural",
-  socialPreset: "karaoke",
+  socialPreset: "lyricFocus",
   strictness: "standard",
 };
 
@@ -366,7 +366,7 @@ export function LyricDisplay({
   // Per-version meta
   const normalizeVersionMeta = (meta?: Partial<VersionMeta>): Partial<VersionMeta> => ({
     ...(meta ?? {}),
-    socialPreset: "karaoke",
+    socialPreset: "lyricFocus",
   });
 
   const [explicitMeta, setExplicitMeta] = useState<VersionMeta>({
@@ -1022,7 +1022,7 @@ export function LyricDisplay({
 
   // ── Format / meta updaters ────────────────────────────────────────────────
   const updateMeta = (version: ActiveVersion, patch: Partial<VersionMeta>) => {
-    const nextPatch = { ...patch, socialPreset: "karaoke" as const };
+    const nextPatch = { ...patch, socialPreset: "lyricFocus" as const };
     if (version === "explicit") {
       setExplicitMeta((m) => ({ ...m, ...nextPatch }));
       setExplicitLastEdited(new Date());

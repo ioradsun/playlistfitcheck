@@ -13,7 +13,7 @@ import type { LineAnimation } from "@/engine/AnimationResolver";
 import { animationResolver } from "@/engine/AnimationResolver";
 import { resolveEffectKey, getEffect, type EffectState } from "@/engine/EffectRegistry";
 import { cinematicFontSize, computeFitFontSize, computeStackedLayout, getCinematicLayout } from "@/engine/SystemStyles";
-import { applyEntrance, applyExit, applyModEffect } from "@/engine/LyricAnimations";
+import { applyEntrance, applyExit } from "@/engine/LyricAnimations";
 import { applyKineticEffect } from "@/engine/KineticEffects";
 import { drawElementalWord } from "@/engine/ElementalEffects";
 import { getTextShadow } from "@/engine/LightingSystem";
@@ -30,6 +30,23 @@ interface StableLineLayout {
   wordWidths: number[];
   wordXOffsets: number[];
 }
+
+interface LayoutLock {
+  layoutKey: string;
+  layoutFontSize: number;
+}
+
+const INACTIVE_OPACITY = 0.34;
+const ACTIVE_OPACITY = 1;
+const ACTIVE_PULSE_AMPLITUDE = 0.08;
+const PULSE_SPEED_HZ = 0.72;
+const ACTIVE_GLOW_ALPHA = 0.14;
+const HERO_WORD_COLOR = 1;
+
+const smoothstep = (v: number): number => {
+  const x = Math.max(0, Math.min(1, v));
+  return x * x * (3 - 2 * x);
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -202,13 +219,13 @@ export interface PrecomputedLineMetrics {
 export interface TextState {
   xOffset: number;
   yBase: number;
-  beatScale: number;
   wordCounts: Map<string, number>;
   seenAppearances: Set<string>;
   wordHistory: Map<string, WordHistory>;
   directiveCache: Map<string, WordDirective | null>;
   evolutionCache: Map<string, { count: number; scale: number; glow: number; opacity: number; yOffset: number }>;
   stableLineLayoutCache: Map<string, StableLineLayout>;
+  layoutLockCache: Map<string, LayoutLock>;
   measurementCache: Map<string, number>;
   scratchVisibleWordIndices: number[];
 }
@@ -287,8 +304,16 @@ export interface TextResult {
   xNudge: number;
   sectionZone: string;
   wordsProcessed: number;
-  karaokeSlottingActive: boolean;
-  karaokeSlotCollision: boolean;
+  lineSlottingActive: boolean;
+  lineSlotCollision: boolean;
+  debug: {
+    activeWordIndex: number;
+    activeWordOpacity: number;
+    inactiveOpacity: number;
+    heroWordDetected: boolean;
+    layoutKey: string;
+    layoutLocked: boolean;
+  };
 }
 
 // ─── Main function ──────────────────────────────────────────────────
@@ -300,7 +325,7 @@ export function renderText(
 ): TextResult {
   const {
     lines, activeLine, activeLineIndex, visibleLines,
-    currentTime, songProgress, beatIntensity, beatIndex,
+    currentTime, songProgress, beatIntensity,
     cw, ch, effectivePalette, effectiveSystem, resolvedManifest, textPalette, spec,
     state, interpreter, shot, tensionStage, chapterDirective, cinematicDirection,
     isClimax, particleEngine, rng, getWordWidth, isMobile, fontSize: providedFontSize, hardwareConcurrency, devicePixelRatio, precomputedLine,
@@ -320,9 +345,6 @@ export function renderText(
     y: textState.yBase === 0 ? ch * 0.5 : textState.yBase + state.offsetY,
   };
 
-  // Decay beat scale
-  textState.beatScale = Math.max(1, textState.beatScale * 0.9);
-
   // Default debug frame info
   let frameEffectKey = "—";
   let frameFontSize = 0;
@@ -338,10 +360,6 @@ export function renderText(
   let frameRepTotal = 0;
   let frameXNudge = 0;
   let frameSectionZone = "chorus";
-
-  const karaokeMode = true;
-  const karaokeDisableBaselineEase = karaokeMode && ((resolvedManifest as { karaokeDisableBaselineEase?: boolean }).karaokeDisableBaselineEase ?? false);
-  const karaokeDisableShake = karaokeMode && ((resolvedManifest as { karaokeDisableShake?: boolean }).karaokeDisableShake ?? true);
 
   if (!activeLine) {
     return {
@@ -362,8 +380,16 @@ export function renderText(
       xNudge: frameXNudge,
       sectionZone: frameSectionZone,
       wordsProcessed: 0,
-      karaokeSlottingActive: false,
-      karaokeSlotCollision: false,
+      lineSlottingActive: false,
+      lineSlotCollision: false,
+      debug: {
+        activeWordIndex: -1,
+        activeWordOpacity: ACTIVE_OPACITY,
+        inactiveOpacity: INACTIVE_OPACITY,
+        heroWordDetected: false,
+        layoutKey: "",
+        layoutLocked: false,
+      },
     };
   }
 
@@ -499,22 +525,21 @@ export function renderText(
       ? ch * 0.09
       : ch * 0.07;
 
-  const karaokeOverlapActive = karaokeMode && activeLineAnim.entryProgress < 0.98;
-  const karaokeEchoLine = karaokeOverlapActive && activeLineIndex > 0 ? (lines[activeLineIndex - 1] ?? null) : null;
-  const karaokePrimarySlotY = cinematicLayout.baselineY - lineSpacing * 0.5;
-  const karaokeEchoSlotY = cinematicLayout.baselineY + lineSpacing * 0.5;
-  const karaokeSlottingActive = karaokeMode && karaokeEchoLine != null;
-  const karaokeSlotCollision = karaokeSlottingActive && Math.abs(karaokePrimarySlotY - karaokeEchoSlotY) < 0.5;
+  const lineOverlapActive = activeLineAnim.entryProgress < 0.98;
+  const echoLine = lineOverlapActive && activeLineIndex > 0 ? (lines[activeLineIndex - 1] ?? null) : null;
+  const primarySlotY = cinematicLayout.baselineY - lineSpacing * 0.5;
+  const echoSlotY = cinematicLayout.baselineY + lineSpacing * 0.5;
+  const lineSlottingActive = echoLine != null;
+  const lineSlotCollision = lineSlottingActive && Math.abs(primarySlotY - echoSlotY) < 0.5;
 
-  // Karaoke uses fixed slot reservation so incoming/outgoing lines never contend for the same Y slot.
-  targetYBase = karaokePrimarySlotY;
+  // Fixed slot reservation keeps outgoing/incoming lines from colliding.
+  targetYBase = primarySlotY;
   if (activeLineAnim.isHookLine) {
     targetYBase -= ch * 0.03;
   }
 
   textState.xOffset += (0 - textState.xOffset) * 0.05;
-  if (karaokeDisableBaselineEase) textState.yBase = targetYBase;
-  else textState.yBase += (targetYBase - textState.yBase) * 0.05;
+  textState.yBase += (targetYBase - textState.yBase) * 0.05;
 
   const nudge = beatIntensity * 3;
   let xNudge = 0;
@@ -543,10 +568,9 @@ export function renderText(
   }
   frameXNudge = xNudge;
 
-  // Physics-driven shake
-  const physShakeAngle = (beatIndex * 2.3 + currentTime * 7.1) % (Math.PI * 2);
-  const physShakeX = karaokeDisableShake ? 0 : Math.cos(physShakeAngle) * state.shake;
-  const physShakeY = karaokeDisableShake ? 0 : Math.sin(physShakeAngle) * state.shake;
+  // Keep lyric text steady to avoid frame-to-frame jitter.
+  const physShakeX = 0;
+  const physShakeY = 0;
   const lineX = cw / 2 + textState.xOffset + xNudge + state.offsetX + physShakeX;
   const lineY = textState.yBase + yNudge + state.offsetY + physShakeY;
   activeWordPosition = { x: lineX, y: lineY };
@@ -570,13 +594,9 @@ export function renderText(
   if (Math.abs(state.rotation) > 0.0001) {
     ctx.rotate(state.rotation);
   }
-  const lineScale = activeLineAnim.scale * state.scale;
+  const lineScale = state.scale;
   ctx.scale(lineScale, lineScale);
   ctx.translate(-lineX, -lineY);
-
-  if (activeLineAnim.activeMod && !STRONG_MODS.includes(activeLineAnim.activeMod as (typeof STRONG_MODS)[number])) {
-    applyModEffect(ctx, activeLineAnim.activeMod, currentTime, beatIntensity);
-  }
 
   // ── Word splitting + display mode ─────────────────────────────────
   const words = precomputedLine?.words ?? activeLine.text.split(/\s+/).filter(Boolean);
@@ -590,7 +610,7 @@ export function renderText(
     while (visibleWordCount < snappedStarts.length && currentTime >= snappedStarts[visibleWordCount]) visibleWordCount += 1;
   } else {
     visibleWordCount = 0;
-    console.warn('[karaokeMode] strict timing enabled but no AI word timing data for active line', { start: activeLine.start, end: activeLine.end, text: activeLine.text });
+    console.warn('[renderText] strict timing enabled but no AI word timing data for active line', { start: activeLine.start, end: activeLine.end, text: activeLine.text });
   }
 
   const wordCount = words.length;
@@ -628,7 +648,7 @@ export function renderText(
     ctx.restore();
   }
 
-  if (karaokeSlottingActive && karaokeEchoLine) {
+  if (lineSlottingActive && echoLine) {
     const echoAlpha = Math.min(0.35, compositeAlpha * 0.35);
     if (echoAlpha > 0.01) {
       ctx.save();
@@ -638,9 +658,9 @@ export function renderText(
       ctx.fillStyle = textPalette[2] ?? "#cbd5e1";
       ctx.globalAlpha = echoAlpha;
       if (resolvedLetterSpacingEm !== 0) {
-        drawTextWithSpacing(ctx, karaokeEchoLine.text, lineX, karaokeEchoSlotY + yNudge + state.offsetY, fontSize, resolvedLetterSpacingEm, "center");
+        drawTextWithSpacing(ctx, echoLine.text, lineX, echoSlotY + yNudge + state.offsetY, fontSize, resolvedLetterSpacingEm, "center");
       } else {
-        ctx.fillText(karaokeEchoLine.text, lineX, karaokeEchoSlotY + yNudge + state.offsetY);
+        ctx.fillText(echoLine.text, lineX, echoSlotY + yNudge + state.offsetY);
       }
       ctx.restore();
       drawCalls += 1;
@@ -699,8 +719,16 @@ export function renderText(
       xNudge: frameXNudge,
       sectionZone: frameSectionZone,
       wordsProcessed: renderLines.length,
-      karaokeSlottingActive,
-      karaokeSlotCollision,
+      lineSlottingActive,
+      lineSlotCollision,
+      debug: {
+        activeWordIndex: renderLines.length - 1,
+        activeWordOpacity: ACTIVE_OPACITY,
+        inactiveOpacity: INACTIVE_OPACITY,
+        heroWordDetected: false,
+        layoutKey: "stacked",
+        layoutLocked: true,
+      },
     };
   }
 
@@ -714,17 +742,21 @@ export function renderText(
     for (let i = 0; i < visibleWordCount; i += 1) visibleWordIndices.push(i);
   }
 
-  const layoutFontSize = computedFontSize;
-  const lineLayoutKey = [
+  const layoutLockKey = [
     activeLine.start,
     activeLine.end,
     activeLine.text,
     cinematicFontFamily,
     cinematicFontWeight,
-    layoutFontSize.toFixed(3),
     resolvedLetterSpacingEm.toFixed(4),
     resolvedWordFont,
   ].join("|");
+  const existingLayoutLock = textState.layoutLockCache.get(layoutLockKey);
+  const layoutFontSize = existingLayoutLock?.layoutFontSize ?? fontSize;
+  const lineLayoutKey = existingLayoutLock?.layoutKey ?? [layoutLockKey, layoutFontSize.toFixed(3)].join("|");
+  if (!existingLayoutLock) {
+    textState.layoutLockCache.set(layoutLockKey, { layoutKey: lineLayoutKey, layoutFontSize });
+  }
 
   let stableLayout = textState.stableLineLayoutCache.get(lineLayoutKey);
   if (!stableLayout) {
@@ -863,18 +895,21 @@ export function renderText(
       ? (isActiveWord ? 1 : 0.4)
       : 1;
 
-    if (karaokeMode) {
-      if (isActiveWord) {
-        props.yOffset -= Math.min(6, fontSize * 0.12);
-        props.opacity = Math.max(props.opacity, 0.9);
-        props.glowRadius = Math.max(props.glowRadius, fontSize * 0.18);
-      } else {
-        props.xOffset = 0;
-        props.yOffset = 0;
-        props.scale = 1;
-        props.glowRadius = 0;
-      }
+    if (isActiveWord) {
+      props.yOffset -= Math.min(4, fontSize * 0.08);
+      props.glowRadius = Math.max(props.glowRadius, fontSize * 0.14);
+    } else {
+      props.xOffset = 0;
+      props.yOffset = 0;
+      props.scale = 1;
+      props.glowRadius = 0;
     }
+
+    const pulse = 0.5 - 0.5 * Math.cos(2 * Math.PI * currentTime * PULSE_SPEED_HZ);
+    const easedPulse = smoothstep(pulse);
+    const activeOpacity = Math.min(1, ACTIVE_OPACITY + ACTIVE_PULSE_AMPLITUDE * easedPulse);
+    const targetOpacity = isActiveWord ? activeOpacity : INACTIVE_OPACITY;
+    props.opacity = Math.max(0, Math.min(1, targetOpacity));
 
     const fragmentationX = useLetterFragmentation ? (rng() - 0.5) * 6 : 0;
     const fragmentationY = useLetterFragmentation ? (rng() - 0.5) * 4 : 0;
@@ -911,18 +946,23 @@ export function renderText(
       ctx.scale(emphasisScale, emphasisScale);
     }
 
+    const inactiveColor = textPalette[2] ?? "#94a3b8";
+    const activeColor = activeLineAnim.lineColor;
+    const heroColor = effectivePalette[HERO_WORD_COLOR] ?? "#f472b6";
+    const overrideColor = directive?.colorOverride ?? null;
+    const resolvedColor = isHeroWord
+      ? heroColor
+      : (overrideColor ?? (isActiveWord ? activeColor : inactiveColor));
+
     if (isHeroWord) {
-      // Hero words use accent color from palette
-      props.color = effectivePalette[1] ?? props.color;
       const heroGlow = ctx.createRadialGradient(0, -fontSize * 0.35, 0, 0, -fontSize * 0.35, fontSize * 1.8);
-      heroGlow.addColorStop(0, effectivePalette[1] ?? resolvedManifest.palette?.[2] ?? "#ec4899");
+      heroGlow.addColorStop(0, heroColor);
       heroGlow.addColorStop(1, "rgba(0,0,0,0)");
       ctx.save();
-      ctx.globalAlpha *= 0.14;
+      ctx.globalAlpha *= ACTIVE_GLOW_ALPHA;
       ctx.fillStyle = heroGlow;
       ctx.fillRect(-wordRenderWidth * 0.35, -fontSize * 1.6, wordRenderWidth * 1.7, fontSize * 2.7);
       ctx.restore();
-      ctx.scale(1.2, 1.2);
     }
 
     // ── Evolution ─────────────────────────────────────────────────
@@ -992,25 +1032,25 @@ export function renderText(
       ctx.translate(0, evolutionYOffset);
     }
 
-    ctx.fillStyle = directive?.colorOverride ?? props.color;
+    ctx.fillStyle = resolvedColor;
     ctx.globalAlpha = props.opacity * compositeAlpha * modeOpacity * evolutionOpacity;
 
     // Glow
     if (props.glowRadius > 0 || evolutionGlow > 0) {
       const glowRadius = Math.max(props.glowRadius, evolutionGlow, 1);
-      const glowColor = directive?.colorOverride ?? props.color;
+      const glowColor = resolvedColor;
       const glow = ctx.createRadialGradient(0, -fontSize * 0.3, 0, 0, -fontSize * 0.3, glowRadius * 2.4);
       glow.addColorStop(0, glowColor);
       glow.addColorStop(1, "rgba(0,0,0,0)");
       ctx.save();
-      ctx.globalAlpha *= 0.16;
+      ctx.globalAlpha *= ACTIVE_GLOW_ALPHA;
       ctx.fillStyle = glow;
       ctx.fillRect(-wordRenderWidth * 0.3, -fontSize - glowRadius, wordRenderWidth * 1.6, fontSize + glowRadius * 2);
       ctx.restore();
     }
 
     // Kinetic effect
-    if (directive?.kineticClass) {
+    if (directive?.kineticClass && isActiveWord) {
       applyKineticEffect(
         ctx,
         directive.kineticClass,
@@ -1145,7 +1185,18 @@ export function renderText(
     xNudge: frameXNudge,
     sectionZone: frameSectionZone,
     wordsProcessed: visibleWordIndices.length,
-    karaokeSlottingActive,
-    karaokeSlotCollision,
+    lineSlottingActive,
+    lineSlotCollision,
+    debug: {
+      activeWordIndex: visibleWordIndices.length > 0 ? visibleWordIndices[visibleWordIndices.length - 1] ?? -1 : -1,
+      activeWordOpacity: Math.min(1, ACTIVE_OPACITY + ACTIVE_PULSE_AMPLITUDE),
+      inactiveOpacity: INACTIVE_OPACITY,
+      heroWordDetected: visibleWordIndices.some((wordIndex) => {
+        const wordText = words[wordIndex] ?? "";
+        return Boolean(lineDirection?.heroWord && normalizeToken(wordText) === normalizeToken(lineDirection.heroWord));
+      }),
+      layoutKey: lineLayoutKey,
+      layoutLocked: Boolean(textState.layoutLockCache.get(layoutLockKey)),
+    },
   };
 }

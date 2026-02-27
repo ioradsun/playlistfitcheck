@@ -11,7 +11,7 @@ export type LineFormat =
   | "break_on_pause";
 
 export type SocialPreset =
-  | "karaoke";
+  | "lyricFocus";
 
 interface LyricFormatControlsProps {
   activeVersion: ActiveVersion;
@@ -59,7 +59,7 @@ export function LyricFormatControls({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="karaoke" className="text-xs">Karaoke</SelectItem>
+            <SelectItem value="lyricFocus" className="text-xs">LyricFocus</SelectItem>
           </SelectContent>
         </Select>
       </div>

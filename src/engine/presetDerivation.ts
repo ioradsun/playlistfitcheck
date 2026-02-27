@@ -319,7 +319,7 @@ export interface FrameRenderState {
     direction?: string;
   };
 
-  // Cinematic karaoke debug/dev flags
+  // Cinematic lyricFocus debug/dev flags
   debugHud?: boolean;
   enableEchoLine?: boolean;
   wordFeatherMs?: number;

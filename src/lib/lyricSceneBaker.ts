@@ -403,7 +403,7 @@ const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {
 };
 
 const getVisualMode = (_payload: ScenePayload): VisualMode => {
-  // Karaoke renderer is single-mode: always use cinematic layout behavior.
+  // LyricFocus renderer is single-mode: always use cinematic layout behavior.
   return 'cinematic';
 };
 
