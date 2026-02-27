@@ -861,7 +861,6 @@ export class LyricDancePlayer {
   private activeTension: any = null;
   private lastExitProgressByChunk = new Map<string, number>();
   private chunkActiveSinceMs: Map<string, number> = new Map();
-  private lastSafeFontSize: Map<string, number> = new Map();
 
 
   // Health monitor
@@ -898,7 +897,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: min-visible-v15');
+    console.log('[LyricDancePlayer] build: revert-clamp-v16');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -2024,18 +2023,15 @@ export class LyricDancePlayer {
       const fontWeight = chunk.fontWeight ?? 700;
       const viewportMinFont = Math.max(16, Math.min(this.width, this.height) * 0.055);
       const safeFontSize = Math.max(viewportMinFont, Math.round(fontSize * zoom) || 36);
-      const prevSize = this.lastSafeFontSize.get(chunk.id) ?? safeFontSize;
-      const clampedSize = Math.max(prevSize * 0.8, Math.min(prevSize * 1.2, safeFontSize));
-      this.lastSafeFontSize.set(chunk.id, clampedSize);
       const resolvedFont = this.getResolvedFont();
       const family = chunk.fontFamily ?? resolvedFont;
-      this.ctx.font = `${fontWeight} ${clampedSize}px ${family}`;
+      this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
       if (!this.ctx.font.includes('px')) {
         this.ctx.font = `700 36px ${resolvedFont}`;
       }
       const text = chunk.text ?? obj.text;
       const textWidth = this.ctx.measureText(text).width;
-      const spaceWidth = Math.max(4, this.ctx.measureText(' ').width || clampedSize * 0.25);
+      const spaceWidth = Math.max(4, this.ctx.measureText(' ').width || safeFontSize * 0.25);
       const rowKey = Math.round(finalDrawY);
       const previousRightEdge = rowLastRightEdge.get(rowKey);
       let drawX = rawDrawX;
@@ -2129,20 +2125,18 @@ export class LyricDancePlayer {
           text,
           drawX: wordCenterX,
           drawY: drawY,
-          fontSize: clampedSize,
+          fontSize: safeFontSize,
           fontWeight,
           fontFamily: chunk.fontFamily,
           color: this.getTextColor(chunk.color ?? chapterColor),
           directive: decompDirective,
         });
       }
-      const decompActive = this.activeDecomps.some(d => d.id === chunk.id);
-      if (decompActive) continue;
 
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
-        this.ctx.font = `${fontWeight} ${clampedSize}px ${family}`;
+        this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
         if (!this.ctx.font.includes('px')) {
           this.ctx.font = `700 36px ${resolvedFont}`;
         }
