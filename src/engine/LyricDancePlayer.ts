@@ -896,7 +896,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: word-is-particle-v10');
+    console.log('[LyricDancePlayer] build: camera-space-v11');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1877,9 +1877,6 @@ export class LyricDancePlayer {
 
     this.drawEmotionalEvents(tSec);
 
-    const nowSec = performance.now() / 1000;
-    this.drawDecompositions(this.ctx, nowSec);
-
     // Ambient particles — runtime system updates per section
     this.ambientParticleEngine?.draw(this.ctx, "far");
 
@@ -1888,6 +1885,9 @@ export class LyricDancePlayer {
     this.ctx.translate(safeCameraX, safeCameraY);
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
+
+    const nowSec = performance.now() / 1000;
+    this.drawDecompositions(this.ctx, nowSec);
 
     let drawCalls = 0;
     const palette = this.getBurstPalette(songProgress);
@@ -1898,8 +1898,8 @@ export class LyricDancePlayer {
       return bIsExiting - aIsExiting;
     });
     // If any chunk has exitProgress === 0 in this frame, suppress all exiting chunks
-    const anyChunkActive = frame.chunks.some(
-      (c: any) => (c.exitProgress ?? 0) === 0 && (c.alpha ?? 0) > 0.1
+    const anyChunkActive = sortedChunks.some(
+      (c: any) => c.visible && (c.exitProgress ?? 0) === 0 && (c.alpha ?? 0) > 0.1
     );
 
     const visibleLines = this.payload?.lines?.filter((l: any) => tSec >= (l.start ?? 0) && tSec < (l.end ?? 0)) ?? [];
