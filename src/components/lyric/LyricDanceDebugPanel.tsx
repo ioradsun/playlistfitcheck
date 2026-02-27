@@ -125,6 +125,10 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
           <KV label="Hero Match" value={snap.heroWordMatch ? "yes" : "no"} />
           <KV label="Tier α (A/P/F)" value={`${f(snap.tierActiveOpacity)}/${f(snap.tierPastOpacity)}/${f(snap.tierFutureOpacity)}`} />
           <KV label="Layout Stable" value={snap.layoutStable ? "✓" : "✗"} />
+          <KV label="Rack Focus" value={`${snap.rackFocusEnabled ? 'on' : 'off'} p:${f(snap.rackFocusPrimaryBlurPx)} e:${f(snap.rackFocusEchoBlurPx)}`} />
+          <KV label="Hero Sweep" value={snap.heroSweepActive ? `active ${f(snap.heroSweepProgress)}` : 'idle'} />
+          <KV label="Section Temp" value={f(snap.sectionGradeTemperature)} />
+          <KV label="Ghost Trails" value={snap.ghostTrailActiveCount} />
           <KV label="Mismatches" value={snap.karaokeMismatchWarnings} />
         </div>
       </Section>

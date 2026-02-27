@@ -12,6 +12,18 @@ export interface ResolvedLineSettings {
   atmosphere: string;
 }
 
+export interface SectionGrade {
+  baseTextColor: string;
+  futureTextColor: string;
+  activeTextColor: string;
+  glowColor: string;
+  echoColor: string;
+  overlayStyle: 'grain' | 'haze' | 'glass' | 'none';
+  temperature: number;
+  contrast: number;
+  hazeLift: number;
+}
+
 export interface ResolvedWordSettings {
   token: string;
   emphasisLevel: number;
@@ -112,7 +124,11 @@ export function resolveCinematicState(
   direction: CinematicDirection | null | undefined,
   lines: Array<{ start: number; end: number; text: string }>,
   durationSec: number,
-): { lineSettings: Record<number, ResolvedLineSettings>; wordSettings: Record<string, ResolvedWordSettings> } {
+): {
+  lineSettings: Record<number, ResolvedLineSettings>;
+  wordSettings: Record<string, ResolvedWordSettings>;
+  sectionGrades: SectionGrade[];
+} {
   const d = direction ?? {};
   const songDefaults = (d as any).songDefaults ?? {};
   const sections = Array.isArray(d.sections) ? d.sections : [];
@@ -157,7 +173,66 @@ export function resolveCinematicState(
     };
   });
 
-  return { lineSettings, wordSettings };
+  const sectionGrades = sections.map((section) => resolveSectionGrade(section as Record<string, unknown>, d));
+  return { lineSettings, wordSettings, sectionGrades };
+}
+
+function resolveSectionGrade(section: Record<string, unknown>, root: Record<string, unknown>): SectionGrade {
+  const mood = String(section.mood ?? root.sceneTone ?? '').toLowerCase();
+  const atmosphere = String(section.atmosphere ?? root.atmosphere ?? '').toLowerCase();
+  const texture = String(section.texture ?? root.texture ?? '').toLowerCase();
+  const styleToken = `${mood} ${atmosphere} ${texture}`;
+  const cool = /(lonely|void|dark|glass|winter|night)/.test(styleToken);
+  const warm = /(warm|devotion|sun|golden|ember)/.test(styleToken);
+  const hazy = /(haze|stars|mist|dust)/.test(styleToken);
+  const glass = /(glass|mirror|crystal)/.test(styleToken);
+
+  const activeTextColor = cool ? '#eaf2ff' : (warm ? '#fff0dc' : '#f5f7ff');
+  const baseTextColor = cool ? '#cfd9ee' : (warm ? '#e9ddc8' : '#d8deea');
+  const futureTextColor = cool ? '#7183a6' : (warm ? '#8f7c67' : '#6f788f');
+  const glowColor = cool ? '#9eb8ff' : (warm ? '#ffcfa3' : '#bed0ff');
+  const echoColor = cool ? '#9caecc' : (warm ? '#c3ae91' : '#98a2bf');
+
+  return {
+    baseTextColor,
+    futureTextColor,
+    activeTextColor,
+    glowColor,
+    echoColor,
+    overlayStyle: glass ? 'glass' : (hazy ? 'haze' : (texture.includes('grain') || texture.includes('dust') ? 'grain' : 'none')),
+    temperature: cool ? -0.7 : (warm ? 0.7 : 0),
+    contrast: cool ? 0.75 : (warm ? 0.52 : 0.62),
+    hazeLift: hazy ? 0.28 : 0.12,
+  };
+}
+
+export function blendSectionGrade(a: SectionGrade, b: SectionGrade, t: number): SectionGrade {
+  const m = clamp01(t);
+  const c = (ca: string, cb: string) => {
+    const pa = Number.parseInt(ca.slice(1), 16);
+    const pb = Number.parseInt(cb.slice(1), 16);
+    const ar = (pa >> 16) & 0xff;
+    const ag = (pa >> 8) & 0xff;
+    const ab = pa & 0xff;
+    const br = (pb >> 16) & 0xff;
+    const bg = (pb >> 8) & 0xff;
+    const bb = pb & 0xff;
+    const rr = Math.round(ar + (br - ar) * m);
+    const rg = Math.round(ag + (bg - ag) * m);
+    const rb = Math.round(ab + (bb - ab) * m);
+    return `#${rr.toString(16).padStart(2, '0')}${rg.toString(16).padStart(2, '0')}${rb.toString(16).padStart(2, '0')}`;
+  };
+  return {
+    baseTextColor: c(a.baseTextColor, b.baseTextColor),
+    futureTextColor: c(a.futureTextColor, b.futureTextColor),
+    activeTextColor: c(a.activeTextColor, b.activeTextColor),
+    glowColor: c(a.glowColor, b.glowColor),
+    echoColor: c(a.echoColor, b.echoColor),
+    overlayStyle: m < 0.5 ? a.overlayStyle : b.overlayStyle,
+    temperature: a.temperature + (b.temperature - a.temperature) * m,
+    contrast: a.contrast + (b.contrast - a.contrast) * m,
+    hazeLift: a.hazeLift + (b.hazeLift - a.hazeLift) * m,
+  };
 }
 
 export function computeBeatSpine(
