@@ -3105,7 +3105,7 @@ export class LyricDancePlayer {
       : deriveTensionCurve(direction?.emotionalArc);
     const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives);
     const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
-    const resolved = resolveCinematicState(direction, payload.lines as any[], durationSec);
+    const resolved = resolveCinematicState(direction, payload.lines as any[], durationSec, this.data.auto_palettes);
     const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
     const texture = this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, direction);
     this.resolvedState = {

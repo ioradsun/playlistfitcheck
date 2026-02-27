@@ -124,6 +124,7 @@ export function resolveCinematicState(
   direction: CinematicDirection | null | undefined,
   lines: Array<{ start: number; end: number; text: string }>,
   durationSec: number,
+  autoPalettes?: string[][] | null,
 ): {
   lineSettings: Record<number, ResolvedLineSettings>;
   wordSettings: Record<string, ResolvedWordSettings>;
@@ -173,11 +174,23 @@ export function resolveCinematicState(
     };
   });
 
-  const sectionGrades = sections.map((section) => resolveSectionGrade(section as Record<string, unknown>, d));
+  const sectionGrades = sections.map((section, idx) => {
+    const palette = Array.isArray(autoPalettes) ? autoPalettes[idx] ?? null : null;
+    return resolveSectionGrade(section as unknown as Record<string, unknown>, d as unknown as Record<string, unknown>, palette);
+  });
   return { lineSettings, wordSettings, sectionGrades };
 }
 
-function resolveSectionGrade(section: Record<string, unknown>, root: Record<string, unknown>): SectionGrade {
+/**
+ * Derive section-level color grade.
+ * If an autoPalette is provided [background, accent, text, glow, dim],
+ * colors are derived from the image sample rather than hardcoded heuristics.
+ */
+function resolveSectionGrade(
+  section: Record<string, unknown>,
+  root: Record<string, unknown>,
+  autoPalette: string[] | null,
+): SectionGrade {
   const mood = String(section.mood ?? root.sceneTone ?? '').toLowerCase();
   const atmosphere = String(section.atmosphere ?? root.atmosphere ?? '').toLowerCase();
   const texture = String(section.texture ?? root.texture ?? '').toLowerCase();
@@ -187,11 +200,28 @@ function resolveSectionGrade(section: Record<string, unknown>, root: Record<stri
   const hazy = /(haze|stars|mist|dust)/.test(styleToken);
   const glass = /(glass|mirror|crystal)/.test(styleToken);
 
-  const activeTextColor = cool ? '#eaf2ff' : (warm ? '#fff0dc' : '#f5f7ff');
-  const baseTextColor = cool ? '#cfd9ee' : (warm ? '#e9ddc8' : '#d8deea');
-  const futureTextColor = cool ? '#7183a6' : (warm ? '#8f7c67' : '#6f788f');
-  const glowColor = cool ? '#9eb8ff' : (warm ? '#ffcfa3' : '#bed0ff');
-  const echoColor = cool ? '#9caecc' : (warm ? '#c3ae91' : '#98a2bf');
+  // autoPalette layout: [background, accent, text, glow, dim]
+  let activeTextColor: string;
+  let baseTextColor: string;
+  let futureTextColor: string;
+  let glowColor: string;
+  let echoColor: string;
+
+  if (autoPalette && autoPalette.length >= 5) {
+    // Derive from image-sampled palette
+    activeTextColor = autoPalette[2]; // text — high contrast against bg
+    baseTextColor = mixHex(autoPalette[2], autoPalette[4], 0.25); // slightly dimmed text
+    futureTextColor = autoPalette[4]; // dim color for upcoming lines
+    glowColor = autoPalette[3]; // glow
+    echoColor = mixHex(autoPalette[4], autoPalette[1], 0.3); // dim + accent tint for echo
+  } else {
+    // Fallback: mood-based heuristics
+    activeTextColor = cool ? '#eaf2ff' : (warm ? '#fff0dc' : '#f5f7ff');
+    baseTextColor = cool ? '#cfd9ee' : (warm ? '#e9ddc8' : '#d8deea');
+    futureTextColor = cool ? '#7183a6' : (warm ? '#8f7c67' : '#6f788f');
+    glowColor = cool ? '#9eb8ff' : (warm ? '#ffcfa3' : '#bed0ff');
+    echoColor = cool ? '#9caecc' : (warm ? '#c3ae91' : '#98a2bf');
+  }
 
   return {
     baseTextColor,
@@ -204,6 +234,17 @@ function resolveSectionGrade(section: Record<string, unknown>, root: Record<stri
     contrast: cool ? 0.75 : (warm ? 0.52 : 0.62),
     hazeLift: hazy ? 0.28 : 0.12,
   };
+}
+
+/** Blend two hex colors by ratio (0 = all a, 1 = all b) */
+function mixHex(a: string, b: string, ratio: number): string {
+  const pa = Number.parseInt(a.replace('#', ''), 16);
+  const pb = Number.parseInt(b.replace('#', ''), 16);
+  const m = clamp01(ratio);
+  const r = Math.round(((pa >> 16) & 0xff) * (1 - m) + ((pb >> 16) & 0xff) * m);
+  const g = Math.round(((pa >> 8) & 0xff) * (1 - m) + ((pb >> 8) & 0xff) * m);
+  const bl = Math.round((pa & 0xff) * (1 - m) + (pb & 0xff) * m);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
 export function blendSectionGrade(a: SectionGrade, b: SectionGrade, t: number): SectionGrade {
