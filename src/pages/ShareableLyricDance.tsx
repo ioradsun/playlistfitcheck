@@ -233,11 +233,11 @@ function LiveDebugHUD({ player }: { player: LyricDancePlayer | null }) {
       fontSize: 11, lineHeight: "1.55", color: "#4ade80",
       pointerEvents: "auto", overflowY: "auto", maxHeight: "90vh",
     }}>
-      <Section title="BEAT"><Row label="intensity" value={f(snap.beatIntensity)} /><Row label="physGlow" value={f(snap.physGlow)} /></Section>
+      <Section title="BEAT"><Row label="intensity" value={f(snap.beatIntensity)} /><Row label="pulse" value={f(snap.bgBeatPulse)} /><Row label="phase" value={f(snap.bgBeatPhase)} /><Row label="physGlow" value={f(snap.physGlow)} /></Section>
       <Section title="PHYSICS"><Row label="heat" value={f(snap.heat)} /><Row label="velocity" value={f(snap.velocity)} /><Row label="words" value={String(snap.wordCount)} /></Section>
       <Section title="ANIMATION"><Row label="effect" value={snap.effectKey} /><Row label="entry" value={f(snap.entryProgress)} /><Row label="exit" value={f(snap.exitProgress)} /><Row label="mod" value={snap.activeMod ?? "none"} /></Section>
       <Section title="PARTICLES"><Row label="system" value={snap.particleSystem} /><Row label="count" value={String(snap.particleCount)} /></Section>
-      <Section title="DIRECTION"><Row label="chapter" value={snap.dirChapter} /><Row label="tension" value={snap.tensionStage} /></Section>
+      <Section title="DIRECTION"><Row label="section" value={`${snap.secIndex}/${snap.secTotal}`} /><Row label="line" value={String(snap.lineIndex)} /><Row label="chapter" value={snap.dirChapter} /><Row label="hero" value={snap.lineHeroWord || "—"} /><Row label="active" value={snap.activeWord} /><Row label="line style" value={snap.resolvedLineStyle} /><Row label="word style" value={snap.resolvedWordStyle} /><Row label="layout" value={snap.layoutStable ? "stable" : "unstable"} /><Row label="tension" value={snap.tensionStage} /></Section>
       <Section title="PERFORMANCE"><Row label="fps" value={String(Math.round(snap.fps))} /><Row label="total" value={snap.perfTotal.toFixed(2)} /><Row label="text" value={snap.perfText.toFixed(2)} /><Row label="bg" value={snap.perfBg.toFixed(2)} /></Section>
       <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" as const }}>{f(snap.time, 2)}s · press D to close</div>
     </div>

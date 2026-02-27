@@ -22,6 +22,14 @@ import {
 } from "@/lib/sceneCompiler";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
+import {
+  computeBeatSpine,
+  isExactHeroTokenMatch,
+  normalizeToken,
+  resolveCinematicState,
+  type ResolvedLineSettings,
+  type ResolvedWordSettings,
+} from "@/engine/cinematicResolver";
 
 const DECOMP_ENABLED = false; // set to true to re-enable word-to-particle
 const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: no-decomp-v23';
@@ -145,6 +153,7 @@ export interface LiveDebugState {
 
   // Section boundaries
   secIndex: number;
+  lineIndex: number;
   secTotal: number;
   secStartSec: number;
   secEndSec: number;
@@ -169,6 +178,7 @@ export interface LiveDebugState {
   bgConfidence: number;
   bgNextBeat: number;
   bgBeatPhase: number;
+  bgBeatPulse: number;
 
   // Active word
   activeWord: string;
@@ -176,6 +186,9 @@ export interface LiveDebugState {
   activeWordExit: string;
   activeWordEmphasis: number;
   activeWordTrail: string;
+  resolvedLineStyle: string;
+  resolvedWordStyle: string;
+  layoutStable: boolean;
 
   fps: number;
   drawCalls: number;
@@ -283,6 +296,7 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   imgOverlap: false,
 
   secIndex: -1,
+  lineIndex: -1,
   secTotal: 0,
   secStartSec: 0,
   secEndSec: 0,
@@ -305,12 +319,16 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   bgConfidence: 0,
   bgNextBeat: 0,
   bgBeatPhase: 0,
+  bgBeatPulse: 0,
 
   activeWord: "—",
   activeWordEntry: "—",
   activeWordExit: "—",
   activeWordEmphasis: 0,
   activeWordTrail: "none",
+  resolvedLineStyle: "—",
+  resolvedWordStyle: "—",
+  layoutStable: true,
 
   fps: 60,
   drawCalls: 0,
@@ -341,6 +359,8 @@ type ResolvedPlayerState = {
   chapters: any[];
   tensionCurve: any[];
   wordDirectivesMap: Record<string, any>;
+  lineSettings: Record<number, ResolvedLineSettings>;
+  wordSettings: Record<string, ResolvedWordSettings>;
   particleConfig: {
     texture: string;
     system: string;
@@ -826,6 +846,8 @@ export class LyricDancePlayer {
     chapters: [],
     tensionCurve: [],
     wordDirectivesMap: {},
+    lineSettings: {},
+    wordSettings: {},
     particleConfig: { texture: 'dust', system: 'dust', density: 0.35, speed: 0.35 },
   };
   
@@ -1826,7 +1848,7 @@ export class LyricDancePlayer {
     const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
 
     const activeWord = this.getActiveWord(clamped);
-    const activeWordClean = activeWord?.word?.toLowerCase()?.replace(/[.,!?'"]/g, '') ?? '';
+    const activeWordClean = normalizeToken(activeWord?.word ?? '');
     const activeWordDirective = activeWordClean ? this.resolvedState.wordDirectivesMap[activeWordClean] ?? null : null;
 
     const ds = this.debugState;
@@ -1843,6 +1865,7 @@ export class LyricDancePlayer {
 
     // ── Section boundaries ──
     ds.secIndex = sectionIndex;
+    ds.lineIndex = activeLine ? lines.indexOf(activeLine) : -1;
     ds.secTotal = chapters.length;
     const secStartRatio = section?.startRatio ?? 0;
     const secEndRatio = section?.endRatio ?? 1;
@@ -1882,20 +1905,11 @@ export class LyricDancePlayer {
     ds.bgBpm = beatGrid?.bpm ?? 0;
     ds.bgBeatsTotal = beatsArr.length;
     ds.bgConfidence = beatGrid?.confidence ?? 0;
-    let nextBeatTime = 0;
-    let beatPhase = 0;
-    if (beatsArr.length > 0) {
-      const bpm = beatGrid?.bpm ?? 120;
-      const beatPeriod = 60 / Math.max(1, bpm);
-      for (let bi = 0; bi < beatsArr.length; bi++) {
-        if (beatsArr[bi] > clamped) { nextBeatTime = beatsArr[bi]; break; }
-      }
-      let lastBeatBefore = 0;
-      for (let bi2 = beatsArr.length - 1; bi2 >= 0; bi2--) { if (beatsArr[bi2] <= clamped) { lastBeatBefore = beatsArr[bi2]; break; } }
-      beatPhase = beatPeriod > 0 ? ((clamped - lastBeatBefore) / beatPeriod) % 1 : 0;
-    }
-    ds.bgNextBeat = nextBeatTime;
-    ds.bgBeatPhase = beatPhase;
+    const beatSpine = computeBeatSpine(clamped, beatGrid, { lookAheadSec: 0.02, pulseWidth: 0.09 });
+    ds.bgNextBeat = beatSpine.nextBeat;
+    ds.bgBeatPhase = beatSpine.beatPhase;
+    ds.bgBeatPulse = beatSpine.beatPulse;
+    ds.beatIntensity = Math.max(ds.beatIntensity, beatSpine.beatPulse);
 
     // ── Active word ──
     ds.activeWord = activeWordClean || '—';
@@ -1923,6 +1937,15 @@ export class LyricDancePlayer {
     ds.lineIntent = lineStory?.intent ?? lineStory?.emotion ?? '—';
     ds.shotType = lineStory?.shotType ?? 'FloatingInWorld';
     ds.shotDescription = lineStory?.description ?? '—';
+    const resolvedLine = activeLineIdx >= 0 ? this.resolvedState.lineSettings[activeLineIdx] : null;
+    const resolvedWord = activeWordClean ? this.resolvedState.wordSettings[activeWordClean] ?? null : null;
+    ds.resolvedLineStyle = resolvedLine
+      ? `${resolvedLine.entryStyle}→${resolvedLine.exitStyle} / ${resolvedLine.typography} / ${resolvedLine.atmosphere}`
+      : '—';
+    ds.resolvedWordStyle = resolvedWord
+      ? `${resolvedWord.behavior} e${resolvedWord.emphasisLevel} pulse:${resolvedWord.pulseAmp.toFixed(2)}`
+      : '—';
+    ds.layoutStable = true;
 
     // ── Camera & tension ──
     ds.cameraDistance = ds.cdTypography;
@@ -2635,6 +2658,10 @@ export class LyricDancePlayer {
       descent: m.actualBoundingBoxDescent ?? (parseFloat(font) * 0.15),
     };
     this._textMetricsCache.set(key, metrics);
+    if (this._textMetricsCache.size > 2500) {
+      const first = this._textMetricsCache.keys().next().value;
+      if (first) this._textMetricsCache.delete(first);
+    }
     return metrics;
   }
 
@@ -2911,12 +2938,16 @@ export class LyricDancePlayer {
       ? (direction as any).tensionCurve
       : deriveTensionCurve(direction?.emotionalArc);
     const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives);
+    const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
+    const resolved = resolveCinematicState(direction, payload.lines as any[], durationSec);
     const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
     const texture = this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, direction);
     this.resolvedState = {
       chapters,
       tensionCurve,
       wordDirectivesMap,
+      lineSettings: resolved.lineSettings,
+      wordSettings: resolved.wordSettings,
       particleConfig: {
         texture,
         system: texture,
@@ -3657,6 +3688,7 @@ export class LyricDancePlayer {
     while (this._beatCursor + 1 < beats.length && beats[this._beatCursor + 1].time <= tSec) this._beatCursor++;
     while (this._beatCursor > 0 && beats[this._beatCursor].time > tSec) this._beatCursor--;
     const beatIndex = beats.length > 0 ? this._beatCursor : -1;
+    const beatSpine = computeBeatSpine(tSec, this.data.beat_grid, { lookAheadSec: 0.02, pulseWidth: 0.08 });
 
     if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {
       this._lastBeatIndex = beatIndex;
@@ -3687,8 +3719,8 @@ export class LyricDancePlayer {
     const intensityGlowMult = 0.5 + intensity * 1.0;
     const intensityScaleMult = 0.95 + intensity * 0.1;
 
-    const driftX = Math.sin(tSec * 0.15) * 8 * sx;
-    const driftY = Math.cos(tSec * 0.12) * 5 * sy;
+    let driftX = Math.sin(tSec * 0.15) * 8 * sx;
+    let driftY = Math.cos(tSec * 0.12) * 5 * sy;
 
     const groups = scene.phraseGroups;
     const activeGroups = this._activeGroupIndices;
@@ -3712,11 +3744,13 @@ export class LyricDancePlayer {
     for (let ai = 0; ai < activeGroups.length; ai++) {
       const groupIdx = activeGroups[ai];
       const group = groups[groupIdx];
+      const resolvedLine = this.resolvedState.lineSettings[group.lineIndex];
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
       const groupEnd = Math.min(group.end + group.lingerDuration, nextGroupStart);
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
+        const resolvedWord = this.resolvedState.wordSettings[word.clean ?? normalizeToken(word.text)] ?? null;
         const isAnchor = wi === group.anchorWordIdx;
         const staggerDelay = isAnchor ? 0 : Math.abs(wi - group.anchorWordIdx) * group.staggerDelay;
         const li = word.letterIndex ?? 0;
@@ -3737,8 +3771,8 @@ export class LyricDancePlayer {
 
         const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
         const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
-        const finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1) * word.semanticScaleX;
-        const finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1) * word.semanticScaleY;
+        let finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1) * word.semanticScaleX;
+        let finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1) * word.semanticScaleY;
 
         const isEntryComplete = entryProgress >= 1.0;
         const isExiting = exitProgress > 0;
@@ -3760,7 +3794,22 @@ export class LyricDancePlayer {
         const wordSpan = charW * lt;
         const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
 
-        const wordGlow = (isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult;
+        const emphasisPulse = resolvedWord?.pulseAmp ?? 0;
+        const beatScale = 1 + beatSpine.beatPulse * emphasisPulse;
+        finalScaleX *= beatScale;
+        finalScaleY *= beatScale;
+
+        const isHeroBeatHit = isExactHeroTokenMatch(word.text, resolvedLine?.heroWord ?? '') && beatSpine.beatPulse > 0.35;
+        if (isHeroBeatHit) {
+          const push = resolvedWord?.microCamPush ?? 0.04;
+          finalScaleX *= 1 + push;
+          finalScaleY *= 1 + push;
+          driftY += push * 16;
+        }
+
+        const glowGain = resolvedWord?.glowGain ?? 0;
+        const wordGlow = ((isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult)
+          + beatSpine.beatPulse * glowGain;
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
@@ -3790,10 +3839,10 @@ export class LyricDancePlayer {
         chunk.skewX = finalSkewX;
         chunk.blur = Math.max(0, Math.min(1, finalBlur));
         chunk.rotation = finalRotation;
-        chunk.ghostTrail = word.ghostTrail;
+        chunk.ghostTrail = resolvedWord?.ghostTrail ?? word.ghostTrail;
         chunk.ghostCount = word.ghostCount;
         chunk.ghostSpacing = word.ghostSpacing;
-        chunk.ghostDirection = word.ghostDirection as any;
+        chunk.ghostDirection = (resolvedWord?.ghostDirection ?? word.ghostDirection) as any;
         chunk.letterIndex = word.letterIndex;
         chunk.letterTotal = word.letterTotal;
         chunk.letterDelay = word.letterDelay ?? 0;
@@ -3830,6 +3879,7 @@ export class LyricDancePlayer {
     frame.cameraY = driftY;
     frame.cameraZoom = effectiveZoom;
     frame.bgBlend = 0;
+    (frame as any).beatPulse = beatSpine.beatPulse;
     frame.atmosphere = (chapter?.atmosphere ?? 'cinematic') as any;
     frame.chunks = chunks;
     frame.particles = [];
