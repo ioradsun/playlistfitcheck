@@ -921,8 +921,10 @@ export function renderText(
       return;
     }
 
+    const runWordDynamics = isActiveWord;
+
     // Ghost trail for evolution words
-    if (historyForRule.positions.length > 1 && directive?.evolutionRule) {
+    if (runWordDynamics && historyForRule.positions.length > 1 && directive?.evolutionRule) {
       const lastPos = historyForRule.positions[historyForRule.positions.length - 2];
       if (lastPos) {
         ctx.save();
@@ -971,7 +973,7 @@ export function renderText(
     let evolutionOpacity = 1;
     let evolutionYOffset = 0;
 
-    if (directive?.evolutionRule) {
+    if (runWordDynamics && directive?.evolutionRule) {
       const evolutionKey = `${normalizedWord}:${directive.evolutionRule}`;
       const cachedEvolution = textState.evolutionCache.get(evolutionKey);
       if (cachedEvolution && cachedEvolution.count === appearanceCount) {
@@ -1004,7 +1006,7 @@ export function renderText(
       }
     }
 
-    if (normalizedWord === "love" && directive?.evolutionRule) {
+    if (runWordDynamics && normalizedWord === "love" && directive?.evolutionRule) {
       evolutionGlow = Math.max(evolutionGlow, Math.min(appearanceCount * 3, 15));
       evolutionScale = Math.max(evolutionScale, 1 + Math.min(appearanceCount * 0.03, 0.15));
       evolutionYOffset = Math.min(evolutionYOffset + Math.min(appearanceCount, 5), 10);
@@ -1050,7 +1052,7 @@ export function renderText(
     }
 
     // Kinetic effect
-    if (directive?.kineticClass && isActiveWord) {
+    if (runWordDynamics && directive?.kineticClass) {
       applyKineticEffect(
         ctx,
         directive.kineticClass,
@@ -1066,12 +1068,12 @@ export function renderText(
     }
 
     // Drown bubbles
-    if (directive?.evolutionRule && normalizedWord === "drown") {
+    if (runWordDynamics && directive?.evolutionRule && normalizedWord === "drown") {
       drawBubbles(ctx, 0, 0, wordRenderWidth, fontSize, Math.min(20, 3 + appearanceCount * 2), 1 + appearanceCount * 0.4, currentTime);
     }
 
     // Elemental effects
-    if (directive?.elementalClass) {
+    if (runWordDynamics && directive?.elementalClass) {
       const effectQuality = isMobile ? "low" : "high";
       const maxBubbles = devicePixelRatio > 1 ? 8 : 4;
       const bubbleCount = Math.min(maxBubbles, Math.max(3, appearanceCount + 2));
