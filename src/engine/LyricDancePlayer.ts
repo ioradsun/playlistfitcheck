@@ -2078,7 +2078,11 @@ export class LyricDancePlayer {
           directive: decompDirective,
         });
       }
-      const decompActive = this.activeDecomps.some((d) => d.id === chunk.id);
+      // Allow word to render alongside particles for first 80ms — creates "bursts into particles" effect
+      const nowForDecomp = performance.now() / 1000;
+      const decompActive = this.activeDecomps.some(
+        (d) => d.id === chunk.id && nowForDecomp - d.startTime > 0.08,
+      );
 
       if (chunk.iconPosition !== 'replace' && !decompActive) {
         this.ctx.globalAlpha = drawAlpha;
