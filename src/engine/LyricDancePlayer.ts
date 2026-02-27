@@ -29,6 +29,8 @@ import {
   resolveCinematicState,
   type ResolvedLineSettings,
   type ResolvedWordSettings,
+  type SectionGrade,
+  blendSectionGrade,
 } from "@/engine/cinematicResolver";
 
 const DECOMP_ENABLED = false; // set to true to re-enable word-to-particle
@@ -179,6 +181,14 @@ export interface LiveDebugState {
   bgNextBeat: number;
   bgBeatPhase: number;
   bgBeatPulse: number;
+
+  rackFocusEnabled: boolean;
+  rackFocusPrimaryBlurPx: number;
+  rackFocusEchoBlurPx: number;
+  heroSweepActive: boolean;
+  heroSweepProgress: number;
+  sectionGradeTemperature: number;
+  ghostTrailActiveCount: number;
 
   // Active word
   activeWord: string;
@@ -332,6 +342,14 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   bgBeatPhase: 0,
   bgBeatPulse: 0,
 
+  rackFocusEnabled: true,
+  rackFocusPrimaryBlurPx: 0,
+  rackFocusEchoBlurPx: 0,
+  heroSweepActive: false,
+  heroSweepProgress: 0,
+  sectionGradeTemperature: 0,
+  ghostTrailActiveCount: 0,
+
   activeWord: "—",
   activeWordEntry: "—",
   activeWordExit: "—",
@@ -383,6 +401,7 @@ type ResolvedPlayerState = {
   wordDirectivesMap: Record<string, any>;
   lineSettings: Record<number, ResolvedLineSettings>;
   wordSettings: Record<string, ResolvedWordSettings>;
+  sectionGrades: SectionGrade[];
   particleConfig: {
     texture: string;
     system: string;
@@ -412,6 +431,16 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     ghostSpacing?: number;
     ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial';
     frozen?: boolean;
+    isHeroWord?: boolean;
+    isActiveWord?: boolean;
+    wordStart?: number;
+    wordEnd?: number;
+    lineStart?: number;
+    isEcho?: boolean;
+    sectionIndex?: number;
+    glowColor?: string;
+    heroSweepProgress?: number;
+    heroSweepBandFrac?: number;
     fontSize?: number;
     fontWeight?: number;
     fontFamily?: string;
@@ -457,6 +486,25 @@ interface ChunkBounds {
   baseTextWidth: number;
   scaleX: number;
   scaleY: number;
+}
+
+function easeInOutCubic(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+function easeOutCubic(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  return 1 - Math.pow(1 - x, 3);
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const clean = String(hex || '#ffffff').replace('#', '');
+  const normalized = clean.length === 6 ? clean : 'ffffff';
+  const r = Number.parseInt(normalized.slice(0, 2), 16);
+  const g = Number.parseInt(normalized.slice(2, 4), 16);
+  const b = Number.parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
 }
 
 function lerpColor(a: string, b: string, t: number): string {
@@ -871,6 +919,7 @@ export class LyricDancePlayer {
     wordDirectivesMap: {},
     lineSettings: {},
     wordSettings: {},
+    sectionGrades: [],
     particleConfig: { texture: 'dust', system: 'dust', density: 0.35, speed: 0.35 },
   };
   
@@ -978,6 +1027,10 @@ export class LyricDancePlayer {
   private _lastLoggedTSec = 0;
   private _stalledFrames = 0;
   private _lastSimChapterIdx = -1;
+  private readonly isDebugMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1";
+  private heroSweepByChunk = new Map<string, { startSec: number; durationSec: number; activeUntilSec: number }>();
+  private anchorInvariantByChunk = new Map<string, number>();
+  private anchorInvariantLogged = new Set<string>();
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
@@ -1851,9 +1904,11 @@ export class LyricDancePlayer {
       this.activeSectionTexture = texture;
       const mapped = (PARTICLE_SYSTEM_MAP as Record<string, string | undefined>)[texture?.toLowerCase?.() ?? ""]?.toLowerCase?.() ?? texture;
       this.ambientParticleEngine?.setSystem(mapped);
+      const sectionTexture = String(section?.texture ?? '').toLowerCase();
+      const textureDensity = sectionTexture.includes('stars') ? 0.78 : (sectionTexture.includes('petals') ? 0.64 : (sectionTexture.includes('dust') ? 0.58 : 0.5));
       this.ambientParticleEngine?.setConfig({
         system: mapped,
-        density: this.resolvedState.particleConfig.density ?? 0.35,
+        density: (this.resolvedState.particleConfig.density ?? 0.35) * textureDensity,
         speed: this.resolvedState.particleConfig.speed ?? 0.35,
         opacity: 0.4,
         beatReactive: true,
@@ -1935,6 +1990,16 @@ export class LyricDancePlayer {
     ds.bgBeatPhase = beatSpine.beatPhase;
     ds.bgBeatPulse = beatSpine.beatPulse;
     ds.beatIntensity = Math.max(ds.beatIntensity, beatSpine.beatPulse);
+    const activeChunk = visibleChunks.find((c: any) => c.isActiveWord && !c.isEcho) as any;
+    const ghostTrailActiveCount = visibleChunks.filter((c: any) => c.ghostTrail && c.visible).length;
+    ds.rackFocusEnabled = true;
+    ds.rackFocusPrimaryBlurPx = +(Math.max(0, ((activeChunk?.blur ?? 0) * 12) - (activeChunk?.isEcho ? 1.5 : 0))).toFixed(2);
+    ds.rackFocusEchoBlurPx = +((visibleChunks.find((c: any) => c.isEcho)?.blur ?? 0) * 12).toFixed(2);
+    ds.heroSweepActive = Boolean(activeChunk && (activeChunk.heroSweepProgress ?? -1) >= 0 && (activeChunk.heroSweepProgress ?? -1) <= 1);
+    ds.heroSweepProgress = ds.heroSweepActive ? +(activeChunk.heroSweepProgress ?? 0).toFixed(3) : -1;
+    const sectionGrade = this.resolvedState.sectionGrades?.[sectionIndex];
+    ds.sectionGradeTemperature = +(sectionGrade?.temperature ?? 0).toFixed(2);
+    ds.ghostTrailActiveCount = ghostTrailActiveCount;
 
     // ── Active word ──
     ds.activeWord = activeWordClean || '—';
@@ -2102,6 +2167,7 @@ export class LyricDancePlayer {
 
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
+    this.drawSectionGradeOverlay(frame.sectionIndex);
 
     try {
       this.checkEmotionalEvents(tSec, songProgress);
@@ -2400,8 +2466,17 @@ export class LyricDancePlayer {
         const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
         if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         if (chunk.glow > 0) {
-          this.ctx.shadowColor = chunk.color ?? '#ffffff';
+          this.ctx.shadowColor = chunk.glowColor ?? chunk.color ?? '#ffffff';
           this.ctx.shadowBlur = chunk.glow * 32;
+        }
+
+        if (this.isDebugMode && chunk.isActiveWord && !chunk.isEcho) {
+          const prev = this.anchorInvariantByChunk.get(chunk.id);
+          if (prev != null && Math.abs(prev - centerX) > 0.25 && !this.anchorInvariantLogged.has(chunk.id)) {
+            console.warn('[cinematic-karaoke] no-jank invariant violated', { chunkId: chunk.id, prevCenterX: prev, nextCenterX: centerX, dtSec: this.currentTSec });
+            this.anchorInvariantLogged.add(chunk.id);
+          }
+          this.anchorInvariantByChunk.set(chunk.id, centerX);
         }
 
         const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01;
@@ -2411,33 +2486,46 @@ export class LyricDancePlayer {
         }
 
         if (chunk.ghostTrail && chunk.visible) {
-          const count = chunk.ghostCount ?? 3;
-          const spacing = chunk.ghostSpacing ?? 8;
-          const dir = chunk.ghostDirection ?? 'up';
-          for (let g = count; g >= 1; g -= 1) {
-            const ghostAlpha = drawAlpha * (0.12 + (count - g) * 0.06);
-            const offset = g * spacing;
-            let gx = 0, gy = 0;
-            switch (dir) {
-              case 'up': gy = offset; break;
-              case 'down': gy = -offset; break;
-              case 'left': gx = offset; break;
-              case 'right': gx = -offset; break;
-              case 'radial': gx = Math.cos(g * 1.2) * offset; gy = Math.sin(g * 1.2) * offset; break;
+          const trailAge = Math.max(0, this.currentTSec - (chunk.wordStart ?? this.currentTSec));
+          const ghostWindow = this.currentTSec <= (chunk.wordEnd ?? this.currentTSec) + 0.12;
+          if (ghostWindow) {
+            const count = Math.min(5, Math.max(3, chunk.ghostCount ?? 4));
+            const spacing = Math.max(4, chunk.ghostSpacing ?? 8);
+            const dir = chunk.ghostDirection ?? 'up';
+            const drift = easeOutCubic(Math.min(1, trailAge / 0.25));
+            const radialAngles = [0, 72, 144, 216, 288];
+            for (let g = count; g >= 1; g -= 1) {
+              const offset = drift * spacing * g;
+              const ghostAlpha = drawAlpha * (0.02 + (g / count) * 0.08);
+              const scaleGhost = 0.92 + (g / count) * 0.06;
+              let gx = 0, gy = 0;
+              switch (dir) {
+                case 'up': gy = -offset; break;
+                case 'down': gy = offset; break;
+                case 'left': gx = -offset; break;
+                case 'right': gx = offset; break;
+                case 'radial': {
+                  const angle = radialAngles[(g - 1) % radialAngles.length] * (Math.PI / 180);
+                  gx = Math.cos(angle) * offset;
+                  gy = Math.sin(angle) * offset;
+                  break;
+                }
+              }
+              this.ctx.globalAlpha = ghostAlpha;
+              this.ctx.shadowBlur = (chunk.blur ?? 0) * 12 + g * 0.8;
+              const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
+                drawX + gx,
+                finalDrawY + gy,
+                chunk.rotation ?? 0,
+                chunk.skewX ?? 0,
+                sx * scaleGhost,
+                sy * scaleGhost,
+              );
+              this.ctx.setTransform(ga, gb, gc, gd, ge, gf);
+              this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
             }
-            this.ctx.globalAlpha = ghostAlpha;
-            const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
-              drawX + gx,
-              finalDrawY + gy,
-              chunk.rotation ?? 0,
-              chunk.skewX ?? 0,
-              sx,
-              sy,
-            );
-            this.ctx.setTransform(ga, gb, gc, gd, ge, gf);
-            this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
+            this.ctx.globalAlpha = drawAlpha;
           }
-          this.ctx.globalAlpha = drawAlpha;
         }
 
         const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
@@ -2450,6 +2538,25 @@ export class LyricDancePlayer {
         );
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
         this.ctx.fillText(text, 0, 0);
+
+        if ((chunk.heroSweepProgress ?? -1) >= 0 && (chunk.heroSweepProgress ?? 0) <= 1 && !chunk.isEcho) {
+          const sweepProgress = chunk.heroSweepProgress ?? 0;
+          const bandFrac = chunk.heroSweepBandFrac ?? 0.22;
+          const bandW = Math.max(8, textWidth * bandFrac);
+          const minX = drawX - textWidth * 0.5;
+          const sweepX = minX + textWidth * sweepProgress;
+          this.ctx.save();
+          this.ctx.globalAlpha = drawAlpha * 0.16;
+          this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+          this.ctx.beginPath();
+          this.ctx.rect(sweepX - bandW * 0.5, finalDrawY - safeFontSize * 1.2, bandW, safeFontSize * 1.8);
+          this.ctx.clip();
+          this.ctx.setTransform(ma, mb, mc, md, me, mf);
+          this.ctx.fillStyle = hexToRgba(chunk.glowColor ?? '#ffffff', 1);
+          this.ctx.fillText(text, 0, 0);
+          this.ctx.restore();
+        }
+
         if (needsFilterSaveRestore) {
           this.ctx.filter = 'none';
           this.ctx.restore();
@@ -2482,6 +2589,29 @@ export class LyricDancePlayer {
 
     this.drawWatermark();
     this.debugState.drawCalls = drawCalls;
+  }
+
+
+  private drawSectionGradeOverlay(sectionIndex: number): void {
+    const grade = this.resolvedState.sectionGrades?.[sectionIndex];
+    if (!grade) return;
+    const alphaBase = 0.035 + Math.max(0, grade.hazeLift) * 0.04;
+    this.ctx.save();
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    if (grade.overlayStyle === 'haze') {
+      this.ctx.fillStyle = hexToRgba(grade.activeTextColor, alphaBase * 0.55);
+      this.ctx.fillRect(0, 0, this.width, this.height);
+    } else if (grade.overlayStyle === 'glass') {
+      const grad = this.ctx.createLinearGradient(0, 0, this.width, this.height);
+      grad.addColorStop(0, hexToRgba(grade.glowColor, alphaBase * 0.45));
+      grad.addColorStop(1, hexToRgba(grade.futureTextColor, alphaBase * 0.2));
+      this.ctx.fillStyle = grad;
+      this.ctx.fillRect(0, 0, this.width, this.height);
+    } else if (grade.overlayStyle === 'grain') {
+      this.ctx.fillStyle = hexToRgba(grade.baseTextColor, alphaBase * 0.25);
+      this.ctx.fillRect(0, 0, this.width, this.height);
+    }
+    this.ctx.restore();
   }
 
   private drawWatermark(): void {
@@ -2984,6 +3114,7 @@ export class LyricDancePlayer {
       wordDirectivesMap,
       lineSettings: resolved.lineSettings,
       wordSettings: resolved.wordSettings,
+      sectionGrades: resolved.sectionGrades,
       particleConfig: {
         texture,
         system: texture,
@@ -3062,10 +3193,21 @@ export class LyricDancePlayer {
     const frameState = (this.data?.frame_state ?? {}) as Record<string, unknown>;
     const bool = (key: string, fallback: boolean) => typeof frameState[key] === 'boolean' ? (frameState[key] as boolean) : fallback;
     const featherRaw = Number(frameState.wordFeatherMs);
+    const num = (key: string, fallback: number) => {
+      const raw = Number(frameState[key]);
+      return Number.isFinite(raw) ? raw : fallback;
+    };
     return {
-      debugHud: sceneKaraoke?.debugHud ?? bool('debugHud', false),
+      debugHud: this.isDebugMode || sceneKaraoke?.debugHud || bool('debugHud', false),
       enableEchoLine: sceneKaraoke?.enableEchoLine ?? bool('enableEchoLine', true),
       wordFeatherMs: sceneKaraoke?.wordFeatherMs ?? (Number.isFinite(featherRaw) ? Math.min(120, Math.max(40, featherRaw)) : 75),
+      focusInMs: Math.max(140, Math.min(220, num('focusInMs', 160))),
+      echoBlurPx: Math.max(1.5, Math.min(4.5, num('echoBlurPx', 3.0))),
+      primaryEntryBlurPx: Math.max(1.0, Math.min(4.0, num('primaryEntryBlurPx', 2.5))),
+      heroSweepEnabled: bool('heroSweepEnabled', true),
+      heroSweepDurationMs: Math.max(220, Math.min(320, num('heroSweepDurationMs', 260))),
+      heroSweepBandFrac: Math.max(0.12, Math.min(0.4, num('heroSweepBandFrac', 0.22))),
+      sectionGradeCrossfadeMs: Math.max(300, Math.min(500, num('sectionGradeCrossfadeMs', 420))),
     };
   }
 
@@ -3784,9 +3926,24 @@ export class LyricDancePlayer {
     const driftY = 0;
 
     const primaryLineIndex = this.getPrimaryLineIndex(tSec);
+    const primaryLine = primaryLineIndex >= 0 ? this.data.lyrics?.[primaryLineIndex] : null;
     const echoLineIndex = karaokeConfig.enableEchoLine && primaryLineIndex > 0 ? primaryLineIndex - 1 : -1;
     const echoLine = echoLineIndex >= 0 ? this.data.lyrics?.[echoLineIndex] : null;
-    const echoFade = echoLine ? Math.max(0, 1 - (tSec - (this.data.lyrics?.[primaryLineIndex]?.start ?? tSec)) / 0.35) : 0;
+    const echoFade = echoLine ? Math.max(0, 1 - (tSec - (primaryLine?.start ?? tSec)) / 0.35) : 0;
+    const focusInSec = karaokeConfig.focusInMs / 1000;
+    const primaryFocusProgress = primaryLine ? Math.max(0, Math.min(1, (tSec - primaryLine.start) / Math.max(0.001, focusInSec))) : 1;
+    const primaryBlurPx = karaokeConfig.primaryEntryBlurPx * (1 - easeOutCubic(primaryFocusProgress));
+    const primaryEntryLift = (1 - easeOutCubic(primaryFocusProgress)) * 2;
+    const echoBlurPx = echoLine ? (1.5 + (karaokeConfig.echoBlurPx - 1.5) * Math.min(1, (tSec - (primaryLine?.start ?? tSec)) / 0.2)) : 0;
+
+    const grades = this.resolvedState.sectionGrades;
+    const currentGrade = grades[currentChapterIdx] ?? {
+      baseTextColor: '#d8deea', futureTextColor: '#6f788f', activeTextColor: '#f5f7ff', glowColor: '#bed0ff', echoColor: '#98a2bf', overlayStyle: 'none' as const, temperature: 0, contrast: 0.62, hazeLift: 0.12,
+    };
+    const prevGrade = currentChapterIdx > 0 ? grades[currentChapterIdx - 1] ?? currentGrade : currentGrade;
+    const chapterStartSec = scene.songStartSec + songDuration * (chapter?.startRatio ?? 0);
+    const gradeBlend = Math.max(0, Math.min(1, (tSec - chapterStartSec) / Math.max(0.001, karaokeConfig.sectionGradeCrossfadeMs / 1000)));
+    const sectionGrade = blendSectionGrade(prevGrade, currentGrade, gradeBlend);
 
     const groups = scene.phraseGroups;
     const activeGroups = this._activeGroupIndices;
@@ -3853,7 +4010,10 @@ export class LyricDancePlayer {
         const windowFeather = isActive ? Math.min(alphaIn, alphaOut) : 1;
         const tierAlpha = isActive ? 1 : (isPast ? 0.9 : 0.52);
         let rawAlpha = tierAlpha * windowFeather;
-        if (isEchoGroup) rawAlpha *= 0.35 * echoFade;
+        if (isEchoGroup) rawAlpha *= 0.12 * echoFade;
+        if (!isEchoGroup && primaryLine && tSec >= primaryLine.start && tSec <= primaryLine.start + focusInSec) {
+          rawAlpha *= 0.94 + easeOutCubic(primaryFocusProgress) * 0.06;
+        }
 
         const finalAlpha = Math.min(word.semanticAlphaMax, rawAlpha);
 
@@ -3913,8 +4073,11 @@ export class LyricDancePlayer {
         chunk.fontWeight = word.fontWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
-        chunk.color = word.color;
+        chunk.color = isEchoGroup
+          ? sectionGrade.echoColor
+          : (isActive ? sectionGrade.activeTextColor : (isPast ? sectionGrade.baseTextColor : sectionGrade.futureTextColor));
         chunk.glow = wordGlow;
+        chunk.glowColor = sectionGrade.glowColor;
         chunk.emitterType = word.emitterType !== 'none' ? word.emitterType : undefined;
         chunk.trail = word.trail;
         chunk.entryStyle = word.entryStyle;
@@ -3924,12 +4087,42 @@ export class LyricDancePlayer {
         chunk.exitProgress = Math.min(1, exitProgress);
         chunk.behavior = word.behaviorStyle;
         chunk.skewX = finalSkewX;
-        chunk.blur = Math.max(0, Math.min(1, isEchoGroup ? 0.35 + finalBlur : finalBlur));
+        const rackBlurPx = isEchoGroup ? echoBlurPx : primaryBlurPx;
+        chunk.blur = Math.max(0, Math.min(1, (rackBlurPx / 12) + (isEchoGroup ? 0.12 : 0) + finalBlur));
         chunk.rotation = finalRotation;
         chunk.ghostTrail = resolvedWord?.ghostTrail ?? word.ghostTrail;
         chunk.ghostCount = Math.min(5, Math.max(0, word.ghostCount ?? 3));
         chunk.ghostSpacing = word.ghostSpacing;
         chunk.ghostDirection = (resolvedWord?.ghostDirection ?? word.ghostDirection) as any;
+        chunk.isHeroWord = isHeroWord;
+        chunk.isActiveWord = isActive;
+        chunk.wordStart = word.start;
+        chunk.wordEnd = word.end;
+        chunk.lineStart = group.start;
+        chunk.isEcho = isEchoGroup;
+        chunk.sectionIndex = currentChapterIdx;
+        if (!isEchoGroup && primaryEntryLift > 0 && tSec >= (primaryLine?.start ?? 0) && tSec <= (primaryLine?.start ?? 0) + focusInSec) {
+          chunk.y -= primaryEntryLift * sy;
+        }
+        if (karaokeConfig.heroSweepEnabled && isHeroWord && isActive && !isEchoGroup) {
+          const sweepKey = chunk.id;
+          let sweep = this.heroSweepByChunk.get(sweepKey);
+          if (!sweep || tSec > sweep.activeUntilSec) {
+            let startSec = word.start;
+            for (let bi = 0; bi < beats.length; bi += 1) {
+              if (beats[bi].time >= word.start) { startSec = beats[bi].time; break; }
+            }
+            const durationSec = karaokeConfig.heroSweepDurationMs / 1000;
+            sweep = { startSec, durationSec, activeUntilSec: word.end + 0.25 };
+            this.heroSweepByChunk.set(sweepKey, sweep);
+          }
+          const sweepProgress = (tSec - sweep.startSec) / Math.max(0.001, sweep.durationSec);
+          chunk.heroSweepProgress = sweepProgress >= 0 && sweepProgress <= 1 ? easeInOutCubic(sweepProgress) : -1;
+          chunk.heroSweepBandFrac = karaokeConfig.heroSweepBandFrac;
+        } else {
+          chunk.heroSweepProgress = -1;
+          chunk.heroSweepBandFrac = karaokeConfig.heroSweepBandFrac;
+        }
         chunk.letterIndex = word.letterIndex;
         chunk.letterTotal = word.letterTotal;
         chunk.letterDelay = word.letterDelay ?? 0;
