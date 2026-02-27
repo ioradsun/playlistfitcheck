@@ -861,6 +861,9 @@ export class LyricDancePlayer {
   private _glowBudget = 0;
   private _lastBeatIndex = -1;
   private _currentZoom = 1.0;
+  private _smoothedTime = 0;
+  private _lastRawTime = 0;
+  private _timeInitialized = false;
 
   // Viewport scale (replaces timelineScale for runtime use)
   private _viewportSx = 1;
@@ -1245,6 +1248,7 @@ export class LyricDancePlayer {
     this._springOffset = 0;
     this._springVelocity = 0;
     this._currentZoom = 1.0;
+    this._timeInitialized = false;
   }
 
   seekTo(timeSec: number): void {
@@ -1394,6 +1398,7 @@ export class LyricDancePlayer {
 
     this.audio.pause();
     this.audio.src = "";
+    this._timeInitialized = false;
 
     if (this.audioContext) {
       void this.audioContext.close().catch(() => {});
@@ -1450,8 +1455,11 @@ export class LyricDancePlayer {
       this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       this.ctx.clearRect(0, 0, this.width, this.height);
 
-      this.update(deltaMs);
-      this.draw(this.audio.currentTime);
+      const rawTime = this.audio.currentTime;
+      const smoothedTime = this.smoothAudioTime(rawTime);
+
+      this.update(deltaMs, smoothedTime);
+      this.draw(smoothedTime);
     } catch (err) {
       // render crash — silently continue
     } finally {
@@ -1491,6 +1499,30 @@ export class LyricDancePlayer {
 
     this._haloStamps.set(key, stamp);
     return stamp;
+  }
+
+  private smoothAudioTime(rawTime: number): number {
+    // On first call or after seek, snap immediately
+    if (!this._timeInitialized || Math.abs(rawTime - this._lastRawTime) > 0.5) {
+      this._smoothedTime = rawTime;
+      this._timeInitialized = true;
+      this._lastRawTime = rawTime;
+      return rawTime;
+    }
+
+    this._lastRawTime = rawTime;
+
+    // Lerp toward real time — smooths out audio buffer jitter
+    // 0.15 = responsive enough to not drift, smooth enough to hide jitter
+    const alpha = 0.15;
+    this._smoothedTime += (rawTime - this._smoothedTime) * alpha;
+
+    // Never drift more than 100ms from real time
+    if (Math.abs(this._smoothedTime - rawTime) > 0.1) {
+      this._smoothedTime = rawTime;
+    }
+
+    return this._smoothedTime;
   }
 
   private drawWordHalo(
@@ -1736,9 +1768,8 @@ export class LyricDancePlayer {
     return [a, b, c, d, e, f];
   }
 
-  private update(deltaMs: number): void {
-    const t = this.audio.currentTime;
-    const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, t));
+  private update(deltaMs: number, timeSec: number): void {
+    const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
     if (this.isExporting && clamped >= this.songEndSec) {
