@@ -1958,7 +1958,10 @@ export class LyricDancePlayer {
       const wordJustExited = prevExitProgress <= 0 && currentExitProgress > 0;
       this.lastExitProgressByChunk.set(chunk.id, currentExitProgress);
       const obj = this.chunks.get(chunk.id);
-      if (!obj) continue;
+      if (!obj) {
+        console.warn('[Decomp] chunk miss:', chunk.id, 'registered:', [...this.chunks.keys()].slice(0, 5));
+        continue;
+      }
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
       const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
       const drawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
@@ -2050,7 +2053,8 @@ export class LyricDancePlayer {
 
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
-      if (wordJustExited && directive) {
+      if (wordJustExited) {
+        const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
         this.tryStartDecomposition({
           chunkId: chunk.id,
           text: chunk.text ?? obj.text,
@@ -2060,7 +2064,7 @@ export class LyricDancePlayer {
           fontWeight,
           fontFamily: chunk.fontFamily,
           color: this.getTextColor(chunk.color ?? chapterColor),
-          directive,
+          directive: decompDirective,
         });
       }
       const decompActive = this.activeDecomps.some((d) => d.id === chunk.id);
@@ -2804,9 +2808,20 @@ export class LyricDancePlayer {
       return;
     }
 
-    // No words available — leave chunks empty rather than registering
-    // mismatched line-level keys that would never match the baker's
-    // ${lineIndex}-${groupIndex}-${wordIndex} format.
+    if (lines.length > 0) {
+      lines.forEach((line, lineIndex) => {
+        const lineText = line.text ?? '';
+        const displayText = textTransform === 'uppercase' ? lineText.toUpperCase() : lineText;
+        const key = `${lineIndex}-0-0`;
+        this.chunks.set(key, {
+          id: key,
+          text: displayText,
+          color: '#ffffff',
+          font,
+          width: measureCtx.measureText(displayText).width,
+        });
+      });
+    }
   }
 
   private mapBackgroundSystem(desc: string): string {
