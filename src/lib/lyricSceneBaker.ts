@@ -100,6 +100,7 @@ export const BAKER_VERSION = 7;
 const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
+const deterministicSign = (seed: number): number => (Math.sin(seed * 127.1 + 311.7) > 0 ? 1 : -1);
 const easeOut = (t: number): number => 1 - Math.pow(1 - t, 3);
 const easeIn = (t: number): number => Math.pow(t, 3);
 const easeOutBack = (t: number): number => {
@@ -521,7 +522,17 @@ function computeEntryState(style: EntryStyle, progress: number, intensity: numbe
     case 'bloom': return { offsetX: 0, offsetY: 0, scaleX: 0.5 + ep * 0.5, scaleY: 0.5 + ep * 0.5, alpha: easeOut(Math.min(1, progress * 1.2)), skewX: 0, glowMult: (1 - ep) * 2.5, blur: 0, rotation: 0 };
     case 'melt-in': return { offsetX: 0, offsetY: (1 - ep) * 15, scaleX: 1, scaleY: 1, alpha: easeOut(Math.min(1, progress * 1.8)), skewX: (1 - ep) * 2, glowMult: 0, blur: 0, rotation: 0 };
     case 'ink-drop': return { offsetX: 0, offsetY: 0, scaleX: ep < 0.5 ? ep * 2 : 1, scaleY: ep < 0.5 ? ep * 2 : 1, alpha: Math.min(1, progress * 3), skewX: 0, glowMult: (1 - ep) * 0.5, blur: 0, rotation: 0 };
-    case 'shatter-in': return { offsetX: (1 - ep) * (Math.random() > 0.5 ? 30 : -30), offsetY: (1 - ep) * (Math.random() > 0.5 ? -20 : 20), scaleX: 0.8 + ep * 0.2, scaleY: 0.8 + ep * 0.2, alpha: Math.min(1, progress * 4), skewX: (1 - ep) * 5, glowMult: 0, blur: 0, rotation: 0 };
+    case 'shatter-in': return {
+      offsetX: (1 - ep) * (30 * deterministicSign(progress * 13.37)),
+      offsetY: (1 - ep) * (20 * deterministicSign(progress * 7.91)),
+      scaleX: 0.8 + ep * 0.2,
+      scaleY: 0.8 + ep * 0.2,
+      alpha: Math.min(1, progress * 4),
+      skewX: (1 - ep) * 5,
+      glowMult: 0,
+      blur: 0,
+      rotation: 0,
+    };
     case 'focus-in': {
       // Starts blurred/large, snaps to sharp focus
       const focusScale = 1 + (1 - ep) * 0.6;
@@ -546,7 +557,7 @@ function computeExitState(style: ExitStyle, progress: number, intensity: number,
   const ep = easeOut(Math.min(1, progress));
   const ei = easeIn(Math.min(1, progress));
   switch (style) {
-    case 'shatter': return { offsetX: ep * 40 * (Math.random() > 0.5 ? 1 : -1), offsetY: ep * -30, scaleX: 1 + ep * 0.4, scaleY: 1 - ep * 0.3, alpha: 1 - ei, skewX: ep * 10, glowMult: ep * 1.5, blur: 0, rotation: 0 };
+    case 'shatter': return { offsetX: ep * 40 * deterministicSign(progress * 9.43), offsetY: ep * -30, scaleX: 1 + ep * 0.4, scaleY: 1 - ep * 0.3, alpha: 1 - ei, skewX: ep * 10, glowMult: ep * 1.5, blur: 0, rotation: 0 };
     case 'snap-out': return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: progress > 0.02 ? 0 : 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
     case 'burn-out': return { offsetX: 0, offsetY: 0, scaleX: 1 + ep * 0.1, scaleY: 1 + ep * 0.1, alpha: 1 - ei, skewX: 0, glowMult: ep * 3, blur: 0, rotation: 0 };
     case 'punch-out': return { offsetX: ep * 150 * intensity, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1 - Math.min(1, progress * 3), skewX: ep * 8, glowMult: 0, blur: 0, rotation: 0 };
@@ -1616,9 +1627,7 @@ function bakeFrame(
   }
   if (state.glowBudget > 0) state.glowBudget -= 1;
   const glowProgress = state.glowBudget / 13;
-  const glow = glowProgress > 0.77
-    ? (glowProgress - 0.77) / 0.23
-    : glowProgress / 0.77;
+  const glow = Math.pow(glowProgress, 0.6);
 
   state.springOffset += state.springVelocity;
   state.springVelocity *= 0.82;
@@ -1645,7 +1654,7 @@ function bakeFrame(
   const targetZoom = manifestChapters[currentChapterIdx]?.zoom ?? fallbackZoom;
 
   state.currentZoom = state.currentZoom ?? 1.0;
-  state.currentZoom += (targetZoom - state.currentZoom) * 0.015;
+  state.currentZoom += (targetZoom - state.currentZoom) * 0.06;
 
 
   const chunks: Keyframe["chunks"] = [];
@@ -1714,10 +1723,6 @@ function bakeFrame(
             ?? (directiveTrail !== 'none' ? directiveTrail as WordEmitterType : undefined)
             ?? resolveV3EmitterType(wm.directive)
             ?? 'none';
-          if (emitterType !== 'none') {
-            console.log('[PARTICLE]', { word: wm.word, emitterType, source: semanticEffect?.emitterType ? 'semantic' : 'v3-resolve', trail: directiveTrail, metaphor });
-          }
-
           const isLetterSequence = wm.directive?.letterSequence === true;
           const letterTotal = isLetterSequence ? wm.word.length : 1;
           const splitExitStyles: ExitStyle[] = ['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up'];
