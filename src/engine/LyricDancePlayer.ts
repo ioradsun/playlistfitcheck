@@ -845,6 +845,10 @@ export class LyricDancePlayer {
   private _interpParticlePool: ScaledKeyframe['particles'] = [];
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
   private _boundsBuffer: ChunkBounds[] = [];
+  private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
+  private _lastVisibleChunkIds = '';
+  private _solvedBounds: ChunkBounds[] = [];
+  private _solvedWalls = { left: 0, right: 0, top: 0, bottom: 0 };
 
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
@@ -1296,6 +1300,8 @@ export class LyricDancePlayer {
     this.lastSimFrame = -1;
     if (this.timelineBase.length) this.updateTimelineScale();
     this.invalidateFrameCache();
+    this._textMetricsCache.clear();
+    this._lastVisibleChunkIds = '';
   }
 
   setMuted(muted: boolean): void {
@@ -1853,14 +1859,10 @@ export class LyricDancePlayer {
       const weight = chunk.fontWeight ?? 700;
       const family = chunk.fontFamily ?? resolvedFont;
       const measureFont = `${weight} ${fontSize}px ${family}`;
-      if (measureFont !== this._lastFont) {
-        this.ctx.font = measureFont;
-        this._lastFont = measureFont;
-      }
-      const m = this.ctx.measureText(text);
-      const baseTextWidth = m.width;
-      const asc = m.actualBoundingBoxAscent ?? (fontSize * 0.45);
-      const desc = m.actualBoundingBoxDescent ?? (fontSize * 0.15);
+      const metrics = this.getCachedMetrics(text, measureFont);
+      const baseTextWidth = metrics.width;
+      const asc = metrics.ascent;
+      const desc = metrics.descent;
       const halfTextH = (asc + desc) / 2;
       const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
@@ -1885,7 +1887,23 @@ export class LyricDancePlayer {
       });
     }
 
-    this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+    // Only re-solve constraints when the set of visible chunks changes
+    const visibleIds = bounds.map(b => b.chunk.id).join(',');
+    if (visibleIds !== this._lastVisibleChunkIds ||
+        wallLeft !== this._solvedWalls.left ||
+        wallRight !== this._solvedWalls.right) {
+      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+      this._lastVisibleChunkIds = visibleIds;
+      this._solvedWalls = { left: wallLeft, right: wallRight, top: wallTop, bottom: wallBottom };
+      // Save solved positions
+      this._solvedBounds = bounds.map(b => ({ ...b }));
+    } else {
+      // Reapply saved solved positions
+      for (let i = 0; i < bounds.length && i < this._solvedBounds.length; i++) {
+        bounds[i].cx = this._solvedBounds[i].cx;
+        bounds[i].cy = this._solvedBounds[i].cy;
+      }
+    }
 
     let shrinkOccurred = false;
     for (let passPriority = 2; passPriority >= 0; passPriority -= 1) {
@@ -1902,12 +1920,10 @@ export class LyricDancePlayer {
         const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
         b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
         const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
-        if (this.ctx.font !== newFontStr) this.ctx.font = newFontStr;
-        this._lastFont = newFontStr;
-        const m2 = this.ctx.measureText(b.text);
-        b.baseTextWidth = m2.width;
-        const asc2 = m2.actualBoundingBoxAscent ?? (b.fontSize * 0.45);
-        const desc2 = m2.actualBoundingBoxDescent ?? (b.fontSize * 0.15);
+        const metrics2 = this.getCachedMetrics(b.text, newFontStr);
+        b.baseTextWidth = metrics2.width;
+        const asc2 = metrics2.ascent;
+        const desc2 = metrics2.descent;
         const halfTextH2 = (asc2 + desc2) / 2;
         b.halfW = (b.baseTextWidth * Math.abs(b.scaleX)) / 2 + 6;
         b.halfH = (halfTextH2 * Math.abs(b.scaleY)) + 3;
@@ -1915,7 +1931,10 @@ export class LyricDancePlayer {
       }
     }
 
-    if (shrinkOccurred) this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+    if (shrinkOccurred) {
+      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+      this._solvedBounds = bounds.map(b => ({ ...b }));
+    }
 
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       const chunk = sortBuf[ci];
@@ -1982,11 +2001,7 @@ export class LyricDancePlayer {
       if (bound) safeFontSize = bound.fontSize;
 
       const measureFont = `${fontWeight} ${safeFontSize}px ${family}`;
-      if (measureFont !== this._lastFont) {
-        this.ctx.font = measureFont;
-        this._lastFont = measureFont;
-      }
-      const textWidth = this.ctx.measureText(text).width;
+      const textWidth = this.getCachedMetrics(text, measureFont).width;
       const centerX = bound ? bound.cx : rawDrawX;
       const centerY = bound ? bound.cy : rawDrawY;
       let drawX = centerX - textWidth * 0.5;
@@ -2270,7 +2285,8 @@ export class LyricDancePlayer {
       this.ctx.globalAlpha = alpha;
       this.ctx.shadowBlur = 6;
       this.ctx.shadowColor = comment.color;
-      const textWidth = this.ctx.measureText(comment.text).width || 60;
+      const commentFont = `400 ${comment.fontSize * 0.85}px "Space Mono", monospace`;
+      const textWidth = this.getCachedMetrics(comment.text, commentFont).width || 60;
       const dotX = x - comment.direction * (textWidth / 2 + 12);
       this.ctx.fillStyle = comment.color;
       this.ctx.beginPath();
@@ -2308,6 +2324,27 @@ export class LyricDancePlayer {
     this.lastSimFrame = -1;
     if (this.timelineBase.length) this.updateTimelineScale();
     this.invalidateFrameCache();
+    this._textMetricsCache.clear();
+    this._lastVisibleChunkIds = '';
+  }
+
+  private getCachedMetrics(text: string, font: string): { width: number; ascent: number; descent: number } {
+    const key = font + '|' + text;
+    const cached = this._textMetricsCache.get(key);
+    if (cached) return cached;
+
+    if (font !== this._lastFont) {
+      this.ctx.font = font;
+      this._lastFont = font;
+    }
+    const m = this.ctx.measureText(text);
+    const metrics = {
+      width: m.width,
+      ascent: m.actualBoundingBoxAscent ?? (parseFloat(font) * 0.45),
+      descent: m.actualBoundingBoxDescent ?? (parseFloat(font) * 0.15),
+    };
+    this._textMetricsCache.set(key, metrics);
+    return metrics;
   }
 
   // ────────────────────────────────────────────────────────────
