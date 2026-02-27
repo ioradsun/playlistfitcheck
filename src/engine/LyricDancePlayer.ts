@@ -897,7 +897,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: fix-jump-v17');
+    console.log('[LyricDancePlayer] build: no-snap-v18');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -2013,8 +2013,8 @@ export class LyricDancePlayer {
       const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
       const rawDrawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
       const drawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
-      const isExitingChunk = (chunk.exitProgress ?? 0) > 0;
-      const finalDrawY = isExitingChunk ? drawY : drawY + opticalOffset;
+      // Apply opticalOffset always — no position snap on exit
+      const finalDrawY = drawY + opticalOffset;
       const zoom = Number.isFinite(frame.cameraZoom) ? frame.cameraZoom : 1.0;
       const fontSize = cinematicSizingV2
         ? ((chunk as any)._resolvedFontSize ?? baseFontSize ?? 36)
