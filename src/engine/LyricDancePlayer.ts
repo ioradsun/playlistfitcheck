@@ -860,6 +860,8 @@ export class LyricDancePlayer {
   private activeSectionTexture = 'dust';
   private activeTension: any = null;
   private lastExitProgressByChunk = new Map<string, number>();
+  private chunkActiveSinceMs: Map<string, number> = new Map();
+  private lastSafeFontSize: Map<string, number> = new Map();
 
 
   // Health monitor
@@ -896,7 +898,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: hard-cancel-v14');
+    console.log('[LyricDancePlayer] build: min-visible-v15');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1901,6 +1903,7 @@ export class LyricDancePlayer {
     if (anyChunkActive) {
       this.activeDecomps.length = 0;
       this.lastExitProgressByChunk.clear();
+      this.chunkActiveSinceMs.clear();
     }
 
     const nowSec = performance.now() / 1000;
@@ -1973,7 +1976,18 @@ export class LyricDancePlayer {
       }
 
       const prevExitProgress = this.lastExitProgressByChunk.get(chunk.id) ?? 0;
-      const currentExitProgress = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
+      const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
+      const exit = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
+      if (entry >= 1.0 && exit === 0) {
+        if (!this.chunkActiveSinceMs.has(chunk.id)) {
+          this.chunkActiveSinceMs.set(chunk.id, performance.now());
+        }
+      }
+      const activeSince = this.chunkActiveSinceMs.get(chunk.id);
+      const visibleMs = activeSince != null ? performance.now() - activeSince : 0;
+      if (exit > 0) this.chunkActiveSinceMs.delete(chunk.id);
+      const allowDecomp = exit === 0 || visibleMs >= 1000;
+      const currentExitProgress = exit;
       this.lastExitProgressByChunk.set(chunk.id, currentExitProgress);
 
       // Fire when exitProgress first crosses 0 — but also pre-spawn
@@ -2010,15 +2024,18 @@ export class LyricDancePlayer {
       const fontWeight = chunk.fontWeight ?? 700;
       const viewportMinFont = Math.max(16, Math.min(this.width, this.height) * 0.055);
       const safeFontSize = Math.max(viewportMinFont, Math.round(fontSize * zoom) || 36);
+      const prevSize = this.lastSafeFontSize.get(chunk.id) ?? safeFontSize;
+      const clampedSize = Math.max(prevSize * 0.8, Math.min(prevSize * 1.2, safeFontSize));
+      this.lastSafeFontSize.set(chunk.id, clampedSize);
       const resolvedFont = this.getResolvedFont();
       const family = chunk.fontFamily ?? resolvedFont;
-      this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
+      this.ctx.font = `${fontWeight} ${clampedSize}px ${family}`;
       if (!this.ctx.font.includes('px')) {
         this.ctx.font = `700 36px ${resolvedFont}`;
       }
       const text = chunk.text ?? obj.text;
       const textWidth = this.ctx.measureText(text).width;
-      const spaceWidth = Math.max(4, this.ctx.measureText(' ').width || safeFontSize * 0.25);
+      const spaceWidth = Math.max(4, this.ctx.measureText(' ').width || clampedSize * 0.25);
       const rowKey = Math.round(finalDrawY);
       const previousRightEdge = rowLastRightEdge.get(rowKey);
       let drawX = rawDrawX;
@@ -2105,14 +2122,14 @@ export class LyricDancePlayer {
 
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
-      if (shouldSpawnDecomp) {
+      if (shouldSpawnDecomp && allowDecomp) {
         const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
         this.tryStartDecomposition({
           chunkId: chunk.id,
           text,
           drawX: wordCenterX,
           drawY: drawY,
-          fontSize: safeFontSize,
+          fontSize: clampedSize,
           fontWeight,
           fontFamily: chunk.fontFamily,
           color: this.getTextColor(chunk.color ?? chapterColor),
@@ -2125,7 +2142,7 @@ export class LyricDancePlayer {
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
-        this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
+        this.ctx.font = `${fontWeight} ${clampedSize}px ${family}`;
         if (!this.ctx.font.includes('px')) {
           this.ctx.font = `700 36px ${resolvedFont}`;
         }
