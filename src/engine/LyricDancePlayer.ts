@@ -897,7 +897,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: revert-clamp-v16');
+    console.log('[LyricDancePlayer] build: fix-jump-v17');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -1901,7 +1901,6 @@ export class LyricDancePlayer {
     );
     if (anyChunkActive) {
       this.activeDecomps.length = 0;
-      this.lastExitProgressByChunk.clear();
       this.chunkActiveSinceMs.clear();
     }
 
