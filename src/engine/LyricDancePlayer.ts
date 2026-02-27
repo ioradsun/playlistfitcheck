@@ -873,6 +873,9 @@ export class LyricDancePlayer {
   private _lastLoggedTSec = 0;
   private _stalledFrames = 0;
   private _lastSimChapterIdx = -1;
+  private _lastChunkX: Map<string, number> | null = null;
+  private _lastChunkY: Map<string, number> | null = null;
+  private _lastChunkFs: Map<string, number> | null = null;
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
@@ -897,7 +900,7 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    console.log('[LyricDancePlayer] build: no-snap-v18');
+    console.log('[LyricDancePlayer] build: jump-detect-v19');
     // Invalidate cache if song changed (survives HMR)
     const songId = data.id;
     if (
@@ -2135,6 +2138,22 @@ export class LyricDancePlayer {
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
+        // Temporary jump detector
+        const _prevX = this._lastChunkX?.get(chunk.id);
+        const _prevY = this._lastChunkY?.get(chunk.id);
+        const _prevFs = this._lastChunkFs?.get(chunk.id);
+        if (!this._lastChunkX) { this._lastChunkX = new Map(); this._lastChunkY = new Map(); this._lastChunkFs = new Map(); }
+        if (_prevX != null && (Math.abs(drawX - _prevX) > 5 || Math.abs(finalDrawY - _prevY) > 5 || Math.abs(safeFontSize - _prevFs) > 5)) {
+          console.log('[JUMP]', chunk.text, {
+            dx: Math.round(drawX - _prevX),
+            dy: Math.round(finalDrawY - _prevY),
+            dfs: Math.round(safeFontSize - _prevFs),
+            exitP: (chunk.exitProgress ?? 0).toFixed(2),
+          });
+        }
+        this._lastChunkX.set(chunk.id, drawX);
+        this._lastChunkY.set(chunk.id, finalDrawY);
+        this._lastChunkFs.set(chunk.id, safeFontSize);
         this.ctx.font = `${fontWeight} ${safeFontSize}px ${family}`;
         if (!this.ctx.font.includes('px')) {
           this.ctx.font = `700 36px ${resolvedFont}`;
