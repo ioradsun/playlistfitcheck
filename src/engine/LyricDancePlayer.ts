@@ -3855,7 +3855,7 @@ export class LyricDancePlayer {
     frame.cameraY = driftY;
     frame.cameraZoom = effectiveZoom;
     frame.bgBlend = 0;
-    frame.atmosphere = chapter?.atmosphere ?? 'cinematic';
+    frame.atmosphere = (chapter?.atmosphere ?? 'cinematic') as any;
     frame.chunks = chunks;
     frame.particles = [];
     return frame;

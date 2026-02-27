@@ -429,7 +429,7 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     index,
     startRatio: chapter.startRatio ?? 0,
     endRatio: chapter.endRatio ?? 1,
-    targetZoom: distanceToZoom[(payload.cinematic_direction?.storyboard?.[index]?.shotType ?? 'Medium')] ?? 1.0,
+    targetZoom: distanceToZoom[((payload.cinematic_direction?.storyboard?.[index] as any)?.shotType ?? 'Medium')] ?? 1.0,
     emotionalIntensity: chapter.emotionalIntensity ?? 0.5,
     typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform },
     atmosphere: chapter.atmosphere ?? (payload.cinematic_direction as any)?.atmosphere ?? 'cinematic',
