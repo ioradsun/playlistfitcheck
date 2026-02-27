@@ -1,5 +1,38 @@
 import { getRelativeLuminance, getSafeTextColor } from "./SystemStyles";
 
+const ENTRY_MAX_SEC = 0.18;
+const ENTRY_RATIO = 0.12;
+const EXIT_MAX_SEC = 0.14;
+const EXIT_RATIO = 0.10;
+
+function easeOutCubic(t: number): number {
+  const clamped = Math.min(1, Math.max(0, t));
+  return 1 - Math.pow(1 - clamped, 3);
+}
+
+function easeInCubic(t: number): number {
+  const clamped = Math.min(1, Math.max(0, t));
+  return Math.pow(clamped, 3);
+}
+
+function cinematicLinePulse(elapsedSec: number, beatIntensity: number, isHookLine: boolean): number {
+  const beatMod = Math.min(1, Math.max(0, beatIntensity));
+  const amplitude = Math.min(isHookLine ? 0.075 : 0.06, (isHookLine ? 0.06 : 0.05) + beatMod * 0.015);
+  if (elapsedSec <= 0) return 1;
+  if (elapsedSec < 0.08) {
+    return 1 + easeOutCubic(elapsedSec / 0.08) * amplitude;
+  }
+  if (elapsedSec < 0.15) {
+    const t = (elapsedSec - 0.08) / 0.07;
+    return 1 + amplitude + (0.99 - (1 + amplitude)) * easeInCubic(t);
+  }
+  if (elapsedSec < 0.27) {
+    const t = (elapsedSec - 0.15) / 0.12;
+    return 0.99 + (1 - 0.99) * easeOutCubic(t);
+  }
+  return 1;
+}
+
 export interface LineAnimation {
   entryProgress: number;
   exitProgress: number;
@@ -115,12 +148,12 @@ export class AnimationResolver {
   ): LineAnimation {
     const duration = Math.max(0.001, lineEndSec - lineStartSec);
     const elapsed = currentTimeSec - lineStartSec;
-    const entryDur = Math.min(0.35, duration * 0.2);
-    const exitDur = Math.min(0.35, duration * 0.2);
-    const entryProgress = Math.min(1, Math.max(0, elapsed / entryDur));
+    const entryDur = Math.max(0.001, Math.min(ENTRY_MAX_SEC, duration * ENTRY_RATIO));
+    const exitDur = Math.max(0.001, Math.min(EXIT_MAX_SEC, duration * EXIT_RATIO));
+    const entryProgress = easeOutCubic(Math.min(1, Math.max(0, elapsed / entryDur)));
     const exitProgress =
       elapsed > duration - exitDur
-        ? Math.min(1, (elapsed - (duration - exitDur)) / exitDur)
+        ? easeInCubic(Math.min(1, (elapsed - (duration - exitDur)) / exitDur))
         : 0;
 
     const tKey = Math.round(lineStartSec);
@@ -177,9 +210,7 @@ export class AnimationResolver {
 
     lineColor = ensureContrast(lineColor, palette?.[0] ?? "#111111");
 
-    const scale = isHookLine
-      ? 1.0 + beatIntensity * 0.12
-      : 1.0 + beatIntensity * 0.04;
+    const scale = cinematicLinePulse(Math.max(0, elapsed), beatIntensity, isHookLine);
 
     const fontScale = this.resolveFontScale(activeMod);
 

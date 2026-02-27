@@ -19,6 +19,14 @@ import { drawElementalWord } from "@/engine/ElementalEffects";
 import { getTextShadow } from "@/engine/LightingSystem";
 import * as WordClassifier from "@/engine/WordClassifier";
 
+const STRONG_MODS = ["PULSE_STRONG", "HEAT_SPIKE", "ERUPT", "FLAME_BURST", "EXPLODE"] as const;
+const SOFT_MODS = ["BLUR_OUT", "ECHO_FADE", "DISSOLVE", "FADE_OUT", "FADE_OUT_FAST"] as const;
+
+interface StableLineLayout {
+  wordWidths: number[];
+  wordXOffsets: number[];
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function measureTextWithSpacing(
@@ -204,6 +212,9 @@ export interface TextState {
   wordHistory: Map<string, WordHistory>;
   directiveCache: Map<string, WordDirective | null>;
   evolutionCache: Map<string, { count: number; scale: number; glow: number; opacity: number; yOffset: number }>;
+  stableLineLayoutCache: Map<string, StableLineLayout>;
+  measurementCache: Map<string, number>;
+  scratchVisibleWordIndices: number[];
 }
 
 /** Per-frame input for renderText. */
@@ -467,14 +478,14 @@ export function renderText(
   if (activeLineAnim.isHookLine) sectionZone = "hook";
   frameSectionZone = sectionZone;
 
-  const strongMods = new Set(["PULSE_STRONG", "HEAT_SPIKE", "ERUPT", "FLAME_BURST", "EXPLODE"]);
-  const softMods = new Set(["BLUR_OUT", "ECHO_FADE", "DISSOLVE", "FADE_OUT", "FADE_OUT_FAST"]);
+  const strongMods = STRONG_MODS;
+  const softMods = SOFT_MODS;
   let targetYBase = cinematicLayout.baselineY;
   if (activeLineAnim.isHookLine) {
     targetYBase = ch * 0.44;
-  } else if (activeLineAnim.activeMod && strongMods.has(activeLineAnim.activeMod)) {
+  } else if (activeLineAnim.activeMod && strongMods.includes(activeLineAnim.activeMod as (typeof STRONG_MODS)[number])) {
     targetYBase = ch * 0.46;
-  } else if (activeLineAnim.activeMod && softMods.has(activeLineAnim.activeMod)) {
+  } else if (activeLineAnim.activeMod && softMods.includes(activeLineAnim.activeMod as (typeof SOFT_MODS)[number])) {
     targetYBase = ch * 0.54;
   }
 
@@ -537,12 +548,12 @@ export function renderText(
   const lyricEntrance = (entryOverride as any) ?? lineDirection?.entryStyle ?? resolvedManifest?.lyricEntrance ?? "fades";
   const lyricExit = (exitOverride as any) ?? lineDirection?.exitStyle ?? resolvedManifest?.lyricExit ?? "fades";
   const entryAlpha = applyEntrance(ctx, activeLineAnim.entryProgress, lyricEntrance, { spatialZone: sectionZone });
-  // Tighten exit progression to reduce line linger overlap during transitions.
-  const tightenedExitProgress = Math.min(1, activeLineAnim.exitProgress * 1.8);
+  // Keep exit progression short and cinematic to avoid long overlap with the next line.
+  const tightenedExitProgress = Math.min(1, activeLineAnim.exitProgress * 1.25);
   const exitAlpha = activeLineAnim.exitProgress > 0
     ? applyExit(ctx, tightenedExitProgress, lyricExit)
     : 1.0;
-  const compositeAlpha = Math.min(entryAlpha, exitAlpha) * lineOpacity;
+  const compositeAlpha = entryAlpha * exitAlpha * lineOpacity;
 
   ctx.translate(lineX, lineY);
   if (Math.abs(state.rotation) > 0.0001) {
@@ -589,15 +600,16 @@ export function renderText(
     resolvedDisplayMode = "single_word";
   }
 
-  // Previous line ghost for two_line_stack
+  // Previous-line ghosting is disabled by default to avoid non-cinematic overlap.
   const previousLine = activeLineIndex > 0 ? lines[activeLineIndex - 1] : null;
-  if (resolvedDisplayMode === "two_line_stack" && previousLine) {
+  const enablePreviousLineGhost = (resolvedManifest as { enablePreviousLineGhost?: boolean }).enablePreviousLineGhost === true;
+  if (resolvedDisplayMode === "two_line_stack" && previousLine && enablePreviousLineGhost) {
     ctx.save();
     ctx.font = buildWordFont(Math.max(14, fontSize * 0.86));
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = activeLineAnim.lineColor;
-    ctx.globalAlpha = 0.12 * compositeAlpha * Math.max(0.2, 1 - tightenedExitProgress);
+    ctx.globalAlpha = 0.08 * compositeAlpha * Math.max(0.1, 1 - tightenedExitProgress);
     if (resolvedLetterSpacingEm !== 0) {
       drawTextWithSpacing(ctx, previousLine.text, lineX, lineY - Math.max(40, fontSize * 1.5), fontSize, resolvedLetterSpacingEm, "center");
     } else {
@@ -661,25 +673,68 @@ export function renderText(
     };
   }
 
-  const renderedWords = resolvedDisplayMode === "single_word"
-    ? (visibleWordCount > 0 ? [displayMode === "single_word" ? words[Math.max(0, visibleWordCount - 1)] : ""] : [])
-    : resolvedDisplayMode === "two_line_stack"
-      ? words
-      : words.slice(0, visibleWordCount);
+  const visibleWordIndices = textState.scratchVisibleWordIndices;
+  visibleWordIndices.length = 0;
+  if (resolvedDisplayMode === "single_word") {
+    if (visibleWordCount > 0) visibleWordIndices.push(Math.max(0, visibleWordCount - 1));
+  } else if (resolvedDisplayMode === "two_line_stack") {
+    for (let i = 0; i < words.length; i += 1) visibleWordIndices.push(i);
+  } else {
+    for (let i = 0; i < visibleWordCount; i += 1) visibleWordIndices.push(i);
+  }
 
-  const measuredWordWidths = renderedWords.map((word) => getWordWidth(getDisplayWord(word), fontSize, resolvedWordFont));
-  const baseSpaceWidth = getWordWidth(" ", fontSize, resolvedWordFont);
-  const totalWidth = measuredWordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, renderedWords.length - 1) * baseSpaceWidth;
-  let cursorX = resolvedDisplayMode === "single_word" ? lineX : lineX - totalWidth / 2;
+  const layoutFontSize = fs * baseWordScale;
+  const lineLayoutKey = [
+    activeLine.start,
+    activeLine.end,
+    activeLine.text,
+    cinematicFontFamily,
+    cinematicFontWeight,
+    layoutFontSize.toFixed(3),
+    resolvedLetterSpacingEm.toFixed(4),
+    resolvedWordFont,
+  ].join("|");
 
-  if (renderedWords.length > 0) {
-    const activeWordIdx = Math.max(0, renderedWords.length - 1);
-    const priorWidth = measuredWordWidths
-      .slice(0, activeWordIdx)
-      .reduce((sum, width) => sum + width, 0) + activeWordIdx * baseSpaceWidth;
-    const activeWidth = measuredWordWidths[activeWordIdx] ?? 0;
+  let stableLayout = textState.stableLineLayoutCache.get(lineLayoutKey);
+  if (!stableLayout) {
+    const spaceMeasureKey = `${resolvedWordFont}|${layoutFontSize.toFixed(3)}|${resolvedLetterSpacingEm.toFixed(4)}| `;
+    let cachedSpaceWidth = textState.measurementCache.get(spaceMeasureKey);
+    if (cachedSpaceWidth == null) {
+      cachedSpaceWidth = getWordWidth(" ", layoutFontSize, resolvedWordFont);
+      textState.measurementCache.set(spaceMeasureKey, cachedSpaceWidth);
+    }
+
+    const wordWidths: number[] = new Array(words.length);
+    for (let i = 0; i < words.length; i += 1) {
+      const displayWord = getDisplayWord(words[i]);
+      const measureKey = `${resolvedWordFont}|${layoutFontSize.toFixed(3)}|${resolvedLetterSpacingEm.toFixed(4)}|${displayWord}`;
+      let cachedWidth = textState.measurementCache.get(measureKey);
+      if (cachedWidth == null) {
+        cachedWidth = getWordWidth(displayWord, layoutFontSize, resolvedWordFont);
+        textState.measurementCache.set(measureKey, cachedWidth);
+      }
+      wordWidths[i] = cachedWidth;
+    }
+
+    const totalWidth = wordWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, wordWidths.length - 1) * cachedSpaceWidth;
+    const wordXOffsets: number[] = new Array(wordWidths.length);
+    let runningX = -totalWidth / 2;
+    for (let i = 0; i < wordWidths.length; i += 1) {
+      wordXOffsets[i] = runningX + wordWidths[i] / 2;
+      runningX += wordWidths[i] + cachedSpaceWidth;
+    }
+
+    stableLayout = {
+      wordWidths,
+      wordXOffsets,
+    };
+    textState.stableLineLayoutCache.set(lineLayoutKey, stableLayout);
+  }
+
+  if (visibleWordIndices.length > 0) {
+    const activeWordIdx = visibleWordIndices[visibleWordIndices.length - 1];
     activeWordPosition = {
-      x: (resolvedDisplayMode === "single_word" ? lineX : lineX - totalWidth / 2) + priorWidth + activeWidth / 2,
+      x: lineX + (stableLayout.wordXOffsets[activeWordIdx] ?? 0),
       y: lineY,
     };
   }
@@ -694,12 +749,10 @@ export function renderText(
   };
 
   // ── Per-word rendering ────────────────────────────────────────────
-  renderedWords.forEach((wordText, renderedIndex) => {
+  visibleWordIndices.forEach((sourceWordIndex, renderedIndex) => {
+    const wordText = words[sourceWordIndex] ?? "";
     const displayWord = getDisplayWord(wordText);
-    const normalizedWord = normalizedWords[Math.max(0, resolvedDisplayMode === "single_word" ? visibleWordCount - 1 : renderedIndex)] ?? wordText.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
-    const sourceWordIndex = resolvedDisplayMode === "single_word"
-      ? Math.max(0, visibleWordCount - 1)
-      : renderedIndex;
+    const normalizedWord = normalizedWords[sourceWordIndex] ?? wordText.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
     const resolvedWordStartTime = snappedStarts?.[Math.max(0, sourceWordIndex)]
       ?? snapToNearestBeat(activeLine.start + (Math.max(0, sourceWordIndex) * Math.max(0.001, activeLine.end - activeLine.start)) / Math.max(1, words.length), sortedBeats);
     const appearanceKey = `${activeLine.start}:${Math.max(0, sourceWordIndex)}:${normalizedWord}`;
@@ -713,7 +766,7 @@ export function renderText(
     const props = WordClassifier.getWordVisualProps(
       wordText,
       Math.max(0, sourceWordIndex),
-      Math.max(1, renderedWords.length),
+      Math.max(1, words.length),
       activeLineAnim,
       beatIntensity,
       textState.wordCounts.get(normalizedWord) ?? 0,
@@ -732,15 +785,17 @@ export function renderText(
       return;
     }
 
-    const wordWidth = getWordWidth(displayWord, fontSize, resolvedWordFont);
-    const wordCenterX = resolvedDisplayMode === "single_word" ? lineX : cursorX + wordWidth / 2;
+    const wordWidth = stableLayout.wordWidths[sourceWordIndex] ?? getWordWidth(displayWord, layoutFontSize, resolvedWordFont);
+    const wordCenterX = resolvedDisplayMode === "single_word"
+      ? lineX
+      : lineX + (stableLayout.wordXOffsets[sourceWordIndex] ?? 0);
     const wordX = wordCenterX;
     let wordY = lineY;
 
     ctx.font = buildWordFont(fontSize);
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    const wordRenderWidth = getWordWidth(displayWord, fontSize, resolvedWordFont);
+    const wordRenderWidth = wordWidth;
     const existingHistory = textState.wordHistory.get(normalizedWord);
     const appearance = existingHistory?.count ?? 0;
     const appearanceCount = appearance + 1;
@@ -758,7 +813,7 @@ export function renderText(
 
     const isHeroWord = Boolean(lineDirection?.heroWord && wordText.toLowerCase().includes(lineDirection.heroWord.toLowerCase()));
     const modeOpacity = resolvedDisplayMode === "phrase_stack"
-      ? (renderedIndex === renderedWords.length - 1 ? 1 : 0.4)
+      ? (renderedIndex === visibleWordIndices.length - 1 ? 1 : 0.4)
       : 1;
 
     const fragmentationX = useLetterFragmentation ? (rng() - 0.5) * 6 : 0;
@@ -976,9 +1031,6 @@ export function renderText(
     });
 
     ctx.globalAlpha = 1;
-    if (resolvedDisplayMode !== "single_word") {
-      cursorX += wordWidth + baseSpaceWidth;
-    }
   });
 
   // ── Fallback effect when no words visible ─────────────────────────
@@ -1032,6 +1084,6 @@ export function renderText(
     repTotal: frameRepTotal,
     xNudge: frameXNudge,
     sectionZone: frameSectionZone,
-    wordsProcessed: renderedWords.length,
+    wordsProcessed: visibleWordIndices.length,
   };
 }
