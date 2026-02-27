@@ -96,7 +96,7 @@ export type Keyframe = {
 
 export type BakedTimeline = Keyframe[];
 
-export const BAKER_VERSION = 4;
+export const BAKER_VERSION = 5;
 const FRAME_STEP_MS = 16;
 const BASE_X = 960 * 0.5;
 const BASE_Y_CENTER = 540 * 0.5;
@@ -1776,8 +1776,8 @@ function bakeFrame(
             chunks.push({
               id: isLetterSequence ? `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}` : `${group.lineIndex}-${group.groupIndex}-${wi}`,
               text: chunkText,
-              x: pos.x + finalOffsetX + letterOffsetX,
-              y: pos.y + finalOffsetY,
+              x: Math.round(pos.x + finalOffsetX + letterOffsetX),
+              y: Math.round(pos.y + finalOffsetY),
               alpha: Math.max(0, Math.min(1, finalAlpha)),
               scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1) * intensityScaleMult,
               scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1) * intensityScaleMult,
@@ -1931,8 +1931,8 @@ function bakeFrame(
             return {
               id: isLetterSequence ? `${wm.lineIndex}-${wm.wordIndex}-L${li}` : `${wm.lineIndex}-${wm.wordIndex}`,
               text: isLetterSequence ? wm.word[li] ?? '' : wm.word,
-              x: canvasX + finalOffsetX + letterOffsetX2,
-              y: canvasY + finalOffsetY,
+              x: Math.round(canvasX + finalOffsetX + letterOffsetX2),
+              y: Math.round(canvasY + finalOffsetY),
               alpha: finalAlpha,
               scaleX: finalScaleX * (manifestDirective?.scaleX ?? 1),
               scaleY: finalScaleY * (manifestDirective?.scaleY ?? 1),
@@ -2045,8 +2045,8 @@ function bakeFrame(
       chunks.push({
         id: `${idx}`,
         text: line.text,
-        x,
-        y,
+        x: Math.round(x),
+        y: Math.round(y),
         alpha,
         glow: chunkGlow,
         scale: chunkScale,
@@ -2087,8 +2087,8 @@ function bakeFrame(
           chunks.push({
             id: `${idx}-hero`,
             text: directiveWord.toUpperCase(),
-            x: x + preOffset + heroOffset,
-            y,
+            x: Math.round(x + preOffset + heroOffset),
+            y: Math.round(y),
             alpha: Math.min(1, alpha + ((entryStyle as string) === 'punch' ? 0.2 : 0.15)),
             glow: Math.min(1, chunkGlow + 0.2),
             scale: Math.min(chunkScale * ((exitStyle as string) === 'snap' ? 1.2 : 1.15), 1.25),
