@@ -3975,8 +3975,10 @@ export class LyricDancePlayer {
     for (let ai = 0; ai < activeGroups.length; ai++) {
       const groupIdx = activeGroups[ai];
       const group = groups[groupIdx];
-      if (group.lineIndex !== primaryLineIndex && group.lineIndex !== echoLineIndex) continue;
-      const isEchoGroup = group.lineIndex === echoLineIndex;
+      // Cinematic mode: render ALL time-visible groups, not just primary + echo.
+      // Groups outside their visibility window are already excluded by the activeGroups filter above.
+      // Entry/exit animations handle fading. _lineOffset handles vertical separation.
+      const isEchoGroup = group.lineIndex < primaryLineIndex;
       const resolvedLine = this.resolvedState.lineSettings[group.lineIndex];
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
       const groupEnd = Math.min(group.end + group.lingerDuration, nextGroupStart);
@@ -4018,7 +4020,7 @@ export class LyricDancePlayer {
         const windowFeather = isActive ? Math.min(alphaIn, alphaOut) : 1;
         const tierAlpha = isActive ? 1 : (isPast ? 0.9 : 0.52);
         let rawAlpha = tierAlpha * windowFeather;
-        if (isEchoGroup) rawAlpha *= 0.12 * echoFade;
+        if (isEchoGroup) rawAlpha *= 0.55; // Cinematic: past-line words visible but dimmer; exit animations handle fade-out
         if (!isEchoGroup && primaryLine && tSec >= primaryLine.start && tSec <= primaryLine.start + focusInSec) {
           rawAlpha *= 0.94 + easeOutCubic(primaryFocusProgress) * 0.06;
         }
