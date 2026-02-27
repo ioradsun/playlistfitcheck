@@ -123,7 +123,7 @@ export function resolveCinematicState(
   lines.forEach((line, idx) => {
     const lineMid = ((line.start ?? 0) + (line.end ?? 0)) * 0.5;
     const sectionIndex = resolveSectionIndex(sections, lineMid, durationSec);
-    const section = sections[sectionIndex] ?? {};
+    const section = sections[sectionIndex] ?? {} as Record<string, unknown>;
     const story = storyMap.get(idx) ?? ({} as StoryboardEntry);
     const heroToken = normalizeToken(story.heroWord ?? "");
 
