@@ -485,7 +485,7 @@ function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): stri
 }
 
 export function compileScene(payload: ScenePayload): CompiledScene {
-  console.log("%c[sceneCompiler] compileScene called — SPACE_MULT=1.15, auto-scale active", "color:#0ff;font-size:14px;font-weight:bold;background:#111;padding:4px 8px;border-radius:4px");
+  console.log('%c[sceneCompiler] compileScene called — SPACE_MULT=1.15, auto-scale active', 'color: cyan; font-size: 14px; font-weight: bold');
   const durationSec = Math.max(0.01, payload.songEnd - payload.songStart);
   const rawChapters = (payload.cinematic_direction?.chapters ?? []) as Array<any>;
   const chapters = rawChapters.length > 0 ? rawChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
@@ -536,12 +536,34 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     const baseSizeForShot = shotTypeToFontSize[shotType] ?? 68;
     return baseSizeForShot;
   });
-  const measureCanvas = new OffscreenCanvas(1, 1);
+  const measureCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(1, 1);
+  measureCanvas.width = 1;
+  measureCanvas.height = 1;
   const measureCtx = measureCanvas.getContext('2d')!;
   const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
 
   // Pre-compute all line layouts at once so groups sharing a line don't overlap
   const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx);
+
+  // DIAGNOSTIC: log first 3 lines of layout positions
+  let diagCount = 0;
+  for (const [key, positions] of allLineLayouts) {
+    if (diagCount < 3) {
+      const words = positions.map((p, i) => {
+        const group = phraseGroups.find(g => `${g.lineIndex}-${g.groupIndex}` === key);
+        const word = group?.words[i]?.word ?? '?';
+        return `"${word}" x=${Math.round(p.x)} fs=${Math.round(p.fontSize)}`;
+      }).join('  |  ');
+      console.log(`[sceneCompiler] line ${key}: ${words}`);
+      diagCount++;
+    }
+  }
+  
+  // Also test measureText
+  measureCtx.font = `${baseTypography.fontWeight} 68px ${baseTypography.fontFamily}`;
+  const testWord = measureCtx.measureText('hello').width;
+  const testSpace = measureCtx.measureText(' ').width;
+  console.log(`[sceneCompiler] measureText test: "hello"=${testWord.toFixed(1)}px, " "=${testSpace.toFixed(1)}px, font=${measureCtx.font}`);
 
   const compiledGroups: CompiledPhraseGroup[] = phraseGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
