@@ -202,20 +202,26 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[]): PhraseGroup[] {
   return mergeShortGroups(groups).map((group) => ({ ...group, end: Math.max(group.end, group.start + MIN_GROUP_DURATION) }));
 }
 
-export function getGroupLayout(
-  group: PhraseGroup,
-  visualMode: VisualMode,
+/**
+ * Compute positions for ALL phrase groups at the line level.
+ * Groups sharing the same lineIndex are laid out as one continuous horizontal line
+ * so they don't overlap when centered.
+ * Returns a Map keyed by "lineIndex-groupIndex" → GroupPosition[] for that group's words.
+ */
+export function computeAllLineLayouts(
+  phraseGroups: PhraseGroup[],
   canvasW: number,
   canvasH: number,
-  baseFontSize: number,
+  lineFontSizes: number[],
   fontWeight: number,
   fontFamily: string,
   measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-): GroupPosition[] {
-  void visualMode;
+): Map<string, GroupPosition[]> {
   const margin = 60;
-  const anchorIdx = group.anchorWordIdx;
   const lineY = Math.round(canvasH * 0.5);
+  const SPACE_MULT = 1.8;
+  const result = new Map<string, GroupPosition[]>();
+
   const getWordWidth = (word: string, fontSize: number) => {
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
     if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
@@ -226,35 +232,95 @@ export function getGroupLayout(
     if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
     return measureCtx.measureText(' ').width;
   };
-  const wordFontSizes = group.words.map((wm) => {
+  const wordFontSize = (wm: WordMetaEntry, baseFontSize: number) => {
     const isFiller = isFillerWord(wm.word);
     const emphasis = wm.directive?.emphasisLevel ?? 1;
     if (isFiller) return baseFontSize * 0.85;
     if (emphasis === 3) return baseFontSize * 1.08;
-    if (emphasis >= 4) return baseFontSize * 1.0;
     return baseFontSize * 1.0;
-  });
-  const wordWidths = group.words.map((wm, i) => getWordWidth(wm.word, wordFontSizes[i]));
-  const SPACE_MULT = 1.8; // breathing room between words for lyric readability
-  const spaceWidths = group.words.map((_, i) => i < group.words.length - 1 ? getSpaceWidth(Math.min(wordFontSizes[i], wordFontSizes[i + 1])) * SPACE_MULT : 0);
-  const totalLineWidth = wordWidths.reduce((sum, width) => sum + width, 0) + spaceWidths.reduce((sum, width) => sum + width, 0);
-  const minStartX = margin;
-  const maxStartX = Math.max(minStartX, canvasW - margin - totalLineWidth);
-  const startX = Math.max(minStartX, Math.min(maxStartX, (canvasW - totalLineWidth) / 2));
-  let cursorX = startX;
-  return group.words.map((wm, i) => {
-    const halfW = wordWidths[i] * 0.5;
-    const x = Math.max(margin + halfW, Math.min(canvasW - margin - halfW, cursorX + halfW));
-    const position: GroupPosition = {
-      x,
-      y: Math.max(margin, Math.min(canvasH - margin, lineY)),
-      fontSize: wordFontSizes[i],
-      isAnchor: i === anchorIdx,
-      isFiller: isFillerWord(wm.word),
-    };
-    cursorX += wordWidths[i] + spaceWidths[i];
-    return position;
-  });
+  };
+
+  // Collect groups by lineIndex, preserving group order
+  const lineMap = new Map<number, PhraseGroup[]>();
+  for (const group of phraseGroups) {
+    if (!lineMap.has(group.lineIndex)) lineMap.set(group.lineIndex, []);
+    lineMap.get(group.lineIndex)!.push(group);
+  }
+
+  for (const [lineIndex, groups] of lineMap) {
+    const baseFontSize = lineFontSizes[lineIndex] ?? 36;
+    // Sort groups by their temporal order (groupIndex)
+    groups.sort((a, b) => a.groupIndex - b.groupIndex);
+
+    // Flatten all words across all groups on this line
+    type FlatWord = { wm: WordMetaEntry; groupIndex: number; wordIndex: number; fontSize: number; width: number; anchorIdx: number; };
+    const flatWords: FlatWord[] = [];
+    for (const g of groups) {
+      for (let wi = 0; wi < g.words.length; wi++) {
+        const wm = g.words[wi];
+        const fs = wordFontSize(wm, baseFontSize);
+        flatWords.push({ wm, groupIndex: g.groupIndex, wordIndex: wi, fontSize: fs, width: getWordWidth(wm.word, fs), anchorIdx: g.anchorWordIdx });
+      }
+    }
+
+    // Compute total line width with spaces between ALL words (across groups too)
+    let totalWidth = 0;
+    const spaceWidths: number[] = [];
+    for (let i = 0; i < flatWords.length; i++) {
+      totalWidth += flatWords[i].width;
+      if (i < flatWords.length - 1) {
+        const sw = getSpaceWidth(Math.min(flatWords[i].fontSize, flatWords[i + 1].fontSize)) * SPACE_MULT;
+        spaceWidths.push(sw);
+        totalWidth += sw;
+      } else {
+        spaceWidths.push(0);
+      }
+    }
+
+    // Center the entire line
+    const startX = Math.max(margin, Math.min(canvasW - margin - totalWidth, (canvasW - totalWidth) / 2));
+    let cursorX = startX;
+
+    // Assign positions and bucket back into per-group arrays
+    const groupPositions = new Map<number, GroupPosition[]>();
+    for (let i = 0; i < flatWords.length; i++) {
+      const fw = flatWords[i];
+      const halfW = fw.width * 0.5;
+      const x = Math.max(margin + halfW, Math.min(canvasW - margin - halfW, cursorX + halfW));
+      const pos: GroupPosition = {
+        x,
+        y: Math.max(margin, Math.min(canvasH - margin, lineY)),
+        fontSize: fw.fontSize,
+        isAnchor: fw.wordIndex === fw.anchorIdx,
+        isFiller: isFillerWord(fw.wm.word),
+      };
+      if (!groupPositions.has(fw.groupIndex)) groupPositions.set(fw.groupIndex, []);
+      groupPositions.get(fw.groupIndex)!.push(pos);
+      cursorX += fw.width + spaceWidths[i];
+    }
+
+    // Store results keyed by "lineIndex-groupIndex"
+    for (const [gi, positions] of groupPositions) {
+      result.set(`${lineIndex}-${gi}`, positions);
+    }
+  }
+
+  return result;
+}
+
+/** @deprecated Use computeAllLineLayouts instead. Kept for backward compatibility. */
+export function getGroupLayout(
+  group: PhraseGroup,
+  _visualMode: VisualMode,
+  canvasW: number,
+  canvasH: number,
+  baseFontSize: number,
+  fontWeight: number,
+  fontFamily: string,
+  measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+): GroupPosition[] {
+  const layouts = computeAllLineLayouts([group], canvasW, canvasH, [baseFontSize], fontWeight, fontFamily, measureCtx);
+  return layouts.get(`${group.lineIndex}-${group.groupIndex}`) ?? [];
 }
 
 export function computeEntryState(style: EntryStyle, progress: number, intensity: number): AnimState {
@@ -448,10 +514,14 @@ export function compileScene(payload: ScenePayload): CompiledScene {
   const measureCanvas = new OffscreenCanvas(1, 1);
   const measureCtx = measureCanvas.getContext('2d')!;
   const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
+
+  // Pre-compute all line layouts at once so groups sharing a line don't overlap
+  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx);
+
   const compiledGroups: CompiledPhraseGroup[] = phraseGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
     const lineStory = storyboard[group.lineIndex];
-    const positions = getGroupLayout(group, visualMode, 960, 540, lineFontSizes[group.lineIndex] ?? 36, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx);
+    const positions = allLineLayouts.get(key) ?? [];
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const manifestDirective = manifestWordDirectives[key]?.[wi] ?? null;
       const motion = assignWordAnimations(wm, motionDefaults, storyboard, manifestDirective as ManifestWordDirective | null);
