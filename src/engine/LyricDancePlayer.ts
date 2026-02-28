@@ -3914,6 +3914,17 @@ export class LyricDancePlayer {
     // Re-sort so groups render in temporal order
     activeGroups.sort((a: number, b: number) => groups[a].start - groups[b].start);
 
+    // DIAGNOSTIC: log active groups every 2 seconds
+    if (!(this as any)._lastDiagTime || tSec - (this as any)._lastDiagTime > 2) {
+      (this as any)._lastDiagTime = tSec;
+      const groupInfo = activeGroups.map(gi => {
+        const g = groups[gi];
+        const words = g.words.map(w => w.text).join(' ');
+        return `L${g.lineIndex}:"${words}"`;
+      }).join(' | ');
+      console.log(`[diag] t=${tSec.toFixed(1)} primary=${primaryLineIndex} groups(${activeGroups.length}): ${groupInfo}`);
+    }
+
     // Smooth line transitions (250ms ease-out)
     if (primaryLineIndex !== this._prevPrimaryLineIndex) {
       this._lineTransitionStartSec = tSec;
