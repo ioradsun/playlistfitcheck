@@ -1,4 +1,4 @@
-/* cache-bust: 2026-02-28T1 */
+/* cache-bust: 2026-02-28T2 */
 /**
  * LyricDancePlayer — frame-budget-first canvas engine.
  *
@@ -454,7 +454,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 3;
+const BAKER_VERSION = 4;
 let globalBakeLock = false;
 let globalBakePromise: Promise<void> | null = null;
 let globalCompiledScene: CompiledScene | null = null;
@@ -3798,7 +3798,12 @@ export class LyricDancePlayer {
     }
   }
 
+  private _evalFrameLogged = false;
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
+    if (!this._evalFrameLogged) {
+      this._evalFrameLogged = true;
+      console.log("%c[LyricDancePlayer] NEW CODE ACTIVE — writeIdx filter, SPACE_MULT=1.15, single-line mode", "color:#0f0;font-size:16px;font-weight:bold;background:#111;padding:4px 8px;border-radius:4px");
+    }
     const scene = this.compiledScene;
     if (!scene) return null;
 
