@@ -1,4 +1,4 @@
-/* cache-bust: 2026-02-28T1 */
+/* cache-bust: 2026-02-28T2 */
 /**
  * LyricDancePlayer — frame-budget-first canvas engine.
  *
