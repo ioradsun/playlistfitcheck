@@ -35,12 +35,12 @@ export interface BeatSpineState {
 }
 
 const EMPHASIS_LEVEL_MAP: Record<number, Pick<ResolvedWordSettings, 'pulseAmp' | 'glowGain' | 'particleBurst' | 'microCamPush'>> = {
-  0: { pulseAmp: 0.02, glowGain: 0.03, particleBurst: 0, microCamPush: 0 },
-  1: { pulseAmp: 0.06, glowGain: 0.08, particleBurst: 0.1, microCamPush: 0.01 },
-  2: { pulseAmp: 0.1, glowGain: 0.16, particleBurst: 0.2, microCamPush: 0.02 },
-  3: { pulseAmp: 0.16, glowGain: 0.24, particleBurst: 0.35, microCamPush: 0.03 },
-  4: { pulseAmp: 0.22, glowGain: 0.34, particleBurst: 0.5, microCamPush: 0.05 },
-  5: { pulseAmp: 0.28, glowGain: 0.45, particleBurst: 0.7, microCamPush: 0.07 },
+  0: { pulseAmp: 0.015, glowGain: 0.02, particleBurst: 0, microCamPush: 0 },
+  1: { pulseAmp: 0.03, glowGain: 0.05, particleBurst: 0, microCamPush: 0 },
+  2: { pulseAmp: 0.06, glowGain: 0.10, particleBurst: 0.1, microCamPush: 0.01 },
+  3: { pulseAmp: 0.10, glowGain: 0.18, particleBurst: 0.2, microCamPush: 0.02 },
+  4: { pulseAmp: 0.18, glowGain: 0.30, particleBurst: 0.4, microCamPush: 0.04 },
+  5: { pulseAmp: 0.25, glowGain: 0.42, particleBurst: 0.65, microCamPush: 0.06 },
 };
 
 const DEFAULT_WORD: ResolvedWordSettings = {

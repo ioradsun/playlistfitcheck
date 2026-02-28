@@ -212,48 +212,48 @@ export function getGroupLayout(
   fontFamily: string,
   measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
 ): GroupPosition[] {
-  const count = group.words.length;
+  void visualMode;
+  const margin = 60;
   const anchorIdx = group.anchorWordIdx;
-  const anchorPositions: Array<[number, number]> = [
-    [0.50, 0.42], [0.30, 0.38], [0.70, 0.38],
-    [0.35, 0.60], [0.65, 0.60], [0.50, 0.55],
-    [0.42, 0.45], [0.58, 0.45], [0.25, 0.50], [0.75, 0.50],
-  ];
-  const posVariant = anchorPositions[(group.lineIndex * 3 + group.groupIndex * 5) % anchorPositions.length];
-  const deterministicSpread = ((group.lineIndex * 0.618033) % 0.2) - 0.1;
-  const slotSpacing = canvasW * 0.22;
-  const cx = canvasW * (posVariant[0] + (visualMode === 'explosive' ? deterministicSpread : 0)) + (((group as any)._positionSlot ?? 0) * slotSpacing);
-  const cy = canvasH * (posVariant[1] + (visualMode === 'explosive' ? deterministicSpread : 0)) + (((group as any)._lineOffset ?? 0));
-  const MIN_FONT = 30;
-  const getWordWidth = (word: string, fontSize: number) => { const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`; if (measureCtx.font !== fontStr) measureCtx.font = fontStr; return measureCtx.measureText(word).width; };
-  const getSpaceWidth = (fontSize: number) => { const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`; if (measureCtx.font !== fontStr) measureCtx.font = fontStr; return measureCtx.measureText(' ').width; };
-  if (count === 1) return [{ x: Math.max(80, Math.min(canvasW - 80, cx)), y: Math.round(Math.max(80, Math.min(canvasH - 80, cy))), fontSize: Math.max(MIN_FONT, baseFontSize * 1.2), isAnchor: true, isFiller: isFillerWord(group.words[0].word) }];
-  const positions: GroupPosition[] = [];
-  const wordFontSizes = group.words.map((wm, i) => i === anchorIdx ? Math.max(MIN_FONT, baseFontSize * (EMPHASIS_CURVE[wm.directive?.emphasisLevel ?? 1] ?? 1.0)) : Math.max(MIN_FONT, isFillerWord(wm.word) ? baseFontSize * 0.72 : baseFontSize * 0.88));
-  positions[anchorIdx] = { x: cx, y: Math.round(cy), fontSize: wordFontSizes[anchorIdx], isAnchor: true, isFiller: isFillerWord(group.words[anchorIdx].word) };
-  const supportIndices = Array.from({ length: count }, (_, i) => i).filter((i) => i !== anchorIdx);
-  if (supportIndices.length) {
-    const phraseFontSize = Math.max(MIN_FONT, baseFontSize * 0.82);
-    const ww = supportIndices.map((idx) => getWordWidth(group.words[idx].word, phraseFontSize));
-    const inter = getSpaceWidth(phraseFontSize);
-    const total = ww.reduce((s, w) => s + w, 0) + inter * Math.max(0, supportIndices.length - 1);
-    const anchorFontSize = positions[anchorIdx]?.fontSize ?? baseFontSize;
-    const phraseY = Math.round(cy + anchorFontSize * 1.25);
-    const startX = Math.max(80, Math.min(canvasW - 80 - total, cx - total * 0.5));
-    let acc = 0;
-    for (let j = 0; j < supportIndices.length; j += 1) {
-      const idx = supportIndices[j];
-      positions[idx] = { x: startX + acc + ww[j] * 0.5, y: phraseY, fontSize: phraseFontSize, isAnchor: false, isFiller: isFillerWord(group.words[idx].word) };
-      acc += ww[j] + inter;
-    }
-  }
-  for (let i = 0; i < positions.length; i += 1) {
-    const pos = positions[i];
-    const halfW = getWordWidth(group.words[i]?.word ?? '', pos.fontSize) * 0.5;
-    pos.x = Math.max(80 + halfW, Math.min(canvasW - 80 - halfW, pos.x));
-    pos.y = Math.round(Math.max(80, Math.min(canvasH - 80, pos.y)));
-  }
-  return positions;
+  const lineY = Math.round(canvasH * 0.5);
+  const getWordWidth = (word: string, fontSize: number) => {
+    const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
+    return measureCtx.measureText(word).width;
+  };
+  const getSpaceWidth = (fontSize: number) => {
+    const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
+    return measureCtx.measureText(' ').width;
+  };
+  const wordFontSizes = group.words.map((wm) => {
+    const isFiller = isFillerWord(wm.word);
+    const emphasis = wm.directive?.emphasisLevel ?? 1;
+    if (isFiller) return baseFontSize * 0.85;
+    if (emphasis === 3) return baseFontSize * 1.08;
+    if (emphasis >= 4) return baseFontSize * 1.0;
+    return baseFontSize * 1.0;
+  });
+  const wordWidths = group.words.map((wm, i) => getWordWidth(wm.word, wordFontSizes[i]));
+  const spaceWidths = group.words.map((_, i) => i < group.words.length - 1 ? getSpaceWidth(Math.min(wordFontSizes[i], wordFontSizes[i + 1])) : 0);
+  const totalLineWidth = wordWidths.reduce((sum, width) => sum + width, 0) + spaceWidths.reduce((sum, width) => sum + width, 0);
+  const minStartX = margin;
+  const maxStartX = Math.max(minStartX, canvasW - margin - totalLineWidth);
+  const startX = Math.max(minStartX, Math.min(maxStartX, (canvasW - totalLineWidth) / 2));
+  let cursorX = startX;
+  return group.words.map((wm, i) => {
+    const halfW = wordWidths[i] * 0.5;
+    const x = Math.max(margin + halfW, Math.min(canvasW - margin - halfW, cursorX + halfW));
+    const position: GroupPosition = {
+      x,
+      y: Math.max(margin, Math.min(canvasH - margin, lineY)),
+      fontSize: wordFontSizes[i],
+      isAnchor: i === anchorIdx,
+      isFiller: isFillerWord(wm.word),
+    };
+    cursorX += wordWidths[i] + spaceWidths[i];
+    return position;
+  });
 }
 
 export function computeEntryState(style: EntryStyle, progress: number, intensity: number): AnimState {
@@ -374,7 +374,7 @@ const SEMANTIC_EFFECTS: Record<VisualMetaphor, SemanticEffect> = {
   'motion-streak': { entry: 'punch-in', behavior: 'lean', exit: 'cut-out', colorOverride: null, glowMultiplier: 1.2, scaleX: 1.15, scaleY: 0.9, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 700 },
 };
 
-export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
+export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
 export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
@@ -430,39 +430,13 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     (group as any)._positionSlot = slot % 3;
   }
 
-  // ─── Compute _lineOffset: vertical separation for simultaneously-visible lines ───
-  {
-    const byLine = new Map<number, PhraseGroup[]>();
-    for (const group of phraseGroups) {
-      const arr = byLine.get(group.lineIndex) ?? [];
-      arr.push(group);
-      byLine.set(group.lineIndex, arr);
-    }
-    for (const [, lineGroups] of byLine) {
-      for (const g of lineGroups) {
-        const t = g.start;
-        const visibleLineIndices: number[] = [];
-        for (let li = 0; li < payload.lines.length; li++) {
-          const line = payload.lines[li];
-          if (t >= (line.start ?? 0) && t < (line.end ?? 0)) {
-            visibleLineIndices.push(li);
-          }
-        }
-        const visibleCount = Math.max(1, visibleLineIndices.length);
-        const lineSpacing = 90;
-        const linePos = Math.max(0, visibleLineIndices.indexOf(g.lineIndex));
-        (g as any)._lineOffset = (linePos - (visibleCount - 1) * 0.5) * lineSpacing;
-      }
-    }
-  }
-
   const shotTypeToFontSize: Record<string, number> = {
-    Wide: 56,
-    Medium: 68,
-    Close: 84,
-    CloseUp: 96,
-    ExtremeClose: 108,
-    FloatingInWorld: 64,
+    Wide: 48,
+    Medium: 56,
+    Close: 64,
+    CloseUp: 72,
+    ExtremeClose: 80,
+    FloatingInWorld: 52,
   };
   const lineFontSizes = payload.lines.map((_, lineIndex) => {
     const storyEntry = storyboard[lineIndex];
@@ -497,6 +471,7 @@ export function compileScene(payload: ScenePayload): CompiledScene {
         fontFamily: baseTypography.fontFamily,
         color: semantic?.colorOverride ?? resolveV3Palette(payload, ((wm.start + (payload.lines[group.lineIndex]?.end ?? wm.start)) * 0.5 - payload.songStart) / Math.max(0.01, payload.songEnd - payload.songStart))[2] ?? '#ffffff',
         hasSemanticColor: Boolean(semantic?.colorOverride),
+        isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4,
         isAnchor: pos.isAnchor,
         isFiller: pos.isFiller,
         emphasisLevel: wm.directive?.emphasisLevel ?? 1,
@@ -524,66 +499,6 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     });
     return { lineIndex: group.lineIndex, groupIndex: group.groupIndex, anchorWordIdx: group.anchorWordIdx, start: group.start, end: group.end, words: wordsCompiled, staggerDelay: animParams.stagger, entryDuration: animParams.entryDuration, exitDuration: animParams.exitDuration, lingerDuration: animParams.linger, behaviorIntensity: motionDefaults.behaviorIntensity };
   }).sort((a, b) => a.start - b.start);
-
-  // ─── Compile-time collision resolution ───
-  // Nudge overlapping groups apart so anchor words don't collide.
-  {
-    const COL_PADDING = 24;
-    const COL_MAX_PASSES = 6;
-    interface GroupBBox { groupIdx: number; cx: number; cy: number; halfW: number; halfH: number; priority: number; }
-    const bboxes: GroupBBox[] = compiledGroups.map((cg, gi) => {
-      const aw = cg.words.find((w) => w.isAnchor) ?? cg.words[0];
-      if (!aw) return null!;
-      const fontStr = `${aw.fontWeight} ${aw.baseFontSize}px ${aw.fontFamily}`;
-      if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
-      const textW = measureCtx.measureText(aw.text).width;
-      return { groupIdx: gi, cx: aw.layoutX, cy: aw.layoutY, halfW: textW / 2 + COL_PADDING, halfH: aw.baseFontSize * 0.7 + COL_PADDING, priority: aw.emphasisLevel };
-    }).filter(Boolean);
-    for (let pass = 0; pass < COL_MAX_PASSES; pass++) {
-      let hadCollision = false;
-      for (let i = 0; i < bboxes.length; i++) {
-        for (let j = i + 1; j < bboxes.length; j++) {
-          const a = bboxes[i], b = bboxes[j];
-          const ag = compiledGroups[a.groupIdx], bg = compiledGroups[b.groupIdx];
-          const aVisEnd = ag.end + ag.lingerDuration + ag.exitDuration;
-          const bVisStart = bg.start - bg.entryDuration - bg.staggerDelay * bg.words.length;
-          if (aVisEnd < bVisStart) continue;
-          const bVisEnd = bg.end + bg.lingerDuration + bg.exitDuration;
-          const aVisStart = ag.start - ag.entryDuration - ag.staggerDelay * ag.words.length;
-          if (bVisEnd < aVisStart) continue;
-          const dx = a.cx - b.cx, dy = a.cy - b.cy;
-          const overlapX = (a.halfW + b.halfW) - Math.abs(dx);
-          const overlapY = (a.halfH + b.halfH) - Math.abs(dy);
-          if (overlapX <= 0 || overlapY <= 0) continue;
-          hadCollision = true;
-          const moveA = a.priority >= b.priority ? 0.3 : 0.7;
-          const moveB = 1 - moveA;
-          if (overlapX < overlapY) {
-            const sign = dx >= 0 ? 1 : -1;
-            a.cx += sign * overlapX * moveA;
-            b.cx -= sign * overlapX * moveB;
-          } else {
-            const sign = dy >= 0 ? 1 : -1;
-            a.cy += sign * overlapY * moveA;
-            b.cy -= sign * overlapY * moveB;
-          }
-          a.cx = Math.max(a.halfW + 40, Math.min(960 - a.halfW - 40, a.cx));
-          a.cy = Math.max(a.halfH + 40, Math.min(540 - a.halfH - 40, a.cy));
-          b.cx = Math.max(b.halfW + 40, Math.min(960 - b.halfW - 40, b.cx));
-          b.cy = Math.max(b.halfH + 40, Math.min(540 - b.halfH - 40, b.cy));
-        }
-      }
-      if (!hadCollision) break;
-    }
-    for (const bbox of bboxes) {
-      const cg = compiledGroups[bbox.groupIdx];
-      const aw = cg.words.find((w) => w.isAnchor);
-      if (!aw) continue;
-      const deltaX = bbox.cx - aw.layoutX, deltaY = bbox.cy - aw.layoutY;
-      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) continue;
-      for (const word of cg.words) { word.layoutX += deltaX; word.layoutY += deltaY; }
-    }
-  }
 
   const beats = payload.beat_grid?.beats ?? [];
   const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
