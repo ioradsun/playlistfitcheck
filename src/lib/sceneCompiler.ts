@@ -538,10 +538,24 @@ export function compileScene(payload: ScenePayload): CompiledScene {
     const baseSizeForShot = shotTypeToFontSize[shotType] ?? 68;
     return baseSizeForShot;
   });
-  const measureCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(1, 1);
-  measureCanvas.width = 1;
-  measureCanvas.height = 1;
-  const measureCtx = measureCanvas.getContext('2d')!;
+  // Prefer DOM canvas (has access to document.fonts) over OffscreenCanvas (doesn't)
+  let measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+  if (typeof document !== 'undefined') {
+    const domCanvas = document.createElement('canvas');
+    domCanvas.width = 1;
+    domCanvas.height = 1;
+    const ctx = domCanvas.getContext('2d');
+    if (ctx) {
+      measureCtx = ctx;
+    } else {
+      // jsdom or headless — fall back to OffscreenCanvas
+      const oc = new OffscreenCanvas(1, 1);
+      measureCtx = oc.getContext('2d')!;
+    }
+  } else {
+    const oc = new OffscreenCanvas(1, 1);
+    measureCtx = oc.getContext('2d')!;
+  }
   const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
 
   // Pre-compute all line layouts at once so groups sharing a line don't overlap
