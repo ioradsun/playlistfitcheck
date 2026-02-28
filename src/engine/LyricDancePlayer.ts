@@ -4002,8 +4002,8 @@ export class LyricDancePlayer {
         let roleAlpha: number;
         switch (lineRole) {
           case 'current': roleAlpha = 1.0; break;
-          case 'previous': roleAlpha = 0.35; break;
-          case 'next': roleAlpha = 0.25; break;
+          case 'previous': roleAlpha = 0.0; break;
+          case 'next': roleAlpha = 0.0; break;
           default: roleAlpha = 0.0; break;
         }
 
@@ -4034,8 +4034,8 @@ export class LyricDancePlayer {
           waveProximity = gaussian;
 
           const peakAlpha = 1.0;
-          const unsungFloor = 0.55;
-          const sungFloor = 0.80;
+          const unsungFloor = 0.35;
+          const sungFloor = 0.65;
 
           if (distance < -0.02) {
             // Voice hasn't reached this word yet — subtle anticipation glow
