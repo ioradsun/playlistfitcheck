@@ -52,8 +52,6 @@ export interface MoodGrade {
   // Intensity response — how much beats affect brightness
   beatBrightnessGain: number;  // 0-0.1 typically
 
-  // Text layout mode — engine picks this, not the user
-  layoutMode: 'horizontal' | 'queue';
 }
 
 export const MOOD_GRADES: Record<string, MoodGrade> = {
@@ -67,7 +65,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.25, softness: 0.5, opacity: 0.5 },
     motionIntent: 'push-in',
     beatBrightnessGain: 0.02,
-    layoutMode: 'queue',
   },
 
   anthemic: {
@@ -80,7 +77,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.5, softness: 0.6, opacity: 0.2 },
     motionIntent: 'pull-out',
     beatBrightnessGain: 0.04,
-    layoutMode: 'horizontal',
   },
 
   dreamy: {
@@ -93,7 +89,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.4, softness: 0.7, opacity: 0.25 },
     motionIntent: 'drift-lateral',
     beatBrightnessGain: 0.01,
-    layoutMode: 'queue',
   },
 
   aggressive: {
@@ -106,7 +101,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.2, softness: 0.3, opacity: 0.55 },
     motionIntent: 'handheld',
     beatBrightnessGain: 0.06,
-    layoutMode: 'horizontal',
   },
 
   melancholy: {
@@ -119,7 +113,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.3, softness: 0.5, opacity: 0.4 },
     motionIntent: 'drift-down',
     beatBrightnessGain: 0.01,
-    layoutMode: 'queue',
   },
 
   euphoric: {
@@ -132,7 +125,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.6, softness: 0.8, opacity: 0.1 },
     motionIntent: 'pull-out',
     beatBrightnessGain: 0.05,
-    layoutMode: 'horizontal',
   },
 
   eerie: {
@@ -145,7 +137,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.2, softness: 0.4, opacity: 0.6 },
     motionIntent: 'drift-lateral',
     beatBrightnessGain: 0.02,
-    layoutMode: 'queue',
   },
 
   vulnerable: {
@@ -158,7 +149,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.25, softness: 0.5, opacity: 0.45 },
     motionIntent: 'breathing',
     beatBrightnessGain: 0.01,
-    layoutMode: 'queue',
   },
 
   triumphant: {
@@ -171,7 +161,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.5, softness: 0.6, opacity: 0.15 },
     motionIntent: 'stable',
     beatBrightnessGain: 0.04,
-    layoutMode: 'horizontal',
   },
 
   nostalgic: {
@@ -184,7 +173,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.3, softness: 0.5, opacity: 0.35 },
     motionIntent: 'drift-lateral',
     beatBrightnessGain: 0.01,
-    layoutMode: 'queue',
   },
 
   defiant: {
@@ -197,7 +185,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.25, softness: 0.4, opacity: 0.45 },
     motionIntent: 'push-in',
     beatBrightnessGain: 0.04,
-    layoutMode: 'horizontal',
   },
 
   hopeful: {
@@ -210,7 +197,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.5, softness: 0.7, opacity: 0.15 },
     motionIntent: 'drift-up',
     beatBrightnessGain: 0.03,
-    layoutMode: 'queue',
   },
 
   raw: {
@@ -223,7 +209,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.2, softness: 0.3, opacity: 0.5 },
     motionIntent: 'handheld',
     beatBrightnessGain: 0.03,
-    layoutMode: 'horizontal',
   },
 
   hypnotic: {
@@ -236,7 +221,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     vignette: { innerRadius: 0.3, softness: 0.5, opacity: 0.35 },
     motionIntent: 'slow-zoom',
     beatBrightnessGain: 0.02,
-    layoutMode: 'queue',
   },
 };
 
@@ -326,6 +310,5 @@ export function lerpGrade(a: MoodGrade, b: MoodGrade, t: number): MoodGrade {
     },
     motionIntent: t < 0.5 ? a.motionIntent : b.motionIntent,
     beatBrightnessGain: lerp(a.beatBrightnessGain, b.beatBrightnessGain),
-    layoutMode: t < 0.5 ? a.layoutMode : b.layoutMode,
   };
 }
