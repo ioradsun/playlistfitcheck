@@ -466,7 +466,11 @@ export default function ShareableLyricDance() {
     }
 
     const urls = (data.section_images ?? []).filter((u): u is string => Boolean(u));
-    if (urls.length === 0) return;
+    console.log(`[auto-palette lifecycle] section_images count=${data.section_images?.length ?? 0}, valid URLs=${urls.length}`);
+    if (urls.length === 0) {
+      console.warn('[auto-palette lifecycle] no valid section_images URLs — skipping palette computation');
+      return;
+    }
 
     const savePalettesToDb = async (id: string, palettes: string[][]) => {
       try {
@@ -480,8 +484,10 @@ export default function ShareableLyricDance() {
     };
 
     let cancelled = false;
+    console.log(`[auto-palette lifecycle] starting computeAutoPalettesFromUrls for ${urls.length} URLs`);
     computeAutoPalettesFromUrls(urls)
       .then((autoPalettes) => {
+        console.log(`[auto-palette lifecycle] computation returned ${autoPalettes.length} palettes (cancelled=${cancelled})`);
         if (cancelled || autoPalettes.length === 0) return;
         setData(prev => (prev ? { ...prev, auto_palettes: autoPalettes } : prev));
         if (playerRef.current) {
@@ -490,7 +496,7 @@ export default function ShareableLyricDance() {
         void savePalettesToDb(data.id, autoPalettes);
       })
       .catch((error) => {
-        console.error('[auto-palette] failed to compute from section images', error);
+        console.error('[auto-palette lifecycle] failed to compute from section images', error);
       });
 
     return () => {

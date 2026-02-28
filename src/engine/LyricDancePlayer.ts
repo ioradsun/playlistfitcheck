@@ -1675,6 +1675,7 @@ export class LyricDancePlayer {
     const idx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
     return chapters[idx] ?? chapters[0];
   }
+  private _lastPaletteLog = 0;
   /** Resolve the effective palette from image-derived palettes or legacy fallbacks */
   private getResolvedPalette(): string[] {
     const autoPalettes = this.data?.auto_palettes;
@@ -1686,11 +1687,21 @@ export class LyricDancePlayer {
     const totalDurationSec = this.audio?.duration || 1;
     const chIdx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
 
+    const shouldLog = Date.now() - this._lastPaletteLog > 5000;
+
     // Priority 1: auto-palettes computed from section images
     if (Array.isArray(autoPalettes) && chIdx >= 0 && autoPalettes[chIdx]) {
+      if (shouldLog) {
+        this._lastPaletteLog = Date.now();
+        console.log(`[getResolvedPalette] using auto_palettes[${chIdx}]`, autoPalettes[chIdx]);
+      }
       return autoPalettes[chIdx];
     }
     if (Array.isArray(autoPalettes) && autoPalettes.length > 0) {
+      if (shouldLog) {
+        this._lastPaletteLog = Date.now();
+        console.log(`[getResolvedPalette] using auto_palettes[0] fallback (chIdx=${chIdx}, len=${autoPalettes.length})`, autoPalettes[0]);
+      }
       return autoPalettes[0];
     }
 
@@ -1718,6 +1729,11 @@ export class LyricDancePlayer {
     const paletteName = cd?.palette as string | undefined;
     if (paletteName && LyricDancePlayer.PALETTE_COLORS[paletteName]) {
       return LyricDancePlayer.PALETTE_COLORS[paletteName];
+    }
+
+    if (shouldLog) {
+      this._lastPaletteLog = Date.now();
+      console.warn(`[getResolvedPalette] NO auto_palettes (count=${autoPalettes?.length ?? 0}), using final fallback`);
     }
 
     // Final fallback
