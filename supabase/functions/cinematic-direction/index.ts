@@ -57,15 +57,15 @@ MOTION:
   "drift"     — slow, contemplative
   "glitch"    — choppy, digital
 
-TYPOGRAPHY:
-  "bold-impact"      — Oswald, uppercase, power
-  "clean-modern"     — Montserrat, neutral
-  "elegant-serif"    — Playfair Display, soulful
-  "raw-condensed"    — Barlow Condensed, gritty
-  "whisper-soft"     — Nunito, gentle
-  "tech-mono"        — JetBrains Mono, futuristic
-  "display-heavy"    — Bebas Neue, statement
-  "editorial-light"  — Cormorant Garamond, poetic
+TYPOGRAPHY (match to genre — do NOT default to clean-modern):
+  "bold-impact"      — Oswald, uppercase. USE FOR: hip-hop, trap, EDM, anthems
+  "clean-modern"     — Montserrat, neutral. USE FOR: pop, indie pop, mainstream
+  "elegant-serif"    — Playfair Display, soulful. USE FOR: R&B, soul, jazz, ballads
+  "raw-condensed"    — Barlow Condensed, gritty. USE FOR: punk, rock, grunge, drill
+  "whisper-soft"     — Nunito, gentle. USE FOR: acoustic, folk, lullaby, ambient
+  "tech-mono"        — JetBrains Mono, futuristic. USE FOR: electronic, synthwave, cyberpunk
+  "display-heavy"    — Bebas Neue, statement. USE FOR: arena rock, hype tracks, sports anthems
+  "editorial-light"  — Cormorant Garamond, poetic. USE FOR: singer-songwriter, poetry, classical
 
 TEXTURE:
   "fire", "rain", "snow", "aurora", "smoke",
@@ -89,7 +89,22 @@ REQUIRED:
 - "sectionIndex": integer (must match the input section index)
 - "description": vivid 1-sentence scene for background image generation,
   rooted in the listener's scene
-- "mood": 2-3 emotional keywords
+- "visualMood": ONE word from this list that captures the section's visual feel:
+  "intimate"    — close, personal, warm soft focus
+  "anthemic"    — arena, powerful, bright and vivid
+  "dreamy"      — floating, hazy, bloom and glow
+  "aggressive"  — hard, confrontational, cold and sharp
+  "melancholy"  — sad, heavy, desaturated and cool
+  "euphoric"    — peak joy, blown-out bright
+  "eerie"       — unsettling, teal tint, selective focus
+  "vulnerable"  — exposed, fragile, warm and breathing
+  "triumphant"  — victory, bright gold, wide and stable
+  "nostalgic"   — memory, warm grain, slow drift
+  "defiant"     — rebellious, cool and sharp
+  "hopeful"     — dawn, rising warmth
+  "raw"         — unpolished, gritty noise
+  "hypnotic"    — trance, tilt-shift, slow zoom
+  Pick the ONE that best matches this section's emotional energy.
 
 OPTIONAL — override song defaults for this section:
 - "motion": override
@@ -180,6 +195,11 @@ const ENUMS = {
   sceneTone: ["dark", "light", "mixed-dawn", "mixed-dusk", "mixed-pulse"],
   atmosphere: ["void", "cinematic", "haze", "split", "grain", "wash", "glass", "clean"],
   motion: ["weighted", "fluid", "elastic", "drift", "glitch"],
+  visualMood: [
+    "intimate", "anthemic", "dreamy", "aggressive", "melancholy",
+    "euphoric", "eerie", "vulnerable", "triumphant", "nostalgic",
+    "defiant", "hopeful", "raw", "hypnotic",
+  ],
   typography: [
     "bold-impact",
     "clean-modern",
@@ -344,6 +364,11 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
     for (const s of v.sections) {
       if (typeof s.description !== "string" || !s.description.trim()) {
         errors.push(`Section ${s.sectionIndex}: missing description`);
+      }
+      // Validate visualMood — required field, default to "intimate" if missing/invalid
+      if (!s.visualMood || !(ENUMS.visualMood as readonly string[]).includes(s.visualMood)) {
+        if (s.visualMood) errors.push(`Section ${s.sectionIndex}: invalid visualMood "${s.visualMood}"`);
+        s.visualMood = "intimate";
       }
       for (const field of ["motion", "texture", "typography", "atmosphere"] as const) {
         if (s[field] !== undefined && !(ENUMS[field] as readonly string[]).includes(s[field])) {
