@@ -903,6 +903,16 @@ export class LyricDancePlayer {
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
   private chapterImages: HTMLImageElement[] = [];
+  // Ken Burns per-chapter parameters — computed once on image load
+  private _kenBurnsParams: Array<{
+    zoomStart: number;
+    zoomEnd: number;
+    panStartX: number;
+    panStartY: number;
+    panEndX: number;
+    panEndY: number;
+  }> = [];
+  private _bgBlurCurrent = 3;
   private chapterImageLuminance = new WeakMap<HTMLImageElement, number>();
   private _haloStamps: Map<string, HTMLCanvasElement> = new Map();
   private _crushOverlayCanvas: HTMLCanvasElement | null = null;
@@ -3095,6 +3105,26 @@ export class LyricDancePlayer {
         img.src = url;
       }))
     );
+
+    // Generate Ken Burns parameters per chapter
+    this._kenBurnsParams = this.chapterImages.map((_, i) => {
+      const seed = (i * 2654435761) >>> 0;
+      const s = (v: number) => ((seed * v) & 0xFFFF) / 0xFFFF;
+
+      const zoomIn = i % 2 === 0;
+      const zoomStart = zoomIn ? 1.0 : 1.05;
+      const zoomEnd = zoomIn ? 1.05 : 1.0;
+
+      const panRange = 0.02;
+      return {
+        zoomStart,
+        zoomEnd,
+        panStartX: (s(17) - 0.5) * panRange,
+        panStartY: (s(31) - 0.5) * panRange,
+        panEndX: (s(53) - 0.5) * panRange,
+        panEndY: (s(71) - 0.5) * panRange,
+      };
+    });
   }
 
   private drawChapterImage(chapterIdx: number, nextChapterIdx: number, blend: number): void {
@@ -3118,22 +3148,81 @@ export class LyricDancePlayer {
       clean: 0.85,
     };
     const targetImageOpacity = atmosphereOpacity[atmosphere] ?? 0.65;
+
+    // Depth-of-field: verse = blurred, chorus = sharp
+    const chapters = this.resolvedState.chapters ?? [];
+    const currentChapterObj = this.resolveChapter(chapters, this.audio.currentTime, this.audio.duration || 1);
+    const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
+    const targetBlurPx = Math.max(0, (1 - intensity) * 5);
+    this._bgBlurCurrent += (targetBlurPx - this._bgBlurCurrent) * 0.05;
+    const blurPx = Math.round(this._bgBlurCurrent * 10) / 10;
+    const needsBlur = blurPx > 0.2;
+
+    if (needsBlur) {
+      this.ctx.save();
+      this.ctx.filter = `blur(${blurPx}px)`;
+    }
+
     if (current?.complete && current.naturalWidth > 0) {
       this.ctx.globalAlpha = targetImageOpacity;
-      this.ctx.drawImage(current, 0, 0, this.width, this.height);
+
+      // Ken Burns: slow zoom + pan over chapter duration + beat pulse response
+      const kb = this._kenBurnsParams[chapterIdx];
+      const chapterCount = this.chapterImages.length || 1;
+      const audioDur = this.audio?.duration || 1;
+      const chapterDur = audioDur / chapterCount;
+      const chapterStart = chapterIdx * chapterDur;
+      const localT = Math.max(0, Math.min(1, ((this.audio?.currentTime ?? 0) - chapterStart) / chapterDur));
+      const eased = localT * localT * (3 - 2 * localT);
+      const beatScale = 1.0 + Math.max(0, this._springOffset) * 0.008;
+
+      if (kb) {
+        const zoom = (kb.zoomStart + (kb.zoomEnd - kb.zoomStart) * eased) * beatScale;
+        const panX = (kb.panStartX + (kb.panEndX - kb.panStartX) * eased) * this.width;
+        const panY = (kb.panStartY + (kb.panEndY - kb.panStartY) * eased) * this.height;
+
+        this.ctx.save();
+        this.ctx.translate(this.width / 2 + panX, this.height / 2 + panY);
+        this.ctx.scale(zoom, zoom);
+        this.ctx.translate(-this.width / 2, -this.height / 2);
+        this.ctx.drawImage(current, 0, 0, this.width, this.height);
+        this.ctx.restore();
+      } else {
+        this.ctx.drawImage(current, 0, 0, this.width, this.height);
+      }
+
       this.ctx.globalAlpha = 1;
     }
 
     if (next?.complete && next.naturalWidth > 0 && blend > 0) {
       this.ctx.globalAlpha = blend * targetImageOpacity;
-      this.ctx.drawImage(next, 0, 0, this.width, this.height);
+
+      const kbNext = this._kenBurnsParams[nextChapterIdx];
+      if (kbNext) {
+        const nextLocalT = blend;
+        const nextEased = nextLocalT * nextLocalT * (3 - 2 * nextLocalT);
+        const nextZoom = kbNext.zoomStart + (kbNext.zoomEnd - kbNext.zoomStart) * nextEased * 0.15;
+        const nextPanX = kbNext.panStartX * this.width * nextEased * 0.15;
+        const nextPanY = kbNext.panStartY * this.height * nextEased * 0.15;
+
+        this.ctx.save();
+        this.ctx.translate(this.width / 2 + nextPanX, this.height / 2 + nextPanY);
+        this.ctx.scale(nextZoom, nextZoom);
+        this.ctx.translate(-this.width / 2, -this.height / 2);
+        this.ctx.drawImage(next, 0, 0, this.width, this.height);
+        this.ctx.restore();
+      } else {
+        this.ctx.drawImage(next, 0, 0, this.width, this.height);
+      }
+
       this.ctx.globalAlpha = 1;
     }
 
+    if (needsBlur) {
+      this.ctx.restore();
+    }
+
     // Dark crush overlay — cached per chapter+atmosphere
-    const chapters = this.resolvedState.chapters ?? [];
-    const currentChapterObj = this.resolveChapter(chapters, this.audio.currentTime, this.audio.duration || 1);
-    const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
     const atmosphereCrush: Record<string, number> = {
       void: 0.80,
       cinematic: 0.35,
