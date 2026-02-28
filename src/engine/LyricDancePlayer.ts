@@ -1414,6 +1414,8 @@ export class LyricDancePlayer {
   /** Hot-patch auto_palettes and recompile scene so word colors update */
   updateAutoPalettes(palettes: string[][]): void {
     if (!palettes?.length) return;
+    console.log('[auto-palette] updateAutoPalettes received:', palettes.length, 'text color[0]:', palettes[0]?.[2]);
+    (this as any)._paletteDiagLogged = false; // reset so next getResolvedPalette logs the new state
     this.data = { ...this.data, auto_palettes: palettes };
     // Recompile scene with fresh palette data
     if (this.payload) {
@@ -1675,34 +1677,57 @@ export class LyricDancePlayer {
     const idx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
     return chapters[idx] ?? chapters[0];
   }
-  private _lastPaletteLog = 0;
   /** Resolve the effective palette from image-derived palettes or legacy fallbacks */
   private getResolvedPalette(): string[] {
     const autoPalettes = this.data?.auto_palettes;
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const chapters = (cd?.chapters as any[]) ?? [];
+    const sections = (cd?.sections as any[]) ?? [];
 
-    // Find current chapter based on playback position
+    // Find current chapter/section based on playback position
     const currentTimeSec = this.audio?.currentTime ?? 0;
     const totalDurationSec = this.audio?.duration || 1;
-    const chIdx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
-
-    const shouldLog = Date.now() - this._lastPaletteLog > 5000;
 
     // Priority 1: auto-palettes computed from section images
-    if (Array.isArray(autoPalettes) && chIdx >= 0 && autoPalettes[chIdx]) {
-      if (shouldLog) {
-        this._lastPaletteLog = Date.now();
-        console.log(`[getResolvedPalette] using auto_palettes[${chIdx}]`, autoPalettes[chIdx]);
-      }
-      return autoPalettes[chIdx];
-    }
+    // These align with sections, not chapters
     if (Array.isArray(autoPalettes) && autoPalettes.length > 0) {
-      if (shouldLog) {
-        this._lastPaletteLog = Date.now();
-        console.log(`[getResolvedPalette] using auto_palettes[0] fallback (chIdx=${chIdx}, len=${autoPalettes.length})`, autoPalettes[0]);
+      // Use sections for index since auto_palettes come from section_images
+      const sectionSource = sections.length > 0 ? sections : chapters;
+      if (sectionSource.length > 0) {
+        const secIdx = this.resolveSectionIndex(sectionSource, currentTimeSec, totalDurationSec);
+        if (secIdx >= 0 && autoPalettes[secIdx]) {
+          return autoPalettes[secIdx];
+        }
+      }
+      // Fallback: divide song evenly across palettes
+      if (totalDurationSec > 0 && autoPalettes.length > 1) {
+        const progress = Math.max(0, Math.min(0.999, currentTimeSec / totalDurationSec));
+        const idx = Math.floor(progress * autoPalettes.length);
+        return autoPalettes[idx];
       }
       return autoPalettes[0];
+    }
+
+    const chIdx = chapters.length > 0
+      ? this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec)
+      : 0;
+
+    // DIAGNOSTIC: log which fallback branch is hit (once)
+    if (!(this as any)._paletteDiagLogged) {
+      (this as any)._paletteDiagLogged = true;
+      const bakedPalettes = (this.data as any)?.resolvedPalettes;
+      const bakedDefault = (this.data as any)?.resolvedPaletteDefault;
+      const paletteName = cd?.palette as string | undefined;
+      const chapterPalette = chIdx >= 0 ? chapters[chIdx]?.palette : undefined;
+      console.log('[palette-diag] NO auto_palettes. Fallback chain:', {
+        autoPalettes: autoPalettes?.length ?? 0,
+        chIdx,
+        chapterPalette,
+        bakedPalettes: bakedPalettes?.length ?? 0,
+        bakedDefault: bakedDefault?.length ?? 0,
+        paletteName,
+        payloadPalette: this.payload?.palette,
+      });
     }
 
     // Try prebaked per-chapter palette
@@ -1729,11 +1754,6 @@ export class LyricDancePlayer {
     const paletteName = cd?.palette as string | undefined;
     if (paletteName && LyricDancePlayer.PALETTE_COLORS[paletteName]) {
       return LyricDancePlayer.PALETTE_COLORS[paletteName];
-    }
-
-    if (shouldLog) {
-      this._lastPaletteLog = Date.now();
-      console.warn(`[getResolvedPalette] NO auto_palettes (count=${autoPalettes?.length ?? 0}), using final fallback`);
     }
 
     // Final fallback
