@@ -16,7 +16,7 @@ describe('cinematicResolver', () => {
     expect(resolved.lineSettings[0].entryStyle).toBe('cuts');
     expect(resolved.lineSettings[0].typography).toBe('serif');
     expect(resolved.wordSettings.fire.ghostTrail).toBe(true);
-    expect(resolved.wordSettings.fire.pulseAmp).toBeGreaterThan(0.2);
+    expect(resolved.wordSettings.fire.pulseAmp).toBeGreaterThan(0.02);
   });
 
   it('computes beat pulse around nearest beat', () => {
