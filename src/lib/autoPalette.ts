@@ -111,19 +111,19 @@ export function generateAutoPalette(sample: ImageSample): string[] {
 
   if (averageLuminance < 0.4) {
     textH = (dominantHue + 180) % 360;
-    textS = 0.08;
-    textL = 0.92;
+    textS = Math.min(0.35, dominantSaturation * 0.5 + 0.12);
+    textL = 0.90;
   } else if (averageLuminance > 0.6) {
     textH = dominantHue;
-    textS = 0.12;
-    textL = 0.1;
+    textS = Math.min(0.30, dominantSaturation * 0.4 + 0.10);
+    textL = 0.12;
   } else {
-    const lightContrast = contrastRatio(averageLuminance, 0.92);
-    const darkContrast = contrastRatio(averageLuminance, 0.1);
+    const lightContrast = contrastRatio(averageLuminance, 0.90);
+    const darkContrast = contrastRatio(averageLuminance, 0.12);
     if (lightContrast > darkContrast) {
       textH = (dominantHue + 180) % 360;
-      textS = 0.08;
-      textL = 0.92;
+      textS = Math.min(0.35, dominantSaturation * 0.5 + 0.12);
+      textL = 0.90;
     }
   }
 
