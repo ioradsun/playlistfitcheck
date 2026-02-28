@@ -454,7 +454,15 @@ export default function ShareableLyricDance() {
     if (!data?.id) return;
 
     if (Array.isArray(data.auto_palettes) && data.auto_palettes.length > 0) {
-      return;
+      // Check if palettes are stale (old low-saturation white text)
+      // v2 palettes have proper saturation; detect v1 by checking if text color is near-white
+      const textColor = data.auto_palettes[0]?.[2] ?? '#ffffff';
+      const isStaleWhite = /^#f[0-9a-f]{5}$/i.test(textColor) || textColor === '#ffffff';
+      if (!isStaleWhite) {
+        return;
+      }
+      // Stale palette detected — force recomputation below
+      console.log('[auto-palette] stale white palette detected, recomputing...');
     }
 
     const urls = (data.section_images ?? []).filter((u): u is string => Boolean(u));
