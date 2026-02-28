@@ -235,7 +235,8 @@ export function getGroupLayout(
     return baseFontSize * 1.0;
   });
   const wordWidths = group.words.map((wm, i) => getWordWidth(wm.word, wordFontSizes[i]));
-  const spaceWidths = group.words.map((_, i) => i < group.words.length - 1 ? getSpaceWidth(Math.min(wordFontSizes[i], wordFontSizes[i + 1])) : 0);
+  const SPACE_MULT = 1.8; // breathing room between words for lyric readability
+  const spaceWidths = group.words.map((_, i) => i < group.words.length - 1 ? getSpaceWidth(Math.min(wordFontSizes[i], wordFontSizes[i + 1])) * SPACE_MULT : 0);
   const totalLineWidth = wordWidths.reduce((sum, width) => sum + width, 0) + spaceWidths.reduce((sum, width) => sum + width, 0);
   const minStartX = margin;
   const maxStartX = Math.max(minStartX, canvasW - margin - totalLineWidth);
