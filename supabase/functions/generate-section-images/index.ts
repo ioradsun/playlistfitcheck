@@ -10,6 +10,12 @@ const corsHeaders = {
 interface SectionInput {
   sectionIndex: number;
   description: string;
+  visualMood?: string;
+  mood?: string;
+  atmosphere?: string;
+  texture?: string;
+  motion?: string;
+  lyrics?: string;
 }
 
 interface RequestBody {
@@ -17,13 +23,93 @@ interface RequestBody {
   force?: boolean;
 }
 
-function buildImagePrompt(section: SectionInput): string {
-  const description = section.description?.trim() || "moody cinematic abstract environment";
-  if (!section.description?.trim()) {
-    console.warn(`[section-images] Empty description for section ${section.sectionIndex}`);
+// Color palette seeds per section index — ensures visual variety even with similar descriptions
+const SECTION_COLOR_SEEDS = [
+  "deep blue and amber tones",
+  "crimson and dark teal palette",
+  "violet and gold undertones",
+  "emerald and rust hues",
+  "navy and warm copper tones",
+  "dark magenta and silver",
+  "burnt orange and midnight blue",
+  "forest green and dusty rose",
+];
+
+// Visual mood → image generation style hints
+const MOOD_IMAGE_STYLE: Record<string, string> = {
+  intimate: "ultra dark exposure, warm amber lighting, shallow depth of field, soft shadows",
+  anthemic: "vivid colors, dramatic lighting, wide cinematic shot, high contrast",
+  dreamy: "soft focus, warm golden light, ethereal glow, hazy atmosphere, blown highlights",
+  aggressive: "cold blue steel tones, harsh contrast, gritty, sharp shadows, dark",
+  melancholy: "muted desaturated colors, overcast cool light, rain-soaked, foggy",
+  euphoric: "bright warm light, golden hour, lens flare, vivid saturated colors, radiant",
+  eerie: "dark teal green tint, cold fluorescent light, unsettling shadows, fog",
+  vulnerable: "warm soft light, intimate close framing, gentle shadows, dusty film grain",
+  triumphant: "golden dramatic light, bold contrast, wide heroic framing, rich warm tones",
+  nostalgic: "warm sepia tones, vintage film grain, soft sunlight, faded memories",
+  defiant: "cold high contrast, dramatic side lighting, sharp edges, bold shadows",
+  hopeful: "dawn light, warm gradient sky, soft bright exposure, gentle rays",
+  raw: "ungraded neutral, harsh direct light, gritty documentary feel, high grain",
+  hypnotic: "deep saturated colors, slow gradient, mysterious lighting, tilt-shift bokeh",
+};
+
+function buildImagePrompt(section: SectionInput, totalSections: number): string {
+  const parts: string[] = ["Cinematic background scene"];
+
+  // Core description
+  const description = section.description?.trim();
+  if (description) {
+    parts.push(description);
   }
 
-  return `Cinematic background scene, ${description}, ultra dark exposure, deep shadows, moody atmospheric, wide cinematic shot, no people, no text, no faces, photorealistic, film grain, 4k`;
+  // Visual mood drives the entire image style
+  const visualMood = section.visualMood?.trim()?.toLowerCase();
+  const moodStyle = visualMood ? MOOD_IMAGE_STYLE[visualMood] : null;
+  if (moodStyle) {
+    parts.push(moodStyle);
+  }
+
+  // Fallback mood/atmosphere for context
+  const mood = section.mood?.trim();
+  const atmosphere = section.atmosphere?.trim();
+  if (!moodStyle && mood) parts.push(`${mood} mood`);
+  if (atmosphere && atmosphere !== mood) parts.push(`${atmosphere} atmosphere`);
+
+  // Texture for visual style
+  const texture = section.texture?.trim();
+  if (texture) parts.push(`${texture} texture`);
+
+  // Lyrics excerpt for thematic grounding (first ~60 chars)
+  const lyrics = section.lyrics?.trim();
+  if (lyrics) {
+    const excerpt = lyrics.length > 60 ? lyrics.slice(0, 60).replace(/\s+\S*$/, '...') : lyrics;
+    parts.push(`evoking the feeling of "${excerpt}"`);
+  }
+
+  // If we have almost nothing, add a unique fallback
+  if (!description && !moodStyle && !mood && !atmosphere && !lyrics) {
+    parts.push("moody cinematic abstract environment");
+  }
+
+  // Color seed for guaranteed visual variety
+  const colorSeed = SECTION_COLOR_SEEDS[section.sectionIndex % SECTION_COLOR_SEEDS.length];
+  parts.push(colorSeed);
+
+  // Section position awareness
+  if (section.sectionIndex === 0) {
+    parts.push("opening establishing shot");
+  } else if (section.sectionIndex === totalSections - 1) {
+    parts.push("closing finale atmosphere");
+  }
+
+  // Base quality — no longer forcing "ultra dark" on every image
+  parts.push("wide cinematic shot, no people, no text, no faces, photorealistic, film grain, 4k");
+
+  const prompt = parts.join(", ");
+  if (!description) {
+    console.warn(`[section-images] No description for section ${section.sectionIndex} — using visualMood/color seed`);
+  }
+  return prompt;
 }
 
 async function generateImage(prompt: string, apiKey: string): Promise<string | null> {
@@ -124,7 +210,7 @@ serve(async (req) => {
 
     const { data: danceRow, error: danceError } = await supabase
       .from("shareable_lyric_dances")
-      .select("cinematic_direction, section_images")
+      .select("cinematic_direction, section_images, lines, words")
       .eq("id", lyric_dance_id)
       .maybeSingle();
 
@@ -142,14 +228,37 @@ serve(async (req) => {
     }
 
     const cinematicDirection = danceRow?.cinematic_direction;
-    const sections = Array.isArray(cinematicDirection?.sections)
-      ? cinematicDirection.sections
-          .map((section: any, idx: number) => ({
-            sectionIndex: Number.isFinite(section?.sectionIndex) ? Number(section.sectionIndex) : idx,
-            description: typeof section?.description === "string" ? section.description : "",
-          }))
-          .sort((a: SectionInput, b: SectionInput) => a.sectionIndex - b.sectionIndex)
-      : [];
+    const lines = Array.isArray(danceRow?.lines) ? danceRow.lines : [];
+
+    const rawSections = Array.isArray(cinematicDirection?.sections)
+      ? cinematicDirection.sections : [];
+
+    const sections: SectionInput[] = rawSections
+      .map((section: any, idx: number) => {
+        const sectionIndex = Number.isFinite(section?.sectionIndex) ? Number(section.sectionIndex) : idx;
+
+        // Extract lyrics for this section's time range
+        let sectionLyrics = "";
+        if (section?.startSec != null && section?.endSec != null) {
+          const sectionLines = lines.filter((l: any) =>
+            l?.start != null && l?.end != null &&
+            l.start >= section.startSec - 0.5 && l.start < section.endSec + 0.5
+          );
+          sectionLyrics = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 120);
+        }
+
+        return {
+          sectionIndex,
+          description: typeof section?.description === "string" ? section.description : "",
+          visualMood: typeof section?.visualMood === "string" ? section.visualMood : undefined,
+          mood: typeof section?.mood === "string" ? section.mood : undefined,
+          atmosphere: typeof section?.atmosphere === "string" ? section.atmosphere : undefined,
+          texture: typeof section?.texture === "string" ? section.texture : undefined,
+          motion: typeof section?.motion === "string" ? section.motion : undefined,
+          lyrics: sectionLyrics || undefined,
+        };
+      })
+      .sort((a: SectionInput, b: SectionInput) => a.sectionIndex - b.sectionIndex);
 
     if (sections.length === 0) {
       return new Response(JSON.stringify({ error: "cinematic_direction.sections[].description is required" }), {
@@ -159,8 +268,8 @@ serve(async (req) => {
     }
 
     console.log(`[section-images] Generating ${sections.length} images for dance ${lyric_dance_id}`);
-
-    const prompts = sections.map((section: SectionInput) => buildImagePrompt(section));
+    const prompts = sections.map((section: SectionInput) => buildImagePrompt(section, sections.length));
+    prompts.forEach((p, i) => console.log(`[section-images] prompt[${i}]: ${p.slice(0, 150)}...`));
     const imageResults = await Promise.all(prompts.map((prompt: string) => generateImage(prompt, apiKey)));
 
     const uploadResults = await Promise.all(
