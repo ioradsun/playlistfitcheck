@@ -1693,40 +1693,30 @@ export class LyricDancePlayer {
     if (Array.isArray(autoPalettes) && autoPalettes.length > 0) {
       // Use sections for index since auto_palettes come from section_images
       const sectionSource = sections.length > 0 ? sections : chapters;
-      let resolvedIdx = 0;
-      let resolvedVia = 'fallback[0]';
+
+      // DIAGNOSTIC: log palette index resolution every 3 seconds
+      const now = performance.now();
+      if (!(this as any)._lastPalDiag || now - (this as any)._lastPalDiag > 3000) {
+        (this as any)._lastPalDiag = now;
+        const secIdx = sectionSource.length > 0 ? this.resolveSectionIndex(sectionSource, currentTimeSec, totalDurationSec) : -1;
+        const firstSection = sectionSource[0];
+        console.log(`[palette-cycle] t=${currentTimeSec.toFixed(1)}s / ${totalDurationSec.toFixed(1)}s, sections=${sectionSource.length}, secIdx=${secIdx}, palette=${autoPalettes[secIdx]?.[2] ?? 'none'}`, 
+          firstSection ? { startSec: firstSection.startSec, endSec: firstSection.endSec, startRatio: firstSection.startRatio, endRatio: firstSection.endRatio, sectionIndex: firstSection.sectionIndex } : 'NO SECTIONS');
+      }
 
       if (sectionSource.length > 0) {
         const secIdx = this.resolveSectionIndex(sectionSource, currentTimeSec, totalDurationSec);
         if (secIdx >= 0 && autoPalettes[secIdx]) {
-          resolvedIdx = secIdx;
-          resolvedVia = 'sectionIndex';
-        } else if (totalDurationSec > 0 && autoPalettes.length > 1) {
-          const progress = Math.max(0, Math.min(0.999, currentTimeSec / totalDurationSec));
-          resolvedIdx = Math.floor(progress * autoPalettes.length);
-          resolvedVia = 'evenSplit';
+          return autoPalettes[secIdx];
         }
-      } else if (totalDurationSec > 0 && autoPalettes.length > 1) {
+      }
+      // Fallback: divide song evenly across palettes
+      if (totalDurationSec > 0 && autoPalettes.length > 1) {
         const progress = Math.max(0, Math.min(0.999, currentTimeSec / totalDurationSec));
-        resolvedIdx = Math.floor(progress * autoPalettes.length);
-        resolvedVia = 'evenSplit(noSections)';
+        const idx = Math.floor(progress * autoPalettes.length);
+        return autoPalettes[idx];
       }
-
-      // Periodic diagnostic log every 3s
-      const now = Date.now();
-      if (!(this as any)._lastPaletteCycleLog || now - (this as any)._lastPaletteCycleLog > 3000) {
-        (this as any)._lastPaletteCycleLog = now;
-        const s0 = sectionSource[0];
-        console.log(
-          `[palette-cycle] t=${currentTimeSec.toFixed(1)}s / ${(this.audio?.duration ?? NaN).toFixed(1)}s, ` +
-          `sections=${sectionSource.length}, secIdx=${resolvedIdx}, via=${resolvedVia}, ` +
-          `palette=${autoPalettes[resolvedIdx]?.[2] ?? '?'}, ` +
-          `s0={startSec:${s0?.startSec ?? 'undef'}, endSec:${s0?.endSec ?? 'undef'}, ` +
-          `startRatio:${s0?.startRatio ?? 'undef'}, endRatio:${s0?.endRatio ?? 'undef'}}`
-        );
-      }
-
-      return autoPalettes[resolvedIdx];
+      return autoPalettes[0];
     }
 
     const chIdx = chapters.length > 0
@@ -4288,11 +4278,22 @@ export class LyricDancePlayer {
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
         chunk.color = word.color;
-        // Runtime palette override: use chapter-resolved text color so words
+        // Runtime palette override: use chapter-resolved colors so words
         // shift color as chapters change (auto_palettes may arrive after compile)
         if (!word.hasSemanticColor) {
           const runtimePal = this.getResolvedPalette();
-          if (runtimePal?.[2]) chunk.color = runtimePal[2];
+          if (runtimePal) {
+            // Visual hierarchy: hero=accent, emphasis=glow, filler=dim, normal=text
+            if (isHeroWord && runtimePal[1]) {
+              chunk.color = runtimePal[1]; // accent — vivid color
+            } else if ((word.emphasisLevel ?? 1) >= 3 && runtimePal[3]) {
+              chunk.color = runtimePal[3]; // glow — warm highlight
+            } else if (word.isFiller && runtimePal[4]) {
+              chunk.color = runtimePal[4]; // dim — recede
+            } else if (runtimePal[2]) {
+              chunk.color = runtimePal[2]; // text — readable
+            }
+          }
         }
         chunk.glow = wordGlow;
         chunk.emitterType = word.emitterType !== 'none' ? word.emitterType : undefined;
