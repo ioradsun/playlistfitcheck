@@ -219,7 +219,7 @@ export function computeAllLineLayouts(
 ): Map<string, GroupPosition[]> {
   const margin = 60;
   const lineY = Math.round(canvasH * 0.5);
-  const SPACE_MULT = 1.8;
+  const SPACE_MULT = 1.15;
   const result = new Map<string, GroupPosition[]>();
 
   const getWordWidth = (word: string, fontSize: number) => {
