@@ -265,7 +265,7 @@ export function computeAllLineLayouts(
 
     // Compute total line width with spaces between ALL words (across groups too)
     let totalWidth = 0;
-    const spaceWidths: number[] = [];
+    let spaceWidths: number[] = [];
     for (let i = 0; i < flatWords.length; i++) {
       totalWidth += flatWords[i].width;
       if (i < flatWords.length - 1) {
@@ -274,6 +274,30 @@ export function computeAllLineLayouts(
         totalWidth += sw;
       } else {
         spaceWidths.push(0);
+      }
+    }
+
+    // Auto-scale: if line is too wide, shrink fonts proportionally to fit
+    const maxLineWidth = canvasW - margin * 2;
+    if (totalWidth > maxLineWidth && totalWidth > 0) {
+      const scaleFactor = maxLineWidth / totalWidth;
+      // Re-measure all words at scaled font sizes
+      for (const fw of flatWords) {
+        fw.fontSize = fw.fontSize * scaleFactor;
+        fw.width = getWordWidth(fw.wm.word, fw.fontSize);
+      }
+      // Recompute total width and spaces
+      totalWidth = 0;
+      spaceWidths = [];
+      for (let i = 0; i < flatWords.length; i++) {
+        totalWidth += flatWords[i].width;
+        if (i < flatWords.length - 1) {
+          const sw = getSpaceWidth(Math.min(flatWords[i].fontSize, flatWords[i + 1].fontSize)) * SPACE_MULT;
+          spaceWidths.push(sw);
+          totalWidth += sw;
+        } else {
+          spaceWidths.push(0);
+        }
       }
     }
 
