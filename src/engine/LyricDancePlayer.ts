@@ -33,7 +33,7 @@ import {
 } from "@/engine/cinematicResolver";
 
 const DECOMP_ENABLED = true; // enabled for hero words (emphasis 4-5) only
-const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: no-decomp-v23';
+const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: v24-diag-2026-02-28';
 
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
