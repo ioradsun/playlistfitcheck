@@ -104,12 +104,14 @@ type StoryboardEntryLike = { lineIndex?: number; entryStyle?: string; exitStyle?
 type ManifestWordDirective = { entryStyle?: EntryStyle; behavior?: BehaviorStyle; exitStyle?: ExitStyle };
 
 const TYPOGRAPHY_PROFILES: Record<string, TypographyProfile> = {
-  'bold-impact': { fontFamily: 'Inter', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, heroWeight: 900 },
-  'clean-modern': { fontFamily: 'Inter', fontWeight: 600, textTransform: 'none', letterSpacing: 0.2, heroWeight: 700 },
+  'bold-impact': { fontFamily: 'Oswald', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, heroWeight: 900 },
+  'clean-modern': { fontFamily: 'Montserrat', fontWeight: 600, textTransform: 'none', letterSpacing: 0.2, heroWeight: 700 },
   'elegant-serif': { fontFamily: 'Playfair Display', fontWeight: 500, textTransform: 'none', letterSpacing: 0.15, heroWeight: 700 },
-  'raw-condensed': { fontFamily: 'Oswald', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.35, heroWeight: 800 },
-  'whisper-soft': { fontFamily: 'Inter', fontWeight: 400, textTransform: 'none', letterSpacing: 0.25, heroWeight: 500 },
-  'tech-mono': { fontFamily: 'IBM Plex Mono', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.4, heroWeight: 700 },
+  'raw-condensed': { fontFamily: 'Barlow Condensed', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.35, heroWeight: 800 },
+  'whisper-soft': { fontFamily: 'Nunito', fontWeight: 400, textTransform: 'none', letterSpacing: 0.25, heroWeight: 500 },
+  'tech-mono': { fontFamily: 'JetBrains Mono', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.4, heroWeight: 700 },
+  'display-heavy': { fontFamily: 'Bebas Neue', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, heroWeight: 800 },
+  'editorial-light': { fontFamily: 'Cormorant Garamond', fontWeight: 400, textTransform: 'none', letterSpacing: 0.1, heroWeight: 600 },
 };
 
 const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
@@ -281,9 +283,11 @@ export function computeAllLineLayouts(
     const maxLineWidth = canvasW - margin * 2;
     if (totalWidth > maxLineWidth && totalWidth > 0) {
       const scaleFactor = maxLineWidth / totalWidth;
+      const minFontSize = 24; // floor — don't go below readable
+      console.log(`[sceneCompiler] auto-scale line ${lineIndex}: ${totalWidth.toFixed(0)}px > ${maxLineWidth}px, scale=${scaleFactor.toFixed(3)}, words=${flatWords.length}`);
       // Re-measure all words at scaled font sizes
       for (const fw of flatWords) {
-        fw.fontSize = fw.fontSize * scaleFactor;
+        fw.fontSize = Math.max(minFontSize, fw.fontSize * scaleFactor);
         fw.width = getWordWidth(fw.wm.word, fw.fontSize);
       }
       // Recompute total width and spaces
