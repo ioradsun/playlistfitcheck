@@ -48,6 +48,8 @@ export interface CinematicSection {
   sectionIndex: number;
   description: string;
   mood?: string;
+  /** Visual mood keyword from fixed vocabulary — drives cinematic grading */
+  visualMood?: string;
   motion?: string;
   texture?: string;
   typography?: string;
