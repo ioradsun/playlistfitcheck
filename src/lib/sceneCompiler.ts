@@ -486,6 +486,8 @@ function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): stri
 
 export function compileScene(payload: ScenePayload): CompiledScene {
   console.log('%c[sceneCompiler] compileScene called — SPACE_MULT=1.15, auto-scale active', 'color: cyan; font-size: 14px; font-weight: bold');
+  console.log('[sceneCompiler] auto_palettes:', payload.auto_palettes?.length ?? 0, 'first text color:', payload.auto_palettes?.[0]?.[2] ?? 'none');
+  console.log('[sceneCompiler] fallback palette[2]:', payload.palette?.[2] ?? 'none');
   const durationSec = Math.max(0.01, payload.songEnd - payload.songStart);
   const rawChapters = (payload.cinematic_direction?.chapters ?? []) as Array<any>;
   const chapters = rawChapters.length > 0 ? rawChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
