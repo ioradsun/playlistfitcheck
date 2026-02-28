@@ -3885,16 +3885,24 @@ export class LyricDancePlayer {
     const prevLineIndex = primaryLineIndex > 0 ? primaryLineIndex - 1 : -1;
     const nextLineIndex = primaryLineIndex + 1 < _roleLines.length ? primaryLineIndex + 1 : -1;
 
-    // Second pass: ensure ALL groups on visible lines are included
+    // Second pass: ensure ALL groups on the CURRENT line are included
     // This prevents partial line display (e.g., "oh" appearing without "I've been here before")
-    const visibleLineIndices = new Set<number>();
-    if (primaryLineIndex >= 0) visibleLineIndices.add(primaryLineIndex);
-    if (prevLineIndex >= 0) visibleLineIndices.add(prevLineIndex);
-    if (nextLineIndex >= 0) visibleLineIndices.add(nextLineIndex);
+    // Also filter OUT any lingering groups from other lines
+    if (primaryLineIndex >= 0) {
+      // Remove groups not on current line
+      let writeIdx = 0;
+      for (let ri = 0; ri < activeGroups.length; ri++) {
+        if (groups[activeGroups[ri]].lineIndex === primaryLineIndex) {
+          activeGroups[writeIdx++] = activeGroups[ri];
+        }
+      }
+      activeGroups.length = writeIdx;
 
-    for (let gi = 0; gi < groups.length; gi++) {
-      if (visibleLineIndices.has(groups[gi].lineIndex) && !activeGroups.includes(gi)) {
-        activeGroups.push(gi);
+      // Add any missing groups from current line
+      for (let gi = 0; gi < groups.length; gi++) {
+        if (groups[gi].lineIndex === primaryLineIndex && !activeGroups.includes(gi)) {
+          activeGroups.push(gi);
+        }
       }
     }
     // Re-sort so groups render in temporal order
@@ -4136,10 +4144,7 @@ export class LyricDancePlayer {
         if (heroDimSiblings) groupHeroDimming = true;
         if (heroIsolate) groupHeroIsolation = true;
 
-        // Hero word in 'next' line — anticipation effects start early
-        if (isHeroWord && lineRole === 'next') {
-          roleAlpha = Math.max(roleAlpha, 0.35);
-        }
+        // (Next-line anticipation removed — only current line is visible)
 
         // Sibling dimming: proportional to hero word's wave proximity
         if (!isHeroWord && lineRole === 'current') {
