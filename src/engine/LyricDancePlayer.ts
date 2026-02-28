@@ -389,6 +389,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     ghostCount?: number;
     ghostSpacing?: number;
     ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial';
+    heroTrackingExpand?: boolean;
     frozen?: boolean;
     fontSize?: number;
     fontWeight?: number;
@@ -2441,7 +2442,20 @@ export class LyricDancePlayer {
           sy,
         );
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
-        this.ctx.fillText(text, 0, 0);
+        // Tracking expand: draw each letter with increased spacing
+        if (chunk.heroTrackingExpand && chunk.visible) {
+          const letters = text.split('');
+          const baseSpacing = safeFontSize * 0.15;
+          const totalExtraWidth = baseSpacing * (letters.length - 1);
+          let letterX = -totalExtraWidth / 2;
+          for (const letter of letters) {
+            this.ctx.fillText(letter, letterX, 0);
+            const letterWidth = this.ctx.measureText(letter).width;
+            letterX += letterWidth + baseSpacing;
+          }
+        } else {
+          this.ctx.fillText(text, 0, 0);
+        }
         if (needsFilterSaveRestore) {
           this.ctx.filter = 'none';
           this.ctx.restore();
@@ -3832,6 +3846,8 @@ export class LyricDancePlayer {
     const groups = scene.phraseGroups;
     const activeGroups = this._activeGroupIndices;
     activeGroups.length = 0;
+
+    // First pass: collect groups by their individual time windows (original logic)
     for (let gi = 0; gi < groups.length; gi++) {
       const group = groups[gi];
       const visStart = group.start - group.entryDuration - group.staggerDelay * group.words.length;
@@ -3869,6 +3885,21 @@ export class LyricDancePlayer {
     const prevLineIndex = primaryLineIndex > 0 ? primaryLineIndex - 1 : -1;
     const nextLineIndex = primaryLineIndex + 1 < _roleLines.length ? primaryLineIndex + 1 : -1;
 
+    // Second pass: ensure ALL groups on visible lines are included
+    // This prevents partial line display (e.g., "oh" appearing without "I've been here before")
+    const visibleLineIndices = new Set<number>();
+    if (primaryLineIndex >= 0) visibleLineIndices.add(primaryLineIndex);
+    if (prevLineIndex >= 0) visibleLineIndices.add(prevLineIndex);
+    if (nextLineIndex >= 0) visibleLineIndices.add(nextLineIndex);
+
+    for (let gi = 0; gi < groups.length; gi++) {
+      if (visibleLineIndices.has(groups[gi].lineIndex) && !activeGroups.includes(gi)) {
+        activeGroups.push(gi);
+      }
+    }
+    // Re-sort so groups render in temporal order
+    activeGroups.sort((a: number, b: number) => groups[a].start - groups[b].start);
+
     // Smooth line transitions (250ms ease-out)
     if (primaryLineIndex !== this._prevPrimaryLineIndex) {
       this._lineTransitionStartSec = tSec;
@@ -3887,6 +3918,30 @@ export class LyricDancePlayer {
       const resolvedLine = this.resolvedState.lineSettings[group.lineIndex];
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
       const groupEnd = Math.min(group.end + group.lingerDuration, nextGroupStart);
+
+      const lineRole = group.lineIndex === primaryLineIndex ? 'current'
+        : group.lineIndex === prevLineIndex ? 'previous'
+        : group.lineIndex === nextLineIndex ? 'next'
+        : 'offscreen';
+
+      // Check if any hero word in this group is active and requesting sibling dimming
+      let groupHeroDimming = false;
+      let groupHeroIsolation = false;
+      if (lineRole === 'current') {
+        for (let hwi = 0; hwi < group.words.length; hwi++) {
+          const hw = group.words[hwi];
+          if (hw.isHeroWord && (hw as any).heroPresentation) {
+            const hwStart = group.start + (hw === group.words[group.anchorWordIdx] ? 0 : Math.abs(hwi - group.anchorWordIdx) * group.staggerDelay);
+            if (tSec >= hwStart) {
+              const pres = (hw as any).heroPresentation as string;
+              if (pres === 'isolation') groupHeroIsolation = true;
+              if (['inline-scale', 'delayed-reveal', 'vertical-lift', 'vertical-drop', 'tracking-expand', 'dim-surroundings'].includes(pres)) {
+                groupHeroDimming = true;
+              }
+            }
+          }
+        }
+      }
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
@@ -3920,10 +3975,6 @@ export class LyricDancePlayer {
         // ─── Line role Y positioning ───
         // Compiler sets all words at canvasH * 0.50 (Y=270 in 960x540 space).
         // Override Y based on which line role this group belongs to.
-        const lineRole = group.lineIndex === primaryLineIndex ? 'current'
-          : group.lineIndex === prevLineIndex ? 'previous'
-          : group.lineIndex === nextLineIndex ? 'next'
-          : 'offscreen';
 
         // Target Y positions in compile coordinate space (540px canvas height)
         let targetLineY: number;
@@ -3971,32 +4022,115 @@ export class LyricDancePlayer {
 
         let finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
-        // ─── Hero word breakout ───
+        // ─── Hero word presentation ───
         const isHeroWord = word.isHeroWord === true;
+        const heroPresentation = (word as any).heroPresentation as string | undefined;
         let heroScaleMult = 1.0;
+        let heroOffsetY = 0;
+        let heroDelayMs = 0;
+        let heroDimSiblings = false;
+        let heroIsolate = false;
+        let heroTrackingExpand = false;
 
-        if (isHeroWord && (lineRole === 'current' || lineRole === 'next')) {
+        if (isHeroWord && lineRole === 'current') {
           const wordStartTime = group.start + staggerDelay;
+          const isBeingSung = tSec >= wordStartTime;
+          const anticipationWindow = 0.8;
+          const anticipation = Math.max(0, Math.min(1, (tSec - (wordStartTime - anticipationWindow)) / anticipationWindow));
 
-          if (lineRole === 'next') {
-            // Phase 1 — Anticipation: hero word is slightly brighter than siblings in next line
-            // Semantic effects (frost, ember, etc.) are already applied via the emitter system
-            roleAlpha = Math.max(roleAlpha, 0.35);
-          }
-
-          if (lineRole === 'current') {
-            // Phase 2 — Build-up: scale grows as we approach the word being sung
-            const anticipationWindow = 1.5; // seconds before word is sung
-            const anticipation = Math.max(0, Math.min(1, (tSec - (wordStartTime - anticipationWindow)) / anticipationWindow));
-
-            if (tSec < wordStartTime) {
-              // Pre-sung: growing
-              heroScaleMult = 1.0 + anticipation * 0.4; // up to 1.4x
-            } else {
-              // Phase 3 — Peak: word is being sung or just sung
-              heroScaleMult = 1.6; // full breakout size
-              roleAlpha = 1.0; // ensure full brightness
+          switch (heroPresentation ?? 'inline-scale') {
+            case 'inline-scale': {
+              if (isBeingSung) {
+                heroScaleMult = 1.20;
+                roleAlpha = 1.0;
+                heroDimSiblings = true;
+              } else {
+                heroScaleMult = 1.0 + anticipation * 0.12;
+              }
+              if (isBeingSung) heroOffsetY = -8;
+              break;
             }
+            case 'delayed-reveal': {
+              heroDelayMs = 120;
+              const delayedStart = wordStartTime + heroDelayMs / 1000;
+              if (tSec < delayedStart) {
+                roleAlpha = 0.0;
+              } else {
+                heroScaleMult = 1.18;
+                roleAlpha = 1.0;
+                heroDimSiblings = true;
+              }
+              break;
+            }
+            case 'isolation': {
+              heroIsolate = true;
+              if (isBeingSung) {
+                heroScaleMult = 1.35;
+                roleAlpha = 1.0;
+                heroOffsetY = 270 - (word.layoutY);
+              } else {
+                heroScaleMult = 1.0 + anticipation * 0.15;
+              }
+              break;
+            }
+            case 'vertical-lift': {
+              if (isBeingSung) {
+                heroOffsetY = -28;
+                heroScaleMult = 1.15;
+                roleAlpha = 1.0;
+                heroDimSiblings = true;
+              } else {
+                heroOffsetY = -28 * anticipation;
+                heroScaleMult = 1.0 + anticipation * 0.08;
+              }
+              break;
+            }
+            case 'vertical-drop': {
+              if (isBeingSung) {
+                heroOffsetY = 28;
+                heroScaleMult = 1.15;
+                roleAlpha = 1.0;
+                heroDimSiblings = true;
+              } else {
+                heroOffsetY = 28 * anticipation;
+                heroScaleMult = 1.0 + anticipation * 0.08;
+              }
+              break;
+            }
+            case 'tracking-expand': {
+              heroTrackingExpand = true;
+              if (isBeingSung) {
+                heroScaleMult = 1.10;
+                roleAlpha = 1.0;
+                heroDimSiblings = true;
+              }
+              break;
+            }
+            case 'dim-surroundings': {
+              heroDimSiblings = true;
+              if (isBeingSung) {
+                heroScaleMult = 1.15;
+                roleAlpha = 1.0;
+              }
+              break;
+            }
+          }
+        }
+
+        if (heroDimSiblings) groupHeroDimming = true;
+        if (heroIsolate) groupHeroIsolation = true;
+
+        // Hero word in 'next' line — anticipation effects start early
+        if (isHeroWord && lineRole === 'next') {
+          roleAlpha = Math.max(roleAlpha, 0.35);
+        }
+
+        // Sibling dimming: when a hero word is active, non-hero words recede
+        if (!isHeroWord && lineRole === 'current') {
+          if (groupHeroIsolation) {
+            roleAlpha *= 0.0;
+          } else if (groupHeroDimming) {
+            roleAlpha *= 0.80;
           }
         }
 
@@ -4039,9 +4173,11 @@ export class LyricDancePlayer {
           }
         }
 
-        // Hero word extra glow during breakout
-        if (isHeroWord && heroScaleMult > 1.2) {
-          wordGlow += 0.6 * (heroScaleMult - 1.0);
+        // Hero word glow — proportional to presentation intensity
+        if (isHeroWord && heroScaleMult > 1.05) {
+          wordGlow += 0.35 * (heroScaleMult - 1.0);
+          // Isolation gets extra glow since it's alone on screen
+          if (heroPresentation === 'isolation') wordGlow += 0.5;
         }
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
@@ -4049,7 +4185,7 @@ export class LyricDancePlayer {
         chunk.id = word.id;
         chunk.text = word.text;
         chunk.x = (word.layoutX + finalOffsetX + letterOffsetX) * sx;
-        chunk.y = (roleY + finalOffsetY) * sy;
+        chunk.y = (roleY + finalOffsetY + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
         chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult;
@@ -4082,6 +4218,7 @@ export class LyricDancePlayer {
         chunk.ghostCount = word.ghostCount;
         chunk.ghostSpacing = word.ghostSpacing;
         chunk.ghostDirection = (resolvedWord?.ghostDirection ?? word.ghostDirection) as any;
+        chunk.heroTrackingExpand = isHeroWord && heroTrackingExpand && tSec >= group.start + staggerDelay;
         chunk.letterIndex = word.letterIndex;
         chunk.letterTotal = word.letterTotal;
         chunk.letterDelay = word.letterDelay ?? 0;
