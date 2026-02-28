@@ -4031,32 +4031,19 @@ export class LyricDancePlayer {
     // Show only temporally active groups — don't force all groups from the same line.
     // Long lines (e.g. repeated chorus) have many groups; showing all at once overflows.
     // Keep: groups whose time window overlaps tSec (with entry/exit padding).
-    // In queue mode: widen window and apply to ALL groups (not just primary line) for vertical scroll.
-    const activeMoodGradeEarly = (this as any)._activeMoodGrade as MoodGrade | undefined;
-    const isQueueModeEarly = activeMoodGradeEarly?.layoutMode === 'queue';
-
     if (primaryLineIndex >= 0) {
       let writeIdx = 0;
       for (let ri = 0; ri < activeGroups.length; ri++) {
         const g = groups[activeGroups[ri]];
-
-        if (isQueueModeEarly) {
-          // Queue mode: keep all groups within a wide temporal window, any line
-          if (tSec >= g.start - 4.0 && tSec <= g.end + 3.5) {
+        if (g.lineIndex === primaryLineIndex) {
+          const entryPad = g.words.length * (g.staggerDelay ?? 0.05) + 0.3;
+          const exitPad = g.lingerDuration + 0.5;
+          if (tSec >= g.start - entryPad && tSec <= g.end + exitPad) {
             activeGroups[writeIdx++] = activeGroups[ri];
           }
         } else {
-          // Horizontal mode: narrow filter only on current line, keep other lines as-is
-          if (g.lineIndex === primaryLineIndex) {
-            const entryPad = g.words.length * (g.staggerDelay ?? 0.05) + 0.3;
-            const exitPad = g.lingerDuration + 0.5;
-            if (tSec >= g.start - entryPad && tSec <= g.end + exitPad) {
-              activeGroups[writeIdx++] = activeGroups[ri];
-            }
-          } else {
-            // Non-primary-line groups pass through (prev/next lines)
-            activeGroups[writeIdx++] = activeGroups[ri];
-          }
+          // Non-primary-line groups pass through (prev/next lines)
+          activeGroups[writeIdx++] = activeGroups[ri];
         }
       }
       activeGroups.length = writeIdx;
@@ -4087,12 +4074,6 @@ export class LyricDancePlayer {
     let ci = 0;
     const bpm = scene.bpm;
 
-    // ─── Layout mode from mood grade ───
-    const activeMoodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
-    const isQueueMode = activeMoodGrade?.layoutMode === 'queue';
-    const queueCenterY = this.height * 0.45; // slightly above center — feels more cinematic
-    const queueSpacing = this.height * 0.12; // vertical gap between phrase rows
-
     for (let ai = 0; ai < activeGroups.length; ai++) {
       const groupIdx = activeGroups[ai];
       const group = groups[groupIdx];
@@ -4104,26 +4085,6 @@ export class LyricDancePlayer {
         : group.lineIndex === prevLineIndex ? 'previous'
         : group.lineIndex === nextLineIndex ? 'next'
         : 'offscreen';
-
-      // ─── Queue mode: compute group's vertical position ───
-      let queueGroupY = 0;
-      let queueGroupShiftX = 0;
-      if (isQueueMode) {
-        // Temporal distance: group center vs vocal position
-        const groupMidTime = (group.start + group.end) / 2;
-        const temporalOffset = groupMidTime - tSec; // negative = past, positive = future
-        // Convert seconds to pixels — each second ≈ one spacing unit
-        queueGroupY = queueCenterY + temporalOffset * queueSpacing * 1.5;
-
-        // Center the group horizontally — shift so group midpoint is at canvas center
-        let minX = Infinity, maxX = -Infinity;
-        for (let w = 0; w < group.words.length; w++) {
-          minX = Math.min(minX, group.words[w].layoutX);
-          maxX = Math.max(maxX, group.words[w].layoutX);
-        }
-        const groupMidX = (minX + maxX) / 2;
-        queueGroupShiftX = 480 - groupMidX; // 480 = half of 960px virtual canvas
-      }
 
       // Check if any hero word in this group is active and requesting sibling dimming
       let groupHeroDimming = false;
@@ -4417,43 +4378,6 @@ export class LyricDancePlayer {
         chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale;
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01 && lineRole !== 'offscreen';
-
-        // ─── Queue mode override ───
-        if (isQueueMode) {
-          // Y: group's queue position (smoothly scrolling vertical)
-          chunk.y = queueGroupY + (finalOffsetY + heroOffsetY) * sy;
-          // X: centered horizontally with original word spacing preserved
-          chunk.x = (word.layoutX + queueGroupShiftX + finalOffsetX + letterOffsetX) * sx;
-
-          // Alpha: past words fade, future words dim, active bright
-          const groupMidTime = (group.start + group.end) / 2;
-          const temporalDist = Math.abs(groupMidTime - tSec);
-          const isActive = tSec >= group.start && tSec <= group.end;
-          const isFuture = groupMidTime > tSec;
-
-          if (isActive) {
-            // Active phrase: full brightness, wave breathe still applies
-            chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-          } else if (isFuture) {
-            // Future: dim, waiting
-            const futureFade = Math.max(0, 1 - temporalDist * 0.4);
-            chunk.alpha = futureFade * 0.35;
-          } else {
-            // Past: sung, fading up
-            const pastFade = Math.max(0, 1 - temporalDist * 0.5);
-            chunk.alpha = pastFade * 0.55;
-          }
-
-          // Scale: active phrase normal, past/future slightly smaller
-          if (!isActive) {
-            const distanceShrink = Math.max(0.7, 1 - temporalDist * 0.08);
-            chunk.scaleX *= distanceShrink;
-            chunk.scaleY *= distanceShrink;
-          }
-
-          // Visibility: hide if scrolled too far off screen
-          chunk.visible = chunk.alpha > 0.01 && queueGroupY > -this.height * 0.2 && queueGroupY < this.height * 1.2;
-        }
         chunk.fontWeight = word.fontWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
