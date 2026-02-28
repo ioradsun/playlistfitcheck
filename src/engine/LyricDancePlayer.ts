@@ -3798,7 +3798,12 @@ export class LyricDancePlayer {
     }
   }
 
+  private _evalFrameLogged = false;
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
+    if (!this._evalFrameLogged) {
+      this._evalFrameLogged = true;
+      console.log("%c[LyricDancePlayer] NEW CODE ACTIVE — writeIdx filter, SPACE_MULT=1.15, single-line mode", "color:#0f0;font-size:16px;font-weight:bold;background:#111;padding:4px 8px;border-radius:4px");
+    }
     const scene = this.compiledScene;
     if (!scene) return null;
 

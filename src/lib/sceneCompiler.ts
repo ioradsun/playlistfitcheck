@@ -485,6 +485,7 @@ function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): stri
 }
 
 export function compileScene(payload: ScenePayload): CompiledScene {
+  console.log("%c[sceneCompiler] compileScene called — SPACE_MULT=1.15, auto-scale active", "color:#0ff;font-size:14px;font-weight:bold;background:#111;padding:4px 8px;border-radius:4px");
   const durationSec = Math.max(0.01, payload.songEnd - payload.songStart);
   const rawChapters = (payload.cinematic_direction?.chapters ?? []) as Array<any>;
   const chapters = rawChapters.length > 0 ? rawChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
