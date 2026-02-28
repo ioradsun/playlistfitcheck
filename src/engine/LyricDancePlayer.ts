@@ -1693,19 +1693,40 @@ export class LyricDancePlayer {
     if (Array.isArray(autoPalettes) && autoPalettes.length > 0) {
       // Use sections for index since auto_palettes come from section_images
       const sectionSource = sections.length > 0 ? sections : chapters;
+      let resolvedIdx = 0;
+      let resolvedVia = 'fallback[0]';
+
       if (sectionSource.length > 0) {
         const secIdx = this.resolveSectionIndex(sectionSource, currentTimeSec, totalDurationSec);
         if (secIdx >= 0 && autoPalettes[secIdx]) {
-          return autoPalettes[secIdx];
+          resolvedIdx = secIdx;
+          resolvedVia = 'sectionIndex';
+        } else if (totalDurationSec > 0 && autoPalettes.length > 1) {
+          const progress = Math.max(0, Math.min(0.999, currentTimeSec / totalDurationSec));
+          resolvedIdx = Math.floor(progress * autoPalettes.length);
+          resolvedVia = 'evenSplit';
         }
-      }
-      // Fallback: divide song evenly across palettes
-      if (totalDurationSec > 0 && autoPalettes.length > 1) {
+      } else if (totalDurationSec > 0 && autoPalettes.length > 1) {
         const progress = Math.max(0, Math.min(0.999, currentTimeSec / totalDurationSec));
-        const idx = Math.floor(progress * autoPalettes.length);
-        return autoPalettes[idx];
+        resolvedIdx = Math.floor(progress * autoPalettes.length);
+        resolvedVia = 'evenSplit(noSections)';
       }
-      return autoPalettes[0];
+
+      // Periodic diagnostic log every 3s
+      const now = Date.now();
+      if (!(this as any)._lastPaletteCycleLog || now - (this as any)._lastPaletteCycleLog > 3000) {
+        (this as any)._lastPaletteCycleLog = now;
+        const s0 = sectionSource[0];
+        console.log(
+          `[palette-cycle] t=${currentTimeSec.toFixed(1)}s / ${(this.audio?.duration ?? NaN).toFixed(1)}s, ` +
+          `sections=${sectionSource.length}, secIdx=${resolvedIdx}, via=${resolvedVia}, ` +
+          `palette=${autoPalettes[resolvedIdx]?.[2] ?? '?'}, ` +
+          `s0={startSec:${s0?.startSec ?? 'undef'}, endSec:${s0?.endSec ?? 'undef'}, ` +
+          `startRatio:${s0?.startRatio ?? 'undef'}, endRatio:${s0?.endRatio ?? 'undef'}}`
+        );
+      }
+
+      return autoPalettes[resolvedIdx];
     }
 
     const chIdx = chapters.length > 0
