@@ -454,7 +454,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 3;
+const BAKER_VERSION = 4;
 let globalBakeLock = false;
 let globalBakePromise: Promise<void> | null = null;
 let globalCompiledScene: CompiledScene | null = null;
