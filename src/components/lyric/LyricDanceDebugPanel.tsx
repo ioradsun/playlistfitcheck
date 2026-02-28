@@ -874,6 +874,15 @@ OPTIONAL per word:
     "change" + scatter-letters + letterSequence = letters rearrange/scatter
   letterSequence without a semantic exit wastes the effect.
 - "visualMetaphor": freeform string describing the intended visual
+- "heroPresentation": for emphasis 4-5 words ONLY, how the word is spatially presented.
+  Choose based on what the word MEANS, not how loud it is:
+    "inline-scale"      — default. Confident emphasis. Word grows 120% inline.
+    "delayed-reveal"    — punch words, end-of-line impact. Snaps in 120ms after siblings.
+    "isolation"         — climactic moment. Everything else disappears. MAX 1-2 PER SONG.
+    "vertical-lift"     — word means UP: fly, rise, heaven, above, clouds, hope, soar.
+    "vertical-drop"     — word means DOWN: fall, drop, gravity, drown, sink, crash, weight.
+    "tracking-expand"   — slow emotional stretch: love, forever, breathe, time, slowly.
+    "dim-surroundings"  — singular focus: only, truth, silence, nothing, alone.
 
 BEHAVIORS:
   pulse, vibrate, float, grow, contract, flicker, orbit, lean, none,
@@ -967,7 +976,8 @@ Return this exact JSON structure. All top-level keys are required.
       "behavior": "float",
       "exit": "dissolve",
       "trail": "frost",
-      "visualMetaphor": "gravity-drop"
+      "visualMetaphor": "gravity-drop",
+      "heroPresentation": "vertical-drop"
     },
     "shatter": {
       "word": "shatter",
@@ -976,7 +986,8 @@ Return this exact JSON structure. All top-level keys are required.
       "behavior": "vibrate",
       "exit": "scatter-letters",
       "trail": "spark-burst",
-      "letterSequence": true
+      "letterSequence": true,
+      "heroPresentation": "inline-scale"
     },
     "echo": {
       "word": "echo",

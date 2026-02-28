@@ -126,6 +126,16 @@ Optional:
 - "ghostDirection": "up" | "down" | "left" | "right" | "radial"
 - "letterSequence": true
 - "visualMetaphor": freeform string
+- "heroPresentation": HOW the hero word is spatially presented (emphasis 4-5 only).
+  Pick based on what the word MEANS:
+    "inline-scale"      — default. Confident emphasis. Word grows 120% inline. Most hero words.
+    "delayed-reveal"    — punch words, end-of-line impact. Word snaps in 120ms after siblings.
+    "isolation"         — climactic moment. All other words disappear. Hero alone on screen. MAX 1-2 PER SONG.
+    "vertical-lift"     — word means UP: fly, rise, heaven, above, clouds, hope, soar, ascend.
+    "vertical-drop"     — word means DOWN: fall, drop, gravity, drown, sink, crash, weight.
+    "tracking-expand"   — slow emotional stretch: love, forever, breathe, time, slowly, fading.
+    "dim-surroundings"  — singular focus: only, truth, silence, nothing, alone, everything.
+  Only include for emphasisLevel 4-5 words. Omit for emphasis 1-3.
 
 Return JSON only.
 `;

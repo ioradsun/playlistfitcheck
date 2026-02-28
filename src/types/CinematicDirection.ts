@@ -89,6 +89,7 @@ export interface WordDirective {
   ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial' | null;
   letterSequence?: boolean;
   visualMetaphor?: string | null;
+  heroPresentation?: 'inline-scale' | 'delayed-reveal' | 'isolation' | 'vertical-lift' | 'vertical-drop' | 'tracking-expand' | 'dim-surroundings' | null;
   // v1 legacy fields
   kineticClass?:
     | 'RUNNING' | 'FALLING' | 'SPINNING' | 'FLOATING' | 'SHAKING' | 'RISING'
