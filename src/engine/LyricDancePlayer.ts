@@ -31,7 +31,7 @@ import {
   type ResolvedWordSettings,
 } from "@/engine/cinematicResolver";
 
-const DECOMP_ENABLED = false; // set to true to re-enable word-to-particle
+const DECOMP_ENABLED = true; // enabled for hero words (emphasis 4-5) only
 const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: no-decomp-v23';
 
 // ──────────────────────────────────────────────────────────────
@@ -943,6 +943,8 @@ export class LyricDancePlayer {
   private activeTension: any = null;
   private lastExitProgressByChunk = new Map<string, number>();
   private chunkActiveSinceMs: Map<string, number> = new Map();
+  private _prevPrimaryLineIndex: number = -1;
+  private _lineTransitionStartSec: number = 0;
 
 
   // Health monitor
@@ -2369,7 +2371,7 @@ export class LyricDancePlayer {
 
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
-      if (DECOMP_ENABLED && shouldSpawnDecomp && allowDecomp) {
+      if (DECOMP_ENABLED && shouldSpawnDecomp && allowDecomp && (chunk.emphasisLevel ?? 0) >= 4) {
         const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
         this.tryStartDecomposition({ chunkId: chunk.id, text, drawX: centerX, drawY, fontSize: safeFontSize, fontWeight, fontFamily: chunk.fontFamily, color: this.getTextColor(chunk.color ?? chapterColor), directive: decompDirective });
       }
@@ -3753,6 +3755,39 @@ export class LyricDancePlayer {
       activeGroups.push(gi);
     }
 
+    // ─── Determine which line is currently being sung ───
+    let primaryLineIndex = -1;
+    const _roleLines = this.data.lyrics ?? [];
+    for (let li = 0; li < _roleLines.length; li++) {
+      const ls = _roleLines[li].start ?? 0;
+      const le = _roleLines[li].end ?? Infinity;
+      if (tSec >= ls && tSec < le) {
+        primaryLineIndex = li;
+        break;
+      }
+    }
+    // If between lines, find the next upcoming line
+    if (primaryLineIndex === -1) {
+      for (let li = 0; li < _roleLines.length; li++) {
+        if ((_roleLines[li].start ?? 0) > tSec) {
+          primaryLineIndex = li;
+          break;
+        }
+      }
+    }
+    if (primaryLineIndex === -1) primaryLineIndex = _roleLines.length - 1;
+
+    const prevLineIndex = primaryLineIndex > 0 ? primaryLineIndex - 1 : -1;
+    const nextLineIndex = primaryLineIndex + 1 < _roleLines.length ? primaryLineIndex + 1 : -1;
+
+    // Smooth line transitions (250ms ease-out)
+    if (primaryLineIndex !== this._prevPrimaryLineIndex) {
+      this._lineTransitionStartSec = tSec;
+      this._prevPrimaryLineIndex = primaryLineIndex;
+    }
+    const _lineTransElapsed = Math.min(1, (tSec - this._lineTransitionStartSec) / 0.25);
+    const lineTransEase = _lineTransElapsed * (2 - _lineTransElapsed); // ease-out quad
+
     const chunks = this._evalChunkPool;
     let ci = 0;
     const bpm = scene.bpm;
@@ -3792,12 +3827,91 @@ export class LyricDancePlayer {
 
         const isEntryComplete = entryProgress >= 1.0;
         const isExiting = exitProgress > 0;
-        const rawAlpha = isExiting
+
+        // ─── Line role Y positioning ───
+        // Compiler sets all words at canvasH * 0.50 (Y=270 in 960x540 space).
+        // Override Y based on which line role this group belongs to.
+        const lineRole = group.lineIndex === primaryLineIndex ? 'current'
+          : group.lineIndex === prevLineIndex ? 'previous'
+          : group.lineIndex === nextLineIndex ? 'next'
+          : 'offscreen';
+
+        // Target Y positions in compile coordinate space (540px canvas height)
+        let targetLineY: number;
+        switch (lineRole) {
+          case 'current': targetLineY = 270; break; // center
+          case 'previous': targetLineY = 150; break; // above center
+          case 'next': targetLineY = 390; break; // below center
+          default: targetLineY = word.layoutY; break;
+        }
+
+        // Smooth transition when lines shift roles
+        const baseLineY = word.layoutY; // compiled Y (270 for all)
+        const roleY = baseLineY + (targetLineY - 270) * lineTransEase;
+
+        // ─── Alpha: line role + vocal tracking ───
+        // Base animation alpha (entry/exit/behavior)
+        const animAlpha = isExiting
           ? Math.max(0, exitState.alpha)
           : isEntryComplete
             ? 1.0 * (behaviorState.alpha ?? 1)
             : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
-        const finalAlpha = Math.min(word.semanticAlphaMax, rawAlpha);
+
+        // Line role opacity
+        let roleAlpha: number;
+        switch (lineRole) {
+          case 'current': roleAlpha = 1.0; break;
+          case 'previous': roleAlpha = 0.35; break;
+          case 'next': roleAlpha = 0.25; break;
+          default: roleAlpha = 0.0; break;
+        }
+
+        // Vocal tracking within current line — opacity sweep follows the singer
+        if (lineRole === 'current' && isEntryComplete && !isExiting) {
+          if (tSec < group.start + staggerDelay) {
+            // Not yet sung
+            roleAlpha = 0.55;
+          } else if (tSec < group.start + staggerDelay + effectiveEntryDuration + 0.3) {
+            // Currently being sung (entry + ~300ms active window)
+            roleAlpha = 1.0;
+          } else {
+            // Already sung
+            roleAlpha = 0.78;
+          }
+        }
+
+        let finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
+
+        // ─── Hero word breakout ───
+        const isHeroWord = word.isHeroWord === true;
+        let heroScaleMult = 1.0;
+
+        if (isHeroWord && (lineRole === 'current' || lineRole === 'next')) {
+          const wordStartTime = group.start + staggerDelay;
+
+          if (lineRole === 'next') {
+            // Phase 1 — Anticipation: hero word is slightly brighter than siblings in next line
+            // Semantic effects (frost, ember, etc.) are already applied via the emitter system
+            roleAlpha = Math.max(roleAlpha, 0.35);
+          }
+
+          if (lineRole === 'current') {
+            // Phase 2 — Build-up: scale grows as we approach the word being sung
+            const anticipationWindow = 1.5; // seconds before word is sung
+            const anticipation = Math.max(0, Math.min(1, (tSec - (wordStartTime - anticipationWindow)) / anticipationWindow));
+
+            if (tSec < wordStartTime) {
+              // Pre-sung: growing
+              heroScaleMult = 1.0 + anticipation * 0.4; // up to 1.4x
+            } else {
+              // Phase 3 — Peak: word is being sung or just sung
+              heroScaleMult = 1.6; // full breakout size
+              roleAlpha = 1.0; // ensure full brightness
+            }
+          }
+        }
+
+        finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
         const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
         const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
@@ -3824,21 +3938,35 @@ export class LyricDancePlayer {
         }
 
         const glowGain = resolvedWord?.glowGain ?? 0;
-        const wordGlow = ((isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult)
+        let wordGlow = ((isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult)
           + beatSpine.beatPulse * glowGain;
+
+        // Active word glow — the word currently being sung gets a subtle halo
+        if (lineRole === 'current' && isEntryComplete && !isExiting) {
+          const wordActiveStart = group.start + staggerDelay;
+          const wordActiveEnd = wordActiveStart + effectiveEntryDuration + 0.3;
+          if (tSec >= wordActiveStart && tSec < wordActiveEnd) {
+            wordGlow += 0.4;
+          }
+        }
+
+        // Hero word extra glow during breakout
+        if (isHeroWord && heroScaleMult > 1.2) {
+          wordGlow += 0.6 * (heroScaleMult - 1.0);
+        }
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
         chunk.id = word.id;
         chunk.text = word.text;
         chunk.x = (word.layoutX + finalOffsetX + letterOffsetX) * sx;
-        chunk.y = (word.layoutY + finalOffsetY) * sy;
+        chunk.y = (roleY + finalOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult;
-        chunk.scaleY = finalScaleY * intensityScaleMult;
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult;
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult;
         chunk.scale = 1;
-        chunk.visible = finalAlpha > 0.01;
+        chunk.visible = finalAlpha > 0.01 && lineRole !== 'offscreen';
         chunk.fontWeight = word.fontWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
