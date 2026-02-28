@@ -23,6 +23,7 @@ import {
 } from "@/lib/sceneCompiler";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { getMoodGrade, buildGradeFilter, lerpGrade, getTextMode, type MoodGrade } from "@/engine/moodGrades";
+import { perceivedBrightness, mixTowardWhite } from "@/engine/ColorEnhancer";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
   computeBeatSpine,
@@ -2151,12 +2152,28 @@ export class LyricDancePlayer {
     // Section image overlay — use baked sectionIndex directly
     const imgIdx = Math.min(frame.sectionIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
     const nextImgIdx = Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
-    // Simple crossfade: use fractional song progress within the chapter
+    // Crossfade based on actual section boundaries (matches grade lerp timing)
     const duration = this.audio?.duration || 1;
     const totalChapters = this.chapterImages.length || 1;
     const chapterSpan = duration / totalChapters;
-    const chapterLocalProgress = chapterSpan > 0 ? ((this.audio?.currentTime ?? 0) % chapterSpan) / chapterSpan : 0;
-    const crossfade = chapterLocalProgress > 0.85 ? (chapterLocalProgress - 0.85) / 0.15 : 0;
+    const currentTimeSec = this.audio?.currentTime ?? 0;
+    const cdForCrossfade = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+    const sectionsForCrossfade = (cdForCrossfade?.sections as any[]) ?? (cdForCrossfade?.chapters as any[]) ?? [];
+    const currentSection = sectionsForCrossfade[imgIdx];
+    let crossfade = 0;
+    if (currentSection && nextImgIdx !== imgIdx) {
+      // Resolve the end time of the current section
+      const secEnd = currentSection.endSec
+        ?? (currentSection.endRatio != null ? currentSection.endRatio * duration : null);
+      if (secEnd != null) {
+        const crossfadeDur = 1.5; // seconds — matches grade lerp transitionDur
+        const timeToEnd = secEnd - currentTimeSec;
+        if (timeToEnd < crossfadeDur && timeToEnd > 0) {
+          crossfade = 1 - (timeToEnd / crossfadeDur); // 0 at start → 1 at boundary
+        }
+      }
+    }
+    const chapterLocalProgress = chapterSpan > 0 ? ((currentTimeSec) % chapterSpan) / chapterSpan : 0;
 
     // Image diagnostics — log section transitions
     if (imgIdx !== this._prevImgIdx && this.chapterImages.length > 0) {
@@ -4412,6 +4429,32 @@ export class LyricDancePlayer {
               chunk.color = runtimePal[4]; // dim — recede
             } else if (runtimePal[2]) {
               chunk.color = runtimePal[2]; // text — readable
+            }
+          }
+
+          // ── Image-aware contrast enforcement ──
+          // auto_palettes are extracted FROM the image, so dark images produce
+          // dark palette colors → invisible text. Use actual image luminance to
+          // guarantee minimum contrast.
+          const currentImg = this.chapterImages[currentChapterIdx];
+          const imgLum = this.getAverageLuminance(currentImg);
+          if (imgLum != null && chunk.color && typeof chunk.color === 'string' && !chunk.color.startsWith('rgba')) {
+            const textBright = perceivedBrightness(chunk.color);
+            const contrastGap = Math.abs(textBright - imgLum);
+            if (contrastGap < 0.3) {
+              // Not enough contrast — push text away from image luminance
+              if (imgLum < 0.45) {
+                // Dark image: lighten text toward white
+                const liftAmount = Math.max(0.4, 0.7 - contrastGap);
+                chunk.color = mixTowardWhite(chunk.color, liftAmount);
+              } else {
+                // Bright image: darken text
+                if (isHeroWord) {
+                  chunk.color = '#1a1a2e';
+                } else {
+                  chunk.color = '#1e1e1e';
+                }
+              }
             }
           }
         }
