@@ -3927,6 +3927,7 @@ export class LyricDancePlayer {
       // Check if any hero word in this group is active and requesting sibling dimming
       let groupHeroDimming = false;
       let groupHeroIsolation = false;
+      let groupHeroWaveProximity = 0;
       if (lineRole === 'current') {
         for (let hwi = 0; hwi < group.words.length; hwi++) {
           const hw = group.words[hwi];
@@ -4006,23 +4007,53 @@ export class LyricDancePlayer {
           default: roleAlpha = 0.0; break;
         }
 
-        // Vocal tracking within current line — opacity sweep follows the singer
+        // ─── Vocal wave: continuous brightness flowing through the line ───
+        let waveProximity = 0; // 0-1, how close the wave peak is to this word
         if (lineRole === 'current' && isEntryComplete && !isExiting) {
-          if (tSec < group.start + staggerDelay) {
-            // Not yet sung
-            roleAlpha = 0.55;
-          } else if (tSec < group.start + staggerDelay + effectiveEntryDuration + 0.3) {
-            // Currently being sung (entry + ~300ms active window)
-            roleAlpha = 1.0;
+          const lineData = _roleLines[primaryLineIndex];
+          const lineStart = lineData?.start ?? group.start;
+          const lineEnd = lineData?.end ?? group.end;
+          const lineDuration = Math.max(0.01, lineEnd - lineStart);
+
+          // Vocal position: where the voice is in the line (0 to 1)
+          const vocalProgress = Math.max(0, Math.min(1, (tSec - lineStart) / lineDuration));
+
+          // Word position: where this word sits in the line (0 to 1)
+          const wordTime = group.start + staggerDelay;
+          const wordPosition = Math.max(0, Math.min(1, (wordTime - lineStart) / lineDuration));
+
+          // Distance between voice and word (positive = voice has passed)
+          const distance = vocalProgress - wordPosition;
+
+          // Wave width: hero words have wider brightness zone
+          const isHero = word.isHeroWord === true;
+          const waveWidth = isHero ? 0.25 : 0.15;
+
+          // Gaussian brightness curve
+          const gaussian = Math.exp(-(distance * distance) / (2 * waveWidth * waveWidth));
+          waveProximity = gaussian;
+
+          const peakAlpha = 1.0;
+          const unsungFloor = 0.55;
+          const sungFloor = 0.80;
+
+          if (distance < -0.02) {
+            // Voice hasn't reached this word yet — subtle anticipation glow
+            const anticipationGlow = Math.exp(-(distance * distance) / (2 * (waveWidth * 1.5) * (waveWidth * 1.5)));
+            roleAlpha = unsungFloor + (peakAlpha - unsungFloor) * anticipationGlow * 0.3;
+          } else if (distance > waveWidth * 2.5) {
+            // Wave fully passed — settle to sung brightness
+            roleAlpha = sungFloor;
           } else {
-            // Already sung
-            roleAlpha = 0.78;
+            // In the wave — smooth brightness
+            const floor = distance > 0 ? sungFloor : unsungFloor;
+            roleAlpha = floor + (peakAlpha - floor) * gaussian;
           }
         }
 
         let finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
-        // ─── Hero word presentation ───
+        // ─── Hero word presentation (wave-driven) ───
         const isHeroWord = word.isHeroWord === true;
         const heroPresentation = (word as any).heroPresentation as string | undefined;
         let heroScaleMult = 1.0;
@@ -4033,88 +4064,73 @@ export class LyricDancePlayer {
         let heroTrackingExpand = false;
 
         if (isHeroWord && lineRole === 'current') {
-          const wordStartTime = group.start + staggerDelay;
-          const isBeingSung = tSec >= wordStartTime;
-          const anticipationWindow = 0.8;
-          const anticipation = Math.max(0, Math.min(1, (tSec - (wordStartTime - anticipationWindow)) / anticipationWindow));
+          // waveProximity (0-1) drives all hero effects smoothly
+          // At 1.0 = wave peak is exactly on this word
+          // At 0.0 = wave is far away
+          const wp = waveProximity;
 
           switch (heroPresentation ?? 'inline-scale') {
             case 'inline-scale': {
-              if (isBeingSung) {
-                heroScaleMult = 1.20;
-                roleAlpha = 1.0;
-                heroDimSiblings = true;
-              } else {
-                heroScaleMult = 1.0 + anticipation * 0.12;
-              }
-              if (isBeingSung) heroOffsetY = -8;
+              // 115-120% scale that follows the wave curve
+              heroScaleMult = 1.0 + wp * 0.18;
+              // Subtle 8px upward nudge at peak
+              heroOffsetY = -8 * wp;
+              if (wp > 0.5) heroDimSiblings = true;
               break;
             }
             case 'delayed-reveal': {
+              // Snap-in effect: word is invisible until wave arrives, then pops
               heroDelayMs = 120;
+              const wordStartTime = group.start + staggerDelay;
               const delayedStart = wordStartTime + heroDelayMs / 1000;
               if (tSec < delayedStart) {
                 roleAlpha = 0.0;
               } else {
-                heroScaleMult = 1.18;
-                roleAlpha = 1.0;
-                heroDimSiblings = true;
+                // Once revealed, scale follows the wave
+                heroScaleMult = 1.0 + wp * 0.16;
+                if (wp > 0.3) heroDimSiblings = true;
               }
               break;
             }
             case 'isolation': {
+              // Everything else fades proportional to wave proximity
               heroIsolate = true;
-              if (isBeingSung) {
-                heroScaleMult = 1.35;
-                roleAlpha = 1.0;
-                heroOffsetY = 270 - (word.layoutY);
-              } else {
-                heroScaleMult = 1.0 + anticipation * 0.15;
-              }
+              heroScaleMult = 1.0 + wp * 0.35;
+              // Offset toward center proportional to wave
+              heroOffsetY = (270 - word.layoutY) * wp;
+              roleAlpha = Math.max(roleAlpha, wp);
               break;
             }
             case 'vertical-lift': {
-              if (isBeingSung) {
-                heroOffsetY = -28;
-                heroScaleMult = 1.15;
-                roleAlpha = 1.0;
-                heroDimSiblings = true;
-              } else {
-                heroOffsetY = -28 * anticipation;
-                heroScaleMult = 1.0 + anticipation * 0.08;
-              }
+              // Rise follows the wave — eases up and settles back
+              heroOffsetY = -28 * wp;
+              heroScaleMult = 1.0 + wp * 0.15;
+              if (wp > 0.5) heroDimSiblings = true;
               break;
             }
             case 'vertical-drop': {
-              if (isBeingSung) {
-                heroOffsetY = 28;
-                heroScaleMult = 1.15;
-                roleAlpha = 1.0;
-                heroDimSiblings = true;
-              } else {
-                heroOffsetY = 28 * anticipation;
-                heroScaleMult = 1.0 + anticipation * 0.08;
-              }
+              // Sink follows the wave
+              heroOffsetY = 28 * wp;
+              heroScaleMult = 1.0 + wp * 0.15;
+              if (wp > 0.5) heroDimSiblings = true;
               break;
             }
             case 'tracking-expand': {
               heroTrackingExpand = true;
-              if (isBeingSung) {
-                heroScaleMult = 1.10;
-                roleAlpha = 1.0;
-                heroDimSiblings = true;
-              }
+              heroScaleMult = 1.0 + wp * 0.10;
+              if (wp > 0.5) heroDimSiblings = true;
               break;
             }
             case 'dim-surroundings': {
               heroDimSiblings = true;
-              if (isBeingSung) {
-                heroScaleMult = 1.15;
-                roleAlpha = 1.0;
-              }
+              heroScaleMult = 1.0 + wp * 0.15;
               break;
             }
           }
+        }
+
+        if (isHeroWord && waveProximity > groupHeroWaveProximity) {
+          groupHeroWaveProximity = waveProximity;
         }
 
         if (heroDimSiblings) groupHeroDimming = true;
@@ -4125,12 +4141,14 @@ export class LyricDancePlayer {
           roleAlpha = Math.max(roleAlpha, 0.35);
         }
 
-        // Sibling dimming: when a hero word is active, non-hero words recede
+        // Sibling dimming: proportional to hero word's wave proximity
         if (!isHeroWord && lineRole === 'current') {
           if (groupHeroIsolation) {
-            roleAlpha *= 0.0;
+            // Isolation: siblings fade smoothly as wave reaches hero, return after
+            roleAlpha *= Math.max(0.05, 1.0 - groupHeroWaveProximity * 0.95);
           } else if (groupHeroDimming) {
-            roleAlpha *= 0.80;
+            // Subtle dim: 0-20% reduction following the wave
+            roleAlpha *= 1.0 - groupHeroWaveProximity * 0.20;
           }
         }
 
@@ -4164,20 +4182,15 @@ export class LyricDancePlayer {
         let wordGlow = ((isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult)
           + beatSpine.beatPulse * glowGain;
 
-        // Active word glow — the word currently being sung gets a subtle halo
+        // Wave glow: all words near vocal position get subtle halo
         if (lineRole === 'current' && isEntryComplete && !isExiting) {
-          const wordActiveStart = group.start + staggerDelay;
-          const wordActiveEnd = wordActiveStart + effectiveEntryDuration + 0.3;
-          if (tSec >= wordActiveStart && tSec < wordActiveEnd) {
-            wordGlow += 0.4;
-          }
+          wordGlow += 0.3 * waveProximity;
         }
 
-        // Hero word glow — proportional to presentation intensity
-        if (isHeroWord && heroScaleMult > 1.05) {
-          wordGlow += 0.35 * (heroScaleMult - 1.0);
-          // Isolation gets extra glow since it's alone on screen
-          if (heroPresentation === 'isolation') wordGlow += 0.5;
+        // Hero glow follows the wave
+        if (isHeroWord && heroScaleMult > 1.02) {
+          wordGlow += 0.4 * (heroScaleMult - 1.0);
+          if ((heroPresentation ?? 'inline-scale') === 'isolation') wordGlow += 0.5 * waveProximity;
         }
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
