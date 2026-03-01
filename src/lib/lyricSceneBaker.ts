@@ -436,7 +436,7 @@ export function deriveMotionProfile(payload: ScenePayload): MotionProfile {
   return resolveMotionProfile(directMotion, payload);
 }
 
-function assignWordAnimations(
+export function assignWordAnimations(
   wm: WordMetaEntry,
   motionDefaults: MotionDefaults,
   storyboard: StoryboardEntryLike[],
