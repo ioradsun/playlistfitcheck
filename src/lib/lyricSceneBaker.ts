@@ -758,7 +758,7 @@ export type WordDirectiveLike = {
   exit?: string;
 };
 
-function resolveV3EmitterType(directive: WordDirectiveLike | null): WordEmitterType {
+export function resolveV3EmitterType(directive: WordDirectiveLike | null): WordEmitterType {
   if (!directive) return 'none';
 
   // Priority 1: ghostTrail → memory-orbs (ghost rendering handled separately via chunk.ghostTrail)
