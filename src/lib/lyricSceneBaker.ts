@@ -688,7 +688,7 @@ export const FILLER_WORDS = new Set([
 const MIN_GROUP_DURATION = 0.4;
 const MAX_GROUP_SIZE = 5;
 
-function isFillerWord(word: string): boolean {
+export function isFillerWord(word: string): boolean {
   return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase());
 }
 
