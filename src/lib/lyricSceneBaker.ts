@@ -126,7 +126,7 @@ export type BehaviorStyle =
   | 'pulse' | 'vibrate' | 'float' | 'grow' | 'contract'
   | 'flicker' | 'orbit' | 'lean' | 'freeze' | 'tilt' | 'pendulum' | 'pulse-focus' | 'none';
 
-type ExitStyle =
+export type ExitStyle =
   | 'shatter' | 'snap-out' | 'burn-out' | 'punch-out'
   | 'dissolve' | 'drift-up' | 'exhale' | 'sink'
   | 'drop-out' | 'cut-out' | 'vanish'
