@@ -863,7 +863,7 @@ type TensionStageLike = {
   motionIntensity?: number;
 };
 
-type StoryboardEntryLike = {
+export type StoryboardEntryLike = {
   lineIndex?: number;
   entryStyle?: string;
   exitStyle?: string;
