@@ -553,7 +553,7 @@ export function computeEntryState(style: EntryStyle, progress: number, intensity
   }
 }
 
-function computeExitState(style: ExitStyle, progress: number, intensity: number, letterIndex = 0, letterTotal = 1): AnimState {
+export function computeExitState(style: ExitStyle, progress: number, intensity: number, letterIndex = 0, letterTotal = 1): AnimState {
   const ep = easeOut(Math.min(1, progress));
   const ei = easeIn(Math.min(1, progress));
   switch (style) {
