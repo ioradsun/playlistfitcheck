@@ -897,7 +897,7 @@ export function buildWordDirectivesMap(wordDirectives: CinematicDirection['wordD
   return map;
 }
 
-type ChapterLike = {
+export type ChapterLike = {
   startRatio?: number;
   endRatio?: number;
   emotionalIntensity?: number;
