@@ -198,7 +198,7 @@ export const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
   glitch: { entries: ['snap-in', 'cut-in', 'shatter-in'], behaviors: ['vibrate', 'flicker', 'vibrate', 'orbit'], exits: ['cut-out', 'snap-out', 'burn-out'], entryDuration: 0.05, exitDuration: 0.06, behaviorIntensity: 1.4 },
 };
 
-const EMPHASIS_CURVE: Record<number, number> = {
+export const EMPHASIS_CURVE: Record<number, number> = {
   1: 0.78,
   2: 0.92,
   3: 1.18,
