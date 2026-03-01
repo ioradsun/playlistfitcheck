@@ -190,7 +190,7 @@ export interface AnimState {
   rotation: number;
 }
 
-const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
+export const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
   weighted: { entries: ['slam-down', 'drop', 'plant', 'stomp'], behaviors: ['pulse', 'vibrate', 'pulse', 'grow'], exits: ['shatter', 'snap-out', 'burn-out'], entryDuration: 0.1, exitDuration: 0.12, behaviorIntensity: 1.2 },
   fluid: { entries: ['rise', 'materialize', 'breathe-in', 'drift-in'], behaviors: ['float', 'grow', 'float', 'lean'], exits: ['dissolve', 'drift-up', 'linger'], entryDuration: 0.35, exitDuration: 0.4, behaviorIntensity: 0.6 },
   elastic: { entries: ['explode-in', 'punch-in', 'breathe-in'], behaviors: ['pulse', 'orbit', 'pulse', 'float'], exits: ['punch-out', 'snap-out'], entryDuration: 0.15, exitDuration: 0.1, behaviorIntensity: 1.0 },
