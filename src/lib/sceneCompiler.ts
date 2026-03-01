@@ -101,12 +101,21 @@ export interface CompiledPhraseGroup {
   behaviorIntensity: number;
 }
 
+export interface CompiledChapter {
+  startRatio: number;
+  endRatio: number;
+  targetZoom: number;
+  atmosphere?: string;
+}
+
 export interface CompiledScene {
   phraseGroups: CompiledPhraseGroup[];
   beatEvents: Array<{ time: number; springVelocity: number }>;
-  chapters: Array<{ startRatio: number; endRatio: number; targetZoom: number }>;
+  chapters: CompiledChapter[];
   emotionalArc: string;
   bpm: number;
+  durationSec: number;
+  songStartSec: number;
 }
 
 // ═══════════════════════════════════════════════════════════════
