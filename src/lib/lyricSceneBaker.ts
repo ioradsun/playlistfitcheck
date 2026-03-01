@@ -875,7 +875,7 @@ export type StoryboardEntryLike = {
   iconScale?: number;
 };
 
-function buildWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives']): Record<string, WordDirectiveLike> {
+export function buildWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives']): Record<string, WordDirectiveLike> {
   const map: Record<string, WordDirectiveLike> = {};
   if (!wordDirectives) return map;
 
