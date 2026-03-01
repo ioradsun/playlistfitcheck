@@ -113,7 +113,7 @@ const easeOutElastic = (t: number): number => {
   return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI) / 3) + 1;
 };
 
-type EntryStyle =
+export type EntryStyle =
   | 'slam-down' | 'punch-in' | 'explode-in' | 'snap-in' | 'shatter-in'
   | 'rise' | 'materialize' | 'breathe-in' | 'drift-in' | 'surface'
   | 'drop' | 'plant' | 'stomp' | 'cut-in'
@@ -122,11 +122,11 @@ type EntryStyle =
   // Previously phantom (now implemented)
   | 'focus-in' | 'spin-in' | 'tumble-in';
 
-type BehaviorStyle =
+export type BehaviorStyle =
   | 'pulse' | 'vibrate' | 'float' | 'grow' | 'contract'
   | 'flicker' | 'orbit' | 'lean' | 'freeze' | 'tilt' | 'pendulum' | 'pulse-focus' | 'none';
 
-type ExitStyle =
+export type ExitStyle =
   | 'shatter' | 'snap-out' | 'burn-out' | 'punch-out'
   | 'dissolve' | 'drift-up' | 'exhale' | 'sink'
   | 'drop-out' | 'cut-out' | 'vanish'
@@ -139,9 +139,9 @@ type ExitStyle =
   | 'scatter-letters' | 'cascade-down' | 'cascade-up'
   | 'blur-out' | 'spin-out' | 'peel-off' | 'peel-reverse';
 
-type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
+export type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
 
-interface MotionDefaults {
+export interface MotionDefaults {
   entries: EntryStyle[];
   behaviors: BehaviorStyle[];
   exits: ExitStyle[];
@@ -178,7 +178,7 @@ interface TextureConfig {
   shape: 'circle' | 'line' | 'diamond' | 'glow';
 }
 
-interface AnimState {
+export interface AnimState {
   offsetX: number;
   offsetY: number;
   scaleX: number;
@@ -190,7 +190,7 @@ interface AnimState {
   rotation: number;
 }
 
-const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
+export const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
   weighted: { entries: ['slam-down', 'drop', 'plant', 'stomp'], behaviors: ['pulse', 'vibrate', 'pulse', 'grow'], exits: ['shatter', 'snap-out', 'burn-out'], entryDuration: 0.1, exitDuration: 0.12, behaviorIntensity: 1.2 },
   fluid: { entries: ['rise', 'materialize', 'breathe-in', 'drift-in'], behaviors: ['float', 'grow', 'float', 'lean'], exits: ['dissolve', 'drift-up', 'linger'], entryDuration: 0.35, exitDuration: 0.4, behaviorIntensity: 0.6 },
   elastic: { entries: ['explode-in', 'punch-in', 'breathe-in'], behaviors: ['pulse', 'orbit', 'pulse', 'float'], exits: ['punch-out', 'snap-out'], entryDuration: 0.15, exitDuration: 0.1, behaviorIntensity: 1.0 },
@@ -198,7 +198,7 @@ const MOTION_DEFAULTS: Record<MotionProfile, MotionDefaults> = {
   glitch: { entries: ['snap-in', 'cut-in', 'shatter-in'], behaviors: ['vibrate', 'flicker', 'vibrate', 'orbit'], exits: ['cut-out', 'snap-out', 'burn-out'], entryDuration: 0.05, exitDuration: 0.06, behaviorIntensity: 1.4 },
 };
 
-const EMPHASIS_CURVE: Record<number, number> = {
+export const EMPHASIS_CURVE: Record<number, number> = {
   1: 0.78,
   2: 0.92,
   3: 1.18,
@@ -373,7 +373,7 @@ function resolveTypographyFontWeight(typographyField: string | undefined, payloa
   return payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight ?? 700;
 }
 
-type VisualMode = 'intimate' | 'cinematic' | 'explosive';
+export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
 
 const INTIMATE_LAYOUTS: Record<number, Array<[number, number]>> = {
   1: [[0.5, 0.5]],
@@ -402,7 +402,7 @@ const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {
   6: [[0.12, 0.28], [0.42, 0.18], [0.82, 0.25], [0.15, 0.72], [0.55, 0.8], [0.85, 0.7]],
 };
 
-const getVisualMode = (payload: ScenePayload): VisualMode => {
+export const getVisualMode = (payload: ScenePayload): VisualMode => {
   const frameState = payload.frame_state ?? null;
   const manifestMode = (frameState as any)?.visualMode;
   if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
@@ -431,12 +431,12 @@ const getVisualMode = (payload: ScenePayload): VisualMode => {
 };
 
 
-function deriveMotionProfile(payload: ScenePayload): MotionProfile {
+export function deriveMotionProfile(payload: ScenePayload): MotionProfile {
   const directMotion = (payload.cinematic_direction as any)?.motion as string | undefined;
   return resolveMotionProfile(directMotion, payload);
 }
 
-function assignWordAnimations(
+export function assignWordAnimations(
   wm: WordMetaEntry,
   motionDefaults: MotionDefaults,
   storyboard: StoryboardEntryLike[],
@@ -499,7 +499,7 @@ function assignWordAnimations(
   };
 }
 
-function computeEntryState(style: EntryStyle, progress: number, intensity: number): AnimState {
+export function computeEntryState(style: EntryStyle, progress: number, intensity: number): AnimState {
   const ep = easeOut(Math.min(1, progress));
   const eb = easeOutBack(Math.min(1, progress));
   const ee = easeOutElastic(Math.min(1, progress));
@@ -553,7 +553,7 @@ function computeEntryState(style: EntryStyle, progress: number, intensity: numbe
   }
 }
 
-function computeExitState(style: ExitStyle, progress: number, intensity: number, letterIndex = 0, letterTotal = 1): AnimState {
+export function computeExitState(style: ExitStyle, progress: number, intensity: number, letterIndex = 0, letterTotal = 1): AnimState {
   const ep = easeOut(Math.min(1, progress));
   const ei = easeIn(Math.min(1, progress));
   switch (style) {
@@ -649,7 +649,7 @@ function computeExitState(style: ExitStyle, progress: number, intensity: number,
   }
 }
 
-function computeBehaviorState(style: BehaviorStyle, tSec: number, wordStart: number, beatPhase: number, intensity: number): Partial<AnimState> {
+export function computeBehaviorState(style: BehaviorStyle, tSec: number, wordStart: number, beatPhase: number, intensity: number): Partial<AnimState> {
   const age = tSec - wordStart;
   switch (style) {
     case 'pulse': { const pulse = Math.sin(beatPhase * Math.PI * 2) * 0.03 * intensity; return { scaleX: 1 + pulse, scaleY: 1 + pulse }; }
@@ -677,7 +677,7 @@ function computeBehaviorState(style: BehaviorStyle, tSec: number, wordStart: num
   }
 }
 
-const FILLER_WORDS = new Set([
+export const FILLER_WORDS = new Set([
   'the', 'a', 'an', 'i', 'in', 'on', 'at', 'to', 'of', 'and', 'or', 'but',
   'is', 'it', 'my', 'me', 'you', 'we', 'he', 'she', 'they', 'im', 'its',
   'was', 'be', 'do', 'got', 'get', 'just', 'so', 'no', 'not', 'for', 'with',
@@ -688,7 +688,7 @@ const FILLER_WORDS = new Set([
 const MIN_GROUP_DURATION = 0.4;
 const MAX_GROUP_SIZE = 5;
 
-function isFillerWord(word: string): boolean {
+export function isFillerWord(word: string): boolean {
   return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase());
 }
 
@@ -741,7 +741,7 @@ const SEMANTIC_EFFECTS: Record<VisualMetaphor, SemanticEffect> = {
   'motion-streak': { entry: 'punch-in', behavior: 'lean', exit: 'cut-out', colorOverride: null, glowMultiplier: 1.2, scaleX: 1.15, scaleY: 0.9, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 700 },
 };
 
-type WordDirectiveLike = {
+export type WordDirectiveLike = {
   word?: string;
   kineticClass?: string;
   colorOverride?: string;
@@ -758,7 +758,7 @@ type WordDirectiveLike = {
   exit?: string;
 };
 
-function resolveV3EmitterType(directive: WordDirectiveLike | null): WordEmitterType {
+export function resolveV3EmitterType(directive: WordDirectiveLike | null): WordEmitterType {
   if (!directive) return 'none';
 
   // Priority 1: ghostTrail → memory-orbs (ghost rendering handled separately via chunk.ghostTrail)
@@ -801,7 +801,7 @@ function resolveV3EmitterDirection(directive: WordDirectiveLike | null): 'up' | 
 }
 
 
-type ManifestWordDirective = {
+export type ManifestWordDirective = {
   position?: [number, number];
   fontSize?: number;
   scaleX?: number;
@@ -832,14 +832,14 @@ interface WordEntry {
   end: number;
 }
 
-type WordMetaEntry = WordEntry & {
+export type WordMetaEntry = WordEntry & {
   clean: string;
   directive: WordDirectiveLike | null;
   lineIndex: number;
   wordIndex: number;
 };
 
-interface PhraseGroup {
+export interface PhraseGroup {
   words: WordMetaEntry[];
   start: number;
   end: number;
@@ -848,7 +848,7 @@ interface PhraseGroup {
   groupIndex: number;
 }
 
-interface GroupPosition {
+export interface GroupPosition {
   x: number;
   y: number;
   fontSize: number;
@@ -863,7 +863,7 @@ type TensionStageLike = {
   motionIntensity?: number;
 };
 
-type StoryboardEntryLike = {
+export type StoryboardEntryLike = {
   lineIndex?: number;
   entryStyle?: string;
   exitStyle?: string;
@@ -875,7 +875,7 @@ type StoryboardEntryLike = {
   iconScale?: number;
 };
 
-function buildWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives']): Record<string, WordDirectiveLike> {
+export function buildWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives']): Record<string, WordDirectiveLike> {
   const map: Record<string, WordDirectiveLike> = {};
   if (!wordDirectives) return map;
 
@@ -897,7 +897,7 @@ function buildWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectiv
   return map;
 }
 
-type ChapterLike = {
+export type ChapterLike = {
   startRatio?: number;
   endRatio?: number;
   emotionalIntensity?: number;
@@ -933,7 +933,7 @@ type BakeState = {
   
 };
 
-type PrebakedData = {
+export type PrebakedData = {
   chapters: ChapterLike[];
   tensionMotionByFrame: number[];
   chapterIndexByFrame: number[];
@@ -1073,7 +1073,7 @@ function mergeShortGroups(groups: PhraseGroup[]): PhraseGroup[] {
   return result;
 }
 
-function buildPhraseGroups(wordMeta: WordMetaEntry[]): PhraseGroup[] {
+export function buildPhraseGroups(wordMeta: WordMetaEntry[]): PhraseGroup[] {
   const lineMap = new Map<number, WordMetaEntry[]>();
   for (const wm of wordMeta) {
     if (!lineMap.has(wm.lineIndex)) lineMap.set(wm.lineIndex, []);
@@ -1360,7 +1360,7 @@ function resolveWorldDefaults(payload: ScenePayload, chapters: ChapterLike[]) {
   };
 }
 
-function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMode: VisualMode): PrebakedData {
+export function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMode: VisualMode): PrebakedData {
   // V3 uses sections (enriched with startRatio/endRatio), V2 used chapters directly
   const rawChapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
   const chapters: ChapterLike[] = rawChapters.length > 0
