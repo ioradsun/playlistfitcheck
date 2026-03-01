@@ -373,7 +373,7 @@ function resolveTypographyFontWeight(typographyField: string | undefined, payloa
   return payload.cinematic_direction?.visualWorld?.typographyProfile?.fontWeight ?? 700;
 }
 
-type VisualMode = 'intimate' | 'cinematic' | 'explosive';
+export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
 
 const INTIMATE_LAYOUTS: Record<number, Array<[number, number]>> = {
   1: [[0.5, 0.5]],
