@@ -141,6 +141,15 @@ Optional:
 - "ghostDirection": "up" | "down" | "left" | "right" | "radial"
 - "letterSequence": true
 - "visualMetaphor": freeform string
+- "elementalClass": if this word is strongly depictable as an element, tag it.
+  Only tag when the imagery is OBVIOUS and cinematic — not every word needs one.
+    "FIRE"     — fire, burn, flame, blaze, heat, hell, ash, ember, inferno
+    "WATER"    — rain, drown, ocean, tears, flood, wave, sea, pour, sink
+    "FROST"    — cold, ice, freeze, frozen, winter, snow, chill, numb, bitter
+    "SMOKE"    — smoke, fog, haze, ghost, shadow, fade, vanish, mist, cloud
+    "ELECTRIC" — electric, shock, spark, lightning, thunder, power, energy, neon
+  The word itself doesn't have to be in the list — use judgment. "heartless" → FROST.
+  "scorched" → FIRE. "suffocating" → SMOKE. Leave blank if no element fits.
 - "heroPresentation": HOW the hero word is spatially presented (emphasis 4-5 only).
   Pick based on what the word MEANS:
     "inline-scale"      — default. Confident emphasis. Word grows 120% inline. Most hero words.
@@ -228,6 +237,9 @@ const ENUMS = {
   trails: [
     "ember", "frost", "spark-burst", "dust-impact", "light-rays", "gold-coins", "dark-absorb", "motion-trail",
     "memory-orbs", "none",
+  ],
+  elementalClass: [
+    "FIRE", "WATER", "FROST", "SMOKE", "ELECTRIC", "none",
   ],
 } as const;
 
@@ -414,6 +426,10 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
     if (wd.trail && !(ENUMS.trails as readonly string[]).includes(wd.trail)) {
       wd.trail = "none";
     }
+    if (wd.elementalClass && !(ENUMS.elementalClass as readonly string[]).includes(wd.elementalClass)) {
+      wd.elementalClass = null;
+    }
+    if (wd.elementalClass === "none") wd.elementalClass = null;
 
     if (typeof wd.emphasisLevel === "number") {
       wd.emphasisLevel = Math.min(5, Math.max(1, Math.round(wd.emphasisLevel)));
