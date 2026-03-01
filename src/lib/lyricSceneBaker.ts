@@ -499,7 +499,7 @@ export function assignWordAnimations(
   };
 }
 
-function computeEntryState(style: EntryStyle, progress: number, intensity: number): AnimState {
+export function computeEntryState(style: EntryStyle, progress: number, intensity: number): AnimState {
   const ep = easeOut(Math.min(1, progress));
   const eb = easeOutBack(Math.min(1, progress));
   const ee = easeOutElastic(Math.min(1, progress));
