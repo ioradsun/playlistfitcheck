@@ -848,7 +848,7 @@ export interface PhraseGroup {
   groupIndex: number;
 }
 
-interface GroupPosition {
+export interface GroupPosition {
   x: number;
   y: number;
   fontSize: number;
