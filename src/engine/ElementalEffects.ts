@@ -190,6 +190,73 @@ export function drawElementalWord(
       break;
     }
 
+    case "ICE":
+    case "FROST": {
+      // Icy blue-white base word
+      ctx.fillStyle = colorOverride ?? "#A8D8EA";
+      ctx.fillText(word, 0, 0);
+
+      // Frost shimmer overlay clipped to word area
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(-2, -fontSize - 4, wordWidth + 4, fontSize + 8);
+      ctx.clip();
+      const frostShimmer = ctx.createLinearGradient(
+        Math.sin(currentTime * 0.8) * wordWidth * 0.3, -fontSize,
+        wordWidth + Math.cos(currentTime * 0.6) * wordWidth * 0.3, 0
+      );
+      frostShimmer.addColorStop(0, "rgba(255,255,255,0.0)");
+      frostShimmer.addColorStop(0.3 + Math.sin(currentTime * 1.2) * 0.1, "rgba(200,230,255,0.25)");
+      frostShimmer.addColorStop(0.5, "rgba(255,255,255,0.35)");
+      frostShimmer.addColorStop(0.7 + Math.cos(currentTime * 0.9) * 0.1, "rgba(200,230,255,0.25)");
+      frostShimmer.addColorStop(1, "rgba(255,255,255,0.0)");
+      ctx.fillStyle = frostShimmer;
+      ctx.fillText(word, 0, 0);
+      ctx.restore();
+
+      // Ice crystals forming around word
+      const crystalCount = isHeroWord ? 8 : 4;
+      for (let i = 0; i < crystalCount; i += 1) {
+        const angle = (Math.PI * 2 * i) / crystalCount + currentTime * 0.15;
+        const radius = (wordWidth * 0.55) + Math.sin(currentTime * 0.5 + i * 1.7) * 8;
+        const cx = wordWidth / 2 + Math.cos(angle) * radius;
+        const cy = -fontSize / 2 + Math.sin(angle) * (fontSize * 0.4 + Math.sin(currentTime * 0.3 + i) * 4);
+        const size = 2 + Math.sin(currentTime * 2 + i * 2.1) * 1.5;
+        const crystalOpacity = 0.3 + Math.sin(currentTime * 1.5 + i * 0.8) * 0.2;
+
+        // Diamond shape
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle + currentTime * 0.3);
+        ctx.beginPath();
+        ctx.moveTo(0, -size);
+        ctx.lineTo(size * 0.6, 0);
+        ctx.lineTo(0, size);
+        ctx.lineTo(-size * 0.6, 0);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(180,220,255,${crystalOpacity})`;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Cold breath mist rising
+      if (beatIntensity > 0.3 || isHeroWord) {
+        const mistCount = isHeroWord ? 5 : 3;
+        for (let i = 0; i < mistCount; i += 1) {
+          const mx = wordWidth * (i / mistCount) + Math.sin(currentTime * 0.7 + i) * 8;
+          const mistProgress = (currentTime * 0.35 + i * 0.2) % 1;
+          const my = -fontSize - mistProgress * 25;
+          const mistSize = 6 + mistProgress * 12;
+          const mistAlpha = Math.max(0, (0.2 - mistProgress * 0.2));
+          ctx.beginPath();
+          ctx.arc(mx, my, mistSize, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(200,230,255,${mistAlpha})`;
+          ctx.fill();
+        }
+      }
+      break;
+    }
+
     default:
       // No elemental effect — draw normally
       ctx.fillText(word, 0, 0);
