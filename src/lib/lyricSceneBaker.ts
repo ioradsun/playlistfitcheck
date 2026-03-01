@@ -832,7 +832,7 @@ interface WordEntry {
   end: number;
 }
 
-type WordMetaEntry = WordEntry & {
+export type WordMetaEntry = WordEntry & {
   clean: string;
   directive: WordDirectiveLike | null;
   lineIndex: number;
