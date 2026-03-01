@@ -402,7 +402,7 @@ const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {
   6: [[0.12, 0.28], [0.42, 0.18], [0.82, 0.25], [0.15, 0.72], [0.55, 0.8], [0.85, 0.7]],
 };
 
-const getVisualMode = (payload: ScenePayload): VisualMode => {
+export const getVisualMode = (payload: ScenePayload): VisualMode => {
   const frameState = payload.frame_state ?? null;
   const manifestMode = (frameState as any)?.visualMode;
   if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
