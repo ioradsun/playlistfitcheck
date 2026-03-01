@@ -277,13 +277,16 @@ export function compileScene(
         endRatio: s.endRatio,
       }));
 
-  const chapters = sections.length > 0
+  const chapters: CompiledChapter[] = sections.length > 0
     ? sections.map((ch: any) => ({
         startRatio: ch.startRatio ?? 0,
         endRatio: ch.endRatio ?? 1,
         targetZoom: ch.zoom ?? ch.targetZoom ?? 1.0,
+        atmosphere: ch.atmosphere ?? ch.overrides?.atmosphere,
       }))
     : [{ startRatio: 0, endRatio: 1, targetZoom: 1.0 }];
+
+  const songDuration = Math.max(0.01, payload.songEnd - payload.songStart);
 
   return {
     phraseGroups: compiledGroups,
@@ -291,5 +294,7 @@ export function compileScene(
     chapters,
     emotionalArc: pre.emotionalArc,
     bpm,
+    durationSec: songDuration,
+    songStartSec: payload.songStart,
   };
 }
