@@ -1360,7 +1360,7 @@ function resolveWorldDefaults(payload: ScenePayload, chapters: ChapterLike[]) {
   };
 }
 
-function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMode: VisualMode): PrebakedData {
+export function createPrebakedData(payload: ScenePayload, totalFrames: number, visualMode: VisualMode): PrebakedData {
   // V3 uses sections (enriched with startRatio/endRatio), V2 used chapters directly
   const rawChapters = (payload.cinematic_direction?.chapters ?? []) as ChapterLike[];
   const chapters: ChapterLike[] = rawChapters.length > 0
