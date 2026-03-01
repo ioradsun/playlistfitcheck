@@ -431,7 +431,7 @@ export const getVisualMode = (payload: ScenePayload): VisualMode => {
 };
 
 
-function deriveMotionProfile(payload: ScenePayload): MotionProfile {
+export function deriveMotionProfile(payload: ScenePayload): MotionProfile {
   const directMotion = (payload.cinematic_direction as any)?.motion as string | undefined;
   return resolveMotionProfile(directMotion, payload);
 }
