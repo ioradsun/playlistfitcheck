@@ -58,11 +58,17 @@ export interface CompiledWord {
   layoutY: number;
   semanticScaleX: number;
   semanticScaleY: number;
+  semanticAlphaMax: number;
+  semanticGlowMult: number;
+  hasSemanticColor: boolean;
+  baseFontSize: number;
   entryDurationMult: number;
   isHeroWord: boolean;
+  isFiller: boolean;
   heroPresentation?: string;
   letterIndex?: number;
   letterTotal?: number;
+  letterDelay?: number;
   isLetterChunk?: boolean;
   emitterType?: string;
   ghostTrail?: boolean;
@@ -75,6 +81,10 @@ export interface CompiledWord {
   directive: WordDirectiveLike | null;
   lineIndex: number;
   wordIndex: number;
+  iconGlyph?: string;
+  iconStyle?: 'outline' | 'filled' | 'ghost';
+  iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
+  iconScale?: number;
 }
 
 export interface CompiledPhraseGroup {
