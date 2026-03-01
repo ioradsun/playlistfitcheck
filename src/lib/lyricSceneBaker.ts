@@ -839,7 +839,7 @@ export type WordMetaEntry = WordEntry & {
   wordIndex: number;
 };
 
-interface PhraseGroup {
+export interface PhraseGroup {
   words: WordMetaEntry[];
   start: number;
   end: number;
