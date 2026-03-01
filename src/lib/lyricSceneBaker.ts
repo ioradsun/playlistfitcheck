@@ -141,7 +141,7 @@ export type ExitStyle =
 
 export type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
 
-interface MotionDefaults {
+export interface MotionDefaults {
   entries: EntryStyle[];
   behaviors: BehaviorStyle[];
   exits: ExitStyle[];
