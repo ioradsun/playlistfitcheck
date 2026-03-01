@@ -1103,6 +1103,13 @@ export class LyricDancePlayer {
       // First instance — start the bake
       globalBakeLock = true;
       globalBakePromise = (async () => {
+        // Ensure real viewport dimensions before compiling (ResizeObserver fires async)
+        if (this.width === 0 && this.container) {
+          const cw = this.container.offsetWidth || this.canvas.offsetWidth || 960;
+          const ch = this.container.offsetHeight || this.canvas.offsetHeight || 540;
+          if (cw > 0 && ch > 0) this.resize(cw, ch);
+        }
+
         const payload = this.buildScenePayload();
         this.payload = payload;
         this.resolvePlayerState(payload);
@@ -1111,7 +1118,7 @@ export class LyricDancePlayer {
         this.songEndSec = payload.songEnd;
 
         // Compile the scene — produces lightweight schedule, not 15,000 frames
-        const compiled = compileScene(payload);
+        const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
         this.compiledScene = compiled;
 
         // Build chunk cache from compiled scene
@@ -1204,7 +1211,7 @@ export class LyricDancePlayer {
       this.songEndSec = payload.songEnd;
 
       this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
-      const compiled = compileScene(payload);
+      const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
       this._buildChunkCacheFromScene(compiled);
       this._updateViewportScale();
@@ -1358,7 +1365,7 @@ export class LyricDancePlayer {
     if (!this.payload) return;
     this.payload = { ...this.payload, cinematic_direction: direction };
     this.resolvePlayerState(this.payload);
-    this.compiledScene = compileScene(this.payload);
+    this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
     this._textMetricsCache.clear();
@@ -1388,7 +1395,7 @@ export class LyricDancePlayer {
     // Recompile scene with fresh palette data
     if (this.payload) {
       this.payload = { ...this.payload, auto_palettes: palettes };
-      const compiled = compileScene(this.payload);
+      const compiled = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
       this._buildChunkCacheFromScene(compiled);
       this._textMetricsCache.clear();
@@ -3116,13 +3123,13 @@ export class LyricDancePlayer {
     const baseScale = Math.min(sx, sy);
     const isPortrait = this.height > this.width;
 
-    // fontScale must stay proportional to position scale.
-    // Allow slight boost for readability on small screens,
-    // but never more than 1.4× the base scale.
+    // fontScale must stay proportional to POSITION scale (sx).
+    // If fontScale > sx, text is physically wider than the position spacing → overlap.
     let fontScale: number;
     if (isPortrait) {
-      // Portrait (phone): base scale is tiny (0.4). Allow up to 1.4× for readability.
-      fontScale = Math.max(baseScale, Math.min(this.width / 540, baseScale * 1.4));
+      // Portrait: fontScale MUST equal sx so positions and font widths scale identically.
+      // The scene compiler already boosts font sizes 1.5x for portrait readability.
+      fontScale = sx;
     } else {
       // Landscape: scale proportionally, slight boost on small screens
       if (this.height >= 1080) {
