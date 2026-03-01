@@ -884,7 +884,6 @@ export class LyricDancePlayer {
     panEndY: number;
   }> = [];
   private _bgBlurCurrent = 3;
-  private chapterImageLuminance = new WeakMap<HTMLImageElement, number>();
   private _haloStamps: Map<string, HTMLCanvasElement> = new Map();
   private _crushOverlayCanvas: HTMLCanvasElement | null = null;
   private _crushOverlayKey = '';
@@ -2519,11 +2518,11 @@ export class LyricDancePlayer {
             let elementalClass: string | null = directive?.elementalClass ?? null;
             if (!elementalClass) {
               const lw = (text ?? '').toLowerCase().replace(/[^a-z]/g, '');
-              if (/^(cold|ice|icy|freeze|frozen|frost|winter|snow|chill|numb)$/.test(lw)) elementalClass = 'FROST';
-              else if (/^(fire|burn|burning|flame|blaze|heat|hot|inferno|ash|ember)$/.test(lw)) elementalClass = 'FIRE';
-              else if (/^(rain|water|drown|drowning|ocean|sea|tears|cry|flood|wave|wet)$/.test(lw)) elementalClass = 'WATER';
-              else if (/^(smoke|fog|haze|mist|cloud|ghost|fade|vanish|shadow)$/.test(lw)) elementalClass = 'SMOKE';
-              else if (/^(electric|shock|spark|lightning|thunder|voltage|power|energy|neon|glow)$/.test(lw)) elementalClass = 'ELECTRIC';
+              if (/cold|ice|icy|freez|frost|winter|snow|chill|numb/.test(lw)) elementalClass = 'FROST';
+              else if (/fire|burn|flame|blaz|heat|hot|inferno|ash|ember/.test(lw)) elementalClass = 'FIRE';
+              else if (/rain|water|drown|ocean|sea|tear|cry|flood|wave|wet/.test(lw)) elementalClass = 'WATER';
+              else if (/smoke|fog|haze|mist|cloud|ghost|fade|vanish|shadow/.test(lw)) elementalClass = 'SMOKE';
+              else if (/electr|shock|spark|lightn|thunder|volt|power|energy|neon|glow/.test(lw)) elementalClass = 'ELECTRIC';
             }
 
             if (elementalClass) {
@@ -2533,11 +2532,14 @@ export class LyricDancePlayer {
               }
               const nowSec = performance.now() / 1000;
               const smoothBeat = Math.max(0, this._springOffset ?? 0);
+              const moodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
+              const moodInt = (this as any)._activeIntensity as number ?? 0.5;
+              const lightingMode: 'dark' | 'bright' = moodGrade ? getTextMode(moodGrade, moodInt) === 'dark' ? 'bright' : 'dark' : 'dark';
               drawElementalWord(
                 this.ctx, text, safeFontSize, textWidth, elementalClass,
                 nowSec, smoothBeat, 1,
                 chunk.color ?? null,
-                { isHeroWord: true, effectQuality: 'high', wordX: 0, wordY: 0, canvasWidth: this.width, canvasHeight: this.height },
+                { isHeroWord: true, effectQuality: 'high', wordX: 0, wordY: 0, canvasWidth: this.width, canvasHeight: this.height, lightingMode },
               );
             } else {
               // Hero word without a matching element — just draw bigger (scale already applied upstream)
@@ -3408,34 +3410,6 @@ export class LyricDancePlayer {
     this.ctx.restore();
   }
 
-  private getAverageLuminance(img: HTMLImageElement | undefined): number | null {
-    if (!img || !img.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) return null;
-    const cached = this.chapterImageLuminance.get(img);
-    if (cached != null) return cached;
-
-    try {
-      const sampleCanvas = document.createElement('canvas');
-      sampleCanvas.width = 16;
-      sampleCanvas.height = 16;
-      const sampleCtx = sampleCanvas.getContext('2d');
-      if (!sampleCtx) return null;
-      sampleCtx.drawImage(img, 0, 0, 16, 16);
-      const { data } = sampleCtx.getImageData(0, 0, 16, 16);
-      let sum = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        sum += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-      }
-      const luminance = sum / (data.length / 4);
-      this.chapterImageLuminance.set(img, luminance);
-      return luminance;
-    } catch {
-      return null;
-    }
-  }
-
   private buildBgCache(): void {
     
     try {
@@ -4178,6 +4152,28 @@ export class LyricDancePlayer {
               chunk.color = ensureLight(runtimePal?.[4] ?? runtimePal?.[2], 0.35); // dim but visible
             } else {
               chunk.color = ensureLight(runtimePal?.[2], 0.55); // normal text — must be readable
+            }
+          }
+        }
+
+        // ── Final contrast enforcement — no exceptions, no conditions ──
+        // moodGrade.brightness is a CSS filter value (0.5 = no change), NOT actual pixel brightness.
+        // A dark image × 0.65 filter = still dark. So bias strongly toward light text.
+        const moodGradeForContrast = (this as any)._activeMoodGrade as MoodGrade | undefined;
+        const bgFilterBright = moodGradeForContrast?.brightness ?? 0.35;
+        // Only treat as "bright background" when filter pushes well past neutral AND mood is explicitly light
+        const bgIsLikelyDark = bgFilterBright < 0.58;
+        if (chunk.color && typeof chunk.color === 'string') {
+          if (chunk.color.startsWith('rgba')) {
+            if (bgIsLikelyDark && chunk.color.includes('0,0,0')) {
+              chunk.color = word.isFiller ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.7)';
+            }
+          } else {
+            const textBright = perceivedBrightness(chunk.color);
+            if (bgIsLikelyDark && textBright < 0.45) {
+              chunk.color = mixTowardWhite(chunk.color, Math.max(0.5, 0.8 - textBright));
+            } else if (!bgIsLikelyDark && textBright > 0.7) {
+              chunk.color = '#1e1e1e';
             }
           }
         }
