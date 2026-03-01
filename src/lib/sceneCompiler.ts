@@ -218,11 +218,16 @@ export function computeAllLineLayouts(
   fontWeight: number,
   fontFamily: string,
   measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  isPortrait: boolean = false,
 ): Map<string, GroupPosition[]> {
   const margin = 60;
   const lineY = Math.round(canvasH * 0.5);
   const SPACE_MULT = 1.15;
   const result = new Map<string, GroupPosition[]>();
+
+  // On portrait, use a narrower effective width to trigger wrapping.
+  // This ensures words are bigger and stacked rather than tiny on one line.
+  const effectiveMaxWidth = isPortrait ? canvasW * 0.75 : canvasW - margin * 2;
 
   const getWordWidth = (word: string, fontSize: number) => {
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
@@ -250,7 +255,9 @@ export function computeAllLineLayouts(
   }
 
   for (const [lineIndex, groups] of lineMap) {
-    const baseFontSize = lineFontSizes[lineIndex] ?? 36;
+    const rawFontSize = lineFontSizes[lineIndex] ?? 36;
+    // On portrait, boost font size so words are bigger when stacked
+    const baseFontSize = isPortrait ? rawFontSize * 1.5 : rawFontSize;
     // Sort groups by their temporal order (groupIndex)
     groups.sort((a, b) => a.groupIndex - b.groupIndex);
 
@@ -280,8 +287,9 @@ export function computeAllLineLayouts(
     }
 
     // Auto-scale: if line is too wide, shrink fonts proportionally to fit
+    // Skip auto-scale on portrait — wrapping handles overflow with bigger fonts
     const maxLineWidth = canvasW - margin * 2;
-    if (totalWidth > maxLineWidth && totalWidth > 0) {
+    if (!isPortrait && totalWidth > maxLineWidth && totalWidth > 0) {
       const scaleFactor = maxLineWidth / totalWidth;
       const minFontSize = 24; // floor — don't go below readable
       console.log(`[sceneCompiler] auto-scale line ${lineIndex}: ${totalWidth.toFixed(0)}px > ${maxLineWidth}px, scale=${scaleFactor.toFixed(3)}, words=${flatWords.length}`);
@@ -305,26 +313,61 @@ export function computeAllLineLayouts(
       }
     }
 
-    // Center the entire line
-    const startX = Math.max(margin, Math.min(canvasW - margin - totalWidth, (canvasW - totalWidth) / 2));
-    let cursorX = startX;
+    // ─── Portrait word wrapping: split into rows ───
+    // On portrait, if line is still wider than the effective max, wrap words into rows.
+    // Each row gets a different Y offset so words stack vertically.
+    type RowInfo = { startIdx: number; endIdx: number; width: number; };
+    const rows: RowInfo[] = [];
 
-    // Assign positions and bucket back into per-group arrays
+    if (isPortrait && totalWidth > effectiveMaxWidth && flatWords.length > 1) {
+      // Greedy wrap: fill each row up to effectiveMaxWidth
+      let rowStart = 0;
+      let rowWidth = 0;
+      for (let i = 0; i < flatWords.length; i++) {
+        const addedWidth = flatWords[i].width + (i > rowStart ? spaceWidths[i - 1] : 0);
+        if (rowWidth + addedWidth > effectiveMaxWidth && i > rowStart) {
+          rows.push({ startIdx: rowStart, endIdx: i - 1, width: rowWidth });
+          rowStart = i;
+          rowWidth = flatWords[i].width;
+        } else {
+          rowWidth += addedWidth;
+        }
+      }
+      rows.push({ startIdx: rowStart, endIdx: flatWords.length - 1, width: rowWidth });
+      console.log(`[sceneCompiler] portrait wrap line ${lineIndex}: ${flatWords.length} words → ${rows.length} rows`);
+    } else {
+      // Single row
+      rows.push({ startIdx: 0, endIdx: flatWords.length - 1, width: totalWidth });
+    }
+
+    // Compute row heights for vertical centering
+    const rowSpacing = (isPortrait ? rawFontSize : baseFontSize) * 1.3; // line height (use raw font for portrait to avoid over-spreading)
+    const totalRowHeight = (rows.length - 1) * rowSpacing;
+    const firstRowY = lineY - totalRowHeight / 2;
+
+    // Assign positions per row
     const groupPositions = new Map<number, GroupPosition[]>();
-    for (let i = 0; i < flatWords.length; i++) {
-      const fw = flatWords[i];
-      const halfW = fw.width * 0.5;
-      const x = Math.max(margin + halfW, Math.min(canvasW - margin - halfW, cursorX + halfW));
-      const pos: GroupPosition = {
-        x,
-        y: Math.max(margin, Math.min(canvasH - margin, lineY)),
-        fontSize: fw.fontSize,
-        isAnchor: fw.wordIndex === fw.anchorIdx,
-        isFiller: isFillerWord(fw.wm.word),
-      };
-      if (!groupPositions.has(fw.groupIndex)) groupPositions.set(fw.groupIndex, []);
-      groupPositions.get(fw.groupIndex)!.push(pos);
-      cursorX += fw.width + spaceWidths[i];
+    for (let ri = 0; ri < rows.length; ri++) {
+      const row = rows[ri];
+      const rowY = firstRowY + ri * rowSpacing;
+      const rowStartX = Math.max(margin, (canvasW - row.width) / 2);
+      let cursorX = rowStartX;
+
+      for (let i = row.startIdx; i <= row.endIdx; i++) {
+        const fw = flatWords[i];
+        const halfW = fw.width * 0.5;
+        const x = Math.max(margin + halfW, Math.min(canvasW - margin - halfW, cursorX + halfW));
+        const pos: GroupPosition = {
+          x,
+          y: Math.max(margin, Math.min(canvasH - margin, rowY)),
+          fontSize: fw.fontSize,
+          isAnchor: fw.wordIndex === fw.anchorIdx,
+          isFiller: isFillerWord(fw.wm.word),
+        };
+        if (!groupPositions.has(fw.groupIndex)) groupPositions.set(fw.groupIndex, []);
+        groupPositions.get(fw.groupIndex)!.push(pos);
+        cursorX += fw.width + spaceWidths[i];
+      }
     }
 
     // Store results keyed by "lineIndex-groupIndex"
@@ -431,16 +474,40 @@ export function computeBehaviorState(style: BehaviorStyle, tSec: number, wordSta
   }
 }
 
-function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults, storyboard: StoryboardEntryLike[], manifestDirective: ManifestWordDirective | null): { entry: EntryStyle; behavior: BehaviorStyle; exit: ExitStyle } {
-  const storyEntry = storyboard?.[wm.lineIndex];
-  const kinetic = wm.directive?.kineticClass ?? null;
-  if (manifestDirective?.entryStyle) return { entry: manifestDirective.entryStyle, behavior: manifestDirective.behavior ?? 'none', exit: manifestDirective.exitStyle ?? motionDefaults.exits[0] };
-  if (kinetic === 'IMPACT') return { entry: 'slam-down', behavior: 'pulse', exit: 'burn-out' };
-  const storyEntryStyle = storyEntry?.entryStyle ?? 'fades';
-  const entryMap: Record<string, EntryStyle> = { rises: 'rise', 'slams-in': 'slam-down', 'fractures-in': 'shatter-in', materializes: 'materialize', hiding: 'whisper', cuts: 'snap-in', fades: motionDefaults.entries[1] ?? 'materialize' };
-  const exitMap: Record<string, ExitStyle> = { 'dissolves-upward': 'drift-up', 'burns-out': 'burn-out', shatters: 'shatter', lingers: 'linger', fades: motionDefaults.exits[1] ?? 'dissolve' };
+function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults, storyboard: Map<number, StoryboardEntryLike>, manifestDirective: ManifestWordDirective | null): { entry: EntryStyle; behavior: BehaviorStyle; exit: ExitStyle } {
+  // Priority: manifest directive > word directive > storyboard > motion defaults
+  if (manifestDirective?.entryStyle) {
+    return { entry: manifestDirective.entryStyle, behavior: manifestDirective.behavior ?? 'none', exit: manifestDirective.exitStyle ?? motionDefaults.exits[0] };
+  }
+
+  // Word directive entry/behavior/exit — the AI's per-word creative choices
+  const wd = wm.directive;
+  if (wd?.entry) {
+    return {
+      entry: (wd.entry as EntryStyle) ?? motionDefaults.entries[0],
+      behavior: (wd.behavior as BehaviorStyle) ?? 'none',
+      exit: (wd.exit as ExitStyle) ?? motionDefaults.exits[0],
+    };
+  }
+
+  // Storyboard entry/exit — per-line choices (v2 uses direct enum values)
+  const storyEntry = storyboard.get(wm.lineIndex);
+  if (storyEntry?.entryStyle) {
+    // v1 legacy map for old-style verb names; v2 values pass through directly
+    const v1EntryMap: Record<string, EntryStyle> = { rises: 'rise', 'slams-in': 'slam-down', 'fractures-in': 'shatter-in', materializes: 'materialize', hiding: 'whisper', cuts: 'snap-in', fades: motionDefaults.entries[1] ?? 'materialize' };
+    const v1ExitMap: Record<string, ExitStyle> = { 'dissolves-upward': 'drift-up', 'burns-out': 'burn-out', shatters: 'shatter', lingers: 'linger', fades: motionDefaults.exits[1] ?? 'dissolve' };
+    const entry = v1EntryMap[storyEntry.entryStyle] ?? (storyEntry.entryStyle as EntryStyle);
+    const exit = v1ExitMap[storyEntry.exitStyle ?? 'fades'] ?? (storyEntry.exitStyle as ExitStyle) ?? motionDefaults.exits[0];
+    return { entry, behavior: motionDefaults.behaviors[0] ?? 'pulse', exit };
+  }
+
+  // Fallback: deterministic variation from motion profile defaults
   const variationSeed = ((wm.lineIndex ?? 0) * 7 + (wm.wordIndex ?? 0) * 3) % 4;
-  return { entry: entryMap[storyEntryStyle] ?? motionDefaults.entries[variationSeed % motionDefaults.entries.length], behavior: motionDefaults.behaviors[variationSeed % motionDefaults.behaviors.length] ?? 'pulse', exit: exitMap[storyEntry?.exitStyle ?? 'fades'] ?? motionDefaults.exits[variationSeed % motionDefaults.exits.length] };
+  return {
+    entry: motionDefaults.entries[variationSeed % motionDefaults.entries.length],
+    behavior: motionDefaults.behaviors[variationSeed % motionDefaults.behaviors.length] ?? 'pulse',
+    exit: motionDefaults.exits[variationSeed % motionDefaults.exits.length],
+  };
 }
 
 type VisualMetaphor = 'ember-burst'|'frost-form'|'lens-focus'|'gravity-drop'|'ascent'|'fracture'|'heartbeat'|'pain-weight'|'isolation'|'convergence'|'shockwave'|'void-absorb'|'radiance'|'gold-rain'|'speed-blur'|'slow-drift'|'power-surge'|'dream-float'|'truth-snap'|'motion-streak';
@@ -488,7 +555,7 @@ function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): stri
   return payload.palette;
 }
 
-export function compileScene(payload: ScenePayload): CompiledScene {
+export function compileScene(payload: ScenePayload, options?: { viewportWidth?: number; viewportHeight?: number }): CompiledScene {
   console.log('%c[sceneCompiler] compileScene called — SPACE_MULT=1.15, auto-scale active', 'color: cyan; font-size: 14px; font-weight: bold');
   console.log('[sceneCompiler] auto_palettes:', payload.auto_palettes?.length ?? 0, 'first text color:', payload.auto_palettes?.[0]?.[2] ?? 'none');
   console.log('[sceneCompiler] fallback palette[2]:', payload.palette?.[2] ?? 'none');
@@ -514,7 +581,14 @@ export function compileScene(payload: ScenePayload): CompiledScene {
 
   const phraseGroups = buildPhraseGroups(wordMeta);
   const manifestWordDirectives = ((payload.frame_state as any)?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
-  const storyboard = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
+  const storyboardRaw = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
+  // Convert to map keyed by lineIndex — the raw array is sparse (15-25 entries for a 40-line song)
+  const storyboard = new Map<number, StoryboardEntryLike>();
+  for (const entry of storyboardRaw) {
+    if (typeof entry.lineIndex === 'number') {
+      storyboard.set(entry.lineIndex, entry);
+    }
+  }
 
   const WORD_LINGER_BY_PROFILE: Record<string, number> = { weighted: 0.15, fluid: 0.55, elastic: 0.2, drift: 0.8, glitch: 0.05 };
   const animParams = { linger: WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4, stagger: typeof (payload.frame_state as any)?.stagger === 'number' ? (payload.frame_state as any).stagger : 0.05, entryDuration: motionDefaults.entryDuration, exitDuration: motionDefaults.exitDuration };
@@ -563,7 +637,11 @@ export function compileScene(payload: ScenePayload): CompiledScene {
   const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
 
   // Pre-compute all line layouts at once so groups sharing a line don't overlap
-  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx);
+  // Pass viewport aspect so the layout can wrap lines for portrait screens
+  const vw = options?.viewportWidth ?? 960;
+  const vh = options?.viewportHeight ?? 540;
+  const isPortrait = vh > vw;
+  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx, isPortrait);
 
   // DIAGNOSTIC: log first 3 lines of layout positions
   let diagCount = 0;
@@ -587,7 +665,7 @@ export function compileScene(payload: ScenePayload): CompiledScene {
 
   const compiledGroups: CompiledPhraseGroup[] = phraseGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
-    const lineStory = storyboard[group.lineIndex];
+    const lineStory = storyboard.get(group.lineIndex);
     const positions = allLineLayouts.get(key) ?? [];
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const manifestDirective = manifestWordDirectives[key]?.[wi] ?? null;
@@ -609,8 +687,10 @@ export function compileScene(payload: ScenePayload): CompiledScene {
         fontFamily: baseTypography.fontFamily,
         color: semantic?.colorOverride ?? resolveV3Palette(payload, ((wm.start + (payload.lines[group.lineIndex]?.end ?? wm.start)) * 0.5 - payload.songStart) / Math.max(0.01, payload.songEnd - payload.songStart))[2] ?? '#ffffff',
         hasSemanticColor: Boolean(semantic?.colorOverride),
-        isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4,
-        heroPresentation: (wm.directive?.emphasisLevel ?? 1) >= 4
+        isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4
+          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')),
+        heroPresentation: ((wm.directive?.emphasisLevel ?? 1) >= 4
+          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')))
           ? (wm.directive as any)?.heroPresentation ?? 'inline-scale'
           : undefined,
         isAnchor: pos.isAnchor,
