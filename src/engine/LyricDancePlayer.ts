@@ -24,6 +24,7 @@ import {
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { getMoodGrade, buildGradeFilter, lerpGrade, getTextMode, type MoodGrade } from "@/engine/moodGrades";
 import { perceivedBrightness, mixTowardWhite } from "@/engine/ColorEnhancer";
+import { drawElementalWord } from "@/engine/ElementalEffects";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
   computeBeatSpine,
@@ -2557,7 +2558,42 @@ export class LyricDancePlayer {
             letterX += letterWidth + baseSpacing;
           }
         } else {
-          this.ctx.fillText(text, 0, 0);
+          // ── Hero words: bigger + visual directive. That's it. ──
+          const emphasis = chunk.emphasisLevel ?? 0;
+          const isHeroChunk = emphasis >= 3;
+
+          if (isHeroChunk) {
+            // Derive elemental class from the directive or from the word itself
+            let elementalClass: string | null = directive?.elementalClass ?? null;
+            if (!elementalClass) {
+              const lw = (text ?? '').toLowerCase().replace(/[^a-z]/g, '');
+              if (/^(cold|ice|icy|freeze|frozen|frost|winter|snow|chill|numb)$/.test(lw)) elementalClass = 'FROST';
+              else if (/^(fire|burn|burning|flame|blaze|heat|hot|inferno|ash|ember)$/.test(lw)) elementalClass = 'FIRE';
+              else if (/^(rain|water|drown|drowning|ocean|sea|tears|cry|flood|wave|wet)$/.test(lw)) elementalClass = 'WATER';
+              else if (/^(smoke|fog|haze|mist|cloud|ghost|fade|vanish|shadow)$/.test(lw)) elementalClass = 'SMOKE';
+              else if (/^(electric|shock|spark|lightning|thunder|voltage|power|energy|neon|glow)$/.test(lw)) elementalClass = 'ELECTRIC';
+            }
+
+            if (elementalClass) {
+              if (!(this as any)._elementalLoggedIds?.has(chunk.id)) {
+                ((this as any)._elementalLoggedIds ??= new Set()).add(chunk.id);
+                console.log(`[hero-fx] "${text}" → ${elementalClass} (emphasis ${emphasis})`);
+              }
+              const nowSec = performance.now() / 1000;
+              const smoothBeat = Math.max(0, this._springOffset ?? 0);
+              drawElementalWord(
+                this.ctx, text, safeFontSize, textWidth, elementalClass,
+                nowSec, smoothBeat, 1,
+                chunk.color ?? null,
+                { isHeroWord: true, effectQuality: 'high', wordX: 0, wordY: 0, canvasWidth: this.width, canvasHeight: this.height },
+              );
+            } else {
+              // Hero word without a matching element — just draw bigger (scale already applied upstream)
+              this.ctx.fillText(text, 0, 0);
+            }
+          } else {
+            this.ctx.fillText(text, 0, 0);
+          }
         }
         if (needsFilterSaveRestore) {
           this.ctx.filter = 'none';
@@ -4418,43 +4454,23 @@ export class LyricDancePlayer {
             } else {
               chunk.color = '#1e1e1e'; // dark charcoal for normal
             }
-          } else if (runtimePal) {
-            // Dark background — use palette-derived light colors
-            // Visual hierarchy: hero=accent, emphasis=glow, filler=dim, normal=text
-            if (isHeroWord && runtimePal[1]) {
-              chunk.color = runtimePal[1]; // accent — vivid color
-            } else if ((word.emphasisLevel ?? 1) >= 3 && runtimePal[3]) {
-              chunk.color = runtimePal[3]; // glow — warm highlight
-            } else if (word.isFiller && runtimePal[4]) {
-              chunk.color = runtimePal[4]; // dim — recede
-            } else if (runtimePal[2]) {
-              chunk.color = runtimePal[2]; // text — readable
-            }
-          }
+          } else {
+            // Dark background — ALL text must be light, period.
+            // Palette colors come from the image and may be too dark.
+            const ensureLight = (hex: string | undefined, floor: number): string => {
+              if (!hex) return '#ffffff';
+              const b = perceivedBrightness(hex);
+              return b < floor ? mixTowardWhite(hex, Math.max(0.4, floor - b + 0.3)) : hex;
+            };
 
-          // ── Image-aware contrast enforcement ──
-          // auto_palettes are extracted FROM the image, so dark images produce
-          // dark palette colors → invisible text. Use actual image luminance to
-          // guarantee minimum contrast.
-          const currentImg = this.chapterImages[currentChapterIdx];
-          const imgLum = this.getAverageLuminance(currentImg);
-          if (imgLum != null && chunk.color && typeof chunk.color === 'string' && !chunk.color.startsWith('rgba')) {
-            const textBright = perceivedBrightness(chunk.color);
-            const contrastGap = Math.abs(textBright - imgLum);
-            if (contrastGap < 0.3) {
-              // Not enough contrast — push text away from image luminance
-              if (imgLum < 0.45) {
-                // Dark image: lighten text toward white
-                const liftAmount = Math.max(0.4, 0.7 - contrastGap);
-                chunk.color = mixTowardWhite(chunk.color, liftAmount);
-              } else {
-                // Bright image: darken text
-                if (isHeroWord) {
-                  chunk.color = '#1a1a2e';
-                } else {
-                  chunk.color = '#1e1e1e';
-                }
-              }
+            if (isHeroWord) {
+              chunk.color = ensureLight(runtimePal?.[1], 0.55); // accent — vivid but readable
+            } else if ((word.emphasisLevel ?? 1) >= 3) {
+              chunk.color = ensureLight(runtimePal?.[3], 0.50); // glow
+            } else if (word.isFiller) {
+              chunk.color = ensureLight(runtimePal?.[4] ?? runtimePal?.[2], 0.35); // dim but visible
+            } else {
+              chunk.color = ensureLight(runtimePal?.[2], 0.55); // normal text — must be readable
             }
           }
         }
