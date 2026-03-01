@@ -186,6 +186,19 @@ export function compileScene(
         ? ((directive as any)?.heroPresentation ?? 'inline-scale')
         : undefined;
 
+      // Storyboard icon info
+      const storyEntry = storyboard?.[wm.lineIndex];
+      const iconGlyph = storyEntry?.iconGlyph;
+      const iconStyle = storyEntry?.iconStyle;
+      const iconPosition = storyEntry?.iconPosition;
+      const iconScale = storyEntry?.iconScale;
+
+      // Semantic visual properties
+      const semanticAlphaMax = isFiller ? 0.7 : 1.0;
+      const semanticGlowMult = isFiller ? 0.5 : (emphasisLevel >= 4 ? 1.5 : 1.0);
+      const hasSemanticColor = directive?.colorOverride != null;
+      const baseFontSize = pos?.fontSize ?? (pre.lineFontSizes[group.lineIndex] ?? 42);
+
       compiledWords.push({
         id: `w-${group.lineIndex}-${group.groupIndex}-${wi}`,
         text: wm.word,
@@ -197,13 +210,18 @@ export function compileScene(
         behaviorStyle,
         fontWeight: pos?.isAnchor ? (pre.chapterFontWeights[0] ?? 700) : (isFiller ? 400 : 600),
         fontFamily: pre.fontFamily,
-        color: lineColor,
+        color: hasSemanticColor ? (directive!.colorOverride as string) : lineColor,
         layoutX: pos?.x ?? 480,
         layoutY: pos?.y ?? 270,
         semanticScaleX,
         semanticScaleY,
+        semanticAlphaMax,
+        semanticGlowMult,
+        hasSemanticColor,
+        baseFontSize,
         entryDurationMult,
         isHeroWord: isHero,
+        isFiller,
         heroPresentation,
         emitterType: emitterType !== 'none' ? emitterType : undefined,
         ghostTrail: directive?.ghostTrail,
@@ -216,6 +234,10 @@ export function compileScene(
         directive,
         lineIndex: wm.lineIndex,
         wordIndex: wm.wordIndex,
+        iconGlyph,
+        iconStyle,
+        iconPosition,
+        iconScale,
       });
     }
 
