@@ -178,7 +178,7 @@ interface TextureConfig {
   shape: 'circle' | 'line' | 'diamond' | 'glow';
 }
 
-interface AnimState {
+export interface AnimState {
   offsetX: number;
   offsetY: number;
   scaleX: number;
