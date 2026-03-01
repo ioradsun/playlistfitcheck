@@ -122,7 +122,7 @@ export type EntryStyle =
   // Previously phantom (now implemented)
   | 'focus-in' | 'spin-in' | 'tumble-in';
 
-type BehaviorStyle =
+export type BehaviorStyle =
   | 'pulse' | 'vibrate' | 'float' | 'grow' | 'contract'
   | 'flicker' | 'orbit' | 'lean' | 'freeze' | 'tilt' | 'pendulum' | 'pulse-focus' | 'none';
 
