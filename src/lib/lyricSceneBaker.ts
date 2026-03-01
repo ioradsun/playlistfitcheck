@@ -801,7 +801,7 @@ function resolveV3EmitterDirection(directive: WordDirectiveLike | null): 'up' | 
 }
 
 
-type ManifestWordDirective = {
+export type ManifestWordDirective = {
   position?: [number, number];
   fontSize?: number;
   scaleX?: number;
