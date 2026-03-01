@@ -677,7 +677,7 @@ export function computeBehaviorState(style: BehaviorStyle, tSec: number, wordSta
   }
 }
 
-const FILLER_WORDS = new Set([
+export const FILLER_WORDS = new Set([
   'the', 'a', 'an', 'i', 'in', 'on', 'at', 'to', 'of', 'and', 'or', 'but',
   'is', 'it', 'my', 'me', 'you', 'we', 'he', 'she', 'they', 'im', 'its',
   'was', 'be', 'do', 'got', 'get', 'just', 'so', 'no', 'not', 'for', 'with',
