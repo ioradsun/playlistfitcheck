@@ -113,7 +113,7 @@ const easeOutElastic = (t: number): number => {
   return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI) / 3) + 1;
 };
 
-type EntryStyle =
+export type EntryStyle =
   | 'slam-down' | 'punch-in' | 'explode-in' | 'snap-in' | 'shatter-in'
   | 'rise' | 'materialize' | 'breathe-in' | 'drift-in' | 'surface'
   | 'drop' | 'plant' | 'stomp' | 'cut-in'
