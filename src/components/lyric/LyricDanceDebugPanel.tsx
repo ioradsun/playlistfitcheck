@@ -112,7 +112,7 @@ function HudTab({ player }: { player: LyricDancePlayer | null }) {
           <KV label="Entry" value={snap.activeWordEntry} />
           <KV label="Exit" value={snap.activeWordExit} />
           <KV label="Emphasis" value={snap.activeWordEmphasis} />
-          <KV label="Trail" value={snap.activeWordTrail} />
+          <KV label="Emphasis" value={snap.activeWordEmphasis} />
         </div>
       </Section>
       <Section title="Particles">
