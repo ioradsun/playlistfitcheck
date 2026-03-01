@@ -741,7 +741,7 @@ const SEMANTIC_EFFECTS: Record<VisualMetaphor, SemanticEffect> = {
   'motion-streak': { entry: 'punch-in', behavior: 'lean', exit: 'cut-out', colorOverride: null, glowMultiplier: 1.2, scaleX: 1.15, scaleY: 0.9, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 700 },
 };
 
-type WordDirectiveLike = {
+export type WordDirectiveLike = {
   word?: string;
   kineticClass?: string;
   colorOverride?: string;
