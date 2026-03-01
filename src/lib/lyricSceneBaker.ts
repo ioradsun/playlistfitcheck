@@ -933,7 +933,7 @@ type BakeState = {
   
 };
 
-type PrebakedData = {
+export type PrebakedData = {
   chapters: ChapterLike[];
   tensionMotionByFrame: number[];
   chapterIndexByFrame: number[];
