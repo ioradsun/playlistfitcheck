@@ -139,7 +139,7 @@ export type ExitStyle =
   | 'scatter-letters' | 'cascade-down' | 'cascade-up'
   | 'blur-out' | 'spin-out' | 'peel-off' | 'peel-reverse';
 
-type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
+export type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
 
 interface MotionDefaults {
   entries: EntryStyle[];
