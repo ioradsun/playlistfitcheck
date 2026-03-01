@@ -1073,7 +1073,7 @@ function mergeShortGroups(groups: PhraseGroup[]): PhraseGroup[] {
   return result;
 }
 
-function buildPhraseGroups(wordMeta: WordMetaEntry[]): PhraseGroup[] {
+export function buildPhraseGroups(wordMeta: WordMetaEntry[]): PhraseGroup[] {
   const lineMap = new Map<number, WordMetaEntry[]>();
   for (const wm of wordMeta) {
     if (!lineMap.has(wm.lineIndex)) lineMap.set(wm.lineIndex, []);
