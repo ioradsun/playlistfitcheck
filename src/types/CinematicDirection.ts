@@ -98,7 +98,8 @@ export interface WordDirective {
     | 'BREAKING' | 'HIDING' | 'NEGATION' | 'CRYING' | 'SCREAMING' | 'WHISPERING'
     | 'IMPACT' | 'TENDER' | 'STILL' | null;
   elementalClass?:
-    | 'FIRE' | 'ICE' | 'RAIN' | 'SMOKE' | 'ELECTRIC' | 'NEON' | null;
+    | 'FIRE' | 'WATER' | 'FROST' | 'SMOKE' | 'ELECTRIC'
+    | 'ICE' | 'RAIN' | 'NEON' | null; // ICE/RAIN/NEON kept for legacy compat
   colorOverride?: string | null;
   specialEffect?: string | null;
   evolutionRule?: string | null;
