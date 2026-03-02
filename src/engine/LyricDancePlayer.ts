@@ -1546,6 +1546,8 @@ export class LyricDancePlayer {
         let maxEmphasis = 0;
         let vocalActive = false;
 
+        let heroX = 0, heroY = 0, heroCount = 0;
+
         for (let i = 0; i < frame.chunks.length; i++) {
           const c = frame.chunks[i];
           if (!c.visible) continue;
@@ -1554,8 +1556,14 @@ export class LyricDancePlayer {
             anchorX += c.x;
             anchorY += c.y;
             anchorCount++;
-            if (c.isAnchor) heroActive = true;
+            // Hero = emphasis level 3+ (actual semantic hero words, NOT layout anchor)
             const emph = (c as any).emphasisLevel ?? 0;
+            if (emph >= 3) {
+              heroActive = true;
+              heroX += c.x;
+              heroY += c.y;
+              heroCount++;
+            }
             if (emph > maxEmphasis) maxEmphasis = emph;
           }
         }
@@ -1566,9 +1574,12 @@ export class LyricDancePlayer {
         const isClimax = isHighIntensitySection && songProg > 0.50;
 
         if (anchorCount > 0) {
+          // When hero is active, focus on the hero word; otherwise average of visible words
+          const focusX = heroCount > 0 ? heroX / heroCount : anchorX / anchorCount;
+          const focusY = heroCount > 0 ? heroY / heroCount : anchorY / anchorCount;
           const focus: SubjectFocus = {
-            x: anchorX / anchorCount,
-            y: anchorY / anchorCount,
+            x: focusX,
+            y: focusY,
             heroActive,
             emphasisLevel: maxEmphasis,
             isClimax,
