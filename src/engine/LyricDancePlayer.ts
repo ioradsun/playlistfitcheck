@@ -2700,16 +2700,15 @@ export class LyricDancePlayer {
               };
               const glowColor = glowColors[elementalClass] ?? '#ffffff';
               const glowPulse = 0.6 + 0.4 * Math.sin(nowSec * 4);
-              ctx.save();
-              ctx.shadowColor = glowColor;
-              ctx.shadowBlur = 18 + 8 * glowPulse + smoothBeat * 12;
-              ctx.shadowOffsetX = 0;
-              ctx.shadowOffsetY = 0;
-              // Draw invisible text just for the glow
-              ctx.globalAlpha = 0.7 + 0.3 * glowPulse;
-              ctx.fillStyle = glowColor;
-              ctx.fillText(text, 0, 0);
-              ctx.restore();
+              this.ctx.save();
+              this.ctx.shadowColor = glowColor;
+              this.ctx.shadowBlur = 18 + 8 * glowPulse + smoothBeat * 12;
+              this.ctx.shadowOffsetX = 0;
+              this.ctx.shadowOffsetY = 0;
+              this.ctx.globalAlpha = 0.7 + 0.3 * glowPulse;
+              this.ctx.fillStyle = glowColor;
+              this.ctx.fillText(text, 0, 0);
+              this.ctx.restore();
 
               drawElementalWord(
                 this.ctx, text, safeFontSize, textWidth, elementalClass,
