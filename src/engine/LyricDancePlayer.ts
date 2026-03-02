@@ -2489,11 +2489,10 @@ export class LyricDancePlayer {
 
     this.ctx.save();
     // ═══ DIRECTOR'S CAMERA: Subject transform — zoom INTO the words ═══
-    // CameraRig.getSubjectTransform() provides proximity-driven zoom, reframe offset,
-    // beat shake — this is what creates the depth (camera filming the actors).
+    // CameraRig.getSubjectTransform() is the SOLE source of text zoom.
+    // No more old spring system multiplied on top.
     const subjectT = this.cameraRig.getSubjectTransform();
-    const combinedZoom = frame.cameraZoom * subjectT.zoom;
-    const applyZoom = Math.abs(combinedZoom - 1.0) > 0.001
+    const applyZoom = Math.abs(subjectT.zoom - 1.0) > 0.001
       || Math.abs(subjectT.offsetX) > 0.5
       || Math.abs(subjectT.offsetY) > 0.5
       || Math.abs(subjectT.rotation) > 0.0001;
@@ -2502,7 +2501,7 @@ export class LyricDancePlayer {
       const zoomCy = this.height / 2;
       this.ctx.translate(zoomCx + subjectT.offsetX + subjectT.shakeX, zoomCy + subjectT.offsetY + subjectT.shakeY);
       this.ctx.rotate(subjectT.rotation);
-      this.ctx.scale(combinedZoom, combinedZoom);
+      this.ctx.scale(subjectT.zoom, subjectT.zoom);
       this.ctx.translate(-zoomCx, -zoomCy);
     }
 
@@ -2707,11 +2706,14 @@ export class LyricDancePlayer {
         );
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
-        // ═══ Text stroke for contrast (replaces overlay mask) ═══
+        // ═══ Text stroke for contrast — only when brightness is ambiguous ═══
+        // Clear dark/light backgrounds don't need stroke (color flip handles it).
+        // Only the 0.35-0.60 danger zone needs the edge reinforcement.
         const textStrokeColor = (chunk as any).textStroke as string | undefined;
-        if (textStrokeColor) {
+        const needsStroke = textStrokeColor && pixelBright !== null && pixelBright > 0.35 && pixelBright < 0.60;
+        if (needsStroke) {
           this.ctx.strokeStyle = textStrokeColor;
-          this.ctx.lineWidth = Math.max(1.5, safeFontSize * 0.04);
+          this.ctx.lineWidth = Math.max(1.5, safeFontSize * 0.035);
           this.ctx.lineJoin = 'round';
         }
 
@@ -2722,7 +2724,7 @@ export class LyricDancePlayer {
           const totalExtraWidth = baseSpacing * (letters.length - 1);
           let letterX = -totalExtraWidth / 2;
           for (const letter of letters) {
-            if (textStrokeColor) this.ctx.strokeText(letter, letterX, 0);
+            if (needsStroke) this.ctx.strokeText(letter, letterX, 0);
             this.ctx.fillText(letter, letterX, 0);
             const letterWidth = this.ctx.measureText(letter).width;
             letterX += letterWidth + baseSpacing;
@@ -2762,11 +2764,11 @@ export class LyricDancePlayer {
               );
             } else {
               // Hero word without a matching element — just draw bigger (scale already applied upstream)
-              if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
+              if (needsStroke) this.ctx.strokeText(text, 0, 0);
               this.ctx.fillText(text, 0, 0);
             }
           } else {
-            if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
+            if (needsStroke) this.ctx.strokeText(text, 0, 0);
             this.ctx.fillText(text, 0, 0);
           }
         }
@@ -3906,7 +3908,10 @@ export class LyricDancePlayer {
     const targetZoom = chapter?.targetZoom ?? 1.0;
     const zoomLerp = 1 - Math.pow(1 - 0.06, dt); // dt-compensated (identical at 30/60/120fps)
     this._currentZoom += (targetZoom - this._currentZoom) * zoomLerp;
-    const effectiveZoom = this._currentZoom * (1.0 + Math.max(0, this._springOffset));
+    // CameraRig now owns text zoom (proximity + breathing + punchZoom).
+    // The old effectiveZoom is neutralized to 1.0 — springOffset is kept only
+    // for glow/beatMod calculations elsewhere, NOT for zoom.
+    const effectiveZoom = 1.0;
 
     const arcFn = this._getArcFunction(scene.emotionalArc);
     const intensity = Math.max(0, Math.min(1, arcFn(songProgress)));
@@ -4549,20 +4554,20 @@ export class LyricDancePlayer {
 
   private _sampleBackgroundBrightness(): void {
     const now = performance.now();
-    if (now - this._lastBgSampleMs < 150) return; // throttle: ~7Hz
+    if (now - this._lastBgSampleMs < 300) return; // throttle: ~3Hz (plenty for contrast)
     this._lastBgSampleMs = now;
 
-    // Sample the center 80% of canvas (where text lives)
-    // At DPR scale, read actual rendered pixels
-    const margin = 0.10;
+    // Sample a small center strip (20% width × 30% height) — where text lives.
+    // At DPR 2 on 1080p this is ~216×162 = 35K pixels. Fast.
+    const margin = 0.40;
+    const marginY = 0.35;
     const sx = Math.floor(this.width * margin);
-    const sy = Math.floor(this.height * margin);
+    const sy = Math.floor(this.height * marginY);
     const sw = Math.floor(this.width * (1 - 2 * margin));
-    const sh = Math.floor(this.height * (1 - 2 * margin));
+    const sh = Math.floor(this.height * (1 - 2 * marginY));
     if (sw <= 0 || sh <= 0) return;
 
     try {
-      // getImageData reads at the DPR-scaled resolution
       const dsx = Math.floor(sx * this.dpr);
       const dsy = Math.floor(sy * this.dpr);
       const dsw = Math.floor(sw * this.dpr);
@@ -4574,7 +4579,6 @@ export class LyricDancePlayer {
       this._bgSampleX = sx;
       this._bgSampleY = sy;
     } catch {
-      // Canvas tainted or other error — fall back to heuristic
       this._bgSampleData = null;
     }
   }
@@ -4587,12 +4591,11 @@ export class LyricDancePlayer {
   private _getBrightnessAtPoint(canvasX: number, canvasY: number): number | null {
     if (!this._bgSampleData) return null;
 
-    // Map canvas coords to sample buffer coords
     const relX = (canvasX - this._bgSampleX) * this.dpr;
     const relY = (canvasY - this._bgSampleY) * this.dpr;
 
-    // Sample a ~20px radius (in DPR space) around the point for stability
-    const radius = Math.floor(10 * this.dpr);
+    // Small 8px radius, sample every 4th pixel — fast
+    const radius = Math.floor(8 * this.dpr);
     const startX = Math.max(0, Math.floor(relX - radius));
     const endX = Math.min(this._bgSampleW - 1, Math.floor(relX + radius));
     const startY = Math.max(0, Math.floor(relY - radius));
@@ -4600,8 +4603,7 @@ export class LyricDancePlayer {
 
     if (startX >= endX || startY >= endY) return null;
 
-    // Sample every 3rd pixel for speed (still plenty of samples)
-    const step = 3;
+    const step = 4;
     let totalBright = 0;
     let count = 0;
     const data = this._bgSampleData;
@@ -4610,11 +4612,7 @@ export class LyricDancePlayer {
     for (let py = startY; py <= endY; py += step) {
       for (let px = startX; px <= endX; px += step) {
         const idx = (py * w + px) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-        // Perceived brightness (ITU-R BT.709 luma)
-        totalBright += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        totalBright += (0.2126 * data[idx] + 0.7152 * data[idx + 1] + 0.0722 * data[idx + 2]) / 255;
         count++;
       }
     }
