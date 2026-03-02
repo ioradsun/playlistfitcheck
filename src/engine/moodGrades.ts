@@ -7,27 +7,22 @@
  * Each grade controls:
  *  - Image treatment (brightness, saturation, contrast, temperature)
  *  - Blur (type, radius, rack focus behavior)
- *  - Grain (intensity, size)
- *  - Vignette (radius, softness, intensity)
+ *  - Grain (intensity, size — capped at 0.15)
  *  - Ken Burns motion intent
  *  - Text mode derived from final brightness (not stored)
+ *
+ * Vignette overlay was REMOVED — use brightness() filter for edge darkening.
  */
 
 export interface BlurGrade {
   type: 'none' | 'gaussian' | 'bloom' | 'tilt-shift';
-  radius: number;           // px base — scaled by viewport
+  radius: number;           // px base — capped at 3px in buildGradeFilter
   rackFocus?: boolean;      // sharp when vocal active, blur between
 }
 
 export interface GrainGrade {
-  intensity: number;        // 0-1
+  intensity: number;        // 0-1 (capped at 0.15 at render time)
   size: number;             // px
-}
-
-export interface VignetteGrade {
-  innerRadius: number;      // 0-1 fraction of canvas diagonal
-  softness: number;         // 0-1 how gradual the falloff
-  opacity: number;          // 0-1
 }
 
 export interface MoodGrade {
@@ -42,9 +37,6 @@ export interface MoodGrade {
 
   // Film grain
   grain: GrainGrade;
-
-  // Vignette
-  vignette: VignetteGrade;
 
   // Ken Burns motion intent
   motionIntent: 'push-in' | 'pull-out' | 'drift-up' | 'drift-down' | 'drift-lateral' | 'breathing' | 'stable' | 'handheld' | 'slow-zoom';
@@ -61,8 +53,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     contrast: 1.0,
     temperature: 0.2,
     blur: { type: 'gaussian', radius: 3, rackFocus: true },
-    grain: { intensity: 0.3, size: 1.5 },
-    vignette: { innerRadius: 0.25, softness: 0.5, opacity: 0.5 },
+    grain: { intensity: 0.15, size: 1.5 },
     motionIntent: 'push-in',
     beatBrightnessGain: 0.02,
   },
@@ -74,7 +65,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     temperature: 0.0,
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.0, size: 0 },
-    vignette: { innerRadius: 0.5, softness: 0.6, opacity: 0.2 },
     motionIntent: 'pull-out',
     beatBrightnessGain: 0.04,
   },
@@ -84,9 +74,8 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.50,
     contrast: 0.85,
     temperature: 0.3,
-    blur: { type: 'bloom', radius: 5 },
+    blur: { type: 'bloom', radius: 3 },
     grain: { intensity: 0.15, size: 2.0 },
-    vignette: { innerRadius: 0.4, softness: 0.7, opacity: 0.25 },
     motionIntent: 'drift-lateral',
     beatBrightnessGain: 0.01,
   },
@@ -97,8 +86,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     contrast: 1.4,
     temperature: -0.3,
     blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.2, size: 1.0 },
-    vignette: { innerRadius: 0.2, softness: 0.3, opacity: 0.55 },
+    grain: { intensity: 0.15, size: 1.0 },
     motionIntent: 'handheld',
     beatBrightnessGain: 0.06,
   },
@@ -109,8 +97,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     contrast: 1.0,
     temperature: -0.1,
     blur: { type: 'gaussian', radius: 2 },
-    grain: { intensity: 0.35, size: 1.5 },
-    vignette: { innerRadius: 0.3, softness: 0.5, opacity: 0.4 },
+    grain: { intensity: 0.15, size: 1.5 },
     motionIntent: 'drift-down',
     beatBrightnessGain: 0.01,
   },
@@ -122,7 +109,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     temperature: 0.2,
     blur: { type: 'bloom', radius: 3 },
     grain: { intensity: 0.0, size: 0 },
-    vignette: { innerRadius: 0.6, softness: 0.8, opacity: 0.1 },
     motionIntent: 'pull-out',
     beatBrightnessGain: 0.05,
   },
@@ -132,9 +118,8 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.30,
     contrast: 1.3,
     temperature: -0.4,
-    blur: { type: 'tilt-shift', radius: 4 },
-    grain: { intensity: 0.25, size: 0.8 },
-    vignette: { innerRadius: 0.2, softness: 0.4, opacity: 0.6 },
+    blur: { type: 'tilt-shift', radius: 3 },
+    grain: { intensity: 0.15, size: 0.8 },
     motionIntent: 'drift-lateral',
     beatBrightnessGain: 0.02,
   },
@@ -145,8 +130,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     contrast: 0.9,
     temperature: 0.15,
     blur: { type: 'gaussian', radius: 2, rackFocus: true },
-    grain: { intensity: 0.3, size: 1.5 },
-    vignette: { innerRadius: 0.25, softness: 0.5, opacity: 0.45 },
+    grain: { intensity: 0.15, size: 1.5 },
     motionIntent: 'breathing',
     beatBrightnessGain: 0.01,
   },
@@ -158,7 +142,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     temperature: 0.15,
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.0, size: 0 },
-    vignette: { innerRadius: 0.5, softness: 0.6, opacity: 0.15 },
     motionIntent: 'stable',
     beatBrightnessGain: 0.04,
   },
@@ -169,8 +152,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     contrast: 0.95,
     temperature: 0.35,
     blur: { type: 'gaussian', radius: 2 },
-    grain: { intensity: 0.5, size: 2.0 },
-    vignette: { innerRadius: 0.3, softness: 0.5, opacity: 0.35 },
+    grain: { intensity: 0.15, size: 2.0 },
     motionIntent: 'drift-lateral',
     beatBrightnessGain: 0.01,
   },
@@ -182,7 +164,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     temperature: -0.15,
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.1, size: 1.0 },
-    vignette: { innerRadius: 0.25, softness: 0.4, opacity: 0.45 },
     motionIntent: 'push-in',
     beatBrightnessGain: 0.04,
   },
@@ -194,7 +175,6 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     temperature: 0.3,
     blur: { type: 'gaussian', radius: 1 },
     grain: { intensity: 0.05, size: 1.0 },
-    vignette: { innerRadius: 0.5, softness: 0.7, opacity: 0.15 },
     motionIntent: 'drift-up',
     beatBrightnessGain: 0.03,
   },
@@ -205,8 +185,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     contrast: 1.35,
     temperature: 0.0,
     blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.55, size: 1.2 },
-    vignette: { innerRadius: 0.2, softness: 0.3, opacity: 0.5 },
+    grain: { intensity: 0.15, size: 1.2 },
     motionIntent: 'handheld',
     beatBrightnessGain: 0.03,
   },
@@ -216,9 +195,8 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.70,
     contrast: 1.1,
     temperature: -0.1,
-    blur: { type: 'tilt-shift', radius: 4 },
+    blur: { type: 'tilt-shift', radius: 3 },
     grain: { intensity: 0.05, size: 1.0 },
-    vignette: { innerRadius: 0.3, softness: 0.5, opacity: 0.35 },
     motionIntent: 'slow-zoom',
     beatBrightnessGain: 0.02,
   },
@@ -264,8 +242,9 @@ export function buildGradeFilter(
     parts.push(`hue-rotate(${Math.round(grade.temperature * 30)}deg)`);
   }
 
-  // Blur
-  const blurPx = blurOverride ?? grade.blur.radius;
+  // Blur — hard cap at 3px to keep background image sharp
+  const MAX_BLUR_PX = 3;
+  const blurPx = Math.min(MAX_BLUR_PX, blurOverride ?? grade.blur.radius);
   if (blurPx > 0.2) {
     parts.push(`blur(${blurPx.toFixed(1)}px)`);
   }
@@ -302,11 +281,6 @@ export function lerpGrade(a: MoodGrade, b: MoodGrade, t: number): MoodGrade {
     grain: {
       intensity: lerp(a.grain.intensity, b.grain.intensity),
       size: lerp(a.grain.size, b.grain.size),
-    },
-    vignette: {
-      innerRadius: lerp(a.vignette.innerRadius, b.vignette.innerRadius),
-      softness: lerp(a.vignette.softness, b.vignette.softness),
-      opacity: lerp(a.vignette.opacity, b.vignette.opacity),
     },
     motionIntent: t < 0.5 ? a.motionIntent : b.motionIntent,
     beatBrightnessGain: lerp(a.beatBrightnessGain, b.beatBrightnessGain),
