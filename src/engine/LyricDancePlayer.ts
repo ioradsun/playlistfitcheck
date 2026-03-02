@@ -947,7 +947,6 @@ export class LyricDancePlayer {
   // ═══ Pre-computed hero word schedule for camera lookahead ═══
   private _heroSchedule: Array<{ startSec: number; endSec: number; emphasis: number; word: string }> = [];
   private _heroLookaheadMs = 400; // anticipate hero words 400ms before they appear
-  private _lastCameraLogMs = 0;
   private activeSectionTexture = 'dust';
   private activeTension: any = null;
   private lastExitProgressByChunk = new Map<string, number>();
@@ -1554,15 +1553,6 @@ export class LyricDancePlayer {
           vocalActive,
         };
         this.cameraRig.update(deltaMs, beatState, focus);
-
-        // ═══ DEBUG: log camera state every 500ms ═══
-        if (!this._lastCameraLogMs || performance.now() - this._lastCameraLogMs > 500) {
-          this._lastCameraLogMs = performance.now();
-          const st = this.cameraRig.getSubjectTransform();
-          if (upcoming || st.proximity > 0.25) {
-            console.log(`[CAM] t=${smoothedTime.toFixed(2)} hero=${upcoming?.word ?? 'none'}(e${upcoming?.emphasis ?? 0}) antic=${upcoming?.isAnticipation ?? false} prox=${st.proximity.toFixed(3)} zoom=${st.zoom.toFixed(4)} schedule=${this._heroSchedule.length}`);
-          }
-        }
       }
 
       this.update(deltaMs, smoothedTime, frame, beatState);
@@ -2135,12 +2125,12 @@ export class LyricDancePlayer {
     // ── Background / image ──
     ds.backgroundSystem = cdAny?.backgroundSystem ?? cd?.visualWorld?.backgroundSystem ?? '—';
     ds.imageLoaded = this.chapterImages.length > 0;
-    ds.zoom = (this as any)._debugCameraZoom ?? 1;
+    ds.zoom = frame?.cameraZoom ?? 1;
     ds.vignetteIntensity = 0;
 
     // ── Font / animation stubs ──
     ds.fontScale = this._viewportFontScale ?? 1;
-    ds.scale = (this as any)._debugCameraProx ?? 0;
+    ds.scale = frame?.cameraZoom ?? 1;
     ds.lineColor = this.getResolvedPalette()?.[2] ?? '#ffffff';
     ds.effectKey = activeLine?.tag ?? '—';
     const firstVisible = visibleChunks[0];
@@ -2457,13 +2447,6 @@ export class LyricDancePlayer {
     // ═══ DIRECTOR'S CAMERA: Pure depth — zoom into the words ═══
     const subjectT = this.cameraRig.getSubjectTransform();
 
-    // ═══ DEBUG: Force-test zoom for first 15s to confirm render pipeline ═══
-    // Text should visibly pulse if render path works. REMOVE AFTER TESTING.
-    const _forceTestSec = (this.audio?.currentTime ?? 0);
-    if (_forceTestSec < 15) {
-      subjectT.zoom = 1.12 + 0.06 * Math.sin(performance.now() / 400);
-    }
-
     if (Math.abs(subjectT.zoom - 1.0) > 0.001) {
       const zoomCx = this.width / 2;
       const zoomCy = this.height / 2;
@@ -2471,8 +2454,6 @@ export class LyricDancePlayer {
       this.ctx.scale(subjectT.zoom, subjectT.zoom);
       this.ctx.translate(-zoomCx, -zoomCy);
     }
-    (this as any)._debugCameraZoom = subjectT.zoom;
-    (this as any)._debugCameraProx = subjectT.proximity;
 
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       const chunk = sortBuf[ci];
@@ -2746,28 +2727,6 @@ export class LyricDancePlayer {
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
-
-    // ═══ DEBUG: On-canvas camera state — REMOVE AFTER TESTING ═══
-    {
-      const dbgY = this.height - 28;
-      const prox = subjectT.proximity;
-      const zm = subjectT.zoom;
-      const sched = this._heroSchedule.length;
-      // Proximity bar
-      this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      this.ctx.fillRect(0, dbgY - 2, this.width, 30);
-      // Green bar = proximity (0 to width)
-      this.ctx.fillStyle = prox > 0.5 ? '#ff4444' : prox > 0.25 ? '#ffaa00' : '#44ff44';
-      this.ctx.fillRect(0, dbgY, this.width * prox, 12);
-      // Text
-      this.ctx.fillStyle = '#ffffff';
-      this.ctx.font = '11px monospace';
-      const upcoming = this._getUpcomingHero(this.audio?.currentTime ?? 0);
-      this.ctx.fillText(
-        `CAM prox=${prox.toFixed(3)} zoom=${zm.toFixed(4)} hero=${upcoming?.word ?? '-'}(e${upcoming?.emphasis ?? 0}) sched=${sched}`,
-        8, dbgY + 24
-      );
-    }
 
     this.debugState.perfText = performance.now() - _t0Text;
 
@@ -4676,20 +4635,7 @@ export class LyricDancePlayer {
     // Sort by start time
     schedule.sort((a, b) => a.startSec - b.startSec);
     this._heroSchedule = schedule;
-    console.info(`[CameraLookahead] Built hero schedule: ${schedule.length} hero words from ${words.length} total words, ${Object.keys(ws).length} wordSettings keys`);
-    if (schedule.length > 0) {
-      console.info(`[CameraLookahead] First 5:`, schedule.slice(0, 5).map(h => `${h.word}(e${h.emphasis} @${h.startSec.toFixed(2)}s)`).join(', '));
-    } else {
-      console.warn(`[CameraLookahead] EMPTY schedule! words=${words.length}, wordSettings keys=[${Object.keys(ws).join(',')}], wordDirectivesMap keys=[${Object.keys(wdm).join(',')}]`);
-      // Log first 3 words to debug key mismatch
-      if (words.length > 0) {
-        for (let i = 0; i < Math.min(3, words.length); i++) {
-          const w = words[i];
-          const clean = normalizeToken(w.word);
-          console.warn(`[CameraLookahead] word[${i}] raw="${w.word}" clean="${clean}" wsHit=${!!ws[clean]} wdmHit=${!!wdm[clean]}`);
-        }
-      }
-    }
+    console.info(`[CameraLookahead] ${schedule.length} hero words scheduled`);
   }
 
   /**

@@ -103,19 +103,19 @@ const SECTION_ENERGY: Record<SectionRigName, SectionEnergy> = {
 
 const DEFAULT_CONFIG: CameraConfig = {
   wideZoom: 1.0,
-  mediumZoom: 1.12,
-  closeUpZoom: 1.25,
-  extremeCloseUpZoom: 1.45,
+  mediumZoom: 1.15,
+  closeUpZoom: 1.35,
+  extremeCloseUpZoom: 1.60,
 
-  pushInSpeed: 0.07,
-  releaseSpeed: 0.02,
+  pushInSpeed: 0.12,
+  releaseSpeed: 0.025,
 
-  punchAmount: 0.03,
+  punchAmount: 0.04,
 
-  breathDepth: 0.02,
+  breathDepth: 0.015,
 
-  holdMs: 500,
-  climaxHoldMs: 1200,
+  holdMs: 800,
+  climaxHoldMs: 1500,
 };
 
 // ──────────────────────────────────────────────────────────────
@@ -130,8 +130,8 @@ const PUNCH_DECAY_60 = 0.90;  // per-frame at 60fps
 
 export class CameraRig {
   // ─── Core state: just depth ───
-  private proximity = 0.20;          // current smoothed proximity 0-1
-  private targetProximity = 0.20;    // where we want to be
+  private proximity = 0.0;           // current smoothed proximity 0-1
+  private targetProximity = 0.0;     // where we want to be
   private holdTimer = 0;             // ms remaining in hold phase
 
   // ─── Punch zoom (additive, decays) ───
@@ -204,26 +204,24 @@ export class CameraRig {
         this.holdTimer = cfg.climaxHoldMs;
       } else if (sf.isClimax) {
         // Climax non-hero
-        this.targetProximity = 0.70;
+        this.targetProximity = 0.75;
         this.holdTimer = Math.max(this.holdTimer, cfg.holdMs);
       } else if (sf.heroActive && !this.prevHeroActive) {
-        // Hero just arrived — commit
-        // emph 3 → 0.50, emph 4 → 0.65, emph 5 → 0.80
-        this.targetProximity = 0.35 + Math.min(sf.emphasisLevel, 5) * 0.09;
+        // Hero just arrived — commit hard
+        // emph 3 → 0.55, emph 4 → 0.70, emph 5 → 0.85
+        this.targetProximity = Math.min(1.0, 0.25 + Math.min(sf.emphasisLevel, 5) * 0.12);
         this.holdTimer = cfg.holdMs;
       } else if (sf.heroActive) {
         // Sustain — keep target
       } else {
-        // Normal words — comfortable medium
+        // Normal words — TRUE BASELINE: zoom 1.0
         if (this.holdTimer <= 0) {
-          this.targetProximity = 0.20;
+          this.targetProximity = 0.0;
         }
       }
     } else if (focus) {
-      // Legacy PhraseAnchor — just gentle medium
-      if (this.holdTimer <= 0) this.targetProximity = 0.20;
+      if (this.holdTimer <= 0) this.targetProximity = 0.0;
     } else {
-      // No subject
       if (this.holdTimer <= 0) this.targetProximity = 0.0;
     }
 
@@ -329,8 +327,8 @@ export class CameraRig {
   }
 
   reset(): void {
-    this.proximity = 0.20;
-    this.targetProximity = 0.20;
+    this.proximity = 0.0;
+    this.targetProximity = 0.0;
     this.holdTimer = 0;
     this.punchZoom = 0;
     this.breathPhase = 0;
