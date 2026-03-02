@@ -2294,27 +2294,18 @@ export class LyricDancePlayer {
 
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
 
-    // ═══ Sample center band brightness for text contrast ═══
-    // Text renders in the middle ~30% of canvas height. Sample ACTUAL pixels there
-    // instead of relying on whole-image mood grade (which averages sky + ground).
+    // ═══ Sample center brightness for text contrast — ZERO GPU STALL ═══
+    // Instead of getImageData (forces GPU→CPU sync), use the mood grade brightness
+    // from the CSS filter + a bias toward dark (text is usually in bottom half).
+    // This costs nothing — it's already computed.
     const nowMs = performance.now();
-    if (nowMs - this._lastBandSampleMs > 300) {
+    if (nowMs - this._lastBandSampleMs > 2000) {
       this._lastBandSampleMs = nowMs;
-      try {
-        const bandTop = Math.floor(this.height * this.dpr * 0.35);
-        const bandH = Math.max(1, Math.floor(this.height * this.dpr * 0.30));
-        const sampleStep = 8; // skip pixels for speed
-        const bandData = this.ctx.getImageData(0, bandTop, Math.floor(this.width * this.dpr), bandH).data;
-        let sum = 0;
-        let count = 0;
-        for (let i = 0; i < bandData.length; i += 4 * sampleStep) {
-          // Perceived brightness: 0.299R + 0.587G + 0.114B
-          sum += bandData[i] * 0.299 + bandData[i + 1] * 0.587 + bandData[i + 2] * 0.114;
-          count++;
-        }
-        this._textBandBrightness = count > 0 ? (sum / count) / 255 : 0.3;
-      } catch (_e) {
-        // getImageData can fail on tainted canvas
+      const moodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
+      if (moodGrade) {
+        // CSS filter brightness applies to the whole image. Text sits in the lower
+        // half where it's almost always darker. Bias down by 0.15.
+        this._textBandBrightness = Math.max(0, moodGrade.brightness - 0.15);
       }
     }
 
@@ -2484,6 +2475,8 @@ export class LyricDancePlayer {
     const camCX = this.width / 2 + subjectT.shakeX;
     const camCY = this.height / 2 + subjectT.shakeY;
 
+    const frameNowMs = performance.now(); // hoisted — used per-chunk below
+    const frameNowSec = frameNowMs / 1000;
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       const chunk = sortBuf[ci];
       if (!chunk.visible) continue;
@@ -2494,10 +2487,10 @@ export class LyricDancePlayer {
       const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
       const exit = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
       if (entry >= 1.0 && exit === 0) {
-        if (!this.chunkActiveSinceMs.has(chunk.id)) this.chunkActiveSinceMs.set(chunk.id, performance.now());
+        if (!this.chunkActiveSinceMs.has(chunk.id)) this.chunkActiveSinceMs.set(chunk.id, frameNowMs);
       }
       const activeSince = this.chunkActiveSinceMs.get(chunk.id);
-      const visibleMs = activeSince != null ? performance.now() - activeSince : 0;
+      const visibleMs = activeSince != null ? frameNowMs - activeSince : 0;
       if (exit > 0) this.chunkActiveSinceMs.delete(chunk.id);
       const allowDecomp = exit === 0 || visibleMs >= 1000;
       const currentExitProgress = exit;
@@ -2566,7 +2559,7 @@ export class LyricDancePlayer {
       const effectiveScale = positionScaleOverride[chunk.iconPosition ?? 'behind'] ?? iconScaleMult;
       const iconBaseSize = safeFontSize * effectiveScale;
       const iconColor = chunk.color ?? chapterColor;
-      const now = performance.now() / 1000;
+      const now = frameNowSec;
       let iconPulse = 1.0;
       if (chunk.iconPosition === 'behind') iconPulse = 1.0 + Math.sin(now * 1.5) * 0.08;
       else if (chunk.behavior === 'pulse') iconPulse = 1.0 + Math.sin(now * 3) * 0.04;
@@ -2668,8 +2661,12 @@ export class LyricDancePlayer {
         // Tracking expand: draw each letter with increased spacing
         if (chunk.heroTrackingExpand && chunk.visible) {
           const letters = text.split('');
-          const baseSpacing = safeFontSize * 0.15;
-          const totalExtraWidth = baseSpacing * (letters.length - 1);
+          // Cap extra spacing so expanded word stays within ~120% of original width
+          const maxExtraWidth = textWidth * 0.20;
+          const idealSpacing = safeFontSize * 0.12;
+          const gapCount = Math.max(1, letters.length - 1);
+          const baseSpacing = Math.min(idealSpacing, maxExtraWidth / gapCount);
+          const totalExtraWidth = baseSpacing * gapCount;
           let letterX = -totalExtraWidth / 2;
           for (const letter of letters) {
             if (textStrokeColor) this.ctx.strokeText(letter, letterX, 0);
@@ -2719,7 +2716,6 @@ export class LyricDancePlayer {
                 ((this as any)._elementalLoggedIds ??= new Set()).add(chunk.id);
                 console.log(`[hero-fx] "${text}" → ${elementalClass} (emphasis ${emphasis})`);
               }
-              const nowSec = performance.now() / 1000;
               // Word-local time: effects start at t=0 when word appears
               const wordAgeSec = visibleMs / 1000;
               const smoothBeat = Math.max(0, this._springOffset ?? 0);

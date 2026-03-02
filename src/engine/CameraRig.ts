@@ -105,6 +105,8 @@ export class CameraRig {
   // Smoothed energy from beat map — drives all modulation
   private smoothedEnergy = 0;
   private activeRig: SectionRigName = 'verse'; // kept for external API compat
+  // Frame cache — computed once per update(), reused by getSubjectTransform()/applyTransform()
+  private _cachedTransform: SubjectTransform | null = null;
 
   private prevHitStrength = 0;
   private prevHeroActive = false;
@@ -237,9 +239,13 @@ export class CameraRig {
       this.shakeX *= 0.9;
       this.shakeY *= 0.9;
     }
+
+    // Invalidate cached transform — will be recomputed on next get
+    this._cachedTransform = null;
   }
 
   getSubjectTransform(): SubjectTransform {
+    if (this._cachedTransform) return this._cachedTransform;
     const cfg = this.config;
     const breathMult = energyToBreathMult(this.smoothedEnergy);
 
@@ -263,11 +269,13 @@ export class CameraRig {
     // Punch
     zoom += this.punchZoom;
 
-    return {
+    const result: SubjectTransform = {
       zoom,
       proximity: this.proximity,
       offsetX: 0, offsetY: 0, rotation: 0, shakeX: this.shakeX, shakeY: this.shakeY,
     };
+    this._cachedTransform = result;
+    return result;
   }
 
   applyTransform(ctx: CanvasRenderingContext2D, _layer: 'backdrop' | 'atmosphere' | 'far' | 'mid' | 'near'): void {
