@@ -228,7 +228,7 @@ serve(async (req) => {
     }
 
     const cinematicDirection = danceRow?.cinematic_direction;
-    const lines = Array.isArray(danceRow?.lines) ? danceRow.lines : [];
+    const lines = Array.isArray(danceRow?.lyrics) ? danceRow.lyrics : [];
 
     const rawSections = Array.isArray(cinematicDirection?.sections)
       ? cinematicDirection.sections : [];
