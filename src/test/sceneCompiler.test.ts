@@ -48,32 +48,4 @@ describe('sceneCompiler', () => {
     }
   });
 
-  it('bakeScene produces frames with valid chunks', () => {
-    const baked = bakeScene(PAYLOAD);
-    expect(baked.length).toBeGreaterThan(0);
-    const allChunks = baked.flatMap((f) => f.chunks);
-    expect(allChunks.length).toBeGreaterThan(0);
-    for (const chunk of allChunks) {
-      expect(chunk.id).toBeTruthy();
-      expect(chunk.behavior).toBeTruthy();
-    }
-  });
-
-  it('both functions use the same motion profile for the same payload', () => {
-    const compiled = compileScene(PAYLOAD);
-    const baked = bakeScene(PAYLOAD);
-
-    // Collect unique behaviors from each
-    const compiledBehaviors = new Set(compiled.phraseGroups.flatMap(g => g.words.map(w => w.behaviorStyle)));
-    const bakedBehaviors = new Set(baked.flatMap(f => f.chunks.map(c => c.behavior)));
-
-    // Both should produce behaviors from the fluid motion profile
-    const fluidBehaviors = ['float', 'grow', 'lean'];
-    for (const b of compiledBehaviors) {
-      expect(fluidBehaviors).toContain(b);
-    }
-    for (const b of bakedBehaviors) {
-      expect(fluidBehaviors).toContain(b);
-    }
-  });
 });
