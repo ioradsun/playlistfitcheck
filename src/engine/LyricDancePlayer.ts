@@ -4620,7 +4620,7 @@ export class LyricDancePlayer {
       const resolved = ws[clean];
       const directive = wdm[clean];
       const emphasis = resolved?.emphasisLevel ?? directive?.emphasisLevel ?? 0;
-      if (emphasis >= 3) {
+      if (emphasis >= 5) {
         schedule.push({
           startSec: w.start,
           endSec: w.end,

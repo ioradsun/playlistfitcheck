@@ -89,12 +89,12 @@ interface SectionEnergy {
 }
 
 const SECTION_ENERGY: Record<SectionRigName, SectionEnergy> = {
-  intro:  { punchMult: 0.4, breathMult: 0.7, pushSpeedMult: 0.8 },
-  verse:  { punchMult: 0.6, breathMult: 0.8, pushSpeedMult: 0.9 },
-  bridge: { punchMult: 0.7, breathMult: 1.0, pushSpeedMult: 1.0 },
-  chorus: { punchMult: 1.2, breathMult: 1.2, pushSpeedMult: 1.3 },
-  drop:   { punchMult: 1.8, breathMult: 1.5, pushSpeedMult: 1.6 },
-  outro:  { punchMult: 0.4, breathMult: 0.7, pushSpeedMult: 0.7 },
+  intro:  { punchMult: 0.3, breathMult: 0.8, pushSpeedMult: 0.8 },
+  verse:  { punchMult: 0.5, breathMult: 1.0, pushSpeedMult: 1.0 },
+  bridge: { punchMult: 0.5, breathMult: 1.0, pushSpeedMult: 1.0 },
+  chorus: { punchMult: 0.8, breathMult: 1.2, pushSpeedMult: 1.1 },
+  drop:   { punchMult: 1.2, breathMult: 1.3, pushSpeedMult: 1.2 },
+  outro:  { punchMult: 0.3, breathMult: 0.8, pushSpeedMult: 0.7 },
 };
 
 // ──────────────────────────────────────────────────────────────
@@ -102,20 +102,25 @@ const SECTION_ENERGY: Record<SectionRigName, SectionEnergy> = {
 // ──────────────────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: CameraConfig = {
+  // Zoom range — subtle. Breathing lives in the bottom, moments in the top.
   wideZoom: 1.0,
-  mediumZoom: 1.15,
-  closeUpZoom: 1.35,
-  extremeCloseUpZoom: 1.60,
+  mediumZoom: 1.06,
+  closeUpZoom: 1.15,
+  extremeCloseUpZoom: 1.30,
 
-  pushInSpeed: 0.12,
-  releaseSpeed: 0.025,
+  // Smooth — no snapping
+  pushInSpeed: 0.05,
+  releaseSpeed: 0.018,
 
-  punchAmount: 0.04,
+  // Gentle punch
+  punchAmount: 0.015,
 
-  breathDepth: 0.015,
+  // Breathing is the star — always gently moving
+  breathDepth: 0.025,
 
-  holdMs: 800,
-  climaxHoldMs: 1500,
+  // Long holds so moments land
+  holdMs: 1200,
+  climaxHoldMs: 2000,
 };
 
 // ──────────────────────────────────────────────────────────────
@@ -195,32 +200,28 @@ export class CameraRig {
     // ─── 1. WHAT: Emphasis → target proximity ───
     if (sf) {
       if (!sf.vocalActive) {
-        // Instrumental — pull all the way out
+        // Instrumental — settle to base
         this.targetProximity = 0.0;
         this.holdTimer = 0;
-      } else if (sf.isClimax && sf.heroActive) {
-        // Climax hero — extreme close-up
+      } else if (sf.isClimax && sf.heroActive && sf.emphasisLevel >= 5) {
+        // Climax + emph 5 — the BIG moment (maybe 2-3 per song)
         this.targetProximity = 1.0;
         this.holdTimer = cfg.climaxHoldMs;
-      } else if (sf.isClimax) {
-        // Climax non-hero
-        this.targetProximity = 0.75;
-        this.holdTimer = Math.max(this.holdTimer, cfg.holdMs);
-      } else if (sf.heroActive && !this.prevHeroActive) {
-        // Hero just arrived — commit hard
-        // emph 3 → 0.55, emph 4 → 0.70, emph 5 → 0.85
-        this.targetProximity = Math.min(1.0, 0.25 + Math.min(sf.emphasisLevel, 5) * 0.12);
+      } else if (sf.heroActive && sf.emphasisLevel >= 5 && !this.prevHeroActive) {
+        // Emph 5 hero — a real moment (push in)
+        this.targetProximity = 0.70;
         this.holdTimer = cfg.holdMs;
-      } else if (sf.heroActive) {
-        // Sustain — keep target
+      } else if (sf.heroActive && sf.emphasisLevel >= 5) {
+        // Sustain emph 5
       } else {
-        // Normal words — TRUE BASELINE: zoom 1.0
+        // Everything else (emph 0-4, normal words) — gentle breathing zone
+        // Vocal active = slight warmth (0.15), silence = flat (0.0)
         if (this.holdTimer <= 0) {
-          this.targetProximity = 0.0;
+          this.targetProximity = sf.vocalActive ? 0.15 : 0.0;
         }
       }
     } else if (focus) {
-      if (this.holdTimer <= 0) this.targetProximity = 0.0;
+      if (this.holdTimer <= 0) this.targetProximity = 0.10;
     } else {
       if (this.holdTimer <= 0) this.targetProximity = 0.0;
     }
