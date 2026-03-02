@@ -2445,15 +2445,13 @@ export class LyricDancePlayer {
 
     this.ctx.save();
     // ═══ DIRECTOR'S CAMERA: Pure depth — zoom into the words ═══
+    // NOTE: Canvas zoom is baked into each chunk's setTransform() call below,
+    // NOT applied as a parent transform, because setTransform() replaces the
+    // entire matrix and would wipe any parent zoom.
     const subjectT = this.cameraRig.getSubjectTransform();
-
-    if (Math.abs(subjectT.zoom - 1.0) > 0.001) {
-      const zoomCx = this.width / 2;
-      const zoomCy = this.height / 2;
-      this.ctx.translate(zoomCx, zoomCy);
-      this.ctx.scale(subjectT.zoom, subjectT.zoom);
-      this.ctx.translate(-zoomCx, -zoomCy);
-    }
+    const camZoom = subjectT.zoom;
+    const camCX = this.width / 2;
+    const camCY = this.height / 2;
 
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       const chunk = sortBuf[ci];
@@ -2601,12 +2599,12 @@ export class LyricDancePlayer {
             }
             this.ctx.globalAlpha = ghostAlpha;
             const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
-              drawX + gx,
-              finalDrawY + gy,
+              camCX + ((drawX + gx) - camCX) * camZoom,
+              camCY + ((finalDrawY + gy) - camCY) * camZoom,
               chunk.rotation ?? 0,
               chunk.skewX ?? 0,
-              sx,
-              sy,
+              sx * camZoom,
+              sy * camZoom,
             );
             this.ctx.setTransform(ga, gb, gc, gd, ge, gf);
             this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
@@ -2615,12 +2613,12 @@ export class LyricDancePlayer {
         }
 
         const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
-          drawX,
-          finalDrawY,
+          camCX + (drawX - camCX) * camZoom,
+          camCY + (finalDrawY - camCY) * camZoom,
           chunk.rotation ?? 0,
           chunk.skewX ?? 0,
-          sx,
-          sy,
+          sx * camZoom,
+          sy * camZoom,
         );
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
