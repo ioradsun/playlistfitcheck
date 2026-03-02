@@ -98,28 +98,28 @@ export type SectionRigName = 'verse' | 'chorus' | 'bridge' | 'drop' | 'intro' | 
 
 const SECTION_RIGS: Record<SectionRigName, Partial<CameraConfig>> = {
   verse: {
-    punchZoomAmount: 0.012, shakeAmplitude: 1.5,
-    swayAmplitudeX: 4, swayAmplitudeY: 2, swayRotAmplitude: 0.003, breathAmplitude: 0.015,
+    punchZoomAmount: 0.018, shakeAmplitude: 2,
+    swayAmplitudeX: 4, swayAmplitudeY: 2, swayRotAmplitude: 0.003, breathAmplitude: 0.020,
   },
   chorus: {
-    punchZoomAmount: 0.028, shakeAmplitude: 3.5,
-    swayAmplitudeX: 7, swayAmplitudeY: 3.5, swayRotAmplitude: 0.006, breathAmplitude: 0.022,
+    punchZoomAmount: 0.040, shakeAmplitude: 5,
+    swayAmplitudeX: 8, swayAmplitudeY: 4, swayRotAmplitude: 0.007, breathAmplitude: 0.030,
   },
   bridge: {
-    punchZoomAmount: 0.016, shakeAmplitude: 2,
-    swayAmplitudeX: 5, swayAmplitudeY: 2.5, swayRotAmplitude: 0.004, breathAmplitude: 0.018,
+    punchZoomAmount: 0.022, shakeAmplitude: 2.5,
+    swayAmplitudeX: 5, swayAmplitudeY: 2.5, swayRotAmplitude: 0.004, breathAmplitude: 0.022,
   },
   drop: {
-    punchZoomAmount: 0.040, shakeAmplitude: 5,
-    swayAmplitudeX: 8, swayAmplitudeY: 4, swayRotAmplitude: 0.010, breathAmplitude: 0.025,
+    punchZoomAmount: 0.055, shakeAmplitude: 7,
+    swayAmplitudeX: 10, swayAmplitudeY: 5, swayRotAmplitude: 0.012, breathAmplitude: 0.035,
   },
   intro: {
-    punchZoomAmount: 0.008, shakeAmplitude: 1,
-    swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.002, breathAmplitude: 0.012,
+    punchZoomAmount: 0.010, shakeAmplitude: 1.5,
+    swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.002, breathAmplitude: 0.015,
   },
   outro: {
-    punchZoomAmount: 0.008, shakeAmplitude: 1,
-    swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.002, breathAmplitude: 0.012,
+    punchZoomAmount: 0.010, shakeAmplitude: 1.5,
+    swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.002, breathAmplitude: 0.015,
   },
 };
 
@@ -128,11 +128,11 @@ const SECTION_RIGS: Record<SectionRigName, Partial<CameraConfig>> = {
 // ──────────────────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: CameraConfig = {
-  proximitySmoothing: 0.04, reframeSmoothing: 0.06, rotSmoothing: 0.03,
-  wideZoom: 1.0, closeUpZoom: 1.12, extremeCloseUpZoom: 1.25,
-  maxReframeX: 35, maxReframeY: 20, maxRotation: 0.012,
-  punchZoomAmount: 0.020, shakeAmplitude: 3,
-  breathAmplitude: 0.018, breathCycleMs: 4000,
+  proximitySmoothing: 0.06, reframeSmoothing: 0.08, rotSmoothing: 0.03,
+  wideZoom: 1.0, closeUpZoom: 1.22, extremeCloseUpZoom: 1.45,
+  maxReframeX: 50, maxReframeY: 30, maxRotation: 0.015,
+  punchZoomAmount: 0.030, shakeAmplitude: 4,
+  breathAmplitude: 0.025, breathCycleMs: 4000,
   swayAmplitudeX: 5, swayAmplitudeY: 2.5, swayRotAmplitude: 0.004,
   backdropDriftFactor: 0.20, atmosphereFactor: 0.15,
   baseHoldMs: 400, heroHoldMs: 600, climaxHoldMs: 1000,
@@ -206,13 +206,13 @@ export class CameraRig {
         this.targetProximity = 0.75;
         this.holdTimer = Math.max(this.holdTimer, cfg.baseHoldMs);
       } else if (sf.heroActive && !this.prevHeroActive) {
-        // Hero just arrived — commit
-        this.targetProximity = 0.55 + Math.min(sf.emphasisLevel, 5) * 0.05;
+        // Hero just arrived — commit hard
+        this.targetProximity = 0.65 + Math.min(sf.emphasisLevel, 5) * 0.06;
         this.holdTimer = cfg.heroHoldMs;
       } else if (sf.heroActive) {
         // Sustain hold
       } else if (sf.emphasisLevel >= 3) {
-        this.targetProximity = 0.4;
+        this.targetProximity = 0.50;
         this.holdTimer = Math.max(this.holdTimer, cfg.baseHoldMs * 0.5);
       } else {
         if (this.holdTimer <= 0) this.targetProximity = 0.25;
@@ -239,7 +239,7 @@ export class CameraRig {
     if (sf || anchor) {
       const dx = fx - this.canvasW * 0.5;
       const dy = fy - this.canvasH * 0.5;
-      const reframeMult = 0.20 + this.proximity * 0.20;
+      const reframeMult = 0.20 + this.proximity * 0.30;
       this.targetReframeX = Math.max(-cfg.maxReframeX, Math.min(cfg.maxReframeX, dx * reframeMult));
       this.targetReframeY = Math.max(-cfg.maxReframeY, Math.min(cfg.maxReframeY, dy * reframeMult));
     } else {
