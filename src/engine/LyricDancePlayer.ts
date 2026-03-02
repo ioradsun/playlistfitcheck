@@ -1542,9 +1542,6 @@ export class LyricDancePlayer {
         const vocalActive = frame ? frame.chunks.some((c: any) => c.visible && c.alpha > 0.3) : false;
         const upcoming = this._getUpcomingHero(smoothedTime);
 
-        // Feed beat energy directly — camera derives all modulation from this
-        if (beatState) this.cameraRig.setEnergy(beatState.energy);
-
         const songProg = (smoothedTime - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
         // Climax = high energy + past halfway through the song
         const isClimax = (beatState?.energy ?? 0) > 0.65 && songProg > 0.50;
@@ -2471,9 +2468,8 @@ export class LyricDancePlayer {
     // entire matrix and would wipe any parent zoom.
     const subjectT = this.cameraRig.getSubjectTransform();
     const camZoom = subjectT.zoom;
-    // Shake shifts the "camera center" — everything moves together
-    const camCX = this.width / 2 + subjectT.shakeX;
-    const camCY = this.height / 2 + subjectT.shakeY;
+    const camCX = this.width / 2;
+    const camCY = this.height / 2;
 
     const frameNowMs = performance.now(); // hoisted — used per-chunk below
     const frameNowSec = frameNowMs / 1000;
@@ -2659,7 +2655,9 @@ export class LyricDancePlayer {
         }
 
         // Tracking expand: draw each letter with increased spacing
-        if (chunk.heroTrackingExpand && chunk.visible) {
+        if (false && chunk.heroTrackingExpand && chunk.visible) {
+          // DISABLED: tracking expand adds width at render time but layout
+          // doesn't account for it, causing word overlap. Needs layout-time solution.
           const letters = text.split('');
           // Cap extra spacing so expanded word stays within ~120% of original width
           const maxExtraWidth = textWidth * 0.20;
