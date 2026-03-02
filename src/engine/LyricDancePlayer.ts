@@ -39,7 +39,7 @@ import {
   type ResolvedWordSettings,
 } from "@/engine/cinematicResolver";
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
-import { CameraRig, type SectionRigName } from "@/engine/CameraRig";
+import { CameraRig, type SectionRigName, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 
@@ -902,6 +902,14 @@ export class LyricDancePlayer {
     panEndY: number;
   }> = [];
   private _bgBlurCurrent = 3;
+
+  // ═══ Pixel-sampled background brightness (replaces CSS filter heuristic) ═══
+  private _bgSampleData: Uint8ClampedArray | null = null;  // raw pixel data from last sample
+  private _bgSampleW = 0;                                   // width of sampled region
+  private _bgSampleH = 0;                                   // height of sampled region
+  private _bgSampleX = 0;                                   // canvas x offset of sample region
+  private _bgSampleY = 0;                                   // canvas y offset of sample region
+  private _lastBgSampleMs = 0;                               // timestamp of last sample
   private _haloStamps: Map<string, HTMLCanvasElement> = new Map();
   private _grainCanvas: HTMLCanvasElement | null = null;
   private _grainPool: ImageData[] = [];      // pre-generated noise frames
@@ -942,6 +950,7 @@ export class LyricDancePlayer {
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
   private ambientParticleEngine: ParticleEngine | null = null;
   private activeSectionIndex = -1;
+  private _activeRigName: string = 'verse';
   private activeSectionTexture = 'dust';
   private activeTension: any = null;
   private lastExitProgressByChunk = new Map<string, number>();
@@ -1529,25 +1538,49 @@ export class LyricDancePlayer {
       // ═══ V2: Single evaluateFrame call ═══
       const frame = this.evaluateFrame(smoothedTime);
 
-      // ═══ V2: Update CameraRig with beat state + phrase anchor ═══
+      // ═══ V2: Update CameraRig with SubjectFocus — camera films the WORDS ═══
       if (frame && frame.chunks) {
-        // Compute phrase anchor from current-line chunks (alpha > 0.5 = current line)
+        // Build SubjectFocus from current frame state
         let anchorX = 0, anchorY = 0, anchorCount = 0;
+        let heroActive = false;
+        let maxEmphasis = 0;
+        let vocalActive = false;
+
         for (let i = 0; i < frame.chunks.length; i++) {
           const c = frame.chunks[i];
-          if (c.visible && c.alpha > 0.5) {
+          if (!c.visible) continue;
+          if (c.alpha > 0.3) vocalActive = true;
+          if (c.alpha > 0.5) {
             anchorX += c.x;
             anchorY += c.y;
             anchorCount++;
+            if (c.isAnchor) heroActive = true;
+            const emph = (c as any).emphasisLevel ?? 0;
+            if (emph > maxEmphasis) maxEmphasis = emph;
           }
         }
+
+        // Detect climax from section type (drop/chorus in latter half = climax)
+        const songProg = (smoothedTime - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
+        const isHighIntensitySection = this._activeRigName === 'drop' || this._activeRigName === 'chorus';
+        const isClimax = isHighIntensitySection && songProg > 0.50;
+
         if (anchorCount > 0) {
-          this.cameraRig.update(deltaMs, beatState, {
+          const focus: SubjectFocus = {
             x: anchorX / anchorCount,
             y: anchorY / anchorCount,
-          });
+            heroActive,
+            emphasisLevel: maxEmphasis,
+            isClimax,
+            vocalActive,
+          };
+          this.cameraRig.update(deltaMs, beatState, focus);
         } else {
-          this.cameraRig.update(deltaMs, beatState, null);
+          this.cameraRig.update(deltaMs, beatState, {
+            x: this.width / 2, y: this.height / 2,
+            heroActive: false, emphasisLevel: 0,
+            isClimax: false, vocalActive: false,
+          });
         }
       } else {
         this.cameraRig.update(deltaMs, beatState, null);
@@ -1974,6 +2007,7 @@ export class LyricDancePlayer {
         : moodLower.includes('outro') || moodLower.includes('fade') ? 'outro' as const
         : 'verse' as const;
       this.cameraRig.setSection(rigName);
+      this._activeRigName = rigName;
     }
     this.activeTension = currentTension;
 
@@ -2284,14 +2318,15 @@ export class LyricDancePlayer {
     this.cameraRig.resetTransform(this.ctx);
 
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
+    // Sample actual canvas pixels for ground-truth brightness (throttled ~7Hz)
+    this._sampleBackgroundBrightness();
+
     const _t0Text = performance.now();
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
     const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
-    // Apply camera zoom as a canvas-level transform — NOT per-word font resize.
-    // This keeps collision bounds stable across beat pulses.
-    const applyZoom = Math.abs(frame.cameraZoom - 1.0) > 0.001;
+    // Camera zoom is now applied via CameraRig.getSubjectTransform() at the text rendering stage
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'middle';
 
@@ -2442,11 +2477,21 @@ export class LyricDancePlayer {
     }
 
     this.ctx.save();
+    // ═══ DIRECTOR'S CAMERA: Subject transform — zoom INTO the words ═══
+    // CameraRig.getSubjectTransform() provides proximity-driven zoom, reframe offset,
+    // beat shake — this is what creates the depth (camera filming the actors).
+    const subjectT = this.cameraRig.getSubjectTransform();
+    const combinedZoom = frame.cameraZoom * subjectT.zoom;
+    const applyZoom = Math.abs(combinedZoom - 1.0) > 0.001
+      || Math.abs(subjectT.offsetX) > 0.5
+      || Math.abs(subjectT.offsetY) > 0.5
+      || Math.abs(subjectT.rotation) > 0.0001;
     if (applyZoom) {
       const zoomCx = this.width / 2;
       const zoomCy = this.height / 2;
-      this.ctx.translate(zoomCx, zoomCy);
-      this.ctx.scale(frame.cameraZoom, frame.cameraZoom);
+      this.ctx.translate(zoomCx + subjectT.offsetX + subjectT.shakeX, zoomCy + subjectT.offsetY + subjectT.shakeY);
+      this.ctx.rotate(subjectT.rotation);
+      this.ctx.scale(combinedZoom, combinedZoom);
       this.ctx.translate(-zoomCx, -zoomCy);
     }
 
@@ -2509,6 +2554,38 @@ export class LyricDancePlayer {
       let drawX = centerX - textWidth * 0.5;
       const drawY = centerY;
       const finalDrawY = drawY;
+
+      // ═══ PIXEL-SAMPLED CONTRAST: Override chunk color from actual background brightness ═══
+      // evaluateFrame set chunk.color using the CSS filter heuristic (bgFilterBright).
+      // Here we override with ground truth: actual pixel brightness at this word's position.
+      const pixelBright = this._getBrightnessAtPoint(centerX, centerY);
+      if (pixelBright !== null && chunk.color && typeof chunk.color === 'string') {
+        const isFiller = (chunk.alpha ?? 1) < 0.35;
+        if (pixelBright > 0.55) {
+          // Bright background → need dark text
+          if (chunk.color.startsWith('rgba') && chunk.color.includes('255,255,255')) {
+            chunk.color = isFiller ? 'rgba(25,25,25,0.25)' : 'rgba(25,25,25,0.85)';
+          } else if (!chunk.color.startsWith('rgba')) {
+            const textBright = perceivedBrightness(chunk.color);
+            if (textBright > 0.60) {
+              chunk.color = '#1a1a1a';
+            }
+          }
+          (chunk as any).textStroke = 'rgba(255,255,255,0.3)'; // light stroke on dark text
+        } else if (pixelBright < 0.40) {
+          // Dark background → need light text
+          if (chunk.color.startsWith('rgba') && chunk.color.includes('0,0,0')) {
+            chunk.color = isFiller ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.90)';
+          } else if (!chunk.color.startsWith('rgba')) {
+            const textBright = perceivedBrightness(chunk.color);
+            if (textBright < 0.45) {
+              chunk.color = mixTowardWhite(chunk.color, Math.max(0.55, 0.90 - textBright));
+            }
+          }
+          (chunk as any).textStroke = 'rgba(0,0,0,0.35)';
+        }
+        // Middle zone (0.40-0.55): keep evaluateFrame's choice — it's ambiguous
+      }
 
       const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
@@ -2618,6 +2695,15 @@ export class LyricDancePlayer {
           sy,
         );
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
+
+        // ═══ Text stroke for contrast (replaces overlay mask) ═══
+        const textStrokeColor = (chunk as any).textStroke as string | undefined;
+        if (textStrokeColor) {
+          this.ctx.strokeStyle = textStrokeColor;
+          this.ctx.lineWidth = Math.max(1.5, safeFontSize * 0.04);
+          this.ctx.lineJoin = 'round';
+        }
+
         // Tracking expand: draw each letter with increased spacing
         if (chunk.heroTrackingExpand && chunk.visible) {
           const letters = text.split('');
@@ -2625,6 +2711,7 @@ export class LyricDancePlayer {
           const totalExtraWidth = baseSpacing * (letters.length - 1);
           let letterX = -totalExtraWidth / 2;
           for (const letter of letters) {
+            if (textStrokeColor) this.ctx.strokeText(letter, letterX, 0);
             this.ctx.fillText(letter, letterX, 0);
             const letterWidth = this.ctx.measureText(letter).width;
             letterX += letterWidth + baseSpacing;
@@ -2664,9 +2751,11 @@ export class LyricDancePlayer {
               );
             } else {
               // Hero word without a matching element — just draw bigger (scale already applied upstream)
+              if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
               this.ctx.fillText(text, 0, 0);
             }
           } else {
+            if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
             this.ctx.fillText(text, 0, 0);
           }
         }
@@ -3315,24 +3404,83 @@ export class LyricDancePlayer {
       }))
     );
 
-    // Generate Ken Burns parameters per chapter
+    // Generate Ken Burns parameters per chapter — driven by motionIntent from mood grade.
+    // Images are drawn with 20% overscan, so KB can safely use up to ~8% pan + 1.15 zoom
+    // without ever revealing canvas edges (CameraRig 'far' parallax adds ≤2% displacement).
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+    const sections = (cd?.sections as any[]) ?? [];
     this._kenBurnsParams = this.chapterImages.map((_, i) => {
       const seed = (i * 2654435761) >>> 0;
       const s = (v: number) => ((seed * v) & 0xFFFF) / 0xFFFF;
 
-      const zoomIn = i % 2 === 0;
-      const zoomStart = zoomIn ? 1.0 : 1.05;
-      const zoomEnd = zoomIn ? 1.05 : 1.0;
+      // Resolve this chapter's motionIntent from its section's visualMood
+      const sectionMood = sections[i]?.visualMood as string | undefined;
+      const grade = getMoodGrade(sectionMood);
+      const intent = grade.motionIntent;
 
-      const panRange = 0.02;
-      return {
-        zoomStart,
-        zoomEnd,
-        panStartX: (s(17) - 0.5) * panRange,
-        panStartY: (s(31) - 0.5) * panRange,
-        panEndX: (s(53) - 0.5) * panRange,
-        panEndY: (s(71) - 0.5) * panRange,
-      };
+      // Base: all chapters have enough zoom to avoid border visibility
+      let zoomStart = 1.06;
+      let zoomEnd = 1.06;
+      let panStartX = 0;
+      let panStartY = 0;
+      let panEndX = 0;
+      let panEndY = 0;
+
+      switch (intent) {
+        case 'push-in':
+          zoomStart = 1.06; zoomEnd = 1.14;
+          panStartX = (s(17) - 0.5) * 0.03; panStartY = (s(31) - 0.5) * 0.02;
+          panEndX = 0; panEndY = 0; // push-in converges toward center
+          break;
+        case 'pull-out':
+          zoomStart = 1.14; zoomEnd = 1.06;
+          panStartX = 0; panStartY = 0;
+          panEndX = (s(53) - 0.5) * 0.03; panEndY = (s(71) - 0.5) * 0.02;
+          break;
+        case 'drift-up':
+          zoomStart = 1.08; zoomEnd = 1.10;
+          panStartY = 0.03; panEndY = -0.03; // image drifts up (pan moves down in image space)
+          panStartX = (s(17) - 0.5) * 0.01; panEndX = (s(53) - 0.5) * 0.01;
+          break;
+        case 'drift-down':
+          zoomStart = 1.08; zoomEnd = 1.10;
+          panStartY = -0.03; panEndY = 0.03;
+          panStartX = (s(17) - 0.5) * 0.01; panEndX = (s(53) - 0.5) * 0.01;
+          break;
+        case 'drift-lateral': {
+          const leftToRight = i % 2 === 0;
+          zoomStart = 1.08; zoomEnd = 1.10;
+          panStartX = leftToRight ? -0.04 : 0.04;
+          panEndX = leftToRight ? 0.04 : -0.04;
+          panStartY = (s(31) - 0.5) * 0.015; panEndY = (s(71) - 0.5) * 0.015;
+          break;
+        }
+        case 'slow-zoom':
+          zoomStart = 1.06; zoomEnd = 1.15;
+          panStartX = (s(17) - 0.5) * 0.02; panStartY = (s(31) - 0.5) * 0.015;
+          panEndX = panStartX * 0.3; panEndY = panStartY * 0.3; // slowly converges
+          break;
+        case 'breathing':
+          // Gentle oscillation — zoom handled by CameraRig sway, KB just holds steady
+          zoomStart = 1.08; zoomEnd = 1.10;
+          panStartX = (s(17) - 0.5) * 0.015; panStartY = (s(31) - 0.5) * 0.015;
+          panEndX = -panStartX; panEndY = -panStartY;
+          break;
+        case 'handheld':
+          // Intentionally jittery — small random start/end, CameraRig shake adds the rest
+          zoomStart = 1.07; zoomEnd = 1.09;
+          panStartX = (s(17) - 0.5) * 0.04; panStartY = (s(31) - 0.5) * 0.03;
+          panEndX = (s(53) - 0.5) * 0.04; panEndY = (s(71) - 0.5) * 0.03;
+          break;
+        case 'stable':
+        default:
+          zoomStart = 1.07; zoomEnd = 1.08;
+          panStartX = (s(17) - 0.5) * 0.01; panStartY = (s(31) - 0.5) * 0.01;
+          panEndX = (s(53) - 0.5) * 0.01; panEndY = (s(71) - 0.5) * 0.01;
+          break;
+      }
+
+      return { zoomStart, zoomEnd, panStartX, panStartY, panEndX, panEndY };
     });
   }
 
@@ -3399,19 +3547,25 @@ export class LyricDancePlayer {
     // Beat response
     const beatMod = Math.max(0, this._springOffset);
 
-    // Blur: rack focus support — sharp when vocal is active, blur between phrases
+    // Blur: rack focus + proximity-driven depth of field
+    // Closer camera → shallower DOF → more backdrop blur (like real cinematography)
+    const cameraProximity = this.cameraRig.getProximity();
+    const proximityBlurBoost = cameraProximity * 2.0; // 0px at wide, up to 2px at ECU
+
     let blurOverride: number | undefined;
     if (activeGrade.blur.rackFocus) {
-      // Use vocal activity to drive focus
       const isVocalActive = this._lastVocalProgress != null && this._lastVocalProgress > 0.02 && this._lastVocalProgress < 0.98;
-      const targetBlur = isVocalActive ? 0 : activeGrade.blur.radius;
+      const targetBlur = (isVocalActive ? 0 : activeGrade.blur.radius) + proximityBlurBoost;
       this._bgBlurCurrent += (targetBlur - this._bgBlurCurrent) * 0.08;
       blurOverride = Math.round(this._bgBlurCurrent * 10) / 10;
     } else if (activeGrade.blur.type !== 'none') {
-      this._bgBlurCurrent += (activeGrade.blur.radius - this._bgBlurCurrent) * 0.05;
+      const targetBlur = activeGrade.blur.radius + proximityBlurBoost;
+      this._bgBlurCurrent += (targetBlur - this._bgBlurCurrent) * 0.05;
       blurOverride = Math.round(this._bgBlurCurrent * 10) / 10;
     } else {
-      this._bgBlurCurrent += (0 - this._bgBlurCurrent) * 0.1;
+      // Even with no mood blur, proximity still adds DOF
+      const targetBlur = proximityBlurBoost;
+      this._bgBlurCurrent += (targetBlur - this._bgBlurCurrent) * 0.1;
       blurOverride = this._bgBlurCurrent > 0.2 ? Math.round(this._bgBlurCurrent * 10) / 10 : 0;
     }
 
@@ -3421,6 +3575,14 @@ export class LyricDancePlayer {
     if (current?.complete && current.naturalWidth > 0) {
       this.ctx.save();
       this.ctx.filter = filterStr;
+
+      // ═══ OVERSCAN: draw image 20% larger than canvas to prevent border visibility
+      // during CameraRig pan/sway/shake + Ken Burns motion. The canvas clips automatically.
+      const OVERSCAN = 1.20;
+      const ow = this.width * OVERSCAN;
+      const oh = this.height * OVERSCAN;
+      const ox = (this.width - ow) / 2;   // negative offset — extends beyond canvas edges
+      const oy = (this.height - oh) / 2;
 
       // Ken Burns: slow zoom + pan over chapter duration
       // Beat-driven zoom pulse is handled by CameraRig.applyTransform('far') — don't double-apply
@@ -3440,10 +3602,10 @@ export class LyricDancePlayer {
         this.ctx.translate(this.width / 2 + panX, this.height / 2 + panY);
         this.ctx.scale(zoom, zoom);
         this.ctx.translate(-this.width / 2, -this.height / 2);
-        this.ctx.drawImage(current, 0, 0, this.width, this.height);
+        this.ctx.drawImage(current, ox, oy, ow, oh);
         this.ctx.restore();
       } else {
-        this.ctx.drawImage(current, 0, 0, this.width, this.height);
+        this.ctx.drawImage(current, ox, oy, ow, oh);
       }
 
       this.ctx.restore(); // restore filter state
@@ -3453,6 +3615,13 @@ export class LyricDancePlayer {
       this.ctx.save();
       this.ctx.globalAlpha = blend;
       this.ctx.filter = filterStr;
+
+      // Same overscan as primary image
+      const OVERSCAN_NEXT = 1.20;
+      const onw = this.width * OVERSCAN_NEXT;
+      const onh = this.height * OVERSCAN_NEXT;
+      const onx = (this.width - onw) / 2;
+      const ony = (this.height - onh) / 2;
 
       const kbNext = this._kenBurnsParams[nextChapterIdx];
       if (kbNext) {
@@ -3466,10 +3635,10 @@ export class LyricDancePlayer {
         this.ctx.translate(this.width / 2 + nextPanX, this.height / 2 + nextPanY);
         this.ctx.scale(nextZoom, nextZoom);
         this.ctx.translate(-this.width / 2, -this.height / 2);
-        this.ctx.drawImage(next, 0, 0, this.width, this.height);
+        this.ctx.drawImage(next, onx, ony, onw, onh);
         this.ctx.restore();
       } else {
-        this.ctx.drawImage(next, 0, 0, this.width, this.height);
+        this.ctx.drawImage(next, onx, ony, onw, onh);
       }
 
       this.ctx.restore(); // restore filter + alpha
@@ -4190,32 +4359,44 @@ export class LyricDancePlayer {
           }
         }
 
-        // ── Final contrast enforcement — no exceptions, no conditions ──
-        // moodGrade.brightness is a CSS filter value (0.5 = no change), NOT actual pixel brightness.
-        // A dark image × 0.65 filter = still dark. So bias strongly toward light text.
-        // ═══ V2: Section tone overrides — "light" tone = bright bg = dark text ═══
+        // ── Final contrast enforcement — smarter without overlay mask ──
+        // Without an overlay mask, actual pixel brightness depends on IMAGE CONTENT × CSS filter.
+        // CSS brightness alone is not reliable. Instead:
+        // 1. Use section tone as primary signal (AI-determined)
+        // 2. Be conservative: push text toward guaranteed-readable colors
+        // 3. Set textStroke flag for the renderer to add edge contrast
         const moodGradeForContrast = (this as any)._activeMoodGrade as MoodGrade | undefined;
         const bgFilterBright = moodGradeForContrast?.brightness ?? 0.35;
         const sectionTone = this._currentSectionTone as string | undefined;
-        // Light scene: tone says "light" OR brightness filter is well past neutral
-        const bgIsLikelyDark = sectionTone === 'light' ? false : bgFilterBright < 0.58;
+
+        // Without overlay mask, be more conservative about "dark" detection.
+        // Only consider bg "likely light" if section tone explicitly says so OR brightness is very high.
+        // In the ambiguous middle zone (0.45-0.65), treat as dark (white text is safer).
+        const bgIsLikelyLight = sectionTone === 'light' || bgFilterBright > 0.65;
+        const bgIsLikelyDark = !bgIsLikelyLight;
+
         if (chunk.color && typeof chunk.color === 'string') {
           if (chunk.color.startsWith('rgba')) {
             if (bgIsLikelyDark && chunk.color.includes('0,0,0')) {
-              chunk.color = word.isFiller ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.7)';
-            } else if (!bgIsLikelyDark && chunk.color.includes('255,255,255')) {
-              // Light bg: flip white text to dark
-              chunk.color = word.isFiller ? 'rgba(30,30,30,0.25)' : 'rgba(30,30,30,0.75)';
+              chunk.color = word.isFiller ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.85)';
+            } else if (bgIsLikelyLight && chunk.color.includes('255,255,255')) {
+              chunk.color = word.isFiller ? 'rgba(30,30,30,0.25)' : 'rgba(30,30,30,0.80)';
             }
           } else {
             const textBright = perceivedBrightness(chunk.color);
-            if (bgIsLikelyDark && textBright < 0.45) {
-              chunk.color = mixTowardWhite(chunk.color, Math.max(0.5, 0.8 - textBright));
-            } else if (!bgIsLikelyDark && textBright > 0.7) {
-              chunk.color = '#1e1e1e';
+            if (bgIsLikelyDark && textBright < 0.50) {
+              // Push dark text toward white for readability on dark bg
+              chunk.color = mixTowardWhite(chunk.color, Math.max(0.55, 0.85 - textBright));
+            } else if (bgIsLikelyLight && textBright > 0.65) {
+              // Push bright text toward dark for readability on light bg
+              chunk.color = '#1a1a1a';
             }
           }
         }
+        // Guarantee: add text stroke for contrast (renderer uses this)
+        (chunk as any).textStroke = bgIsLikelyDark
+          ? 'rgba(0,0,0,0.4)'     // dark bg → subtle dark stroke for crispness
+          : 'rgba(0,0,0,0.55)';   // light bg → stronger dark stroke to pop text
         chunk.glow = wordGlow;
         chunk.entryStyle = usedEntry;
         chunk.exitStyle = usedExit;
@@ -4350,6 +4531,85 @@ export class LyricDancePlayer {
     }
   }
 
+
+  // ═══ Pixel-sampled background brightness ═══
+  // After all BG layers render, sample actual canvas pixels to get ground-truth
+  // brightness at any point. Throttled to every ~150ms for performance.
+
+  private _sampleBackgroundBrightness(): void {
+    const now = performance.now();
+    if (now - this._lastBgSampleMs < 150) return; // throttle: ~7Hz
+    this._lastBgSampleMs = now;
+
+    // Sample the center 80% of canvas (where text lives)
+    // At DPR scale, read actual rendered pixels
+    const margin = 0.10;
+    const sx = Math.floor(this.width * margin);
+    const sy = Math.floor(this.height * margin);
+    const sw = Math.floor(this.width * (1 - 2 * margin));
+    const sh = Math.floor(this.height * (1 - 2 * margin));
+    if (sw <= 0 || sh <= 0) return;
+
+    try {
+      // getImageData reads at the DPR-scaled resolution
+      const dsx = Math.floor(sx * this.dpr);
+      const dsy = Math.floor(sy * this.dpr);
+      const dsw = Math.floor(sw * this.dpr);
+      const dsh = Math.floor(sh * this.dpr);
+      const imageData = this.ctx.getImageData(dsx, dsy, dsw, dsh);
+      this._bgSampleData = imageData.data;
+      this._bgSampleW = dsw;
+      this._bgSampleH = dsh;
+      this._bgSampleX = sx;
+      this._bgSampleY = sy;
+    } catch {
+      // Canvas tainted or other error — fall back to heuristic
+      this._bgSampleData = null;
+    }
+  }
+
+  /**
+   * Get perceived brightness (0-1) at a canvas-space point from sampled pixel data.
+   * Returns null if no sample data available (caller falls back to heuristic).
+   * Samples a small region around the point for stability.
+   */
+  private _getBrightnessAtPoint(canvasX: number, canvasY: number): number | null {
+    if (!this._bgSampleData) return null;
+
+    // Map canvas coords to sample buffer coords
+    const relX = (canvasX - this._bgSampleX) * this.dpr;
+    const relY = (canvasY - this._bgSampleY) * this.dpr;
+
+    // Sample a ~20px radius (in DPR space) around the point for stability
+    const radius = Math.floor(10 * this.dpr);
+    const startX = Math.max(0, Math.floor(relX - radius));
+    const endX = Math.min(this._bgSampleW - 1, Math.floor(relX + radius));
+    const startY = Math.max(0, Math.floor(relY - radius));
+    const endY = Math.min(this._bgSampleH - 1, Math.floor(relY + radius));
+
+    if (startX >= endX || startY >= endY) return null;
+
+    // Sample every 3rd pixel for speed (still plenty of samples)
+    const step = 3;
+    let totalBright = 0;
+    let count = 0;
+    const data = this._bgSampleData;
+    const w = this._bgSampleW;
+
+    for (let py = startY; py <= endY; py += step) {
+      for (let px = startX; px <= endX; px += step) {
+        const idx = (py * w + px) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        // Perceived brightness (ITU-R BT.709 luma)
+        totalBright += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        count++;
+      }
+    }
+
+    return count > 0 ? totalBright / count : null;
+  }
 
   private drawBackground(frame: ScaledKeyframe): void {
     const chapters = this.resolvedState.chapters ?? [];

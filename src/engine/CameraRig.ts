@@ -1,25 +1,26 @@
 /**
- * CameraRig — spring-damped virtual camera for cinematic Canvas 2D rendering.
+ * CameraRig — director's virtual camera for cinematic lyric video rendering.
  *
- * Responsibilities:
- *   - Smooth phrase-following with look-ahead
- *   - Hit impulses (punch zoom, shake, reframe snap)
- *   - Beat-synced micro sway (dance motion)
- *   - Parallax transform output for depth layers
- *   - Hard constraints to prevent nausea (max speed, max rotation, etc.)
+ * ═══ DIRECTOR'S MODEL ═══
+ * The camera films THE WORDS. Words are the actors. Background is the set.
  *
- * Design rules:
- *   - ZERO allocations per frame (all state is pre-allocated floats)
- *   - One update() call per tick, one getTransform() per layer
- *   - All motion is spring-damped (no lerp jumps)
- *   - Hit impulses are additive and decay independently
+ * Core concept: PROXIMITY
+ *   0.0 = wide shot (establishing, see the world)
+ *   0.5 = medium (comfortable reading distance)
+ *   0.7 = close-up (hero word, see effects/texture)
+ *   1.0 = extreme close-up (climax, one word fills the frame)
  *
- * Usage:
- *   camera.update(deltaMs, beatState, phraseAnchor);
- *   camera.applyTransform(ctx, 'far');   // parallax layer
- *   camera.applyTransform(ctx, 'mid');
- *   camera.applyTransform(ctx, 'near');
- *   camera.resetTransform(ctx);          // for screen-space text
+ * Layer transforms:
+ *   'subject'    — text: FULL zoom from proximity, gentle reframe toward focus
+ *   'backdrop'   — bg:   NO zoom, slight inverse drift, blur ∝ proximity
+ *   'atmosphere' — sims: ~10% of subject zoom, bridges the two worlds
+ *
+ * Movement philosophy:
+ *   - ANTICIPATE: camera starts drifting in before the hero word lands
+ *   - COMMIT: smooth acceleration into close-up (fast push-in smoothing)
+ *   - HOLD: stay close for emotional weight (duration ∝ emphasis)
+ *   - RELEASE: ease back gradually (slow pull-out smoothing)
+ *   - BREATHE: imperceptible ±1.5% zoom oscillation between moments
  */
 
 import type { BeatState } from './BeatConductor';
@@ -29,98 +30,96 @@ import type { BeatState } from './BeatConductor';
 // ──────────────────────────────────────────────────────────────
 
 export interface CameraConfig {
-  // Spring physics
-  followSmoothing: number;    // 0-1, lower = stiffer follow (0.08 default)
-  zoomSmoothing: number;      // 0-1, lower = stiffer zoom (0.05 default)
-  rotSmoothing: number;       // 0-1, lower = stiffer rotation (0.03 default)
+  proximitySmoothing: number;  // push-in speed (0.04)
+  reframeSmoothing: number;    // reframe speed (0.06)
+  rotSmoothing: number;        // rotation speed (0.03)
 
-  // Look-ahead
-  lookAheadPx: number;        // pixels ahead in phrase motion direction
+  wideZoom: number;            // zoom at proximity 0.0
+  closeUpZoom: number;         // zoom at proximity 0.7
+  extremeCloseUpZoom: number;  // zoom at proximity 1.0
 
-  // Limits (hard constraints)
-  maxPanSpeed: number;        // pixels/sec cap
-  maxZoom: number;            // max zoom factor
-  minZoom: number;            // min zoom factor
-  maxRotation: number;        // radians cap (keep small! ~0.015)
+  maxReframeX: number;
+  maxReframeY: number;
+  maxRotation: number;
 
-  // Hit impulse magnitudes
-  punchZoomAmount: number;    // zoom bump on hit (0.03 default)
-  shakeAmplitude: number;     // pixels of shake on hit
-  reframeSnap: number;        // pixels of reframe nudge toward phrase
+  punchZoomAmount: number;
+  shakeAmplitude: number;
 
-  // Beat sway
-  swayAmplitudeX: number;    // pixels of horizontal sway
-  swayAmplitudeY: number;    // pixels of vertical sway
-  swayRotAmplitude: number;  // radians of rotational sway
+  breathAmplitude: number;     // zoom oscillation (±0.015)
+  breathCycleMs: number;       // full cycle (4000ms)
+  swayAmplitudeX: number;
+  swayAmplitudeY: number;
+  swayRotAmplitude: number;
 
-  // Parallax factors (how much each layer moves relative to camera)
-  parallaxFar: number;       // 0.3 = 30% of camera motion
-  parallaxMid: number;       // 0.6 = 60%
-  parallaxNear: number;      // 1.0 = 100% (foreground matches camera)
+  backdropDriftFactor: number; // 0.05 = 5% inverse drift on backdrop
+  atmosphereFactor: number;    // 0.10 = 10% of subject zoom on atmosphere
+
+  baseHoldMs: number;
+  heroHoldMs: number;
+  climaxHoldMs: number;
+
+  releaseSmoothing: number;    // pull-out speed (slow — 0.02)
 }
 
-/** Phrase anchor point — where the camera should "look" */
-export interface PhraseAnchor {
-  x: number;       // center of phrase in canvas space
+/** What the camera should focus on this tick */
+export interface SubjectFocus {
+  x: number;
   y: number;
-  velocityX?: number;  // estimated motion direction (for look-ahead)
+  heroActive: boolean;
+  emphasisLevel: number;
+  isClimax: boolean;
+  vocalActive: boolean;
+}
+
+/** Transform data for the text/subject layer */
+export interface SubjectTransform {
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+  rotation: number;
+  proximity: number;
+  shakeX: number;
+  shakeY: number;
+}
+
+// Legacy compat
+export interface PhraseAnchor {
+  x: number;
+  y: number;
+  velocityX?: number;
   velocityY?: number;
 }
 
-// ──────────────────────────────────────────────────────────────
-// Section Presets (rigs)
-// ──────────────────────────────────────────────────────────────
-
 export type SectionRigName = 'verse' | 'chorus' | 'bridge' | 'drop' | 'intro' | 'outro';
+
+// ──────────────────────────────────────────────────────────────
+// Section Presets
+// ──────────────────────────────────────────────────────────────
 
 const SECTION_RIGS: Record<SectionRigName, Partial<CameraConfig>> = {
   verse: {
-    followSmoothing: 0.06,
-    punchZoomAmount: 0.015,
-    shakeAmplitude: 1.5,
-    swayAmplitudeX: 4,
-    swayAmplitudeY: 2,
-    swayRotAmplitude: 0.003,
+    punchZoomAmount: 0.008, shakeAmplitude: 1.0,
+    swayAmplitudeX: 2, swayAmplitudeY: 1, swayRotAmplitude: 0.002, breathAmplitude: 0.012,
   },
   chorus: {
-    followSmoothing: 0.10,
-    punchZoomAmount: 0.035,
-    shakeAmplitude: 4,
-    swayAmplitudeX: 8,
-    swayAmplitudeY: 4,
-    swayRotAmplitude: 0.008,
+    punchZoomAmount: 0.020, shakeAmplitude: 2.5,
+    swayAmplitudeX: 4, swayAmplitudeY: 2, swayRotAmplitude: 0.005, breathAmplitude: 0.018,
   },
   bridge: {
-    followSmoothing: 0.04,
-    punchZoomAmount: 0.02,
-    shakeAmplitude: 2,
-    swayAmplitudeX: 6,
-    swayAmplitudeY: 3,
-    swayRotAmplitude: 0.005,
+    punchZoomAmount: 0.012, shakeAmplitude: 1.5,
+    swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.003, breathAmplitude: 0.015,
   },
   drop: {
-    followSmoothing: 0.14,
-    punchZoomAmount: 0.05,
-    shakeAmplitude: 6,
-    swayAmplitudeX: 10,
-    swayAmplitudeY: 5,
-    swayRotAmplitude: 0.012,
+    punchZoomAmount: 0.035, shakeAmplitude: 4,
+    swayAmplitudeX: 5, swayAmplitudeY: 3, swayRotAmplitude: 0.008, breathAmplitude: 0.020,
   },
   intro: {
-    followSmoothing: 0.03,
-    punchZoomAmount: 0.01,
-    shakeAmplitude: 1,
-    swayAmplitudeX: 3,
-    swayAmplitudeY: 1.5,
-    swayRotAmplitude: 0.002,
+    punchZoomAmount: 0.005, shakeAmplitude: 0.5,
+    swayAmplitudeX: 1.5, swayAmplitudeY: 0.8, swayRotAmplitude: 0.001, breathAmplitude: 0.010,
   },
   outro: {
-    followSmoothing: 0.03,
-    punchZoomAmount: 0.01,
-    shakeAmplitude: 1,
-    swayAmplitudeX: 3,
-    swayAmplitudeY: 1.5,
-    swayRotAmplitude: 0.002,
+    punchZoomAmount: 0.005, shakeAmplitude: 0.5,
+    swayAmplitudeX: 1.5, swayAmplitudeY: 0.8, swayRotAmplitude: 0.001, breathAmplitude: 0.010,
   },
 };
 
@@ -129,253 +128,241 @@ const SECTION_RIGS: Record<SectionRigName, Partial<CameraConfig>> = {
 // ──────────────────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: CameraConfig = {
-  followSmoothing: 0.08,
-  zoomSmoothing: 0.05,
-  rotSmoothing: 0.03,
-  lookAheadPx: 30,
-  maxPanSpeed: 400,
-  maxZoom: 1.15,
-  minZoom: 0.92,
-  maxRotation: 0.015,
-  punchZoomAmount: 0.03,
-  shakeAmplitude: 3,
-  reframeSnap: 8,
-  swayAmplitudeX: 6,
-  swayAmplitudeY: 3,
-  swayRotAmplitude: 0.005,
-  parallaxFar: 0.3,
-  parallaxMid: 0.6,
-  parallaxNear: 1.0,
+  proximitySmoothing: 0.04, reframeSmoothing: 0.06, rotSmoothing: 0.03,
+  wideZoom: 1.0, closeUpZoom: 1.12, extremeCloseUpZoom: 1.25,
+  maxReframeX: 25, maxReframeY: 15, maxRotation: 0.012,
+  punchZoomAmount: 0.015, shakeAmplitude: 2,
+  breathAmplitude: 0.015, breathCycleMs: 4000,
+  swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.003,
+  backdropDriftFactor: 0.05, atmosphereFactor: 0.10,
+  baseHoldMs: 400, heroHoldMs: 600, climaxHoldMs: 1000,
+  releaseSmoothing: 0.02,
 };
 
-// ──────────────────────────────────────────────────────────────
-// Hit decay constants — base rates at 60fps, dt-compensated via Math.pow(rate, dt)
-// ──────────────────────────────────────────────────────────────
-
-const SHAKE_DECAY_60 = 0.88;       // per-frame at 60fps
-const PUNCH_ZOOM_DECAY_60 = 0.92;  // per-frame at 60fps
-const REFRAME_DECAY_60 = 0.90;     // per-frame at 60fps
+const SHAKE_DECAY_60 = 0.88;
+const PUNCH_ZOOM_DECAY_60 = 0.92;
 
 // ──────────────────────────────────────────────────────────────
 // CameraRig class
 // ──────────────────────────────────────────────────────────────
 
 export class CameraRig {
-  // Current state (the "actual" camera position)
-  private x = 0;
-  private y = 0;
-  private zoom = 1;
+  private proximity = 0.15;
+  private targetProximity = 0.15;
+  private holdTimer = 0;
+  private reframeX = 0;
+  private reframeY = 0;
+  private targetReframeX = 0;
+  private targetReframeY = 0;
   private rot = 0;
-
-  // Target state (where the camera wants to be)
-  private targetX = 0;
-  private targetY = 0;
-  private targetZoom = 1;
   private targetRot = 0;
-
-  // Velocity (for speed capping)
-  private vx = 0;
-  private vy = 0;
-
-  // Hit impulse accumulators (additive, decaying)
   private shakeX = 0;
   private shakeY = 0;
   private punchZoom = 0;
-  private reframeX = 0;
-  private reframeY = 0;
-
-  // Beat sway state
-  private swayPhase = 0;
-
-  // Canvas dimensions (for centering)
+  private breathPhase = 0;
   private canvasW = 960;
   private canvasH = 540;
-
-  // Active config (blended from default + section preset)
   private config: CameraConfig;
   private activeRig: SectionRigName = 'verse';
-
-  // Previous hit strength (for edge detection)
   private prevHitStrength = 0;
+  private prevHeroActive = false;
 
   constructor(config?: Partial<CameraConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  // ──────────────────────────────────────────────────
-  // Public API
-  // ──────────────────────────────────────────────────
-
-  /** Call once when canvas resizes */
   setViewport(width: number, height: number): void {
     this.canvasW = width;
     this.canvasH = height;
   }
 
-  /** Switch section preset (smooth transition via spring damping) */
   setSection(section: SectionRigName): void {
     if (section === this.activeRig) return;
     this.activeRig = section;
-    const preset = SECTION_RIGS[section] ?? {};
-    // Blend preset over defaults (not over previous preset — clean slate)
-    this.config = { ...DEFAULT_CONFIG, ...preset };
+    this.config = { ...DEFAULT_CONFIG, ...(SECTION_RIGS[section] ?? {}) };
   }
 
-  /** Main update — call once per tick */
-  update(deltaMs: number, beatState: BeatState | null, anchor?: PhraseAnchor | null): void {
-    const dt = Math.min(deltaMs, 33.33) / 16.67; // normalize to 60fps (dt=1 at 60fps)
+  /**
+   * Main update — call once per tick.
+   * Accepts SubjectFocus (new) or legacy PhraseAnchor (detected via 'heroActive' field).
+   */
+  update(deltaMs: number, beatState: BeatState | null, focus?: SubjectFocus | PhraseAnchor | null): void {
+    const dt = Math.min(deltaMs, 33.33) / 16.67;
     const cfg = this.config;
 
-    // ─── 1. Phrase following ───
-    if (anchor) {
-      const lookX = (anchor.velocityX ?? 0) * cfg.lookAheadPx;
-      const lookY = (anchor.velocityY ?? 0) * cfg.lookAheadPx;
-      // Target is phrase anchor + look-ahead, relative to canvas center
-      this.targetX = (anchor.x - this.canvasW * 0.5) * 0.3 + lookX;
-      this.targetY = (anchor.y - this.canvasH * 0.5) * 0.3 + lookY;
+    const isSubjectFocus = focus && 'heroActive' in focus;
+    const sf = isSubjectFocus ? (focus as SubjectFocus) : null;
+    const anchor = !isSubjectFocus && focus ? (focus as PhraseAnchor) : null;
+
+    // ─── 1. Proximity targeting ───
+    if (sf) {
+      if (!sf.vocalActive) {
+        this.targetProximity = 0.0;
+        this.holdTimer = 0;
+      } else if (sf.isClimax && sf.heroActive) {
+        this.targetProximity = 1.0;
+        this.holdTimer = cfg.climaxHoldMs;
+      } else if (sf.isClimax) {
+        this.targetProximity = 0.75;
+        this.holdTimer = Math.max(this.holdTimer, cfg.baseHoldMs);
+      } else if (sf.heroActive && !this.prevHeroActive) {
+        // Hero just arrived — commit
+        this.targetProximity = 0.55 + Math.min(sf.emphasisLevel, 5) * 0.05;
+        this.holdTimer = cfg.heroHoldMs;
+      } else if (sf.heroActive) {
+        // Sustain hold
+      } else if (sf.emphasisLevel >= 3) {
+        this.targetProximity = 0.4;
+        this.holdTimer = Math.max(this.holdTimer, cfg.baseHoldMs * 0.5);
+      } else {
+        if (this.holdTimer <= 0) this.targetProximity = 0.15;
+      }
+    } else if (anchor) {
+      if (this.holdTimer <= 0) this.targetProximity = 0.15;
+    } else {
+      if (this.holdTimer <= 0) this.targetProximity = 0.0;
     }
 
-    // ─── 2. Beat sway (predictable dance motion) ───
+    if (this.holdTimer > 0) this.holdTimer = Math.max(0, this.holdTimer - deltaMs);
+    this.prevHeroActive = sf?.heroActive ?? false;
+
+    // ─── 2. Smooth proximity (asymmetric: fast push-in, slow release) ───
+    const pushingIn = this.targetProximity > this.proximity;
+    const smoothing = pushingIn ? cfg.proximitySmoothing : cfg.releaseSmoothing;
+    const proxAlpha = 1 - Math.pow(1 - smoothing, dt);
+    this.proximity += (this.targetProximity - this.proximity) * proxAlpha;
+    this.proximity = Math.max(0, Math.min(1, this.proximity));
+
+    // ─── 3. Reframe toward subject ───
+    const fx = sf?.x ?? anchor?.x ?? this.canvasW * 0.5;
+    const fy = sf?.y ?? anchor?.y ?? this.canvasH * 0.5;
+    if (sf || anchor) {
+      const dx = fx - this.canvasW * 0.5;
+      const dy = fy - this.canvasH * 0.5;
+      const reframeMult = 0.15 + this.proximity * 0.15;
+      this.targetReframeX = Math.max(-cfg.maxReframeX, Math.min(cfg.maxReframeX, dx * reframeMult));
+      this.targetReframeY = Math.max(-cfg.maxReframeY, Math.min(cfg.maxReframeY, dy * reframeMult));
+    } else {
+      this.targetReframeX = 0;
+      this.targetReframeY = 0;
+    }
+
+    const reframeAlpha = 1 - Math.pow(1 - cfg.reframeSmoothing, dt);
+    this.reframeX += (this.targetReframeX - this.reframeX) * reframeAlpha;
+    this.reframeY += (this.targetReframeY - this.reframeY) * reframeAlpha;
+
+    // ─── 4. Beat sway + breathing ───
     if (beatState) {
       const phase = beatState.phase;
-      const intensity = beatState.energy; // V2: continuous energy drives sway amplitude
+      const energy = beatState.energy;
       const sway = Math.sin(phase * Math.PI * 2);
-      const swayY = Math.cos(phase * Math.PI * 2 + 0.5); // slightly offset Y
-
-      this.targetX += sway * cfg.swayAmplitudeX * intensity;
-      this.targetY += swayY * cfg.swayAmplitudeY * intensity;
-      this.targetRot = sway * cfg.swayRotAmplitude * intensity;
+      const swayY = Math.cos(phase * Math.PI * 2 + 0.5);
+      this.reframeX += sway * cfg.swayAmplitudeX * energy * 0.5;
+      this.reframeY += swayY * cfg.swayAmplitudeY * energy * 0.5;
+      this.targetRot = sway * cfg.swayRotAmplitude * energy;
     }
 
-    // ─── 3. Hit impulses (violent but brief) ───
-    if (beatState && beatState.hitStrength > 0.1) {
-      // Edge detect: only trigger on rising edge
-      const isNewHit = beatState.hitStrength > this.prevHitStrength + 0.05;
+    this.breathPhase += (deltaMs / cfg.breathCycleMs) * Math.PI * 2;
+    if (this.breathPhase > Math.PI * 2) this.breathPhase -= Math.PI * 2;
 
+    // ─── 5. Hit impulses ───
+    if (beatState && beatState.hitStrength > 0.1) {
+      const isNewHit = beatState.hitStrength > this.prevHitStrength + 0.05;
       if (isNewHit) {
         const h = beatState.hitStrength;
         const isBass = beatState.hitType === 'bass';
-
-        // Punch zoom: quick zoom-in
         this.punchZoom += h * cfg.punchZoomAmount * (isBass ? 1.5 : 1.0);
-
-        // Shake: random direction, short
         const angle = Math.random() * Math.PI * 2;
         this.shakeX += Math.cos(angle) * h * cfg.shakeAmplitude * (isBass ? 1.3 : 1.0);
         this.shakeY += Math.sin(angle) * h * cfg.shakeAmplitude * (isBass ? 1.3 : 1.0);
-
-        // Reframe snap: nudge toward phrase anchor
-        if (anchor) {
-          const dx = (anchor.x - this.canvasW * 0.5) - this.x;
-          const dy = (anchor.y - this.canvasH * 0.5) - this.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          this.reframeX += (dx / dist) * h * cfg.reframeSnap;
-          this.reframeY += (dy / dist) * h * cfg.reframeSnap;
-        }
       }
     }
     this.prevHitStrength = beatState?.hitStrength ?? 0;
 
-    // ─── 4. Decay impulses (dt-compensated for frame-rate independence) ───
+    // ─── 6. Decay impulses ───
     const shakeMul = Math.pow(SHAKE_DECAY_60, dt);
     const punchMul = Math.pow(PUNCH_ZOOM_DECAY_60, dt);
-    const reframeMul = Math.pow(REFRAME_DECAY_60, dt);
     this.shakeX *= shakeMul;
     this.shakeY *= shakeMul;
     this.punchZoom *= punchMul;
-    this.reframeX *= reframeMul;
-    this.reframeY *= reframeMul;
-
-    // Kill tiny residuals (avoid float drift)
     if (Math.abs(this.shakeX) < 0.01) this.shakeX = 0;
     if (Math.abs(this.shakeY) < 0.01) this.shakeY = 0;
     if (Math.abs(this.punchZoom) < 0.0001) this.punchZoom = 0;
-    if (Math.abs(this.reframeX) < 0.01) this.reframeX = 0;
-    if (Math.abs(this.reframeY) < 0.01) this.reframeY = 0;
 
-    // ─── 5. Spring damping toward target ───
-    const followAlpha = 1 - Math.pow(1 - cfg.followSmoothing, dt);
-    const zoomAlpha = 1 - Math.pow(1 - cfg.zoomSmoothing, dt);
+    // ─── 7. Rotation ───
     const rotAlpha = 1 - Math.pow(1 - cfg.rotSmoothing, dt);
-
-    // Compute new velocity
-    const newVx = (this.targetX + this.reframeX - this.x) * followAlpha;
-    const newVy = (this.targetY + this.reframeY - this.y) * followAlpha;
-
-    // Speed cap
-    const speed = Math.sqrt(newVx * newVx + newVy * newVy);
-    const maxSpeedPerFrame = cfg.maxPanSpeed * (deltaMs / 1000);
-    if (speed > maxSpeedPerFrame && speed > 0) {
-      const scale = maxSpeedPerFrame / speed;
-      this.vx = newVx * scale;
-      this.vy = newVy * scale;
-    } else {
-      this.vx = newVx;
-      this.vy = newVy;
-    }
-
-    // Apply
-    this.x += this.vx;
-    this.y += this.vy;
-
-    // Zoom: target is 1.0 + punch
-    this.targetZoom = 1.0 + this.punchZoom;
-    this.zoom += (this.targetZoom - this.zoom) * zoomAlpha;
-
-    // Clamp zoom
-    this.zoom = Math.max(cfg.minZoom, Math.min(cfg.maxZoom, this.zoom));
-
-    // Rotation
     this.rot += (this.targetRot - this.rot) * rotAlpha;
     this.rot = Math.max(-cfg.maxRotation, Math.min(cfg.maxRotation, this.rot));
   }
 
-  /**
-   * Apply camera transform to a canvas context for a specific depth layer.
-   * Saves context state — call resetTransform() after drawing.
-   *
-   * @param ctx - Canvas 2D context
-   * @param depth - 'far' | 'mid' | 'near' — controls parallax amount
-   */
-  applyTransform(ctx: CanvasRenderingContext2D, depth: 'far' | 'mid' | 'near'): void {
+  // ──────────────────────────────────────────────────
+  // Transform outputs
+  // ──────────────────────────────────────────────────
+
+  /** Subject (text) transform — where the DEPTH lives. */
+  getSubjectTransform(): SubjectTransform {
     const cfg = this.config;
-    const parallax = depth === 'far' ? cfg.parallaxFar
-      : depth === 'mid' ? cfg.parallaxMid
-      : cfg.parallaxNear;
+    let zoom: number;
+    if (this.proximity <= 0.7) {
+      const t = this.proximity / 0.7;
+      const eased = t * t * (3 - 2 * t);
+      zoom = cfg.wideZoom + (cfg.closeUpZoom - cfg.wideZoom) * eased;
+    } else {
+      const t = (this.proximity - 0.7) / 0.3;
+      const eased = t * t * (3 - 2 * t);
+      zoom = cfg.closeUpZoom + (cfg.extremeCloseUpZoom - cfg.closeUpZoom) * eased;
+    }
+    zoom += Math.sin(this.breathPhase) * cfg.breathAmplitude + this.punchZoom;
 
-    const tx = -(this.x + this.shakeX) * parallax;
-    const ty = -(this.y + this.shakeY) * parallax;
-    const s = this.zoom;
-    const r = this.rot * parallax; // rotation also parallaxed
+    return {
+      zoom, offsetX: this.reframeX, offsetY: this.reframeY,
+      rotation: this.rot, proximity: this.proximity,
+      shakeX: this.shakeX, shakeY: this.shakeY,
+    };
+  }
 
+  /**
+   * Backdrop / atmosphere transform.
+   * Backdrop: slight inverse drift, NO zoom. Atmosphere: ~10% of subject zoom.
+   * Accepts legacy 'far'/'mid'/'near' for compatibility.
+   */
+  applyTransform(ctx: CanvasRenderingContext2D, layer: 'backdrop' | 'atmosphere' | 'far' | 'mid' | 'near'): void {
+    const cfg = this.config;
     const cx = this.canvasW * 0.5;
     const cy = this.canvasH * 0.5;
-
     ctx.save();
-    // Translate to center, apply zoom + rotation, translate back, apply pan
-    ctx.translate(cx, cy);
-    ctx.rotate(r);
-    ctx.scale(s, s);
-    ctx.translate(-cx + tx, -cy + ty);
+
+    const isBackdrop = layer === 'backdrop' || layer === 'far';
+    if (isBackdrop) {
+      const driftX = -this.reframeX * cfg.backdropDriftFactor;
+      const driftY = -this.reframeY * cfg.backdropDriftFactor;
+      const bgShakeX = this.shakeX * 0.15;
+      const bgShakeY = this.shakeY * 0.15;
+      ctx.translate(cx, cy);
+      ctx.rotate(this.rot * 0.1);
+      ctx.translate(-cx + driftX + bgShakeX, -cy + driftY + bgShakeY);
+    } else {
+      // Atmosphere: bridges subject and backdrop
+      const subT = this.getSubjectTransform();
+      const atmZoom = 1.0 + (subT.zoom - 1.0) * cfg.atmosphereFactor;
+      const atmDriftX = this.reframeX * 0.15;
+      const atmDriftY = this.reframeY * 0.15;
+      ctx.translate(cx, cy);
+      ctx.rotate(this.rot * 0.3);
+      ctx.scale(atmZoom, atmZoom);
+      ctx.translate(-cx + atmDriftX + this.shakeX * 0.3, -cy + atmDriftY + this.shakeY * 0.3);
+    }
   }
 
-  /** Reset transform after drawing a layer */
-  resetTransform(ctx: CanvasRenderingContext2D): void {
-    ctx.restore();
-  }
+  resetTransform(ctx: CanvasRenderingContext2D): void { ctx.restore(); }
+  getProximity(): number { return this.proximity; }
 
-  /** Hard reset (seek, song change) */
   reset(): void {
-    this.x = this.y = 0;
-    this.zoom = 1;
-    this.rot = 0;
-    this.targetX = this.targetY = 0;
-    this.targetZoom = 1;
-    this.targetRot = 0;
-    this.vx = this.vy = 0;
-    this.shakeX = this.shakeY = 0;
-    this.punchZoom = 0;
-    this.reframeX = this.reframeY = 0;
-    this.prevHitStrength = 0;
+    this.proximity = 0.15; this.targetProximity = 0.15; this.holdTimer = 0;
+    this.reframeX = 0; this.reframeY = 0;
+    this.targetReframeX = 0; this.targetReframeY = 0;
+    this.rot = 0; this.targetRot = 0;
+    this.shakeX = 0; this.shakeY = 0; this.punchZoom = 0;
+    this.breathPhase = 0; this.prevHitStrength = 0; this.prevHeroActive = false;
   }
 }
