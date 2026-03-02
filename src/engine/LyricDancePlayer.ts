@@ -2580,7 +2580,6 @@ export class LyricDancePlayer {
             }
 
             if (elementalClass) {
-              }
               // Word-local time: effects start at t=0 when word appears
               const wordAgeSec = visibleMs / 1000;
               const smoothBeat = Math.max(0, this._springOffset ?? 0);
