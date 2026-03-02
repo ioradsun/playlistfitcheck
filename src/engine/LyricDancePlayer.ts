@@ -16,13 +16,14 @@ import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
 import { drawIcon, type IconGlyph, type IconStyle } from "@/lib/lyricIcons";
-import { type Keyframe, type ScenePayload } from "@/lib/lyricSceneBaker";
 import {
   compileScene,
   computeEntryState,
   computeExitState,
   computeBehaviorState,
   type CompiledScene,
+  type Keyframe,
+  type ScenePayload,
 } from "@/lib/sceneCompiler";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { getMoodGrade, buildGradeFilter, lerpGrade, getTextMode, type MoodGrade } from "@/engine/moodGrades";
