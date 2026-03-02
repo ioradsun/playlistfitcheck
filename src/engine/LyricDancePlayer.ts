@@ -914,6 +914,10 @@ export class LyricDancePlayer {
   private _prevImgIdx = -1;
   private _textBandBrightness = 0.3; // sampled brightness of center band where text renders
   private _lastBandSampleMs = 0;     // throttle: sample every 300ms
+  // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
+  private _frameSectionIdx = -1;
+  private _framePalette: string[] | null = null;
+  private _framePaletteTime = -1; // audio time when palette was last resolved
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
@@ -1534,6 +1538,22 @@ export class LyricDancePlayer {
       this._lastBeatState = beatState;
       this._frameDt = Math.min(deltaMs, 33.33) / 16.67; // normalized to 60fps
 
+      // ═══ Per-frame caches: section index + palette ═══
+      {
+        const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+        const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+        const dur = this.audio?.duration || 1;
+        this._frameSectionIdx = sections.length > 0
+          ? this.resolveSectionIndex(sections, smoothedTime, dur)
+          : -1;
+        // Palette: only re-resolve if section changed
+        const secIdx = this._frameSectionIdx;
+        if (secIdx !== this._framePaletteTime) {
+          this._framePaletteTime = secIdx;
+          this._framePalette = this._resolveCurrentPalette(secIdx);
+        }
+      }
+
       // ═══ V2: Single evaluateFrame call ═══
       const frame = this.evaluateFrame(smoothedTime);
 
@@ -1716,104 +1736,49 @@ export class LyricDancePlayer {
     const idx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
     return chapters[idx] ?? chapters[0];
   }
-  /** Resolve the effective palette from image-derived palettes or legacy fallbacks */
+  /** Return per-frame cached palette */
   private getResolvedPalette(): string[] {
+    return this._framePalette ?? this._resolveCurrentPalette(this._frameSectionIdx);
+  }
+
+  /** Raw palette resolution — only called on section change */
+  private _resolveCurrentPalette(secIdx: number): string[] {
     const autoPalettes = this.data?.auto_palettes;
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const chapters = (cd?.chapters as any[]) ?? [];
-    const sections = (cd?.sections as any[]) ?? [];
 
-    // Find current chapter/section based on playback position
-    const currentTimeSec = this.audio?.currentTime ?? 0;
-    const totalDurationSec = this.audio?.duration || 1;
-
-    // Priority 1: auto-palettes computed from section images
-    // These align with sections, not chapters
     if (Array.isArray(autoPalettes) && autoPalettes.length > 0) {
-      // Use sections for index since auto_palettes come from section_images
-      const sectionSource = sections.length > 0 ? sections : chapters;
-
-      // DIAGNOSTIC: log palette index resolution every 3 seconds
-      const now = performance.now();
-      if (!(this as any)._lastPalDiag || now - (this as any)._lastPalDiag > 3000) {
-        (this as any)._lastPalDiag = now;
-        const secIdx = sectionSource.length > 0 ? this.resolveSectionIndex(sectionSource, currentTimeSec, totalDurationSec) : -1;
-        const firstSection = sectionSource[0];
-        console.log(`[palette-cycle] t=${currentTimeSec.toFixed(1)}s / ${totalDurationSec.toFixed(1)}s, sections=${sectionSource.length}, secIdx=${secIdx}, palette=${autoPalettes[secIdx]?.[2] ?? 'none'}`, 
-          firstSection ? { startSec: firstSection.startSec, endSec: firstSection.endSec, startRatio: firstSection.startRatio, endRatio: firstSection.endRatio, sectionIndex: firstSection.sectionIndex } : 'NO SECTIONS');
-      }
-
-      if (sectionSource.length > 0) {
-        const secIdx = this.resolveSectionIndex(sectionSource, currentTimeSec, totalDurationSec);
-        if (secIdx >= 0 && autoPalettes[secIdx]) {
-          return autoPalettes[secIdx];
-        }
-      }
-      // Fallback: divide song evenly across palettes
+      if (secIdx >= 0 && autoPalettes[secIdx]) return autoPalettes[secIdx];
+      const totalDurationSec = this.audio?.duration || 1;
+      const currentTimeSec = this.audio?.currentTime ?? 0;
       if (totalDurationSec > 0 && autoPalettes.length > 1) {
         const progress = Math.max(0, Math.min(0.999, currentTimeSec / totalDurationSec));
-        const idx = Math.floor(progress * autoPalettes.length);
-        return autoPalettes[idx];
+        return autoPalettes[Math.floor(progress * autoPalettes.length)];
       }
       return autoPalettes[0];
     }
 
-    const chIdx = chapters.length > 0
-      ? this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec)
-      : 0;
-
-    // DIAGNOSTIC: log which fallback branch is hit (once)
-    if (!(this as any)._paletteDiagLogged) {
-      (this as any)._paletteDiagLogged = true;
-      const bakedPalettes = (this.data as any)?.resolvedPalettes;
-      const bakedDefault = (this.data as any)?.resolvedPaletteDefault;
-      const paletteName = cd?.palette as string | undefined;
-      const chapterPalette = chIdx >= 0 ? chapters[chIdx]?.palette : undefined;
-      console.log('[palette-diag] NO auto_palettes. Fallback chain:', {
-        autoPalettes: autoPalettes?.length ?? 0,
-        chIdx,
-        chapterPalette,
-        bakedPalettes: bakedPalettes?.length ?? 0,
-        bakedDefault: bakedDefault?.length ?? 0,
-        paletteName,
-        payloadPalette: this.payload?.palette,
-      });
-    }
-
-    // Try prebaked per-chapter palette
+    const chIdx = secIdx >= 0 ? secIdx : 0;
     const bakedPalettes = (this.data as any)?.resolvedPalettes;
     if (bakedPalettes && Array.isArray(bakedPalettes) && chIdx >= 0 && bakedPalettes[chIdx]) {
       return bakedPalettes[chIdx];
     }
-
-    // Try chapter-level palette override from raw data
     if (chIdx >= 0) {
       const chapterPalette = chapters[chIdx]?.palette as string | undefined;
       if (chapterPalette && LyricDancePlayer.PALETTE_COLORS[chapterPalette]) {
         return LyricDancePlayer.PALETTE_COLORS[chapterPalette];
       }
     }
-
-    // Try prebaked default
     const bakedDefault = (this.data as any)?.resolvedPaletteDefault;
-    if (bakedDefault && Array.isArray(bakedDefault) && bakedDefault.length >= 5) {
-      return bakedDefault;
-    }
-
-    // Try top-level palette name
+    if (bakedDefault && Array.isArray(bakedDefault) && bakedDefault.length >= 5) return bakedDefault;
     const paletteName = cd?.palette as string | undefined;
     if (paletteName && LyricDancePlayer.PALETTE_COLORS[paletteName]) {
       return LyricDancePlayer.PALETTE_COLORS[paletteName];
     }
-
-    // Final fallback
     const existing = this.payload?.palette ?? [];
     return [
-      existing[0] ?? '#0A0A0F',
-      existing[1] ?? '#FFD700',
-      existing[2] ?? '#F0F0F0',
-      existing[3] ?? '#FFD700',
-      existing[4] ?? '#555555',
+      existing[0] ?? '#0A0A0F', existing[1] ?? '#FFD700', existing[2] ?? '#F0F0F0',
+      existing[3] ?? '#FFD700', existing[4] ?? '#555555',
     ];
   }
 
@@ -1945,15 +1910,9 @@ export class LyricDancePlayer {
     const songProgress = duration > 0 ? Math.max(0, Math.min(1, (clamped - this.songStartSec) / duration)) : 0;
     const cd = this.payload?.cinematic_direction;
     const chapters = this.resolvedState.chapters;
-    const currentChapter = this.resolveChapter(chapters, clamped - this.songStartSec, duration);
 
-    const tensionCurve = this.resolvedState.tensionCurve;
-    const currentTension = tensionCurve.find(
-      (ts: any) => songProgress >= (ts.startRatio ?? 0) && songProgress <= (ts.endRatio ?? 1)
-    ) ?? tensionCurve[0];
-    const lines = this.payload?.lines ?? [];
-
-    const sectionIndex = chapters.length > 0 ? this.resolveSectionIndex(chapters, clamped - this.songStartSec, duration) : -1;
+    // Use cached section index — already resolved in tick()
+    const sectionIndex = this._frameSectionIdx;
     const section = sectionIndex >= 0 ? chapters[sectionIndex] : null;
     if (sectionIndex !== this.activeSectionIndex) {
       this.activeSectionIndex = sectionIndex;
@@ -1969,23 +1928,16 @@ export class LyricDancePlayer {
         beatReactive: true,
       });
 
-      // ═══ V2: Switch camera rig based on section mood ═══
-      const sectionMood = (section as any)?.mood ?? (section as any)?.description ?? '';
-      const moodLower = sectionMood.toLowerCase();
-      const rigName = moodLower.includes('drop') || moodLower.includes('climax') ? 'drop' as const
-        : moodLower.includes('chorus') || moodLower.includes('hook') ? 'chorus' as const
-        : moodLower.includes('bridge') || moodLower.includes('break') ? 'bridge' as const
-        : moodLower.includes('intro') ? 'intro' as const
-        : moodLower.includes('outro') || moodLower.includes('fade') ? 'outro' as const
-        : 'verse' as const;
-      this.cameraRig.setSection(rigName);
-      this._activeRigName = rigName;
+      // Cache tension for this section
+      this.activeTension = this.resolvedState.tensionCurve.find(
+        (ts: any) => songProgress >= (ts.startRatio ?? 0) && songProgress <= (ts.endRatio ?? 1)
+      ) ?? this.resolvedState.tensionCurve[0] ?? null;
     }
-    this.activeTension = currentTension;
 
     // ═══ V2: Use conductor for particle intensity instead of tension curve ═══
     const conductorResponse = beatState ? this.conductor?.getSubsystemResponse(beatState, 2) ?? null : null;
     this._lastSubsystemResponse = conductorResponse;
+    const currentTension = this.activeTension;
     if (conductorResponse) {
       this.ambientParticleEngine?.setDensityMultiplier(conductorResponse.particleDensity * 2);
       this.ambientParticleEngine?.setSpeedMultiplier(conductorResponse.particleSpeed * 2);
@@ -1994,155 +1946,124 @@ export class LyricDancePlayer {
       this.ambientParticleEngine?.setSpeedMultiplier((currentTension?.motionIntensity ?? 0.5) * 2);
     }
 
-    const visibleLines = lines.filter((l: any) => clamped >= (l.start ?? 0) && clamped < (l.end ?? 0));
-    const activeLine = visibleLines.length === 0
-      ? null
-      : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
-
-    // ═══ V2: Beat intensity from conductor (not climax curve) ═══
-    const beatIntensity = beatState?.pulse ?? 0;
-    const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
-
-    const activeWord = this.getActiveWord(clamped);
-    const activeWordClean = normalizeToken(activeWord?.word ?? '');
-    const activeWordDirective = activeWordClean ? this.resolvedState.wordDirectivesMap[activeWordClean] ?? null : null;
-
+    // ── Minimal debug state (always cheap) ──
     const ds = this.debugState;
     ds.time = clamped;
     ds.fps = Math.round(this.fpsAccum.fps);
     ds.songProgress = songProgress;
-    ds.perfTotal = deltaMs;
-    ds.beatIntensity = beatIntensity;
-    ds.physGlow = beatIntensity * 0.6;
-    ds.lastBeatForce = beatIntensity * 0.8;
-    ds.physicsActive = this.playing;
+    ds.beatIntensity = beatState?.pulse ?? 0;
 
-    // ── Section boundaries ──
-    ds.secIndex = sectionIndex;
-    ds.lineIndex = activeLine ? lines.indexOf(activeLine) : -1;
-    ds.secTotal = chapters.length;
-    const secStartRatio = section?.startRatio ?? 0;
-    const secEndRatio = section?.endRatio ?? 1;
-    ds.secStartSec = +(secStartRatio * duration).toFixed(2);
-    ds.secEndSec = +(secEndRatio * duration).toFixed(2);
-    ds.secDuration = +(ds.secEndSec - ds.secStartSec).toFixed(2);
-    ds.secElapsed = +((clamped - this.songStartSec) - ds.secStartSec).toFixed(2);
-    ds.secProgress = ds.secDuration > 0 ? Math.max(0, Math.min(1, ds.secElapsed / ds.secDuration)) : 0;
-    ds.secMood = section?.mood ?? section?.atmosphere ?? '—';
-    ds.secTexture = this.activeSectionTexture ?? '—';
-    ds.secHasImage = sectionIndex >= 0 && sectionIndex < this.chapterImages.length && !!this.chapterImages[sectionIndex];
+    // Heavy debug state — only when debug panel is open
+    if ((this as any)._debugPanelOpen) {
+      const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
+      ds.wordCount = visibleChunks.length;
+      ds.particleCount = this.ambientParticleEngine?.getActiveCount() ?? 0;
 
-    // ── Cinematic direction defaults ──
-    const cdAny = cd as any;
-    ds.cdSceneTone = cdAny?.sceneTone ?? '—';
-    ds.cdAtmosphere = cdAny?.atmosphere ?? '—';
-    ds.cdMotion = cdAny?.motion ?? '—';
-    ds.cdTypography = cdAny?.typography ?? '—';
-    ds.cdTexture = cdAny?.texture ?? '—';
-    ds.cdEmotionalArc = cdAny?.emotionalArc ?? '—';
-    ds.dirThesis = cd?.thesis ?? '—';
+      const currentChapter = section;
+      const cdAny = cd as any;
+      ds.cdSceneTone = cdAny?.sceneTone ?? '—';
+      ds.cdAtmosphere = cdAny?.atmosphere ?? '—';
+      ds.cdMotion = cdAny?.motion ?? '—';
+      ds.cdTypography = cdAny?.typography ?? '—';
+      ds.cdTexture = cdAny?.texture ?? '—';
+      ds.cdEmotionalArc = cdAny?.emotionalArc ?? '—';
+      ds.dirThesis = cd?.thesis ?? '—';
 
-    // ── Chapter ──
-    const chapterIdx = chapters.length > 0 ? this.resolveChapterIndex(chapters, clamped - this.songStartSec, duration) : -1;
-    ds.dirChapter = chapterIdx >= 0 ? `${chapterIdx + 1}/${chapters.length}` : '—';
-    const chapterStartR = currentChapter?.startRatio ?? 0;
-    const chapterEndR = currentChapter?.endRatio ?? 1;
-    const chapterRange = chapterEndR - chapterStartR;
-    ds.dirChapterProgress = chapterRange > 0 ? Math.max(0, Math.min(1, (songProgress - chapterStartR) / chapterRange)) : 0;
-    ds.dirIntensity = currentChapter?.emotionalIntensity ?? 0;
-    ds.dirBgDirective = currentChapter?.bgDirective ?? currentChapter?.backgroundSystem ?? '—';
-    ds.dirLightBehavior = currentChapter?.lightBehavior ?? currentChapter?.atmosphere ?? '—';
+      ds.dirChapter = sectionIndex >= 0 ? `${sectionIndex + 1}/${chapters.length}` : '—';
+      const chapterStartR = (currentChapter as any)?.startRatio ?? 0;
+      const chapterEndR = (currentChapter as any)?.endRatio ?? 1;
+      const chapterRange = chapterEndR - chapterStartR;
+      ds.dirChapterProgress = chapterRange > 0 ? Math.max(0, Math.min(1, (songProgress - chapterStartR) / chapterRange)) : 0;
+      ds.dirIntensity = (currentChapter as any)?.emotionalIntensity ?? 0;
+      ds.dirBgDirective = (currentChapter as any)?.bgDirective ?? (currentChapter as any)?.backgroundSystem ?? '—';
+      ds.dirLightBehavior = (currentChapter as any)?.lightBehavior ?? (currentChapter as any)?.atmosphere ?? '—';
 
-    // ── Beat grid phase (from conductor) ──
-    const beatGrid = this.data?.beat_grid;
-    const beatsArr = beatGrid?.beats ?? [];
-    ds.bgBpm = beatGrid?.bpm ?? 0;
-    ds.bgBeatsTotal = beatsArr.length;
-    ds.bgConfidence = beatGrid?.confidence ?? 0;
-    ds.bgNextBeat = beatState?.nextBeat ?? 0;
-    ds.bgBeatPhase = beatState?.phase ?? 0;
-    ds.bgBeatPulse = beatState?.pulse ?? 0;
-    ds.beatIntensity = Math.max(ds.beatIntensity, beatState?.pulse ?? 0);
+      const beatGrid = this.data?.beat_grid;
+      const beatsArr = beatGrid?.beats ?? [];
+      ds.bgBpm = beatGrid?.bpm ?? 0;
+      ds.bgBeatsTotal = beatsArr.length;
+      ds.bgConfidence = beatGrid?.confidence ?? 0;
+      ds.bgNextBeat = beatState?.nextBeat ?? 0;
+      ds.bgBeatPhase = beatState?.phase ?? 0;
+      ds.bgBeatPulse = beatState?.pulse ?? 0;
 
-    // ── Active word ──
-    ds.activeWord = activeWordClean || '—';
-    ds.activeWordEntry = activeWordDirective?.entry ?? '—';
-    ds.activeWordExit = activeWordDirective?.exit ?? '—';
-    ds.activeWordEmphasis = activeWordDirective?.emphasisLevel ?? 0;
+      const activeWord = this.getActiveWord(clamped);
+      const activeWordClean = normalizeToken(activeWord?.word ?? '');
+      const activeWordDirective = activeWordClean ? this.resolvedState.wordDirectivesMap[activeWordClean] ?? null : null;
+      ds.activeWord = activeWordClean || '—';
+      ds.activeWordEntry = activeWordDirective?.entry ?? '—';
+      ds.activeWordExit = activeWordDirective?.exit ?? '—';
+      ds.activeWordEmphasis = activeWordDirective?.emphasisLevel ?? 0;
 
-    // ── Word directive (from cinematic direction) ──
-    ds.wordDirectiveWord = activeWordClean || '';
-    ds.wordDirectiveBehavior = activeWordDirective?.behavior ?? activeWordDirective?.kineticClass ?? '—';
-    ds.wordDirectiveEntry = activeWordDirective?.entry ?? '—';
-    ds.wordDirectiveExit = activeWordDirective?.exit ?? '—';
-    ds.wordDirectiveEmphasis = activeWordDirective?.emphasisLevel ?? 0;
-    ds.wordDirectiveGhostTrail = activeWordDirective?.ghostTrail ?? false;
-    ds.wordDirectiveGhostDir = activeWordDirective?.ghostDirection ?? '—';
+      ds.wordDirectiveWord = activeWordClean || '';
+      ds.wordDirectiveBehavior = activeWordDirective?.behavior ?? activeWordDirective?.kineticClass ?? '—';
+      ds.wordDirectiveEntry = activeWordDirective?.entry ?? '—';
+      ds.wordDirectiveExit = activeWordDirective?.exit ?? '—';
+      ds.wordDirectiveEmphasis = activeWordDirective?.emphasisLevel ?? 0;
+      ds.wordDirectiveGhostTrail = activeWordDirective?.ghostTrail ?? false;
+      ds.wordDirectiveGhostDir = activeWordDirective?.ghostDirection ?? '—';
 
-    // ── Line / storyboard ──
-    const storyboard = cd?.storyboard ?? [];
-    const activeLineIdx = activeLine ? lines.indexOf(activeLine) : -1;
-    const lineStory = activeLineIdx >= 0 ? (storyboard as any[])[activeLineIdx] : null;
-    ds.lineHeroWord = lineStory?.heroWord ?? '';
-    ds.lineEntry = lineStory?.entryStyle ?? 'fades';
-    ds.lineExit = lineStory?.exitStyle ?? 'fades';
-    ds.lineIntent = lineStory?.intent ?? lineStory?.emotion ?? '—';
-    ds.shotType = lineStory?.shotType ?? 'FloatingInWorld';
-    ds.shotDescription = lineStory?.description ?? '—';
-    const resolvedLine = activeLineIdx >= 0 ? this.resolvedState.lineSettings[activeLineIdx] : null;
-    const resolvedWord = activeWordClean ? this.resolvedState.wordSettings[activeWordClean] ?? null : null;
-    ds.resolvedLineStyle = resolvedLine
-      ? `${resolvedLine.entryStyle}→${resolvedLine.exitStyle} / ${resolvedLine.typography} / ${resolvedLine.atmosphere}`
-      : '—';
-    ds.resolvedWordStyle = resolvedWord
-      ? `${resolvedWord.behavior} e${resolvedWord.emphasisLevel} pulse:${resolvedWord.pulseAmp.toFixed(2)}`
-      : '—';
-    ds.layoutStable = true;
+      const lines = this.payload?.lines ?? [];
+      const visibleLines = lines.filter((l: any) => clamped >= (l.start ?? 0) && clamped < (l.end ?? 0));
+      const activeLine = visibleLines.length === 0
+        ? null
+        : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
+      const storyboard = cd?.storyboard ?? [];
+      const activeLineIdx = activeLine ? lines.indexOf(activeLine) : -1;
+      const lineStory = activeLineIdx >= 0 ? (storyboard as any[])[activeLineIdx] : null;
+      ds.lineHeroWord = lineStory?.heroWord ?? '';
+      ds.lineEntry = lineStory?.entryStyle ?? 'fades';
+      ds.lineExit = lineStory?.exitStyle ?? 'fades';
+      ds.lineIntent = lineStory?.intent ?? lineStory?.emotion ?? '—';
+      ds.shotType = lineStory?.shotType ?? 'FloatingInWorld';
+      ds.shotDescription = lineStory?.description ?? '—';
+      const resolvedLine = activeLineIdx >= 0 ? this.resolvedState.lineSettings[activeLineIdx] : null;
+      const resolvedWord = activeWordClean ? this.resolvedState.wordSettings[activeWordClean] ?? null : null;
+      ds.resolvedLineStyle = resolvedLine
+        ? `${resolvedLine.entryStyle}→${resolvedLine.exitStyle} / ${resolvedLine.typography} / ${resolvedLine.atmosphere}`
+        : '—';
+      ds.resolvedWordStyle = resolvedWord
+        ? `${resolvedWord.behavior} e${resolvedWord.emphasisLevel} pulse:${resolvedWord.pulseAmp.toFixed(2)}`
+        : '—';
+      ds.layoutStable = true;
 
-    // ── Camera & tension ──
-    ds.cameraDistance = ds.cdTypography;
-    ds.cameraMovement = cdAny?.cameraMovement ?? currentChapter?.cameraMovement ?? '—';
-    ds.tensionStage = currentTension?.stage ?? '—';
-    ds.tensionMotion = currentTension?.motionIntensity ?? 0;
-    ds.tensionParticles = currentTension?.particleDensity ?? 0;
-    ds.tensionTypo = currentTension?.typography ?? '—';
+      ds.cameraDistance = ds.cdTypography;
+      ds.cameraMovement = cdAny?.cameraMovement ?? (currentChapter as any)?.cameraMovement ?? '—';
+      ds.tensionStage = currentTension?.stage ?? '—';
+      ds.tensionMotion = currentTension?.motionIntensity ?? 0;
+      ds.tensionParticles = currentTension?.particleDensity ?? 0;
+      ds.tensionTypo = currentTension?.typography ?? '—';
 
-    // ── Symbols ──
-    const symbols = cdAny?.symbolSystem ?? cdAny?.symbols ?? {};
-    ds.symbolPrimary = symbols?.primary ?? '—';
-    ds.symbolSecondary = symbols?.secondary ?? '—';
-    ds.symbolState = symbols?.state ?? '—';
+      const symbols = cdAny?.symbolSystem ?? cdAny?.symbols ?? {};
+      ds.symbolPrimary = symbols?.primary ?? '—';
+      ds.symbolSecondary = symbols?.secondary ?? '—';
+      ds.symbolState = symbols?.state ?? '—';
 
-    // ── Physics / position ──
-    const physics = cd?.visualWorld?.physicsProfile;
-    ds.heat = physics?.heat ?? 0;
-    ds.velocity = 0;
-    ds.rotation = 0;
-    ds.wordCount = visibleChunks.length;
+      const physics = cd?.visualWorld?.physicsProfile;
+      ds.heat = physics?.heat ?? 0;
+      ds.velocity = 0;
+      ds.rotation = 0;
 
-    // ── Particles ──
-    ds.particleSystem = this.activeSectionTexture ?? 'none';
-    ds.particleDensity = this.resolvedState.particleConfig.density ?? 0;
-    ds.particleSpeed = this.resolvedState.particleConfig.speed ?? 0;
+      ds.particleSystem = this.activeSectionTexture ?? 'none';
+      ds.particleDensity = this.resolvedState.particleConfig.density ?? 0;
+      ds.particleSpeed = this.resolvedState.particleConfig.speed ?? 0;
 
-    // ── Background / image ──
-    ds.backgroundSystem = cdAny?.backgroundSystem ?? cd?.visualWorld?.backgroundSystem ?? '—';
-    ds.imageLoaded = this.chapterImages.length > 0;
-    ds.zoom = frame?.cameraZoom ?? 1;
-    ds.vignetteIntensity = 0;
+      ds.backgroundSystem = cdAny?.backgroundSystem ?? cd?.visualWorld?.backgroundSystem ?? '—';
+      ds.imageLoaded = this.chapterImages.length > 0;
+      ds.zoom = frame?.cameraZoom ?? 1;
+      ds.vignetteIntensity = 0;
 
-    // ── Font / animation stubs ──
-    ds.fontScale = this._viewportFontScale ?? 1;
-    ds.scale = frame?.cameraZoom ?? 1;
-    ds.lineColor = this.getResolvedPalette()?.[2] ?? '#ffffff';
-    ds.effectKey = activeLine?.tag ?? '—';
-    const firstVisible = visibleChunks[0];
-    ds.entryProgress = firstVisible?.entryProgress ?? 0;
-    ds.exitProgress = firstVisible?.exitProgress ?? 0;
+      ds.fontScale = this._viewportFontScale ?? 1;
+      ds.scale = frame?.cameraZoom ?? 1;
+      ds.lineColor = this.getResolvedPalette()?.[2] ?? '#ffffff';
+      ds.effectKey = activeLine?.tag ?? '—';
+      const firstVisible = visibleChunks[0];
+      ds.entryProgress = firstVisible?.entryProgress ?? 0;
+      ds.exitProgress = firstVisible?.exitProgress ?? 0;
+    } // end debug panel guard
 
-    const beatIntensityClamped = Math.max(0, Math.min(1, beatIntensity));
+    const beatIntensityClamped = Math.max(0, Math.min(1, beatState?.pulse ?? 0));
     this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
-    ds.particleCount = this.ambientParticleEngine?.getActiveCount() ?? 0;
   }
 
   private draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
@@ -2168,34 +2089,8 @@ export class LyricDancePlayer {
     }
     this._lastLoggedTSec = tSec;
 
-    // ─── Resolve mood grade early ───
-    {
-      const cdEarly = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-      const sectionsEarly = (cdEarly?.sections as any[]) ?? [];
-      const tSecEarly = this.audio?.currentTime ?? 0;
-      const durEarly = this.audio?.duration || 1;
-      const secIdxEarly = sectionsEarly.length > 0
-        ? this.resolveSectionIndex(sectionsEarly, tSecEarly, durEarly)
-        : -1;
-      const vm = secIdxEarly >= 0 ? (sectionsEarly[secIdxEarly]?.visualMood as string) : undefined;
-      let earlyGrade = getMoodGrade(vm);
-
-      // ═══ V2: Apply scene tone brightness boost for light sections ═══
-      const earlySceneTone = (cdEarly?.sceneTone as string) ?? 'dark';
-      const earlyTones = getSectionTones(earlySceneTone, Math.max(1, sectionsEarly.length));
-      const earlyTone = secIdxEarly >= 0 ? (earlyTones[secIdxEarly] ?? 'dark') : 'dark';
-      if (earlyTone === 'light') {
-        earlyGrade = {
-          ...earlyGrade,
-          brightness: Math.max(earlyGrade.brightness, 0.75),
-          saturation: Math.min(earlyGrade.saturation, 1.0),
-          contrast: Math.min(earlyGrade.contrast, 1.1),
-        };
-      }
-      (this as any)._activeMoodGrade = earlyGrade;
-      (this as any)._activeIntensity = 0.5;
-      this._currentSectionTone = earlyTone;
-    }
+    // Mood grade is computed inside drawChapterImage() which runs before text rendering.
+    // _activeMoodGrade and _currentSectionTone are set there.
 
     // ═══ V2: Use pre-computed frame (single evaluateFrame per tick) ═══
     const frame = precomputedFrame;
@@ -2215,7 +2110,6 @@ export class LyricDancePlayer {
 
     // Background: static bg cache first, then section images on top
     // ═══ V2: CameraRig parallax — BG_FAR layer ═══
-    const _t0Bg = performance.now();
     this.cameraRig.applyTransform(this.ctx, 'far');
     this.drawBackground(frame);
 
@@ -2243,37 +2137,15 @@ export class LyricDancePlayer {
         }
       }
     }
-    const chapterLocalProgress = chapterSpan > 0 ? ((currentTimeSec) % chapterSpan) / chapterSpan : 0;
-
-    // Image diagnostics — log section transitions
-    if (imgIdx !== this._prevImgIdx && this.chapterImages.length > 0) {
-      this._prevImgIdx = imgIdx;
-    }
-
-    // Update image debug state
-    const atmosphere = this.getAtmosphere();
-    const atmosphereOpacityMap: Record<string, number> = { void: 0.10, cinematic: 0.65, haze: 0.50, split: 0.75, grain: 0.60, wash: 0.55, glass: 0.45, clean: 0.85 };
-    this.debugState.imgCount = this.chapterImages.length;
-    this.debugState.imgActiveIdx = imgIdx;
-    this.debugState.imgNextIdx = nextImgIdx;
-    this.debugState.imgCrossfade = crossfade;
-    this.debugState.imgChapterSpan = chapterSpan;
-    this.debugState.imgLocalProgress = chapterLocalProgress;
-    this.debugState.imgOpacity = atmosphereOpacityMap[atmosphere] ?? 0.65;
-    this.debugState.imgOverlap = false;
-
     this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
     // ═══ V2: End BG_FAR parallax ═══
     this.cameraRig.resetTransform(this.ctx);
-    this.debugState.perfBg = performance.now() - _t0Bg;
 
     // ═══ V2: CameraRig parallax — BG_MID layer (sims, lighting) ═══
-    const _t0Mid = performance.now();
     this.cameraRig.applyTransform(this.ctx, 'mid');
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
     this.cameraRig.resetTransform(this.ctx);
-    this.debugState.perfSymbol = performance.now() - _t0Mid;
 
     try {
       this.checkEmotionalEvents(tSec, songProgress);
@@ -2306,7 +2178,6 @@ export class LyricDancePlayer {
       }
     }
 
-    const _t0Text = performance.now();
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
@@ -2323,12 +2194,12 @@ export class LyricDancePlayer {
     for (let i = 1; i < sortBuf.length; i += 1) {
       const v = sortBuf[i];
       const vKey = ((v.exitProgress ?? 0) > 0) ? 1 : 0;
-      const vFont = `${v.fontWeight ?? 700}|${v.fontSize ?? 36}|${v.fontFamily ?? ''}`;
+      const vSort = (v.fontWeight ?? 700) * 10000 + (v.fontSize ?? 36);
       let j = i - 1;
       while (j >= 0) {
         const jKey = ((sortBuf[j].exitProgress ?? 0) > 0) ? 1 : 0;
-        const jFont = `${sortBuf[j].fontWeight ?? 700}|${sortBuf[j].fontSize ?? 36}|${sortBuf[j].fontFamily ?? ''}`;
-        if (jKey > vKey || (jKey === vKey && jFont > vFont)) {
+        const jSort = (sortBuf[j].fontWeight ?? 700) * 10000 + (sortBuf[j].fontSize ?? 36);
+        if (jKey > vKey || (jKey === vKey && jSort > vSort)) {
           sortBuf[j + 1] = sortBuf[j];
           j -= 1;
         } else {
@@ -2337,8 +2208,9 @@ export class LyricDancePlayer {
       }
       sortBuf[j + 1] = v;
     }
-    const nowSec = performance.now() / 1000;
-    this.drawDecompositions(this.ctx, nowSec);
+    const frameNowMs = performance.now(); // hoisted — used everywhere below
+    const frameNowSec = frameNowMs / 1000;
+    this.drawDecompositions(this.ctx, frameNowSec);
 
     const isPortraitLocal = this.height > this.width;
     const viewportMinFont = isPortraitLocal
@@ -2471,8 +2343,6 @@ export class LyricDancePlayer {
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
-    const frameNowMs = performance.now(); // hoisted — used per-chunk below
-    const frameNowSec = frameNowMs / 1000;
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       const chunk = sortBuf[ci];
       if (!chunk.visible) continue;
@@ -2710,9 +2580,6 @@ export class LyricDancePlayer {
             }
 
             if (elementalClass) {
-              if (!(this as any)._elementalLoggedIds?.has(chunk.id)) {
-                ((this as any)._elementalLoggedIds ??= new Set()).add(chunk.id);
-                console.log(`[hero-fx] "${text}" → ${elementalClass} (emphasis ${emphasis})`);
               }
               // Word-local time: effects start at t=0 when word appears
               const wordAgeSec = visibleMs / 1000;
@@ -2782,14 +2649,11 @@ export class LyricDancePlayer {
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
 
-    this.debugState.perfText = performance.now() - _t0Text;
 
     // Comment comets — after text, before watermark
-    const _t0Over = performance.now();
-    this.drawComments(performance.now() / 1000);
+    this.drawComments(frameNowSec);
 
     this.drawWatermark();
-    this.debugState.perfOverlays = performance.now() - _t0Over;
     this.debugState.drawCalls = drawCalls;
   }
 
@@ -3498,14 +3362,12 @@ export class LyricDancePlayer {
     const next = this.chapterImages[nextChapterIdx];
 
     // ─── Mood-based cinematic grading ───
-    // Resolve current section's visualMood → grade recipe
+    // Use cached section index — already resolved in tick()
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const sections = (cd?.sections as any[]) ?? [];
     const currentTimeSec = this.audio?.currentTime ?? 0;
     const totalDurationSec = this.audio?.duration || 1;
-    const secIdx = sections.length > 0
-      ? this.resolveSectionIndex(sections, currentTimeSec, totalDurationSec)
-      : -1;
+    const secIdx = this._frameSectionIdx;
     const currentVisualMood = secIdx >= 0 ? (sections[secIdx]?.visualMood as string) : undefined;
     const currentGrade = getMoodGrade(currentVisualMood);
 
@@ -3546,10 +3408,10 @@ export class LyricDancePlayer {
     // Store for text color decisions elsewhere
     this._currentSectionTone = currentTone;
 
-    // Emotional intensity from chapter
+    // Emotional intensity from cached section
     const chapters = this.resolvedState.chapters ?? [];
-    const currentChapterObj = this.resolveChapter(chapters, this.audio.currentTime, this.audio.duration || 1);
-    const intensity = currentChapterObj?.emotionalIntensity ?? 0.5;
+    const currentChapterObj = secIdx >= 0 ? chapters[secIdx] : chapters[0];
+    const intensity = (currentChapterObj as any)?.emotionalIntensity ?? 0.5;
 
     // Beat response
     const beatMod = Math.max(0, this._springOffset);
@@ -3800,8 +3662,8 @@ export class LyricDancePlayer {
       if (simFrame === this.lastSimFrame) return;
       this.lastSimFrame = simFrame;
       const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
-      const chapterIdxRaw = this.resolveChapterIndex(chapters, this.audio.currentTime, this.audio.duration || 1);
-      const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
+      // Use cached section index — already resolved in tick()
+      const chapterIdx = this._frameSectionIdx >= 0 ? Math.min(this._frameSectionIdx, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
 
       if (ci !== this._lastSimChapterIdx) {
@@ -3857,7 +3719,6 @@ export class LyricDancePlayer {
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
     if (!this._evalFrameLogged) {
       this._evalFrameLogged = true;
-      console.log("%c[LyricDancePlayer] NEW CODE ACTIVE — writeIdx filter, SPACE_MULT=1.15, single-line mode", "color:#0f0;font-size:16px;font-weight:bold;background:#111;padding:4px 8px;border-radius:4px");
     }
     const scene = this.compiledScene;
     if (!scene) return null;
@@ -3992,17 +3853,6 @@ export class LyricDancePlayer {
     // Re-sort so groups render in temporal order
     activeGroups.sort((a: number, b: number) => groups[a].start - groups[b].start);
 
-    // DIAGNOSTIC: log active groups every 2 seconds
-    if (!(this as any)._lastDiagTime || tSec - (this as any)._lastDiagTime > 2) {
-      (this as any)._lastDiagTime = tSec;
-      const groupInfo = activeGroups.map(gi => {
-        const g = groups[gi];
-        const words = g.words.map(w => w.text).join(' ');
-        return `L${g.lineIndex}:"${words}"`;
-      }).join(' | ');
-      console.log(`[diag] t=${tSec.toFixed(1)} primary=${primaryLineIndex} groups(${activeGroups.length}): ${groupInfo}`);
-    }
-
     // Smooth line transitions (250ms ease-out)
     if (primaryLineIndex !== this._prevPrimaryLineIndex) {
       this._lineTransitionStartSec = tSec;
@@ -4027,25 +3877,9 @@ export class LyricDancePlayer {
         : group.lineIndex === nextLineIndex ? 'next'
         : 'offscreen';
 
-      // Check if any hero word in this group is active and requesting sibling dimming
+      // Track hero word wave proximity for sibling dimming
       let groupHeroDimming = false;
-      let groupHeroIsolation = false;
       let groupHeroWaveProximity = 0;
-      if (lineRole === 'current') {
-        for (let hwi = 0; hwi < group.words.length; hwi++) {
-          const hw = group.words[hwi];
-          if (hw.isHeroWord && (hw as any).heroPresentation) {
-            const hwStart = group.start + (hw === group.words[group.anchorWordIdx] ? 0 : Math.abs(hwi - group.anchorWordIdx) * group.staggerDelay);
-            if (tSec >= hwStart) {
-              const pres = (hw as any).heroPresentation as string;
-              if (pres === 'isolation') groupHeroIsolation = true;
-              if (['inline-scale', 'delayed-reveal', 'vertical-lift', 'vertical-drop', 'tracking-expand', 'dim-surroundings'].includes(pres)) {
-                groupHeroDimming = true;
-              }
-            }
-          }
-        }
-      }
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
@@ -4170,100 +4004,46 @@ export class LyricDancePlayer {
 
         let finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
-        // ─── Hero word presentation (wave-driven) ───
+        // ─── Hero word presentation: SOLO CENTER ───
+        // Emph 3+: hero appears alone at center, siblings invisible.
+        // As wave passes, hero slides back to layout position, siblings fade in.
         const isHeroWord = word.isHeroWord === true;
-        const heroPresentation = (word as any).heroPresentation as string | undefined;
         let heroScaleMult = 1.0;
+        let heroOffsetX = 0;
         let heroOffsetY = 0;
-        let heroDelayMs = 0;
         let heroDimSiblings = false;
-        let heroIsolate = false;
-        let heroTrackingExpand = false;
 
         if (isHeroWord && lineRole === 'current') {
-          // waveProximity (0-1) drives all hero effects smoothly
-          // At 1.0 = wave peak is exactly on this word
-          // At 0.0 = wave is far away
           const wp = waveProximity;
+          // Smooth isolation curve: full isolation at wp > 0.4, releases below
+          const isolation = Math.min(1, wp * 2.5); // 0→0 at wp=0, →1 at wp=0.4+
 
-          switch (heroPresentation ?? 'inline-scale') {
-            case 'inline-scale': {
-              // 115-120% scale that follows the wave curve
-              heroScaleMult = 1.0 + wp * 0.18;
-              // Subtle 8px upward nudge at peak
-              heroOffsetY = -8 * wp;
-              if (wp > 0.5) heroDimSiblings = true;
-              break;
-            }
-            case 'delayed-reveal': {
-              // Snap-in effect: word is invisible until wave arrives, then pops
-              heroDelayMs = 120;
-              const wordStartTime = group.start + staggerDelay;
-              const delayedStart = wordStartTime + heroDelayMs / 1000;
-              if (tSec < delayedStart) {
-                roleAlpha = 0.0;
-              } else {
-                // Once revealed, scale follows the wave
-                heroScaleMult = 1.0 + wp * 0.16;
-                if (wp > 0.3) heroDimSiblings = true;
-              }
-              break;
-            }
-            case 'isolation': {
-              // Everything else fades proportional to wave proximity
-              heroIsolate = true;
-              heroScaleMult = 1.0 + wp * 0.35;
-              // Offset toward center proportional to wave
-              heroOffsetY = (270 - word.layoutY) * wp;
-              roleAlpha = Math.max(roleAlpha, wp);
-              break;
-            }
-            case 'vertical-lift': {
-              // Rise follows the wave — eases up and settles back
-              heroOffsetY = -28 * wp;
-              heroScaleMult = 1.0 + wp * 0.15;
-              if (wp > 0.5) heroDimSiblings = true;
-              break;
-            }
-            case 'vertical-drop': {
-              // Sink follows the wave
-              heroOffsetY = 28 * wp;
-              heroScaleMult = 1.0 + wp * 0.15;
-              if (wp > 0.5) heroDimSiblings = true;
-              break;
-            }
-            case 'tracking-expand': {
-              heroTrackingExpand = true;
-              heroScaleMult = 1.0 + wp * 0.10;
-              if (wp > 0.5) heroDimSiblings = true;
-              break;
-            }
-            case 'dim-surroundings': {
-              heroDimSiblings = true;
-              heroScaleMult = 1.0 + wp * 0.15;
-              break;
-            }
-          }
+          // Scale: 130% at peak, settles to 100%
+          heroScaleMult = 1.0 + isolation * 0.30;
+
+          // Position: lerp from layout position toward screen center
+          const centerX = 480; // center of 960-space
+          const centerY = 270; // center of 540-space
+          heroOffsetX = (centerX - word.layoutX) * isolation;
+          heroOffsetY = (centerY - roleY) * isolation;
+
+          // Dim siblings when hero is prominent
+          if (isolation > 0.15) heroDimSiblings = true;
         }
+
 
         if (isHeroWord && waveProximity > groupHeroWaveProximity) {
           groupHeroWaveProximity = waveProximity;
         }
 
         if (heroDimSiblings) groupHeroDimming = true;
-        if (heroIsolate) groupHeroIsolation = true;
 
         // (Next-line anticipation removed — only current line is visible)
 
-        // Sibling dimming: proportional to hero word's wave proximity
-        if (!isHeroWord && lineRole === 'current') {
-          if (groupHeroIsolation) {
-            // Isolation: siblings fade smoothly as wave reaches hero, return after
-            roleAlpha *= Math.max(0.05, 1.0 - groupHeroWaveProximity * 0.95);
-          } else if (groupHeroDimming) {
-            // Subtle dim: 0-20% reduction following the wave
-            roleAlpha *= 1.0 - groupHeroWaveProximity * 0.20;
-          }
+        // Solo-center: siblings fade out when hero is prominent, fade back in after
+        if (!isHeroWord && lineRole === 'current' && groupHeroDimming) {
+          // Siblings invisible at peak hero, smoothly return
+          roleAlpha *= Math.max(0.05, 1.0 - groupHeroWaveProximity * 0.92);
         }
 
         finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
@@ -4279,7 +4059,7 @@ export class LyricDancePlayer {
         const wordSpan = charW * lt;
         const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
 
-        // Micro cam push — skip for hero words (handled by heroPresentation)
+        // Micro cam push — skip for hero words (handled by solo-center)
         if (!isHeroWord) {
           const isHeroBeatHit = isExactHeroTokenMatch(word.text, resolvedLine?.heroWord ?? '') && beatPulse > 0.35;
           if (isHeroBeatHit) {
@@ -4302,7 +4082,7 @@ export class LyricDancePlayer {
         // Hero glow follows the wave
         if (isHeroWord && heroScaleMult > 1.02) {
           wordGlow += 0.4 * (heroScaleMult - 1.0);
-          if ((heroPresentation ?? 'inline-scale') === 'isolation') wordGlow += 0.5 * waveProximity;
+          wordGlow += 0.4 * waveProximity; // solo-center glow
         }
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
@@ -4317,7 +4097,7 @@ export class LyricDancePlayer {
           waveScale = 1.0 + waveProximity * 0.06; // 6% max at peak — subtle but visible
         }
 
-        chunk.x = (word.layoutX + finalOffsetX + letterOffsetX) * sx;
+        chunk.x = (word.layoutX + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
         chunk.y = (roleY + finalOffsetY + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
@@ -4424,7 +4204,7 @@ export class LyricDancePlayer {
         chunk.ghostCount = word.ghostCount;
         chunk.ghostSpacing = word.ghostSpacing;
         chunk.ghostDirection = (resolvedWord?.ghostDirection ?? word.ghostDirection) as any;
-        chunk.heroTrackingExpand = isHeroWord && heroTrackingExpand && tSec >= group.start + staggerDelay;
+        chunk.heroTrackingExpand = false;
         chunk.letterIndex = word.letterIndex;
         chunk.letterTotal = word.letterTotal;
         chunk.letterDelay = word.letterDelay ?? 0;
@@ -4604,7 +4384,14 @@ export class LyricDancePlayer {
         this.activeEvents.push({ event: ev, startTime: tSec });
       }
     }
-    this.activeEvents = this.activeEvents.filter(ae => (tSec - ae.startTime) < ae.event.duration);
+    // In-place filter — no allocation
+    let writeIdx = 0;
+    for (let i = 0; i < this.activeEvents.length; i++) {
+      if ((tSec - this.activeEvents[i].startTime) < this.activeEvents[i].event.duration) {
+        this.activeEvents[writeIdx++] = this.activeEvents[i];
+      }
+    }
+    this.activeEvents.length = writeIdx;
   }
 
   private drawEmotionalEvents(tSec: number): void {
