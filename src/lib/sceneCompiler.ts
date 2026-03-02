@@ -292,7 +292,6 @@ export function computeAllLineLayouts(
     if (!isPortrait && totalWidth > maxLineWidth && totalWidth > 0) {
       const scaleFactor = maxLineWidth / totalWidth;
       const minFontSize = 24; // floor — don't go below readable
-      console.log(`[sceneCompiler] auto-scale line ${lineIndex}: ${totalWidth.toFixed(0)}px > ${maxLineWidth}px, scale=${scaleFactor.toFixed(3)}, words=${flatWords.length}`);
       // Re-measure all words at scaled font sizes
       for (const fw of flatWords) {
         fw.fontSize = Math.max(minFontSize, fw.fontSize * scaleFactor);
@@ -334,7 +333,6 @@ export function computeAllLineLayouts(
         }
       }
       rows.push({ startIdx: rowStart, endIdx: flatWords.length - 1, width: rowWidth });
-      console.log(`[sceneCompiler] portrait wrap line ${lineIndex}: ${flatWords.length} words → ${rows.length} rows`);
     } else {
       // Single row
       rows.push({ startIdx: 0, endIdx: flatWords.length - 1, width: totalWidth });
@@ -556,9 +554,6 @@ function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): stri
 }
 
 export function compileScene(payload: ScenePayload, options?: { viewportWidth?: number; viewportHeight?: number }): CompiledScene {
-  console.log('%c[sceneCompiler] compileScene called — SPACE_MULT=1.15, auto-scale active', 'color: cyan; font-size: 14px; font-weight: bold');
-  console.log('[sceneCompiler] auto_palettes:', payload.auto_palettes?.length ?? 0, 'first text color:', payload.auto_palettes?.[0]?.[2] ?? 'none');
-  console.log('[sceneCompiler] fallback palette[2]:', payload.palette?.[2] ?? 'none');
   const durationSec = Math.max(0.01, payload.songEnd - payload.songStart);
   const rawChapters = (payload.cinematic_direction?.chapters ?? []) as Array<any>;
   const chapters = rawChapters.length > 0 ? rawChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
@@ -570,10 +565,15 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const wordDirectives = payload.cinematic_direction?.wordDirectives;
   const directives = new Map<string, WordDirectiveLike>();
   if (Array.isArray(wordDirectives)) for (const d of wordDirectives) directives.set(String(d?.word ?? '').trim().toLowerCase(), d as WordDirectiveLike);
-  const words = payload.words ?? [];
+  // B-11: Validate word timing — skip words with start >= end or negative timestamps
+  const rawWords = payload.words ?? [];
+  const words = rawWords.filter(w => {
+    if (w.start < 0 || w.end < 0 || w.start >= w.end) return false;
+    return true;
+  });
   const wordMeta: WordMetaEntry[] = words.map((w) => {
     const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? 9999)));
+    const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity)));
     return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
   });
   const lineWordCounters: Record<number, number> = {};
@@ -652,7 +652,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         const word = group?.words[i]?.word ?? '?';
         return `"${word}" x=${Math.round(p.x)} fs=${Math.round(p.fontSize)}`;
       }).join('  |  ');
-      console.log(`[sceneCompiler] line ${key}: ${words}`);
       diagCount++;
     }
   }
@@ -661,7 +660,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   measureCtx.font = `${baseTypography.fontWeight} 68px ${baseTypography.fontFamily}`;
   const testWord = measureCtx.measureText('hello').width;
   const testSpace = measureCtx.measureText(' ').width;
-  console.log(`[sceneCompiler] measureText test: "hello"=${testWord.toFixed(1)}px, " "=${testSpace.toFixed(1)}px, font=${measureCtx.font}`);
 
   const compiledGroups: CompiledPhraseGroup[] = phraseGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
@@ -757,3 +755,78 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     animParams,
   };
 }
+
+// ─── Types migrated from lyricSceneBaker.ts (deleted — sceneCompiler is the canonical pipeline) ───
+
+interface AtmosphereConfig {
+  vignetteStrength: number;
+  blurAmount: number;
+  grainOpacity: number;
+  tintStrength: number;
+  overlayType: 'none' | 'frost' | 'gradient-wash' | 'split-mask';
+}
+
+export type Keyframe = {
+  timeMs: number;
+  chunks: Array<{
+    id: string;
+    text: string;
+    x: number;
+    y: number;
+    alpha: number;
+    glow: number;
+    scale: number;
+    scaleX: number;
+    scaleY: number;
+    visible: boolean;
+    fontSize: number;
+    fontWeight: number;
+    fontFamily?: string;
+    isAnchor: boolean;
+    color: string;
+    emitterType?: WordEmitterType;
+    trail?: string;
+    entryStyle?: string;
+    exitStyle?: string;
+    emphasisLevel?: number;
+    entryProgress?: number;
+    exitProgress?: number;
+    iconGlyph?: string;
+    iconStyle?: 'outline' | 'filled' | 'ghost';
+    iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
+    iconScale?: number;
+    behavior?: BehaviorStyle;
+    entryOffsetY: number;
+    entryOffsetX: number;
+    entryScale: number;
+    exitOffsetY: number;
+    exitScale: number;
+    skewX: number;
+    blur?: number;
+    rotation?: number;
+    ghostTrail?: boolean;
+    ghostCount?: number;
+    ghostSpacing?: number;
+    ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial';
+    letterIndex?: number;
+    letterTotal?: number;
+    letterDelay?: number;
+    isLetterChunk?: boolean;
+    frozen?: boolean;
+  }>;
+  cameraX: number;
+  cameraY: number;
+  cameraZoom: number;
+  beatIndex: number;
+  bgBlend: number;
+  particles: Array<{
+    x: number;
+    y: number;
+    size: number;
+    alpha: number;
+    shape?: 'circle' | 'line' | 'diamond' | 'glow';
+  }>;
+  particleColor?: string;
+  atmosphere?: AtmosphereConfig;
+  sectionIndex: number;
+};
