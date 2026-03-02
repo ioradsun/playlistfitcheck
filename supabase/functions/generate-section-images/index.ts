@@ -210,7 +210,7 @@ serve(async (req) => {
 
     const { data: danceRow, error: danceError } = await supabase
       .from("shareable_lyric_dances")
-      .select("cinematic_direction, section_images, lines, words")
+      .select("cinematic_direction, section_images, lyrics, words")
       .eq("id", lyric_dance_id)
       .maybeSingle();
 
