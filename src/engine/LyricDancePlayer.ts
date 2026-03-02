@@ -1542,17 +1542,21 @@ export class LyricDancePlayer {
         const vocalActive = frame ? frame.chunks.some((c: any) => c.visible && c.alpha > 0.3) : false;
         const upcoming = this._getUpcomingHero(smoothedTime);
 
+        // Feed beat energy directly — camera derives all modulation from this
+        if (beatState) this.cameraRig.setEnergy(beatState.energy);
+
         const songProg = (smoothedTime - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
-        const isHighIntensitySection = this._activeRigName === 'drop' || this._activeRigName === 'chorus';
-        const isClimax = isHighIntensitySection && songProg > 0.50;
+        // Climax = high energy + past halfway through the song
+        const isClimax = (beatState?.energy ?? 0) > 0.65 && songProg > 0.50;
 
         const focus: SubjectFocus = {
           x: this.width / 2,
           y: this.height / 2,
-          heroActive: upcoming !== null,
+          heroActive: upcoming !== null && !upcoming.isAnticipation,
           emphasisLevel: upcoming?.emphasis ?? 0,
           isClimax,
           vocalActive,
+          heroApproaching: upcoming?.isAnticipation ?? false,
         };
         this.cameraRig.update(deltaMs, beatState, focus);
       }
@@ -2476,8 +2480,9 @@ export class LyricDancePlayer {
     // entire matrix and would wipe any parent zoom.
     const subjectT = this.cameraRig.getSubjectTransform();
     const camZoom = subjectT.zoom;
-    const camCX = this.width / 2;
-    const camCY = this.height / 2;
+    // Shake shifts the "camera center" — everything moves together
+    const camCX = this.width / 2 + subjectT.shakeX;
+    const camCY = this.height / 2 + subjectT.shakeY;
 
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       const chunk = sortBuf[ci];
@@ -4395,6 +4400,22 @@ export class LyricDancePlayer {
         (chunk as any).textStroke = bgIsLikelyDark
           ? 'rgba(0,0,0,0.4)'     // dark bg → subtle dark stroke for crispness
           : 'rgba(0,0,0,0.55)';   // light bg → stronger dark stroke to pop text
+
+        // ═══ Active word (anchor) always gets a distinct accent color ═══
+        // The currently-spoken word must visually pop from its siblings.
+        if (isAnchor && lineRole === 'current' && !word.hasSemanticColor) {
+          const runtimePal = this.getResolvedPalette();
+          const accentHex = runtimePal?.[1] ?? '#ffffff'; // palette accent
+          if (bgIsLikelyDark) {
+            // Dark bg: use bright accent, ensure it's light enough
+            const ab = perceivedBrightness(accentHex);
+            chunk.color = ab < 0.55 ? mixTowardWhite(accentHex, 0.5) : accentHex;
+          } else {
+            // Light bg: darken the accent for readability but keep the hue
+            const ab = perceivedBrightness(accentHex);
+            chunk.color = ab > 0.60 ? '#1a1a2e' : accentHex;
+          }
+        }
         chunk.glow = wordGlow;
         chunk.entryStyle = usedEntry;
         chunk.exitStyle = usedExit;
