@@ -1,9 +1,17 @@
 import { useState, useEffect, useRef } from "react";
+import { analyzeAudioAsync } from "@/engine/audioAnalyzerWorker";
+import type { AudioAnalysis } from "@/engine/audioAnalyzer";
 
 export interface BeatGridData {
   bpm: number;
   beats: number[]; // beat positions in seconds
   confidence: number;
+  /** V2: Onset/hit events with strength */
+  hits?: Array<{ time: number; strength: number; type: 'transient' | 'bass' | 'tonal' }>;
+  /** V2: Per-beat energy aligned to beat positions */
+  beatEnergies?: number[];
+  /** V2: Full audio analysis (runtime only, not serialized) */
+  _analysis?: AudioAnalysis;
 }
 
 // CDN URLs for essentia.js
@@ -15,7 +23,6 @@ let loadPromise: Promise<any> | null = null;
 
 function loadScript(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    // Check if already loaded
     if (document.querySelector(`script[src="${url}"]`)) {
       resolve();
       return;
@@ -33,12 +40,10 @@ async function loadEssentia(): Promise<any> {
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    // Load WASM module first, then core
     await loadScript(ESSENTIA_WASM_URL);
     await loadScript(ESSENTIA_CORE_URL);
 
     const w = window as any;
-    // EssentiaWASM is a factory that returns a promise
     const wasmModule = await w.EssentiaWASM();
     essentiaInstance = new w.Essentia(wasmModule);
     console.log("[beat-grid] Essentia.js loaded, version:", essentiaInstance.version);
@@ -60,9 +65,11 @@ function getMonoChannel(buffer: AudioBuffer): Float32Array {
 }
 
 /**
- * Hook that runs Essentia.js RhythmExtractor2013 on an AudioBuffer
- * to detect beat positions and BPM.
- * Loads Essentia WASM from CDN on first use (~2MB).
+ * Hook that runs Essentia.js RhythmExtractor2013 + AudioAnalyzer on an AudioBuffer
+ * to detect beat positions, BPM, hit events, energy curve, and spectral features.
+ *
+ * V2: Now includes onset detection, energy envelope, and brightness curve
+ * for conductor-driven choreography.
  */
 export function useBeatGrid(buffer: AudioBuffer | null): {
   beatGrid: BeatGridData | null;
@@ -101,10 +108,10 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
           signal = monoData;
         }
 
+        // ═══ Step 1: Essentia beat detection ═══
         const vectorSignal = essentia.arrayToVector(signal);
         const result = essentia.RhythmExtractor2013(vectorSignal, 208, "multifeature", 40);
 
-        // Extract beat positions
         const beatsVector = result.ticks;
         const beats: number[] = [];
         for (let i = 0; i < beatsVector.size(); i++) {
@@ -114,14 +121,35 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
         const bpm = result.bpm;
         const confidence = result.confidence;
 
-        // Clean up WASM vectors
         vectorSignal.delete();
         beatsVector.delete();
 
+        console.log(`[beat-grid] ${beats.length} beats, BPM: ${Math.round(bpm)}, conf: ${confidence.toFixed(2)}`);
+
+        // ═══ Step 2: Audio analysis (onsets, energy, brightness) ═══
+        let analysis: AudioAnalysis | undefined;
+        let hits: BeatGridData['hits'];
+        let beatEnergies: number[] | undefined;
+
+        try {
+          analysis = await analyzeAudioAsync(buffer, beats);
+          hits = analysis.hits;
+          beatEnergies = analysis.beatEnergies;
+          console.log(`[beat-grid] V2: ${hits?.length ?? 0} hits, ${analysis.frames.length} frames`);
+        } catch (analysisErr) {
+          console.warn("[beat-grid] Audio analysis failed (non-fatal):", analysisErr);
+        }
+
         if (!cancelled) {
-          setBeatGrid({ bpm: Math.round(bpm), beats, confidence });
+          setBeatGrid({
+            bpm: Math.round(bpm),
+            beats,
+            confidence,
+            hits,
+            beatEnergies,
+            _analysis: analysis,
+          });
           setLoading(false);
-          console.log(`[beat-grid] ${beats.length} beats, BPM: ${Math.round(bpm)}, conf: ${confidence.toFixed(2)}`);
         }
       } catch (err: any) {
         console.error("[beat-grid] Analysis failed:", err);
