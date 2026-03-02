@@ -308,13 +308,22 @@ export class CameraRig {
 
   /**
    * Backdrop / atmosphere transform.
-   * With depth-only camera, the backdrop gets NO transform at all.
-   * The set doesn't move. Only the actors (text) zoom.
-   * Kept for interface compatibility.
+   * Real camera = everything zooms together. Background gets the same
+   * zoom as text. This works because background drawing uses normal
+   * translate/scale (not setTransform), so parent transforms survive.
    */
   applyTransform(ctx: CanvasRenderingContext2D, _layer: 'backdrop' | 'atmosphere' | 'far' | 'mid' | 'near'): void {
     ctx.save();
-    // No transform — backdrop stays still. That IS the depth.
+    // Zoom from canvas center — same as text
+    const zoom = this.getSubjectTransform().zoom;
+    if (Math.abs(zoom - 1.0) > 0.001) {
+      // We need canvas dimensions — use last known viewport
+      const cx = this.canvasW / 2;
+      const cy = this.canvasH / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-cx, -cy);
+    }
   }
 
   resetTransform(ctx: CanvasRenderingContext2D): void {
