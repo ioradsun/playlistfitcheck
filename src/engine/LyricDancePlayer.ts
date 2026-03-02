@@ -2647,6 +2647,13 @@ export class LyricDancePlayer {
           const emphasis = chunk.emphasisLevel ?? 0;
           const isHeroChunk = emphasis >= 3;
 
+          // DIAGNOSTIC: log emphasis for first few visible chunks
+          if (!(this as any)._emphLogCount) (this as any)._emphLogCount = 0;
+          if ((this as any)._emphLogCount < 100 && emphasis > 0) {
+            (this as any)._emphLogCount++;
+            console.log(`[ELEM-DIAG] "${text}" emph=${emphasis} isHero=${isHeroChunk} heroTrack=${chunk.heroTrackingExpand}`);
+          }
+
           if (isHeroChunk) {
             // Derive elemental class from the directive or from the word itself
             let elementalClass: string | null = directive?.elementalClass ?? null;
@@ -4354,6 +4361,13 @@ export class LyricDancePlayer {
         chunk.entryStyle = usedEntry;
         chunk.exitStyle = usedExit;
         chunk.emphasisLevel = resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0;
+        // DIAGNOSTIC: trace emphasis resolution
+        if (!(this as any)._emphSetLog) (this as any)._emphSetLog = new Set();
+        if (chunk.emphasisLevel > 0 && !(this as any)._emphSetLog.has(word.text)) {
+          (this as any)._emphSetLog.add(word.text);
+          const key = word.clean ?? normalizeToken(word.text);
+          console.log(`[EMPH-SET] "${word.text}" key="${key}" resolvedWord=${!!resolvedWord} rEmph=${resolvedWord?.emphasisLevel} wEmph=${word.emphasisLevel} final=${chunk.emphasisLevel}`);
+        }
         chunk.entryProgress = entryProgress;
         chunk.exitProgress = Math.min(1, exitProgress);
         chunk.behavior = usedBehavior;
