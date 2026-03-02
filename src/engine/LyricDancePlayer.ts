@@ -912,6 +912,8 @@ export class LyricDancePlayer {
   private _lightingOverlayCanvas: HTMLCanvasElement | null = null;
   private _lightingOverlayKey = '';
   private _prevImgIdx = -1;
+  private _textBandBrightness = 0.3; // sampled brightness of center band where text renders
+  private _lastBandSampleMs = 0;     // throttle: sample every 300ms
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
@@ -2287,6 +2289,30 @@ export class LyricDancePlayer {
     this.cameraRig.resetTransform(this.ctx);
 
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
+
+    // ═══ Sample center band brightness for text contrast ═══
+    // Text renders in the middle ~30% of canvas height. Sample ACTUAL pixels there
+    // instead of relying on whole-image mood grade (which averages sky + ground).
+    const nowMs = performance.now();
+    if (nowMs - this._lastBandSampleMs > 300) {
+      this._lastBandSampleMs = nowMs;
+      try {
+        const bandTop = Math.floor(this.height * this.dpr * 0.35);
+        const bandH = Math.max(1, Math.floor(this.height * this.dpr * 0.30));
+        const sampleStep = 8; // skip pixels for speed
+        const bandData = this.ctx.getImageData(0, bandTop, Math.floor(this.width * this.dpr), bandH).data;
+        let sum = 0;
+        let count = 0;
+        for (let i = 0; i < bandData.length; i += 4 * sampleStep) {
+          // Perceived brightness: 0.299R + 0.587G + 0.114B
+          sum += bandData[i] * 0.299 + bandData[i + 1] * 0.587 + bandData[i + 2] * 0.114;
+          count++;
+        }
+        this._textBandBrightness = count > 0 ? (sum / count) / 255 : 0.3;
+      } catch (_e) {
+        // getImageData can fail on tainted canvas
+      }
+    }
 
     const _t0Text = performance.now();
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -4308,9 +4334,8 @@ export class LyricDancePlayer {
         // shift color as chapters change (auto_palettes may arrive after compile)
         if (!word.hasSemanticColor) {
           const runtimePal = this.getResolvedPalette();
-          const moodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
-          const moodIntensity = (this as any)._activeIntensity as number ?? 0.5;
-          const textMode = moodGrade ? getTextMode(moodGrade, moodIntensity) : 'light';
+          // Use ACTUAL sampled brightness from center band where text renders
+          const textMode: 'light' | 'dark' = this._textBandBrightness > 0.55 ? 'dark' : 'light';
 
           if (textMode === 'dark') {
             // Bright background — use dark text colors
@@ -4344,20 +4369,8 @@ export class LyricDancePlayer {
           }
         }
 
-        // ── Final contrast enforcement — smarter without overlay mask ──
-        // Without an overlay mask, actual pixel brightness depends on IMAGE CONTENT × CSS filter.
-        // CSS brightness alone is not reliable. Instead:
-        // 1. Use section tone as primary signal (AI-determined)
-        // 2. Be conservative: push text toward guaranteed-readable colors
-        // 3. Set textStroke flag for the renderer to add edge contrast
-        const moodGradeForContrast = (this as any)._activeMoodGrade as MoodGrade | undefined;
-        const bgFilterBright = moodGradeForContrast?.brightness ?? 0.35;
-        const sectionTone = this._currentSectionTone as string | undefined;
-
-        // Without overlay mask, be more conservative about "dark" detection.
-        // Only consider bg "likely light" if section tone explicitly says so OR brightness is very high.
-        // In the ambiguous middle zone (0.45-0.65), treat as dark (white text is safer).
-        const bgIsLikelyLight = sectionTone === 'light' || bgFilterBright > 0.65;
+        // ── Final contrast enforcement — uses actual center band brightness ──
+        const bgIsLikelyLight = this._textBandBrightness > 0.55;
         const bgIsLikelyDark = !bgIsLikelyLight;
 
         if (chunk.color && typeof chunk.color === 'string') {

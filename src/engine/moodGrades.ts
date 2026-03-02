@@ -258,6 +258,8 @@ export function buildGradeFilter(
  * 'light' otherwise.
  */
 export function getTextMode(grade: MoodGrade, intensityMod: number = 0): 'light' | 'dark' {
+  // NOTE: This is still used by elemental effects lighting mode.
+  // Text color now uses _textBandBrightness (actual pixel sampling) instead.
   const effectiveBrightness = grade.brightness + intensityMod * 0.15;
   return effectiveBrightness > 0.52 ? 'dark' : 'light';
 }
