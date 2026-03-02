@@ -1,11 +1,14 @@
-/* cache-bust: 2026-02-28T2 */
+/* cache-bust: 2026-03-01-V2-CONDUCTOR */
 /**
- * LyricDancePlayer — frame-budget-first canvas engine.
+ * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
- * IMPORTANT:
- * - Fresh implementation. Do not copy logic from prior versions.
- * - React never draws to canvas; React only calls public methods.
- * - Draw loop is pure lookup from baked keyframes.
+ * Architecture:
+ * - BeatConductor is the SINGLE rhythmic driver. No dual-system chaos.
+ * - EffectBudgeter guarantees effects complete (no mid-animation cutoffs).
+ * - Previous/next lines are visible (depth, not hard cuts).
+ * - One evaluateFrame() call per tick (not two).
+ * - All catches log errors (no silent swallowing).
+ * - All state on instance (no global singletons).
  */
 
 import type { CinematicDirection } from "@/types/CinematicDirection";
@@ -23,20 +26,24 @@ import {
 } from "@/lib/sceneCompiler";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { getMoodGrade, buildGradeFilter, lerpGrade, getTextMode, type MoodGrade } from "@/engine/moodGrades";
+import { getSectionTones } from "@/engine/presetDerivation";
 import { perceivedBrightness, mixTowardWhite } from "@/engine/ColorEnhancer";
 import { drawElementalWord } from "@/engine/ElementalEffects";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
-  computeBeatSpine,
   isExactHeroTokenMatch,
   normalizeToken,
   resolveCinematicState,
   type ResolvedLineSettings,
   type ResolvedWordSettings,
 } from "@/engine/cinematicResolver";
+import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
+import { CameraRig, type SectionRigName } from "@/engine/CameraRig";
+import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
+import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 
 const DECOMP_ENABLED = true; // enabled for hero words (emphasis 4-5) only
-const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: v24-diag-2026-02-28';
+const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-01';
 
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
@@ -454,15 +461,6 @@ function lerpColor(a: string, b: string, t: number): string {
 }
 
 const BAKER_VERSION = 4;
-let globalBakeLock = false;
-let globalBakePromise: Promise<void> | null = null;
-let globalCompiledScene: CompiledScene | null = null;
-let globalChunkCache: Map<string, ChunkState> | null = null;
-let globalHasCinematicDirection = false;
-let globalSongStartSec = 0;
-let globalSongEndSec = 0;
-let globalBakerVersion = 0;
-let globalSessionKey = '';
 
 const SIM_W = 96;
 const SIM_H = 54;
@@ -838,10 +836,27 @@ export class LyricDancePlayer {
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
   private _lastVisibleChunkIds = '';
   private _solvedBounds: ChunkBounds[] = [];
-  private _solvedWalls = { left: 0, right: 0, top: 0, bottom: 0 };
 
   // ═══ Compiled Scene (replaces timeline) ═══
   private compiledScene: CompiledScene | null = null;
+
+  // ═══ BeatConductor — single rhythmic driver ═══
+  private conductor: BeatConductor | null = null;
+  private cameraRig: CameraRig = new CameraRig();
+  private _lastBeatState: BeatState | null = null;
+  private _lastSubsystemResponse: SubsystemResponse | null = null;
+
+  // ═══ EffectBudgeter — compile-time timing guarantees ═══
+  private timingBudgets: GroupTimingBudget[] = [];
+  private _wordBudgetMap: Map<string, WordTimingBudget> = new Map();
+
+  // ═══ Instance-level bake cache (no globals) ═══
+  private _bakeLock = false;
+  private _bakePromise: Promise<void> | null = null;
+  private _bakedScene: CompiledScene | null = null;
+  private _bakedChunkCache: Map<string, ChunkState> | null = null;
+  private _bakedVersion = 0;
+  private _bakedHasCinematicDirection = false;
 
   // Runtime evaluator state
   private _evalChunkPool: Array<ScaledKeyframe['chunks'][number]> = [];
@@ -851,10 +866,12 @@ export class LyricDancePlayer {
   private _beatCursor = 0;
   private _springOffset = 0;
   private _springVelocity = 0;
-  private _glowBudget = 0;
+  private _glowRemainMs = 0;       // time-based glow (replaces frame-count _glowBudget)
   private _lastBeatIndex = -1;
   private _currentZoom = 1.0;
   private _smoothedTime = 0;
+  private _frameDt = 1.0;          // normalized dt (1.0 = 60fps), set by tick()
+  private _currentSectionTone: string = 'dark'; // B-07: typed field (was (this as any))
   private _lastRawTime = 0;
   private _timeInitialized = false;
 
@@ -885,9 +902,11 @@ export class LyricDancePlayer {
   }> = [];
   private _bgBlurCurrent = 3;
   private _haloStamps: Map<string, HTMLCanvasElement> = new Map();
-  private _crushOverlayCanvas: HTMLCanvasElement | null = null;
-  private _crushOverlayKey = '';
   private _grainCanvas: HTMLCanvasElement | null = null;
+  private _grainPool: ImageData[] = [];      // pre-generated noise frames
+  private _grainPoolW = 0;
+  private _grainPoolH = 0;
+  private _grainFrameIdx = 0;               // rotates through pool
   private _lastVocalProgress: number | null = null;
   private _lightingOverlayCanvas: HTMLCanvasElement | null = null;
   private _lightingOverlayKey = '';
@@ -901,6 +920,9 @@ export class LyricDancePlayer {
   private poolIndex = 0;
   private readonly offscreen = document.createElement('canvas');
   private readonly octx = this.offscreen.getContext('2d', { willReadFrequently: true })!;
+  // Reusable 1×1 canvas for text measurement (avoids per-recompile DOM allocation)
+  private readonly _measureCanvas = (() => { const c = document.createElement('canvas'); c.width = 1; c.height = 1; return c; })();
+  private readonly _measureCtx = this._measureCanvas.getContext('2d')!;
 
   // Comment comets
   private activeComments: CommentChunk[] = [];
@@ -961,24 +983,6 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: { bootMode?: "minimal" | "full" },
   ) {
-    // Invalidate cache if song changed (survives HMR)
-    const songId = data.id;
-    if (
-      globalCompiledScene &&
-      (globalSessionKey !== `v15-${songId}` || globalBakerVersion !== BAKER_VERSION)
-    ) {
-      globalCompiledScene = null;
-    }
-    const sessionKey = `v15-${data.id}`;
-    if (globalSessionKey !== sessionKey) {
-      globalSessionKey = sessionKey;
-      globalBakePromise = null;
-      globalCompiledScene = null;
-      globalChunkCache = null;
-      globalBakeLock = false;
-      globalHasCinematicDirection = false;
-      globalBakerVersion = 0;
-    }
     this.data = data;
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
@@ -1091,19 +1095,18 @@ export class LyricDancePlayer {
 
   private async ensureTimelineReady(): Promise<void> {
 
-    // Cache exists but was baked without cinematic direction — invalidate before promise reuse
-    if (globalCompiledScene && !globalHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
-      globalBakePromise = null;
-      globalCompiledScene = null;
-      globalChunkCache = null;
-      globalBakeLock = false;
+    // Cache exists but was baked without cinematic direction — invalidate
+    if (this._bakedScene && !this._bakedHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
+      this._bakePromise = null;
+      this._bakedScene = null;
+      this._bakedChunkCache = null;
+      this._bakeLock = false;
     }
 
-    if (!globalBakePromise) {
-      // First instance — start the bake
-      globalBakeLock = true;
-      globalBakePromise = (async () => {
-        // Ensure real viewport dimensions before compiling (ResizeObserver fires async)
+    if (!this._bakePromise) {
+      this._bakeLock = true;
+      this._bakePromise = (async () => {
+        // Ensure real viewport dimensions before compiling
         if (this.width === 0 && this.container) {
           const cw = this.container.offsetWidth || this.canvas.offsetWidth || 960;
           const ch = this.container.offsetHeight || this.canvas.offsetHeight || 540;
@@ -1117,9 +1120,26 @@ export class LyricDancePlayer {
         this.songStartSec = payload.songStart;
         this.songEndSec = payload.songEnd;
 
-        // Compile the scene — produces lightweight schedule, not 15,000 frames
+        // Compile the scene
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
         this.compiledScene = compiled;
+
+        // ═══ V2: Create BeatConductor with full audio analysis ═══
+        const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
+        const beatGridData = this.data.beat_grid ?? { bpm: 120, beats: [], confidence: 0 };
+        this.conductor = new BeatConductor(beatGridData, songDuration);
+        // Attach runtime analysis if available (has energy/brightness curves not stored in DB)
+        if ((beatGridData as any)._analysis) {
+          this.conductor.setAnalysis((beatGridData as any)._analysis);
+        }
+        console.info(`[V2] BeatConductor created: ${this.conductor.beatsPerMinute} BPM, ${this.conductor.totalBeats} beats, ${songDuration.toFixed(1)}s, hits: ${(beatGridData as any).hits?.length ?? 0}`);
+
+        // ═══ V2: Compute timing budgets ═══
+        if (compiled.phraseGroups?.length > 0 && this.conductor) {
+          this.timingBudgets = computeTimingBudgets(compiled.phraseGroups as any, this.conductor);
+          this._buildWordBudgetMap();
+          console.info(`[V2] EffectBudgeter: ${this.timingBudgets.length} group budgets, ${this._wordBudgetMap.size} word budgets`);
+        }
 
         // Build chunk cache from compiled scene
         this._buildChunkCacheFromScene(compiled);
@@ -1128,24 +1148,19 @@ export class LyricDancePlayer {
         this._updateViewportScale();
         this._textMetricsCache.clear();
 
-        globalCompiledScene = compiled;
-        globalChunkCache = new Map(this.chunks);
-        globalHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
-        globalSongStartSec = payload.songStart;
-        globalSongEndSec = payload.songEnd;
-        globalBakerVersion = BAKER_VERSION;
-        globalBakeLock = false;
+        this._bakedScene = compiled;
+        this._bakedChunkCache = new Map(this.chunks);
+        this._bakedHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
+        this._bakedVersion = BAKER_VERSION;
+        this._bakeLock = false;
       })();
     }
 
-    // ALL instances wait for the promise — including the first one
-    await globalBakePromise;
+    await this._bakePromise;
 
-    // Now cache is guaranteed to exist for every instance
-    this.compiledScene = globalCompiledScene;
-    this.chunks = new Map(globalChunkCache!);
-    this.songStartSec = globalSongStartSec;
-    this.songEndSec = globalSongEndSec;
+    // Restore from instance cache
+    this.compiledScene = this._bakedScene;
+    this.chunks = new Map(this._bakedChunkCache!);
     this._updateViewportScale();
     this._textMetricsCache.clear();
     if (this.audio.currentTime <= 0) {
@@ -1255,11 +1270,13 @@ export class LyricDancePlayer {
     this.currentTimeMs = Math.max(0, (t - this.songStartSec) * 1000);
     this._beatCursor = 0;
     this._lastBeatIndex = -1;
-    this._glowBudget = 0;
+    this._glowRemainMs = 0;
     this._springOffset = 0;
     this._springVelocity = 0;
     this._currentZoom = 1.0;
     this._timeInitialized = false;
+    this.conductor?.resetCursor();
+    this.cameraRig.reset();
   }
 
   seekTo(timeSec: number): void {
@@ -1342,8 +1359,6 @@ export class LyricDancePlayer {
     this.textCanvas.style.height = `${h}px`;
 
     if (this.payload) this.buildBgCache();
-    this._crushOverlayCanvas = null;
-    this._crushOverlayKey = '';
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
     this._haloStamps.clear();
@@ -1352,6 +1367,7 @@ export class LyricDancePlayer {
     this._updateViewportScale();
     this._textMetricsCache.clear();
     this._lastVisibleChunkIds = '';
+    this.cameraRig.setViewport(w, h);
   }
 
   setMuted(muted: boolean): void {
@@ -1369,6 +1385,11 @@ export class LyricDancePlayer {
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
     this._textMetricsCache.clear();
+    // ═══ V2: Recompute timing budgets with conductor ═══
+    if (this.compiledScene?.phraseGroups?.length > 0 && this.conductor) {
+      this.timingBudgets = computeTimingBudgets(this.compiledScene.phraseGroups as any, this.conductor);
+      this._buildWordBudgetMap();
+    }
     this.buildBgCache();
     this.deriveVisualSystems();
     this.buildChapterSims();
@@ -1436,10 +1457,13 @@ export class LyricDancePlayer {
     this.ambientParticleEngine?.clear();
     this.chapterSims = [];
     this.chapterImages = [];
-    this._crushOverlayCanvas = null;
     this._lightingOverlayCanvas = null;
+    this._grainCanvas = null;
+    this._grainPool = [];
     this._haloStamps.clear();
-        this.ctx = null as any;
+    this._textMetricsCache.clear();
+    revokeAnalyzerWorker();          // free blob URL (safe to call multiple times)
+    this.ctx = null as any;
     this.canvas = null as any;
     this.bgCanvas = null as any;
     this.textCanvas = null as any;
@@ -1455,9 +1479,20 @@ export class LyricDancePlayer {
     this.healthCheckInterval = setInterval(() => {
       const fps = this.frameCount / 5;
       this.frameCount = 0;
-
-      // Health check — silent (no logging)
+      if (fps > 0 && fps < 20 && this.playing) {
+        console.warn(`[LyricEngine] low fps: ${fps.toFixed(1)} — consider reducing effects`);
+      }
     }, 5000);
+  }
+
+  /** Build O(1) lookup from wordId → WordTimingBudget for evaluateFrame. */
+  private _buildWordBudgetMap(): void {
+    this._wordBudgetMap.clear();
+    for (const group of this.timingBudgets) {
+      for (const wb of group.words) {
+        this._wordBudgetMap.set(wb.wordId, wb);
+      }
+    }
   }
 
   private stopHealthMonitor(): void {
@@ -1468,7 +1503,7 @@ export class LyricDancePlayer {
   }
 
   private tick = (timestamp: number): void => {
-    if (this.destroyed) return; // truly dead — no reschedule
+    if (this.destroyed) return;
     if (!this.playing) {
       this.rafHandle = 0;
       return;
@@ -1485,10 +1520,42 @@ export class LyricDancePlayer {
       const rawTime = this.audio.currentTime;
       const smoothedTime = this.smoothAudioTime(rawTime);
 
-      this.update(deltaMs, smoothedTime);
-      this.draw(smoothedTime);
+      // ═══ V2: Get beat state ONCE from conductor ═══
+      const beatState = this.conductor?.getState(smoothedTime) ?? null;
+      this._lastBeatState = beatState;
+      this._frameDt = Math.min(deltaMs, 33.33) / 16.67; // normalized to 60fps
+
+      // ═══ V2: Single evaluateFrame call ═══
+      const frame = this.evaluateFrame(smoothedTime);
+
+      // ═══ V2: Update CameraRig with beat state + phrase anchor ═══
+      if (frame && frame.chunks) {
+        // Compute phrase anchor from current-line chunks (alpha > 0.5 = current line)
+        let anchorX = 0, anchorY = 0, anchorCount = 0;
+        for (let i = 0; i < frame.chunks.length; i++) {
+          const c = frame.chunks[i];
+          if (c.visible && c.alpha > 0.5) {
+            anchorX += c.x;
+            anchorY += c.y;
+            anchorCount++;
+          }
+        }
+        if (anchorCount > 0) {
+          this.cameraRig.update(deltaMs, beatState, {
+            x: anchorX / anchorCount,
+            y: anchorY / anchorCount,
+          });
+        } else {
+          this.cameraRig.update(deltaMs, beatState, null);
+        }
+      } else {
+        this.cameraRig.update(deltaMs, beatState, null);
+      }
+
+      this.update(deltaMs, smoothedTime, frame, beatState);
+      this.draw(smoothedTime, frame);
     } catch (err) {
-      // render crash — silently continue
+      console.error('[LyricEngine] tick crash:', err);
     } finally {
       // ALWAYS reschedule — even after crash — loop must never die
       if (!this.destroyed && this.playing) {
@@ -1540,12 +1607,12 @@ export class LyricDancePlayer {
     this._lastRawTime = rawTime;
 
     // Lerp toward real time — smooths out audio buffer jitter
-    // 0.15 = responsive enough to not drift, smooth enough to hide jitter
-    const alpha = 0.5;
+    // 0.2 = responsive enough to not drift, smooth enough to hide 1-frame jitter
+    const alpha = 0.2;
     this._smoothedTime += (rawTime - this._smoothedTime) * alpha;
 
     // Never drift more than 100ms from real time
-    if (Math.abs(this._smoothedTime - rawTime) > 0.05) {
+    if (Math.abs(this._smoothedTime - rawTime) > 0.1) {
       this._smoothedTime = rawTime;
     }
 
@@ -1581,15 +1648,6 @@ export class LyricDancePlayer {
   private getTextColor(chunkColor: string): string {
     // V3: colors come pre-resolved from the palette. Don't darken again.
     return chunkColor;
-  }
-
-  private darkenColor(hex: string, amount: number): string {
-    const clean = hex.replace('#', '');
-    if (clean.length !== 6) return hex;
-    const r = Math.round(parseInt(clean.slice(0, 2), 16) * (1 - amount));
-    const g = Math.round(parseInt(clean.slice(2, 4), 16) * (1 - amount));
-    const b = Math.round(parseInt(clean.slice(4, 6), 16) * (1 - amount));
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
 
   private static readonly PALETTE_COLORS: Record<string, string[]> = {
@@ -1861,7 +1919,7 @@ export class LyricDancePlayer {
     return [a, b, c, d, e, f];
   }
 
-  private update(deltaMs: number, timeSec: number): void {
+  private update(deltaMs: number, timeSec: number, frame: ScaledKeyframe | null, beatState: BeatState | null): void {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
@@ -1904,18 +1962,38 @@ export class LyricDancePlayer {
         opacity: 0.4,
         beatReactive: true,
       });
+
+      // ═══ V2: Switch camera rig based on section mood ═══
+      const sectionMood = (section as any)?.mood ?? (section as any)?.description ?? '';
+      const moodLower = sectionMood.toLowerCase();
+      const rigName = moodLower.includes('drop') || moodLower.includes('climax') ? 'drop' as const
+        : moodLower.includes('chorus') || moodLower.includes('hook') ? 'chorus' as const
+        : moodLower.includes('bridge') || moodLower.includes('break') ? 'bridge' as const
+        : moodLower.includes('intro') ? 'intro' as const
+        : moodLower.includes('outro') || moodLower.includes('fade') ? 'outro' as const
+        : 'verse' as const;
+      this.cameraRig.setSection(rigName);
     }
     this.activeTension = currentTension;
-    this.ambientParticleEngine?.setDensityMultiplier((currentTension?.particleDensity ?? 0.5) * 2);
-    this.ambientParticleEngine?.setSpeedMultiplier((currentTension?.motionIntensity ?? 0.5) * 2);
+
+    // ═══ V2: Use conductor for particle intensity instead of tension curve ═══
+    const conductorResponse = beatState ? this.conductor?.getSubsystemResponse(beatState, 2) ?? null : null;
+    this._lastSubsystemResponse = conductorResponse;
+    if (conductorResponse) {
+      this.ambientParticleEngine?.setDensityMultiplier(conductorResponse.particleDensity * 2);
+      this.ambientParticleEngine?.setSpeedMultiplier(conductorResponse.particleSpeed * 2);
+    } else {
+      this.ambientParticleEngine?.setDensityMultiplier((currentTension?.particleDensity ?? 0.5) * 2);
+      this.ambientParticleEngine?.setSpeedMultiplier((currentTension?.motionIntensity ?? 0.5) * 2);
+    }
 
     const visibleLines = lines.filter((l: any) => clamped >= (l.start ?? 0) && clamped < (l.end ?? 0));
     const activeLine = visibleLines.length === 0
       ? null
       : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
-    const climaxRatio = (cd as any)?.climax?.timeRatio ?? 0.75;
-    const simulatedBeat = Math.max(0.1, 1 - Math.abs(songProgress - climaxRatio) * 2);
-    const frame = this.evaluateFrame(clamped);
+
+    // ═══ V2: Beat intensity from conductor (not climax curve) ═══
+    const beatIntensity = beatState?.pulse ?? 0;
     const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
 
     const activeWord = this.getActiveWord(clamped);
@@ -1927,11 +2005,9 @@ export class LyricDancePlayer {
     ds.fps = Math.round(this.fpsAccum.fps);
     ds.songProgress = songProgress;
     ds.perfTotal = deltaMs;
-    ds.perfBg = 0;
-    ds.perfText = 0;
-    ds.beatIntensity = simulatedBeat;
-    ds.physGlow = simulatedBeat * 0.6;
-    ds.lastBeatForce = simulatedBeat * 0.8;
+    ds.beatIntensity = beatIntensity;
+    ds.physGlow = beatIntensity * 0.6;
+    ds.lastBeatForce = beatIntensity * 0.8;
     ds.physicsActive = this.playing;
 
     // ── Section boundaries ──
@@ -1970,17 +2046,16 @@ export class LyricDancePlayer {
     ds.dirBgDirective = currentChapter?.bgDirective ?? currentChapter?.backgroundSystem ?? '—';
     ds.dirLightBehavior = currentChapter?.lightBehavior ?? currentChapter?.atmosphere ?? '—';
 
-    // ── Beat grid phase ──
+    // ── Beat grid phase (from conductor) ──
     const beatGrid = this.data?.beat_grid;
     const beatsArr = beatGrid?.beats ?? [];
     ds.bgBpm = beatGrid?.bpm ?? 0;
     ds.bgBeatsTotal = beatsArr.length;
     ds.bgConfidence = beatGrid?.confidence ?? 0;
-    const beatSpine = computeBeatSpine(clamped, beatGrid, { lookAheadSec: 0.02, pulseWidth: 0.09 });
-    ds.bgNextBeat = beatSpine.nextBeat;
-    ds.bgBeatPhase = beatSpine.beatPhase;
-    ds.bgBeatPulse = beatSpine.beatPulse;
-    ds.beatIntensity = Math.max(ds.beatIntensity, beatSpine.beatPulse);
+    ds.bgNextBeat = beatState?.nextBeat ?? 0;
+    ds.bgBeatPhase = beatState?.phase ?? 0;
+    ds.bgBeatPulse = beatState?.pulse ?? 0;
+    ds.beatIntensity = Math.max(ds.beatIntensity, beatState?.pulse ?? 0);
 
     // ── Active word ──
     ds.activeWord = activeWordClean || '—';
@@ -2058,21 +2133,20 @@ export class LyricDancePlayer {
     ds.entryProgress = firstVisible?.entryProgress ?? 0;
     ds.exitProgress = firstVisible?.exitProgress ?? 0;
 
-    const beatIntensity = Math.max(0, Math.min(1, simulatedBeat));
-    this.ambientParticleEngine?.update(deltaMs, beatIntensity);
+    const beatIntensityClamped = Math.max(0, Math.min(1, beatIntensity));
+    this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
     ds.particleCount = this.ambientParticleEngine?.getActiveCount() ?? 0;
   }
 
-  private draw(tSec: number): void {
+  private draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
     try {
-      this._draw(tSec);
+      this._draw(tSec, precomputedFrame);
     } catch (err) {
-      // draw crash — silently continue
-      // Don't stop health monitor — let loop continue
+      console.error('[LyricEngine] draw crash:', err);
     }
   }
 
-  private _draw(tSec: number): void {
+  private _draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
     this.currentTSec = tSec;
     this.frameCount++;
 
@@ -2087,7 +2161,7 @@ export class LyricDancePlayer {
     }
     this._lastLoggedTSec = tSec;
 
-    // ─── Resolve mood grade early — needed by evaluateFrame (layout) and drawChapterImage (filter) ───
+    // ─── Resolve mood grade early ───
     {
       const cdEarly = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
       const sectionsEarly = (cdEarly?.sections as any[]) ?? [];
@@ -2097,11 +2171,27 @@ export class LyricDancePlayer {
         ? this.resolveSectionIndex(sectionsEarly, tSecEarly, durEarly)
         : -1;
       const vm = secIdxEarly >= 0 ? (sectionsEarly[secIdxEarly]?.visualMood as string) : undefined;
-      (this as any)._activeMoodGrade = getMoodGrade(vm);
-      (this as any)._activeIntensity = 0.5; // refined in drawChapterImage
+      let earlyGrade = getMoodGrade(vm);
+
+      // ═══ V2: Apply scene tone brightness boost for light sections ═══
+      const earlySceneTone = (cdEarly?.sceneTone as string) ?? 'dark';
+      const earlyTones = getSectionTones(earlySceneTone, Math.max(1, sectionsEarly.length));
+      const earlyTone = secIdxEarly >= 0 ? (earlyTones[secIdxEarly] ?? 'dark') : 'dark';
+      if (earlyTone === 'light') {
+        earlyGrade = {
+          ...earlyGrade,
+          brightness: Math.max(earlyGrade.brightness, 0.75),
+          saturation: Math.min(earlyGrade.saturation, 1.0),
+          contrast: Math.min(earlyGrade.contrast, 1.1),
+        };
+      }
+      (this as any)._activeMoodGrade = earlyGrade;
+      (this as any)._activeIntensity = 0.5;
+      this._currentSectionTone = earlyTone;
     }
 
-    const frame = this.evaluateFrame(tSec);
+    // ═══ V2: Use pre-computed frame (single evaluateFrame per tick) ═══
+    const frame = precomputedFrame;
     if (!frame) return;
 
 
@@ -2113,10 +2203,13 @@ export class LyricDancePlayer {
     try {
       this.updateSims(tSec, frame);
     } catch (e) {
-      // sim crash — silently continue
+      console.error('[LyricEngine] sim crash:', e);
     }
 
     // Background: static bg cache first, then section images on top
+    // ═══ V2: CameraRig parallax — BG_FAR layer ═══
+    const _t0Bg = performance.now();
+    this.cameraRig.applyTransform(this.ctx, 'far');
     this.drawBackground(frame);
 
     // Section image overlay — use baked sectionIndex directly
@@ -2163,20 +2256,35 @@ export class LyricDancePlayer {
     this.debugState.imgOverlap = false;
 
     this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
+    // ═══ V2: End BG_FAR parallax ═══
+    this.cameraRig.resetTransform(this.ctx);
+    this.debugState.perfBg = performance.now() - _t0Bg;
 
+    // ═══ V2: CameraRig parallax — BG_MID layer (sims, lighting) ═══
+    const _t0Mid = performance.now();
+    this.cameraRig.applyTransform(this.ctx, 'mid');
     this.drawSimLayer(frame);
     this.drawLightingOverlay(frame, tSec);
+    this.cameraRig.resetTransform(this.ctx);
+    this.debugState.perfSymbol = performance.now() - _t0Mid;
 
     try {
       this.checkEmotionalEvents(tSec, songProgress);
     } catch (e) {
-      // emotional events crash — silently continue
+      console.error('[LyricEngine] emotional events crash:', e);
     }
 
     this.drawEmotionalEvents(tSec);
 
     // Ambient particles — runtime system updates per section
+    // ═══ V2: CameraRig parallax — BG_NEAR layer ═══
+    this.cameraRig.applyTransform(this.ctx, 'near');
     this.ambientParticleEngine?.draw(this.ctx, "far");
+    this.cameraRig.resetTransform(this.ctx);
+
+    // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
+    const _t0Text = performance.now();
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
     const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
@@ -2273,9 +2381,14 @@ export class LyricDancePlayer {
       visibleSig += bounds[i].chunk.id;
       visibleSig += ',';
     }
-    // Compile-time solver in sceneCompiler handles collision avoidance.
-    // Runtime solver caused frame-to-frame jitter by re-solving every time
-    // a word entered/exited. Now we only wall-clamp to keep words on-screen.
+    // Compile-time solver in sceneCompiler handles static layout.
+    // Runtime solver fixes dynamic overlaps from entry/exit offsets.
+    // Only re-solve when the visible word set changes (prevents jitter).
+    const setChanged = visibleSig !== this._lastVisibleChunkIds;
+    if (setChanged && bounds.length >= 2) {
+      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+    }
+    // Wall-clamp ALL bounds every frame (stable, no jitter)
     for (let i = 0; i < bounds.length; i++) {
       const b = bounds[i];
       const minX = wallLeft + b.halfW;
@@ -2323,7 +2436,7 @@ export class LyricDancePlayer {
     }
 
     if (shrinkOccurred) {
-      // this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
       this._solvedBounds = bounds.map(b => ({ ...b }));
     }
 
@@ -2576,11 +2689,14 @@ export class LyricDancePlayer {
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
+    this.debugState.perfText = performance.now() - _t0Text;
 
     // Comment comets — after text, before watermark
+    const _t0Over = performance.now();
     this.drawComments(performance.now() / 1000);
 
     this.drawWatermark();
+    this.debugState.perfOverlays = performance.now() - _t0Over;
     this.debugState.drawCalls = drawCalls;
   }
 
@@ -2767,8 +2883,6 @@ export class LyricDancePlayer {
 
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.buildBgCache();
-    this._crushOverlayCanvas = null;
-    this._crushOverlayKey = '';
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
     this._haloStamps.clear();
@@ -3097,10 +3211,7 @@ export class LyricDancePlayer {
 
   private _buildChunkCacheFromScene(scene: CompiledScene): void {
     this.chunks.clear();
-    const measureCanvas = document.createElement('canvas');
-    measureCanvas.width = 1;
-    measureCanvas.height = 1;
-    const measureCtx = measureCanvas.getContext('2d')!;
+    const measureCtx = this._measureCtx;
 
     for (const group of scene.phraseGroups) {
       for (const word of group.words) {
@@ -3182,17 +3293,6 @@ export class LyricDancePlayer {
     return 'default';
   }
 
-  private mapParticleSystem(desc: string): string | null {
-    const lower = (desc || '').toLowerCase();
-    if (lower.includes('smoke') || lower.includes('swirl') || lower.includes('churn')) return 'dust';
-    if (lower.includes('spark') || lower.includes('ember') || lower.includes('fire')) return 'embers';
-    if (lower.includes('mist') || lower.includes('dissipat') || lower.includes('fog')) return 'snow';
-    if (lower.includes('rain') || lower.includes('drip') || lower.includes('drop')) return 'rain';
-    if (lower.includes('star') || lower.includes('shimmer') || lower.includes('glint')) return 'stars';
-    return null;
-  }
-
-
   private async loadSectionImages(): Promise<void> {
     const urls = this.data.section_images ?? [];
     if (urls.length === 0) return;
@@ -3270,6 +3370,26 @@ export class LyricDancePlayer {
       }
     }
 
+    // ═══ V2: Scene Tone → Light/Dark per section ═══
+    // sceneTone drives whether this section renders bright or dark.
+    // "light" sections get boosted brightness so background image is luminous
+    // and text contrast enforcement will automatically flip text to dark.
+    const sceneTone = (cd?.sceneTone as string) ?? 'dark';
+    const sectionTones = getSectionTones(sceneTone, Math.max(1, sections.length));
+    const currentTone = secIdx >= 0 ? (sectionTones[secIdx] ?? 'dark') : 'dark';
+    if (currentTone === 'light') {
+      // Boost brightness for light scenes — image becomes luminous
+      // Also desaturate slightly and reduce contrast for airy feel
+      activeGrade = {
+        ...activeGrade,
+        brightness: Math.max(activeGrade.brightness, 0.75),
+        saturation: Math.min(activeGrade.saturation, 1.0),
+        contrast: Math.min(activeGrade.contrast, 1.1),
+      };
+    }
+    // Store for text color decisions elsewhere
+    this._currentSectionTone = currentTone;
+
     // Emotional intensity from chapter
     const chapters = this.resolvedState.chapters ?? [];
     const currentChapterObj = this.resolveChapter(chapters, this.audio.currentTime, this.audio.duration || 1);
@@ -3301,7 +3421,8 @@ export class LyricDancePlayer {
       this.ctx.save();
       this.ctx.filter = filterStr;
 
-      // Ken Burns: slow zoom + pan over chapter duration + beat pulse response
+      // Ken Burns: slow zoom + pan over chapter duration
+      // Beat-driven zoom pulse is handled by CameraRig.applyTransform('far') — don't double-apply
       const kb = this._kenBurnsParams[chapterIdx];
       const chapterCount = this.chapterImages.length || 1;
       const audioDur = this.audio?.duration || 1;
@@ -3309,10 +3430,8 @@ export class LyricDancePlayer {
       const chapterStart = chapterIdx * chapterDur;
       const localT = Math.max(0, Math.min(1, ((this.audio?.currentTime ?? 0) - chapterStart) / chapterDur));
       const eased = localT * localT * (3 - 2 * localT);
-      const beatScale = 1.0 + Math.max(0, this._springOffset) * 0.008;
-
       if (kb) {
-        const zoom = (kb.zoomStart + (kb.zoomEnd - kb.zoomStart) * eased) * beatScale;
+        const zoom = kb.zoomStart + (kb.zoomEnd - kb.zoomStart) * eased;
         const panX = (kb.panStartX + (kb.panEndX - kb.panStartX) * eased) * this.width;
         const panY = (kb.panStartY + (kb.panEndY - kb.panStartY) * eased) * this.height;
 
@@ -3355,23 +3474,14 @@ export class LyricDancePlayer {
       this.ctx.restore(); // restore filter + alpha
     }
 
-    // ─── Vignette from mood grade ───
-    const vig = activeGrade.vignette;
-    if (vig.opacity > 0.02) {
-      const diag = Math.sqrt(this.width * this.width + this.height * this.height);
-      const vignetteGrad = this.ctx.createRadialGradient(
-        this.width / 2, this.height / 2, diag * vig.innerRadius,
-        this.width / 2, this.height / 2, diag * (vig.innerRadius + vig.softness * 0.5)
-      );
-      vignetteGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      vignetteGrad.addColorStop(1, `rgba(0,0,0,${vig.opacity.toFixed(2)})`);
-      this.ctx.fillStyle = vignetteGrad;
-      this.ctx.fillRect(0, 0, this.width, this.height);
-    }
+    // ─── Vignette REMOVED — use brightness() filter for edge darkening, not a black overlay ───
+    // Vignette was drawing rgba(0,0,0) on top of the already-graded image,
+    // fighting the direct brightness/saturation/contrast pipeline.
 
-    // ─── Film grain from mood grade ───
-    if (activeGrade.grain.intensity > 0.02) {
-      this.renderFilmGrain(activeGrade.grain.intensity, activeGrade.grain.size);
+    // ─── Film grain from mood grade (capped at 0.15 for image clarity) ───
+    const grainIntensity = Math.min(0.15, activeGrade.grain.intensity);
+    if (grainIntensity > 0.02) {
+      this.renderFilmGrain(grainIntensity, activeGrade.grain.size);
     }
 
     // Store active grade for text color decisions
@@ -3380,12 +3490,30 @@ export class LyricDancePlayer {
   }
 
   /**
-   * Render film grain overlay. Uses a small noise buffer scaled up for performance.
-   * Grain changes every frame for the flickering analog feel.
+   * Render film grain overlay. Uses pre-generated noise buffers rotated per frame
+   * to eliminate per-frame Math.random() cost (~57K calls/frame → 0).
    */
   private renderFilmGrain(intensity: number, size: number): void {
     const grainW = Math.ceil(this.width / Math.max(1, size * 2));
     const grainH = Math.ceil(this.height / Math.max(1, size * 2));
+
+    // Re-generate pool on resize or first call
+    if (grainW !== this._grainPoolW || grainH !== this._grainPoolH || this._grainPool.length === 0) {
+      this._grainPoolW = grainW;
+      this._grainPoolH = grainH;
+      this._grainPool = [];
+      const POOL_SIZE = 4;
+      for (let p = 0; p < POOL_SIZE; p++) {
+        const img = new ImageData(grainW, grainH);
+        const d = img.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const v = Math.random() * 255;
+          d[i] = v; d[i + 1] = v; d[i + 2] = v;
+          d[i + 3] = 255; // alpha set at draw time via globalAlpha
+        }
+        this._grainPool.push(img);
+      }
+    }
 
     if (!this._grainCanvas || this._grainCanvas.width !== grainW || this._grainCanvas.height !== grainH) {
       this._grainCanvas = document.createElement('canvas');
@@ -3396,22 +3524,13 @@ export class LyricDancePlayer {
     const gctx = this._grainCanvas.getContext('2d');
     if (!gctx) return;
 
-    const imageData = gctx.createImageData(grainW, grainH);
-    const data = imageData.data;
-    const alpha = Math.round(intensity * 60); // 0-60 range for subtle grain
-
-    for (let i = 0; i < data.length; i += 4) {
-      const v = Math.random() * 255;
-      data[i] = v;
-      data[i + 1] = v;
-      data[i + 2] = v;
-      data[i + 3] = alpha;
-    }
-
-    gctx.putImageData(imageData, 0, 0);
+    // Rotate through pre-generated noise frames (zero random calls per frame)
+    this._grainFrameIdx = (this._grainFrameIdx + 1) % this._grainPool.length;
+    gctx.putImageData(this._grainPool[this._grainFrameIdx], 0, 0);
 
     this.ctx.save();
     this.ctx.globalCompositeOperation = 'overlay';
+    this.ctx.globalAlpha = Math.min(1, intensity * 0.24); // ~same as old alpha/255 with 60 max
     this.ctx.imageSmoothingEnabled = false;
     this.ctx.drawImage(this._grainCanvas, 0, 0, this.width, this.height);
     this.ctx.restore();
@@ -3448,118 +3567,8 @@ export class LyricDancePlayer {
       this.bgCacheCount = this.bgCaches.length;
       
     } catch (err) {
-      
+      console.error('[LyricEngine] buildBgCache crash:', err);
     }
-  }
-
-  private drawRadialGlow(ctx: CanvasRenderingContext2D, width: number, height: number, palette: string[]): void {
-    const glow = ctx.createRadialGradient(width / 2, height / 2, height * 0.08, width / 2, height / 2, height * 0.7);
-    glow.addColorStop(0, palette[1] || 'rgba(255,255,255,0.2)');
-    glow.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.save();
-    ctx.globalAlpha = 0.16;
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
-
-  private darken(hex: string, factor: number): string {
-    const clean = hex.replace('#', '');
-    const padded = clean.length >= 6 ? clean : clean.padEnd(6, '0');
-    const r = Math.round(parseInt(padded.slice(0, 2), 16) * factor);
-    const g = Math.round(parseInt(padded.slice(2, 4), 16) * factor);
-    const b = Math.round(parseInt(padded.slice(4, 6), 16) * factor);
-    const clamp = (v: number) => Math.max(0, Math.min(255, v));
-    return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
-  }
-
-  private drawStormAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
-    for (let i = 0; i < 6; i++) {
-      const x = (i * 0.618033 % 1) * w;
-      const y = (i * 0.381966 % 1) * h * 0.7;
-      const r = w * (0.2 + intensity * 0.15);
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, `${dominant}10`);
-      grad.addColorStop(1, 'transparent');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-    }
-    if (intensity > 0.6) {
-      const lightGrad = ctx.createLinearGradient(w * 0.3, 0, w * 0.7, h * 0.3);
-      lightGrad.addColorStop(0, `${accent}0c`);
-      lightGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = lightGrad;
-      ctx.fillRect(0, 0, w, h);
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  private drawCosmicAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
-    for (let i = 0; i < 80; i++) {
-      const x = (i * 0.618033 % 1) * w;
-      const y = (i * 0.381966 % 1) * h;
-      const size = 0.5 + (i % 3) * 0.5;
-      const alpha = 0.3 + (i % 4) * 0.15;
-      ctx.globalAlpha = alpha * intensity;
-      ctx.fillStyle = i % 7 === 0 ? accent : '#ffffff';
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    const nebula = ctx.createRadialGradient(w * 0.6, h * 0.3, 0, w * 0.6, h * 0.3, w * 0.4);
-    nebula.addColorStop(0, `${accent}09`);
-    nebula.addColorStop(1, 'transparent');
-    ctx.fillStyle = nebula;
-    ctx.fillRect(0, 0, w, h);
-    ctx.globalAlpha = 1;
-  }
-
-  private drawIntimateAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
-    const glow = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, w * 0.5);
-    glow.addColorStop(0, `${accent}0a`);
-    glow.addColorStop(0.5, `${dominant}04`);
-    glow.addColorStop(1, 'transparent');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 3; i++) {
-      const y = h * (0.3 + i * 0.2);
-      const band = ctx.createLinearGradient(0, y - 40, 0, y + 40);
-      band.addColorStop(0, 'transparent');
-      band.addColorStop(0.5, `${accent}04`);
-      band.addColorStop(1, 'transparent');
-      ctx.fillStyle = band;
-      ctx.fillRect(0, y - 40, w, 80);
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  private drawGoldenAtmosphere(ctx: CanvasRenderingContext2D, w: number, h: number, dominant: string, accent: string, intensity: number): void {
-    const beamCount = Math.floor(2 + intensity * 3);
-    for (let i = 0; i < beamCount; i++) {
-      const x = w * (0.2 + (i / beamCount) * 0.6);
-      const beam = ctx.createLinearGradient(x, 0, x + w * 0.05, h);
-      beam.addColorStop(0, `${accent}12`);
-      beam.addColorStop(0.4, `${accent}08`);
-      beam.addColorStop(1, 'transparent');
-      ctx.fillStyle = beam;
-      ctx.fillRect(x - w * 0.05, 0, w * 0.15, h);
-    }
-    const bloom = ctx.createRadialGradient(w * 0.5, h * 0.4, 0, w * 0.5, h * 0.4, w * 0.35);
-    bloom.addColorStop(0, `${accent}10`);
-    bloom.addColorStop(1, 'transparent');
-    ctx.fillStyle = bloom;
-    ctx.fillRect(0, 0, w, h);
-    ctx.globalAlpha = 1;
-  }
-
-  private drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number): void {
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.25, w / 2, h / 2, h * 0.85);
-    vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, `rgba(0,0,0,${0.55 + intensity * 0.2})`);
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, w, h);
   }
 
   private deriveVisualSystems(): void {
@@ -3590,7 +3599,7 @@ export class LyricDancePlayer {
       });
       
     } catch (err) {
-      
+      console.error('[LyricEngine] buildChapterSims crash:', err);
     }
   }
 
@@ -3614,14 +3623,6 @@ export class LyricDancePlayer {
       if (simFrame === this.lastSimFrame) return;
       this.lastSimFrame = simFrame;
       const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
-      const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
-      const isClimaxZone = songProgress >= 0.75 && songProgress <= 0.85;
-      const climaxCurve = isClimaxZone
-        ? Math.sin(((songProgress - 0.75) / 0.1) * Math.PI)
-        : 0;
-      const ambientFraction = 0.15;
-      const climaxBoost = climaxCurve * 0.85;
-      const ambientSimScale = ambientFraction + climaxBoost;
       const chapterIdxRaw = this.resolveChapterIndex(chapters, this.audio.currentTime, this.audio.duration || 1);
       const chapterIdx = chapterIdxRaw >= 0 ? Math.min(chapterIdxRaw, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
@@ -3631,8 +3632,15 @@ export class LyricDancePlayer {
       }
 
       const chapter = chapters[ci] ?? {};
-      const intensity = ((chapter as any)?.emotionalIntensity ?? 0.5) * ambientSimScale;
-      const pulse = (frame as any).beatPulse ?? (frame.beatIndex ? (frame.beatIndex % 2 ? 0.2 : 0.7) : 0);
+
+      // ═══ V2: Beat-driven sim intensity (no climax curve) ═══
+      const conductorResponse = this._lastSubsystemResponse;
+      const simIntensity = conductorResponse
+        ? conductorResponse.bgSimIntensity
+        : 0.3; // fallback ambient
+      const intensity = ((chapter as any)?.emotionalIntensity ?? 0.5) * simIntensity;
+      const pulse = (frame as any).beatPulse ?? 0;
+
       const sim = this.chapterSims[ci];
       this.currentSimCanvases = [];
       if (!sim) return;
@@ -3641,20 +3649,16 @@ export class LyricDancePlayer {
       if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
       if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
     } catch (err) {
-      // sim crash — silently continue
+      console.error('[LyricEngine] updateSims crash:', err);
     }
   }
 
   private drawSimLayer(_frame: ScaledKeyframe): void {
-    const songDuration = Math.max(1, this.songEndSec - this.songStartSec);
-    const songProgress = Math.max(0, Math.min(1, (this.currentTSec - this.songStartSec) / songDuration));
-    const isClimaxZone = songProgress >= 0.75 && songProgress <= 0.85;
-    const climaxCurve = isClimaxZone
-      ? Math.sin(((songProgress - 0.75) / 0.1) * Math.PI)
-      : 0;
-    const ambientFraction = 0.15;
-    const climaxBoost = climaxCurve * 0.85;
-    const simOpacity = ambientFraction + climaxBoost;
+    // ═══ V2: Sim opacity from conductor (fire flares on beats, water splashes on downbeats) ═══
+    const conductorResponse = this._lastSubsystemResponse;
+    const simOpacity = conductorResponse
+      ? conductorResponse.bgSimIntensity
+      : 0.3; // ambient fallback
     for (const simCanvas of this.currentSimCanvases) {
       this.ctx.globalAlpha = 0.38 * simOpacity;
       this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
@@ -3689,19 +3693,26 @@ export class LyricDancePlayer {
     while (this._beatCursor + 1 < beats.length && beats[this._beatCursor + 1].time <= tSec) this._beatCursor++;
     while (this._beatCursor > 0 && beats[this._beatCursor].time > tSec) this._beatCursor--;
     const beatIndex = beats.length > 0 ? this._beatCursor : -1;
-    const beatSpine = computeBeatSpine(tSec, this.data.beat_grid, { lookAheadSec: 0.02, pulseWidth: 0.08 });
+
+    // ═══ V2: Use conductor instead of computeBeatSpine ═══
+    const beatState = this._lastBeatState ?? this.conductor?.getState(tSec) ?? null;
+    const beatPulse = beatState?.pulse ?? 0;
+    const beatPhase = beatState?.phase ?? 0;
 
     if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {
       this._lastBeatIndex = beatIndex;
-      this._glowBudget = 13;
+      this._glowRemainMs = 217;  // ~13 frames @60fps = 217ms
       this._springVelocity = beats[beatIndex]?.springVelocity ?? 0;
     }
-    if (this._glowBudget > 0) this._glowBudget -= 1;
-    const glow = Math.pow(this._glowBudget / 13, 0.6);
+    // Time-based glow decay (frame-rate independent)
+    this._glowRemainMs = Math.max(0, this._glowRemainMs - this._frameDt * 16.67);
+    const glow = Math.pow(Math.min(1, this._glowRemainMs / 217), 0.6);
 
-    this._springOffset += this._springVelocity;
-    this._springVelocity *= 0.82;
-    this._springOffset *= 0.88;
+    // dt-compensated spring (identical feel at 30/60/120 fps)
+    const dt = this._frameDt;
+    this._springOffset += this._springVelocity * dt;
+    this._springVelocity *= Math.pow(0.82, dt);
+    this._springOffset *= Math.pow(0.88, dt);
 
     let currentChapterIdx = 0;
     for (let i = 0; i < scene.chapters.length; i++) {
@@ -3712,7 +3723,8 @@ export class LyricDancePlayer {
     }
     const chapter = scene.chapters[currentChapterIdx] ?? scene.chapters[0];
     const targetZoom = chapter?.targetZoom ?? 1.0;
-    this._currentZoom += (targetZoom - this._currentZoom) * 0.06;
+    const zoomLerp = 1 - Math.pow(1 - 0.06, dt); // dt-compensated (identical at 30/60/120fps)
+    this._currentZoom += (targetZoom - this._currentZoom) * zoomLerp;
     const effectiveZoom = this._currentZoom * (1.0 + Math.max(0, this._springOffset));
 
     const arcFn = this._getArcFunction(scene.emotionalArc);
@@ -3871,10 +3883,20 @@ export class LyricDancePlayer {
         const exitDelay = word.isLetterChunk && SPLIT_EXIT_STYLES.has(word.exitStyle) ? letterDelay : 0;
         const exitProgress = Math.max(0, (tSec - groupEnd - exitDelay) / Math.max(0.01, effectiveExitDuration));
 
-        const entryState = computeEntryState(word.entryStyle as any, entryProgress, group.behaviorIntensity);
-        const exitState = computeExitState(word.exitStyle as any, exitProgress, group.behaviorIntensity, li, lt);
-        const beatPhase = beatIndex >= 0 ? ((tSec - (beats[beatIndex]?.time ?? 0)) / (60 / Math.max(1, bpm))) % 1 : 0;
-        const behaviorState = computeBehaviorState(word.behaviorStyle as any, tSec, group.start, beatPhase, group.behaviorIntensity);
+        // ═══ V2: EffectBudgeter — use budget-resolved styles when available ═══
+        // Budget downgrades heavy effects (slide, scale) to lighter ones (fade, cut)
+        // when the word's screen time is too short for the original animation to complete.
+        const wb = this._wordBudgetMap.get(word.id);
+        const usedEntry = (wb?.resolvedEntry ?? word.entryStyle) as any;
+        const usedExit = (wb?.resolvedExit ?? word.exitStyle) as any;
+        const usedBehavior = (wb?.resolvedBehavior ?? word.behaviorStyle) as any;
+        const usedIntensity = wb?.behaviorIntensity ?? group.behaviorIntensity;
+
+        const entryState = computeEntryState(usedEntry, entryProgress, usedIntensity);
+        const exitState = computeExitState(usedExit, exitProgress, usedIntensity, li, lt);
+        // ═══ V2: Use conductor phase directly ═══
+        const wordBeatPhase = beatPhase;
+        const behaviorState = computeBehaviorState(usedBehavior, tSec, group.start, wordBeatPhase, usedIntensity);
 
         const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
         const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
@@ -3909,13 +3931,17 @@ export class LyricDancePlayer {
             ? 1.0 * (behaviorState.alpha ?? 1)
             : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
 
-        // Line role opacity
+        // ═══ V2: Previous/next lines VISIBLE — creates depth ═══
+        // Previous: drifting up, fading out
+        // Current: full brightness, beat-reactive
+        // Next: teasing below, barely visible
         let roleAlpha: number;
+        let roleScale = 1.0;
         switch (lineRole) {
-          case 'current': roleAlpha = 1.0; break;
-          case 'previous': roleAlpha = 0.0; break;
-          case 'next': roleAlpha = 0.0; break;
-          default: roleAlpha = 0.0; break;
+          case 'current': roleAlpha = 1.0; roleScale = 1.0; break;
+          case 'previous': roleAlpha = 0.20; roleScale = 0.92; break;
+          case 'next': roleAlpha = 0.12; roleScale = 0.95; break;
+          default: roleAlpha = 0.0; roleScale = 1.0; break;
         }
 
         // ─── Vocal wave: continuous brightness flowing through the line ───
@@ -4066,7 +4092,7 @@ export class LyricDancePlayer {
         const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
         const finalBlur = (entryState.blur ?? 0) + (exitState.blur ?? 0) + (behaviorState.blur ?? 0);
         const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
-        const isFrozen = word.behaviorStyle === 'freeze' && (tSec - group.start) > 0.3;
+        const isFrozen = usedBehavior === 'freeze' && (tSec - group.start) > 0.3;
 
         const effectiveFontSize = word.baseFontSize * fontScale;
         const charW = word.isLetterChunk ? effectiveFontSize * 0.6 : 0;
@@ -4075,7 +4101,7 @@ export class LyricDancePlayer {
 
         // Micro cam push — skip for hero words (handled by heroPresentation)
         if (!isHeroWord) {
-          const isHeroBeatHit = isExactHeroTokenMatch(word.text, resolvedLine?.heroWord ?? '') && beatSpine.beatPulse > 0.35;
+          const isHeroBeatHit = isExactHeroTokenMatch(word.text, resolvedLine?.heroWord ?? '') && beatPulse > 0.35;
           if (isHeroBeatHit) {
             const push = resolvedWord?.microCamPush ?? 0.04;
             finalScaleX *= 1 + push;
@@ -4086,7 +4112,7 @@ export class LyricDancePlayer {
 
         const glowGain = resolvedWord?.glowGain ?? 0;
         let wordGlow = ((isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult)
-          + beatSpine.beatPulse * glowGain;
+          + beatPulse * glowGain;
 
         // Wave glow: all words near vocal position get subtle halo
         if (lineRole === 'current' && isEntryComplete && !isExiting) {
@@ -4115,10 +4141,10 @@ export class LyricDancePlayer {
         chunk.y = (roleY + finalOffsetY + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale;
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale;
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale;
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale;
         chunk.scale = 1;
-        chunk.visible = finalAlpha > 0.01 && lineRole !== 'offscreen';
+        chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = word.fontWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
@@ -4166,14 +4192,19 @@ export class LyricDancePlayer {
         // ── Final contrast enforcement — no exceptions, no conditions ──
         // moodGrade.brightness is a CSS filter value (0.5 = no change), NOT actual pixel brightness.
         // A dark image × 0.65 filter = still dark. So bias strongly toward light text.
+        // ═══ V2: Section tone overrides — "light" tone = bright bg = dark text ═══
         const moodGradeForContrast = (this as any)._activeMoodGrade as MoodGrade | undefined;
         const bgFilterBright = moodGradeForContrast?.brightness ?? 0.35;
-        // Only treat as "bright background" when filter pushes well past neutral AND mood is explicitly light
-        const bgIsLikelyDark = bgFilterBright < 0.58;
+        const sectionTone = this._currentSectionTone as string | undefined;
+        // Light scene: tone says "light" OR brightness filter is well past neutral
+        const bgIsLikelyDark = sectionTone === 'light' ? false : bgFilterBright < 0.58;
         if (chunk.color && typeof chunk.color === 'string') {
           if (chunk.color.startsWith('rgba')) {
             if (bgIsLikelyDark && chunk.color.includes('0,0,0')) {
               chunk.color = word.isFiller ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.7)';
+            } else if (!bgIsLikelyDark && chunk.color.includes('255,255,255')) {
+              // Light bg: flip white text to dark
+              chunk.color = word.isFiller ? 'rgba(30,30,30,0.25)' : 'rgba(30,30,30,0.75)';
             }
           } else {
             const textBright = perceivedBrightness(chunk.color);
@@ -4185,12 +4216,12 @@ export class LyricDancePlayer {
           }
         }
         chunk.glow = wordGlow;
-        chunk.entryStyle = word.entryStyle;
-        chunk.exitStyle = word.exitStyle;
+        chunk.entryStyle = usedEntry;
+        chunk.exitStyle = usedExit;
         chunk.emphasisLevel = word.emphasisLevel;
         chunk.entryProgress = entryProgress;
         chunk.exitProgress = Math.min(1, exitProgress);
-        chunk.behavior = word.behaviorStyle;
+        chunk.behavior = usedBehavior;
         chunk.skewX = finalSkewX;
         chunk.blur = Math.max(0, Math.min(1, finalBlur));
         chunk.rotation = finalRotation;
@@ -4235,7 +4266,7 @@ export class LyricDancePlayer {
     frame.cameraY = driftY;
     frame.cameraZoom = effectiveZoom;
     frame.bgBlend = 0;
-    (frame as any).beatPulse = beatSpine.beatPulse;
+    (frame as any).beatPulse = beatPulse;
     frame.atmosphere = (chapter?.atmosphere ?? 'cinematic') as any;
     frame.chunks = chunks;
     frame.particles = [];
