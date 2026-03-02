@@ -2561,7 +2561,11 @@ export class LyricDancePlayer {
 
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
-      if (DECOMP_ENABLED && shouldSpawnDecomp && allowDecomp && (chunk.emphasisLevel ?? 0) >= 4) {
+
+      // ═══ Decomp particles: burst on ENTRY, linger after exit ═══
+      // Spawn the moment entry completes (word fully visible), not on exit
+      const justBecameFullyVisible = entry >= 1.0 && exit === 0 && visibleMs < 50;
+      if (DECOMP_ENABLED && justBecameFullyVisible && (chunk.emphasisLevel ?? 0) >= 4) {
         const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
         this.tryStartDecomposition({ chunkId: chunk.id, text, drawX: centerX, drawY, fontSize: safeFontSize, fontWeight, fontFamily: chunk.fontFamily, color: this.getTextColor(chunk.color ?? chapterColor), directive: decompDirective });
       }
@@ -3070,9 +3074,10 @@ export class LyricDancePlayer {
   }
 
   private effectDuration(effect: DecompEffect): number {
+    // Longer durations so particles linger past word exit
     const m: Record<DecompEffect, number> = {
-      'explode': 1.2, 'ice-shatter': 1.5, 'burn-away': 1.5, 'dissolve': 0.4, 'melt': 1.5,
-      'ascend': 1.8, 'glitch': 0.8, 'bloom': 2.0, 'crush': 0.8, 'shockwave': 1.0, 'magnetize': 1.2,
+      'explode': 2.5, 'ice-shatter': 3.0, 'burn-away': 3.0, 'dissolve': 2.5, 'melt': 3.0,
+      'ascend': 3.5, 'glitch': 1.5, 'bloom': 3.5, 'crush': 1.5, 'shockwave': 2.0, 'magnetize': 2.5,
     };
     return m[effect];
   }
@@ -3080,7 +3085,7 @@ export class LyricDancePlayer {
   private tryStartDecomposition(input: { chunkId: string; text: string; drawX: number; drawY: number; fontSize: number; fontWeight: number; fontFamily?: string; color: string; directive: any; }): void {
     const effect = this.resolveDecompEffect(input.directive);
     if (!effect || this.activeDecomps.some((d) => d.id === input.chunkId)) return;
-    if (this.activeDecomps.length >= 3) this.activeDecomps.shift();
+    if (this.activeDecomps.length >= 6) this.activeDecomps.shift();
     const particles = this.captureWordParticles(input, effect);
     const decomp: PixelDecomp = {
       id: input.chunkId, particles, effect, startTime: performance.now() / 1000,
