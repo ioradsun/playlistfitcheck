@@ -2685,6 +2685,8 @@ export class LyricDancePlayer {
                 console.log(`[hero-fx] "${text}" → ${elementalClass} (emphasis ${emphasis})`);
               }
               const nowSec = performance.now() / 1000;
+              // Word-local time: effects start at t=0 when word appears
+              const wordAgeSec = visibleMs / 1000;
               const smoothBeat = Math.max(0, this._springOffset ?? 0);
               const moodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
               const moodInt = (this as any)._activeIntensity as number ?? 0.5;
@@ -2699,20 +2701,24 @@ export class LyricDancePlayer {
                 ELECTRIC: '#ffee44',
               };
               const glowColor = glowColors[elementalClass] ?? '#ffffff';
-              const glowPulse = 0.6 + 0.4 * Math.sin(nowSec * 4);
+              // Glow ramps in over first 200ms, pulses during, fades with exit
+              const glowRampIn = Math.min(1, wordAgeSec / 0.2);
+              const glowExitFade = 1 - exit;
+              const glowPulse = 0.6 + 0.4 * Math.sin(wordAgeSec * 4);
+              const glowStrength = glowRampIn * glowExitFade;
               this.ctx.save();
               this.ctx.shadowColor = glowColor;
-              this.ctx.shadowBlur = 18 + 8 * glowPulse + smoothBeat * 12;
+              this.ctx.shadowBlur = (18 + 8 * glowPulse + smoothBeat * 12) * glowStrength;
               this.ctx.shadowOffsetX = 0;
               this.ctx.shadowOffsetY = 0;
-              this.ctx.globalAlpha = 0.7 + 0.3 * glowPulse;
+              this.ctx.globalAlpha = (0.7 + 0.3 * glowPulse) * glowStrength;
               this.ctx.fillStyle = glowColor;
               this.ctx.fillText(text, 0, 0);
               this.ctx.restore();
 
               drawElementalWord(
                 this.ctx, text, safeFontSize, textWidth, elementalClass,
-                nowSec, smoothBeat, 1,
+                wordAgeSec, smoothBeat, 1,
                 chunk.color ?? null,
                 { isHeroWord: true, effectQuality: 'high', wordX: 0, wordY: 0, canvasWidth: this.width, canvasHeight: this.height, lightingMode },
               );
