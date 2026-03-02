@@ -2580,6 +2580,7 @@ export class LyricDancePlayer {
             }
 
             if (elementalClass) {
+              }
               // Word-local time: effects start at t=0 when word appears
               const wordAgeSec = visibleMs / 1000;
               const smoothBeat = Math.max(0, this._springOffset ?? 0);
@@ -3876,9 +3877,22 @@ export class LyricDancePlayer {
         : group.lineIndex === nextLineIndex ? 'next'
         : 'offscreen';
 
-      // Track hero word wave proximity for sibling dimming
-      let groupHeroDimming = false;
-      let groupHeroWaveProximity = 0;
+      // Pre-scan: is any hero word in this group currently active (fully entered, not exiting)?
+      let groupHasActiveHero = false;
+      if (lineRole === 'current') {
+        for (let hwi = 0; hwi < group.words.length; hwi++) {
+          const hw = group.words[hwi];
+          if (!hw.isHeroWord) continue;
+          const hwStagger = hwi === group.anchorWordIdx ? 0 : Math.abs(hwi - group.anchorWordIdx) * group.staggerDelay;
+          const hwStart = group.start + hwStagger;
+          const hwEnd = group.end + group.lingerDuration;
+          // Hero is "active" from shortly after entry until it starts exiting
+          if (tSec >= hwStart + 0.08 && tSec < hwEnd) {
+            groupHasActiveHero = true;
+            break;
+          }
+        }
+      }
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
@@ -4003,49 +4017,26 @@ export class LyricDancePlayer {
 
         let finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
-        // ─── Hero word presentation: SOLO CENTER ───
-        // Emph 3+: hero appears alone at center, siblings invisible.
-        // As wave passes, hero slides back to layout position, siblings fade in.
+        // ─── Hero word: solo center when active ───
         const isHeroWord = word.isHeroWord === true;
         let heroScaleMult = 1.0;
         let heroOffsetX = 0;
         let heroOffsetY = 0;
-        let heroDimSiblings = false;
 
-        if (isHeroWord && lineRole === 'current') {
-          const wp = waveProximity;
-          // Smooth isolation curve: full isolation at wp > 0.4, releases below
-          const isolation = Math.min(1, wp * 2.5); // 0→0 at wp=0, →1 at wp=0.4+
-
-          // Scale: 130% at peak, settles to 100%
-          heroScaleMult = 1.0 + isolation * 0.30;
-
-          // Position: lerp from layout position toward screen center
-          const centerX = 480; // center of 960-space
-          const centerY = 270; // center of 540-space
-          heroOffsetX = (centerX - word.layoutX) * isolation;
-          heroOffsetY = (centerY - roleY) * isolation;
-
-          // Dim siblings when hero is prominent
-          if (isolation > 0.15) heroDimSiblings = true;
+        if (isHeroWord && lineRole === 'current' && groupHasActiveHero) {
+          // Place at screen center, scaled up
+          heroOffsetX = 480 - word.layoutX;
+          heroOffsetY = 270 - roleY;
+          heroScaleMult = 1.25;
         }
 
-
-        if (isHeroWord && waveProximity > groupHeroWaveProximity) {
-          groupHeroWaveProximity = waveProximity;
-        }
-
-        if (heroDimSiblings) groupHeroDimming = true;
-
-        // (Next-line anticipation removed — only current line is visible)
-
-        // Solo-center: siblings fade out when hero is prominent, fade back in after
-        if (!isHeroWord && lineRole === 'current' && groupHeroDimming) {
-          // Siblings invisible at peak hero, smoothly return
-          roleAlpha *= Math.max(0.05, 1.0 - groupHeroWaveProximity * 0.92);
+        // Non-hero words: hidden while a hero in this group is active
+        if (!isHeroWord && lineRole === 'current' && groupHasActiveHero) {
+          roleAlpha = 0;
         }
 
         finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
+
 
         const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
         const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
