@@ -902,14 +902,6 @@ export class LyricDancePlayer {
     panEndY: number;
   }> = [];
   private _bgBlurCurrent = 3;
-
-  // ═══ Pixel-sampled background brightness (replaces CSS filter heuristic) ═══
-  private _bgSampleData: Uint8ClampedArray | null = null;  // raw pixel data from last sample
-  private _bgSampleW = 0;                                   // width of sampled region
-  private _bgSampleH = 0;                                   // height of sampled region
-  private _bgSampleX = 0;                                   // canvas x offset of sample region
-  private _bgSampleY = 0;                                   // canvas y offset of sample region
-  private _lastBgSampleMs = 0;                               // timestamp of last sample
   private _haloStamps: Map<string, HTMLCanvasElement> = new Map();
   private _grainCanvas: HTMLCanvasElement | null = null;
   private _grainPool: ImageData[] = [];      // pre-generated noise frames
@@ -1143,6 +1135,7 @@ export class LyricDancePlayer {
           this.conductor.setAnalysis((beatGridData as any)._analysis);
         }
         console.info(`[V2] BeatConductor created: ${this.conductor.beatsPerMinute} BPM, ${this.conductor.totalBeats} beats, ${songDuration.toFixed(1)}s, hits: ${(beatGridData as any).hits?.length ?? 0}`);
+        this.cameraRig.setBPM(this.conductor.beatsPerMinute);
 
         // ═══ V2: Compute timing budgets ═══
         if (compiled.phraseGroups?.length > 0 && this.conductor) {
@@ -2329,8 +2322,6 @@ export class LyricDancePlayer {
     this.cameraRig.resetTransform(this.ctx);
 
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
-    // Sample actual canvas pixels for ground-truth brightness (throttled ~7Hz)
-    this._sampleBackgroundBrightness();
 
     const _t0Text = performance.now();
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -2488,19 +2479,12 @@ export class LyricDancePlayer {
     }
 
     this.ctx.save();
-    // ═══ DIRECTOR'S CAMERA: Subject transform — zoom INTO the words ═══
-    // CameraRig.getSubjectTransform() is the SOLE source of text zoom.
-    // No more old spring system multiplied on top.
+    // ═══ DIRECTOR'S CAMERA: Pure depth — zoom into the words ═══
     const subjectT = this.cameraRig.getSubjectTransform();
-    const applyZoom = Math.abs(subjectT.zoom - 1.0) > 0.001
-      || Math.abs(subjectT.offsetX) > 0.5
-      || Math.abs(subjectT.offsetY) > 0.5
-      || Math.abs(subjectT.rotation) > 0.0001;
-    if (applyZoom) {
+    if (Math.abs(subjectT.zoom - 1.0) > 0.001) {
       const zoomCx = this.width / 2;
       const zoomCy = this.height / 2;
-      this.ctx.translate(zoomCx + subjectT.offsetX + subjectT.shakeX, zoomCy + subjectT.offsetY + subjectT.shakeY);
-      this.ctx.rotate(subjectT.rotation);
+      this.ctx.translate(zoomCx, zoomCy);
       this.ctx.scale(subjectT.zoom, subjectT.zoom);
       this.ctx.translate(-zoomCx, -zoomCy);
     }
@@ -2564,38 +2548,6 @@ export class LyricDancePlayer {
       let drawX = centerX - textWidth * 0.5;
       const drawY = centerY;
       const finalDrawY = drawY;
-
-      // ═══ PIXEL-SAMPLED CONTRAST: Override chunk color from actual background brightness ═══
-      // evaluateFrame set chunk.color using the CSS filter heuristic (bgFilterBright).
-      // Here we override with ground truth: actual pixel brightness at this word's position.
-      const pixelBright = this._getBrightnessAtPoint(centerX, centerY);
-      if (pixelBright !== null && chunk.color && typeof chunk.color === 'string') {
-        const isFiller = (chunk.alpha ?? 1) < 0.35;
-        if (pixelBright > 0.55) {
-          // Bright background → need dark text
-          if (chunk.color.startsWith('rgba') && chunk.color.includes('255,255,255')) {
-            chunk.color = isFiller ? 'rgba(25,25,25,0.25)' : 'rgba(25,25,25,0.85)';
-          } else if (!chunk.color.startsWith('rgba')) {
-            const textBright = perceivedBrightness(chunk.color);
-            if (textBright > 0.60) {
-              chunk.color = '#1a1a1a';
-            }
-          }
-          (chunk as any).textStroke = 'rgba(255,255,255,0.3)'; // light stroke on dark text
-        } else if (pixelBright < 0.40) {
-          // Dark background → need light text
-          if (chunk.color.startsWith('rgba') && chunk.color.includes('0,0,0')) {
-            chunk.color = isFiller ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.90)';
-          } else if (!chunk.color.startsWith('rgba')) {
-            const textBright = perceivedBrightness(chunk.color);
-            if (textBright < 0.45) {
-              chunk.color = mixTowardWhite(chunk.color, Math.max(0.55, 0.90 - textBright));
-            }
-          }
-          (chunk as any).textStroke = 'rgba(0,0,0,0.35)';
-        }
-        // Middle zone (0.40-0.55): keep evaluateFrame's choice — it's ambiguous
-      }
 
       const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
@@ -2706,14 +2658,11 @@ export class LyricDancePlayer {
         );
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
-        // ═══ Text stroke for contrast — only when brightness is ambiguous ═══
-        // Clear dark/light backgrounds don't need stroke (color flip handles it).
-        // Only the 0.35-0.60 danger zone needs the edge reinforcement.
+        // ═══ Text stroke for edge contrast in ambiguous zones ═══
         const textStrokeColor = (chunk as any).textStroke as string | undefined;
-        const needsStroke = textStrokeColor && pixelBright !== null && pixelBright > 0.35 && pixelBright < 0.60;
-        if (needsStroke) {
+        if (textStrokeColor) {
           this.ctx.strokeStyle = textStrokeColor;
-          this.ctx.lineWidth = Math.max(1.5, safeFontSize * 0.035);
+          this.ctx.lineWidth = Math.max(1.5, safeFontSize * 0.03);
           this.ctx.lineJoin = 'round';
         }
 
@@ -2724,7 +2673,7 @@ export class LyricDancePlayer {
           const totalExtraWidth = baseSpacing * (letters.length - 1);
           let letterX = -totalExtraWidth / 2;
           for (const letter of letters) {
-            if (needsStroke) this.ctx.strokeText(letter, letterX, 0);
+            if (textStrokeColor) this.ctx.strokeText(letter, letterX, 0);
             this.ctx.fillText(letter, letterX, 0);
             const letterWidth = this.ctx.measureText(letter).width;
             letterX += letterWidth + baseSpacing;
@@ -2764,11 +2713,11 @@ export class LyricDancePlayer {
               );
             } else {
               // Hero word without a matching element — just draw bigger (scale already applied upstream)
-              if (needsStroke) this.ctx.strokeText(text, 0, 0);
+              if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
               this.ctx.fillText(text, 0, 0);
             }
           } else {
-            if (needsStroke) this.ctx.strokeText(text, 0, 0);
+            if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
             this.ctx.fillText(text, 0, 0);
           }
         }
@@ -4416,7 +4365,7 @@ export class LyricDancePlayer {
         chunk.glow = wordGlow;
         chunk.entryStyle = usedEntry;
         chunk.exitStyle = usedExit;
-        chunk.emphasisLevel = word.emphasisLevel;
+        chunk.emphasisLevel = resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0;
         chunk.entryProgress = entryProgress;
         chunk.exitProgress = Math.min(1, exitProgress);
         chunk.behavior = usedBehavior;
@@ -4547,78 +4496,6 @@ export class LyricDancePlayer {
     }
   }
 
-
-  // ═══ Pixel-sampled background brightness ═══
-  // After all BG layers render, sample actual canvas pixels to get ground-truth
-  // brightness at any point. Throttled to every ~150ms for performance.
-
-  private _sampleBackgroundBrightness(): void {
-    const now = performance.now();
-    if (now - this._lastBgSampleMs < 300) return; // throttle: ~3Hz (plenty for contrast)
-    this._lastBgSampleMs = now;
-
-    // Sample a small center strip (20% width × 30% height) — where text lives.
-    // At DPR 2 on 1080p this is ~216×162 = 35K pixels. Fast.
-    const margin = 0.40;
-    const marginY = 0.35;
-    const sx = Math.floor(this.width * margin);
-    const sy = Math.floor(this.height * marginY);
-    const sw = Math.floor(this.width * (1 - 2 * margin));
-    const sh = Math.floor(this.height * (1 - 2 * marginY));
-    if (sw <= 0 || sh <= 0) return;
-
-    try {
-      const dsx = Math.floor(sx * this.dpr);
-      const dsy = Math.floor(sy * this.dpr);
-      const dsw = Math.floor(sw * this.dpr);
-      const dsh = Math.floor(sh * this.dpr);
-      const imageData = this.ctx.getImageData(dsx, dsy, dsw, dsh);
-      this._bgSampleData = imageData.data;
-      this._bgSampleW = dsw;
-      this._bgSampleH = dsh;
-      this._bgSampleX = sx;
-      this._bgSampleY = sy;
-    } catch {
-      this._bgSampleData = null;
-    }
-  }
-
-  /**
-   * Get perceived brightness (0-1) at a canvas-space point from sampled pixel data.
-   * Returns null if no sample data available (caller falls back to heuristic).
-   * Samples a small region around the point for stability.
-   */
-  private _getBrightnessAtPoint(canvasX: number, canvasY: number): number | null {
-    if (!this._bgSampleData) return null;
-
-    const relX = (canvasX - this._bgSampleX) * this.dpr;
-    const relY = (canvasY - this._bgSampleY) * this.dpr;
-
-    // Small 8px radius, sample every 4th pixel — fast
-    const radius = Math.floor(8 * this.dpr);
-    const startX = Math.max(0, Math.floor(relX - radius));
-    const endX = Math.min(this._bgSampleW - 1, Math.floor(relX + radius));
-    const startY = Math.max(0, Math.floor(relY - radius));
-    const endY = Math.min(this._bgSampleH - 1, Math.floor(relY + radius));
-
-    if (startX >= endX || startY >= endY) return null;
-
-    const step = 4;
-    let totalBright = 0;
-    let count = 0;
-    const data = this._bgSampleData;
-    const w = this._bgSampleW;
-
-    for (let py = startY; py <= endY; py += step) {
-      for (let px = startX; px <= endX; px += step) {
-        const idx = (py * w + px) * 4;
-        totalBright += (0.2126 * data[idx] + 0.7152 * data[idx + 1] + 0.0722 * data[idx + 2]) / 255;
-        count++;
-      }
-    }
-
-    return count > 0 ? totalBright / count : null;
-  }
 
   private drawBackground(frame: ScaledKeyframe): void {
     const chapters = this.resolvedState.chapters ?? [];
