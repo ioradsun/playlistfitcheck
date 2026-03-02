@@ -56,32 +56,45 @@ export function drawElementalWord(
     case "WATER":
     case "RAIN": {
       if (mode === "bright") {
-        // Bright: clear refraction distortion + soft shadow ripple
+        // Bright: visible wave distortion + water drops + ripples
         ctx.fillStyle = colorOverride ?? "#1a3a5c";
         ctx.fillText(word, 0, 0);
 
-        // Refractive displacement — subtle horizontal wave
+        // Refractive wave — visible
         ctx.save();
-        ctx.globalAlpha *= 0.12;
-        const waveAmp = 1.5 + beatIntensity * 1.5;
+        ctx.globalAlpha *= 0.25;
+        const waveAmp = 2.5 + beatIntensity * 2;
         const waveOff = Math.sin(currentTime * 2.5) * waveAmp;
-        ctx.fillStyle = colorOverride ?? "#1a3a5c";
-        ctx.fillText(word, waveOff, 0.5);
-        ctx.globalAlpha /= 0.12;
+        ctx.fillStyle = "#2255aa";
+        ctx.fillText(word, waveOff, 0.8);
         ctx.restore();
 
-        // Soft shadow ripple beneath word
-        const rippleCount = 2;
+        // Visible ripples beneath word
+        const rippleCount = 3;
         for (let i = 0; i < rippleCount; i++) {
-          const rippleT = (currentTime * 0.4 + i * 0.5) % 1;
-          const rippleW = wordWidth * (0.6 + rippleT * 0.5);
-          const rippleAlpha = Math.max(0, 0.08 - rippleT * 0.08);
+          const rippleT = (currentTime * 0.4 + i * 0.33) % 1;
+          const rippleW = wordWidth * (0.5 + rippleT * 0.6);
+          const rippleAlpha = Math.max(0, 0.25 - rippleT * 0.25);
           ctx.save();
           ctx.beginPath();
-          ctx.ellipse(wordWidth / 2, fontSize * 0.15 + rippleT * 8, rippleW / 2, 2, 0, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(0,40,80,${rippleAlpha})`;
-          ctx.fill();
+          ctx.ellipse(wordWidth / 2, fontSize * 0.2 + rippleT * 12, rippleW / 2, 2.5, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(30,100,200,${rippleAlpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
           ctx.restore();
+        }
+
+        // Water drops falling
+        for (let i = 0; i < 3; i++) {
+          const dx = wordWidth * (i + 0.5) / 3;
+          const dropProgress = (currentTime * 0.7 + i * 0.33) % 1;
+          const dy = dropProgress * 25;
+          const dropSize = 2 + dropProgress * 2;
+          const dropOpacity = 0.4 - dropProgress * 0.4;
+          ctx.beginPath();
+          ctx.arc(dx, dy, dropSize, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(50,120,200,${dropOpacity})`;
+          ctx.fill();
         }
       } else {
         // Dark: blue glow, bubbles, drips
@@ -136,51 +149,58 @@ export function drawElementalWord(
     // ═══════════════════════════════════════
     case "FIRE": {
       if (mode === "bright") {
-        // Bright: heat shimmer + red tint edges. No particles. Feels like temperature.
+        // Bright: visible heat shimmer + red/orange tint
         ctx.fillStyle = colorOverride ?? "#2a0a00";
         ctx.fillText(word, 0, 0);
 
-        // Heat shimmer — vertical displacement oscillation
+        // Heat shimmer — visible displacement
         ctx.save();
-        ctx.globalAlpha *= 0.08 + beatIntensity * 0.06;
-        const shimmerY = Math.sin(currentTime * 6) * 1.2;
-        ctx.fillStyle = colorOverride ?? "#2a0a00";
+        ctx.globalAlpha *= 0.2 + beatIntensity * 0.15;
+        const shimmerY = Math.sin(currentTime * 6) * 2.5;
+        ctx.fillStyle = "#cc3300";
         ctx.fillText(word, 0, shimmerY);
-        ctx.globalAlpha /= (0.08 + beatIntensity * 0.06);
         ctx.restore();
 
-        // Red tint at edges
+        // Red-orange tint at edges
         ctx.save();
         ctx.beginPath();
         ctx.rect(-2, -fontSize - 2, wordWidth + 4, fontSize + 4);
         ctx.clip();
         const heatGrad = ctx.createLinearGradient(0, 0, 0, -fontSize);
-        heatGrad.addColorStop(0, "rgba(180,40,0,0.12)");
-        heatGrad.addColorStop(0.5, "rgba(180,40,0,0)");
-        heatGrad.addColorStop(1, "rgba(180,40,0,0.08)");
+        heatGrad.addColorStop(0, "rgba(220,60,0,0.30)");
+        heatGrad.addColorStop(0.5, "rgba(220,60,0,0.05)");
+        heatGrad.addColorStop(1, "rgba(255,120,0,0.20)");
         ctx.fillStyle = heatGrad;
         ctx.fillText(word, 0, 0);
         ctx.restore();
 
-        // Rising heat distortion lines (very faint)
-        if (beatIntensity > 0.3) {
-          ctx.save();
-          ctx.globalAlpha = 0.04 + beatIntensity * 0.03;
-          ctx.strokeStyle = "rgba(180,60,0,0.3)";
-          ctx.lineWidth = 0.5;
-          for (let i = 0; i < 3; i++) {
-            const hx = wordWidth * (i + 0.5) / 3;
-            const hProgress = (currentTime * 0.8 + i * 0.33) % 1;
-            ctx.beginPath();
-            ctx.moveTo(hx, -fontSize * hProgress);
-            ctx.bezierCurveTo(
-              hx + Math.sin(currentTime * 4 + i) * 4, -fontSize * (hProgress + 0.15),
-              hx - Math.sin(currentTime * 3 + i) * 3, -fontSize * (hProgress + 0.3),
-              hx + Math.sin(currentTime * 5 + i) * 2, -fontSize * (hProgress + 0.5),
-            );
-            ctx.stroke();
-          }
-          ctx.restore();
+        // Rising heat lines — visible
+        ctx.save();
+        ctx.globalAlpha = 0.15 + beatIntensity * 0.10;
+        ctx.strokeStyle = "rgba(220,80,0,0.6)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+          const hx = wordWidth * (i + 0.5) / 4;
+          const hProgress = (currentTime * 0.8 + i * 0.25) % 1;
+          ctx.beginPath();
+          ctx.moveTo(hx, -fontSize * hProgress);
+          ctx.bezierCurveTo(
+            hx + Math.sin(currentTime * 4 + i) * 6, -fontSize * (hProgress + 0.15),
+            hx - Math.sin(currentTime * 3 + i) * 5, -fontSize * (hProgress + 0.3),
+            hx + Math.sin(currentTime * 5 + i) * 3, -fontSize * (hProgress + 0.5),
+          );
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Embers even in bright mode
+        const brightEmberCount = 3 + Math.floor(beatIntensity * 3);
+        for (let i = 0; i < brightEmberCount; i += 1) {
+          const ex = (wordWidth * i / brightEmberCount) + Math.sin(currentTime * 5 + i * 1.3) * 6;
+          const eyOffset = (currentTime * 20 + i * 12) % 30;
+          const ey = -fontSize - eyOffset;
+          const eOpacity = Math.max(0, 0.6 - eyOffset / 30);
+          drawEmber(ctx, ex, ey, 1.8 + (i % 2), eOpacity, currentTime * 1000, i);
         }
       } else {
         // Dark: orange bloom, embers, additive flame gradient
@@ -221,40 +241,54 @@ export function drawElementalWord(
     // ═══════════════════════════════════════
     case "SMOKE": {
       if (mode === "bright") {
-        // Bright: subtle displacement + shadow depth. No visible particles.
+        // Bright: visible shadow depth + drift + smoke wisps
         ctx.fillStyle = colorOverride ?? "#333";
         ctx.fillText(word, 0, 0);
 
-        // Shadow depth
+        // Deep shadow
         ctx.save();
-        ctx.globalAlpha *= 0.06;
-        ctx.fillStyle = "#000";
-        ctx.fillText(word, 1.5, 1.5);
-        ctx.globalAlpha /= 0.06;
+        ctx.globalAlpha *= 0.25;
+        ctx.fillStyle = "#553388";
+        ctx.fillText(word, 2, 2);
         ctx.restore();
 
-        // Horizontal drift — word gently sways
+        // Drifting echo
         ctx.save();
-        ctx.globalAlpha *= 0.05;
-        const drift = Math.sin(currentTime * 1.5) * 2;
-        ctx.fillStyle = colorOverride ?? "#333";
-        ctx.fillText(word, drift, -0.5);
-        ctx.globalAlpha /= 0.05;
+        const drift = Math.sin(currentTime * 1.5) * 4;
+        const driftAlpha = 0.15 + 0.08 * Math.sin(currentTime * 2.5);
+        ctx.globalAlpha *= driftAlpha;
+        ctx.fillStyle = "#6644aa";
+        ctx.fillText(word, drift, -1);
         ctx.restore();
+
+        // Rising wisps (visible in bright mode too)
+        for (let i = 0; i < 3; i++) {
+          const wispX = wordWidth * (i + 0.3) / 3 + Math.sin(currentTime * 2 + i * 2.1) * 8;
+          const wispProgress = (currentTime * 0.5 + i * 0.33) % 1;
+          const wispY = -fontSize * wispProgress * 1.5;
+          const wispAlpha = Math.max(0, 0.25 - wispProgress * 0.25);
+          ctx.save();
+          ctx.globalAlpha *= wispAlpha;
+          ctx.beginPath();
+          ctx.arc(wispX, wispY, 6 + wispProgress * 12, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(100,70,160,0.3)";
+          ctx.fill();
+          ctx.restore();
+        }
       } else {
-        // Dark: expanding smoke, reduced opacity base
-        ctx.globalAlpha *= 0.65;
-        ctx.fillStyle = colorOverride ?? "#8a8a8a";
+        // Dark: expanding smoke, visible base
+        ctx.globalAlpha *= 0.85;
+        ctx.fillStyle = colorOverride ?? "#aa99cc";
         ctx.fillText(word, 0, 0);
-        ctx.globalAlpha /= 0.65;
+        ctx.globalAlpha /= 0.85;
 
         const smokeAge = (currentTime * 0.4) % 1;
         drawSmoke(
           ctx,
           wordWidth / 2,
           -fontSize / 2,
-          (wordWidth / 2) * (1 + smokeAge * 0.5),
-          Math.max(0, 0.3 - smokeAge * 0.25),
+          (wordWidth / 2) * (1 + smokeAge * 0.8),
+          Math.max(0, 0.5 - smokeAge * 0.35),
           currentTime * 1000,
           appearanceCount,
         );
@@ -268,34 +302,45 @@ export function drawElementalWord(
     case "ELECTRIC":
     case "NEON": {
       if (mode === "bright") {
-        // Bright: sharp contrast, inner shadow, subtle ambient tint. No bloom.
+        // Bright: visible electric tint, flicker, spark particles
         ctx.fillStyle = colorOverride ?? "#0a0a0a";
         ctx.fillText(word, 0, 0);
 
-        // Inner shadow
+        // Strong inner shadow
         ctx.save();
-        ctx.globalAlpha *= 0.08;
-        ctx.fillStyle = "#000";
-        ctx.fillText(word, 0.8, 0.8);
-        ctx.globalAlpha /= 0.08;
+        ctx.globalAlpha *= 0.2;
+        ctx.fillStyle = "#003366";
+        ctx.fillText(word, 1, 1);
         ctx.restore();
 
-        // Ambient electric tint — faint colored edge
+        // Visible electric tint — colored edge glow
         ctx.save();
-        ctx.globalAlpha *= 0.06 + beatIntensity * 0.04;
-        ctx.fillStyle = "#0066cc";
-        ctx.fillText(word, -0.5, 0);
-        ctx.fillText(word, 0.5, 0);
-        ctx.globalAlpha /= (0.06 + beatIntensity * 0.04);
+        ctx.globalAlpha *= 0.2 + beatIntensity * 0.15;
+        ctx.fillStyle = "#0088ff";
+        ctx.fillText(word, -0.8, 0);
+        ctx.fillText(word, 0.8, 0);
         ctx.restore();
 
-        // Sharp flicker on strong beat
-        if (beatIntensity > 0.6 && Math.sin(currentTime * 30) > 0.8) {
+        // Flicker — random bright flash
+        if (Math.sin(currentTime * 25 + Math.sin(currentTime * 7) * 5) > 0.7) {
           ctx.save();
-          ctx.globalAlpha *= 0.7;
-          ctx.fillStyle = colorOverride ?? "#0a0a0a";
+          ctx.globalAlpha *= 0.4;
+          ctx.fillStyle = "#4488ff";
           ctx.fillText(word, 0, 0);
-          ctx.globalAlpha /= 0.7;
+          ctx.restore();
+        }
+
+        // Spark particles
+        for (let i = 0; i < 3; i++) {
+          const sparkX = wordWidth * Math.abs(Math.sin(currentTime * 3 + i * 2.1));
+          const sparkY = -fontSize * 0.5 + Math.cos(currentTime * 4 + i * 1.7) * fontSize * 0.4;
+          const sparkAlpha = 0.3 + 0.3 * Math.abs(Math.sin(currentTime * 8 + i * 3));
+          ctx.save();
+          ctx.globalAlpha *= sparkAlpha;
+          ctx.fillStyle = "#66aaff";
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, 2, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
         }
       } else {
@@ -344,11 +389,11 @@ export function drawElementalWord(
     case "ICE":
     case "FROST": {
       if (mode === "bright") {
-        // Bright: desaturation sweep + crystalline white edge. Minimal particles.
+        // Bright: visible frost sweep + crystalline edges + ice crystals
         ctx.fillStyle = colorOverride ?? "#1a3040";
         ctx.fillText(word, 0, 0);
 
-        // Desaturation sweep — moving white wash
+        // Desaturation sweep — visible white wash
         ctx.save();
         ctx.beginPath();
         ctx.rect(-2, -fontSize - 2, wordWidth + 4, fontSize + 4);
@@ -356,29 +401,28 @@ export function drawElementalWord(
         const sweepX = (Math.sin(currentTime * 0.6) * 0.5 + 0.5) * wordWidth;
         const sweepGrad = ctx.createLinearGradient(sweepX - wordWidth * 0.3, 0, sweepX + wordWidth * 0.3, 0);
         sweepGrad.addColorStop(0, "rgba(255,255,255,0)");
-        sweepGrad.addColorStop(0.5, "rgba(240,248,255,0.15)");
+        sweepGrad.addColorStop(0.5, "rgba(200,230,255,0.35)");
         sweepGrad.addColorStop(1, "rgba(255,255,255,0)");
         ctx.fillStyle = sweepGrad;
         ctx.fillText(word, 0, 0);
         ctx.restore();
 
-        // Crystalline white edge
+        // Visible crystalline edge
         ctx.save();
-        ctx.globalAlpha *= 0.06;
-        ctx.fillStyle = "#a0c8e0";
-        ctx.fillText(word, -0.5, -0.5);
-        ctx.fillText(word, 0.5, 0.5);
-        ctx.globalAlpha /= 0.06;
+        ctx.globalAlpha *= 0.2;
+        ctx.fillStyle = "#66aadd";
+        ctx.fillText(word, -0.7, -0.7);
+        ctx.fillText(word, 0.7, 0.7);
         ctx.restore();
 
-        // Very sparse crystals (2-3)
-        const fewCrystals = isHeroWord ? 3 : 2;
-        for (let i = 0; i < fewCrystals; i++) {
-          const angle = (Math.PI * 2 * i) / fewCrystals + currentTime * 0.1;
-          const radius = wordWidth * 0.45 + Math.sin(currentTime * 0.4 + i * 2) * 5;
+        // Ice crystals — visible
+        const crystalCount = isHeroWord ? 5 : 3;
+        for (let i = 0; i < crystalCount; i++) {
+          const angle = (Math.PI * 2 * i) / crystalCount + currentTime * 0.15;
+          const radius = wordWidth * 0.45 + Math.sin(currentTime * 0.4 + i * 2) * 8;
           const cx = wordWidth / 2 + Math.cos(angle) * radius;
-          const cy = -fontSize / 2 + Math.sin(angle) * fontSize * 0.3;
-          const size = 1.5 + Math.sin(currentTime * 1.5 + i) * 0.8;
+          const cy = -fontSize / 2 + Math.sin(angle) * fontSize * 0.4;
+          const size = 3 + Math.sin(currentTime * 1.5 + i) * 1.5;
           ctx.save();
           ctx.translate(cx, cy);
           ctx.rotate(angle);
@@ -388,7 +432,7 @@ export function drawElementalWord(
           ctx.lineTo(0, size);
           ctx.lineTo(-size * 0.5, 0);
           ctx.closePath();
-          ctx.fillStyle = "rgba(100,140,170,0.15)";
+          ctx.fillStyle = "rgba(100,180,230,0.35)";
           ctx.fill();
           ctx.restore();
         }
