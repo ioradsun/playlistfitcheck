@@ -5,7 +5,9 @@
  * Architecture:
  * - BeatConductor is the SINGLE rhythmic driver. No dual-system chaos.
  * - EffectBudgeter guarantees effects complete (no mid-animation cutoffs).
- * - Previous/next lines are visible (depth, not hard cuts).
+ * - ACTIVE CHUNK ONLY: one phrase group on screen at a time, dead center.
+ * - Single color model: one text color, contrast against background.
+ * - Hero words: solo center (≥500ms) or inline emphasis scaling.
  * - One evaluateFrame() call per tick (not two).
  * - All catches log errors (no silent swallowing).
  * - All state on instance (no global singletons).
@@ -26,10 +28,10 @@ import {
   type ScenePayload,
 } from "@/lib/sceneCompiler";
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
-import { getMoodGrade, buildGradeFilter, lerpGrade, getTextMode, type MoodGrade } from "@/engine/moodGrades";
-import { getSectionTones } from "@/engine/presetDerivation";
-import { perceivedBrightness, mixTowardWhite } from "@/engine/ColorEnhancer";
-import { drawElementalWord } from "@/engine/ElementalEffects";
+import { getMoodGrade, buildGradeFilter, type MoodGrade } from "@/engine/moodGrades";
+// getSectionTones removed — song-level grade model
+// ColorEnhancer removed — single color model handles contrast directly
+// ElementalEffects removed — single color model
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
   isExactHeroTokenMatch,
@@ -39,7 +41,7 @@ import {
   type ResolvedWordSettings,
 } from "@/engine/cinematicResolver";
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
-import { CameraRig, type SectionRigName, type SubjectFocus } from "@/engine/CameraRig";
+import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 
@@ -867,12 +869,9 @@ export class LyricDancePlayer {
   private _beatCursor = 0;
   private _springOffset = 0;
   private _springVelocity = 0;
-  private _glowRemainMs = 0;       // time-based glow (replaces frame-count _glowBudget)
   private _lastBeatIndex = -1;
-  private _currentZoom = 1.0;
   private _smoothedTime = 0;
   private _frameDt = 1.0;          // normalized dt (1.0 = 60fps), set by tick()
-  private _currentSectionTone: string = 'dark'; // B-07: typed field (was (this as any))
   private _lastRawTime = 0;
   private _timeInitialized = false;
 
@@ -902,16 +901,15 @@ export class LyricDancePlayer {
     panEndY: number;
   }> = [];
   private _bgBlurCurrent = 3;
-  private _haloStamps: Map<string, HTMLCanvasElement> = new Map();
+  /** Song-level grade: computed once, used for entire song — no per-section chaos */
+  private _songGrade: MoodGrade | null = null;
   private _grainCanvas: HTMLCanvasElement | null = null;
   private _grainPool: ImageData[] = [];      // pre-generated noise frames
   private _grainPoolW = 0;
   private _grainPoolH = 0;
   private _grainFrameIdx = 0;               // rotates through pool
-  private _lastVocalProgress: number | null = null;
   private _lightingOverlayCanvas: HTMLCanvasElement | null = null;
   private _lightingOverlayKey = '';
-  private _prevImgIdx = -1;
   private _textBandBrightness = 0.3; // sampled brightness of center band where text renders
   private _lastBandSampleMs = 0;     // throttle: sample every 300ms
   // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
@@ -948,7 +946,6 @@ export class LyricDancePlayer {
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
   private ambientParticleEngine: ParticleEngine | null = null;
   private activeSectionIndex = -1;
-  private _activeRigName: string = 'verse';
 
   // ═══ Pre-computed hero word schedule for camera lookahead ═══
   private _heroSchedule: Array<{ startSec: number; endSec: number; emphasis: number; word: string }> = [];
@@ -957,20 +954,14 @@ export class LyricDancePlayer {
   private activeTension: any = null;
   private lastExitProgressByChunk = new Map<string, number>();
   private chunkActiveSinceMs: Map<string, number> = new Map();
-  private _prevPrimaryLineIndex: number = -1;
-  private _lineTransitionStartSec: number = 0;
 
 
   // Health monitor
   private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
   private frameCount = 0;
-  private lastHealthCheck = 0;
   private currentTSec = 0;
 
-  // Stall detection
-  private _lastLoggedTSec = 0;
-  private _stalledFrames = 0;
-  private _lastSimChapterIdx = -1;
+  // Stall detection removed — was no-op (counters with no output)
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
@@ -1127,6 +1118,7 @@ export class LyricDancePlayer {
 
         const payload = this.buildScenePayload();
         this.payload = payload;
+        this._songGrade = null; // force recomputation for new song
         this.resolvePlayerState(payload);
         await this.preloadFonts();
         this.songStartSec = payload.songStart;
@@ -1234,6 +1226,7 @@ export class LyricDancePlayer {
   async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<Map<string, ChunkState>> {
     try {
       this.payload = payload;
+      this._songGrade = null; // force recomputation for new song
       this.resolvePlayerState(payload);
       this.songStartSec = payload.songStart;
       this.songEndSec = payload.songEnd;
@@ -1283,10 +1276,8 @@ export class LyricDancePlayer {
     this.currentTimeMs = Math.max(0, (t - this.songStartSec) * 1000);
     this._beatCursor = 0;
     this._lastBeatIndex = -1;
-    this._glowRemainMs = 0;
     this._springOffset = 0;
     this._springVelocity = 0;
-    this._currentZoom = 1.0;
     this._timeInitialized = false;
     this.conductor?.resetCursor();
     this.cameraRig.reset();
@@ -1374,7 +1365,6 @@ export class LyricDancePlayer {
     if (this.payload) this.buildBgCache();
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
-    this._haloStamps.clear();
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
     this._updateViewportScale();
@@ -1393,6 +1383,7 @@ export class LyricDancePlayer {
     this.data = { ...this.data, cinematic_direction: direction };
     if (!this.payload) return;
     this.payload = { ...this.payload, cinematic_direction: direction };
+    this._songGrade = null; // cinematic direction changed — recompute grade
     this.resolvePlayerState(this.payload);
     this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this._buildChunkCacheFromScene(this.compiledScene);
@@ -1473,7 +1464,6 @@ export class LyricDancePlayer {
     this._lightingOverlayCanvas = null;
     this._grainCanvas = null;
     this._grainPool = [];
-    this._haloStamps.clear();
     this._textMetricsCache.clear();
     revokeAnalyzerWorker();          // free blob URL (safe to call multiple times)
     this.ctx = null as any;
@@ -1590,37 +1580,6 @@ export class LyricDancePlayer {
     }
   };
 
-  private getHaloStamp(radius: number, isAnchor: boolean, chapterColor: string): HTMLCanvasElement {
-    const bucketedRadius = Math.ceil(radius / 8) * 8;
-    const key = `${bucketedRadius}-${isAnchor ? 1 : 0}-${chapterColor}`;
-
-    let stamp = this._haloStamps.get(key);
-    if (stamp) return stamp;
-
-    const size = bucketedRadius * 2;
-    stamp = document.createElement('canvas');
-    stamp.width = size;
-    stamp.height = size;
-    const ctx = stamp.getContext('2d')!;
-
-    const innerAlpha = isAnchor ? 0.72 : 0.45;
-    const innerColor = isAnchor
-      ? this.blendWithBlack(chapterColor, 0.85)
-      : '#000000';
-
-    const halo = ctx.createRadialGradient(bucketedRadius, bucketedRadius, 0, bucketedRadius, bucketedRadius, bucketedRadius);
-    halo.addColorStop(0, this.hexWithAlpha(innerColor, innerAlpha));
-    halo.addColorStop(0.6, this.hexWithAlpha(innerColor, innerAlpha * 0.6));
-    halo.addColorStop(1, this.hexWithAlpha(innerColor, 0));
-    ctx.fillStyle = halo;
-    ctx.beginPath();
-    ctx.arc(bucketedRadius, bucketedRadius, bucketedRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    this._haloStamps.set(key, stamp);
-    return stamp;
-  }
-
   private smoothAudioTime(rawTime: number): number {
     // On first call or after seek, snap immediately
     if (!this._timeInitialized || Math.abs(rawTime - this._lastRawTime) > 0.5) {
@@ -1643,37 +1602,6 @@ export class LyricDancePlayer {
     }
 
     return this._smoothedTime;
-  }
-
-  private drawWordHalo(
-    x: number,
-    y: number,
-    fontSize: number,
-    isAnchor: boolean,
-    chapterColor: string,
-    alpha: number
-  ): void {
-    if (alpha < 0.01) return;
-    const baseRadius = fontSize * (isAnchor ? 1.8 : 1.2);
-    const stamp = this.getHaloStamp(baseRadius, isAnchor, chapterColor);
-    const size = baseRadius * 2;
-    this.ctx.globalAlpha = alpha;
-    this.ctx.drawImage(stamp, x - baseRadius, y - baseRadius, size, size);
-    this.ctx.globalAlpha = 1;
-  }
-
-  private blendWithBlack(hex: string, blackAmount: number): string {
-    const clean = hex.replace('#', '');
-    if (clean.length !== 6) return '#000000';
-    const r = Math.round(parseInt(clean.slice(0, 2), 16) * (1 - blackAmount));
-    const g = Math.round(parseInt(clean.slice(2, 4), 16) * (1 - blackAmount));
-    const b = Math.round(parseInt(clean.slice(4, 6), 16) * (1 - blackAmount));
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-  }
-
-  private getTextColor(chunkColor: string): string {
-    // V3: colors come pre-resolved from the palette. Don't darken again.
-    return chunkColor;
   }
 
   private static readonly PALETTE_COLORS: Record<string, string[]> = {
@@ -1728,14 +1656,6 @@ export class LyricDancePlayer {
     return Math.max(0, sections.length - 1);
   }
 
-  private resolveChapterIndex(chapters: any[], currentTimeSec: number, totalDurationSec: number): number {
-    return this.resolveSectionIndex(chapters, currentTimeSec, totalDurationSec);
-  }
-
-  private resolveChapter(chapters: any[], currentTimeSec: number, totalDurationSec: number): any {
-    const idx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
-    return chapters[idx] ?? chapters[0];
-  }
   /** Return per-frame cached palette */
   private getResolvedPalette(): string[] {
     return this._framePalette ?? this._resolveCurrentPalette(this._frameSectionIdx);
@@ -1791,20 +1711,6 @@ export class LyricDancePlayer {
     return '"Montserrat", sans-serif';
   }
 
-  private getAtmosphere(): string {
-    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const chapters = (cd?.chapters as any[]) ?? [];
-    const currentTimeSec = this.audio?.currentTime ?? 0;
-    const totalDurationSec = this.audio?.duration || 1;
-    const chIdx = this.resolveChapterIndex(chapters, currentTimeSec, totalDurationSec);
-
-    // Chapter-level override
-    if (chIdx >= 0 && chapters[chIdx]?.atmosphere) {
-      return chapters[chIdx].atmosphere;
-    }
-    // Top-level default
-    return (cd?.atmosphere as string) ?? 'cinematic';
-  }
 
   private async preloadFonts(): Promise<void> {
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
@@ -1848,14 +1754,6 @@ export class LyricDancePlayer {
     }
   }
 
-  private hexWithAlpha(hex: string, alpha: number): string {
-    const clean = hex.replace('#', '');
-    if (clean.length !== 6) return `rgba(0,0,0,${alpha})`;
-    const r = parseInt(clean.slice(0, 2), 16);
-    const g = parseInt(clean.slice(2, 4), 16);
-    const b = parseInt(clean.slice(4, 6), 16);
-    return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
-  }
 
   /**
    * Computes a combined 2D affine matrix for:
@@ -2078,19 +1976,8 @@ export class LyricDancePlayer {
     this.currentTSec = tSec;
     this.frameCount++;
 
-    // Stall detection — log when audio time stops advancing
-    if (this._lastLoggedTSec === tSec && tSec > 0) {
-      this._stalledFrames = (this._stalledFrames ?? 0) + 1;
-      if (this._stalledFrames > 10) {
-        this._stalledFrames = 0;
-      }
-    } else {
-      this._stalledFrames = 0;
-    }
-    this._lastLoggedTSec = tSec;
-
     // Mood grade is computed inside drawChapterImage() which runs before text rendering.
-    // _activeMoodGrade and _currentSectionTone are set there.
+    // _activeMoodGrade is set by drawChapterImage (song-level grade).
 
     // ═══ V2: Use pre-computed frame (single evaluateFrame per tick) ═══
     const frame = precomputedFrame;
@@ -2187,7 +2074,6 @@ export class LyricDancePlayer {
     this.ctx.textBaseline = 'middle';
 
     let drawCalls = 0;
-    const palette = this.getBurstPalette(songProgress);
     const sortBuf = this._sortBuffer;
     sortBuf.length = 0;
     for (let i = 0; i < frame.chunks.length; i += 1) sortBuf.push(frame.chunks[i]);
@@ -2410,9 +2296,7 @@ export class LyricDancePlayer {
       const sy = Number.isFinite(syRaw) ? syRaw : 1;
 
       const isAnchor = chunk.isAnchor ?? false;
-      const haloPal = this.getResolvedPalette();
-      const chapterColor = haloPal[1];
-      this.drawWordHalo(centerX, finalDrawY, safeFontSize, isAnchor, chapterColor, chunk.alpha);
+      // ═══ SINGLE COLOR MODEL: no colored halos behind words ═══
 
       const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
       const iconScaleMult = chunk.iconScale ?? 2.0;
@@ -2424,7 +2308,7 @@ export class LyricDancePlayer {
       };
       const effectiveScale = positionScaleOverride[chunk.iconPosition ?? 'behind'] ?? iconScaleMult;
       const iconBaseSize = safeFontSize * effectiveScale;
-      const iconColor = chunk.color ?? chapterColor;
+      const iconColor = chunk.color ?? '#f0f0f0';
       const now = frameNowSec;
       let iconPulse = 1.0;
       if (chunk.iconPosition === 'behind') iconPulse = 1.0 + Math.sin(now * 1.5) * 0.08;
@@ -2457,17 +2341,18 @@ export class LyricDancePlayer {
       const justBecameFullyVisible = entry >= 1.0 && exit === 0 && visibleMs < 50;
       if (DECOMP_ENABLED && justBecameFullyVisible && (chunk.emphasisLevel ?? 0) >= 4) {
         const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
-        this.tryStartDecomposition({ chunkId: chunk.id, text, drawX: centerX, drawY, fontSize: safeFontSize, fontWeight, fontFamily: chunk.fontFamily, color: this.getTextColor(chunk.color ?? chapterColor), directive: decompDirective });
+        this.tryStartDecomposition({ chunkId: chunk.id, text, drawX: centerX, drawY, fontSize: safeFontSize, fontWeight, fontFamily: chunk.fontFamily, color: chunk.color ?? '#f0f0f0', directive: decompDirective });
       }
 
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
-        this.ctx.fillStyle = this.getTextColor(chunk.color ?? obj.color);
+        this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
         const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
         if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         if (chunk.glow > 0) {
-          this.ctx.shadowColor = chunk.color ?? '#ffffff';
-          this.ctx.shadowBlur = chunk.glow * 32;
+          // ═══ SINGLE COLOR MODEL: clean white bloom, not colored glow ═══
+          this.ctx.shadowColor = '#ffffff';
+          this.ctx.shadowBlur = chunk.glow * 24;
         }
 
         const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01;
@@ -2543,89 +2428,11 @@ export class LyricDancePlayer {
             letterX += letterWidth + baseSpacing;
           }
         } else {
-          // ── Hero words: bigger + visual directive. That's it. ──
-          const emphasis = chunk.emphasisLevel ?? 0;
-          const isHeroChunk = emphasis >= 3;
-
-          if (isHeroChunk) {
-            // Derive elemental class from the directive or from the word itself
-            let elementalClass: string | null = directive?.elementalClass ?? null;
-            if (!elementalClass) {
-              const lw = (text ?? '').toLowerCase().replace(/[^a-z]/g, '');
-
-              // ═══ Associative elemental mapping — poetic, not literal ═══
-
-              // FROST: cold, stillness, isolation, stopping, hardness
-              if (/cold|ice|icy|freez|frost|winter|snow|chill|numb|stop|still|silent|alone|steel|metal|seal|stone|hard|sharp|blade|glass|crystal|rigid|hollow|void/.test(lw)) elementalClass = 'FROST';
-
-              // FIRE: passion, intensity, anger, wealth, ambition, destruction
-              else if (/fire|burn|flame|blaz|heat|hot|inferno|ash|ember|money|cash|gold|rich|mil|billion|stack|bag|swear|oath|rage|fury|war|fight|kill|destroy|passion|hunger|desire|crave|grind|hustle|real/.test(lw)) elementalClass = 'FIRE';
-
-              // WATER: emotion, tears, flow, depth, feeling, time passing
-              else if (/rain|water|drown|ocean|sea|tear|cry|flood|wave|wet|feel|deep|sink|pour|flow|river|current|drift|swim|blood|vein|heart|soul|pain|hurt/.test(lw)) elementalClass = 'WATER';
-
-              // SMOKE: dreams, mystery, ethereal, memory, the unseen
-              else if (/smoke|fog|haze|mist|cloud|ghost|fade|vanish|shadow|dream|vision|imagine|memory|thought|mind|spirit|haunt|room|space|air|breath|whisper|secret|hide|lost|gone|past|time|year|same/.test(lw)) elementalClass = 'SMOKE';
-
-              // ELECTRIC: light, power, awakening, energy, triumph, revelation
-              else if (/electr|shock|spark|lightn|thunder|volt|power|energy|neon|glow|wake|rise|shine|light|bright|sun|dawn|star|flash|bolt|alive|new|born|create|build|king|crown|wield|certif|approv|fulfill|triumph|win|run|fast|speed|fly/.test(lw)) elementalClass = 'ELECTRIC';
-
-              // Fallback for emphasis 4+: give them SOMETHING based on mood
-              if (!elementalClass && emphasis >= 4) {
-                const mood = (this as any)._activeMoodGrade?.motionIntent as string | undefined;
-                if (mood === 'push-in' || mood === 'handheld') elementalClass = 'FIRE';
-                else if (mood === 'breathing' || mood === 'drift-up') elementalClass = 'SMOKE';
-                else elementalClass = 'ELECTRIC'; // default: light/power
-              }
-            }
-
-            if (elementalClass) {
-              // Word-local time: effects start at t=0 when word appears
-              const wordAgeSec = visibleMs / 1000;
-              const smoothBeat = Math.max(0, this._springOffset ?? 0);
-              const moodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
-              const moodInt = (this as any)._activeIntensity as number ?? 0.5;
-              const lightingMode: 'dark' | 'bright' = moodGrade ? getTextMode(moodGrade, moodInt) === 'dark' ? 'bright' : 'dark' : 'dark';
-
-              // ═══ Visible glow halo — guarantees you SEE the elemental class ═══
-              const glowColors: Record<string, string> = {
-                FIRE: '#ff4400',
-                FROST: '#44ccff',
-                WATER: '#2288ff',
-                SMOKE: '#8866cc',
-                ELECTRIC: '#ffee44',
-              };
-              const glowColor = glowColors[elementalClass] ?? '#ffffff';
-              // Glow ramps in over first 200ms, pulses during, fades with exit
-              const glowRampIn = Math.min(1, wordAgeSec / 0.2);
-              const glowExitFade = 1 - exit;
-              const glowPulse = 0.6 + 0.4 * Math.sin(wordAgeSec * 4);
-              const glowStrength = glowRampIn * glowExitFade;
-              this.ctx.save();
-              this.ctx.shadowColor = glowColor;
-              this.ctx.shadowBlur = (18 + 8 * glowPulse + smoothBeat * 12) * glowStrength;
-              this.ctx.shadowOffsetX = 0;
-              this.ctx.shadowOffsetY = 0;
-              this.ctx.globalAlpha = (0.7 + 0.3 * glowPulse) * glowStrength;
-              this.ctx.fillStyle = glowColor;
-              this.ctx.fillText(text, 0, 0);
-              this.ctx.restore();
-
-              drawElementalWord(
-                this.ctx, text, safeFontSize, textWidth, elementalClass,
-                wordAgeSec, smoothBeat, 1,
-                chunk.color ?? null,
-                { isHeroWord: true, effectQuality: 'high', wordX: 0, wordY: 0, canvasWidth: this.width, canvasHeight: this.height, lightingMode },
-              );
-            } else {
-              // Hero word without a matching element — just draw bigger (scale already applied upstream)
-              if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
-              this.ctx.fillText(text, 0, 0);
-            }
-          } else {
-            if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
-            this.ctx.fillText(text, 0, 0);
-          }
+          // ═══ SINGLE COLOR MODEL: all words draw the same way ═══
+          // Hero scale/motion is handled upstream in evaluateFrame.
+          // No elemental colors, no colored glows — just text.
+          if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
+          this.ctx.fillText(text, 0, 0);
         }
         if (needsFilterSaveRestore) {
           this.ctx.filter = 'none';
@@ -2841,7 +2648,6 @@ export class LyricDancePlayer {
     this.buildBgCache();
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
-    this._haloStamps.clear();
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();
@@ -3360,84 +3166,31 @@ export class LyricDancePlayer {
     const current = this.chapterImages[chapterIdx];
     const next = this.chapterImages[nextChapterIdx];
 
-    // ─── Mood-based cinematic grading ───
-    // Use cached section index — already resolved in tick()
-    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const sections = (cd?.sections as any[]) ?? [];
-    const currentTimeSec = this.audio?.currentTime ?? 0;
-    const totalDurationSec = this.audio?.duration || 1;
-    const secIdx = this._frameSectionIdx;
-    const currentVisualMood = secIdx >= 0 ? (sections[secIdx]?.visualMood as string) : undefined;
-    const currentGrade = getMoodGrade(currentVisualMood);
-
-    // Section transition: lerp grades over 1.5s at boundaries
-    let activeGrade = currentGrade;
-    if (secIdx >= 0 && secIdx + 1 < sections.length) {
-      const sec = sections[secIdx];
-      const secEnd = sec.endSec ?? (sec.endRatio != null ? sec.endRatio * totalDurationSec : null);
-      if (secEnd != null) {
-        const transitionDur = 1.5;
-        const timeToEnd = secEnd - currentTimeSec;
-        if (timeToEnd < transitionDur && timeToEnd > 0) {
-          const t = 1 - (timeToEnd / transitionDur); // 0 at start of transition → 1 at boundary
-          const nextMood = sections[secIdx + 1]?.visualMood as string | undefined;
-          const nextGrade = getMoodGrade(nextMood);
-          activeGrade = lerpGrade(currentGrade, nextGrade, t);
-        }
-      }
+    // ═══ SONG-LEVEL GRADE: one look for the entire song ═══
+    // Computed once from the dominant mood, then locked in.
+    if (!this._songGrade) {
+      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+      const sections = (cd?.sections as any[]) ?? [];
+      // Use the first section's mood as the song's vibe, or fall back to default
+      const dominantMood = sections[0]?.visualMood as string | undefined;
+      this._songGrade = getMoodGrade(dominantMood);
     }
+    const activeGrade = this._songGrade;
 
-    // ═══ V2: Scene Tone → Light/Dark per section ═══
-    // sceneTone drives whether this section renders bright or dark.
-    // "light" sections get boosted brightness so background image is luminous
-    // and text contrast enforcement will automatically flip text to dark.
-    const sceneTone = (cd?.sceneTone as string) ?? 'dark';
-    const sectionTones = getSectionTones(sceneTone, Math.max(1, sections.length));
-    const currentTone = secIdx >= 0 ? (sectionTones[secIdx] ?? 'dark') : 'dark';
-    if (currentTone === 'light') {
-      // Boost brightness for light scenes — image becomes luminous
-      // Also desaturate slightly and reduce contrast for airy feel
-      activeGrade = {
-        ...activeGrade,
-        brightness: Math.max(activeGrade.brightness, 0.75),
-        saturation: Math.min(activeGrade.saturation, 1.0),
-        contrast: Math.min(activeGrade.contrast, 1.1),
-      };
-    }
-    // Store for text color decisions elsewhere
-    this._currentSectionTone = currentTone;
+    // Emotional intensity: use a fixed mid-level — no per-section variation
+    const intensity = 0.5;
 
-    // Emotional intensity from cached section
-    const chapters = this.resolvedState.chapters ?? [];
-    const currentChapterObj = secIdx >= 0 ? chapters[secIdx] : chapters[0];
-    const intensity = (currentChapterObj as any)?.emotionalIntensity ?? 0.5;
-
-    // Beat response
+    // Beat response — subtle brightness pulse on beats
     const beatMod = Math.max(0, this._springOffset);
 
-    // Blur: rack focus + proximity-driven depth of field
-    // Closer camera → shallower DOF → more backdrop blur (like real cinematography)
+    // Blur: gentle fixed backdrop blur for text readability + proximity DOF
     const cameraProximity = this.cameraRig.getProximity();
-    const proximityBlurBoost = cameraProximity * 2.0; // 0px at wide, up to 2px at ECU
+    const proximityBlurBoost = cameraProximity * 2.0;
+    const targetBlur = activeGrade.blur.radius + proximityBlurBoost;
+    this._bgBlurCurrent += (targetBlur - this._bgBlurCurrent) * 0.08;
+    const blurOverride = Math.round(this._bgBlurCurrent * 10) / 10;
 
-    let blurOverride: number | undefined;
-    if (activeGrade.blur.rackFocus) {
-      const isVocalActive = this._lastVocalProgress != null && this._lastVocalProgress > 0.02 && this._lastVocalProgress < 0.98;
-      const targetBlur = (isVocalActive ? 0 : activeGrade.blur.radius) + proximityBlurBoost;
-      this._bgBlurCurrent += (targetBlur - this._bgBlurCurrent) * 0.08;
-      blurOverride = Math.round(this._bgBlurCurrent * 10) / 10;
-    } else if (activeGrade.blur.type !== 'none') {
-      const targetBlur = activeGrade.blur.radius + proximityBlurBoost;
-      this._bgBlurCurrent += (targetBlur - this._bgBlurCurrent) * 0.05;
-      blurOverride = Math.round(this._bgBlurCurrent * 10) / 10;
-    } else {
-      // Even with no mood blur, proximity still adds DOF
-      const targetBlur = proximityBlurBoost;
-      this._bgBlurCurrent += (targetBlur - this._bgBlurCurrent) * 0.1;
-      blurOverride = this._bgBlurCurrent > 0.2 ? Math.round(this._bgBlurCurrent * 10) / 10 : 0;
-    }
-
-    // Build the CSS filter string from grade
+    // Build the CSS filter string — same for every frame
     const filterStr = buildGradeFilter(activeGrade, intensity, beatMod, blurOverride || undefined);
 
     if (current?.complete && current.naturalWidth > 0) {
@@ -3445,15 +3198,13 @@ export class LyricDancePlayer {
       this.ctx.filter = filterStr;
 
       // ═══ OVERSCAN: draw image 20% larger than canvas to prevent border visibility
-      // during CameraRig pan/sway/shake + Ken Burns motion. The canvas clips automatically.
       const OVERSCAN = 1.20;
       const ow = this.width * OVERSCAN;
       const oh = this.height * OVERSCAN;
-      const ox = (this.width - ow) / 2;   // negative offset — extends beyond canvas edges
+      const ox = (this.width - ow) / 2;
       const oy = (this.height - oh) / 2;
 
       // Ken Burns: slow zoom + pan over chapter duration
-      // Beat-driven zoom pulse is handled by CameraRig.applyTransform('far') — don't double-apply
       const kb = this._kenBurnsParams[chapterIdx];
       const chapterCount = this.chapterImages.length || 1;
       const audioDur = this.audio?.duration || 1;
@@ -3484,7 +3235,6 @@ export class LyricDancePlayer {
       this.ctx.globalAlpha = blend;
       this.ctx.filter = filterStr;
 
-      // Same overscan as primary image
       const OVERSCAN_NEXT = 1.20;
       const onw = this.width * OVERSCAN_NEXT;
       const onh = this.height * OVERSCAN_NEXT;
@@ -3509,20 +3259,16 @@ export class LyricDancePlayer {
         this.ctx.drawImage(next, onx, ony, onw, onh);
       }
 
-      this.ctx.restore(); // restore filter + alpha
+      this.ctx.restore();
     }
 
-    // ─── Vignette REMOVED — use brightness() filter for edge darkening, not a black overlay ───
-    // Vignette was drawing rgba(0,0,0) on top of the already-graded image,
-    // fighting the direct brightness/saturation/contrast pipeline.
-
-    // ─── Film grain from mood grade (capped at 0.15 for image clarity) ───
+    // ─── Film grain: consistent level from song grade ───
     const grainIntensity = Math.min(0.15, activeGrade.grain.intensity);
     if (grainIntensity > 0.02) {
       this.renderFilmGrain(grainIntensity, activeGrade.grain.size);
     }
 
-    // Store active grade for text color decisions
+    // Store for _textBandBrightness sampling
     (this as any)._activeMoodGrade = activeGrade;
     (this as any)._activeIntensity = intensity;
   }
@@ -3581,7 +3327,6 @@ export class LyricDancePlayer {
       const count = Math.max(1, chapters.length);
       this.bgCaches = [];
       this.chapterParticleSystems = [];
-      this._haloStamps.clear();
 
       for (let ci = 0; ci < count; ci++) {
         const chapter = chapters[ci] as any;
@@ -3664,11 +3409,6 @@ export class LyricDancePlayer {
       // Use cached section index — already resolved in tick()
       const chapterIdx = this._frameSectionIdx >= 0 ? Math.min(this._frameSectionIdx, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
-
-      if (ci !== this._lastSimChapterIdx) {
-        this._lastSimChapterIdx = ci;
-      }
-
       const chapter = chapters[ci] ?? {};
 
       // ═══ V2: Beat-driven sim intensity (no climax curve) ═══
@@ -3704,21 +3444,8 @@ export class LyricDancePlayer {
     }
   }
 
-  private getBurstPalette(songProgress: number): { accent: string; glow: string; particle: string } {
-    const palette = this.getResolvedPalette();
-    return {
-      accent: palette[1] ?? '#FFD700',
-      glow: palette[3] ?? '#ffffff',
-      particle: palette[2] ?? '#ffffff',
-    };
-  }
 
-
-  private _evalFrameLogged = false;
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
-    if (!this._evalFrameLogged) {
-      this._evalFrameLogged = true;
-    }
     const scene = this.compiledScene;
     if (!scene) return null;
 
@@ -3738,12 +3465,8 @@ export class LyricDancePlayer {
 
     if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {
       this._lastBeatIndex = beatIndex;
-      this._glowRemainMs = 217;  // ~13 frames @60fps = 217ms
       this._springVelocity = beats[beatIndex]?.springVelocity ?? 0;
     }
-    // Time-based glow decay (frame-rate independent)
-    this._glowRemainMs = Math.max(0, this._glowRemainMs - this._frameDt * 16.67);
-    const glow = Math.pow(Math.min(1, this._glowRemainMs / 217), 0.6);
 
     // dt-compensated spring (identical feel at 30/60/120 fps)
     const dt = this._frameDt;
@@ -3751,25 +3474,11 @@ export class LyricDancePlayer {
     this._springVelocity *= Math.pow(0.82, dt);
     this._springOffset *= Math.pow(0.88, dt);
 
-    let currentChapterIdx = 0;
-    for (let i = 0; i < scene.chapters.length; i++) {
-      if (songProgress >= scene.chapters[i].startRatio && songProgress < scene.chapters[i].endRatio) {
-        currentChapterIdx = i;
-        break;
-      }
-    }
-    const chapter = scene.chapters[currentChapterIdx] ?? scene.chapters[0];
-    const targetZoom = chapter?.targetZoom ?? 1.0;
-    const zoomLerp = 1 - Math.pow(1 - 0.06, dt); // dt-compensated (identical at 30/60/120fps)
-    this._currentZoom += (targetZoom - this._currentZoom) * zoomLerp;
-    // CameraRig now owns text zoom (proximity + breathing + punchZoom).
-    // The old effectiveZoom is neutralized to 1.0 — springOffset is kept only
-    // for glow/beatMod calculations elsewhere, NOT for zoom.
+    // CameraRig owns text zoom — effectiveZoom neutralized to 1.0
     const effectiveZoom = 1.0;
 
     const arcFn = this._getArcFunction(scene.emotionalArc);
     const intensity = Math.max(0, Math.min(1, arcFn(songProgress)));
-    const intensityGlowMult = 0.5 + intensity * 1.0;
     const intensityScaleMult = 0.95 + intensity * 0.1;
 
     let driftX = Math.sin(tSec * 0.15) * 8 * sx;
@@ -3814,51 +3523,70 @@ export class LyricDancePlayer {
     }
     if (primaryLineIndex === -1) primaryLineIndex = _roleLines.length - 1;
 
-    // Track vocal progress for rack focus blur
-    if (primaryLineIndex >= 0) {
-      const lineData = _roleLines[primaryLineIndex];
-      const lineStart = lineData?.start ?? 0;
-      const lineEnd = lineData?.end ?? 0;
-      const lineDur = Math.max(0.01, lineEnd - lineStart);
-      const vp = (tSec - lineStart) / lineDur;
-      this._lastVocalProgress = Math.max(0, Math.min(1, vp));
-    } else {
-      this._lastVocalProgress = null;
-    }
+    // prevLineIndex/nextLineIndex removed — active chunk only model
 
-    const prevLineIndex = primaryLineIndex > 0 ? primaryLineIndex - 1 : -1;
-    const nextLineIndex = primaryLineIndex + 1 < _roleLines.length ? primaryLineIndex + 1 : -1;
-
-    // Show only temporally active groups — don't force all groups from the same line.
-    // Long lines (e.g. repeated chorus) have many groups; showing all at once overflows.
-    // Keep: groups whose time window overlaps tSec (with entry/exit padding).
-    if (primaryLineIndex >= 0) {
-      let writeIdx = 0;
+    // ═══ ACTIVE CHUNK ONLY: find THE single group being spoken right now ═══
+    // No previous groups. No upcoming groups. One chunk, dead center.
+    let activeGroupIdx = -1;
+    {
+      // Pass 1: find the group whose time range contains tSec
       for (let ri = 0; ri < activeGroups.length; ri++) {
         const g = groups[activeGroups[ri]];
-        if (g.lineIndex === primaryLineIndex) {
-          const entryPad = g.words.length * (g.staggerDelay ?? 0.05) + 0.3;
-          const exitPad = g.lingerDuration + 0.5;
-          if (tSec >= g.start - entryPad && tSec <= g.end + exitPad) {
-            activeGroups[writeIdx++] = activeGroups[ri];
-          }
-        } else {
-          // Non-primary-line groups pass through (prev/next lines)
-          activeGroups[writeIdx++] = activeGroups[ri];
+        if (g.lineIndex !== primaryLineIndex) continue;
+        // Active = voice is within this group's lifespan
+        if (tSec >= g.start && tSec < g.end + g.lingerDuration) {
+          activeGroupIdx = activeGroups[ri];
+          break;
         }
       }
-      activeGroups.length = writeIdx;
+      // Pass 2: if between groups, find the one we're entering (entry animation visible)
+      if (activeGroupIdx === -1) {
+        for (let ri = 0; ri < activeGroups.length; ri++) {
+          const g = groups[activeGroups[ri]];
+          if (g.lineIndex !== primaryLineIndex) continue;
+          const entryPad = g.words.length * (g.staggerDelay ?? 0.05) + 0.2;
+          if (tSec >= g.start - entryPad && tSec < g.start) {
+            activeGroupIdx = activeGroups[ri];
+            break;
+          }
+        }
+      }
+      // Pass 3: if still nothing, find closest exiting group (exit animation visible)
+      if (activeGroupIdx === -1) {
+        for (let ri = 0; ri < activeGroups.length; ri++) {
+          const g = groups[activeGroups[ri]];
+          if (g.lineIndex !== primaryLineIndex) continue;
+          const exitEnd = g.end + g.lingerDuration + g.exitDuration;
+          if (tSec >= g.end && tSec < exitEnd) {
+            activeGroupIdx = activeGroups[ri];
+            break;
+          }
+        }
+      }
     }
-    // Re-sort so groups render in temporal order
-    activeGroups.sort((a: number, b: number) => groups[a].start - groups[b].start);
+    // Replace activeGroups with just the one active group
+    if (activeGroupIdx >= 0) {
+      activeGroups.length = 1;
+      activeGroups[0] = activeGroupIdx;
+    } else {
+      activeGroups.length = 0;
+    }
 
-    // Smooth line transitions (250ms ease-out)
-    if (primaryLineIndex !== this._prevPrimaryLineIndex) {
-      this._lineTransitionStartSec = tSec;
-      this._prevPrimaryLineIndex = primaryLineIndex;
+    // Compute centering offset for the active group:
+    // shift its words so the group center lands at (480, 270) in compile space
+    let groupCenterOffsetX = 0;
+    if (activeGroupIdx >= 0) {
+      const g = groups[activeGroupIdx];
+      let minX = Infinity, maxX = -Infinity;
+      for (const w of g.words) {
+        minX = Math.min(minX, w.layoutX);
+        maxX = Math.max(maxX, w.layoutX);
+      }
+      const groupCenterX = (minX + maxX) / 2;
+      groupCenterOffsetX = 480 - groupCenterX; // shift to horizontal center
     }
-    const _lineTransElapsed = Math.min(1, (tSec - this._lineTransitionStartSec) / 0.25);
-    const lineTransEase = _lineTransElapsed * (2 - _lineTransElapsed); // ease-out quad
+
+    // Line transition easing removed — active chunk always at center
 
     const chunks = this._evalChunkPool;
     let ci = 0;
@@ -3871,23 +3599,22 @@ export class LyricDancePlayer {
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
       const groupEnd = Math.min(group.end + group.lingerDuration, nextGroupStart);
 
-      const lineRole = group.lineIndex === primaryLineIndex ? 'current'
-        : group.lineIndex === prevLineIndex ? 'previous'
-        : group.lineIndex === nextLineIndex ? 'next'
-        : 'offscreen';
+      // ═══ ACTIVE CHUNK ONLY: non-current groups are already filtered out above ═══
+      const lineRole = group.lineIndex === primaryLineIndex ? 'current' : 'offscreen';
 
-      // Pre-scan: is any hero word in this group currently active (fully entered, not exiting)?
-      let groupHasActiveHero = false;
+      // Pre-scan: is any SOLO hero word (≥500ms duration, emphasis ≥4) currently active?
+      let groupHasActiveSoloHero = false;
       if (lineRole === 'current') {
         for (let hwi = 0; hwi < group.words.length; hwi++) {
           const hw = group.words[hwi];
           if (!hw.isHeroWord) continue;
+          // Solo treatment only for words with ≥500ms duration
+          if ((hw.wordDuration ?? 0) < 0.5) continue;
           const hwStagger = hwi === group.anchorWordIdx ? 0 : Math.abs(hwi - group.anchorWordIdx) * group.staggerDelay;
           const hwStart = group.start + hwStagger;
           const hwEnd = group.end + group.lingerDuration;
-          // Hero is "active" from shortly after entry until it starts exiting
           if (tSec >= hwStart + 0.08 && tSec < hwEnd) {
-            groupHasActiveHero = true;
+            groupHasActiveSoloHero = true;
             break;
           }
         }
@@ -3932,24 +3659,9 @@ export class LyricDancePlayer {
         const isEntryComplete = entryProgress >= 1.0;
         const isExiting = exitProgress > 0;
 
-        // ─── Line role Y positioning ───
-        // Compiler sets all words at canvasH * 0.50 (Y=270 in 960x540 space).
-        // Override Y based on which line role this group belongs to.
+        // ═══ ACTIVE CHUNK ONLY: always dead center, full brightness ═══
+        const roleY = 270; // center of 540px compile space
 
-        // Target Y positions in compile coordinate space (540px canvas height)
-        let targetLineY: number;
-        switch (lineRole) {
-          case 'current': targetLineY = 270; break; // center
-          case 'previous': targetLineY = 150; break; // above center
-          case 'next': targetLineY = 390; break; // below center
-          default: targetLineY = word.layoutY; break;
-        }
-
-        // Smooth transition when lines shift roles
-        const baseLineY = word.layoutY; // compiled Y (270 for all)
-        const roleY = baseLineY + (targetLineY - 270) * lineTransEase;
-
-        // ─── Alpha: line role + vocal tracking ───
         // Base animation alpha (entry/exit/behavior)
         const animAlpha = isExiting
           ? Math.max(0, exitState.alpha)
@@ -3957,81 +3669,59 @@ export class LyricDancePlayer {
             ? 1.0 * (behaviorState.alpha ?? 1)
             : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
 
-        // ═══ V2: Previous/next lines VISIBLE — creates depth ═══
-        // Previous: drifting up, fading out
-        // Current: full brightness, beat-reactive
-        // Next: teasing below, barely visible
-        let roleAlpha: number;
+        // No previous/next/offscreen. No vocal wave alpha modulation.
+        // Active chunk words are at full brightness. Period.
+        let roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
         let roleScale = 1.0;
-        switch (lineRole) {
-          case 'current': roleAlpha = 1.0; roleScale = 1.0; break;
-          case 'previous': roleAlpha = 0.20; roleScale = 0.92; break;
-          case 'next': roleAlpha = 0.12; roleScale = 0.95; break;
-          default: roleAlpha = 0.0; roleScale = 1.0; break;
-        }
 
-        // ─── Vocal wave: continuous brightness flowing through the line ───
-        let waveProximity = 0; // 0-1, how close the wave peak is to this word
+        // Wave proximity still tracked for emphasis glow, but NOT for alpha
+        let waveProximity = 0;
         if (lineRole === 'current' && isEntryComplete && !isExiting) {
           const lineData = _roleLines[primaryLineIndex];
           const lineStart = lineData?.start ?? group.start;
           const lineEnd = lineData?.end ?? group.end;
           const lineDuration = Math.max(0.01, lineEnd - lineStart);
-
-          // Vocal position: where the voice is in the line (0 to 1)
           const vocalProgress = Math.max(0, Math.min(1, (tSec - lineStart) / lineDuration));
-
-          // Word position: where this word sits in the line (0 to 1)
           const wordTime = group.start + staggerDelay;
           const wordPosition = Math.max(0, Math.min(1, (wordTime - lineStart) / lineDuration));
-
-          // Distance between voice and word (positive = voice has passed)
           const distance = vocalProgress - wordPosition;
-
-          // Wave width: hero words have wider brightness zone
-          const isHero = word.isHeroWord === true;
-          const waveWidth = isHero ? 0.25 : 0.15;
-
-          // Gaussian brightness curve
-          const gaussian = Math.exp(-(distance * distance) / (2 * waveWidth * waveWidth));
-          waveProximity = gaussian;
-
-          const peakAlpha = 1.0;
-          const unsungFloor = 0.35;
-          const sungFloor = 0.65;
-
-          if (distance < -0.02) {
-            // Voice hasn't reached this word yet — subtle anticipation glow
-            const anticipationGlow = Math.exp(-(distance * distance) / (2 * (waveWidth * 1.5) * (waveWidth * 1.5)));
-            roleAlpha = unsungFloor + (peakAlpha - unsungFloor) * anticipationGlow * 0.3;
-          } else if (distance > waveWidth * 2.5) {
-            // Wave fully passed — settle to sung brightness
-            roleAlpha = sungFloor;
-          } else {
-            // In the wave — smooth brightness
-            const floor = distance > 0 ? sungFloor : unsungFloor;
-            roleAlpha = floor + (peakAlpha - floor) * gaussian;
-          }
+          const empLevel = word.emphasisLevel ?? 0;
+          const waveWidth = 0.12 + Math.min(empLevel, 5) * 0.026;
+          waveProximity = Math.exp(-(distance * distance) / (2 * waveWidth * waveWidth));
         }
 
         let finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
-        // ─── Hero word: solo center when active ───
+        // ─── NEW HERO MODEL: duration-gated solo OR emphasis-based inline ───
         const isHeroWord = word.isHeroWord === true;
+        const heroDuration = word.wordDuration ?? 0;
+        const isSoloHero = isHeroWord && heroDuration >= 0.5; // ≥500ms = solo center
         let heroScaleMult = 1.0;
         let heroOffsetX = 0;
         let heroOffsetY = 0;
 
-        if (isHeroWord && lineRole === 'current' && groupHasActiveHero) {
-          // Place at screen center, scaled up
-          heroOffsetX = 480 - word.layoutX;
+        // SOLO hero: ≥500ms, alone center screen
+        if (isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
+          heroOffsetX = 480 - word.layoutX - groupCenterOffsetX; // center, undoing group shift
           heroOffsetY = 270 - roleY;
-          heroScaleMult = 1.25;
+          heroScaleMult = 1.5;
         }
 
-        // Non-hero words: hidden while a hero in this group is active
-        if (!isHeroWord && lineRole === 'current' && groupHasActiveHero) {
+        // Non-hero words: hidden while a SOLO hero is active
+        if (!isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
           roleAlpha = 0;
+        }
+
+        // ═══ EMPHASIS-BASED INLINE SCALING ═══
+        // Every word gets scale + weight based on emphasis level.
+        // emp 0 = baseline, emp 1 = +25%, emp 2 = +50%, ... emp 5 = +125%
+        const emp = word.emphasisLevel ?? 0;
+        const emphasisScale = 1.0 + emp * 0.25;
+        const emphasisWeight = Math.min(900, (word.fontWeight ?? 400) + emp * 100);
+
+        // Apply emphasis to inline words (solo heroes get heroScaleMult instead)
+        if (!isSoloHero || !groupHasActiveSoloHero) {
+          heroScaleMult = emphasisScale;
         }
 
         finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
@@ -4048,8 +3738,8 @@ export class LyricDancePlayer {
         const wordSpan = charW * lt;
         const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
 
-        // Micro cam push — skip for hero words (handled by solo-center)
-        if (!isHeroWord) {
+        // Micro cam push — skip for SOLO hero words (they're center-screen)
+        if (!(isSoloHero && groupHasActiveSoloHero)) {
           const isHeroBeatHit = isExactHeroTokenMatch(word.text, resolvedLine?.heroWord ?? '') && beatPulse > 0.35;
           if (isHeroBeatHit) {
             const push = resolvedWord?.microCamPush ?? 0.04;
@@ -4059,19 +3749,14 @@ export class LyricDancePlayer {
           }
         }
 
-        const glowGain = resolvedWord?.glowGain ?? 0;
-        let wordGlow = ((isAnchor ? glow * (1 + finalGlowMult) * (word.isFiller ? 0.5 : 1.0) : glow * 0.3) * word.semanticGlowMult * intensityGlowMult)
-          + beatPulse * glowGain;
-
-        // Wave glow: all words near vocal position get subtle halo
-        if (lineRole === 'current' && isEntryComplete && !isExiting) {
-          wordGlow += 0.3 * waveProximity;
-        }
-
-        // Hero glow follows the wave
-        if (isHeroWord && heroScaleMult > 1.02) {
-          wordGlow += 0.4 * (heroScaleMult - 1.0);
-          wordGlow += 0.4 * waveProximity; // solo-center glow
+        // ═══ SIMPLIFIED GLOW: spoken words glow, solo hero words glow stronger ═══
+        let wordGlow = 0;
+        if (isAnchor && lineRole === 'current') {
+          // Currently spoken word — clean bright glow
+          wordGlow = 0.6 + beatPulse * 0.3;
+        } else if (isSoloHero && groupHasActiveSoloHero && lineRole === 'current') {
+          // Solo hero during its center-screen moment
+          wordGlow = 0.7;
         }
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
@@ -4079,14 +3764,13 @@ export class LyricDancePlayer {
         chunk.id = word.id;
         chunk.text = word.text;
 
-        // Wave-driven scale: gentle breathe for ALL words as vocal passes
-        // Hero words get heroScaleMult (larger); normal words get a subtle lift
+        // Wave-driven scale: gentle breathe for inline words as vocal passes
         let waveScale = 1.0;
-        if (!isHeroWord && lineRole === 'current' && waveProximity > 0.01) {
-          waveScale = 1.0 + waveProximity * 0.06; // 6% max at peak — subtle but visible
+        if (!(isSoloHero && groupHasActiveSoloHero) && lineRole === 'current' && waveProximity > 0.01) {
+          waveScale = 1.0 + waveProximity * 0.06;
         }
 
-        chunk.x = (word.layoutX + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
+        chunk.x = (word.layoutX + groupCenterOffsetX + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
         chunk.y = (roleY + finalOffsetY + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
@@ -4094,90 +3778,16 @@ export class LyricDancePlayer {
         chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale;
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
-        chunk.fontWeight = word.fontWeight;
+        chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
         chunk.color = word.color;
-        // Runtime palette override: use chapter-resolved colors so words
-        // shift color as chapters change (auto_palettes may arrive after compile)
-        if (!word.hasSemanticColor) {
-          const runtimePal = this.getResolvedPalette();
-          // Use ACTUAL sampled brightness from center band where text renders
-          const textMode: 'light' | 'dark' = this._textBandBrightness > 0.55 ? 'dark' : 'light';
-
-          if (textMode === 'dark') {
-            // Bright background — use dark text colors
-            if (isHeroWord) {
-              chunk.color = '#1a1a2e'; // deep navy for hero
-            } else if ((word.emphasisLevel ?? 1) >= 3) {
-              chunk.color = '#2d1b4e'; // deep purple for emphasis
-            } else if (word.isFiller) {
-              chunk.color = 'rgba(0,0,0,0.35)'; // subtle dark for filler
-            } else {
-              chunk.color = '#1e1e1e'; // dark charcoal for normal
-            }
-          } else {
-            // Dark background — ALL text must be light, period.
-            // Palette colors come from the image and may be too dark.
-            const ensureLight = (hex: string | undefined, floor: number): string => {
-              if (!hex) return '#ffffff';
-              const b = perceivedBrightness(hex);
-              return b < floor ? mixTowardWhite(hex, Math.max(0.4, floor - b + 0.3)) : hex;
-            };
-
-            if (isHeroWord) {
-              chunk.color = ensureLight(runtimePal?.[1], 0.55); // accent — vivid but readable
-            } else if ((word.emphasisLevel ?? 1) >= 3) {
-              chunk.color = ensureLight(runtimePal?.[3], 0.50); // glow
-            } else if (word.isFiller) {
-              chunk.color = ensureLight(runtimePal?.[4] ?? runtimePal?.[2], 0.35); // dim but visible
-            } else {
-              chunk.color = ensureLight(runtimePal?.[2], 0.55); // normal text — must be readable
-            }
-          }
-        }
-
-        // ── Final contrast enforcement — uses actual center band brightness ──
-        const bgIsLikelyLight = this._textBandBrightness > 0.55;
-        const bgIsLikelyDark = !bgIsLikelyLight;
-
-        if (chunk.color && typeof chunk.color === 'string') {
-          if (chunk.color.startsWith('rgba')) {
-            if (bgIsLikelyDark && chunk.color.includes('0,0,0')) {
-              chunk.color = word.isFiller ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.85)';
-            } else if (bgIsLikelyLight && chunk.color.includes('255,255,255')) {
-              chunk.color = word.isFiller ? 'rgba(30,30,30,0.25)' : 'rgba(30,30,30,0.80)';
-            }
-          } else {
-            const textBright = perceivedBrightness(chunk.color);
-            if (bgIsLikelyDark && textBright < 0.50) {
-              // Push dark text toward white for readability on dark bg
-              chunk.color = mixTowardWhite(chunk.color, Math.max(0.55, 0.85 - textBright));
-            } else if (bgIsLikelyLight && textBright > 0.65) {
-              // Push bright text toward dark for readability on light bg
-              chunk.color = '#1a1a1a';
-            }
-          }
-        }
-        // Guarantee: add text stroke for contrast (renderer uses this)
-        (chunk as any).textStroke = bgIsLikelyDark
-          ? 'rgba(0,0,0,0.4)'     // dark bg → subtle dark stroke for crispness
-          : 'rgba(0,0,0,0.55)';   // light bg → stronger dark stroke to pop text
-
-        // ═══ Active word (anchor) always gets a distinct accent color ═══
-        // The currently-spoken word must visually pop from its siblings.
-        if (isAnchor && lineRole === 'current' && !word.hasSemanticColor) {
-          const runtimePal = this.getResolvedPalette();
-          const accentHex = runtimePal?.[1] ?? '#ffffff'; // palette accent
-          if (bgIsLikelyDark) {
-            // Dark bg: use bright accent, ensure it's light enough
-            const ab = perceivedBrightness(accentHex);
-            chunk.color = ab < 0.55 ? mixTowardWhite(accentHex, 0.5) : accentHex;
-          } else {
-            // Light bg: darken the accent for readability but keep the hue
-            const ab = perceivedBrightness(accentHex);
-            chunk.color = ab > 0.60 ? '#1a1a2e' : accentHex;
-          }
+        // ═══ SINGLE COLOR MODEL: one color for all words, contrast against background ═══
+        // No tiers, no semantic overrides, no palette juggling.
+        // Light text on dark backgrounds, dark text on light backgrounds.
+        {
+          const bgIsLight = this._textBandBrightness > 0.55;
+          chunk.color = bgIsLight ? '#1a1a2e' : '#f0f0f0';
         }
         chunk.glow = wordGlow;
         chunk.entryStyle = usedEntry;
@@ -4443,7 +4053,7 @@ export class LyricDancePlayer {
     return text.replace(/[^a-zA-Z'']/g, '').toLowerCase();
   }
 
-  // ═══ Hero schedule: pre-computed from word timing + emphasis data ═══
+  // ═══ Hero schedule: pre-computed for SOLO heroes (≥500ms, emphasis ≥4) ═══
 
   private _buildHeroSchedule(): void {
     const words = this.data.words ?? [];
@@ -4456,7 +4066,9 @@ export class LyricDancePlayer {
       const resolved = ws[clean];
       const directive = wdm[clean];
       const emphasis = resolved?.emphasisLevel ?? directive?.emphasisLevel ?? 0;
-      if (emphasis >= 5) {
+      const duration = w.end - w.start;
+      // Only solo-eligible heroes drive camera lookahead
+      if (emphasis >= 4 && duration >= 0.5) {
         schedule.push({
           startSec: w.start,
           endSec: w.end,
