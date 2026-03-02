@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bakeScene, type ScenePayload } from '@/lib/lyricSceneBaker';
-import { compileScene } from '@/lib/sceneCompiler';
+import { compileScene, type ScenePayload } from '@/lib/sceneCompiler';
 
 class FakeOffscreenCanvas {
   width: number;
