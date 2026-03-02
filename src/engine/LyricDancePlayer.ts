@@ -943,6 +943,10 @@ export class LyricDancePlayer {
   private ambientParticleEngine: ParticleEngine | null = null;
   private activeSectionIndex = -1;
   private _activeRigName: string = 'verse';
+
+  // ═══ Pre-computed hero word schedule for camera lookahead ═══
+  private _heroSchedule: Array<{ startSec: number; endSec: number; emphasis: number; word: string }> = [];
+  private _heroLookaheadMs = 400; // anticipate hero words 400ms before they appear
   private activeSectionTexture = 'dust';
   private activeTension: any = null;
   private lastExitProgressByChunk = new Map<string, number>();
@@ -1531,63 +1535,27 @@ export class LyricDancePlayer {
       // ═══ V2: Single evaluateFrame call ═══
       const frame = this.evaluateFrame(smoothedTime);
 
-      // ═══ V2: Update CameraRig with SubjectFocus — camera films the WORDS ═══
-      if (frame && frame.chunks) {
-        // Build SubjectFocus from current frame state
-        let anchorX = 0, anchorY = 0, anchorCount = 0;
-        let heroActive = false;
-        let maxEmphasis = 0;
-        let vocalActive = false;
+      // ═══ V2: Update CameraRig with LOOKAHEAD — anticipate hero words ═══
+      // Instead of reacting to visible chunks (too late), we pre-scan
+      // the hero schedule 400ms ahead and start pushing in before the word lands.
+      {
+        const vocalActive = frame ? frame.chunks.some((c: any) => c.visible && c.alpha > 0.3) : false;
+        const upcoming = this._getUpcomingHero(smoothedTime);
 
-        let heroX = 0, heroY = 0, heroCount = 0;
-
-        for (let i = 0; i < frame.chunks.length; i++) {
-          const c = frame.chunks[i];
-          if (!c.visible) continue;
-          if (c.alpha > 0.3) vocalActive = true;
-          if (c.alpha > 0.5) {
-            anchorX += c.x;
-            anchorY += c.y;
-            anchorCount++;
-            // Hero = emphasis level 3+ (actual semantic hero words, NOT layout anchor)
-            const emph = (c as any).emphasisLevel ?? 0;
-            if (emph >= 3) {
-              heroActive = true;
-              heroX += c.x;
-              heroY += c.y;
-              heroCount++;
-            }
-            if (emph > maxEmphasis) maxEmphasis = emph;
-          }
-        }
-
-        // Detect climax from section type (drop/chorus in latter half = climax)
+        // Detect climax from section type
         const songProg = (smoothedTime - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
         const isHighIntensitySection = this._activeRigName === 'drop' || this._activeRigName === 'chorus';
         const isClimax = isHighIntensitySection && songProg > 0.50;
 
-        if (anchorCount > 0) {
-          // When hero is active, focus on the hero word; otherwise average of visible words
-          const focusX = heroCount > 0 ? heroX / heroCount : anchorX / anchorCount;
-          const focusY = heroCount > 0 ? heroY / heroCount : anchorY / anchorCount;
-          const focus: SubjectFocus = {
-            x: focusX,
-            y: focusY,
-            heroActive,
-            emphasisLevel: maxEmphasis,
-            isClimax,
-            vocalActive,
-          };
-          this.cameraRig.update(deltaMs, beatState, focus);
-        } else {
-          this.cameraRig.update(deltaMs, beatState, {
-            x: this.width / 2, y: this.height / 2,
-            heroActive: false, emphasisLevel: 0,
-            isClimax: false, vocalActive: false,
-          });
-        }
-      } else {
-        this.cameraRig.update(deltaMs, beatState, null);
+        const focus: SubjectFocus = {
+          x: this.width / 2,
+          y: this.height / 2,
+          heroActive: upcoming !== null,
+          emphasisLevel: upcoming?.emphasis ?? 0,
+          isClimax,
+          vocalActive,
+        };
+        this.cameraRig.update(deltaMs, beatState, focus);
       }
 
       this.update(deltaMs, smoothedTime, frame, beatState);
@@ -2688,11 +2656,31 @@ export class LyricDancePlayer {
             let elementalClass: string | null = directive?.elementalClass ?? null;
             if (!elementalClass) {
               const lw = (text ?? '').toLowerCase().replace(/[^a-z]/g, '');
-              if (/cold|ice|icy|freez|frost|winter|snow|chill|numb/.test(lw)) elementalClass = 'FROST';
-              else if (/fire|burn|flame|blaz|heat|hot|inferno|ash|ember/.test(lw)) elementalClass = 'FIRE';
-              else if (/rain|water|drown|ocean|sea|tear|cry|flood|wave|wet/.test(lw)) elementalClass = 'WATER';
-              else if (/smoke|fog|haze|mist|cloud|ghost|fade|vanish|shadow/.test(lw)) elementalClass = 'SMOKE';
-              else if (/electr|shock|spark|lightn|thunder|volt|power|energy|neon|glow/.test(lw)) elementalClass = 'ELECTRIC';
+
+              // ═══ Associative elemental mapping — poetic, not literal ═══
+
+              // FROST: cold, stillness, isolation, stopping, hardness
+              if (/cold|ice|icy|freez|frost|winter|snow|chill|numb|stop|still|silent|alone|steel|metal|seal|stone|hard|sharp|blade|glass|crystal|rigid|hollow|void/.test(lw)) elementalClass = 'FROST';
+
+              // FIRE: passion, intensity, anger, wealth, ambition, destruction
+              else if (/fire|burn|flame|blaz|heat|hot|inferno|ash|ember|money|cash|gold|rich|mil|billion|stack|bag|swear|oath|rage|fury|war|fight|kill|destroy|passion|hunger|desire|crave|grind|hustle|real/.test(lw)) elementalClass = 'FIRE';
+
+              // WATER: emotion, tears, flow, depth, feeling, time passing
+              else if (/rain|water|drown|ocean|sea|tear|cry|flood|wave|wet|feel|deep|sink|pour|flow|river|current|drift|swim|blood|vein|heart|soul|pain|hurt/.test(lw)) elementalClass = 'WATER';
+
+              // SMOKE: dreams, mystery, ethereal, memory, the unseen
+              else if (/smoke|fog|haze|mist|cloud|ghost|fade|vanish|shadow|dream|vision|imagine|memory|thought|mind|spirit|haunt|room|space|air|breath|whisper|secret|hide|lost|gone|past|time|year|same/.test(lw)) elementalClass = 'SMOKE';
+
+              // ELECTRIC: light, power, awakening, energy, triumph, revelation
+              else if (/electr|shock|spark|lightn|thunder|volt|power|energy|neon|glow|wake|rise|shine|light|bright|sun|dawn|star|flash|bolt|alive|new|born|create|build|king|crown|wield|certif|approv|fulfill|triumph|win|run|fast|speed|fly/.test(lw)) elementalClass = 'ELECTRIC';
+
+              // Fallback for emphasis 4+: give them SOMETHING based on mood
+              if (!elementalClass && emphasis >= 4) {
+                const mood = (this as any)._activeMoodGrade?.motionIntent as string | undefined;
+                if (mood === 'push-in' || mood === 'handheld') elementalClass = 'FIRE';
+                else if (mood === 'breathing' || mood === 'drift-up') elementalClass = 'SMOKE';
+                else elementalClass = 'ELECTRIC'; // default: light/power
+              }
             }
 
             if (elementalClass) {
@@ -3259,6 +3247,9 @@ export class LyricDancePlayer {
     };
     this.activeSectionIndex = -1;
     this.activeSectionTexture = texture;
+
+    // ═══ Build pre-computed hero schedule for camera lookahead ═══
+    this._buildHeroSchedule();
   }
 
   private _buildChunkCacheFromScene(scene: CompiledScene): void {
@@ -4617,5 +4608,67 @@ export class LyricDancePlayer {
 
   private cleanWord(text: string): string {
     return text.replace(/[^a-zA-Z'']/g, '').toLowerCase();
+  }
+
+  // ═══ Hero schedule: pre-computed from word timing + emphasis data ═══
+
+  private _buildHeroSchedule(): void {
+    const words = this.data.words ?? [];
+    const ws = this.resolvedState.wordSettings;
+    const wdm = this.resolvedState.wordDirectivesMap;
+    const schedule: typeof this._heroSchedule = [];
+
+    for (const w of words) {
+      const clean = normalizeToken(w.word);
+      const resolved = ws[clean];
+      const directive = wdm[clean];
+      const emphasis = resolved?.emphasisLevel ?? directive?.emphasisLevel ?? 0;
+      if (emphasis >= 3) {
+        schedule.push({
+          startSec: w.start,
+          endSec: w.end,
+          emphasis,
+          word: w.word,
+        });
+      }
+    }
+
+    // Sort by start time
+    schedule.sort((a, b) => a.startSec - b.startSec);
+    this._heroSchedule = schedule;
+    console.info(`[CameraLookahead] Built hero schedule: ${schedule.length} hero words`);
+  }
+
+  /**
+   * Given current time, return the hero word that is either:
+   * - Currently active (startSec <= t <= endSec)
+   * - About to appear within lookahead window (t + lookahead >= startSec)
+   * Returns null if no hero is near.
+   */
+  _getUpcomingHero(timeSec: number): { emphasis: number; word: string; isAnticipation: boolean; startSec: number; endSec: number } | null {
+    const lookahead = this._heroLookaheadMs / 1000;
+    const schedule = this._heroSchedule;
+
+    // Binary search for first hero where endSec > timeSec (still relevant)
+    let lo = 0, hi = schedule.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      if (schedule[mid].endSec < timeSec) lo = mid + 1;
+      else hi = mid - 1;
+    }
+
+    // Check from `lo` onward for current or upcoming hero
+    for (let i = lo; i < Math.min(lo + 3, schedule.length); i++) {
+      const h = schedule[i];
+      if (timeSec >= h.startSec && timeSec <= h.endSec) {
+        // Currently active
+        return { emphasis: h.emphasis, word: h.word, isAnticipation: false, startSec: h.startSec, endSec: h.endSec };
+      }
+      if (h.startSec > timeSec && h.startSec - timeSec <= lookahead) {
+        // About to appear — anticipate!
+        return { emphasis: h.emphasis, word: h.word, isAnticipation: true, startSec: h.startSec, endSec: h.endSec };
+      }
+    }
+    return null;
   }
 }
