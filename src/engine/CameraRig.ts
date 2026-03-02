@@ -98,28 +98,28 @@ export type SectionRigName = 'verse' | 'chorus' | 'bridge' | 'drop' | 'intro' | 
 
 const SECTION_RIGS: Record<SectionRigName, Partial<CameraConfig>> = {
   verse: {
-    punchZoomAmount: 0.008, shakeAmplitude: 1.0,
-    swayAmplitudeX: 2, swayAmplitudeY: 1, swayRotAmplitude: 0.002, breathAmplitude: 0.012,
+    punchZoomAmount: 0.012, shakeAmplitude: 1.5,
+    swayAmplitudeX: 4, swayAmplitudeY: 2, swayRotAmplitude: 0.003, breathAmplitude: 0.015,
   },
   chorus: {
-    punchZoomAmount: 0.020, shakeAmplitude: 2.5,
-    swayAmplitudeX: 4, swayAmplitudeY: 2, swayRotAmplitude: 0.005, breathAmplitude: 0.018,
+    punchZoomAmount: 0.028, shakeAmplitude: 3.5,
+    swayAmplitudeX: 7, swayAmplitudeY: 3.5, swayRotAmplitude: 0.006, breathAmplitude: 0.022,
   },
   bridge: {
-    punchZoomAmount: 0.012, shakeAmplitude: 1.5,
-    swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.003, breathAmplitude: 0.015,
+    punchZoomAmount: 0.016, shakeAmplitude: 2,
+    swayAmplitudeX: 5, swayAmplitudeY: 2.5, swayRotAmplitude: 0.004, breathAmplitude: 0.018,
   },
   drop: {
-    punchZoomAmount: 0.035, shakeAmplitude: 4,
-    swayAmplitudeX: 5, swayAmplitudeY: 3, swayRotAmplitude: 0.008, breathAmplitude: 0.020,
+    punchZoomAmount: 0.040, shakeAmplitude: 5,
+    swayAmplitudeX: 8, swayAmplitudeY: 4, swayRotAmplitude: 0.010, breathAmplitude: 0.025,
   },
   intro: {
-    punchZoomAmount: 0.005, shakeAmplitude: 0.5,
-    swayAmplitudeX: 1.5, swayAmplitudeY: 0.8, swayRotAmplitude: 0.001, breathAmplitude: 0.010,
+    punchZoomAmount: 0.008, shakeAmplitude: 1,
+    swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.002, breathAmplitude: 0.012,
   },
   outro: {
-    punchZoomAmount: 0.005, shakeAmplitude: 0.5,
-    swayAmplitudeX: 1.5, swayAmplitudeY: 0.8, swayRotAmplitude: 0.001, breathAmplitude: 0.010,
+    punchZoomAmount: 0.008, shakeAmplitude: 1,
+    swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.002, breathAmplitude: 0.012,
   },
 };
 
@@ -130,11 +130,11 @@ const SECTION_RIGS: Record<SectionRigName, Partial<CameraConfig>> = {
 const DEFAULT_CONFIG: CameraConfig = {
   proximitySmoothing: 0.04, reframeSmoothing: 0.06, rotSmoothing: 0.03,
   wideZoom: 1.0, closeUpZoom: 1.12, extremeCloseUpZoom: 1.25,
-  maxReframeX: 25, maxReframeY: 15, maxRotation: 0.012,
-  punchZoomAmount: 0.015, shakeAmplitude: 2,
-  breathAmplitude: 0.015, breathCycleMs: 4000,
-  swayAmplitudeX: 3, swayAmplitudeY: 1.5, swayRotAmplitude: 0.003,
-  backdropDriftFactor: 0.05, atmosphereFactor: 0.10,
+  maxReframeX: 35, maxReframeY: 20, maxRotation: 0.012,
+  punchZoomAmount: 0.020, shakeAmplitude: 3,
+  breathAmplitude: 0.018, breathCycleMs: 4000,
+  swayAmplitudeX: 5, swayAmplitudeY: 2.5, swayRotAmplitude: 0.004,
+  backdropDriftFactor: 0.20, atmosphereFactor: 0.15,
   baseHoldMs: 400, heroHoldMs: 600, climaxHoldMs: 1000,
   releaseSmoothing: 0.02,
 };
@@ -147,8 +147,8 @@ const PUNCH_ZOOM_DECAY_60 = 0.92;
 // ──────────────────────────────────────────────────────────────
 
 export class CameraRig {
-  private proximity = 0.15;
-  private targetProximity = 0.15;
+  private proximity = 0.25;
+  private targetProximity = 0.25;
   private holdTimer = 0;
   private reframeX = 0;
   private reframeY = 0;
@@ -215,10 +215,10 @@ export class CameraRig {
         this.targetProximity = 0.4;
         this.holdTimer = Math.max(this.holdTimer, cfg.baseHoldMs * 0.5);
       } else {
-        if (this.holdTimer <= 0) this.targetProximity = 0.15;
+        if (this.holdTimer <= 0) this.targetProximity = 0.25;
       }
     } else if (anchor) {
-      if (this.holdTimer <= 0) this.targetProximity = 0.15;
+      if (this.holdTimer <= 0) this.targetProximity = 0.25;
     } else {
       if (this.holdTimer <= 0) this.targetProximity = 0.0;
     }
@@ -239,7 +239,7 @@ export class CameraRig {
     if (sf || anchor) {
       const dx = fx - this.canvasW * 0.5;
       const dy = fy - this.canvasH * 0.5;
-      const reframeMult = 0.15 + this.proximity * 0.15;
+      const reframeMult = 0.20 + this.proximity * 0.20;
       this.targetReframeX = Math.max(-cfg.maxReframeX, Math.min(cfg.maxReframeX, dx * reframeMult));
       this.targetReframeY = Math.max(-cfg.maxReframeY, Math.min(cfg.maxReframeY, dy * reframeMult));
     } else {
@@ -257,8 +257,8 @@ export class CameraRig {
       const energy = beatState.energy;
       const sway = Math.sin(phase * Math.PI * 2);
       const swayY = Math.cos(phase * Math.PI * 2 + 0.5);
-      this.reframeX += sway * cfg.swayAmplitudeX * energy * 0.5;
-      this.reframeY += swayY * cfg.swayAmplitudeY * energy * 0.5;
+      this.reframeX += sway * cfg.swayAmplitudeX * energy;
+      this.reframeY += swayY * cfg.swayAmplitudeY * energy;
       this.targetRot = sway * cfg.swayRotAmplitude * energy;
     }
 
@@ -336,21 +336,21 @@ export class CameraRig {
     if (isBackdrop) {
       const driftX = -this.reframeX * cfg.backdropDriftFactor;
       const driftY = -this.reframeY * cfg.backdropDriftFactor;
-      const bgShakeX = this.shakeX * 0.15;
-      const bgShakeY = this.shakeY * 0.15;
+      const bgShakeX = this.shakeX * 0.30;
+      const bgShakeY = this.shakeY * 0.30;
       ctx.translate(cx, cy);
-      ctx.rotate(this.rot * 0.1);
+      ctx.rotate(this.rot * 0.20);
       ctx.translate(-cx + driftX + bgShakeX, -cy + driftY + bgShakeY);
     } else {
       // Atmosphere: bridges subject and backdrop
       const subT = this.getSubjectTransform();
       const atmZoom = 1.0 + (subT.zoom - 1.0) * cfg.atmosphereFactor;
-      const atmDriftX = this.reframeX * 0.15;
-      const atmDriftY = this.reframeY * 0.15;
+      const atmDriftX = this.reframeX * 0.25;
+      const atmDriftY = this.reframeY * 0.25;
       ctx.translate(cx, cy);
-      ctx.rotate(this.rot * 0.3);
+      ctx.rotate(this.rot * 0.4);
       ctx.scale(atmZoom, atmZoom);
-      ctx.translate(-cx + atmDriftX + this.shakeX * 0.3, -cy + atmDriftY + this.shakeY * 0.3);
+      ctx.translate(-cx + atmDriftX + this.shakeX * 0.4, -cy + atmDriftY + this.shakeY * 0.4);
     }
   }
 
@@ -358,7 +358,7 @@ export class CameraRig {
   getProximity(): number { return this.proximity; }
 
   reset(): void {
-    this.proximity = 0.15; this.targetProximity = 0.15; this.holdTimer = 0;
+    this.proximity = 0.25; this.targetProximity = 0.25; this.holdTimer = 0;
     this.reframeX = 0; this.reframeY = 0;
     this.targetReframeX = 0; this.targetReframeY = 0;
     this.rot = 0; this.targetRot = 0;
