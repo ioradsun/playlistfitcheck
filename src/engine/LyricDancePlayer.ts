@@ -2279,7 +2279,7 @@ export class LyricDancePlayer {
         if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
 
         // ═══ HERO EFFECTS: depth stack, bloom pulse, underline sweep, beat bounce ═══
-        const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || (chunk as any).isHeroWord;
+        const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
         const beatState = this._lastBeatState;
         const beatPulse = beatState?.pulse ?? 0;
         let heroDrawX = drawX;
@@ -3529,17 +3529,20 @@ export class LyricDancePlayer {
         const lt = word.letterTotal ?? 1;
         const letterDelay = word.isLetterChunk ? li * 0.06 : 0;
         const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay - letterDelay);
-        const effectiveEntryDuration = group.entryDuration * word.entryDurationMult;
+        // Use budget-constrained entry duration when available — prevents 350ms fade-in
+        // on words that are only spoken for 170ms in fast sections
+        const wb = this._wordBudgetMap.get(word.id);
+        const effectiveEntryDuration = wb ? wb.entryBudget : (group.entryDuration * word.entryDurationMult);
         const entryProgress = Math.min(1, Math.max(0, adjustedElapsed / Math.max(0.01, effectiveEntryDuration)));
 
-        const effectiveExitDuration = Math.min(group.exitDuration, Math.max(0.05, nextGroupStart - group.end));
+        const effectiveExitDuration = wb ? wb.exitBudget : Math.min(group.exitDuration, Math.max(0.05, nextGroupStart - group.end));
         const exitDelay = word.isLetterChunk && SPLIT_EXIT_STYLES.has(word.exitStyle) ? letterDelay : 0;
         const exitProgress = Math.max(0, (tSec - groupEnd - exitDelay) / Math.max(0.01, effectiveExitDuration));
 
         // ═══ V2: EffectBudgeter — use budget-resolved styles when available ═══
         // Budget downgrades heavy effects (slide, scale) to lighter ones (fade, cut)
         // when the word's screen time is too short for the original animation to complete.
-        const wb = this._wordBudgetMap.get(word.id);
+        // wb already resolved above for entry/exit duration budgeting
         const usedEntry = (wb?.resolvedEntry ?? word.entryStyle) as any;
         const usedExit = (wb?.resolvedExit ?? word.exitStyle) as any;
         const usedBehavior = (wb?.resolvedBehavior ?? word.behaviorStyle) as any;
