@@ -3580,7 +3580,7 @@ export class LyricDancePlayer {
         this.ctx.globalAlpha = 1;
       }
     }
-
+  }
 
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
     const scene = this.compiledScene;
