@@ -1410,65 +1410,75 @@ export class LyricDancePlayer {
     this._heroDecompSpawned.clear();
   }
 
-  seekTo(timeSec: number): void {
-    this.seek(timeSec);
+  /**
+   * Render a single frame at an arbitrary timestamp.
+   * Used by the export pipeline — does NOT touch audio or rAF.
+   */
+  public drawAtTime(tSec: number): void {
+    const songTime = this.songStartSec + tSec;
+    const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, songTime));
 
+    // Set up conductor state for this time
+    this._timeInitialized = true;
+    this._smoothedTime = clamped;
+    this._lastRawTime = clamped;
 
+    // Resolve section index + palette
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+    const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+    const dur = this.songEndSec - this.songStartSec || 1;
+    this._frameSectionIdx = sections.length > 0
+      ? this.resolveSectionIndex(sections, clamped, this.songEndSec)
+      : -1;
+    const secIdx = this._frameSectionIdx;
+    if (secIdx !== this._framePaletteTime) {
+      this._framePaletteTime = secIdx;
+      this._framePalette = this._resolveCurrentPalette(secIdx);
+    }
+
+    // Beat state
+    const beatState = this.conductor?.getState(clamped) ?? null;
+    this._lastBeatState = beatState;
+    this._frameDt = 1; // normalized to 60fps
+
+    // Evaluate + update + draw
+    const frame = this.evaluateFrame(clamped);
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.clearRect(0, 0, this.width, this.height);
+    this.update(16.67, clamped, frame, beatState);
+    this.draw(clamped, frame);
   }
 
-  async startExport(ratio: "16:9" | "9:16"): Promise<void> {
-    if (this.isExporting || !this.payload) return;
-
-    const { width, height } = LyricDancePlayer.RESOLUTIONS[ratio];
-    this.isExporting = true;
-    this.wasLoopingBeforeExport = this.audio.loop;
-    this.audio.loop = false;
-
+  /**
+   * Set up export resolution — changes the player's canvas to export dimensions.
+   * Call teardownExportResolution() when done.
+   */
+  public setupExportResolution(width: number, height: number): void {
+    this.displayWidth = this.width;
+    this.displayHeight = this.height;
+    this.pause();
     this.setResolution(width, height);
-    this.seekTo(0);
-
-    const stream = this.canvas.captureStream(30);
-    const mimeType = MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "video/webm";
-
-    this.mediaRecorder = new MediaRecorder(stream, {
-      mimeType,
-      videoBitsPerSecond: 8_000_000,
-    });
-
-    const chunks: Blob[] = [];
-    this.mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
-
-    const onAudioEnded = () => {
-      this.stopExport();
-    };
-    this.audio.addEventListener("ended", onAudioEnded, { once: true });
-
-    this.mediaRecorder.onstop = () => {
-      this.audio.removeEventListener("ended", onAudioEnded);
-      const blob = new Blob(chunks, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${this.data.artist_name ?? "artist"}-${this.data.song_name ?? "song"}-${ratio.replace(":", "x")}.${mimeType.includes("mp4") ? "mp4" : "webm"}`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      this.isExporting = false;
-      this.mediaRecorder = null;
-      this.audio.loop = this.wasLoopingBeforeExport;
-      this.setResolution(this.displayWidth, this.displayHeight);
-      this.onExportComplete?.();
-    };
-
-    this.mediaRecorder.start(100);
-    this.play();
   }
 
-  stopExport(): void {
-    if (!this.mediaRecorder || this.mediaRecorder.state === "inactive") return;
-    this.mediaRecorder.stop();
+  /**
+   * Restore display resolution after export.
+   */
+  public teardownExportResolution(): void {
+    this.setResolution(this.displayWidth, this.displayHeight);
+  }
+
+  /**
+   * Get the player's active canvas (for VideoFrame creation during export).
+   */
+  public getExportCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
+  /**
+   * Get the total song duration in seconds.
+   */
+  public getSongDuration(): number {
+    return Math.max(0, this.songEndSec - this.songStartSec);
   }
 
   resize(logicalW: number, logicalH: number): void {
