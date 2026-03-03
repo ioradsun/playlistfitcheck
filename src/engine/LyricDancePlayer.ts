@@ -1486,6 +1486,90 @@ export class LyricDancePlayer {
     this.mediaRecorder.stop();
   }
 
+  // ═══ WebCodecs export API ═══
+
+  getSongDuration(): number {
+    return Math.max(0, this.songEndSec - this.songStartSec);
+  }
+
+  setupExportResolution(width: number, height: number): void {
+    this.pause();
+    this.displayWidth = this.width;
+    this.displayHeight = this.height;
+    this.setResolution(width, height);
+    // Re-acquire context with willReadFrequently for fast pixel readback
+    this.ctx = this.canvas.getContext('2d', {
+      willReadFrequently: true,
+      desynchronized: true,
+    })!;
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.seek(this.songStartSec);
+  }
+
+  drawAtTime(tSec: number): void {
+    const timeSec = this.songStartSec + tSec;
+    const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
+    this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
+
+    // Set up frame context
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.clearRect(0, 0, this.width, this.height);
+
+    const deltaMs = 1000 / 30; // fixed timestep for export
+    const beatState = this.conductor?.getState(clamped) ?? null;
+    this._lastBeatState = beatState;
+    this._frameDt = deltaMs / 16.67;
+
+    // Section + palette
+    {
+      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+      const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+      const dur = this.getSongDuration() || 1;
+      this._frameSectionIdx = sections.length > 0
+        ? this.resolveSectionIndex(sections, clamped, dur)
+        : -1;
+      const secIdx = this._frameSectionIdx;
+      if (secIdx !== this._framePaletteTime) {
+        this._framePaletteTime = secIdx;
+        this._framePalette = this._resolveCurrentPalette(secIdx);
+      }
+    }
+
+    const frame = this.evaluateFrame(clamped);
+
+    // Camera rig
+    {
+      const vocalActive = frame ? frame.chunks.some((c: any) => c.visible && c.alpha > 0.3) : false;
+      const upcoming = this._getUpcomingHero(clamped);
+      const songProg = (clamped - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
+      const isClimax = (beatState?.energy ?? 0) > 0.65 && songProg > 0.50;
+      const focus: SubjectFocus = {
+        x: this.width / 2,
+        y: this.height / 2,
+        heroActive: upcoming !== null && !upcoming.isAnticipation,
+        emphasisLevel: upcoming?.emphasis ?? 0,
+        isClimax,
+        vocalActive,
+        heroApproaching: upcoming?.isAnticipation ?? false,
+      };
+      this.cameraRig.update(deltaMs, beatState, focus);
+    }
+
+    this.update(deltaMs, clamped, frame, beatState);
+    this.draw(clamped, frame);
+  }
+
+  getExportCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
+  teardownExportResolution(): void {
+    this.setResolution(this.displayWidth, this.displayHeight);
+    // Restore normal GPU-backed context
+    this.ctx = this.canvas.getContext('2d')!;
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  }
+
   resize(logicalW: number, logicalH: number): void {
     const w = Math.max(1, Math.floor(logicalW));
     const h = Math.max(1, Math.floor(logicalH));
