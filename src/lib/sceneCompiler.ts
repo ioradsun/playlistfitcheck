@@ -1,3 +1,4 @@
+/* sceneCompiler v2 */
 import type { CinematicDirection, CinematicSection } from "@/types/CinematicDirection";
 import { enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
