@@ -694,6 +694,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         isAnchor: pos.isAnchor,
         isFiller: pos.isFiller,
         emphasisLevel: wm.directive?.emphasisLevel ?? 1,
+        wordStart: wm.start,
         wordDuration: Math.max(0, wm.end - wm.start),
         semanticScaleX: semantic?.scaleX ?? 1,
         semanticScaleY: semantic?.scaleY ?? 1,
