@@ -45,7 +45,6 @@ import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 
-const DECOMP_ENABLED = true; // enabled for hero words (emphasis 4-5) only
 const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-01';
 
 // ──────────────────────────────────────────────────────────────
@@ -734,51 +733,6 @@ interface CommentChunk {
   fontSize: number;
 }
 
-type DecompEffect = 'explode' | 'ice-shatter' | 'burn-away' | 'dissolve' | 'melt' | 'ascend' | 'glitch' | 'bloom' | 'crush' | 'shockwave' | 'magnetize';
-
-interface DecompParticle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  r: number;
-  g: number;
-  b: number;
-  a: number;
-  size: number;
-  life: number;
-  rotation: number;
-  rotSpeed: number;
-  gravity: number;
-  drag: number;
-  shape: 'dot' | 'shard' | 'streak' | 'ember';
-  column: number;
-  burnDelay: number;
-  dissolveDelay: number;
-  dripDelay: number;
-  riseDelay: number;
-  burstDelay: number;
-  glitchOffsetX: number;
-  glitchOffsetY: number;
-  targetX: number;
-  targetY: number;
-  active: boolean;
-}
-
-interface PixelDecomp {
-  id: string;
-  particles: DecompParticle[];
-  effect: DecompEffect;
-  startTime: number;
-  duration: number;
-  centerX: number;
-  centerY: number;
-  wordWidth: number;
-  fontSize: number;
-  word: string;
-  color: string;
-  phase: number;
-}
 
 
 // ──────────────────────────────────────────────────────────────
@@ -919,12 +873,6 @@ export class LyricDancePlayer {
   private emotionalEvents: EmotionalEvent[] = [];
   private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
-  // Word-local particle emitters
-  private activeDecomps: PixelDecomp[] = [];
-  private readonly particlePool: DecompParticle[] = Array.from({ length: 600 }, () => this.createEmptyParticle());
-  private poolIndex = 0;
-  private readonly offscreen = document.createElement('canvas');
-  private readonly octx = this.offscreen.getContext('2d', { willReadFrequently: true })!;
   // Reusable 1×1 canvas for text measurement (avoids per-recompile DOM allocation)
   private readonly _measureCanvas = (() => { const c = document.createElement('canvas'); c.width = 1; c.height = 1; return c; })();
   private readonly _measureCtx = this._measureCanvas.getContext('2d')!;
@@ -952,7 +900,6 @@ export class LyricDancePlayer {
   private _heroLookaheadMs = 400; // anticipate hero words 400ms before they appear
   private activeSectionTexture = 'dust';
   private activeTension: any = null;
-  private lastExitProgressByChunk = new Map<string, number>();
   private chunkActiveSinceMs: Map<string, number> = new Map();
 
 
@@ -1004,7 +951,6 @@ export class LyricDancePlayer {
     this.audio.muted = true;
     this.audio.preload = "auto";
     this.bootMode = options?.bootMode ?? "full";
-    this.activeDecomps.length = 0;
 
     console.info(LYRIC_DANCE_PLAYER_BUILD_STAMP);
 
@@ -2096,7 +2042,6 @@ export class LyricDancePlayer {
     }
     const frameNowMs = performance.now(); // hoisted — used everywhere below
     const frameNowSec = frameNowMs / 1000;
-    this.drawDecompositions(this.ctx, frameNowSec);
 
     const isPortraitLocal = this.height > this.width;
     const viewportMinFont = isPortraitLocal
@@ -2233,9 +2178,6 @@ export class LyricDancePlayer {
       const chunk = sortBuf[ci];
       if (!chunk.visible) continue;
 
-      const isExiting = (chunk.exitScale !== 1) || (chunk.exitOffsetY !== 0) || ((chunk.entryProgress ?? 0) >= 1 && chunk.alpha < 0.85);
-
-      const prevExitProgress = this.lastExitProgressByChunk.get(chunk.id) ?? 0;
       const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
       const exit = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
       if (entry >= 1.0 && exit === 0) {
@@ -2244,20 +2186,7 @@ export class LyricDancePlayer {
       const activeSince = this.chunkActiveSinceMs.get(chunk.id);
       const visibleMs = activeSince != null ? frameNowMs - activeSince : 0;
       if (exit > 0) this.chunkActiveSinceMs.delete(chunk.id);
-      const allowDecomp = exit === 0 || visibleMs >= 1000;
-      const currentExitProgress = exit;
-      this.lastExitProgressByChunk.set(chunk.id, currentExitProgress);
-      const wordJustExited = prevExitProgress <= 0 && currentExitProgress > 0;
-      let hasActiveDecomp = false;
-      for (let di = 0; di < this.activeDecomps.length; di += 1) {
-        if (this.activeDecomps[di].id === chunk.id) {
-          hasActiveDecomp = true;
-          break;
-        }
-      }
-      const wordFadingOut = currentExitProgress === 0 && (chunk.alpha ?? 1) < 0.75 && (chunk.entryProgress ?? 0) >= 1.0 && !hasActiveDecomp && !this.lastExitProgressByChunk.get(`pre_${chunk.id}`);
-      if (wordFadingOut) this.lastExitProgressByChunk.set(`pre_${chunk.id}`, 1);
-      const shouldSpawnDecomp = wordJustExited || wordFadingOut;
+
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
@@ -2343,21 +2272,60 @@ export class LyricDancePlayer {
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
 
-      // ═══ Decomp particles: burst on ENTRY, linger after exit ═══
-      // Spawn the moment entry completes (word fully visible), not on exit
-      const justBecameFullyVisible = entry >= 1.0 && exit === 0 && visibleMs < 50;
-      if (DECOMP_ENABLED && justBecameFullyVisible && (chunk.emphasisLevel ?? 0) >= 4) {
-        const decompDirective = directive ?? { exit: 'dissolve', emphasisLevel: 4 };
-        this.tryStartDecomposition({ chunkId: chunk.id, text, drawX: centerX, drawY, fontSize: safeFontSize, fontWeight, fontFamily: chunk.fontFamily, color: chunk.color ?? '#f0f0f0', directive: decompDirective });
-      }
-
       if (chunk.iconPosition !== 'replace') {
         this.ctx.globalAlpha = drawAlpha;
         this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
         const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
         if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
-        if (chunk.glow > 0) {
-          // ═══ SINGLE COLOR MODEL: clean white bloom, not colored glow ═══
+
+        // ═══ HERO EFFECTS: depth stack, bloom pulse, underline sweep, beat bounce ═══
+        const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
+        const beatState = this._lastBeatState;
+        const beatPulse = beatState?.pulse ?? 0;
+        let heroDrawX = drawX;
+        let heroDrawY = finalDrawY;
+
+        if (isHeroChunk && entry >= 0.5 && drawAlpha > 0.1) {
+          // Beat bounce: gentle Y offset for words on screen > 500ms
+          if (visibleMs > 500 && beatPulse > 0.05) {
+            const bounceAmt = beatPulse * safeFontSize * 0.04; // subtle: ~4% of font size
+            heroDrawY -= bounceAmt;
+          }
+
+          // Bloom pulse: amplified glow synced to beat
+          const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
+          const bloomGlow = baseGlow + beatPulse * 0.5;
+          this.ctx.shadowColor = '#ffffff';
+          this.ctx.shadowBlur = bloomGlow * 28;
+
+          // Depth stack: 3 shadow layers behind the hero word
+          const depthLayers = 3;
+          const layerSpacing = safeFontSize * 0.025;
+          this.ctx.save();
+          for (let layer = depthLayers; layer >= 1; layer--) {
+            const layerAlpha = drawAlpha * (0.12 / layer);
+            const offsetY = layer * layerSpacing;
+            this.ctx.globalAlpha = layerAlpha;
+            this.ctx.shadowBlur = 0;
+            this.ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            const [da, db, dc, dd, de, df] = this.computeTransformMatrix(
+              camCX + (heroDrawX - camCX) * camZoom,
+              camCY + ((heroDrawY + offsetY) - camCY) * camZoom,
+              chunk.rotation ?? 0,
+              chunk.skewX ?? 0,
+              sx * camZoom,
+              sy * camZoom,
+            );
+            this.ctx.setTransform(da, db, dc, dd, de, df);
+            this.ctx.fillText(text, 0, 0);
+          }
+          this.ctx.restore();
+          this.ctx.globalAlpha = drawAlpha;
+          this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
+          this.ctx.shadowColor = '#ffffff';
+          this.ctx.shadowBlur = bloomGlow * 28;
+          if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
+        } else if (chunk.glow > 0) {
           this.ctx.shadowColor = '#ffffff';
           this.ctx.shadowBlur = chunk.glow * 24;
         }
@@ -2385,8 +2353,8 @@ export class LyricDancePlayer {
             }
             this.ctx.globalAlpha = ghostAlpha;
             const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
-              camCX + ((drawX + gx) - camCX) * camZoom,
-              camCY + ((finalDrawY + gy) - camCY) * camZoom,
+              camCX + ((heroDrawX + gx) - camCX) * camZoom,
+              camCY + ((heroDrawY + gy) - camCY) * camZoom,
               chunk.rotation ?? 0,
               chunk.skewX ?? 0,
               sx * camZoom,
@@ -2399,8 +2367,8 @@ export class LyricDancePlayer {
         }
 
         const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
-          camCX + (drawX - camCX) * camZoom,
-          camCY + (finalDrawY - camCY) * camZoom,
+          camCX + (heroDrawX - camCX) * camZoom,
+          camCY + (heroDrawY - camCY) * camZoom,
           chunk.rotation ?? 0,
           chunk.skewX ?? 0,
           sx * camZoom,
@@ -2416,31 +2384,28 @@ export class LyricDancePlayer {
           this.ctx.lineJoin = 'round';
         }
 
-        // Tracking expand: draw each letter with increased spacing
-        if (false && chunk.heroTrackingExpand && chunk.visible) {
-          // DISABLED: tracking expand adds width at render time but layout
-          // doesn't account for it, causing word overlap. Needs layout-time solution.
-          const letters = text.split('');
-          // Cap extra spacing so expanded word stays within ~120% of original width
-          const maxExtraWidth = textWidth * 0.20;
-          const idealSpacing = safeFontSize * 0.12;
-          const gapCount = Math.max(1, letters.length - 1);
-          const baseSpacing = Math.min(idealSpacing, maxExtraWidth / gapCount);
-          const totalExtraWidth = baseSpacing * gapCount;
-          let letterX = -totalExtraWidth / 2;
-          for (const letter of letters) {
-            if (textStrokeColor) this.ctx.strokeText(letter, letterX, 0);
-            this.ctx.fillText(letter, letterX, 0);
-            const letterWidth = this.ctx.measureText(letter).width;
-            letterX += letterWidth + baseSpacing;
-          }
-        } else {
-          // ═══ SINGLE COLOR MODEL: all words draw the same way ═══
-          // Hero scale/motion is handled upstream in evaluateFrame.
-          // No elemental colors, no colored glows — just text.
-          if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
-          this.ctx.fillText(text, 0, 0);
+        // Main text draw
+        if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
+        this.ctx.fillText(text, 0, 0);
+
+        // ═══ UNDERLINE SWEEP: glowing line under hero words ═══
+        if (isHeroChunk && entry >= 0.3 && drawAlpha > 0.1) {
+          const sweepProgress = Math.min(1, (entry - 0.3) / 0.5); // sweep from 30% to 80% of entry
+          const underlineY = safeFontSize * 0.55;
+          const halfW = textWidth * 0.5;
+          const sweepEnd = -halfW + textWidth * sweepProgress;
+          const lineThickness = Math.max(1.5, safeFontSize * 0.04);
+          const sweepAlpha = drawAlpha * (0.6 + beatPulse * 0.3) * (exit > 0 ? 1 - exit : 1);
+          this.ctx.save();
+          this.ctx.globalAlpha = sweepAlpha;
+          this.ctx.shadowColor = '#ffffff';
+          this.ctx.shadowBlur = 8 + beatPulse * 6;
+          this.ctx.fillStyle = chunk.color ?? '#ffffff';
+          this.ctx.fillRect(-halfW, underlineY, sweepEnd + halfW, lineThickness);
+          this.ctx.restore();
+          this.ctx.globalAlpha = drawAlpha;
         }
+
         if (needsFilterSaveRestore) {
           this.ctx.filter = 'none';
           this.ctx.restore();
@@ -2732,199 +2697,6 @@ export class LyricDancePlayer {
       zoom: 1,
       driftIntensity: direction.motion === 'fluid' ? 0.3 : 0.1,
     }));
-  }
-
-
-  private createEmptyParticle(): DecompParticle {
-    return {
-      x: 0, y: 0, vx: 0, vy: 0, r: 255, g: 255, b: 255, a: 0, size: 1.5, life: 0,
-      rotation: 0, rotSpeed: 0, gravity: 0, drag: 0.96, shape: 'dot', column: 0,
-      burnDelay: 0, dissolveDelay: 0, dripDelay: 0, riseDelay: 0, burstDelay: 0,
-      glitchOffsetX: 0, glitchOffsetY: 0, targetX: 0, targetY: 0, active: false,
-    };
-  }
-
-  private getParticle(): DecompParticle {
-    const p = this.particlePool[this.poolIndex % this.particlePool.length];
-    this.poolIndex += 1;
-    return p;
-  }
-
-  private resolveDecompEffect(d: any): DecompEffect | null {
-    const exit = String(d?.exit ?? '').toLowerCase();
-    if (exit === 'shatter' || exit === 'shatters') return 'explode';
-    if (exit === 'burn-out' || exit === 'burns-out') return 'burn-away';
-    if (exit === 'dissolve' || exit === 'dissolves-upward') return 'dissolve';
-    if (exit === 'melt' || exit === 'drip') return 'melt';
-    if (exit === 'ascend' || exit === 'drift-up') return 'ascend';
-    if (exit === 'fades' || exit === 'lingers') return 'dissolve';
-    const meta = String(d?.visualMetaphor ?? '').toLowerCase();
-    if (meta.includes('fire') || meta.includes('ember') || meta.includes('burn')) return 'burn-away';
-    if (meta.includes('ice') || meta.includes('frost') || meta.includes('shatter')) return 'ice-shatter';
-    if (meta.includes('bloom') || meta.includes('flower') || meta.includes('petal')) return 'bloom';
-    if (meta.includes('weight') || meta.includes('crush') || meta.includes('heavy')) return 'crush';
-    if (meta.includes('scream') || meta.includes('shock') || meta.includes('explod')) return 'shockwave';
-    if (meta.includes('rain') || meta.includes('tear') || meta.includes('drip')) return 'melt';
-    if (meta.includes('glitch') || meta.includes('static') || meta.includes('broken')) return 'glitch';
-    if (meta.includes('gather') || meta.includes('together') || meta.includes('embrace')) return 'magnetize';
-    if (meta.includes('rise') || meta.includes('ascend') || meta.includes('fly')) return 'ascend';
-    if (d?.behavior === 'pulse') return 'shockwave';
-    if (d?.behavior === 'float') return 'dissolve';
-    if ((d?.emphasisLevel ?? 0) >= 4) return 'dissolve';
-    return null;
-  }
-
-  private effectDuration(effect: DecompEffect): number {
-    // Longer durations so particles linger past word exit
-    const m: Record<DecompEffect, number> = {
-      'explode': 2.5, 'ice-shatter': 3.0, 'burn-away': 3.0, 'dissolve': 2.5, 'melt': 3.0,
-      'ascend': 3.5, 'glitch': 1.5, 'bloom': 3.5, 'crush': 1.5, 'shockwave': 2.0, 'magnetize': 2.5,
-    };
-    return m[effect];
-  }
-
-  private tryStartDecomposition(input: { chunkId: string; text: string; drawX: number; drawY: number; fontSize: number; fontWeight: number; fontFamily?: string; color: string; directive: any; }): void {
-    const effect = this.resolveDecompEffect(input.directive);
-    if (!effect || this.activeDecomps.some((d) => d.id === input.chunkId)) return;
-    if (this.activeDecomps.length >= 6) this.activeDecomps.shift();
-    const particles = this.captureWordParticles(input, effect);
-    const decomp: PixelDecomp = {
-      id: input.chunkId, particles, effect, startTime: performance.now() / 1000,
-      duration: this.effectDuration(effect), centerX: input.drawX, centerY: input.drawY,
-      wordWidth: this.ctx.measureText(input.text).width, fontSize: input.fontSize, word: input.text,
-      color: input.color, phase: 0,
-    };
-    this.activeDecomps.push(decomp);
-  }
-
-  private captureWordParticles(input: { text: string; drawX: number; drawY: number; fontSize: number; fontWeight: number; fontFamily?: string; color: string; }, effect: DecompEffect): DecompParticle[] {
-    const GRID = 3;
-    const padding = 4;
-    const family = input.fontFamily ?? this.getResolvedFont();
-    this.octx.font = `${input.fontWeight} ${input.fontSize}px ${family}`;
-    const wordWidth = Math.ceil(this.octx.measureText(input.text).width);
-    this.offscreen.width = Math.max(8, wordWidth + padding * 2);
-    this.offscreen.height = Math.max(8, Math.ceil(input.fontSize * 1.4) + padding * 2);
-    this.octx.clearRect(0, 0, this.offscreen.width, this.offscreen.height);
-    this.octx.font = `${input.fontWeight} ${input.fontSize}px ${family}`;
-    this.octx.fillStyle = input.color;
-    this.octx.textBaseline = 'middle';
-    this.octx.textAlign = 'center';
-    this.octx.fillText(input.text, this.offscreen.width / 2, this.offscreen.height / 2);
-    const pixels = this.octx.getImageData(0, 0, this.offscreen.width, this.offscreen.height).data;
-    const out: DecompParticle[] = [];
-    const cx = input.drawX;
-    const cy = input.drawY;
-    const maxParticles = 200;
-    for (let y = 0; y < this.offscreen.height && out.length < maxParticles; y += GRID) {
-      for (let x = 0; x < this.offscreen.width && out.length < maxParticles; x += GRID) {
-        const i = (y * this.offscreen.width + x) * 4;
-        const a = pixels[i + 3];
-        if (a < 30) continue;
-        const p = this.getParticle();
-        Object.assign(p, this.createEmptyParticle());
-        p.active = true;
-        p.x = cx + x - this.offscreen.width / 2;
-        p.y = cy + y - this.offscreen.height / 2;
-        p.r = pixels[i]; p.g = pixels[i + 1]; p.b = pixels[i + 2]; p.a = a / 255;
-        p.size = GRID * 0.6;
-        p.life = 1;
-        this.seedParticleEffect(p, effect, cx, cy, wordWidth, input.fontSize);
-        out.push(p);
-      }
-    }
-    return out;
-  }
-
-  private seedParticleEffect(p: DecompParticle, effect: DecompEffect, cx: number, cy: number, wordWidth: number, fontSize: number): void {
-    if (effect === 'explode' || effect === 'shockwave') {
-      const ang = Math.atan2(p.y - cy, p.x - cx);
-      const force = 80 + Math.random() * 120;
-      p.vx = Math.cos(ang) * force + (Math.random() - 0.5) * 40;
-      p.vy = Math.sin(ang) * force + (Math.random() - 0.5) * 40;
-      p.gravity = 60 + Math.random() * 40; p.drag = 0.96; p.shape = 'shard'; p.rotSpeed = (Math.random() - 0.5) * 8;
-      p.burstDelay = effect === 'shockwave' ? 0.08 : 0;
-    } else if (effect === 'dissolve') {
-      p.vx = 0;
-      p.vy = 0;
-      p.gravity = 0;
-      p.drag = 1.0;
-      p.dissolveDelay = Math.random() * 0.15;
-    }
-    else if (effect === 'melt') { const xNorm=(p.x-(cx-wordWidth/2))/Math.max(1,wordWidth); p.dripDelay=Math.random()*0.5+Math.abs(xNorm-0.5)*0.3; p.gravity=120+Math.random()*80; p.drag=0.92; p.shape='streak'; }
-    else if (effect === 'ascend') { p.vx=(Math.random()-0.5)*30; p.vy=-40-Math.random()*60; p.gravity=-10; p.drag=0.97; p.riseDelay=(1-((p.y-(cy-fontSize/2))/Math.max(1,fontSize)))*0.3; }
-    else if (effect === 'burn-away') { const yNorm=(p.y-(cy-fontSize/2))/Math.max(1,fontSize); p.burnDelay=(1-Math.max(0,Math.min(1,yNorm)))*0.6; p.shape='ember'; }
-    else if (effect === 'ice-shatter') { p.shape='shard'; p.column=Math.max(0,Math.min(4,Math.floor((p.x-(cx-wordWidth/2))/Math.max(1,wordWidth/4)))); p.rotSpeed=(Math.random()-0.5)*6; p.r=Math.min(255,p.r+80); p.g=Math.min(255,p.g+100); p.b=255; }
-    else if (effect === 'glitch') { p.shape='dot'; }
-    else if (effect === 'bloom') { const ang=Math.atan2(p.y-cy,p.x-cx)+(Math.random()-0.5)*0.5; const force=20+Math.random()*30; p.vx=Math.cos(ang)*force; p.vy=Math.sin(ang)*force; p.gravity=15; p.drag=0.96; p.r=Math.min(255,p.r+40); p.g=Math.max(0,p.g-20); }
-    else if (effect === 'crush') { p.drag=0.95; p.targetX=cx; p.targetY=cy+20; }
-    else if (effect === 'magnetize') { p.x+=(Math.random()-0.5)*30; p.y+=(Math.random()-0.5)*30; p.targetX=cx; p.targetY=cy; p.drag=0.92; }
-  }
-
-  private drawDecompositions(ctx: CanvasRenderingContext2D, time: number): void {
-    const dt = 1 / 60;
-    for (const d of this.activeDecomps) {
-      const elapsed = time - d.startTime;
-      if (elapsed > d.duration) continue;
-      for (const p of d.particles) {
-        if (!p.active || p.life <= 0 || p.a <= 0) continue;
-        this.updateDecompParticle(d, p, elapsed, dt);
-        const alpha = p.a * p.life;
-        if (alpha < 0.01) continue;
-        if (p.shape === 'shard') { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation); ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.fillRect(-p.size*0.4,-p.size,p.size*0.8,p.size*2); ctx.restore(); }
-        else if (p.shape === 'streak') { const len=Math.min(Math.abs(p.vy)*0.03,8); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x,p.y-len); ctx.lineWidth=p.size*0.6; ctx.lineCap='round'; ctx.strokeStyle=`rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.stroke(); }
-        else if (p.shape === 'ember') { ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+p.vx*0.015,p.y+p.vy*0.015); ctx.lineWidth=p.size*0.4; ctx.strokeStyle=`rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.stroke(); }
-        else { ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`; ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size); }
-      }
-      if (d.effect === 'shockwave') {
-        const ringRadius = elapsed * 150;
-        const ringAlpha = Math.max(0, 0.3 * (1 - elapsed / 0.5));
-        ctx.beginPath(); ctx.arc(d.centerX, d.centerY, ringRadius, 0, Math.PI * 2);
-        ctx.lineWidth = Math.max(0.2, 2 * (1 - elapsed / 0.5));
-        ctx.strokeStyle = `rgba(255,255,255,${ringAlpha})`; ctx.stroke();
-      }
-    }
-    this.activeDecomps = this.activeDecomps.filter((d) => (time - d.startTime) < d.duration);
-  }
-
-  private updateDecompParticle(d: PixelDecomp, p: DecompParticle, elapsed: number, dt: number): void {
-    if (d.effect === 'glitch' && elapsed < 0.3) {
-      p.glitchOffsetX = (Math.random() - 0.5) * 40; p.glitchOffsetY = (Math.random() - 0.5) * 20;
-      p.x += p.glitchOffsetX * 0.1; p.y += p.glitchOffsetY * 0.1; p.life -= dt * 0.25; return;
-    }
-    if (d.effect === 'shockwave' && elapsed < p.burstDelay) return;
-    if (d.effect === 'dissolve' && elapsed < p.dissolveDelay) return;
-    if (d.effect === 'melt' && elapsed < p.dripDelay) return;
-    if (d.effect === 'ascend' && elapsed < p.riseDelay) return;
-    if (d.effect === 'burn-away' && elapsed < p.burnDelay) return;
-    if (d.effect === 'ice-shatter' && elapsed < (0.5 + p.column * 0.08)) return;
-
-    if (d.effect === 'burn-away') {
-      const burnAge = elapsed - p.burnDelay;
-      if (burnAge < 0.3) { p.r = 255; p.g = Math.max(0, 200 - burnAge * 600); p.b = 0; }
-      else { p.r = Math.max(0, 200 - (burnAge - 0.3) * 400); p.g = 0; p.b = 0; }
-      p.vy = -20 - Math.random() * 30; p.vx = (Math.random() - 0.5) * 15; p.size *= 0.996;
-    }
-    if (d.effect === 'crush') {
-      const dx = p.targetX - p.x; const dy = p.targetY - p.y; const dist = Math.max(5, Math.hypot(dx, dy));
-      const force = 200 / dist; p.vx += (dx / dist) * force * dt; p.vy += (dy / dist) * force * dt; p.size *= 0.98;
-    }
-    if (d.effect === 'magnetize') {
-      p.vx += (p.targetX - p.x) * 3 * dt; p.vy += (p.targetY - p.y) * 3 * dt;
-      if (elapsed > 0.8) p.life -= dt * 4;
-    }
-    if (d.effect === 'glitch' && elapsed >= 0.3) {
-      p.vx = (Math.random() - 0.5) * 200; p.vy = (Math.random() - 0.5) * 200; p.life -= dt * 2;
-    } else {
-      p.vy += p.gravity * dt;
-      p.vx *= p.drag;
-      p.vy *= p.drag;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.rotation += p.rotSpeed * dt;
-      const duration = d.effect === 'dissolve' ? 0.4 : d.duration;
-      p.life -= dt * (1 / Math.max(0.2, duration));
-    }
   }
 
   private toWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives']): Record<string, any> {
@@ -3636,29 +3408,46 @@ export class LyricDancePlayer {
         }
       }
 
-      // ═══ MULTI-LINE LAYOUT: emphasized words get their own line ═══
-      // Any word with isHeroWord OR emphasisLevel >= 2 goes on its own line.
-      // This catches all cases where runtime scaling would cause overlap.
-      // Non-hero words wrap into lines of max 3 words above/below.
+      // ═══ MULTI-LINE LAYOUT ═══
+      // Triggers when: (a) any word has emphasis >= 2 or isHeroWord, OR
+      //                (b) phrase is too wide for a single line (> ~85% of 960px compile space)
+      // Scaled words get their own line. Non-scaled words wrap at max 3 per line.
       const _mlDy: number[] = [];    // per-word Y offset in compile space
       const _mlDx: number[] = [];    // per-word X re-centering offset
       let _isMultiLine = false;
       const MAX_WORDS_PER_LINE = 3;
+      const MAX_LINE_WIDTH = 960 * 0.85; // 816px in compile space
 
       if (lineRole === 'current' && !groupHasActiveSoloHero && group.words.length > 1) {
-        // Check if any word will be scaled up (hero OR emphasis >= 2)
+        const mCtx = this._measureCtx;
+        const resolvedFontML = this.getResolvedFont();
+
+        // Measure total line width and detect scaled words in one pass
         let hasScaledWord = false;
+        let totalLineW = 0;
         for (let wi = 0; wi < group.words.length; wi++) {
           const w = group.words[wi];
-          if (w.isHeroWord || (w.emphasisLevel ?? 0) >= 2) { hasScaledWord = true; break; }
+          if (w.isHeroWord || (w.emphasisLevel ?? 0) >= 2) hasScaledWord = true;
+          const fs = Math.round(w.baseFontSize * fontScale);
+          const fontStr = `${w.fontWeight ?? 700} ${fs}px ${w.fontFamily ?? resolvedFontML}`;
+          if (mCtx.font !== fontStr) mCtx.font = fontStr;
+          totalLineW += mCtx.measureText(w.text).width;
+          if (wi < group.words.length - 1) {
+            const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
+            if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
+            totalLineW += mCtx.measureText(' ').width * 1.15;
+          }
         }
 
-        if (hasScaledWord) {
+        // Trigger multi-line for scaled words OR wide lines
+        const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
+
+        if (needsWrap) {
           _isMultiLine = true;
           const normalFS = group.words[0].baseFontSize * fontScale;
           const normalLineH = normalFS * 1.3;
 
-          // Build line list: scaled words get solo lines, others chunk into groups of 3
+          // Build line list: scaled words get solo lines, others wrap at max 3
           type LineRange = { words: number[]; isHero: boolean; h: number };
           const lines: LineRange[] = [];
           let nonHeroBuf: number[] = [];
@@ -3689,10 +3478,6 @@ export class LyricDancePlayer {
           const totalH = lines.reduce((sum, l) => sum + l.h, 0);
           let yPos = -totalH / 2;
 
-          // Use measureCtx for accurate word widths
-          const mCtx = this._measureCtx;
-          const resolvedFontML = this.getResolvedFont();
-
           for (const line of lines) {
             const lineY = yPos + line.h / 2;
 
@@ -3712,7 +3497,6 @@ export class LyricDancePlayer {
               wordWidths.push(ww);
               lineW += ww;
               if (i < line.words.length - 1) {
-                // space between words
                 const spaceStr = `400 ${fs}px ${family}`;
                 if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
                 lineW += mCtx.measureText(' ').width * 1.15;
@@ -3725,7 +3509,6 @@ export class LyricDancePlayer {
             for (let i = 0; i < line.words.length; i++) {
               const wi = line.words[i];
               const w = group.words[wi];
-              // _mlDx: offset from original layoutX to new centered position
               const wordCenterX = cursor + wordWidths[i] / 2;
               _mlDx[wi] = wordCenterX - w.layoutX;
               _mlDy[wi] = lineY;
