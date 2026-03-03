@@ -3476,6 +3476,15 @@ export class LyricDancePlayer {
 
     // CameraRig owns text zoom — effectiveZoom neutralized to 1.0
     const effectiveZoom = 1.0;
+    // Resolve current chapter for atmosphere metadata (no zoom — CameraRig owns that)
+    let currentChapterIdx = 0;
+    for (let i = 0; i < scene.chapters.length; i++) {
+      if (songProgress >= scene.chapters[i].startRatio && songProgress < scene.chapters[i].endRatio) {
+        currentChapterIdx = i;
+        break;
+      }
+    }
+    const chapter = scene.chapters[currentChapterIdx] ?? scene.chapters[0];
 
     const arcFn = this._getArcFunction(scene.emotionalArc);
     const intensity = Math.max(0, Math.min(1, arcFn(songProgress)));
