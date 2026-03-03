@@ -3299,14 +3299,25 @@ export class LyricDancePlayer {
     // No previous groups. No upcoming groups. One chunk, dead center.
     let activeGroupIdx = -1;
     {
-      // Pass 1: find the group whose time range contains tSec
+      // Pass 1a: find a group whose speech is actively happening (highest priority)
       for (let ri = 0; ri < activeGroups.length; ri++) {
         const g = groups[activeGroups[ri]];
         if (g.lineIndex !== primaryLineIndex) continue;
-        // Active = voice is within this group's lifespan
-        if (tSec >= g.start && tSec < g.end + g.lingerDuration) {
+        if (tSec >= g.start && tSec < g.end) {
           activeGroupIdx = activeGroups[ri];
           break;
+        }
+      }
+      // Pass 1b: find a group that finished speaking but is still lingering
+      // Only if no actively-spoken group was found — prevents linger from blocking next group
+      if (activeGroupIdx === -1) {
+        for (let ri = 0; ri < activeGroups.length; ri++) {
+          const g = groups[activeGroups[ri]];
+          if (g.lineIndex !== primaryLineIndex) continue;
+          if (tSec >= g.end && tSec < g.end + g.lingerDuration) {
+            activeGroupIdx = activeGroups[ri];
+            break;
+          }
         }
       }
       // Pass 2: if between groups, find the one we're entering (entry animation visible)
