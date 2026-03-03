@@ -808,7 +808,7 @@ class BeatVisSim {
           const r = Math.min(255, Math.floor(pr * (0.4 + t * 0.6) + tipShift * (255 - pr) * 0.6));
           const g = Math.min(255, Math.floor(pg * (0.3 + t * 0.4) + tipShift * Math.max(0, 180 - pg) * 0.3));
           const b = Math.floor(pb * (0.2 + t * 0.15) * (1 - tipShift * 0.7));
-          const a = Math.min(255, Math.floor((120 + flicker * 25) * (0.4 + t * 0.35) * (1 - flicker * 0.15)));
+          const a = Math.min(255, Math.floor((160 + flicker * 35) * (0.45 + t * 0.40) * (1 - flicker * 0.15)));
           buf[idx] = r; buf[idx + 1] = g; buf[idx + 2] = Math.max(0, b); buf[idx + 3] = a;
         } else if (style === 'neon') {
           // ── NEON: bright core, bloom falloff at edges ──
@@ -818,7 +818,7 @@ class BeatVisSim {
           buf[idx]     = Math.min(255, Math.floor(pr * bright * glow + 40 * t));
           buf[idx + 1] = Math.min(255, Math.floor(pg * bright * glow + 30 * t));
           buf[idx + 2] = Math.min(255, Math.floor(pb * bright * glow + 60 * t));
-          buf[idx + 3] = Math.min(255, Math.floor(130 * (0.4 + t * 0.4)));
+          buf[idx + 3] = Math.min(255, Math.floor(170 * (0.45 + t * 0.45)));
         } else if (style === 'smoke') {
           // ── SMOKE: soft, feathered, wispy at top ──
           const wisp = t > 0.4 ? Math.sin(this.flickerPhase * 1.5 + seed * 30 + x * 0.5) * 0.25 * t : 0;
@@ -827,21 +827,21 @@ class BeatVisSim {
           buf[idx]     = Math.min(255, Math.floor((pr * 0.3 + 180 * 0.7) * grey));
           buf[idx + 1] = Math.min(255, Math.floor((pg * 0.3 + 170 * 0.7) * grey));
           buf[idx + 2] = Math.min(255, Math.floor((pb * 0.3 + 175 * 0.7) * grey));
-          buf[idx + 3] = Math.min(255, Math.floor(100 * fade * (0.3 + t * 0.25 + wisp)));
+          buf[idx + 3] = Math.min(255, Math.floor(130 * fade * (0.35 + t * 0.28 + wisp)));
         } else {
           // ── LIGHT: clean, bright, minimal pillars ──
           const bright = 0.35 + t * 0.65;
           buf[idx]     = Math.min(255, Math.floor(pr * bright + 50 * t));
           buf[idx + 1] = Math.min(255, Math.floor(pg * bright + 50 * t));
           buf[idx + 2] = Math.min(255, Math.floor(pb * bright + 50 * t));
-          buf[idx + 3] = Math.min(255, Math.floor(120 * (0.4 + t * 0.4)));
+          buf[idx + 3] = Math.min(255, Math.floor(155 * (0.45 + t * 0.45)));
         }
       }
     }
 
     // ── Beat flash: bright line at bottom on new beat ──
     if (isNewBeat && hitStrength > 0.3) {
-      const flashAlpha = Math.min(200, Math.floor(hitStrength * 120));
+      const flashAlpha = Math.min(200, Math.floor(hitStrength * 155));
       const fr = style === 'flame' ? Math.min(255, pr + 80) : pr;
       const fg = style === 'flame' ? Math.min(255, Math.floor(pg * 0.7 + 60)) : pg;
       const fb = style === 'flame' ? Math.floor(pb * 0.3) : pb;
@@ -3601,7 +3601,7 @@ export class LyricDancePlayer {
 
     // Section-specific sims (fire, water, aurora, rain) — full canvas, subtle
     for (const simCanvas of this.currentSimCanvases) {
-      this.ctx.globalAlpha = 0.25 * simOpacity;
+      this.ctx.globalAlpha = 0.30 * simOpacity;
       this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
     }
@@ -3612,7 +3612,7 @@ export class LyricDancePlayer {
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
       // Alpha driven by actual energy — invisible during silence
-      const visAlpha = Math.min(0.22, 0.08 + bsEnergy * 0.10 + bsPulse * 0.04); // 0.08 floor → 0.22 peak
+      const visAlpha = Math.min(0.45, 0.15 + bsEnergy * 0.22 + bsPulse * 0.08); // 0.15 floor → 0.45 peak
       if (visAlpha > 0.01) {
         const visH = this.height * 0.25;
         const visTop = this.height - visH;
