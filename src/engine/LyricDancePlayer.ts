@@ -3644,15 +3644,15 @@ export class LyricDancePlayer {
       this.ctx.globalAlpha = 1;
     }
 
-    // ═══ Beat visualizer strip — bottom ~14% of canvas, synced to actual beatmap ═══
+    // ═══ Beat visualizer strip — bottom ~25% of canvas, synced to actual beatmap ═══
     if (this._globalBeatVis) {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
       // Alpha driven by actual energy — invisible during silence
-      const visAlpha = Math.min(0.85, bsEnergy * 0.6 + bsPulse * 0.25);
+      const visAlpha = Math.min(0.75, 0.20 + bsEnergy * 0.40 + bsPulse * 0.15); // 0.20 floor → 0.75 peak
       if (visAlpha > 0.01) {
-        const visH = this.height * 0.14;
+        const visH = this.height * 0.25;
         const visTop = this.height - visH;
         this.ctx.globalAlpha = visAlpha * simOpacity;
         this.ctx.imageSmoothingEnabled = false;
@@ -3661,7 +3661,6 @@ export class LyricDancePlayer {
         this.ctx.globalAlpha = 1;
       }
     }
-  }
 
 
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
