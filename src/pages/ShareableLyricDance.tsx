@@ -820,19 +820,29 @@ export default function ShareableLyricDance() {
                   disabled={!!exporting}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
                 >
-                  <span className="text-white/30">9:16</span>
-                  <span className="text-white/50">·</span>
-                  <span>TikTok / Reels</span>
+                  {exporting === "9:16"
+                    ? <span className="text-white/50">Exporting {exportProgress}%…</span>
+                    : <><span className="text-white/30">9:16</span><span className="text-white/50">·</span><span>TikTok / Reels</span></>
+                  }
                 </button>
                 <button
                   onClick={() => handleExport("16:9")}
                   disabled={!!exporting}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
                 >
-                  <span className="text-white/30">16:9</span>
-                  <span className="text-white/50">·</span>
-                  <span>YouTube</span>
+                  {exporting === "16:9"
+                    ? <span className="text-white/50">Exporting {exportProgress}%…</span>
+                    : <><span className="text-white/30">16:9</span><span className="text-white/50">·</span><span>YouTube</span></>
+                  }
                 </button>
+                {exporting && (
+                  <button
+                    onClick={() => abortRef.current?.abort()}
+                    className="w-full px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
               </PopoverContent>
             </Popover>
 
