@@ -716,7 +716,7 @@ class RainSim {
 // ═══ BeatVisSim: Beat-synced visualizer strip ═══
 // Driven by ACTUAL BeatState data (energy, pulse, hitStrength) — not faked sinusoids.
 // Goes silent when the music goes silent. Color from AI palette.
-type BeatVisStyle = 'bars' | 'mirror-bars' | 'wave';
+// Beat vis uses bars style only — no switching.
 const VIS_W = 192;
 const VIS_H = 48; // shorter — rendered as ~14% strip at bottom
 
@@ -727,13 +727,12 @@ class BeatVisSim {
   private imageData: ImageData;
   private bars: Float32Array;
   private palette: [number, number, number];
-  private style: BeatVisStyle;
   // Beat history ring buffer — stores last 192 energy samples for scrolling bars
   private energyHistory: Float32Array;
   private historyHead = 0;
   private lastBeatIndex = -1;
 
-  constructor(accent: string, style: BeatVisStyle = 'bars') {
+  constructor(accent: string) {
     this.visCanvas = document.createElement('canvas');
     this.visCanvas.width = VIS_W;
     this.visCanvas.height = VIS_H;
@@ -743,7 +742,6 @@ class BeatVisSim {
     this.bars = new Float32Array(VIS_W);
     this.energyHistory = new Float32Array(VIS_W);
     this.palette = this.hexToRgb(accent);
-    this.style = style;
   }
 
   private hexToRgb(hex: string): [number, number, number] {
@@ -752,7 +750,6 @@ class BeatVisSim {
   }
 
   setAccent(hex: string): void { this.palette = this.hexToRgb(hex); }
-  setStyle(s: BeatVisStyle): void { this.style = s; }
 
   /**
    * Update with REAL beat data.
@@ -785,97 +782,29 @@ class BeatVisSim {
     // Combined drive signal — ZERO during silence, peaks on beats
     const drive = energy * 0.5 + pulse * 0.35 + hitStrength * 0.15;
 
-    if (this.style === 'bars') {
-      // Bar targets: energy history provides per-column variation (real data, not sin waves)
-      for (let x = 0; x < W; x++) {
-        const histIdx = (this.historyHead - W + x + W * 2) % W;
-        const histVal = this.energyHistory[histIdx];
-        // Combine history with current beat pulse for reactivity
-        const target = histVal * 0.7 + pulse * 0.3;
-        // Fast attack, slow decay
-        if (target > this.bars[x]) {
-          this.bars[x] += (target - this.bars[x]) * 0.7;
-        } else {
-          this.bars[x] += (target - this.bars[x]) * 0.15;
-        }
+    // Bar targets from energy history (real data, not sin waves)
+    for (let x = 0; x < W; x++) {
+      const histIdx = (this.historyHead - W + x + W * 2) % W;
+      const histVal = this.energyHistory[histIdx];
+      const target = histVal * 0.7 + pulse * 0.3;
+      if (target > this.bars[x]) {
+        this.bars[x] += (target - this.bars[x]) * 0.7;
+      } else {
+        this.bars[x] += (target - this.bars[x]) * 0.15;
       }
-      // Render bars from bottom
-      for (let x = 0; x < W; x++) {
-        const barH = Math.floor(this.bars[x] * H * 0.90);
-        if (barH < 1) continue;
-        for (let y = H - 1; y >= H - barH && y >= 0; y--) {
-          const t = (H - y) / Math.max(1, barH);
-          const idx = (y * W + x) * 4;
-          const bright = 0.30 + t * 0.70;
-          buf[idx] = Math.min(255, Math.floor(pr * bright));
-          buf[idx + 1] = Math.min(255, Math.floor(pg * bright));
-          buf[idx + 2] = Math.min(255, Math.floor(pb * bright));
-          buf[idx + 3] = Math.min(255, Math.floor(drive * 255 * (0.4 + t * 0.6)));
-        }
-      }
-    } else if (this.style === 'mirror-bars') {
-      // Same data, mirrored from center
-      for (let x = 0; x < W; x++) {
-        const histIdx = (this.historyHead - W + x + W * 2) % W;
-        const histVal = this.energyHistory[histIdx];
-        const target = histVal * 0.7 + pulse * 0.3;
-        if (target > this.bars[x]) {
-          this.bars[x] += (target - this.bars[x]) * 0.7;
-        } else {
-          this.bars[x] += (target - this.bars[x]) * 0.15;
-        }
-      }
-      const midY = Math.floor(H * 0.5);
-      for (let x = 0; x < W; x++) {
-        const halfH = Math.floor(this.bars[x] * midY * 0.9);
-        if (halfH < 1) continue;
-        for (let d = 0; d < halfH; d++) {
-          const t = d / Math.max(1, halfH);
-          const bright = 0.5 + (1 - t) * 0.5;
-          const alpha = Math.floor(drive * 255 * (1 - t * 0.5));
-          if (alpha < 2) continue;
-          // Up from center
-          const yUp = midY - d;
-          if (yUp >= 0) {
-            const idx = (yUp * W + x) * 4;
-            buf[idx] = Math.min(255, Math.floor(pr * bright));
-            buf[idx + 1] = Math.min(255, Math.floor(pg * bright));
-            buf[idx + 2] = Math.min(255, Math.floor(pb * bright));
-            buf[idx + 3] = alpha;
-          }
-          // Down from center
-          const yDown = midY + d;
-          if (yDown < H) {
-            const idx = (yDown * W + x) * 4;
-            buf[idx] = Math.min(255, Math.floor(pr * bright * 0.65));
-            buf[idx + 1] = Math.min(255, Math.floor(pg * bright * 0.65));
-            buf[idx + 2] = Math.min(255, Math.floor(pb * bright * 0.65));
-            buf[idx + 3] = Math.floor(alpha * 0.55);
-          }
-        }
-      }
-    } else {
-      // Wave — energy-modulated sine riding on beat phase
-      // The wave amplitude IS the energy — flatlines during silence
-      for (let x = 0; x < W; x++) {
-        const nx = x / W;
-        const histIdx = (this.historyHead - W + x + W * 2) % W;
-        const localEnergy = this.energyHistory[histIdx];
-        // Wave shape from beat phase — synced to actual rhythm
-        const wave = Math.sin(nx * Math.PI * 6 + beatPhase * Math.PI * 2) * localEnergy * 0.45
-          + Math.sin(nx * Math.PI * 3 - beatPhase * Math.PI) * pulse * 0.25;
-        const cy = H - 3 - Math.abs(wave) * H * 0.7;
-        const thick = 1.5 + drive * 4;
-        for (let y = Math.max(0, Math.floor(cy - thick)); y < Math.min(H, Math.ceil(cy + thick)); y++) {
-          const dist = Math.abs(y - cy) / thick;
-          const alpha = (1 - dist) * drive * 220;
-          if (alpha < 2) continue;
-          const idx = (y * W + x) * 4;
-          buf[idx] = Math.min(255, Math.floor(pr * (0.4 + (1 - dist) * 0.6)));
-          buf[idx + 1] = Math.min(255, Math.floor(pg * (0.4 + (1 - dist) * 0.6)));
-          buf[idx + 2] = Math.min(255, Math.floor(pb * (0.4 + (1 - dist) * 0.6)));
-          buf[idx + 3] = Math.min(255, Math.floor(alpha));
-        }
+    }
+    // Render bars from bottom
+    for (let x = 0; x < W; x++) {
+      const barH = Math.floor(this.bars[x] * H * 0.90);
+      if (barH < 1) continue;
+      for (let y = H - 1; y >= H - barH && y >= 0; y--) {
+        const t = (H - y) / Math.max(1, barH);
+        const idx = (y * W + x) * 4;
+        const bright = 0.30 + t * 0.70;
+        buf[idx] = Math.min(255, Math.floor(pr * bright));
+        buf[idx + 1] = Math.min(255, Math.floor(pg * bright));
+        buf[idx + 2] = Math.min(255, Math.floor(pb * bright));
+        buf[idx + 3] = Math.min(255, Math.floor(drive * 255 * (0.4 + t * 0.6)));
       }
     }
 
@@ -943,6 +872,7 @@ interface CommentChunk {
   trailLength: number;
   fontSize: number;
 }
+
 
 
 // ──────────────────────────────────────────────────────────────
@@ -1053,7 +983,6 @@ export class LyricDancePlayer {
   private backgroundSystem = 'default';
   private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim; beatVis?: BeatVisSim }> = [];
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
-  private _beatVisStyles: BeatVisStyle[] = [];
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
   private _beatVisCanvas: HTMLCanvasElement | null = null; // separate from themed sims
@@ -3540,7 +3469,7 @@ export class LyricDancePlayer {
 
       // ═══ Always-on beat visualizer — present throughout entire song ═══
       if (!this._globalBeatVis) {
-        this._globalBeatVis = new BeatVisSim(accentColor, 'bars');
+        this._globalBeatVis = new BeatVisSim(accentColor);
       }
 
       this.chapterSims = chapters.map((chapter: any, ci: number) => {
@@ -3557,13 +3486,6 @@ export class LyricDancePlayer {
         return sim;
       });
 
-      // Map section keywords to beat vis styles — always present, style varies
-      this._beatVisStyles = chapters.map((chapter: any) => {
-        const desc = (chapter?.backgroundDirective ?? chapter?.background ?? '').toLowerCase();
-        if (desc.includes('wave') || desc.includes('ocean') || desc.includes('flow') || desc.includes('water') || desc.includes('rain') || desc.includes('aurora')) return 'wave' as BeatVisStyle;
-        if (desc.includes('mirror') || desc.includes('reflect') || desc.includes('dream') || desc.includes('float') || desc.includes('drift')) return 'mirror-bars' as BeatVisStyle;
-        return 'bars' as BeatVisStyle;
-      });
       
     } catch (err) {
       console.error('[LyricEngine] buildChapterSims crash:', err);
@@ -3613,8 +3535,6 @@ export class LyricDancePlayer {
 
       // ═══ Beat visualizer — driven by ACTUAL BeatState, not section intensity ═══
       if (this._globalBeatVis) {
-        const visStyle = this._beatVisStyles[ci] ?? 'bars';
-        this._globalBeatVis.setStyle(visStyle);
         const bs = this._lastBeatState;
         this._globalBeatVis.update(
           bs?.energy ?? 0,       // RMS energy — goes to 0 during silence
@@ -3660,7 +3580,7 @@ export class LyricDancePlayer {
         this.ctx.globalAlpha = 1;
       }
     }
-  }
+
 
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
     const scene = this.compiledScene;
