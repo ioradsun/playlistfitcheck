@@ -697,6 +697,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         wordDuration: Math.max(0, wm.end - wm.start),
         semanticScaleX: semantic?.scaleX ?? 1,
         semanticScaleY: semantic?.scaleY ?? 1,
+        semanticAlphaMax: semantic?.alphaMax ?? 1,
         semanticGlowMult: semantic?.glowMultiplier ?? 1,
         entryDurationMult: semantic?.entryDurationMult ?? 1,
         emitterType: semantic?.emitterType ?? 'none',
