@@ -2279,7 +2279,7 @@ export class LyricDancePlayer {
         if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
 
         // ═══ HERO EFFECTS: depth stack, bloom pulse, underline sweep, beat bounce ═══
-        const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
+        const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || (chunk as any).isHeroWord;
         const beatState = this._lastBeatState;
         const beatPulse = beatState?.pulse ?? 0;
         let heroDrawX = drawX;
