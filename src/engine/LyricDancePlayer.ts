@@ -804,7 +804,7 @@ class BeatVisSim {
         buf[idx] = Math.min(255, Math.floor(pr * bright));
         buf[idx + 1] = Math.min(255, Math.floor(pg * bright));
         buf[idx + 2] = Math.min(255, Math.floor(pb * bright));
-        buf[idx + 3] = Math.min(255, Math.floor(drive * 255 * (0.4 + t * 0.6)));
+        buf[idx + 3] = Math.min(255, Math.floor(200 * (0.5 + t * 0.5)));
       }
     }
 
@@ -3569,11 +3569,11 @@ export class LyricDancePlayer {
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
       // Alpha driven by actual energy — invisible during silence
-      const visAlpha = Math.min(0.75, 0.20 + bsEnergy * 0.40 + bsPulse * 0.15); // 0.20 floor → 0.75 peak
+      const visAlpha = Math.min(0.75, 0.30 + bsEnergy * 0.35 + bsPulse * 0.10); // 0.20 floor → 0.75 peak
       if (visAlpha > 0.01) {
         const visH = this.height * 0.25;
         const visTop = this.height - visH;
-        this.ctx.globalAlpha = visAlpha * simOpacity;
+        this.ctx.globalAlpha = visAlpha;
         this.ctx.imageSmoothingEnabled = false;
         this.ctx.drawImage(this._globalBeatVis.canvas, 0, visTop, this.width, visH);
         this.ctx.imageSmoothingEnabled = true;
@@ -3581,6 +3581,7 @@ export class LyricDancePlayer {
       }
     }
   }
+
 
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
     const scene = this.compiledScene;
