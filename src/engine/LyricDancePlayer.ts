@@ -2292,7 +2292,12 @@ export class LyricDancePlayer {
       const sx = Number.isFinite(sxRaw) ? sxRaw : 1;
       const sy = Number.isFinite(syRaw) ? syRaw : 1;
 
-      // ═══ CRITICAL: offset by SCALED half-width so text expands from center ═══
+      // drawX: position the text's left edge so that AFTER scaling, it's centered on centerX.
+      // With textAlign='left', fillText draws from x=0 → rightward.
+      // The transform scales by sx, so visual width = textWidth * sx.
+      // We need: tx + textWidth * sx / 2 = visual_center
+      // But tx feeds through computeTransformMatrix as the origin (e = tx * dpr).
+      // So: drawX = centerX - textWidth * sx * 0.5
       let drawX = centerX - textWidth * sx * 0.5;
       const drawY = centerY;
       const finalDrawY = drawY;
@@ -3631,77 +3636,106 @@ export class LyricDancePlayer {
         }
       }
 
-      // ═══ MULTI-LINE LAYOUT: break phrase around inline hero words ═══
-      // When an inline hero (<500ms) is present, split into 2-3 lines
-      // so emphasis scaling doesn't cause overlap on a single line.
-      //   hero at beginning → hero top, rest below
-      //   hero in middle    → before / HERO / after (3 lines)
-      //   hero at end       → rest above, hero below
+      // ═══ MULTI-LINE LAYOUT: hero words get their own line ═══
+      // Any isHeroWord (that isn't a ≥500ms solo hero) goes on its own line.
+      // Non-hero words wrap into lines of max 3 words above/below.
       const _mlDy: number[] = [];    // per-word Y offset in compile space
       const _mlDx: number[] = [];    // per-word X re-centering offset
       let _isMultiLine = false;
+      const MAX_WORDS_PER_LINE = 3;
 
       if (lineRole === 'current' && !groupHasActiveSoloHero && group.words.length > 1) {
-        let heroWi = -1;
+        // Check if any hero word exists
+        let hasInlineHero = false;
         for (let wi = 0; wi < group.words.length; wi++) {
-          const w = group.words[wi];
-          if (w.isHeroWord && (w.wordDuration ?? 0) < 0.5 && (w.emphasisLevel ?? 0) >= 2) {
-            heroWi = wi;
-            break;
-          }
+          if (group.words[wi].isHeroWord) { hasInlineHero = true; break; }
         }
 
-        if (heroWi >= 0) {
+        if (hasInlineHero) {
           _isMultiLine = true;
-          const heroEmp = group.words[heroWi].emphasisLevel ?? 0;
-          const heroFS = group.words[heroWi].baseFontSize * fontScale;
           const normalFS = group.words[0].baseFontSize * fontScale;
-          // Line heights: hero line accounts for emphasis scale
-          const heroLineH = heroFS * (1.0 + heroEmp * 0.25) * 1.3;
           const normalLineH = normalFS * 1.3;
 
-          const total = group.words.length;
-          const atStart = heroWi === 0;
-          const atEnd = heroWi === total - 1;
+          // Build line list: hero words get solo lines, non-heroes chunk into groups of 3
+          type LineRange = { words: number[]; isHero: boolean; h: number };
+          const lines: LineRange[] = [];
+          let nonHeroBuf: number[] = [];
 
-          // Build line ranges: { startWi, endWi, height }
-          const lineRanges: Array<{ s: number; e: number; h: number }> = [];
-          if (atStart) {
-            lineRanges.push({ s: 0, e: 0, h: heroLineH });
-            lineRanges.push({ s: 1, e: total - 1, h: normalLineH });
-          } else if (atEnd) {
-            lineRanges.push({ s: 0, e: total - 2, h: normalLineH });
-            lineRanges.push({ s: total - 1, e: total - 1, h: heroLineH });
-          } else {
-            lineRanges.push({ s: 0, e: heroWi - 1, h: normalLineH });
-            lineRanges.push({ s: heroWi, e: heroWi, h: heroLineH });
-            lineRanges.push({ s: heroWi + 1, e: total - 1, h: normalLineH });
+          const flushNonHero = () => {
+            while (nonHeroBuf.length > 0) {
+              const take = nonHeroBuf.splice(0, MAX_WORDS_PER_LINE);
+              lines.push({ words: take, isHero: false, h: normalLineH });
+            }
+          };
+
+          for (let wi = 0; wi < group.words.length; wi++) {
+            const w = group.words[wi];
+            if (w.isHeroWord) {
+              flushNonHero();
+              const heroEmp = w.emphasisLevel ?? 0;
+              const heroFS = w.baseFontSize * fontScale;
+              const heroScale = 1.0 + Math.max(0, heroEmp - 1) * 0.25;
+              lines.push({ words: [wi], isHero: true, h: heroFS * heroScale * 1.4 });
+            } else {
+              nonHeroBuf.push(wi);
+            }
           }
+          flushNonHero();
 
-          // Original group center (before centering offset was applied)
-          const groupCenterX = 480 - groupCenterOffsetX;
-
-          // Compute total height, center vertically around 0
-          const totalH = lineRanges.reduce((sum, l) => sum + l.h, 0);
+          // Compute total height and center vertically around 0
+          const totalH = lines.reduce((sum, l) => sum + l.h, 0);
           let yPos = -totalH / 2;
 
-          for (const lr of lineRanges) {
-            // Compute this line's horizontal midpoint from layoutX
-            let lMinX = Infinity, lMaxX = -Infinity;
-            for (let wi = lr.s; wi <= lr.e; wi++) {
-              lMinX = Math.min(lMinX, group.words[wi].layoutX);
-              lMaxX = Math.max(lMaxX, group.words[wi].layoutX);
-            }
-            const lineMidX = (lMinX + lMaxX) / 2;
-            // Shift so this line's center hits 480 after groupCenterOffsetX
-            const dxShift = groupCenterX - lineMidX;
+          // Use measureCtx for accurate word widths
+          const mCtx = this._measureCtx;
+          const resolvedFontML = this.getResolvedFont();
 
-            const lineY = yPos + lr.h / 2;
-            for (let wi = lr.s; wi <= lr.e; wi++) {
-              _mlDy[wi] = lineY;
-              _mlDx[wi] = dxShift;
+          for (const line of lines) {
+            const lineY = yPos + line.h / 2;
+
+            // Measure total line width to center it
+            let lineW = 0;
+            const wordWidths: number[] = [];
+            for (let i = 0; i < line.words.length; i++) {
+              const w = group.words[line.words[i]];
+              const fs = Math.round(w.baseFontSize * fontScale);
+              const weight = w.fontWeight ?? 700;
+              const family = w.fontFamily ?? resolvedFontML;
+              const emp = w.emphasisLevel ?? 0;
+              const scale = line.isHero ? (1.0 + Math.max(0, emp - 1) * 0.25) : 1.0;
+              const fontStr = `${weight} ${fs}px ${family}`;
+              if (mCtx.font !== fontStr) mCtx.font = fontStr;
+              const ww = mCtx.measureText(w.text).width * scale;
+              wordWidths.push(ww);
+              lineW += ww;
+              if (i < line.words.length - 1) {
+                // space between words
+                const spaceStr = `400 ${fs}px ${family}`;
+                if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
+                lineW += mCtx.measureText(' ').width * 1.15;
+              }
             }
-            yPos += lr.h;
+
+            // Position words left-to-right centered at x=480
+            const startX = 480 - lineW / 2;
+            let cursor = startX;
+            for (let i = 0; i < line.words.length; i++) {
+              const wi = line.words[i];
+              const w = group.words[wi];
+              // _mlDx: offset from original layoutX to new centered position
+              const wordCenterX = cursor + wordWidths[i] / 2;
+              _mlDx[wi] = wordCenterX - w.layoutX;
+              _mlDy[wi] = lineY;
+              cursor += wordWidths[i];
+              if (i < line.words.length - 1) {
+                const fs = Math.round(w.baseFontSize * fontScale);
+                const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
+                if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
+                cursor += mCtx.measureText(' ').width * 1.15;
+              }
+            }
+
+            yPos += line.h;
           }
         }
       }
@@ -3799,11 +3833,12 @@ export class LyricDancePlayer {
         }
 
         // ═══ EMPHASIS-BASED INLINE SCALING ═══
-        // Every word gets scale + weight based on emphasis level.
-        // emp 0 = baseline, emp 1 = +25%, emp 2 = +50%, ... emp 5 = +125%
+        // emp 1 = baseline (matches compile-time layout), emp 2+ = progressively larger.
+        // Compile-time layoutX positions words at base size (emp 1 = 1.0x).
+        // Runtime scale MUST match or words overflow their slots.
         const emp = word.emphasisLevel ?? 0;
-        const emphasisScale = 1.0 + emp * 0.25;
-        const emphasisWeight = Math.min(900, (word.fontWeight ?? 400) + emp * 100);
+        const emphasisScale = 1.0 + Math.max(0, emp - 1) * 0.25;
+        const emphasisWeight = Math.min(900, (word.fontWeight ?? 400) + Math.max(0, emp - 1) * 100);
 
         // Apply emphasis to inline words (solo heroes get heroScaleMult instead)
         if (!isSoloHero || !groupHasActiveSoloHero) {
@@ -3856,7 +3891,10 @@ export class LyricDancePlayer {
           waveScale = 1.0 + waveProximity * 0.06;
         }
 
-        chunk.x = (word.layoutX + groupCenterOffsetX + (_isMultiLine ? (_mlDx[wi] ?? 0) : 0) + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
+        // When multi-line is active, _mlDx already positions words centered at 480.
+        // Skip groupCenterOffsetX to avoid double-centering.
+        const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
+        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
         chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : 0) + finalOffsetY + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
@@ -3908,6 +3946,71 @@ export class LyricDancePlayer {
       }
     }
     chunks.length = ci;
+
+    // ═══ RUNTIME RE-SPACING: fix overlaps at the SOURCE ═══
+    // Compile-time layoutX positions words for base font sizes.
+    // Emphasis scaling (up to 2.25x) makes words wider. This pass measures
+    // actual visual widths and re-lays words left-to-right, centered.
+    if (ci > 1) {
+      const resolvedFont = this.getResolvedFont();
+      const mCtx = this._measureCtx;
+
+      // Collect visible chunks with their visual widths
+      type RespacedWord = { idx: number; visualW: number; y: number; origX: number; fontSize: number };
+      const rWords: RespacedWord[] = [];
+
+      for (let i = 0; i < ci; i++) {
+        const c = chunks[i];
+        if (!c.visible || (c.alpha ?? 0) < 0.01) continue;
+        const fs = Math.round(c.fontSize ?? 36);
+        const weight = c.fontWeight ?? 700;
+        const family = c.fontFamily ?? resolvedFont;
+        const fontStr = `${weight} ${fs}px ${family}`;
+        if (mCtx.font !== fontStr) mCtx.font = fontStr;
+        const baseW = mCtx.measureText(c.text ?? '').width;
+        const scX = Math.abs(c.scaleX ?? 1);
+        rWords.push({ idx: i, visualW: baseW * scX, y: c.y ?? 0, origX: c.x ?? 0, fontSize: fs });
+      }
+
+      if (rWords.length > 1) {
+        // Group by Y position (multi-line layout uses different Y rows)
+        const yBuckets = new Map<number, RespacedWord[]>();
+        for (const rw of rWords) {
+          const yKey = Math.round(rw.y / 5) * 5; // bucket within 5px
+          if (!yBuckets.has(yKey)) yBuckets.set(yKey, []);
+          yBuckets.get(yKey)!.push(rw);
+        }
+
+        const centerX = 480 * sx; // compile center → viewport space
+
+        for (const [, line] of yBuckets) {
+          if (line.length < 2) continue;
+          // Preserve word order by original X
+          line.sort((a, b) => a.origX - b.origX);
+
+          // Compute spacing: space char width at median font size
+          const medianFS = line[Math.floor(line.length / 2)].fontSize;
+          const spFontStr = `400 ${medianFS}px ${resolvedFont}`;
+          if (mCtx.font !== spFontStr) mCtx.font = spFontStr;
+          const spaceW = mCtx.measureText(' ').width * 1.15;
+
+          // Total visual line width
+          let totalW = 0;
+          for (let i = 0; i < line.length; i++) {
+            totalW += line[i].visualW;
+            if (i < line.length - 1) totalW += spaceW;
+          }
+
+          // Lay out left-to-right from center
+          let cursor = centerX - totalW / 2;
+          for (const rw of line) {
+            // chunk.x = center of this word
+            chunks[rw.idx].x = cursor + rw.visualW / 2;
+            cursor += rw.visualW + spaceW;
+          }
+        }
+      }
+    }
 
     if (!this._evalFrame) {
       this._evalFrame = {

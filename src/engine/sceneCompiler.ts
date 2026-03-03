@@ -241,9 +241,10 @@ export function computeAllLineLayouts(
   };
   const wordFontSize = (wm: WordMetaEntry, baseFontSize: number) => {
     const isFiller = isFillerWord(wm.word);
-    const emphasis = wm.directive?.emphasisLevel ?? 1;
     if (isFiller) return baseFontSize * 0.85;
-    if (emphasis === 3) return baseFontSize * 1.08;
+    // Emphasis scaling is applied at RUNTIME via scaleX (emphasisScale).
+    // Compile-time uses base size for ALL non-filler words.
+    // This avoids double-scaling since baseFontSize feeds into runtime font.
     return baseFontSize * 1.0;
   };
 
