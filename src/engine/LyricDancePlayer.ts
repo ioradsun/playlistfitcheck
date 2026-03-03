@@ -1464,7 +1464,7 @@ export class LyricDancePlayer {
       alpha: false,
       willReadFrequently: true,
       desynchronized: true,
-    } as any)!;
+    })! as CanvasRenderingContext2D;
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
