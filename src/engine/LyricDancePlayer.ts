@@ -2285,15 +2285,17 @@ export class LyricDancePlayer {
       const textWidth = this.getCachedMetrics(text, measureFont).width;
       const centerX = bound ? bound.cx : rawDrawX;
       const centerY = bound ? bound.cy : rawDrawY;
-      let drawX = centerX - textWidth * 0.5;
-      const drawY = centerY;
-      const finalDrawY = drawY;
 
       const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
       const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
       const sx = Number.isFinite(sxRaw) ? sxRaw : 1;
       const sy = Number.isFinite(syRaw) ? syRaw : 1;
+
+      // ═══ CRITICAL: offset by SCALED half-width so text expands from center ═══
+      let drawX = centerX - textWidth * sx * 0.5;
+      const drawY = centerY;
+      const finalDrawY = drawY;
 
       const isAnchor = chunk.isAnchor ?? false;
       // ═══ SINGLE COLOR MODEL: no colored halos behind words ═══
