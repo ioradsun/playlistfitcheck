@@ -713,9 +713,9 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         iconPosition: lineStory?.iconPosition,
         iconScale: lineStory?.iconScale,
       };
+      // letterSequence: render as single chunk with spaced letters (e.g. "count" → "c o u n t")
       if (wm.directive?.letterSequence) {
-        const letters = wm.word.split('');
-        return letters.map((ch, li) => ({ ...base, id: `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}`, text: ch, isLetterChunk: true, letterIndex: li, letterTotal: letters.length, letterDelay: li * 0.012 }));
+        base.text = base.text.split('').join(' ');
       }
       return [base];
     });
