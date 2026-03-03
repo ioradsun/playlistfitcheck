@@ -1044,6 +1044,7 @@ export class LyricDancePlayer {
   private _lightingOverlayCanvas: HTMLCanvasElement | null = null;
   private _lightingOverlayKey = '';
   private _textBandBrightness = 0.3; // sampled brightness of center band where text renders
+  private _heroAccentColor = '#FFD700'; // accent from AI palette for hero words
   private _lastBandSampleMs = 0;     // throttle: sample every 300ms
   // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
   private _frameSectionIdx = -1;
@@ -3500,6 +3501,7 @@ export class LyricDancePlayer {
       const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
       const palette = this.getResolvedPalette();
       const accentColor = palette[1] ?? '#FFD700';
+      this._heroAccentColor = accentColor;
       const bgSystem = this.backgroundSystem;
 
       // ═══ Always-on beat visualizer — present throughout entire song ═══
@@ -4109,12 +4111,15 @@ export class LyricDancePlayer {
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
         chunk.color = word.color;
-        // ═══ SINGLE COLOR MODEL: one color for all words, contrast against background ═══
-        // No tiers, no semantic overrides, no palette juggling.
-        // Light text on dark backgrounds, dark text on light backgrounds.
+        // ═══ TEXT COLOR: auto light/dark + accent for heroes ═══
         {
-          const bgIsLight = this._textBandBrightness > 0.55;
-          chunk.color = bgIsLight ? '#1a1a2e' : '#f0f0f0';
+          const emph = resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0;
+          const bgIsLight = this._textBandBrightness > 0.40;
+          if (emph >= 4) {
+            chunk.color = this._heroAccentColor;
+          } else {
+            chunk.color = bgIsLight ? '#1a1a2e' : '#f0f0f0';
+          }
         }
         chunk.glow = wordGlow;
         chunk.entryStyle = usedEntry;
