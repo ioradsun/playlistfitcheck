@@ -713,23 +713,20 @@ class RainSim {
   get canvas(): HTMLCanvasElement { return this.sim.canvas; }
 }
 
-// ═══ BeatVisSim: Beat-synced visualizer strip ═══
-// Driven by ACTUAL BeatState data (energy, pulse, hitStrength) — not faked sinusoids.
-// Goes silent when the music goes silent. Color from AI palette.
-// Beat vis uses bars style only — no switching.
+// ═══ BeatVisSim: In-place beat-reactive bar visualizer ═══
+// Bars stay in place — height bounces with current beat energy.
+// No scrolling. Driven by actual BeatState data.
 const VIS_W = 192;
-const VIS_H = 48; // shorter — rendered as ~14% strip at bottom
+const VIS_H = 48;
 
 class BeatVisSim {
   private visCanvas: HTMLCanvasElement;
   private visCtx: CanvasRenderingContext2D;
   private buf: Uint8ClampedArray;
   private imageData: ImageData;
-  private bars: Float32Array;
+  private bars: Float32Array;           // current smoothed bar heights (0-1)
+  private barSeeds: Float32Array;       // fixed per-bar random offsets for variation
   private palette: [number, number, number];
-  // Beat history ring buffer — stores last 192 energy samples for scrolling bars
-  private energyHistory: Float32Array;
-  private historyHead = 0;
   private lastBeatIndex = -1;
 
   constructor(accent: string) {
@@ -740,7 +737,12 @@ class BeatVisSim {
     this.imageData = this.visCtx.createImageData(VIS_W, VIS_H);
     this.buf = this.imageData.data;
     this.bars = new Float32Array(VIS_W);
-    this.energyHistory = new Float32Array(VIS_W);
+    // Fixed seeds give each bar a unique character — computed once
+    this.barSeeds = new Float32Array(VIS_W);
+    for (let i = 0; i < VIS_W; i++) {
+      this.barSeeds[i] = (Math.sin(i * 127.1 + 311.7) * 43758.5453) % 1;
+      if (this.barSeeds[i] < 0) this.barSeeds[i] += 1;
+    }
     this.palette = this.hexToRgb(accent);
   }
 
@@ -751,15 +753,7 @@ class BeatVisSim {
 
   setAccent(hex: string): void { this.palette = this.hexToRgb(hex); }
 
-  /**
-   * Update with REAL beat data.
-   * @param energy     0-1 RMS energy from BeatState (goes to 0 during silence)
-   * @param pulse      0-1 Gaussian beat pulse (peaks on each beat)
-   * @param hitStrength 0-1 onset hit impulse
-   * @param beatPhase  0-1 phase between beats
-   * @param beatIndex  current beat index (for new-beat detection)
-   */
-  update(energy: number, pulse: number, hitStrength: number, beatPhase: number, beatIndex: number): void {
+  update(energy: number, pulse: number, hitStrength: number, _beatPhase: number, beatIndex: number): void {
     const W = VIS_W;
     const H = VIS_H;
     const buf = this.buf;
@@ -769,52 +763,52 @@ class BeatVisSim {
       buf[i] = 0; buf[i + 1] = 0; buf[i + 2] = 0; buf[i + 3] = 0;
     }
 
-    // Push energy sample into history ring buffer (1 sample per frame at ~24fps sim rate)
-    this.energyHistory[this.historyHead] = energy * 0.6 + pulse * 0.4;
-    this.historyHead = (this.historyHead + 1) % W;
-
-    // Detect new beat
     const isNewBeat = beatIndex !== this.lastBeatIndex;
     this.lastBeatIndex = beatIndex;
 
     const [pr, pg, pb] = this.palette;
 
-    // Combined drive signal — ZERO during silence, peaks on beats
-    const drive = energy * 0.5 + pulse * 0.35 + hitStrength * 0.15;
+    // All bars respond to CURRENT beat — each with slight per-bar variation
+    const drive = energy * 0.55 + pulse * 0.35 + hitStrength * 0.10;
 
-    // Bar targets from energy history (real data, not sin waves)
     for (let x = 0; x < W; x++) {
-      const histIdx = (this.historyHead - W + x + W * 2) % W;
-      const histVal = this.energyHistory[histIdx];
-      const target = histVal * 0.7 + pulse * 0.3;
+      const nx = x / W;
+      // Bell curve: center columns taller (classic EQ shape)
+      const centerBias = 0.5 + 0.5 * (1.0 - Math.abs(nx - 0.5) * 2.0);
+      // Per-bar seed gives unique variation so they don't all move identically
+      const variation = 0.7 + this.barSeeds[x] * 0.6;
+      const target = drive * centerBias * variation;
+
+      // Fast attack (snap up on beat), slow decay (gravity fall between beats)
       if (target > this.bars[x]) {
-        this.bars[x] += (target - this.bars[x]) * 0.7;
+        this.bars[x] += (target - this.bars[x]) * 0.75;
       } else {
-        this.bars[x] += (target - this.bars[x]) * 0.15;
+        this.bars[x] += (target - this.bars[x]) * 0.12;
       }
     }
-    // Render bars from bottom
+
+    // Render bars from bottom — in place, no scrolling
     for (let x = 0; x < W; x++) {
-      const barH = Math.floor(this.bars[x] * H * 0.90);
+      const barH = Math.floor(this.bars[x] * H * 0.92);
       if (barH < 1) continue;
       for (let y = H - 1; y >= H - barH && y >= 0; y--) {
-        const t = (H - y) / Math.max(1, barH);
+        const t = (H - y) / Math.max(1, barH); // 0 at base, 1 at tip
         const idx = (y * W + x) * 4;
         const bright = 0.30 + t * 0.70;
-        buf[idx] = Math.min(255, Math.floor(pr * bright));
+        buf[idx]     = Math.min(255, Math.floor(pr * bright));
         buf[idx + 1] = Math.min(255, Math.floor(pg * bright));
         buf[idx + 2] = Math.min(255, Math.floor(pb * bright));
         buf[idx + 3] = Math.min(255, Math.floor(200 * (0.5 + t * 0.5)));
       }
     }
 
-    // Beat flash — brief brightness boost on new beat (2 frames of extra alpha on bottom row)
+    // Beat flash: bright line at bottom on new beat
     if (isNewBeat && hitStrength > 0.3) {
-      const flashAlpha = Math.min(180, Math.floor(hitStrength * 180));
+      const flashAlpha = Math.min(200, Math.floor(hitStrength * 200));
       for (let x = 0; x < W; x++) {
         for (let y = H - 3; y < H; y++) {
           const idx = (y * W + x) * 4;
-          buf[idx] = Math.max(buf[idx], Math.min(255, pr));
+          buf[idx]     = Math.max(buf[idx],     Math.min(255, pr));
           buf[idx + 1] = Math.max(buf[idx + 1], Math.min(255, pg));
           buf[idx + 2] = Math.max(buf[idx + 2], Math.min(255, pb));
           buf[idx + 3] = Math.max(buf[idx + 3], flashAlpha);
