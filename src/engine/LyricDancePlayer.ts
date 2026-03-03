@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-01-V2-CONDUCTOR */
+/* cache-bust: 2026-03-03-V6 */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
