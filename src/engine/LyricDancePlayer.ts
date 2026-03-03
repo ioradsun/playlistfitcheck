@@ -1931,9 +1931,6 @@ export class LyricDancePlayer {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
-    if (this.isExporting && clamped >= this.songEndSec) {
-      this.stopExport();
-    }
 
     this.fpsAccum.t += deltaMs;
     this.fpsAccum.frames += 1;

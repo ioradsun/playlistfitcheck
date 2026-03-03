@@ -264,6 +264,8 @@ export default function ShareableLyricDance() {
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
+  const [exportProgress, setExportProgress] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -272,18 +274,70 @@ export default function ShareableLyricDance() {
   const [playerInstance, setPlayerInstance] = useState<LyricDancePlayer | null>(null);
   const playerInitializedRef = useRef(false);
 
-  const handleExport = useCallback((ratio: "16:9" | "9:16") => {
+  const handleExport = useCallback(async (ratio: "16:9" | "9:16") => {
     if (!playerRef.current) return;
-    setExporting(ratio);
 
-    playerRef.current.onExportComplete = () => {
-      setExporting(null);
+    if (!canExportVideo()) {
+      toast.error("Export requires Chrome or Edge browser (version 94+)");
+      return;
+    }
+
+    const resolutions = {
+      "16:9": { width: 1920, height: 1080 },
+      "9:16": { width: 1080, height: 1920 },
     };
 
-    playerRef.current.startExport(ratio).catch(() => {
+    const { width, height } = resolutions[ratio];
+    const songDuration = playerRef.current.getSongDuration();
+
+    if (!songDuration || songDuration <= 0) {
+      toast.error("Could not determine song duration");
+      return;
+    }
+
+    playerRef.current.pause();
+    setExporting(ratio);
+    setExportProgress(0);
+
+    const abort = new AbortController();
+    abortRef.current = abort;
+
+    try {
+      const blob = await exportVideoAsMP4({
+        player: playerRef.current,
+        width,
+        height,
+        fps: 30,
+        songDuration,
+        onProgress: setExportProgress,
+        signal: abort.signal,
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const artistName = data?.artist_name ?? "artist";
+      const songName = data?.song_name ?? "song";
+      a.download = `${artistName}-${songName}-${ratio.replace(":", "x")}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("Video exported!");
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        toast.info("Export cancelled");
+      } else {
+        console.error("Export failed:", err);
+        toast.error("Export failed. Try Chrome or Edge browser.");
+      }
+    } finally {
+      abortRef.current = null;
       setExporting(null);
-    });
-  }, []);
+      setExportProgress(0);
+    }
+  }, [data]);
 
   // ── Data fetch ──────────────────────────────────────────────────────
 
