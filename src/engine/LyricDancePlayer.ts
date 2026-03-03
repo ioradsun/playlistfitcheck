@@ -713,9 +713,14 @@ class RainSim {
   get canvas(): HTMLCanvasElement { return this.sim.canvas; }
 }
 
-// ═══ BeatVisSim: In-place beat-reactive bar visualizer ═══
-// Bars stay in place — height bounces with current beat energy.
-// No scrolling. Driven by actual BeatState data.
+// ═══ BeatVisSim: In-place beat-reactive visualizer ═══
+// Bar HEIGHT bounces with beat energy. Bar APPEARANCE varies by mood:
+//   flame  — orange/red tips, warm glow, flicker
+//   neon   — bright core, soft bloom falloff
+//   smoke  — soft feathered edges, wispy tops
+//   light  — clean bright minimal pillars
+// AI cinematic direction picks style per section based on mood/atmosphere.
+type BarVisStyle = 'flame' | 'neon' | 'smoke' | 'light';
 const VIS_W = 192;
 const VIS_H = 48;
 
@@ -724,10 +729,12 @@ class BeatVisSim {
   private visCtx: CanvasRenderingContext2D;
   private buf: Uint8ClampedArray;
   private imageData: ImageData;
-  private bars: Float32Array;           // current smoothed bar heights (0-1)
-  private barSeeds: Float32Array;       // fixed per-bar random offsets for variation
+  private bars: Float32Array;
+  private barSeeds: Float32Array;
   private palette: [number, number, number];
+  private style: BarVisStyle = 'flame';
   private lastBeatIndex = -1;
+  private flickerPhase = 0; // for flame/smoke animation
 
   constructor(accent: string) {
     this.visCanvas = document.createElement('canvas');
@@ -737,7 +744,6 @@ class BeatVisSim {
     this.imageData = this.visCtx.createImageData(VIS_W, VIS_H);
     this.buf = this.imageData.data;
     this.bars = new Float32Array(VIS_W);
-    // Fixed seeds give each bar a unique character — computed once
     this.barSeeds = new Float32Array(VIS_W);
     for (let i = 0; i < VIS_W; i++) {
       this.barSeeds[i] = (Math.sin(i * 127.1 + 311.7) * 43758.5453) % 1;
@@ -752,34 +758,30 @@ class BeatVisSim {
   }
 
   setAccent(hex: string): void { this.palette = this.hexToRgb(hex); }
+  setStyle(s: BarVisStyle): void { this.style = s; }
 
   update(energy: number, pulse: number, hitStrength: number, _beatPhase: number, beatIndex: number): void {
     const W = VIS_W;
     const H = VIS_H;
     const buf = this.buf;
 
-    // Clear to transparent
     for (let i = 0; i < W * H * 4; i += 4) {
       buf[i] = 0; buf[i + 1] = 0; buf[i + 2] = 0; buf[i + 3] = 0;
     }
 
     const isNewBeat = beatIndex !== this.lastBeatIndex;
     this.lastBeatIndex = beatIndex;
+    this.flickerPhase += 0.15 + energy * 0.3;
 
     const [pr, pg, pb] = this.palette;
-
-    // All bars respond to CURRENT beat — each with slight per-bar variation
     const drive = energy * 0.55 + pulse * 0.35 + hitStrength * 0.10;
 
+    // ── Compute bar heights (same for all styles) ──
     for (let x = 0; x < W; x++) {
       const nx = x / W;
-      // Bell curve: center columns taller (classic EQ shape)
       const centerBias = 0.5 + 0.5 * (1.0 - Math.abs(nx - 0.5) * 2.0);
-      // Per-bar seed gives unique variation so they don't all move identically
       const variation = 0.7 + this.barSeeds[x] * 0.6;
       const target = drive * centerBias * variation;
-
-      // Fast attack (snap up on beat), slow decay (gravity fall between beats)
       if (target > this.bars[x]) {
         this.bars[x] += (target - this.bars[x]) * 0.75;
       } else {
@@ -787,30 +789,68 @@ class BeatVisSim {
       }
     }
 
-    // Render bars from bottom — in place, no scrolling
+    // ── Render per style ──
+    const style = this.style;
     for (let x = 0; x < W; x++) {
       const barH = Math.floor(this.bars[x] * H * 0.92);
       if (barH < 1) continue;
+      const seed = this.barSeeds[x];
+
       for (let y = H - 1; y >= H - barH && y >= 0; y--) {
-        const t = (H - y) / Math.max(1, barH); // 0 at base, 1 at tip
+        const t = (H - y) / Math.max(1, barH); // 0=base, 1=tip
         const idx = (y * W + x) * 4;
-        const bright = 0.30 + t * 0.70;
-        buf[idx]     = Math.min(255, Math.floor(pr * bright));
-        buf[idx + 1] = Math.min(255, Math.floor(pg * bright));
-        buf[idx + 2] = Math.min(255, Math.floor(pb * bright));
-        buf[idx + 3] = Math.min(255, Math.floor(200 * (0.5 + t * 0.5)));
+
+        if (style === 'flame') {
+          // ── FLAME: warm base → orange mid → bright tip, flicker at top ──
+          const flicker = t > 0.6 ? Math.sin(this.flickerPhase * 3 + seed * 40 + x * 0.7) * 0.3 : 0;
+          const tipShift = Math.max(0, t - 0.5) * 2; // 0-1 over top half
+          // Color: palette base → shift toward orange/yellow at tips
+          const r = Math.min(255, Math.floor(pr * (0.4 + t * 0.6) + tipShift * (255 - pr) * 0.6));
+          const g = Math.min(255, Math.floor(pg * (0.3 + t * 0.4) + tipShift * Math.max(0, 180 - pg) * 0.3));
+          const b = Math.floor(pb * (0.2 + t * 0.15) * (1 - tipShift * 0.7));
+          const a = Math.min(255, Math.floor((210 + flicker * 45) * (0.55 + t * 0.45) * (1 - flicker * 0.15)));
+          buf[idx] = r; buf[idx + 1] = g; buf[idx + 2] = Math.max(0, b); buf[idx + 3] = a;
+        } else if (style === 'neon') {
+          // ── NEON: bright core, bloom falloff at edges ──
+          // Horizontal bloom: center of bar column is brightest
+          const bright = 0.6 + t * 0.4;
+          const glow = 1.0; // full intensity in core
+          buf[idx]     = Math.min(255, Math.floor(pr * bright * glow + 40 * t));
+          buf[idx + 1] = Math.min(255, Math.floor(pg * bright * glow + 30 * t));
+          buf[idx + 2] = Math.min(255, Math.floor(pb * bright * glow + 60 * t));
+          buf[idx + 3] = Math.min(255, Math.floor(220 * (0.5 + t * 0.5)));
+        } else if (style === 'smoke') {
+          // ── SMOKE: soft, feathered, wispy at top ──
+          const wisp = t > 0.4 ? Math.sin(this.flickerPhase * 1.5 + seed * 30 + x * 0.5) * 0.25 * t : 0;
+          const fade = t > 0.7 ? 1.0 - (t - 0.7) / 0.3 : 1.0; // feather out at tip
+          const grey = 0.5 + t * 0.3;
+          buf[idx]     = Math.min(255, Math.floor((pr * 0.3 + 180 * 0.7) * grey));
+          buf[idx + 1] = Math.min(255, Math.floor((pg * 0.3 + 170 * 0.7) * grey));
+          buf[idx + 2] = Math.min(255, Math.floor((pb * 0.3 + 175 * 0.7) * grey));
+          buf[idx + 3] = Math.min(255, Math.floor(160 * fade * (0.4 + t * 0.3 + wisp)));
+        } else {
+          // ── LIGHT: clean, bright, minimal pillars ──
+          const bright = 0.35 + t * 0.65;
+          buf[idx]     = Math.min(255, Math.floor(pr * bright + 50 * t));
+          buf[idx + 1] = Math.min(255, Math.floor(pg * bright + 50 * t));
+          buf[idx + 2] = Math.min(255, Math.floor(pb * bright + 50 * t));
+          buf[idx + 3] = Math.min(255, Math.floor(200 * (0.5 + t * 0.5)));
+        }
       }
     }
 
-    // Beat flash: bright line at bottom on new beat
+    // ── Beat flash: bright line at bottom on new beat ──
     if (isNewBeat && hitStrength > 0.3) {
       const flashAlpha = Math.min(200, Math.floor(hitStrength * 200));
+      const fr = style === 'flame' ? Math.min(255, pr + 80) : pr;
+      const fg = style === 'flame' ? Math.min(255, Math.floor(pg * 0.7 + 60)) : pg;
+      const fb = style === 'flame' ? Math.floor(pb * 0.3) : pb;
       for (let x = 0; x < W; x++) {
         for (let y = H - 3; y < H; y++) {
           const idx = (y * W + x) * 4;
-          buf[idx]     = Math.max(buf[idx],     Math.min(255, pr));
-          buf[idx + 1] = Math.max(buf[idx + 1], Math.min(255, pg));
-          buf[idx + 2] = Math.max(buf[idx + 2], Math.min(255, pb));
+          buf[idx]     = Math.max(buf[idx],     Math.min(255, fr));
+          buf[idx + 1] = Math.max(buf[idx + 1], Math.min(255, fg));
+          buf[idx + 2] = Math.max(buf[idx + 2], Math.min(255, fb));
           buf[idx + 3] = Math.max(buf[idx + 3], flashAlpha);
         }
       }
@@ -977,6 +1017,7 @@ export class LyricDancePlayer {
   private backgroundSystem = 'default';
   private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim; beatVis?: BeatVisSim }> = [];
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
+  private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
   private _beatVisCanvas: HTMLCanvasElement | null = null; // separate from themed sims
@@ -3480,6 +3521,20 @@ export class LyricDancePlayer {
         return sim;
       });
 
+      // ═══ Map AI mood/atmosphere to bar visualizer style per chapter ═══
+      this._barVisStyles = chapters.map((chapter: any) => {
+        const mood = ((chapter?.mood ?? '') + ' ' + (chapter?.atmosphere ?? '') + ' ' + (chapter?.backgroundDirective ?? '')).toLowerCase();
+        if (mood.includes('fire') || mood.includes('burn') || mood.includes('flame') || mood.includes('rage') || mood.includes('anger') || mood.includes('heat') || mood.includes('ember') || mood.includes('intense')) return 'flame' as BarVisStyle;
+        if (mood.includes('neon') || mood.includes('electric') || mood.includes('pulse') || mood.includes('cyber') || mood.includes('urban') || mood.includes('city') || mood.includes('night') || mood.includes('club') || mood.includes('party')) return 'neon' as BarVisStyle;
+        if (mood.includes('smoke') || mood.includes('haze') || mood.includes('fog') || mood.includes('mist') || mood.includes('ethereal') || mood.includes('ghost') || mood.includes('haunt') || mood.includes('melanchol') || mood.includes('sad') || mood.includes('grief')) return 'smoke' as BarVisStyle;
+        if (mood.includes('light') || mood.includes('hope') || mood.includes('bright') || mood.includes('warm') || mood.includes('gentle') || mood.includes('soft') || mood.includes('peace') || mood.includes('calm') || mood.includes('serene') || mood.includes('dream')) return 'light' as BarVisStyle;
+        // Default: high intensity → flame, low → light, mid → neon
+        const ei = chapter?.emotionalIntensity ?? 0.5;
+        if (ei >= 0.7) return 'flame' as BarVisStyle;
+        if (ei <= 0.3) return 'light' as BarVisStyle;
+        return 'neon' as BarVisStyle;
+      });
+
       
     } catch (err) {
       console.error('[LyricEngine] buildChapterSims crash:', err);
@@ -3529,6 +3584,8 @@ export class LyricDancePlayer {
 
       // ═══ Beat visualizer — driven by ACTUAL BeatState, not section intensity ═══
       if (this._globalBeatVis) {
+        const visStyle = this._barVisStyles[ci] ?? 'flame';
+        this._globalBeatVis.setStyle(visStyle);
         const bs = this._lastBeatState;
         this._globalBeatVis.update(
           bs?.energy ?? 0,       // RMS energy — goes to 0 during silence
