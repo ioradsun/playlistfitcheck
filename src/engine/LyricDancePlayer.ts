@@ -2418,6 +2418,8 @@ export class LyricDancePlayer {
     // entire matrix and would wipe any parent zoom.
     const subjectT = this.cameraRig.getSubjectTransform();
     const camZoom = subjectT.zoom;
+    const camShakeX = subjectT.shakeX;
+    const camShakeY = subjectT.shakeY;
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
@@ -2569,8 +2571,8 @@ export class LyricDancePlayer {
             this.ctx.shadowBlur = 0;
             this.ctx.fillStyle = 'rgba(255,255,255,0.15)';
             const [da, db, dc, dd, de, df] = this.computeTransformMatrix(
-              camCX + (heroDrawX - camCX) * camZoom,
-              camCY + ((heroDrawY + offsetY) - camCY) * camZoom,
+              camShakeX + camCX + (heroDrawX - camCX) * camZoom,
+              camShakeY + camCY + ((heroDrawY + offsetY) - camCY) * camZoom,
               chunk.rotation ?? 0,
               chunk.skewX ?? 0,
               sx * camZoom,
@@ -2613,8 +2615,8 @@ export class LyricDancePlayer {
             }
             this.ctx.globalAlpha = ghostAlpha;
             const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
-              camCX + ((heroDrawX + gx) - camCX) * camZoom,
-              camCY + ((heroDrawY + gy) - camCY) * camZoom,
+              camShakeX + camCX + ((heroDrawX + gx) - camCX) * camZoom,
+              camShakeY + camCY + ((heroDrawY + gy) - camCY) * camZoom,
               chunk.rotation ?? 0,
               chunk.skewX ?? 0,
               sx * camZoom,
@@ -2627,8 +2629,8 @@ export class LyricDancePlayer {
         }
 
         const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
-          camCX + (heroDrawX - camCX) * camZoom,
-          camCY + (heroDrawY - camCY) * camZoom,
+          camShakeX + camCX + (heroDrawX - camCX) * camZoom,
+          camShakeY + camCY + (heroDrawY - camCY) * camZoom,
           chunk.rotation ?? 0,
           chunk.skewX ?? 0,
           sx * camZoom,
