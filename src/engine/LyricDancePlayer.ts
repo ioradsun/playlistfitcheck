@@ -3636,8 +3636,9 @@ export class LyricDancePlayer {
         }
       }
 
-      // ═══ MULTI-LINE LAYOUT: hero words get their own line ═══
-      // Any isHeroWord (that isn't a ≥500ms solo hero) goes on its own line.
+      // ═══ MULTI-LINE LAYOUT: emphasized words get their own line ═══
+      // Any word with isHeroWord OR emphasisLevel >= 2 goes on its own line.
+      // This catches all cases where runtime scaling would cause overlap.
       // Non-hero words wrap into lines of max 3 words above/below.
       const _mlDy: number[] = [];    // per-word Y offset in compile space
       const _mlDx: number[] = [];    // per-word X re-centering offset
@@ -3645,18 +3646,19 @@ export class LyricDancePlayer {
       const MAX_WORDS_PER_LINE = 3;
 
       if (lineRole === 'current' && !groupHasActiveSoloHero && group.words.length > 1) {
-        // Check if any hero word exists
-        let hasInlineHero = false;
+        // Check if any word will be scaled up (hero OR emphasis >= 2)
+        let hasScaledWord = false;
         for (let wi = 0; wi < group.words.length; wi++) {
-          if (group.words[wi].isHeroWord) { hasInlineHero = true; break; }
+          const w = group.words[wi];
+          if (w.isHeroWord || (w.emphasisLevel ?? 0) >= 2) { hasScaledWord = true; break; }
         }
 
-        if (hasInlineHero) {
+        if (hasScaledWord) {
           _isMultiLine = true;
           const normalFS = group.words[0].baseFontSize * fontScale;
           const normalLineH = normalFS * 1.3;
 
-          // Build line list: hero words get solo lines, non-heroes chunk into groups of 3
+          // Build line list: scaled words get solo lines, others chunk into groups of 3
           type LineRange = { words: number[]; isHero: boolean; h: number };
           const lines: LineRange[] = [];
           let nonHeroBuf: number[] = [];
@@ -3670,7 +3672,8 @@ export class LyricDancePlayer {
 
           for (let wi = 0; wi < group.words.length; wi++) {
             const w = group.words[wi];
-            if (w.isHeroWord) {
+            const isScaled = w.isHeroWord || (w.emphasisLevel ?? 0) >= 2;
+            if (isScaled) {
               flushNonHero();
               const heroEmp = w.emphasisLevel ?? 0;
               const heroFS = w.baseFontSize * fontScale;
