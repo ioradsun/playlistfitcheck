@@ -1,4 +1,3 @@
-/* sceneCompiler v2 */
 import type { CinematicDirection, CinematicSection } from "@/types/CinematicDirection";
 import { enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
@@ -242,9 +241,10 @@ export function computeAllLineLayouts(
   };
   const wordFontSize = (wm: WordMetaEntry, baseFontSize: number) => {
     const isFiller = isFillerWord(wm.word);
-    const emphasis = wm.directive?.emphasisLevel ?? 1;
     if (isFiller) return baseFontSize * 0.85;
-    if (emphasis === 3) return baseFontSize * 1.08;
+    // Emphasis scaling is applied at RUNTIME via scaleX (emphasisScale).
+    // Compile-time uses base size for ALL non-filler words.
+    // This avoids double-scaling since baseFontSize feeds into runtime font.
     return baseFontSize * 1.0;
   };
 
@@ -535,7 +535,7 @@ const SEMANTIC_EFFECTS: Record<VisualMetaphor, SemanticEffect> = {
   'motion-streak': { entry: 'punch-in', behavior: 'lean', exit: 'cut-out', colorOverride: null, glowMultiplier: 1.2, scaleX: 1.15, scaleY: 0.9, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 700 },
 };
 
-export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; heroPresentation?: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordStart?: number; wordDuration?: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
+export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; wordStart: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; heroPresentation?: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
 export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
@@ -679,6 +679,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         layoutX: pos.x,
         layoutY: pos.y,
         baseFontSize: pos.fontSize,
+        wordStart: wm.start,
         entryStyle: semantic?.entry ?? motion.entry,
         exitStyle: semantic?.exit ?? motion.exit,
         behaviorStyle: semantic?.behavior ?? motion.behavior,
@@ -695,7 +696,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         isAnchor: pos.isAnchor,
         isFiller: pos.isFiller,
         emphasisLevel: wm.directive?.emphasisLevel ?? 1,
-        wordStart: wm.start,
         wordDuration: Math.max(0, wm.end - wm.start),
         semanticScaleX: semantic?.scaleX ?? 1,
         semanticScaleY: semantic?.scaleY ?? 1,
@@ -713,9 +713,9 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         iconPosition: lineStory?.iconPosition,
         iconScale: lineStory?.iconScale,
       };
+      // letterSequence: render as single chunk with spaced letters (e.g. "count" → "c o u n t")
       if (wm.directive?.letterSequence) {
-        const letters = wm.word.split('');
-        return letters.map((ch, li) => ({ ...base, id: `${group.lineIndex}-${group.groupIndex}-${wi}-L${li}`, text: ch, isLetterChunk: true, letterIndex: li, letterTotal: letters.length, letterDelay: li * 0.012 }));
+        base.text = base.text.split('').join(' ');
       }
       return [base];
     });
