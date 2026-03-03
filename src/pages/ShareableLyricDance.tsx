@@ -808,7 +808,7 @@ export default function ShareableLyricDance() {
                   aria-label="Download video"
                 >
                   {exporting ? (
-                    <span className="text-[9px] font-mono animate-pulse text-white/50">REC</span>
+                    <span className="text-[9px] font-mono animate-pulse text-white/50">{exportProgress}%</span>
                   ) : (
                     <Download size={16} />
                   )}
