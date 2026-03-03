@@ -2388,24 +2388,6 @@ export class LyricDancePlayer {
         if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
         this.ctx.fillText(text, 0, 0);
 
-        // ═══ UNDERLINE SWEEP: glowing line under hero words ═══
-        if (isHeroChunk && entry >= 0.3 && drawAlpha > 0.1) {
-          const sweepProgress = Math.min(1, (entry - 0.3) / 0.5); // sweep from 30% to 80% of entry
-          const underlineY = safeFontSize * 0.55;
-          const halfW = textWidth * 0.5;
-          const sweepEnd = -halfW + textWidth * sweepProgress;
-          const lineThickness = Math.max(1.5, safeFontSize * 0.04);
-          const sweepAlpha = drawAlpha * (0.6 + beatPulse * 0.3) * (exit > 0 ? 1 - exit : 1);
-          this.ctx.save();
-          this.ctx.globalAlpha = sweepAlpha;
-          this.ctx.shadowColor = '#ffffff';
-          this.ctx.shadowBlur = 8 + beatPulse * 6;
-          this.ctx.fillStyle = chunk.color ?? '#ffffff';
-          this.ctx.fillRect(-halfW, underlineY, sweepEnd + halfW, lineThickness);
-          this.ctx.restore();
-          this.ctx.globalAlpha = drawAlpha;
-        }
-
         if (needsFilterSaveRestore) {
           this.ctx.filter = 'none';
           this.ctx.restore();
@@ -3398,7 +3380,7 @@ export class LyricDancePlayer {
           if (!hw.isHeroWord) continue;
           // Solo treatment only for words with ≥500ms duration
           if ((hw.wordDuration ?? 0) < 0.5) continue;
-          const hwStagger = hwi === group.anchorWordIdx ? 0 : Math.abs(hwi - group.anchorWordIdx) * group.staggerDelay;
+          const hwStagger = Math.max(0, (hw.wordStart ?? group.start) - group.start);
           const hwStart = group.start + hwStagger;
           const hwEnd = group.end + group.lingerDuration;
           if (tSec >= hwStart + 0.08 && tSec < hwEnd) {
@@ -3530,7 +3512,8 @@ export class LyricDancePlayer {
         const word = group.words[wi];
         const resolvedWord = this.resolvedState.wordSettings[word.clean ?? normalizeToken(word.text)] ?? null;
         const isAnchor = wi === group.anchorWordIdx;
-        const staggerDelay = isAnchor ? 0 : Math.abs(wi - group.anchorWordIdx) * group.staggerDelay;
+        // Use actual word-level timestamp for entry timing instead of artificial stagger
+        const staggerDelay = Math.max(0, (word.wordStart ?? group.start) - group.start);
         const li = word.letterIndex ?? 0;
         const lt = word.letterTotal ?? 1;
         const letterDelay = word.isLetterChunk ? li * 0.06 : 0;
