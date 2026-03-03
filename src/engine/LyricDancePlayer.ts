@@ -421,6 +421,8 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     letterTotal?: number;
     letterDelay?: number;
     isLetterChunk?: boolean;
+    isSoloHero?: boolean;
+    isHeroWord?: boolean;
     visible: boolean;
     entryOffsetY?: number;
     entryOffsetX?: number;
@@ -711,6 +713,238 @@ class RainSim {
   get canvas(): HTMLCanvasElement { return this.sim.canvas; }
 }
 
+// ═══ BeatVisSim: Always-on beat-reactive visualizer ═══
+// Higher-res (192×108) beat-reactive visualizer that runs throughout the entire song.
+// Style changes per section keyword but is ALWAYS present.
+type BeatVisStyle = 'bars' | 'mirror-bars' | 'wave' | 'pulse' | 'rings';
+const VIS_W = 192;
+const VIS_H = 108;
+
+class BeatVisSim {
+  private visCanvas: HTMLCanvasElement;
+  private visCtx: CanvasRenderingContext2D;
+  private buf: Uint8ClampedArray;
+  private imageData: ImageData;
+  private bars: Float32Array;
+  private barTargets: Float32Array;
+  private palette: [number, number, number];
+  private style: BeatVisStyle;
+
+  constructor(accent: string, style: BeatVisStyle = 'bars') {
+    this.visCanvas = document.createElement('canvas');
+    this.visCanvas.width = VIS_W;
+    this.visCanvas.height = VIS_H;
+    this.visCtx = this.visCanvas.getContext('2d')!;
+    this.imageData = this.visCtx.createImageData(VIS_W, VIS_H);
+    this.buf = this.imageData.data;
+    this.bars = new Float32Array(VIS_W);
+    this.barTargets = new Float32Array(VIS_W);
+    this.palette = this.hexToRgb(accent);
+    this.style = style;
+  }
+
+  private hexToRgb(hex: string): [number, number, number] {
+    const c = hex.replace('#', '').padEnd(6, '0');
+    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+  }
+
+  setAccent(hex: string): void { this.palette = this.hexToRgb(hex); }
+  setStyle(s: BeatVisStyle): void { this.style = s; }
+
+  update(tSec: number, intensity: number, beatPulse: number): void {
+    const W = VIS_W;
+    const H = VIS_H;
+    const buf = this.buf;
+
+    // Clear to transparent
+    for (let i = 0; i < W * H * 4; i += 4) {
+      buf[i] = 0; buf[i + 1] = 0; buf[i + 2] = 0; buf[i + 3] = 0;
+    }
+
+    const [pr, pg, pb] = this.palette;
+    const energy = intensity * 0.7 + beatPulse * 0.85;
+
+    if (this.style === 'bars') {
+      this.updateBarTargets(W, energy, beatPulse, tSec);
+      this.smoothBars(W);
+      // Render bars rising from bottom
+      for (let x = 0; x < W; x++) {
+        const barH = Math.floor(this.bars[x] * H * 0.92);
+        for (let y = H - 1; y >= H - barH && y >= 0; y--) {
+          const t = (H - y) / Math.max(1, barH);
+          const idx = (y * W + x) * 4;
+          const bright = 0.35 + t * 0.65;
+          buf[idx] = Math.min(255, Math.floor(pr * bright));
+          buf[idx + 1] = Math.min(255, Math.floor(pg * bright));
+          buf[idx + 2] = Math.min(255, Math.floor(pb * bright));
+          buf[idx + 3] = Math.min(255, Math.floor((210 + beatPulse * 45) * (0.45 + t * 0.55)));
+        }
+      }
+    } else if (this.style === 'mirror-bars') {
+      this.updateBarTargets(W, energy, beatPulse, tSec);
+      this.smoothBars(W);
+      // Mirror: bars grow from center line outward (up + down)
+      const midY = Math.floor(H * 0.45);
+      for (let x = 0; x < W; x++) {
+        const halfH = Math.floor(this.bars[x] * midY * 0.9);
+        for (let d = 0; d < halfH; d++) {
+          const t = d / Math.max(1, halfH);
+          const bright = 0.5 + (1 - t) * 0.5;
+          const alpha = Math.min(255, Math.floor((220 + beatPulse * 35) * (1 - t * 0.5)));
+          // Up from center
+          const yUp = midY - d;
+          if (yUp >= 0) {
+            const idx = (yUp * W + x) * 4;
+            buf[idx] = Math.min(255, Math.floor(pr * bright));
+            buf[idx + 1] = Math.min(255, Math.floor(pg * bright));
+            buf[idx + 2] = Math.min(255, Math.floor(pb * bright));
+            buf[idx + 3] = alpha;
+          }
+          // Down from center
+          const yDown = midY + d;
+          if (yDown < H) {
+            const idx = (yDown * W + x) * 4;
+            buf[idx] = Math.min(255, Math.floor(pr * bright * 0.7));
+            buf[idx + 1] = Math.min(255, Math.floor(pg * bright * 0.7));
+            buf[idx + 2] = Math.min(255, Math.floor(pb * bright * 0.7));
+            buf[idx + 3] = Math.floor(alpha * 0.6);
+          }
+        }
+      }
+    } else if (this.style === 'wave') {
+      // Dual sine-wave bands that ride on beat energy
+      for (let x = 0; x < W; x++) {
+        const nx = x / W;
+        const wave1 = Math.sin(nx * Math.PI * 4 + tSec * 3) * energy * 0.4
+          + Math.sin(nx * Math.PI * 7 - tSec * 2) * beatPulse * 0.3;
+        const wave2 = Math.sin(nx * Math.PI * 3 - tSec * 1.8) * energy * 0.25
+          + Math.cos(nx * Math.PI * 5 + tSec * 2.5) * beatPulse * 0.2;
+        const cy1 = H - 6 - Math.abs(wave1) * H * 0.55;
+        const cy2 = H - 8 - Math.abs(wave2) * H * 0.35;
+        const thick1 = 3 + energy * 4;
+        const thick2 = 2 + energy * 2.5;
+        // Wave 1 (primary)
+        for (let y = Math.max(0, Math.floor(cy1 - thick1)); y < Math.min(H, Math.ceil(cy1 + thick1)); y++) {
+          const dist = Math.abs(y - cy1) / thick1;
+          const alpha = (1 - dist) * (160 + beatPulse * 95);
+          const idx = (y * W + x) * 4;
+          buf[idx] = Math.min(255, Math.floor(pr * (0.5 + (1 - dist) * 0.5)));
+          buf[idx + 1] = Math.min(255, Math.floor(pg * (0.5 + (1 - dist) * 0.5)));
+          buf[idx + 2] = Math.min(255, Math.floor(pb * (0.5 + (1 - dist) * 0.5)));
+          buf[idx + 3] = Math.min(255, Math.floor(alpha));
+        }
+        // Wave 2 (secondary — dimmer)
+        for (let y = Math.max(0, Math.floor(cy2 - thick2)); y < Math.min(H, Math.ceil(cy2 + thick2)); y++) {
+          const dist = Math.abs(y - cy2) / thick2;
+          const alpha = (1 - dist) * (80 + beatPulse * 60);
+          const idx = (y * W + x) * 4;
+          buf[idx] = Math.max(buf[idx], Math.min(255, Math.floor(pr * 0.6)));
+          buf[idx + 1] = Math.max(buf[idx + 1], Math.min(255, Math.floor(pg * 0.6)));
+          buf[idx + 2] = Math.max(buf[idx + 2], Math.min(255, Math.floor(pb * 0.6)));
+          buf[idx + 3] = Math.max(buf[idx + 3], Math.min(255, Math.floor(alpha)));
+        }
+      }
+    } else if (this.style === 'rings') {
+      // Concentric arcs expanding from bottom center on each beat
+      const cx = W / 2;
+      const cy = H + 4;
+      const maxR = H * 0.95;
+      // 3 staggered rings at different expansion phases
+      for (let ring = 0; ring < 3; ring++) {
+        const phase = (tSec * 1.5 + ring * 0.33) % 1;
+        const ringR = phase * maxR;
+        const ringWidth = 3 + energy * 3 + beatPulse * 2;
+        const ringAlpha = (1 - phase) * (0.6 + beatPulse * 0.4);
+        const yStart = Math.max(0, Math.floor(cy - maxR));
+        for (let y = yStart; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const dx = x - cx;
+            const dy = y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const fromRing = Math.abs(dist - ringR);
+            if (fromRing > ringWidth) continue;
+            const t = 1 - fromRing / ringWidth;
+            const alpha = t * ringAlpha * 220;
+            const idx = (y * W + x) * 4;
+            buf[idx] = Math.max(buf[idx], Math.min(255, Math.floor(pr * t)));
+            buf[idx + 1] = Math.max(buf[idx + 1], Math.min(255, Math.floor(pg * t)));
+            buf[idx + 2] = Math.max(buf[idx + 2], Math.min(255, Math.floor(pb * t)));
+            buf[idx + 3] = Math.max(buf[idx + 3], Math.min(255, Math.floor(alpha)));
+          }
+        }
+      }
+    } else {
+      // Pulse: radial arc expanding from bottom center
+      const cx = W / 2;
+      const cy = H;
+      const maxR = H * 0.9;
+      const pulseR = energy * maxR + beatPulse * maxR * 0.4;
+      for (let y = Math.max(0, Math.floor(cy - maxR)); y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const dx = x - cx;
+          const dy = y - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > pulseR + 4) continue;
+          const ring = Math.abs(dist - pulseR);
+          if (ring > 5) continue;
+          const alpha = (1 - ring / 5) * (140 + beatPulse * 115);
+          const idx = (y * W + x) * 4;
+          buf[idx] = Math.min(255, Math.floor(pr));
+          buf[idx + 1] = Math.min(255, Math.floor(pg));
+          buf[idx + 2] = Math.min(255, Math.floor(pb));
+          buf[idx + 3] = Math.min(255, Math.floor(alpha));
+        }
+      }
+    }
+
+    this.visCtx.putImageData(this.imageData, 0, 0);
+  }
+
+  private updateBarTargets(W: number, energy: number, beatPulse: number, tSec: number): void {
+    for (let x = 0; x < W; x++) {
+      const freq = x / W;
+      const centerBias = 1.0 - Math.abs(freq - 0.5) * 1.2;
+      const spectral = Math.sin(tSec * (2 + freq * 8) + x * 0.3) * 0.3 + 0.5;
+      this.barTargets[x] = Math.min(1, energy * centerBias * spectral * 2.0 + beatPulse * 0.5 * centerBias);
+    }
+  }
+
+  private smoothBars(W: number): void {
+    for (let x = 0; x < W; x++) {
+      if (this.barTargets[x] > this.bars[x]) {
+        this.bars[x] += (this.barTargets[x] - this.bars[x]) * 0.65;
+      } else {
+        this.bars[x] += (this.barTargets[x] - this.bars[x]) * 0.1;
+      }
+    }
+  }
+
+  get canvas(): HTMLCanvasElement { return this.visCanvas; }
+}
+
+// ═══ Hero Decomposition Particles ═══
+// When a solo hero word (≥500ms) exits, it "freezes" then shatters into particles.
+interface HeroDecompParticle {
+  x: number; y: number;
+  vx: number; vy: number;
+  size: number;
+  alpha: number;
+  rotation: number;
+  rotSpeed: number;
+  life: number;
+  color: string;
+  shape: 'shard' | 'dust' | 'glow';
+}
+
+interface HeroDecompBurst {
+  wordId: string;
+  particles: HeroDecompParticle[];
+  startTime: number;   // ms
+  duration: number;     // ms
+  originX: number;
+  originY: number;
+}
+
 interface EmotionalEvent {
   type: 'soul-flare' | 'void-moment' | 'light-break' | 'heartbeat' | 'color-drain' | 'lens-breath' | 'halo-ring' | 'echo-ghost' | 'tremor' | 'golden-rain' | 'world-shift';
   triggerRatio: number;
@@ -841,9 +1075,12 @@ export class LyricDancePlayer {
   public chapterParticleSystems: (string | null)[] = [];
 
   private backgroundSystem = 'default';
-  private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim }> = [];
+  private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim; beatVis?: BeatVisSim }> = [];
+  private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
+  private _beatVisStyles: BeatVisStyle[] = [];
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
+  private _beatVisCanvas: HTMLCanvasElement | null = null; // separate from themed sims
   private chapterImages: HTMLImageElement[] = [];
   /** Pre-blurred versions of chapter images — eliminates per-frame ctx.filter blur() cost */
   private _preBlurredImages: HTMLCanvasElement[] = [];
@@ -883,6 +1120,10 @@ export class LyricDancePlayer {
   private activeComments: CommentChunk[] = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
   private commentColorIdx = 0;
+
+  // Hero word decomposition bursts
+  private _heroDecompBursts: HeroDecompBurst[] = [];
+  private _heroDecompSpawned: Set<string> = new Set(); // track which words already burst
 
   // Playback
   private rafHandle = 0;
@@ -1229,6 +1470,8 @@ export class LyricDancePlayer {
     this._timeInitialized = false;
     this.conductor?.resetCursor();
     this.cameraRig.reset();
+    this._heroDecompBursts.length = 0;
+    this._heroDecompSpawned.clear();
   }
 
   seekTo(timeSec: number): void {
@@ -2191,6 +2434,17 @@ export class LyricDancePlayer {
       const visibleMs = activeSince != null ? frameNowMs - activeSince : 0;
       if (exit > 0) this.chunkActiveSinceMs.delete(chunk.id);
 
+      // ═══ HERO DECOMPOSITION: spawn shatter burst when solo hero starts exiting ═══
+      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && !this._heroDecompSpawned.has(chunk.id)) {
+        this._heroDecompSpawned.add(chunk.id);
+        const spawnBound = bounds.find(b => b.chunk.id === chunk.id);
+        const spawnX = spawnBound ? spawnBound.cx : (Number.isFinite(chunk.x) ? chunk.x : this.width / 2);
+        const spawnY = spawnBound ? spawnBound.cy : (Number.isFinite(chunk.y) ? chunk.y : this.height / 2);
+        const spawnFontSize = spawnBound ? spawnBound.fontSize : 36;
+        const spawnColor = chunk.color ?? '#f0f0f0';
+        this.spawnDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, spawnColor, frameNowMs);
+      }
+
       const obj = this.chunks.get(chunk.id);
       if (!obj) continue;
 
@@ -2419,6 +2673,9 @@ export class LyricDancePlayer {
     // Comment comets — after text, before watermark
     this.drawComments(frameNowSec);
 
+    // ═══ Hero decomposition particles — shatter effect on hero word exit ═══
+    this.updateAndDrawDecomp(frameNowSec);
+
     this.drawWatermark();
     this.debugState.drawCalls = drawCalls;
   }
@@ -2589,6 +2846,133 @@ export class LyricDancePlayer {
       this.ctx.shadowBlur = 0;
       this.ctx.restore();
     }
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Hero Decomposition — shatter hero words into particles on exit
+  // ────────────────────────────────────────────────────────────
+
+  private spawnDecompBurst(wordId: string, cx: number, cy: number, fontSize: number, color: string, nowMs: number): void {
+    const particles: HeroDecompParticle[] = [];
+    const count = 28 + Math.floor(Math.random() * 12); // 28-40 particles
+    const spread = fontSize * 1.2;
+
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 40 + Math.random() * 120;
+      const shape: HeroDecompParticle['shape'] =
+        i < count * 0.45 ? 'shard' : i < count * 0.8 ? 'dust' : 'glow';
+
+      particles.push({
+        x: cx + (Math.random() - 0.5) * spread,
+        y: cy + (Math.random() - 0.5) * fontSize * 0.6,
+        vx: Math.cos(angle) * speed * (0.6 + Math.random() * 0.8),
+        vy: Math.sin(angle) * speed * (0.5 + Math.random() * 0.7) - 30, // slight upward bias
+        size: shape === 'shard' ? (3 + Math.random() * 6) : shape === 'dust' ? (1.5 + Math.random() * 3) : (2 + Math.random() * 4),
+        alpha: 0.85 + Math.random() * 0.15,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 8,
+        life: 1.0,
+        color,
+        shape,
+      });
+    }
+
+    this._heroDecompBursts.push({
+      wordId, particles, startTime: nowMs,
+      duration: 1200, // 1.2 seconds
+      originX: cx, originY: cy,
+    });
+
+    // Cap active bursts
+    if (this._heroDecompBursts.length > 4) {
+      this._heroDecompBursts = this._heroDecompBursts.slice(-4);
+    }
+  }
+
+  private updateAndDrawDecomp(frameNowSec: number): void {
+    if (this._heroDecompBursts.length === 0) return;
+
+    const nowMs = frameNowSec * 1000;
+    const dt = Math.min(0.05, this._frameDt); // capped delta
+    const gravity = 180; // pixels/sec²
+
+    this.ctx.save();
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    // Update and draw all active bursts
+    for (let bi = this._heroDecompBursts.length - 1; bi >= 0; bi--) {
+      const burst = this._heroDecompBursts[bi];
+      const elapsed = nowMs - burst.startTime;
+      const burstT = Math.min(1, elapsed / burst.duration);
+
+      if (burstT >= 1) {
+        this._heroDecompBursts.splice(bi, 1);
+        this._heroDecompSpawned.delete(burst.wordId);
+        continue;
+      }
+
+      // Flash at burst start (first 80ms)
+      if (elapsed < 80) {
+        const flashAlpha = (1 - elapsed / 80) * 0.6;
+        this.ctx.globalAlpha = flashAlpha;
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.beginPath();
+        this.ctx.arc(burst.originX, burst.originY, 20 + (elapsed / 80) * 40, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+
+      for (const p of burst.particles) {
+        // Physics
+        p.vy += gravity * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.rotation += p.rotSpeed * dt;
+
+        // Life decay: shards last longer, dust fades faster
+        const decayRate = p.shape === 'shard' ? 0.7 : p.shape === 'dust' ? 1.2 : 0.9;
+        p.life = Math.max(0, 1 - burstT * decayRate);
+        if (p.life <= 0) continue;
+
+        const alpha = p.alpha * p.life * (1 - burstT * 0.3);
+        if (alpha < 0.01) continue;
+
+        this.ctx.globalAlpha = alpha;
+
+        if (p.shape === 'shard') {
+          // Rotated rectangles — icy shard look
+          this.ctx.save();
+          this.ctx.translate(p.x, p.y);
+          this.ctx.rotate(p.rotation);
+          this.ctx.fillStyle = p.color;
+          this.ctx.shadowColor = p.color;
+          this.ctx.shadowBlur = 4;
+          const w = p.size * 0.4;
+          const h = p.size;
+          this.ctx.fillRect(-w / 2, -h / 2, w, h);
+          this.ctx.restore();
+        } else if (p.shape === 'dust') {
+          // Tiny circles
+          this.ctx.fillStyle = p.color;
+          this.ctx.beginPath();
+          this.ctx.arc(p.x, p.y, p.size * 0.5, 0, Math.PI * 2);
+          this.ctx.fill();
+        } else {
+          // Glow dots — radial gradient, no ctx.filter
+          const r = p.size;
+          const grad = this.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2);
+          grad.addColorStop(0, p.color);
+          grad.addColorStop(0.4, p.color);
+          grad.addColorStop(1, 'transparent');
+          this.ctx.fillStyle = grad;
+          this.ctx.beginPath();
+          this.ctx.arc(p.x, p.y, r * 2, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+      }
+    }
+
+    this.ctx.restore();
   }
 
   private setResolution(width: number, height: number): void {
@@ -3175,11 +3559,17 @@ export class LyricDancePlayer {
       const palette = this.getResolvedPalette();
       const accentColor = palette[1] ?? '#FFD700';
       const bgSystem = this.backgroundSystem;
+
+      // ═══ Always-on beat visualizer — present throughout entire song ═══
+      if (!this._globalBeatVis) {
+        this._globalBeatVis = new BeatVisSim(accentColor, 'bars');
+      }
+
       this.chapterSims = chapters.map((chapter: any, ci: number) => {
         const dominant = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#111111';
         const bgDesc = (chapter?.backgroundDirective ?? chapter?.background ?? '').toLowerCase();
         const perSystem = this.mapBackgroundSystem(`${bgDesc} ${bgSystem}`);
-        const sim: { fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim } = {};
+        const sim: { fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim; beatVis?: BeatVisSim } = {};
         if (perSystem === 'fire') sim.fire = new FireSim('fire', 0.08 + (chapter?.emotionalIntensity ?? 0.5) * 0.1);
         else if (perSystem === 'storm') sim.fire = new FireSim('smoke', 0.18);
         else if (perSystem === 'ocean') sim.water = new WaterSim(dominant, accentColor);
@@ -3187,6 +3577,16 @@ export class LyricDancePlayer {
         else if (perSystem === 'urban') sim.rain = new RainSim(accentColor);
         else if (perSystem === 'intimate') sim.fire = new FireSim('ember', 0.25);
         return sim;
+      });
+
+      // Map section keywords to beat vis styles — always present, style varies
+      this._beatVisStyles = chapters.map((chapter: any) => {
+        const desc = (chapter?.backgroundDirective ?? chapter?.background ?? '').toLowerCase();
+        if (desc.includes('fire') || desc.includes('burn') || desc.includes('flame') || desc.includes('ember')) return 'pulse' as BeatVisStyle;
+        if (desc.includes('wave') || desc.includes('ocean') || desc.includes('flow') || desc.includes('water') || desc.includes('rain')) return 'wave' as BeatVisStyle;
+        if (desc.includes('storm') || desc.includes('chaos') || desc.includes('turbul') || desc.includes('smoke')) return 'rings' as BeatVisStyle;
+        if (desc.includes('mirror') || desc.includes('reflect') || desc.includes('dream') || desc.includes('float') || desc.includes('drift')) return 'mirror-bars' as BeatVisStyle;
+        return 'bars' as BeatVisStyle;
       });
       
     } catch (err) {
@@ -3234,6 +3634,13 @@ export class LyricDancePlayer {
       if (sim.water) { sim.water.update(tSec, pulse, intensity); this.currentSimCanvases.push(sim.water.canvas); }
       if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
       if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
+
+      // ═══ Always-on beat visualizer — present throughout entire song ═══
+      if (this._globalBeatVis) {
+        const visStyle = this._beatVisStyles[ci] ?? 'bars';
+        this._globalBeatVis.setStyle(visStyle);
+        this._globalBeatVis.update(tSec, intensity, pulse);
+      }
     } catch (err) {
       console.error('[LyricEngine] updateSims crash:', err);
     }
@@ -3245,9 +3652,27 @@ export class LyricDancePlayer {
     const simOpacity = conductorResponse
       ? conductorResponse.bgSimIntensity
       : 0.3; // ambient fallback
+
+    // Section-specific sims (fire, water, aurora, rain) — full canvas, subtle
     for (const simCanvas of this.currentSimCanvases) {
       this.ctx.globalAlpha = 0.38 * simOpacity;
       this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
+      this.ctx.globalAlpha = 1;
+    }
+
+    // ═══ Always-on beat visualizer — bottom 60% of canvas, energy-reactive ═══
+    if (this._globalBeatVis) {
+      const beatPulse = (_frame as any).beatPulse ?? 0;
+      const visAlpha = 0.50 + beatPulse * 0.30; // 0.50 ambient → 0.80 on beat
+      // Vis height grows on beats: 55% ambient → 65% on strong beats
+      const visRatio = 0.55 + beatPulse * 0.10;
+      const visTop = this.height * (1 - visRatio);
+      const visH = this.height * visRatio;
+      this.ctx.globalAlpha = visAlpha * simOpacity;
+      // Nearest-neighbor upscale preserves crisp bar edges
+      this.ctx.imageSmoothingEnabled = false;
+      this.ctx.drawImage(this._globalBeatVis.canvas, 0, visTop, this.width, visH);
+      this.ctx.imageSmoothingEnabled = true;
       this.ctx.globalAlpha = 1;
     }
   }
@@ -3758,6 +4183,8 @@ export class LyricDancePlayer {
         chunk.ghostSpacing = word.ghostSpacing;
         chunk.ghostDirection = (resolvedWord?.ghostDirection ?? word.ghostDirection) as any;
         chunk.heroTrackingExpand = false;
+        chunk.isHeroWord = isHeroWord;
+        chunk.isSoloHero = isSoloHero;
         chunk.letterIndex = word.letterIndex;
         chunk.letterTotal = word.letterTotal;
         chunk.letterDelay = word.letterDelay ?? 0;
