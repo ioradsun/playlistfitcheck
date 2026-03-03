@@ -330,6 +330,22 @@ ${tempHint[ctx.colorTemperature] ?? ""}
 `;
 }
 
+function unwrapNested(obj: Record<string, any>): Record<string, any> {
+  // If the AI wrapped everything under a single key, unwrap it
+  const keys = Object.keys(obj);
+  if (keys.length === 1) {
+    const inner = obj[keys[0]];
+    if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+      // Check if the inner object looks like our expected structure
+      if (inner.sceneTone || inner.storyboard || inner.wordDirectives || inner.sections) {
+        console.log(`[cinematic-direction] Unwrapped nested key "${keys[0]}"`);
+        return inner;
+      }
+    }
+  }
+  return obj;
+}
+
 function extractJson(raw: string): Record<string, any> | null {
   let cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
   const start = cleaned.indexOf("{");
@@ -338,7 +354,7 @@ function extractJson(raw: string): Record<string, any> | null {
   cleaned = cleaned.slice(start, end + 1);
 
   try {
-    return JSON.parse(cleaned);
+    return unwrapNested(JSON.parse(cleaned));
   } catch {
     cleaned = cleaned
       .replace(/\/\/[^\n]*/g, "")
@@ -347,7 +363,7 @@ function extractJson(raw: string): Record<string, any> | null {
       .replace(/[\x00-\x1F\x7F]/g, (ch) => (ch === "\n" || ch === "\r" || ch === "\t" ? ch : ""));
 
     try {
-      return JSON.parse(cleaned);
+      return unwrapNested(JSON.parse(cleaned));
     } catch {
       return null;
     }
