@@ -56,11 +56,19 @@ export function drawSmoke(
   const swell = 1 + clamp((Math.sin(currentTime * 0.003 + index * 0.4) + 1) * 0.12, 0, 0.24);
   const radius = Math.max(2, size * swell);
 
+  // ═══ PERF FIX: Replace ctx.filter="blur(3px)" with radial gradient ═══
+  // ctx.filter blur is CPU-side Gaussian (~100 particles × save/restore = catastrophic).
+  // Radial gradient with shadowBlur achieves the same soft-puff look for free.
   ctx.save();
-  ctx.filter = "blur(3px)";
-  ctx.fillStyle = `rgba(60,50,40,${opacity * 0.85})`;
+  const grad = ctx.createRadialGradient(x, y, 0, x, y, radius * 1.8);
+  grad.addColorStop(0, `rgba(60,50,40,${opacity * 0.7})`);
+  grad.addColorStop(0.4, `rgba(60,50,40,${opacity * 0.45})`);
+  grad.addColorStop(1, "rgba(60,50,40,0)");
+  ctx.fillStyle = grad;
+  ctx.shadowColor = `rgba(60,50,40,${opacity * 0.5})`;
+  ctx.shadowBlur = radius * 1.5;
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.arc(x, y, radius * 1.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }

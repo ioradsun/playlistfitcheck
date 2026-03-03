@@ -603,8 +603,8 @@ const drawStaticResolve: EffectFn = (ctx, s) => {
   ctx.font = buildFont(st, fs);
 
   const t = Math.min(1, age / 400);
-  const blur = (1 - t) * 8;
-  ctx.filter = blur > 0.5 ? `blur(${blur}px)` : "none";
+  const blur = (1 - t) * 3; // capped at 3px (was 8px — CPU-side blur is expensive)
+  ctx.filter = blur > 0.5 ? `blur(${blur.toFixed(1)}px)` : "none";
 
   ctx.shadowBlur = Math.min(15, physState.glow * 0.5);
   ctx.shadowColor = palette[1] || "#8b5cf6";

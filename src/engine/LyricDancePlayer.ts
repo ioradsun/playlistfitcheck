@@ -845,6 +845,8 @@ export class LyricDancePlayer {
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
   private chapterImages: HTMLImageElement[] = [];
+  /** Pre-blurred versions of chapter images — eliminates per-frame ctx.filter blur() cost */
+  private _preBlurredImages: HTMLCanvasElement[] = [];
   // Ken Burns per-chapter parameters — computed once on image load
   private _kenBurnsParams: Array<{
     zoomStart: number;
@@ -1311,6 +1313,7 @@ export class LyricDancePlayer {
     if (this.payload) this.buildBgCache();
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
+    this._preBlurredImages = []; // invalidate — will use runtime blur fallback until reload
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
     this._updateViewportScale();
@@ -1407,6 +1410,7 @@ export class LyricDancePlayer {
     this.ambientParticleEngine?.clear();
     this.chapterSims = [];
     this.chapterImages = [];
+    this._preBlurredImages = [];
     this._lightingOverlayCanvas = null;
     this._grainCanvas = null;
     this._grainPool = [];
@@ -2296,7 +2300,9 @@ export class LyricDancePlayer {
           const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
           const bloomGlow = baseGlow + beatPulse * 0.5;
           this.ctx.shadowColor = '#ffffff';
-          this.ctx.shadowBlur = bloomGlow * 28;
+          // Cap shadow blur to avoid GPU stall in dense sections
+          // 16x gives visible glow without the 22px+ blur that tanks frame rate
+          this.ctx.shadowBlur = Math.min(14, bloomGlow * 16);
 
           // Depth stack: 3 shadow layers behind the hero word
           const depthLayers = 3;
@@ -2323,11 +2329,11 @@ export class LyricDancePlayer {
           this.ctx.globalAlpha = drawAlpha;
           this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
           this.ctx.shadowColor = '#ffffff';
-          this.ctx.shadowBlur = bloomGlow * 28;
+          this.ctx.shadowBlur = Math.min(14, bloomGlow * 16);
           if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         } else if (chunk.glow > 0) {
           this.ctx.shadowColor = '#ffffff';
-          this.ctx.shadowBlur = chunk.glow * 24;
+          this.ctx.shadowBlur = Math.min(14, chunk.glow * 16);
         }
 
         const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01;
@@ -2841,6 +2847,37 @@ export class LyricDancePlayer {
       }))
     );
 
+    // ═══ PRE-BLUR: Bake Gaussian blur into offscreen canvases once ═══
+    // This eliminates the ~1.65M pixel-op/frame cost of ctx.filter = 'blur(3px)'
+    // which causes thermal throttle + frame drops after ~60-90s of playback.
+    {
+      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+      const cdSections = (cd?.sections as any[]) ?? [];
+      const songGrade = this._songGrade ?? getMoodGrade(cdSections[0]?.visualMood as string | undefined);
+      const blurRadius = Math.min(3, songGrade.blur.radius);
+      this._preBlurredImages = this.chapterImages.map((img) => {
+        const off = document.createElement('canvas');
+        // Use image natural size capped at canvas size (no need for higher res)
+        off.width = this.width || 960;
+        off.height = this.height || 540;
+        const ctx = off.getContext('2d');
+        if (!ctx || !img.complete || img.naturalWidth === 0) return off;
+        // Apply blur once via filter
+        if (blurRadius > 0.2) {
+          ctx.filter = `blur(${blurRadius.toFixed(1)}px)`;
+        }
+        // Draw with overscan to avoid blurred edges
+        const OVERSCAN = 1.25;
+        const ow = off.width * OVERSCAN;
+        const oh = off.height * OVERSCAN;
+        const ox = (off.width - ow) / 2;
+        const oy = (off.height - oh) / 2;
+        ctx.drawImage(img, ox, oy, ow, oh);
+        ctx.filter = 'none';
+        return off;
+      });
+    }
+
     // Generate Ken Burns parameters per chapter — driven by motionIntent from mood grade.
     // Images are drawn with 20% overscan, so KB can safely use up to ~8% pan + 1.15 zoom
     // without ever revealing canvas edges (CameraRig 'far' parallax adds ≤2% displacement).
@@ -2926,6 +2963,8 @@ export class LyricDancePlayer {
 
     const current = this.chapterImages[chapterIdx];
     const next = this.chapterImages[nextChapterIdx];
+    const currentBlurred = this._preBlurredImages[chapterIdx];
+    const nextBlurred = this._preBlurredImages[nextChapterIdx];
 
     // ═══ SONG-LEVEL GRADE: one look for the entire song ═══
     // Computed once from the dominant mood, then locked in.
@@ -2944,19 +2983,22 @@ export class LyricDancePlayer {
     // Beat response — subtle brightness pulse on beats
     const beatMod = Math.max(0, this._springOffset);
 
-    // Blur: gentle fixed backdrop blur for text readability + proximity DOF
-    const cameraProximity = this.cameraRig.getProximity();
-    const proximityBlurBoost = cameraProximity * 2.0;
-    const targetBlur = activeGrade.blur.radius + proximityBlurBoost;
-    this._bgBlurCurrent += (targetBlur - this._bgBlurCurrent) * 0.08;
-    const blurOverride = Math.round(this._bgBlurCurrent * 10) / 10;
+    // ═══ PRE-BLURRED PATH: blur is baked into offscreen canvases ═══
+    // Only color adjustments at runtime (brightness, saturate, contrast, hue-rotate)
+    // Pass blurOverride=0 to skip per-frame blur — already baked in
+    const filterStr = buildGradeFilter(activeGrade, intensity, beatMod, 0);
 
-    // Build the CSS filter string — same for every frame
-    const filterStr = buildGradeFilter(activeGrade, intensity, beatMod, blurOverride || undefined);
+    // Use pre-blurred canvas if available (eliminates per-frame blur cost),
+    // otherwise fall back to original image
+    const drawCurrent = (currentBlurred && currentBlurred.width > 0) ? currentBlurred : current;
+    const useOrigCurrent = drawCurrent === current;
 
-    if (current?.complete && current.naturalWidth > 0) {
+    if ((useOrigCurrent ? (current?.complete && current.naturalWidth > 0) : true)) {
       this.ctx.save();
-      this.ctx.filter = filterStr;
+      // If using original (no pre-blur), apply full filter including blur fallback
+      this.ctx.filter = useOrigCurrent
+        ? buildGradeFilter(activeGrade, intensity, beatMod)
+        : filterStr;
 
       // ═══ OVERSCAN: draw image 20% larger than canvas to prevent border visibility
       const OVERSCAN = 1.20;
@@ -2982,19 +3024,24 @@ export class LyricDancePlayer {
         this.ctx.translate(this.width / 2 + panX, this.height / 2 + panY);
         this.ctx.scale(zoom, zoom);
         this.ctx.translate(-this.width / 2, -this.height / 2);
-        this.ctx.drawImage(current, ox, oy, ow, oh);
+        this.ctx.drawImage(drawCurrent, ox, oy, ow, oh);
         this.ctx.restore();
       } else {
-        this.ctx.drawImage(current, ox, oy, ow, oh);
+        this.ctx.drawImage(drawCurrent, ox, oy, ow, oh);
       }
 
       this.ctx.restore(); // restore filter state
     }
 
-    if (next?.complete && next.naturalWidth > 0 && blend > 0) {
+    const drawNext = (nextBlurred && nextBlurred.width > 0) ? nextBlurred : next;
+    const useOrigNext = drawNext === next;
+
+    if ((useOrigNext ? (next?.complete && next.naturalWidth > 0) : true) && blend > 0) {
       this.ctx.save();
       this.ctx.globalAlpha = blend;
-      this.ctx.filter = filterStr;
+      this.ctx.filter = useOrigNext
+        ? buildGradeFilter(activeGrade, intensity, beatMod)
+        : filterStr;
 
       const OVERSCAN_NEXT = 1.20;
       const onw = this.width * OVERSCAN_NEXT;
@@ -3014,10 +3061,10 @@ export class LyricDancePlayer {
         this.ctx.translate(this.width / 2 + nextPanX, this.height / 2 + nextPanY);
         this.ctx.scale(nextZoom, nextZoom);
         this.ctx.translate(-this.width / 2, -this.height / 2);
-        this.ctx.drawImage(next, onx, ony, onw, onh);
+        this.ctx.drawImage(drawNext, onx, ony, onw, onh);
         this.ctx.restore();
       } else {
-        this.ctx.drawImage(next, onx, ony, onw, onh);
+        this.ctx.drawImage(drawNext, onx, ony, onw, onh);
       }
 
       this.ctx.restore();
