@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-03-V8-WEBCODECS-EXPORT */
+/* cache-bust: 2026-03-01-V2-CONDUCTOR */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -203,6 +203,7 @@ export interface LiveDebugState {
   layoutStable: boolean;
 
   fps: number;
+  qualityTier: number;
   drawCalls: number;
   cacheHits: number;
 
@@ -342,6 +343,7 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   layoutStable: true,
 
   fps: 60,
+  qualityTier: 0,
   drawCalls: 0,
   cacheHits: 0,
 
@@ -464,7 +466,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 8;
+const BAKER_VERSION = 4;
 
 const SIM_W = 96;
 const SIM_H = 54;
@@ -930,8 +932,12 @@ export class LyricDancePlayer {
   private dpr: number = window.devicePixelRatio || 1;
   private width = 0; // logical px
   private height = 0; // logical px
+  private mediaRecorder: MediaRecorder | null = null;
+  private isExporting = false;
   private displayWidth = 0;
   private displayHeight = 0;
+  private wasLoopingBeforeExport = true;
+  public onExportComplete: (() => void) | null = null;
 
   // Audio (React reads this)
   public audio: HTMLAudioElement;
@@ -1082,10 +1088,19 @@ export class LyricDancePlayer {
   private chunkActiveSinceMs: Map<string, number> = new Map();
 
 
-  // Health monitor
+  // Health monitor + adaptive quality
   private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
   private frameCount = 0;
   private currentTSec = 0;
+
+  // ═══ Adaptive Quality Tier ═══
+  // Tier 0 = full, 1 = reduced, 2 = low, 3 = survival
+  // Downgrades instantly on low FPS; upgrades only after sustained recovery.
+  private _qualityTier: 0 | 1 | 2 | 3 = 0;
+  private _qFrameCount = 0;          // frames in current 1-second window
+  private _qWindowStart = 0;         // timestamp of current window start
+  private _qUpgradeStreak = 0;       // consecutive good windows (need 3 to upgrade)
+  private _qLastDowngradeMs = 0;     // avoid thrashing — min 2s between downgrades
 
   // Stall detection removed — was no-op (counters with no output)
 
@@ -1410,83 +1425,65 @@ export class LyricDancePlayer {
     this._heroDecompSpawned.clear();
   }
 
-  /**
-   * Render a single frame at an arbitrary timestamp.
-   * Used by the export pipeline — does NOT touch audio or rAF.
-   */
-  public drawAtTime(tSec: number): void {
-    const songTime = this.songStartSec + tSec;
-    const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, songTime));
+  seekTo(timeSec: number): void {
+    this.seek(timeSec);
 
-    // Set up conductor state for this time
-    this._timeInitialized = true;
-    this._smoothedTime = clamped;
-    this._lastRawTime = clamped;
 
-    // Resolve section index + palette
-    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
-    const dur = this.songEndSec - this.songStartSec || 1;
-    this._frameSectionIdx = sections.length > 0
-      ? this.resolveSectionIndex(sections, clamped, this.songEndSec)
-      : -1;
-    const secIdx = this._frameSectionIdx;
-    if (secIdx !== this._framePaletteTime) {
-      this._framePaletteTime = secIdx;
-      this._framePalette = this._resolveCurrentPalette(secIdx);
-    }
-
-    // Beat state
-    const beatState = this.conductor?.getState(clamped) ?? null;
-    this._lastBeatState = beatState;
-    this._frameDt = 1; // normalized to 60fps
-
-    // Evaluate + update + draw
-    const frame = this.evaluateFrame(clamped);
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.ctx.clearRect(0, 0, this.width, this.height);
-    this.update(16.67, clamped, frame, beatState);
-    this.draw(clamped, frame);
   }
 
-  /**
-   * Set up export resolution — changes the player's canvas to export dimensions.
-   * Call teardownExportResolution() when done.
-   */
-  public setupExportResolution(width: number, height: number): void {
-    this.displayWidth = this.width;
-    this.displayHeight = this.height;
-    this.pause();
+  async startExport(ratio: "16:9" | "9:16"): Promise<void> {
+    if (this.isExporting || !this.payload) return;
+
+    const { width, height } = LyricDancePlayer.RESOLUTIONS[ratio];
+    this.isExporting = true;
+    this.wasLoopingBeforeExport = this.audio.loop;
+    this.audio.loop = false;
+
     this.setResolution(width, height);
-    // Re-acquire context with willReadFrequently for fast pixel readback
-    // (VideoFrame reads pixels each frame — software canvas is faster for this)
-    this.ctx = this.canvas.getContext("2d", {
-      alpha: false,
-      willReadFrequently: true,
-      desynchronized: true,
-    })! as CanvasRenderingContext2D;
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.seekTo(0);
+
+    const stream = this.canvas.captureStream(30);
+    const mimeType = MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "video/webm";
+
+    this.mediaRecorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: 8_000_000,
+    });
+
+    const chunks: Blob[] = [];
+    this.mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    const onAudioEnded = () => {
+      this.stopExport();
+    };
+    this.audio.addEventListener("ended", onAudioEnded, { once: true });
+
+    this.mediaRecorder.onstop = () => {
+      this.audio.removeEventListener("ended", onAudioEnded);
+      const blob = new Blob(chunks, { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${this.data.artist_name ?? "artist"}-${this.data.song_name ?? "song"}-${ratio.replace(":", "x")}.${mimeType.includes("mp4") ? "mp4" : "webm"}`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      this.isExporting = false;
+      this.mediaRecorder = null;
+      this.audio.loop = this.wasLoopingBeforeExport;
+      this.setResolution(this.displayWidth, this.displayHeight);
+      this.onExportComplete?.();
+    };
+
+    this.mediaRecorder.start(100);
+    this.play();
   }
 
-  /**
-   * Restore display resolution after export.
-   */
-  public teardownExportResolution(): void {
-    this.setResolution(this.displayWidth, this.displayHeight);
-  }
-
-  /**
-   * Get the player's active canvas (for VideoFrame creation during export).
-   */
-  public getExportCanvas(): HTMLCanvasElement {
-    return this.canvas;
-  }
-
-  /**
-   * Get the total song duration in seconds.
-   */
-  public getSongDuration(): number {
-    return Math.max(0, this.songEndSec - this.songStartSec);
+  stopExport(): void {
+    if (!this.mediaRecorder || this.mediaRecorder.state === "inactive") return;
+    this.mediaRecorder.stop();
   }
 
   resize(logicalW: number, logicalH: number): void {
@@ -1630,9 +1627,43 @@ export class LyricDancePlayer {
       const fps = this.frameCount / 5;
       this.frameCount = 0;
       if (fps > 0 && fps < 20 && this.playing) {
-        console.warn(`[LyricEngine] low fps: ${fps.toFixed(1)} — consider reducing effects`);
+        console.warn(`[LyricEngine] low fps: ${fps.toFixed(1)} — quality tier: ${this._qualityTier}`);
       }
     }, 5000);
+  }
+
+  /** Adaptive quality — call once per frame to update tier based on rolling FPS. */
+  private _updateQualityTier(nowMs: number): void {
+    this._qFrameCount++;
+    if (this._qWindowStart === 0) { this._qWindowStart = nowMs; return; }
+    const elapsed = nowMs - this._qWindowStart;
+    if (elapsed < 1000) return; // 1-second measurement windows
+
+    const fps = (this._qFrameCount / elapsed) * 1000;
+    this._qFrameCount = 0;
+    this._qWindowStart = nowMs;
+
+    const tier = this._qualityTier;
+    const sinceLast = nowMs - this._qLastDowngradeMs;
+
+    // Downgrade instantly (with 2s cooldown to prevent thrashing)
+    if (fps < 18 && tier < 3 && sinceLast > 2000) {
+      this._qualityTier = Math.min(3, tier + 1) as 0 | 1 | 2 | 3;
+      this._qUpgradeStreak = 0;
+      this._qLastDowngradeMs = nowMs;
+      console.info(`[LyricEngine] quality → tier ${this._qualityTier} (fps: ${fps.toFixed(1)})`);
+    }
+    // Upgrade only after 3 consecutive good windows (3s sustained)
+    else if (fps > 40 && tier > 0) {
+      this._qUpgradeStreak++;
+      if (this._qUpgradeStreak >= 3) {
+        this._qualityTier = Math.max(0, tier - 1) as 0 | 1 | 2 | 3;
+        this._qUpgradeStreak = 0;
+        console.info(`[LyricEngine] quality → tier ${this._qualityTier} (fps: ${fps.toFixed(1)})`);
+      }
+    } else {
+      this._qUpgradeStreak = 0;
+    }
   }
 
   /** Build O(1) lookup from wordId → WordTimingBudget for evaluateFrame. */
@@ -1939,6 +1970,9 @@ export class LyricDancePlayer {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
+    if (this.isExporting && clamped >= this.songEndSec) {
+      this.stopExport();
+    }
 
     this.fpsAccum.t += deltaMs;
     this.fpsAccum.frames += 1;
@@ -1992,6 +2026,7 @@ export class LyricDancePlayer {
     const ds = this.debugState;
     ds.time = clamped;
     ds.fps = Math.round(this.fpsAccum.fps);
+    ds.qualityTier = this._qualityTier;
     ds.songProgress = songProgress;
     ds.beatIntensity = beatState?.pulse ?? 0;
 
@@ -2105,7 +2140,7 @@ export class LyricDancePlayer {
     } // end debug panel guard
 
     const beatIntensityClamped = Math.max(0, Math.min(1, beatState?.pulse ?? 0));
-    this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
+    if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
   }
 
   private draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
@@ -2119,6 +2154,8 @@ export class LyricDancePlayer {
   private _draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
     this.currentTSec = tSec;
     this.frameCount++;
+    this._updateQualityTier(performance.now());
+    const qTier = this._qualityTier;
 
     // Mood grade is computed inside drawChapterImage() which runs before text rendering.
     // _activeMoodGrade is set by drawChapterImage (song-level grade).
@@ -2173,24 +2210,33 @@ export class LyricDancePlayer {
     this.cameraRig.resetTransform(this.ctx);
 
     // ═══ V2: CameraRig parallax — BG_MID layer (sims, lighting) ═══
-    this.cameraRig.applyTransform(this.ctx, 'mid');
-    this.drawSimLayer(frame);
-    this.drawLightingOverlay(frame, tSec);
-    this.cameraRig.resetTransform(this.ctx);
-
-    try {
-      this.checkEmotionalEvents(tSec, songProgress);
-    } catch (e) {
-      console.error('[LyricEngine] emotional events crash:', e);
+    // Skip sims at tier 3 (fire/water/aurora/rain draw full-canvas canvases)
+    // Skip lighting overlay at tier 2+ (radial gradient composite)
+    if (qTier < 3) {
+      this.cameraRig.applyTransform(this.ctx, 'mid');
+      this.drawSimLayer(frame);
+      if (qTier < 2) this.drawLightingOverlay(frame, tSec);
+      this.cameraRig.resetTransform(this.ctx);
     }
 
-    this.drawEmotionalEvents(tSec);
+    if (qTier < 3) {
+      try {
+        this.checkEmotionalEvents(tSec, songProgress);
+      } catch (e) {
+        console.error('[LyricEngine] emotional events crash:', e);
+      }
+    }
+
+    if (qTier < 3) this.drawEmotionalEvents(tSec);
 
     // Ambient particles — runtime system updates per section
     // ═══ V2: CameraRig parallax — BG_NEAR layer ═══
-    this.cameraRig.applyTransform(this.ctx, 'near');
-    this.ambientParticleEngine?.draw(this.ctx, "far");
-    this.cameraRig.resetTransform(this.ctx);
+    // Skip particles entirely at tier 3 (hundreds of drawImage/arc calls)
+    if (qTier < 3) {
+      this.cameraRig.applyTransform(this.ctx, 'near');
+      this.ambientParticleEngine?.draw(this.ctx, "far");
+      this.cameraRig.resetTransform(this.ctx);
+    }
 
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
 
@@ -2388,7 +2434,8 @@ export class LyricDancePlayer {
       if (exit > 0) this.chunkActiveSinceMs.delete(chunk.id);
 
       // ═══ HERO DECOMPOSITION: spawn shatter burst when solo hero starts exiting ═══
-      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && !this._heroDecompSpawned.has(chunk.id)) {
+      // Skip at tier 2+ (spawns dozens of particles per hero word)
+      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2) {
         this._heroDecompSpawned.add(chunk.id);
         const spawnBound = bounds.find(b => b.chunk.id === chunk.id);
         const spawnX = spawnBound ? spawnBound.cx : (Number.isFinite(chunk.x) ? chunk.x : this.width / 2);
@@ -2465,12 +2512,14 @@ export class LyricDancePlayer {
       let iconY = finalDrawY;
       let iconOpacity = drawAlpha * 0.45;
       let iconGlow = 0;
+      // ═══ Adaptive quality: reduce/disable icon glow at lower tiers ═══
+      const iconGlowCap = this._qualityTier === 0 ? 99 : this._qualityTier === 1 ? 4 : 0;
 
       switch (chunk.iconPosition) {
-        case 'behind': iconX = centerX; iconY = finalDrawY; iconOpacity = drawAlpha * 0.45; iconGlow = 12; break;
-        case 'above': iconX = centerX; iconY = finalDrawY - safeFontSize * 1.3; iconOpacity = drawAlpha * 0.85; iconGlow = 6; break;
-        case 'beside': iconX = centerX - iconSize * 0.7; iconY = finalDrawY; iconOpacity = drawAlpha * 0.9; iconGlow = 6; break;
-        case 'replace': iconX = centerX; iconY = finalDrawY; iconOpacity = drawAlpha * 1.0; iconGlow = 16; break;
+        case 'behind': iconX = centerX; iconY = finalDrawY; iconOpacity = drawAlpha * 0.45; iconGlow = Math.min(12, iconGlowCap); break;
+        case 'above': iconX = centerX; iconY = finalDrawY - safeFontSize * 1.3; iconOpacity = drawAlpha * 0.85; iconGlow = Math.min(6, iconGlowCap); break;
+        case 'beside': iconX = centerX - iconSize * 0.7; iconY = finalDrawY; iconOpacity = drawAlpha * 0.9; iconGlow = Math.min(6, iconGlowCap); break;
+        case 'replace': iconX = centerX; iconY = finalDrawY; iconOpacity = drawAlpha * 1.0; iconGlow = Math.min(16, iconGlowCap); break;
       }
 
       const drawBefore = chunk.iconPosition === 'behind' || chunk.iconPosition === 'replace';
@@ -2506,50 +2555,54 @@ export class LyricDancePlayer {
           // Bloom pulse: amplified glow synced to beat
           const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
           const bloomGlow = baseGlow + beatPulse * 0.5;
+          // ═══ Adaptive quality: reduce shadow blur at lower tiers ═══
+          const blurCap = this._qualityTier === 0 ? 14 : this._qualityTier === 1 ? 4 : 0;
           this.ctx.shadowColor = '#ffffff';
-          // Cap shadow blur to avoid GPU stall in dense sections
-          // 16x gives visible glow without the 22px+ blur that tanks frame rate
-          this.ctx.shadowBlur = Math.min(14, bloomGlow * 16);
+          this.ctx.shadowBlur = Math.min(blurCap, bloomGlow * 16);
 
           // Depth stack: 3 shadow layers behind the hero word
-          const depthLayers = 3;
-          const layerSpacing = safeFontSize * 0.025;
-          this.ctx.save();
-          for (let layer = depthLayers; layer >= 1; layer--) {
-            const layerAlpha = drawAlpha * (0.12 / layer);
-            const offsetY = layer * layerSpacing;
-            this.ctx.globalAlpha = layerAlpha;
-            this.ctx.shadowBlur = 0;
-            this.ctx.fillStyle = 'rgba(255,255,255,0.15)';
-            const [da, db, dc, dd, de, df] = this.computeTransformMatrix(
-              camShakeX + camCX + (heroDrawX - camCX) * camZoom,
-              camShakeY + camCY + ((heroDrawY + offsetY) - camCY) * camZoom,
-              chunk.rotation ?? 0,
-              chunk.skewX ?? 0,
-              sx * camZoom,
-              sy * camZoom,
-            );
-            this.ctx.setTransform(da, db, dc, dd, de, df);
-            this.ctx.fillText(text, 0, 0);
+          // Skip at tier 2+ (each layer = setTransform + fillText — very expensive)
+          if (this._qualityTier < 2) {
+            const depthLayers = 3;
+            const layerSpacing = safeFontSize * 0.025;
+            this.ctx.save();
+            for (let layer = depthLayers; layer >= 1; layer--) {
+              const layerAlpha = drawAlpha * (0.12 / layer);
+              const offsetY = layer * layerSpacing;
+              this.ctx.globalAlpha = layerAlpha;
+              this.ctx.shadowBlur = 0;
+              this.ctx.fillStyle = 'rgba(255,255,255,0.15)';
+              const [da, db, dc, dd, de, df] = this.computeTransformMatrix(
+                camShakeX + camCX + (heroDrawX - camCX) * camZoom,
+                camShakeY + camCY + ((heroDrawY + offsetY) - camCY) * camZoom,
+                chunk.rotation ?? 0,
+                chunk.skewX ?? 0,
+                sx * camZoom,
+                sy * camZoom,
+              );
+              this.ctx.setTransform(da, db, dc, dd, de, df);
+              this.ctx.fillText(text, 0, 0);
+            }
+            this.ctx.restore();
           }
-          this.ctx.restore();
           this.ctx.globalAlpha = drawAlpha;
           this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
           this.ctx.shadowColor = '#ffffff';
-          this.ctx.shadowBlur = Math.min(14, bloomGlow * 16);
+          this.ctx.shadowBlur = Math.min(blurCap, bloomGlow * 16);
           if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         } else if (chunk.glow > 0) {
+          const glowCap = this._qualityTier === 0 ? 14 : this._qualityTier === 1 ? 4 : 0;
           this.ctx.shadowColor = '#ffffff';
-          this.ctx.shadowBlur = Math.min(14, chunk.glow * 16);
+          this.ctx.shadowBlur = Math.min(glowCap, chunk.glow * 16);
         }
 
-        const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01;
+        const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01 && this._qualityTier < 3;
         if (needsFilterSaveRestore) {
           this.ctx.save();
           this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
         }
 
-        if (chunk.ghostTrail && chunk.visible) {
+        if (chunk.ghostTrail && chunk.visible && this._qualityTier === 0) {
           const count = chunk.ghostCount ?? 3;
           const spacing = chunk.ghostSpacing ?? 8;
           const dir = chunk.ghostDirection ?? 'up';
@@ -2590,7 +2643,8 @@ export class LyricDancePlayer {
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
         // ═══ Text stroke for edge contrast in ambiguous zones ═══
-        const textStrokeColor = (chunk as any).textStroke as string | undefined;
+        // Skip at tier 2+ (strokeText is as expensive as fillText)
+        const textStrokeColor = this._qualityTier < 2 ? (chunk as any).textStroke as string | undefined : undefined;
         if (textStrokeColor) {
           this.ctx.strokeStyle = textStrokeColor;
           this.ctx.lineWidth = Math.max(1.5, safeFontSize * 0.03);
@@ -3408,9 +3462,12 @@ export class LyricDancePlayer {
     }
 
     // ─── Film grain: consistent level from song grade ───
-    const grainIntensity = Math.min(0.15, activeGrade.grain.intensity);
-    if (grainIntensity > 0.02) {
-      this.renderFilmGrain(grainIntensity, activeGrade.grain.size);
+    // Skip grain at tier 1+ (overlay composite + putImageData is expensive)
+    if (this._qualityTier === 0) {
+      const grainIntensity = Math.min(0.15, activeGrade.grain.intensity);
+      if (grainIntensity > 0.02) {
+        this.renderFilmGrain(grainIntensity, activeGrade.grain.size);
+      }
     }
 
     // Store for _textBandBrightness sampling
@@ -3618,7 +3675,8 @@ export class LyricDancePlayer {
     }
 
     // ═══ Beat visualizer strip — bottom ~25% of canvas, synced to actual beatmap ═══
-    if (this._globalBeatVis) {
+    // Skip at tier 2+ (full-width drawImage with alpha composite)
+    if (this._globalBeatVis && this._qualityTier < 2) {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
@@ -3787,15 +3845,22 @@ export class LyricDancePlayer {
     // Compute centering offset for the active group:
     // shift its words so the group center lands at (480, 270) in compile space
     let groupCenterOffsetX = 0;
+    let _compileWrapped = false;
     if (activeGroupIdx >= 0) {
       const g = groups[activeGroupIdx];
       let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
       for (const w of g.words) {
         minX = Math.min(minX, w.layoutX);
         maxX = Math.max(maxX, w.layoutX);
+        minY = Math.min(minY, w.layoutY);
+        maxY = Math.max(maxY, w.layoutY);
       }
-      const groupCenterX = (minX + maxX) / 2;
-      groupCenterOffsetX = 480 - groupCenterX; // shift to horizontal center
+      _compileWrapped = (maxY - minY) > 5;
+      if (!_compileWrapped) {
+        const groupCenterX = (minX + maxX) / 2;
+        groupCenterOffsetX = 480 - groupCenterX;
+      }
     }
 
     // Line transition easing removed — active chunk always at center
