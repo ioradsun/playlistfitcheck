@@ -1458,6 +1458,14 @@ export class LyricDancePlayer {
     this.displayHeight = this.height;
     this.pause();
     this.setResolution(width, height);
+    // Re-acquire context with willReadFrequently for fast pixel readback
+    // (VideoFrame reads pixels each frame — software canvas is faster for this)
+    this.ctx = this.canvas.getContext("2d", {
+      alpha: false,
+      willReadFrequently: true,
+      desynchronized: true,
+    } as any)!;
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
   /**
