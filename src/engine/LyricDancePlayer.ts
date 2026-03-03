@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-03-V6 */
+/* cache-bust: 2026-03-01-V2-CONDUCTOR */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -464,7 +464,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 6;
+const BAKER_VERSION = 4;
 
 const SIM_W = 96;
 const SIM_H = 54;
@@ -1044,7 +1044,6 @@ export class LyricDancePlayer {
   private _lightingOverlayCanvas: HTMLCanvasElement | null = null;
   private _lightingOverlayKey = '';
   private _textBandBrightness = 0.3; // sampled brightness of center band where text renders
-  private _heroAccentColor = '#FFD700'; // accent from AI palette for hero words
   private _lastBandSampleMs = 0;     // throttle: sample every 300ms
   // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
   private _frameSectionIdx = -1;
@@ -3501,7 +3500,6 @@ export class LyricDancePlayer {
       const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
       const palette = this.getResolvedPalette();
       const accentColor = palette[1] ?? '#FFD700';
-      this._heroAccentColor = accentColor;
       const bgSystem = this.backgroundSystem;
 
       // ═══ Always-on beat visualizer — present throughout entire song ═══
@@ -3831,7 +3829,10 @@ export class LyricDancePlayer {
       const _mlDx: number[] = [];    // per-word X re-centering offset
       let _isMultiLine = false;
       const MAX_WORDS_PER_LINE = 3;
-      const MAX_LINE_WIDTH = 960 * 0.85; // 816px in compile space
+      const _isPortraitVP = this.height > this.width;
+      // FIX: totalLineW is measured at fontScale (pixel space), so threshold must match.
+      // Portrait uses narrower effective width (matches compile-time 0.75 factor).
+      const MAX_LINE_WIDTH = (_isPortraitVP ? 960 * 0.65 : 960 * 0.85) * fontScale;
 
       if (lineRole === 'current' && !groupHasActiveSoloHero && group.words.length > 1) {
         const mCtx = this._measureCtx;
@@ -3854,8 +3855,8 @@ export class LyricDancePlayer {
           }
         }
 
-        // Trigger multi-line for scaled words OR wide lines
-        const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
+        // Trigger multi-line for scaled words, wide lines, OR portrait with 3+ words
+        const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > (_isPortraitVP ? 2 : 4);
 
         if (needsWrap) {
           _isMultiLine = true;
@@ -4111,15 +4112,12 @@ export class LyricDancePlayer {
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
         chunk.color = word.color;
-        // ═══ TEXT COLOR: auto light/dark + accent for heroes ═══
+        // ═══ SINGLE COLOR MODEL: one color for all words, contrast against background ═══
+        // No tiers, no semantic overrides, no palette juggling.
+        // Light text on dark backgrounds, dark text on light backgrounds.
         {
-          const emph = resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0;
-          const bgIsLight = this._textBandBrightness > 0.40;
-          if (emph >= 4) {
-            chunk.color = this._heroAccentColor;
-          } else {
-            chunk.color = bgIsLight ? '#1a1a2e' : '#f0f0f0';
-          }
+          const bgIsLight = this._textBandBrightness > 0.55;
+          chunk.color = bgIsLight ? '#1a1a2e' : '#f0f0f0';
         }
         chunk.glow = wordGlow;
         chunk.entryStyle = usedEntry;
