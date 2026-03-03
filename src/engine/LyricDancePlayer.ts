@@ -3629,6 +3629,81 @@ export class LyricDancePlayer {
         }
       }
 
+      // ═══ MULTI-LINE LAYOUT: break phrase around inline hero words ═══
+      // When an inline hero (<500ms) is present, split into 2-3 lines
+      // so emphasis scaling doesn't cause overlap on a single line.
+      //   hero at beginning → hero top, rest below
+      //   hero in middle    → before / HERO / after (3 lines)
+      //   hero at end       → rest above, hero below
+      const _mlDy: number[] = [];    // per-word Y offset in compile space
+      const _mlDx: number[] = [];    // per-word X re-centering offset
+      let _isMultiLine = false;
+
+      if (lineRole === 'current' && !groupHasActiveSoloHero && group.words.length > 1) {
+        let heroWi = -1;
+        for (let wi = 0; wi < group.words.length; wi++) {
+          const w = group.words[wi];
+          if (w.isHeroWord && (w.wordDuration ?? 0) < 0.5 && (w.emphasisLevel ?? 0) >= 2) {
+            heroWi = wi;
+            break;
+          }
+        }
+
+        if (heroWi >= 0) {
+          _isMultiLine = true;
+          const heroEmp = group.words[heroWi].emphasisLevel ?? 0;
+          const heroFS = group.words[heroWi].baseFontSize * fontScale;
+          const normalFS = group.words[0].baseFontSize * fontScale;
+          // Line heights: hero line accounts for emphasis scale
+          const heroLineH = heroFS * (1.0 + heroEmp * 0.25) * 1.3;
+          const normalLineH = normalFS * 1.3;
+
+          const total = group.words.length;
+          const atStart = heroWi === 0;
+          const atEnd = heroWi === total - 1;
+
+          // Build line ranges: { startWi, endWi, height }
+          const lineRanges: Array<{ s: number; e: number; h: number }> = [];
+          if (atStart) {
+            lineRanges.push({ s: 0, e: 0, h: heroLineH });
+            lineRanges.push({ s: 1, e: total - 1, h: normalLineH });
+          } else if (atEnd) {
+            lineRanges.push({ s: 0, e: total - 2, h: normalLineH });
+            lineRanges.push({ s: total - 1, e: total - 1, h: heroLineH });
+          } else {
+            lineRanges.push({ s: 0, e: heroWi - 1, h: normalLineH });
+            lineRanges.push({ s: heroWi, e: heroWi, h: heroLineH });
+            lineRanges.push({ s: heroWi + 1, e: total - 1, h: normalLineH });
+          }
+
+          // Original group center (before centering offset was applied)
+          const groupCenterX = 480 - groupCenterOffsetX;
+
+          // Compute total height, center vertically around 0
+          const totalH = lineRanges.reduce((sum, l) => sum + l.h, 0);
+          let yPos = -totalH / 2;
+
+          for (const lr of lineRanges) {
+            // Compute this line's horizontal midpoint from layoutX
+            let lMinX = Infinity, lMaxX = -Infinity;
+            for (let wi = lr.s; wi <= lr.e; wi++) {
+              lMinX = Math.min(lMinX, group.words[wi].layoutX);
+              lMaxX = Math.max(lMaxX, group.words[wi].layoutX);
+            }
+            const lineMidX = (lMinX + lMaxX) / 2;
+            // Shift so this line's center hits 480 after groupCenterOffsetX
+            const dxShift = groupCenterX - lineMidX;
+
+            const lineY = yPos + lr.h / 2;
+            for (let wi = lr.s; wi <= lr.e; wi++) {
+              _mlDy[wi] = lineY;
+              _mlDx[wi] = dxShift;
+            }
+            yPos += lr.h;
+          }
+        }
+      }
+
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
         const resolvedWord = this.resolvedState.wordSettings[word.clean ?? normalizeToken(word.text)] ?? null;
@@ -3779,8 +3854,8 @@ export class LyricDancePlayer {
           waveScale = 1.0 + waveProximity * 0.06;
         }
 
-        chunk.x = (word.layoutX + groupCenterOffsetX + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
-        chunk.y = (roleY + finalOffsetY + heroOffsetY) * sy;
+        chunk.x = (word.layoutX + groupCenterOffsetX + (_isMultiLine ? (_mlDx[wi] ?? 0) : 0) + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : 0) + finalOffsetY + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
         chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale;
