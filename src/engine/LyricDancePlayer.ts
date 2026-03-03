@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-01-V2-CONDUCTOR */
+/* cache-bust: 2026-03-03-V7-UNWRAP */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -464,7 +464,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 4;
+const BAKER_VERSION = 7;
 
 const SIM_W = 96;
 const SIM_H = 54;
