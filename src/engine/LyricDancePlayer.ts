@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-01-V2-CONDUCTOR */
+/* cache-bust: 2026-03-03-V8-WEBCODECS-EXPORT */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -464,7 +464,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 4;
+const BAKER_VERSION = 8;
 
 const SIM_W = 96;
 const SIM_H = 54;
@@ -930,12 +930,8 @@ export class LyricDancePlayer {
   private dpr: number = window.devicePixelRatio || 1;
   private width = 0; // logical px
   private height = 0; // logical px
-  private mediaRecorder: MediaRecorder | null = null;
-  private isExporting = false;
   private displayWidth = 0;
   private displayHeight = 0;
-  private wasLoopingBeforeExport = true;
-  public onExportComplete: (() => void) | null = null;
 
   // Audio (React reads this)
   public audio: HTMLAudioElement;
@@ -1414,65 +1410,75 @@ export class LyricDancePlayer {
     this._heroDecompSpawned.clear();
   }
 
-  seekTo(timeSec: number): void {
-    this.seek(timeSec);
+  /**
+   * Render a single frame at an arbitrary timestamp.
+   * Used by the export pipeline — does NOT touch audio or rAF.
+   */
+  public drawAtTime(tSec: number): void {
+    const songTime = this.songStartSec + tSec;
+    const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, songTime));
 
+    // Set up conductor state for this time
+    this._timeInitialized = true;
+    this._smoothedTime = clamped;
+    this._lastRawTime = clamped;
 
+    // Resolve section index + palette
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+    const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+    const dur = this.songEndSec - this.songStartSec || 1;
+    this._frameSectionIdx = sections.length > 0
+      ? this.resolveSectionIndex(sections, clamped, this.songEndSec)
+      : -1;
+    const secIdx = this._frameSectionIdx;
+    if (secIdx !== this._framePaletteTime) {
+      this._framePaletteTime = secIdx;
+      this._framePalette = this._resolveCurrentPalette(secIdx);
+    }
+
+    // Beat state
+    const beatState = this.conductor?.getState(clamped) ?? null;
+    this._lastBeatState = beatState;
+    this._frameDt = 1; // normalized to 60fps
+
+    // Evaluate + update + draw
+    const frame = this.evaluateFrame(clamped);
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.clearRect(0, 0, this.width, this.height);
+    this.update(16.67, clamped, frame, beatState);
+    this.draw(clamped, frame);
   }
 
-  async startExport(ratio: "16:9" | "9:16"): Promise<void> {
-    if (this.isExporting || !this.payload) return;
-
-    const { width, height } = LyricDancePlayer.RESOLUTIONS[ratio];
-    this.isExporting = true;
-    this.wasLoopingBeforeExport = this.audio.loop;
-    this.audio.loop = false;
-
+  /**
+   * Set up export resolution — changes the player's canvas to export dimensions.
+   * Call teardownExportResolution() when done.
+   */
+  public setupExportResolution(width: number, height: number): void {
+    this.displayWidth = this.width;
+    this.displayHeight = this.height;
+    this.pause();
     this.setResolution(width, height);
-    this.seekTo(0);
-
-    const stream = this.canvas.captureStream(30);
-    const mimeType = MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "video/webm";
-
-    this.mediaRecorder = new MediaRecorder(stream, {
-      mimeType,
-      videoBitsPerSecond: 8_000_000,
-    });
-
-    const chunks: Blob[] = [];
-    this.mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
-
-    const onAudioEnded = () => {
-      this.stopExport();
-    };
-    this.audio.addEventListener("ended", onAudioEnded, { once: true });
-
-    this.mediaRecorder.onstop = () => {
-      this.audio.removeEventListener("ended", onAudioEnded);
-      const blob = new Blob(chunks, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${this.data.artist_name ?? "artist"}-${this.data.song_name ?? "song"}-${ratio.replace(":", "x")}.${mimeType.includes("mp4") ? "mp4" : "webm"}`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      this.isExporting = false;
-      this.mediaRecorder = null;
-      this.audio.loop = this.wasLoopingBeforeExport;
-      this.setResolution(this.displayWidth, this.displayHeight);
-      this.onExportComplete?.();
-    };
-
-    this.mediaRecorder.start(100);
-    this.play();
   }
 
-  stopExport(): void {
-    if (!this.mediaRecorder || this.mediaRecorder.state === "inactive") return;
-    this.mediaRecorder.stop();
+  /**
+   * Restore display resolution after export.
+   */
+  public teardownExportResolution(): void {
+    this.setResolution(this.displayWidth, this.displayHeight);
+  }
+
+  /**
+   * Get the player's active canvas (for VideoFrame creation during export).
+   */
+  public getExportCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
+  /**
+   * Get the total song duration in seconds.
+   */
+  public getSongDuration(): number {
+    return Math.max(0, this.songEndSec - this.songStartSec);
   }
 
   resize(logicalW: number, logicalH: number): void {
@@ -1925,9 +1931,6 @@ export class LyricDancePlayer {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
-    if (this.isExporting && clamped >= this.songEndSec) {
-      this.stopExport();
-    }
 
     this.fpsAccum.t += deltaMs;
     this.fpsAccum.frames += 1;
@@ -3776,22 +3779,15 @@ export class LyricDancePlayer {
     // Compute centering offset for the active group:
     // shift its words so the group center lands at (480, 270) in compile space
     let groupCenterOffsetX = 0;
-    let _compileWrapped = false;
     if (activeGroupIdx >= 0) {
       const g = groups[activeGroupIdx];
       let minX = Infinity, maxX = -Infinity;
-      let minY = Infinity, maxY = -Infinity;
       for (const w of g.words) {
         minX = Math.min(minX, w.layoutX);
         maxX = Math.max(maxX, w.layoutX);
-        minY = Math.min(minY, w.layoutY);
-        maxY = Math.max(maxY, w.layoutY);
       }
-      _compileWrapped = (maxY - minY) > 5;
-      if (!_compileWrapped) {
-        const groupCenterX = (minX + maxX) / 2;
-        groupCenterOffsetX = 480 - groupCenterX;
-      }
+      const groupCenterX = (minX + maxX) / 2;
+      groupCenterOffsetX = 480 - groupCenterX; // shift to horizontal center
     }
 
     // Line transition easing removed — active chunk always at center

@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import { exportVideoAsMP4, canExportVideo } from "@/engine/exportVideo";
 import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -263,6 +264,8 @@ export default function ShareableLyricDance() {
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
+  const [exportProgress, setExportProgress] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -271,18 +274,70 @@ export default function ShareableLyricDance() {
   const [playerInstance, setPlayerInstance] = useState<LyricDancePlayer | null>(null);
   const playerInitializedRef = useRef(false);
 
-  const handleExport = useCallback((ratio: "16:9" | "9:16") => {
+  const handleExport = useCallback(async (ratio: "16:9" | "9:16") => {
     if (!playerRef.current) return;
-    setExporting(ratio);
 
-    playerRef.current.onExportComplete = () => {
-      setExporting(null);
+    if (!canExportVideo()) {
+      toast.error("Export requires Chrome or Edge browser (version 94+)");
+      return;
+    }
+
+    const resolutions = {
+      "16:9": { width: 1920, height: 1080 },
+      "9:16": { width: 1080, height: 1920 },
     };
 
-    playerRef.current.startExport(ratio).catch(() => {
+    const { width, height } = resolutions[ratio];
+    const songDuration = playerRef.current.getSongDuration();
+
+    if (!songDuration || songDuration <= 0) {
+      toast.error("Could not determine song duration");
+      return;
+    }
+
+    playerRef.current.pause();
+    setExporting(ratio);
+    setExportProgress(0);
+
+    const abort = new AbortController();
+    abortRef.current = abort;
+
+    try {
+      const blob = await exportVideoAsMP4({
+        player: playerRef.current,
+        width,
+        height,
+        fps: 30,
+        songDuration,
+        onProgress: setExportProgress,
+        signal: abort.signal,
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const artistName = data?.artist_name ?? "artist";
+      const songName = data?.song_name ?? "song";
+      a.download = `${artistName}-${songName}-${ratio.replace(":", "x")}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("Video exported!");
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        toast.info("Export cancelled");
+      } else {
+        console.error("Export failed:", err);
+        toast.error("Export failed. Try Chrome or Edge browser.");
+      }
+    } finally {
+      abortRef.current = null;
       setExporting(null);
-    });
-  }, []);
+      setExportProgress(0);
+    }
+  }, [data]);
 
   // ── Data fetch ──────────────────────────────────────────────────────
 
@@ -753,7 +808,7 @@ export default function ShareableLyricDance() {
                   aria-label="Download video"
                 >
                   {exporting ? (
-                    <span className="text-[9px] font-mono animate-pulse text-white/50">REC</span>
+                    <span className="text-[9px] font-mono animate-pulse text-white/50">{exportProgress}%</span>
                   ) : (
                     <Download size={16} />
                   )}
@@ -765,19 +820,29 @@ export default function ShareableLyricDance() {
                   disabled={!!exporting}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
                 >
-                  <span className="text-white/30">9:16</span>
-                  <span className="text-white/50">·</span>
-                  <span>TikTok / Reels</span>
+                  {exporting === "9:16"
+                    ? <span className="text-white/50">Exporting {exportProgress}%…</span>
+                    : <><span className="text-white/30">9:16</span><span className="text-white/50">·</span><span>TikTok / Reels</span></>
+                  }
                 </button>
                 <button
                   onClick={() => handleExport("16:9")}
                   disabled={!!exporting}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
                 >
-                  <span className="text-white/30">16:9</span>
-                  <span className="text-white/50">·</span>
-                  <span>YouTube</span>
+                  {exporting === "16:9"
+                    ? <span className="text-white/50">Exporting {exportProgress}%…</span>
+                    : <><span className="text-white/30">16:9</span><span className="text-white/50">·</span><span>YouTube</span></>
+                  }
                 </button>
+                {exporting && (
+                  <button
+                    onClick={() => abortRef.current?.abort()}
+                    className="w-full px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
               </PopoverContent>
             </Popover>
 
