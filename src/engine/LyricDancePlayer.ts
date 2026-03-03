@@ -942,8 +942,8 @@ interface CommentChunk {
   direction: 1 | -1;  // 1 = left-to-right, -1 = right-to-left
   trailLength: number;
   fontSize: number;
-}
-
+    }
+  }
 
 
 // ──────────────────────────────────────────────────────────────
