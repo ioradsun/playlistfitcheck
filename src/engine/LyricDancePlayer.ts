@@ -3776,15 +3776,22 @@ export class LyricDancePlayer {
     // Compute centering offset for the active group:
     // shift its words so the group center lands at (480, 270) in compile space
     let groupCenterOffsetX = 0;
+    let _compileWrapped = false;
     if (activeGroupIdx >= 0) {
       const g = groups[activeGroupIdx];
       let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
       for (const w of g.words) {
         minX = Math.min(minX, w.layoutX);
         maxX = Math.max(maxX, w.layoutX);
+        minY = Math.min(minY, w.layoutY);
+        maxY = Math.max(maxY, w.layoutY);
       }
-      const groupCenterX = (minX + maxX) / 2;
-      groupCenterOffsetX = 480 - groupCenterX; // shift to horizontal center
+      _compileWrapped = (maxY - minY) > 5;
+      if (!_compileWrapped) {
+        const groupCenterX = (minX + maxX) / 2;
+        groupCenterOffsetX = 480 - groupCenterX;
+      }
     }
 
     // Line transition easing removed — active chunk always at center
