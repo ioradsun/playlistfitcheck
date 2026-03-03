@@ -930,12 +930,8 @@ export class LyricDancePlayer {
   private dpr: number = window.devicePixelRatio || 1;
   private width = 0; // logical px
   private height = 0; // logical px
-  private mediaRecorder: MediaRecorder | null = null;
-  private isExporting = false;
   private displayWidth = 0;
   private displayHeight = 0;
-  private wasLoopingBeforeExport = true;
-  public onExportComplete: (() => void) | null = null;
 
   // Audio (React reads this)
   public audio: HTMLAudioElement;
