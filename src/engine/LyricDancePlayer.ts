@@ -1009,6 +1009,9 @@ export class LyricDancePlayer {
   private _viewportSx = 1;
   private _viewportSy = 1;
   private _viewportFontScale = 1;
+  private _compiledViewportW = 960;
+  private _compiledViewportH = 540;
+  private _compiledWasPortrait = false;
   private _evalFrame: ScaledKeyframe | null = null;
 
   // Background cache
@@ -1267,6 +1270,7 @@ export class LyricDancePlayer {
         // Compile the scene
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
         this.compiledScene = compiled;
+        this._markCompiledViewport(this.width || 960, this.height || 540);
 
         // ═══ V2: Create BeatConductor with full audio analysis ═══
         const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
@@ -1374,6 +1378,7 @@ export class LyricDancePlayer {
       this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
       const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
+      this._markCompiledViewport(this.width || 960, this.height || 540);
       this._buildChunkCacheFromScene(compiled);
       this._updateViewportScale();
       this._textMetricsCache.clear();
@@ -1571,6 +1576,8 @@ export class LyricDancePlayer {
   }
 
   resize(logicalW: number, logicalH: number): void {
+    const prevCompiledW = this._compiledViewportW;
+    const prevCompiledH = this._compiledViewportH;
     const w = Math.max(1, Math.floor(logicalW));
     const h = Math.max(1, Math.floor(logicalH));
     this.width = w;
@@ -1598,6 +1605,20 @@ export class LyricDancePlayer {
     this._textMetricsCache.clear();
     this._lastVisibleChunkIds = '';
     this.cameraRig.setViewport(w, h);
+
+    // Keep compile-time layout in sync with meaningful viewport changes.
+    if (this.payload && this.compiledScene) {
+      const isPortrait = h > w;
+      const widthDelta = Math.abs(w - prevCompiledW) / Math.max(1, prevCompiledW);
+      const heightDelta = Math.abs(h - prevCompiledH) / Math.max(1, prevCompiledH);
+      const crossedSizeThreshold = widthDelta >= 0.2 || heightDelta >= 0.2;
+      if (this._compiledWasPortrait !== isPortrait || crossedSizeThreshold) {
+        this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
+        this._buildChunkCacheFromScene(this.compiledScene);
+        this._markCompiledViewport(w, h);
+        this._textMetricsCache.clear();
+      }
+    }
   }
 
   setMuted(muted: boolean): void {
@@ -1613,6 +1634,7 @@ export class LyricDancePlayer {
     this._songGrade = null; // cinematic direction changed — recompute grade
     this.resolvePlayerState(this.payload);
     this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
+    this._markCompiledViewport(this.width || 960, this.height || 540);
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
     this._textMetricsCache.clear();
@@ -1649,6 +1671,7 @@ export class LyricDancePlayer {
       this.payload = { ...this.payload, auto_palettes: palettes };
       const compiled = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
+      this._markCompiledViewport(this.width || 960, this.height || 540);
       this._buildChunkCacheFromScene(compiled);
       this._textMetricsCache.clear();
     }
@@ -2372,9 +2395,7 @@ export class LyricDancePlayer {
     const frameNowSec = frameNowMs / 1000;
 
     const isPortraitLocal = this.height > this.width;
-    const viewportMinFont = isPortraitLocal
-      ? Math.max(26, this.width * 0.065)
-      : Math.max(28, this.height * 0.045);
+    const viewportMinFont = isPortraitLocal ? 12 : 10;
     const margin = 4;
     const wallLeft = -safeCameraX + margin;
     const wallRight = this.width - safeCameraX - margin;
@@ -3236,6 +3257,12 @@ export class LyricDancePlayer {
     }
   }
 
+  private _markCompiledViewport(width: number, height: number): void {
+    this._compiledViewportW = Math.max(1, Math.floor(width));
+    this._compiledViewportH = Math.max(1, Math.floor(height));
+    this._compiledWasPortrait = this._compiledViewportH > this._compiledViewportW;
+  }
+
   private _updateViewportScale(): void {
     const sx = this.width / 960;
     const sy = this.height / 540;
@@ -4001,7 +4028,7 @@ export class LyricDancePlayer {
         for (let wi = 0; wi < group.words.length; wi++) {
           const w = group.words[wi];
           if (w.isHeroWord || (w.emphasisLevel ?? 0) >= 2) hasScaledWord = true;
-          const fs = Math.round(w.baseFontSize * fontScale);
+          const fs = Math.round(w.baseFontSize);
           const fontStr = `${w.fontWeight ?? 700} ${fs}px ${w.fontFamily ?? resolvedFontML}`;
           if (mCtx.font !== fontStr) mCtx.font = fontStr;
           totalLineW += mCtx.measureText(w.text).width;
@@ -4017,7 +4044,7 @@ export class LyricDancePlayer {
 
         if (needsWrap) {
           _isMultiLine = true;
-          const normalFS = group.words[0].baseFontSize * fontScale;
+          const normalFS = group.words[0].baseFontSize;
           const normalLineH = normalFS * 1.3;
 
           // Build line list: scaled words get solo lines, others wrap at max 3
@@ -4038,7 +4065,7 @@ export class LyricDancePlayer {
             if (isScaled) {
               flushNonHero();
               const heroEmp = w.emphasisLevel ?? 0;
-              const heroFS = w.baseFontSize * fontScale;
+              const heroFS = w.baseFontSize;
               const heroScale = 1.0 + Math.max(0, heroEmp - 1) * 0.25;
               lines.push({ words: [wi], isHero: true, h: heroFS * heroScale * 1.4 });
             } else {
@@ -4059,7 +4086,7 @@ export class LyricDancePlayer {
             const wordWidths: number[] = [];
             for (let i = 0; i < line.words.length; i++) {
               const w = group.words[line.words[i]];
-              const fs = Math.round(w.baseFontSize * fontScale);
+              const fs = Math.round(w.baseFontSize);
               const weight = w.fontWeight ?? 700;
               const family = w.fontFamily ?? resolvedFontML;
               const emp = w.emphasisLevel ?? 0;
@@ -4087,7 +4114,7 @@ export class LyricDancePlayer {
               _mlDy[wi] = lineY;
               cursor += wordWidths[i];
               if (i < line.words.length - 1) {
-                const fs = Math.round(w.baseFontSize * fontScale);
+                const fs = Math.round(w.baseFontSize);
                 const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
                 if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
                 cursor += mCtx.measureText(' ').width * 1.15;
