@@ -657,7 +657,7 @@ export default function ShareableLyricDance() {
             initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.4 }}
             onClick={() => navigate(`/?from=lyric-dance&song=${encodeURIComponent(data.song_name)}`)}
-            className="absolute bottom-16 sm:bottom-5 right-3 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
+            className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
           >
             <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">Fit by toolsFM</span>
           </motion.button>
@@ -667,7 +667,7 @@ export default function ShareableLyricDance() {
       {/* Canvas area */}
       <div
         ref={containerRef}
-        className="relative w-full flex-1 min-h-0 cursor-pointer overflow-hidden"
+        className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer overflow-hidden"
         onClick={() => { if (!showCover) handleMuteToggle(); }}
       >
         <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
@@ -683,15 +683,15 @@ export default function ShareableLyricDance() {
             >
               <div className="mb-5">
                 {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt={profile.display_name || data.artist_name} className="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover border border-white/10" />
+                  <img src={profile.avatar_url} alt={profile.display_name || data.artist_name} className="w-20 h-20 rounded-full object-cover border border-white/10" />
                 ) : (
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-white/10 flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center">
                     <span className="text-2xl font-mono text-white/40">{(data.artist_name || "?")[0].toUpperCase()}</span>
                   </div>
                 )}
               </div>
-              <h2 className="text-lg sm:text-2xl md:text-3xl font-bold text-white text-center leading-tight max-w-[80%] mb-1">{data.song_name}</h2>
-              <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-white/40 mb-4 sm:mb-8">{profile?.display_name || data.artist_name}</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[80%] mb-1">{data.song_name}</h2>
+              <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-white/40 mb-8">{profile?.display_name || data.artist_name}</p>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -720,7 +720,7 @@ export default function ShareableLyricDance() {
               </div>
             )}
             <div className="flex flex-col">
-              <span className="text-[11px] font-semibold text-white/70 leading-tight truncate max-w-[140px] sm:max-w-[200px]">{data.song_name}</span>
+              <span className="text-[11px] font-semibold text-white/70 leading-tight truncate max-w-[180px]">{data.song_name}</span>
               <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{profile?.display_name || data.artist_name}</span>
             </div>
           </div>
@@ -741,8 +741,8 @@ export default function ShareableLyricDance() {
       </div>
 
       {/* Bottom action bar */}
-      <div className="w-full" style={{ background: "#0a0a0a", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        <div className="max-w-[480px] mx-auto px-3 py-2 sm:px-5 sm:py-4 space-y-2 sm:space-y-3">
+      <div className="w-full" style={{ background: "#0a0a0a" }}>
+        <div className="max-w-[480px] mx-auto px-5 py-4 space-y-3">
           <div className="flex items-center gap-3">
             {/* Download button */}
             <Popover>
@@ -794,7 +794,7 @@ export default function ShareableLyricDance() {
                       type="text" value={inputText} onChange={e => setInputText(e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
                       placeholder="DROP YOUR TAKE LIVE" maxLength={200}
-                      className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 pr-14 sm:px-4 sm:py-3 sm:pr-20 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                      className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 pr-20 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/20 pointer-events-none">Press Enter</span>
                   </motion.div>
