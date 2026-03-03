@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-03-V7-UNWRAP */
+/* cache-bust: 2026-03-01-V2-CONDUCTOR */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -464,7 +464,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 7;
+const BAKER_VERSION = 4;
 
 const SIM_W = 96;
 const SIM_H = 54;
@@ -3829,10 +3829,7 @@ export class LyricDancePlayer {
       const _mlDx: number[] = [];    // per-word X re-centering offset
       let _isMultiLine = false;
       const MAX_WORDS_PER_LINE = 3;
-      const _isPortraitVP = this.height > this.width;
-      // FIX: totalLineW is measured at fontScale (pixel space), so threshold must match.
-      // Portrait uses narrower effective width (matches compile-time 0.75 factor).
-      const MAX_LINE_WIDTH = (_isPortraitVP ? 960 * 0.65 : 960 * 0.85) * fontScale;
+      const MAX_LINE_WIDTH = 960 * 0.85; // 816px in compile space
 
       if (lineRole === 'current' && !groupHasActiveSoloHero && group.words.length > 1) {
         const mCtx = this._measureCtx;
@@ -3855,8 +3852,8 @@ export class LyricDancePlayer {
           }
         }
 
-        // Trigger multi-line for scaled words, wide lines, OR portrait with 3+ words
-        const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > (_isPortraitVP ? 2 : 4);
+        // Trigger multi-line for scaled words OR wide lines
+        const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
 
         if (needsWrap) {
           _isMultiLine = true;
@@ -4101,7 +4098,7 @@ export class LyricDancePlayer {
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
         chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : 0) + finalOffsetY + heroOffsetY) * sy;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
         chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale;
