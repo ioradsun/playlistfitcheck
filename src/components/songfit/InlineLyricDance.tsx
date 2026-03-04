@@ -23,6 +23,8 @@ interface Props {
   artistName: string;
   /** Pre-fetched dance data — skips the internal Supabase fetch when provided */
   prefetchedData?: LyricDanceData | null;
+  /** Boot mode — "full" includes particles, beat visualizer, lighting; "minimal" defers them */
+  bootMode?: "minimal" | "full";
 }
 
 type VisibilityListener = (visible: boolean) => void;
@@ -47,7 +49,7 @@ function getSharedVisibilityObserver() {
   return sharedVisibilityObserver;
 }
 
-function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData }: Props, ref: React.Ref<InlineLyricDanceHandle>) {
+function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal" }: Props, ref: React.Ref<InlineLyricDanceHandle>) {
   const [data, setData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -126,7 +128,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         canvasRef.current!,
         textCanvasRef.current!,
         containerRef.current as HTMLDivElement,
-        { bootMode: "minimal" },
+        { bootMode },
       );
       playerRef.current = player;
 
