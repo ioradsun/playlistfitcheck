@@ -75,12 +75,13 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       const player = playerRef.current;
       if (!player) {
         // Engine not ready yet — store for when playerReady fires
+        console.log('[transcript-reload] engine not ready, storing pending transcript');
         pendingTranscriptRef.current = { lines, words: newWords };
         return;
       }
-      const t = player.audio.currentTime;
+      console.log('[transcript-reload] engine ready, calling updateTranscript');
       player.updateTranscript(lines as any, newWords as any ?? undefined);
-      player.seek(t);
+      // updateTranscript already preserves audio position internally; no seek needed
     },
   }), []);
 
@@ -90,9 +91,8 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
     const pending = pendingTranscriptRef.current;
     if (!pending) return;
     pendingTranscriptRef.current = null;
-    const t = playerRef.current.audio.currentTime;
+    console.log('[transcript-reload] playerReady fired, applying pending transcript');
     playerRef.current.updateTranscript(pending.lines as any, pending.words as any ?? undefined);
-    playerRef.current.seek(t);
   }, [playerReady]);
 
   // Use prefetched data if available, otherwise fetch
