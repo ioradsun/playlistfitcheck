@@ -1054,6 +1054,7 @@ export class LyricDancePlayer {
   private _compiledViewportH = 540;
   private _compiledWasPortrait = false;
   private _evalFrame: ScaledKeyframe | null = null;
+  private _evalChunks: ScaledKeyframe['chunks'] | null = null;
 
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
