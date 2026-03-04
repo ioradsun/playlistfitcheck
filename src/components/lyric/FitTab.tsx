@@ -275,8 +275,40 @@ export function FitTab({
     return () => { if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current); };
   }, [lyricData?.lines, words]);
 
+  // ── Auto-save lyrics edits back to DB ────────────────────────────────
+  // The canvas preview now updates live, but `shareable_lyric_dances` still
+  // holds the old lyrics. Without writing back, page reload and the shareable
+  // link always show the original Whisper transcription.
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSaveInitRef = useRef(false);
+  const publishedDanceIdRef = useRef(publishedDanceId);
+  publishedDanceIdRef.current = publishedDanceId;
 
-  const handleDance = useCallback(async () => {
+  useEffect(() => {
+    if (!lyricData?.lines) return;
+    // Skip first fire (same pattern as transcript sync — these are the lines we loaded from)
+    if (!autoSaveInitRef.current) { autoSaveInitRef.current = true; return; }
+    // Nothing to save to if no dance is published yet
+    if (!publishedDanceIdRef.current) return;
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(async () => {
+      const danceId = publishedDanceIdRef.current;
+      if (!danceId) return;
+      const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
+      const { error } = await supabase
+        .from('shareable_lyric_dances' as any)
+        .update({ lyrics: mainLines, words: wordsRef.current ?? null })
+        .eq('id', danceId);
+      if (error) {
+        console.error('[auto-save] lyrics save failed:', error.message);
+      } else {
+        console.log('[auto-save] lyrics saved to DB. lines:', mainLines.length);
+      }
+    }, 1500); // 1.5s debounce — wait for user to stop typing
+
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  }, [lyricData?.lines, words]);
     console.log("[FitTab] handleDance called", { user: !!user, lyricData: !!lyricData, audioFile: !!audioFile, publishing });
     if (!user) { toast.error("Sign in to publish your Dance"); return; }
     if (!cinematicDirection || !lyricData || !audioFile || publishing) return;
