@@ -5,7 +5,7 @@
  * Thin React shell — all rendering is delegated to LyricDancePlayer.
  */
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -441,7 +441,6 @@ export default function ShareableLyricDance() {
     playerRef.current.updateSectionImages(data.section_images);
   }, [data?.section_images]);
 
-
   // ── Auto-palette from section images (client-side sampler) ───────────────
   useEffect(() => {
     if (!data?.id) return;
@@ -496,25 +495,6 @@ export default function ShareableLyricDance() {
       cancelled = true;
     };
   }, [data?.id, data?.section_images, data?.auto_palettes]);
-
-  // ── Hot-patch transcript (lyrics/words) without restart ──────────
-  const transcriptMountRef = useRef(false);
-  const transcriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!playerRef.current || !data?.lyrics) return;
-    // Skip the initial mount — player already loaded with this data
-    if (!transcriptMountRef.current) {
-      transcriptMountRef.current = true;
-      return;
-    }
-    if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
-    transcriptTimerRef.current = setTimeout(() => {
-      playerRef.current?.updateTranscript(data.lyrics, data.words ?? null);
-    }, 300);
-    return () => {
-      if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
-    };
-  }, [data?.lyrics, data?.words]);
 
   // ── Hot-patch scene context without restart ────────────────────────
   useEffect(() => {
