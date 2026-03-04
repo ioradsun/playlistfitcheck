@@ -1723,8 +1723,6 @@ export class LyricDancePlayer {
     }
   }
 
-  }
-
   /** Apply current effective DPR to canvas backing-store dimensions.
    *  Called by resize() and by _updateQualityTier when the DPR bucket changes.
    *  At tier ≥ 2 the effective DPR is capped at 1.5 (from the device DPR which may
