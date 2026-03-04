@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download, Link, Users, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -113,10 +113,13 @@ export function FitTab({
       });
   }, [publishedDanceId]);
 
+  // ── CrowdFit publish state ─────────────────────────────────────────
+  const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
+  const [crowdfitToggling, setCrowdfitToggling] = useState(false);
+
   // ── Battle publish state ──────────────────────────────────────────────
   const [battlePublishing, setBattlePublishing] = useState(false);
   const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(null);
-
   // Simple hash of lyrics to detect transcript changes
   const computeLyricsHash = useCallback((lns: LyricLine[]) => {
     const text = lns.filter(l => l.tag !== "adlib").map(l => `${l.text}|${l.start}|${l.end}`).join("\n");
@@ -152,6 +155,86 @@ export function FitTab({
         }
       });
   }, [user, lyricData, computeLyricsHash]);
+
+  // Check for existing CrowdFit post when we know the dance ID
+  useEffect(() => {
+    if (!publishedDanceId || !user) { setCrowdfitPostId(null); return; }
+    supabase
+      .from("songfit_posts" as any)
+      .select("id, status")
+      .eq("user_id", user.id)
+      .eq("lyric_dance_id", publishedDanceId)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data && data.status !== "removed") {
+          setCrowdfitPostId(data.id);
+        } else {
+          setCrowdfitPostId(null);
+        }
+      });
+  }, [publishedDanceId, user]);
+
+  // CrowdFit toggle handler
+  const handleCrowdfitToggle = useCallback(async () => {
+    if (!user || !publishedDanceId || !publishedUrl || crowdfitToggling) return;
+    setCrowdfitToggling(true);
+    try {
+      if (crowdfitPostId) {
+        // Remove from CrowdFit
+        await supabase
+          .from("songfit_posts" as any)
+          .update({ status: "removed" })
+          .eq("id", crowdfitPostId);
+        setCrowdfitPostId(null);
+        toast.success("Removed from CrowdFit");
+      } else {
+        // Check for existing removed post to reactivate
+        const { data: existing }: any = await supabase
+          .from("songfit_posts" as any)
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("lyric_dance_id", publishedDanceId)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase
+            .from("songfit_posts" as any)
+            .update({ status: "live" })
+            .eq("id", existing.id);
+          setCrowdfitPostId(existing.id);
+        } else {
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 21);
+          const { data: inserted }: any = await supabase
+            .from("songfit_posts" as any)
+            .insert({
+              user_id: user.id,
+              track_title: lyricData.title || "Untitled",
+              caption: "",
+              lyric_dance_url: publishedUrl,
+              lyric_dance_id: publishedDanceId,
+              spotify_track_url: null,
+              spotify_track_id: null,
+              album_art_url: null,
+              tags_json: [],
+              track_artists_json: [],
+              status: "live",
+              submitted_at: new Date().toISOString(),
+              expires_at: expiresAt.toISOString(),
+            })
+            .select("id")
+            .single();
+          if (inserted) setCrowdfitPostId(inserted.id);
+        }
+        window.dispatchEvent(new Event("songfit:dance-published"));
+        toast.success("Published to CrowdFit!");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "CrowdFit toggle failed");
+    } finally {
+      setCrowdfitToggling(false);
+    }
+  }, [user, publishedDanceId, publishedUrl, crowdfitPostId, crowdfitToggling, lyricData.title]);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -719,22 +802,55 @@ export function FitTab({
               bootMode="full"
             />
           </div>
-          {/* Dance action buttons */}
-          <div className="flex gap-2">
+          {/* Action toolbar — single row of icon buttons */}
+          <div className="flex items-center justify-center gap-1">
             <a
               href={publishedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              title="Watch Dance"
             >
-              Watch Dance
+              <ExternalLink size={14} />
+              Watch
             </a>
             <button
               onClick={() => setShowExportModal(true)}
-              className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              title="Download"
             >
               <Download size={14} />
               Download
+            </button>
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}${publishedUrl}`;
+                navigator.clipboard.writeText(url).then(() => toast.success("Link copied!"));
+              }}
+              className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              title="Copy Link"
+            >
+              <Link size={14} />
+              Link
+            </button>
+            <button
+              onClick={handleCrowdfitToggle}
+              disabled={crowdfitToggling}
+              className={`flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 ${
+                crowdfitPostId
+                  ? "text-primary border-primary/40 bg-primary/5"
+                  : "text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              } disabled:opacity-50`}
+              title={crowdfitPostId ? "Remove from CrowdFit" : "Publish to CrowdFit"}
+            >
+              {crowdfitToggling ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : crowdfitPostId ? (
+                <Check size={14} />
+              ) : (
+                <Users size={14} />
+              )}
+              {crowdfitPostId ? "Live" : "CrowdFit"}
             </button>
           </div>
           <FitExportModal
