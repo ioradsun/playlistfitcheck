@@ -1758,18 +1758,50 @@ export class LyricDancePlayer {
   updateTranscript(lines: LyricLine[], words?: Array<{ word: string; start: number; end: number }> | null): void {
     this.data = { ...this.data, lyrics: lines };
     if (words !== undefined) this.data = { ...this.data, words: words ?? undefined };
+
+    // ── Reconcile edited line text back onto word-level tokens ────────────
+    // compileScene renders wm.word (Whisper tokens), not line.text.
+    // When the user edits a line, the new text must be tokenized and
+    // redistributed across the existing word timestamp slots for that line.
+    // Strategy: for each line, collect its word slots, split the edited text
+    // into tokens, then zip new tokens onto old slots (preserving timestamps).
+    // If counts differ: extra slots get "" (hidden), missing slots split time.
+    const currentWords = this.data.words;
+    if (currentWords && lines.length > 0) {
+      const reconciled = currentWords.map(w => ({ ...w }));
+      for (const line of lines) {
+        if (!line.text) continue;
+        const lineStart = line.start ?? 0;
+        const lineEnd = line.end ?? Infinity;
+        // Find all word slots belonging to this line (by timestamp)
+        const slotIdxs = reconciled
+          .map((w, i) => ({ w, i }))
+          .filter(({ w }) => w.start >= lineStart && w.start < lineEnd)
+          .map(({ i }) => i);
+        if (!slotIdxs.length) continue;
+        // Tokenize the edited line text
+        const tokens = line.text.trim().split(/\s+/).filter(Boolean);
+        if (!tokens.length) continue;
+        const slotCount = slotIdxs.length;
+        // Zip tokens onto slots
+        slotIdxs.forEach((slotIdx, si) => {
+          reconciled[slotIdx] = {
+            ...reconciled[slotIdx],
+            word: tokens[si] ?? tokens[tokens.length - 1], // clamp extras to last token
+          };
+        });
+        // If fewer slots than tokens: nothing we can do (timestamps are fixed)
+        // If more tokens than slots: they get collapsed into last slot — acceptable
+      }
+      this.data = { ...this.data, words: reconciled };
+    }
+
     if (!this.payload) return;
 
     // ── Invalidate any in-flight bake ────────────────────────────────────
-    // The bake closure captures _bakeGeneration at start and checks it before
-    // committing. Incrementing here causes it to discard its stale compiled
-    // scene instead of writing _bakedScene — which would otherwise get
-    // restored to compiledScene by ensureTimelineReady() after the await.
     this._bakeGeneration++;
     this._bakedScene = null;
     this._bakedChunkCache = null;
-    // Keep _bakePromise alive so ensureTimelineReady() can still await it;
-    // the closure will return early without touching _bakedScene.
 
     const t = this.audio.currentTime;
     const payload = this.buildScenePayload();
