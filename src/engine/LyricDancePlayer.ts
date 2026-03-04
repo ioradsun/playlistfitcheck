@@ -4968,7 +4968,7 @@ export class LyricDancePlayer {
     frame.bgBlend = 0;
     (frame as any).beatPulse = beatPulse;
     frame.atmosphere = (chapter?.atmosphere ?? 'cinematic') as any;
-    frame.chunks = this.chunks;
+    frame.chunks = _outChunks;
     frame.particles = [];
     return frame;
   }
