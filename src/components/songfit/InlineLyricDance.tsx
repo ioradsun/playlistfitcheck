@@ -12,6 +12,10 @@ import { withInitLimit } from "@/engine/initQueue";
 
 const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,artist_dna";
 
+export interface InlineLyricDanceHandle {
+  getPlayer: () => LyricDancePlayer | null;
+}
+
 interface Props {
   lyricDanceId: string;
   lyricDanceUrl: string;
