@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-04-V3 */
+/* cache-bust: 2026-03-04-V4-EXPORT-FIX */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -1615,17 +1615,37 @@ export class LyricDancePlayer {
     return Math.max(0, this.songEndSec - this.songStartSec);
   }
 
+  private _exportMode = false;
+  private _savedDpr = 0;
+  private _savedQualityTier: 0 | 1 | 2 | 3 = 0;
+
   setupExportResolution(width: number, height: number): void {
     this.pause();
     this.displayWidth = this.width;
     this.displayHeight = this.height;
+
+    // Lock quality to maximum and DPR to 1 so canvas backing store
+    // matches the exact export resolution (e.g. 1920×1080 = 1920×1080 px).
+    this._exportMode = true;
+    this._savedDpr = this.dpr;
+    this._savedQualityTier = this._qualityTier;
+    this.dpr = 1;
+    this._qualityTier = 0;
+
     this.setResolution(width, height);
     // Re-acquire context with willReadFrequently for fast pixel readback
     this.ctx = this.canvas.getContext('2d', {
       willReadFrequently: true,
       desynchronized: true,
     })!;
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    // Invalidate cached snapshots so they rebake at full quality
+    this._bgSnapshotSection = -999;
+    this._bgSnapshotQTier = -1 as any;
+    this._lightingOverlayCanvas = null;
+    this._lightingOverlayKey = '';
+
     this.seek(this.songStartSec);
   }
 
@@ -1687,10 +1707,21 @@ export class LyricDancePlayer {
   }
 
   teardownExportResolution(): void {
+    // Restore DPR + quality tier
+    this.dpr = this._savedDpr;
+    this._qualityTier = this._savedQualityTier;
+    this._exportMode = false;
+
     this.setResolution(this.displayWidth, this.displayHeight);
     // Restore normal GPU-backed context
     this.ctx = this.canvas.getContext('2d')!;
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+
+    // Invalidate caches baked at export resolution
+    this._bgSnapshotSection = -999;
+    this._bgSnapshotQTier = -1 as any;
+    this._lightingOverlayCanvas = null;
+    this._lightingOverlayKey = '';
   }
 
   resize(logicalW: number, logicalH: number): void {
@@ -2550,7 +2581,8 @@ export class LyricDancePlayer {
   private _draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
     this.currentTSec = tSec;
     this.frameCount++;
-    this._updateQualityTier(performance.now());
+    // Skip adaptive quality during export — tier is locked to 0
+    if (!this._exportMode) this._updateQualityTier(performance.now());
     const qTier = this._qualityTier;
 
     // ── During minimal-boot upgrade gap: keep the first frame visible ──
