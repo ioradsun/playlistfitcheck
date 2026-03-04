@@ -14,7 +14,8 @@ import { Sun, Moon } from "lucide-react";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import { getSessionId } from "@/lib/sessionId";
-import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
 import { LyricDancePlayer, DEFAULT_DEBUG_STATE, type LyricDanceData, type LiveDebugState } from "@/engine/LyricDancePlayer";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
@@ -55,7 +56,6 @@ function extractAudioSectionsFromDirection(
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
 interface DanceComment { id: string; text: string; submitted_at: string; }
 
-const PHASE1_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,auto_palettes,beat_grid,palette,system_type,seed,artist_dna,physics_spec";
 const DIRECTION_COLUMNS = "cinematic_direction";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
@@ -252,7 +252,7 @@ export default function ShareableLyricDance() {
   const navigate = useNavigate();
 
 
-  const [data, setData] = useState<LyricDanceData | null>(null);
+  const [data, setDataRaw] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
@@ -266,15 +266,18 @@ export default function ShareableLyricDance() {
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<LyricDancePlayer | null>(null);
-  const [playerInstance, setPlayerInstance] = useState<LyricDancePlayer | null>(null);
-  const playerInitializedRef = useRef(false);
+
+  // ── Player lifecycle — shared hook ───────────────────────────────────
+  const { player: playerInstance, data: liveData } = useLyricDancePlayer(
+    data, bgCanvasRef, textCanvasRef, containerRef, { bootMode: "minimal" },
+  );
+  // Sync hook's hot-patched data (auto_palettes etc.) back to local state
+  useEffect(() => { if (liveData) setDataRaw(liveData); }, [liveData]);
+  const playerRef = { current: playerInstance };
 
   // Sync theme override to player engine
   useEffect(() => {
-    if (playerInstance) {
-      playerInstance.themeOverride = themeMode;
-    }
+    if (playerInstance) playerInstance.themeOverride = themeMode;
   }, [themeMode, playerInstance]);
 
   // ── Data fetch ──────────────────────────────────────────────────────
@@ -286,14 +289,14 @@ export default function ShareableLyricDance() {
 
     supabase
       .from("shareable_lyric_dances" as any)
-      .select(PHASE1_COLUMNS)
+      .select(LYRIC_DANCE_COLUMNS)
       .eq("artist_slug", artistSlug)
       .eq("song_slug", songSlug)
       .maybeSingle()
       .then(async ({ data: row, error }) => {
         if (error || !row) { setNotFound(true); setLoading(false); return; }
         const d = row as any as LyricDanceData;
-        setData({ ...d, cinematic_direction: null });
+        setDataRaw({ ...d, cinematic_direction: null });
         setLoading(false);
 
         // Phase 2: cinematic direction
@@ -302,7 +305,7 @@ export default function ShareableLyricDance() {
         ).then(({ data: dirRow }) => {
           const rawDir = (dirRow as any)?.cinematic_direction;
           const dir = rawDir && !Array.isArray(rawDir) ? rawDir : null;
-          if (dir) setData(prev => prev ? { ...prev, cinematic_direction: dir } : prev);
+          if (dir) setDataRaw(prev => prev ? { ...prev, cinematic_direction: dir } : prev);
         }).catch(() => {}).finally(async () => {
           // Check if cinematic_direction already exists in DB
           const { data: existingRow } = await supabase
@@ -315,7 +318,7 @@ export default function ShareableLyricDance() {
 
           if (existingDir && !Array.isArray(existingDir) && existingDir.sections?.length > 0) {
             // Use cached direction — skip generation
-            setData(prev => prev ? { ...prev, cinematic_direction: existingDir } : prev);
+            setDataRaw(prev => prev ? { ...prev, cinematic_direction: existingDir } : prev);
 
             // Check if section images also already exist
             const imagesAlreadyExist =
@@ -324,7 +327,7 @@ export default function ShareableLyricDance() {
               existingImages.every((url: string) => !!url);
 
             if (imagesAlreadyExist) {
-              setData(prev => prev ? { ...prev, section_images: existingImages } : prev);
+              setDataRaw(prev => prev ? { ...prev, section_images: existingImages } : prev);
             } else {
               // Generate section images from existing direction
               const sections = existingDir.sections;
@@ -336,7 +339,7 @@ export default function ShareableLyricDance() {
                 }).then(({ data: imgResult }) => {
                   const nextImages = imgResult?.section_images ?? imgResult?.urls;
                   if (nextImages) {
-                      setData(prev => prev ? { ...prev, section_images: nextImages } : prev);
+                      setDataRaw(prev => prev ? { ...prev, section_images: nextImages } : prev);
                   }
                 }).catch(() => {});
               }
@@ -351,7 +354,7 @@ export default function ShareableLyricDance() {
               body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
             }).then(({ data: dirResult }) => {
               if (dirResult?.cinematicDirection) {
-                setData(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+                setDataRaw(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
 
                 // Fire-and-forget: generate section background images
                 const sections = dirResult.cinematicDirection?.sections;
@@ -363,7 +366,7 @@ export default function ShareableLyricDance() {
                   }).then(({ data: imgResult }) => {
                     const nextImages = imgResult?.section_images ?? imgResult?.urls;
                     if (nextImages) {
-                      setData(prev => prev ? { ...prev, section_images: nextImages } : prev);
+                      setDataRaw(prev => prev ? { ...prev, section_images: nextImages } : prev);
                     }
                   }).catch(() => {});
                 }
@@ -386,121 +389,6 @@ export default function ShareableLyricDance() {
     console.log('[Player Data] wordDirectives count:', data.cinematic_direction?.wordDirectives?.length ?? 0);
     console.log('[Player Data] texture:', data.cinematic_direction?.texture);
   }, [data]);
-
-  // ── Player lifecycle (init ONCE) ─────────────────────────────────────
-
-  const playerKey = data?.id;
-
-  useEffect(() => {
-    if (playerInitializedRef.current) return;
-    if (!data || !data.cinematic_direction) return;
-    // words are optional — player falls back to line-level timing if absent
-    if (!bgCanvasRef.current || !textCanvasRef.current || !containerRef.current) return;
-
-    playerInitializedRef.current = true;
-    let destroyed = false;
-    const container = containerRef.current;
-    const player = new LyricDancePlayer(data, bgCanvasRef.current, textCanvasRef.current, container, { bootMode: "minimal" });
-    playerRef.current = player;
-    setPlayerInstance(player);
-
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0) {
-        player.resize(width, height);
-      }
-    });
-    ro.observe(container);
-
-    player.init()
-      .then(() => {
-        if (!destroyed) {
-          player.play();
-          console.info("[LyricDance boot]", player.getBootMetrics());
-        }
-      })
-      .catch((err) => {
-        console.error("LyricDancePlayer init failed:", err);
-      });
-
-    return () => {
-      destroyed = true;
-      ro.disconnect();
-      player.destroy();
-      playerRef.current = null;
-      setPlayerInstance(null);
-      playerInitializedRef.current = false;
-    };
-  }, [playerKey, !!data?.cinematic_direction]);
-
-  // ── Hot-patch section images without restart ───────────────────────
-  useEffect(() => {
-    if (!playerRef.current || !data?.section_images?.length) return;
-    playerRef.current.updateSectionImages(data.section_images);
-  }, [data?.section_images]);
-
-  // ── Auto-palette from section images (client-side sampler) ───────────────
-  useEffect(() => {
-    if (!data?.id) return;
-
-    if (Array.isArray(data.auto_palettes) && data.auto_palettes.length > 0) {
-      // Check if palettes are stale (old low-saturation white text)
-      // v2 palettes have proper saturation; detect v1 by checking if text color is near-white
-      const textColor = data.auto_palettes[0]?.[2] ?? '#ffffff';
-      const isStaleWhite = /^#f[0-9a-f]{5}$/i.test(textColor) || textColor === '#ffffff';
-      if (!isStaleWhite) {
-        return;
-      }
-      // Stale palette detected — force recomputation below
-      console.log('[auto-palette] stale white palette detected, recomputing...');
-    }
-
-    const urls = (data.section_images ?? []).filter((u): u is string => Boolean(u));
-    console.log(`[auto-palette lifecycle] section_images count=${data.section_images?.length ?? 0}, valid URLs=${urls.length}`);
-    if (urls.length === 0) {
-      console.warn('[auto-palette lifecycle] no valid section_images URLs — skipping palette computation');
-      return;
-    }
-
-    const savePalettesToDb = async (id: string, palettes: string[][]) => {
-      try {
-        await supabase
-          .from("shareable_lyric_dances" as any)
-          .update({ auto_palettes: palettes, updated_at: new Date().toISOString() } as any)
-          .eq("id", id);
-      } catch (error) {
-        console.warn("[auto-palette] failed to cache:", error);
-      }
-    };
-
-    let cancelled = false;
-    console.log(`[auto-palette lifecycle] starting computeAutoPalettesFromUrls for ${urls.length} URLs`);
-    computeAutoPalettesFromUrls(urls)
-      .then((autoPalettes) => {
-        console.log(`[auto-palette lifecycle] computation returned ${autoPalettes.length} palettes (cancelled=${cancelled})`);
-        if (cancelled || autoPalettes.length === 0) return;
-        setData(prev => (prev ? { ...prev, auto_palettes: autoPalettes } : prev));
-        if (playerRef.current) {
-          playerRef.current.updateAutoPalettes(autoPalettes);
-        }
-        void savePalettesToDb(data.id, autoPalettes);
-      })
-      .catch((error) => {
-        console.error('[auto-palette lifecycle] failed to compute from section images', error);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [data?.id, data?.section_images, data?.auto_palettes]);
-
-  // ── Hot-patch scene context without restart ────────────────────────
-  useEffect(() => {
-    if (!playerRef.current || !data?.scene_context) return;
-    playerRef.current.updateSceneContext(data.scene_context);
-  }, [data?.scene_context]);
 
   // ── Realtime comment comets ─────────────────────────────────────────
   useEffect(() => {
