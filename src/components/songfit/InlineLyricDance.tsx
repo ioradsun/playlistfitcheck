@@ -74,7 +74,8 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       const t = player.audio.currentTime;
       // Update the data object in-place so internal buildScenePayload uses new values
       (player as any).data.lyrics = lines;
-      if (newWords) (player as any).data.words = newWords;
+      // Allow explicit null to clear stale word-level cache after lyric text edits
+      if (newWords !== undefined) (player as any).data.words = newWords;
       const payload = (player as any).buildScenePayload();
       await player.load(payload, () => {});
       player.seek(t);

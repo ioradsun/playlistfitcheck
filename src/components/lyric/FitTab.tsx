@@ -261,15 +261,22 @@ export function FitTab({
 
   useEffect(() => {
     // Only reload when current transcript differs from the published version
-    if (!prefetchedDanceData || !dancePlayerRef.current) return;
+    if (!prefetchedDanceData) return;
     if (transcriptKey === prefetchedTranscriptKey) return;
 
     if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-    reloadTimerRef.current = setTimeout(() => {
-      const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
-      dancePlayerRef.current?.reloadTranscript(mainLines, wordsRef.current ?? null);
-    }, 400);
 
+    const runReload = () => {
+      const playerHandle = dancePlayerRef.current;
+      if (!playerHandle) {
+        reloadTimerRef.current = setTimeout(runReload, 180);
+        return;
+      }
+      const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
+      void playerHandle.reloadTranscript(mainLines, null);
+    };
+
+    reloadTimerRef.current = setTimeout(runReload, 400);
     return () => { if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current); };
   }, [transcriptKey, prefetchedDanceData, prefetchedTranscriptKey]);
 
