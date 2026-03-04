@@ -1003,6 +1003,8 @@ export function LyricFitTab({
             setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle", sectionImages: "idle" });
             setFitReadiness("not_started");
             setFitUnlocked(false);
+            setAutoDanceId(null);
+            setAutoDanceSlug(null);
             cinematicTriggeredRef.current = false;
             pipelineTriggeredRef.current = false;
             sectionPipelineRunningRef.current = false;
