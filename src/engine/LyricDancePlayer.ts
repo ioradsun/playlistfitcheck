@@ -4857,8 +4857,8 @@ export class LyricDancePlayer {
           }
         }
 
-        const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
-        chunks[ci] = chunk;
+        const chunk = this.chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
+        this.chunks[ci] = chunk;
         chunk.id = word.id;
         chunk.text = word.text;
 
