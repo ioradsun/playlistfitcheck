@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-04-V5 */
+/* cache-bust: 2026-03-04-V3 */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -932,6 +932,10 @@ export class LyricDancePlayer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private dpr: number = window.devicePixelRatio || 1;
+  /** Effective DPR used for canvas backing store — capped at 1.5 when tier ≥ 2 to halve pixel fill */
+  private get _effectiveDpr(): number {
+    return this._qualityTier >= 2 ? Math.min(1.5, this.dpr) : this.dpr;
+  }
   private width = 0; // logical px
   private height = 0; // logical px
   private mediaRecorder: MediaRecorder | null = null;
@@ -1417,7 +1421,7 @@ export class LyricDancePlayer {
   }
 
   private drawMinimalFirstFrame(): void {
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
     const isLight = this.themeOverride === 'light';
     const bg = isLight ? '#f5f5f5' : (this.data.palette?.[0] ?? '#0b0b10');
@@ -1609,7 +1613,7 @@ export class LyricDancePlayer {
       willReadFrequently: true,
       desynchronized: true,
     })!;
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.seek(this.songStartSec);
   }
 
@@ -1619,7 +1623,7 @@ export class LyricDancePlayer {
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
     // Set up frame context
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
 
     const deltaMs = 1000 / 30; // fixed timestep for export
@@ -1674,7 +1678,7 @@ export class LyricDancePlayer {
     this.setResolution(this.displayWidth, this.displayHeight);
     // Restore normal GPU-backed context
     this.ctx = this.canvas.getContext('2d')!;
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
   }
 
   resize(logicalW: number, logicalH: number): void {
@@ -1684,18 +1688,7 @@ export class LyricDancePlayer {
     const h = Math.max(1, Math.floor(logicalH));
     this.width = w;
     this.height = h;
-
-    // Single source of truth for canvas dimensions.
-    this.canvas.width = Math.floor(w * this.dpr);
-    this.canvas.height = Math.floor(h * this.dpr);
-    this.canvas.style.width = `${w}px`;
-    this.canvas.style.height = `${h}px`;
-
-    // Keep the stacked canvas matched, but never draw to it.
-    this.textCanvas.width = this.canvas.width;
-    this.textCanvas.height = this.canvas.height;
-    this.textCanvas.style.width = `${w}px`;
-    this.textCanvas.style.height = `${h}px`;
+    this._applyDprToCanvas();
 
     if (this.payload) this.buildBgCache();
     this._lightingOverlayCanvas = null;
@@ -1723,6 +1716,29 @@ export class LyricDancePlayer {
         this._textMetricsCache.clear();
       }
     }
+  }
+
+  }
+
+  /** Apply current effective DPR to canvas backing-store dimensions.
+   *  Called by resize() and by _updateQualityTier when the DPR bucket changes.
+   *  At tier ≥ 2 the effective DPR is capped at 1.5 (from the device DPR which may
+   *  be 2–3×), cutting pixel fill by up to 75% with negligible visual degradation. */
+  private _applyDprToCanvas(): void {
+    const eDpr = this._effectiveDpr;
+    this.canvas.width = Math.floor(this.width * eDpr);
+    this.canvas.height = Math.floor(this.height * eDpr);
+    this.canvas.style.width = `${this.width}px`;
+    this.canvas.style.height = `${this.height}px`;
+    // Text canvas is kept matched (never drawn to, but must agree on dimensions)
+    this.textCanvas.width = this.canvas.width;
+    this.textCanvas.height = this.canvas.height;
+    this.textCanvas.style.width = `${this.width}px`;
+    this.textCanvas.style.height = `${this.height}px`;
+    // Invalidate bg cache — was baked at previous DPR
+    this._lightingOverlayCanvas = null;
+    this._lightingOverlayKey = '';
+    if (this.payload) this.buildBgCache();
   }
 
   setMuted(muted: boolean): void {
@@ -1934,18 +1950,28 @@ export class LyricDancePlayer {
 
     // Downgrade instantly (with 2s cooldown to prevent thrashing)
     if (fps < 18 && tier < 3 && sinceLast > 2000) {
+      const prevDprBucket = tier >= 2 ? 'low' : 'full';
       this._qualityTier = Math.min(3, tier + 1) as 0 | 1 | 2 | 3;
       this._qUpgradeStreak = 0;
       this._qLastDowngradeMs = nowMs;
       console.info(`[LyricEngine] quality → tier ${this._qualityTier} (fps: ${fps.toFixed(1)})`);
+      // Crossing into tier 2: switch to half-DPR backing store (cuts pixel fill 4×)
+      if (prevDprBucket === 'full' && this._qualityTier >= 2) {
+        this._applyDprToCanvas();
+      }
     }
     // Upgrade only after 3 consecutive good windows (3s sustained)
     else if (fps > 40 && tier > 0) {
+      const prevDprBucket = tier >= 2 ? 'low' : 'full';
       this._qUpgradeStreak++;
       if (this._qUpgradeStreak >= 3) {
         this._qualityTier = Math.max(0, tier - 1) as 0 | 1 | 2 | 3;
         this._qUpgradeStreak = 0;
         console.info(`[LyricEngine] quality → tier ${this._qualityTier} (fps: ${fps.toFixed(1)})`);
+        // Crossing back out of tier 2: restore full-DPR backing store
+        if (prevDprBucket === 'low' && this._qualityTier < 2) {
+          this._applyDprToCanvas();
+        }
       }
     } else {
       this._qUpgradeStreak = 0;
@@ -1992,7 +2018,7 @@ export class LyricDancePlayer {
       }
 
       // ALWAYS start frame with this exact sequence
-      this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
       this.ctx.clearRect(0, 0, this.width, this.height);
 
       const rawTime = this.audio.currentTime;
@@ -2513,7 +2539,7 @@ export class LyricDancePlayer {
     // every tick so the user always sees something meaningful.
     if (!precomputedFrame) {
       if (!this.fullModeEnabled) {
-        this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
         this.drawMinimalFirstFrame();
       }
       return;
@@ -2522,7 +2548,7 @@ export class LyricDancePlayer {
     const frame = precomputedFrame;
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
 
     try {
       this.updateSims(tSec, frame);
@@ -2619,7 +2645,7 @@ export class LyricDancePlayer {
       }
     }
 
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
 
     const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
     const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
@@ -3066,7 +3092,7 @@ export class LyricDancePlayer {
       drawCalls += 1;
     }
     this.ctx.restore();
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
@@ -3088,7 +3114,7 @@ export class LyricDancePlayer {
     const y = 16;
     const h = 66;
     this.ctx.save();
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.fillStyle = 'rgba(0,0,0,0.58)';
     this.ctx.fillRect(x, y, 300, h);
     this.ctx.fillStyle = '#9df7c4';
@@ -3145,7 +3171,7 @@ export class LyricDancePlayer {
     const radius = badgeH / 2;
 
     this.ctx.save();
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.font = font;
     (this.ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = "0.08em";
 
@@ -3359,7 +3385,7 @@ export class LyricDancePlayer {
     const gravity = 180; // pixels/sec²
 
     this.ctx.save();
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
 
     // Update and draw all active bursts
     for (let bi = this._heroDecompBursts.length - 1; bi >= 0; bi--) {
@@ -3449,7 +3475,7 @@ export class LyricDancePlayer {
     this.textCanvas.style.width = `${width}px`;
     this.textCanvas.style.height = `${height}px`;
 
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.buildBgCache();
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
@@ -4200,8 +4226,8 @@ export class LyricDancePlayer {
     }
 
     // ═══ Beat visualizer strip — bottom ~25% of canvas, synced to actual beatmap ═══
-    // Always render — it's a single drawImage (cheap) and core to the visual identity.
-    if (this._globalBeatVis) {
+    // Skip at tier 2+ (full-width drawImage with alpha composite)
+    if (this._globalBeatVis && this._qualityTier < 2) {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
