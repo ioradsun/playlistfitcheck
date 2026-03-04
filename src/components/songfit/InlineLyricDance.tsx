@@ -108,6 +108,56 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       });
   }, [lyricDanceId, prefetchedData]);
 
+  // Realtime subscription — picks up DB changes to lyrics/words for internal-fetch path
+  useEffect(() => {
+    if (prefetchedData) return; // parent controls data in this path
+    if (!lyricDanceId) return;
+    const channel = supabase
+      .channel(`inline-dance-${lyricDanceId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'shareable_lyric_dances',
+          filter: `id=eq.${lyricDanceId}`,
+        },
+        (payload: any) => {
+          const next = payload.new;
+          if (!next) return;
+          setData(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            if (next.lyrics) updated.lyrics = next.lyrics;
+            if (next.words !== undefined) updated.words = next.words;
+            return updated;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [lyricDanceId, !!prefetchedData]);
+
+  // Hot-patch transcript on player when data.lyrics/words change
+  const transcriptMountRef = useRef(false);
+  const transcriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!playerRef.current || !playerReady || !data?.lyrics) return;
+    // Skip initial mount — player already loaded with this data
+    if (!transcriptMountRef.current) {
+      transcriptMountRef.current = true;
+      return;
+    }
+    if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
+    transcriptTimerRef.current = setTimeout(() => {
+      playerRef.current?.updateTranscript(data.lyrics, data.words ?? null);
+    }, 300);
+    return () => {
+      if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
+    };
+  }, [data?.lyrics, data?.words, playerReady]);
+
   // Visibility updates via shared observer
   useEffect(() => {
     if (!data || !data.words?.length || !data.cinematic_direction) return;
