@@ -58,8 +58,13 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   const initRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
 
-  // Fetch dance data
+  // Use prefetched data if available, otherwise fetch
   useEffect(() => {
+    if (prefetchedData) {
+      setData(prefetchedData);
+      setLoading(false);
+      return;
+    }
     if (!lyricDanceId) return;
     setLoading(true);
 
@@ -77,7 +82,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         setData(row as any as LyricDanceData);
         setLoading(false);
       });
-  }, [lyricDanceId]);
+  }, [lyricDanceId, prefetchedData]);
 
   // Visibility updates via shared observer
   useEffect(() => {
