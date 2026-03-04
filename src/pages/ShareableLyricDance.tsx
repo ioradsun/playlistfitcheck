@@ -497,6 +497,7 @@ export default function ShareableLyricDance() {
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
+  return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
       {/* Close button */}
       <button
@@ -674,8 +675,9 @@ export default function ShareableLyricDance() {
         </div>
       </div>
 
-      {/* Debug */}
+      {/* Debug — only when data is fully loaded */}
       <LiveDebugHUD player={playerInstance} />
+      {data && (
       <LyricDanceDebugPanel
         player={playerInstance}
         onRegenerateSong={() => {
@@ -795,6 +797,7 @@ export default function ShareableLyricDance() {
           words: data.words,
         }}
       />
+      )}
     </div>
   );
 }
