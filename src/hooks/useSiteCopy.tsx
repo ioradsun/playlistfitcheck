@@ -17,7 +17,7 @@ const DEFAULT_COPY: SiteCopy = {
   about: {
     origin_intro: "",
     origin_body: "",
-    origin_tagline: "toolsFM: experiments to find answers.",
+    origin_tagline: "toolsFM: experiments to find answers. let's agree to keep building.",
     listen_label: "Listen to what started it all.",
     tools_intro: "",
     products: [],
