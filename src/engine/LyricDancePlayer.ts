@@ -977,7 +977,6 @@ export class LyricDancePlayer {
   private chunks: Map<string, ChunkState> = new Map();
   private _lastFont = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
-  private _outChunks: ScaledKeyframe['chunks'] = [];
   private _boundsBuffer: ChunkBounds[] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
   private _lastVisibleChunkSetHash = 0;
@@ -1441,21 +1440,15 @@ export class LyricDancePlayer {
   private drawMinimalFirstFrame(): void {
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
+    // ── SOLID BLACK only ────────────────────────────────────────────────────
+    // Previously drew a palette[1] gradient here which bled through the
+    // rgba(0,0,0,0.72) cover overlay, causing a visible purple/tinted flash.
+    // The cover overlay sits on top — there is NO reason to show palette colors
+    // beneath it. Just black, always, until the cover is dismissed and the
+    // real frame pipeline fires.
     const isLight = this.themeOverride === 'light';
-    const bg = isLight ? '#f5f5f5' : (this.data.palette?.[0] ?? '#0b0b10');
-    const accent = isLight ? '#e8e8ec' : (this.data.palette?.[1] ?? '#2b2b45');
-    const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
-    gradient.addColorStop(0, bg);
-    gradient.addColorStop(1, accent);
-    this.ctx.fillStyle = gradient;
+    this.ctx.fillStyle = isLight ? '#f5f5f5' : '#0a0a0a';
     this.ctx.fillRect(0, 0, this.width, this.height);
-
-    const firstLine = this.data.lyrics?.[0]?.text?.trim() || 'Preparing typography…';
-    this.ctx.fillStyle = isLight ? 'rgba(26,26,46,0.92)' : 'rgba(255,255,255,0.92)';
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.font = '700 30px system-ui, -apple-system, "Segoe UI", sans-serif';
-    this.ctx.fillText(firstLine, this.width / 2, this.height / 2);
     this.perfMarks.tFirstFrameDrawn = this.perfMarks.tFirstFrameDrawn ?? performance.now();
     this.markFirstPaintOnce();
   }
@@ -2691,12 +2684,7 @@ export class LyricDancePlayer {
     let drawCalls = 0;
     const sortBuf = this._sortBuffer;
     // PERF: skip sort when visible set hasn't changed — hash already computed for collision solver above
-    let sortHash = 2166136261;
-    for (let si = 0; si < frame.chunks.length; si += 1) {
-      const sid = frame.chunks[si].id;
-      for (let sc = 0; sc < sid.length; sc += 1) { sortHash ^= sid.charCodeAt(sc); sortHash = Math.imul(sortHash, 16777619); }
-      sortHash ^= 44; sortHash = Math.imul(sortHash, 16777619);
-    }
+    const sortHash = visibleHash; // reuse the FNV hash computed for collision detection
     if (sortHash !== this._lastSortHash || sortBuf.length !== frame.chunks.length) {
       this._lastSortHash = sortHash;
       sortBuf.length = 0;
@@ -4494,8 +4482,6 @@ export class LyricDancePlayer {
     }
     const _hasBeatResponses = _beatResponses.length > 0;
     let ci = 0;
-    if (!this._outChunks) this._outChunks = [] as ScaledKeyframe['chunks'];
-    const _outChunks = this._outChunks;
     const bpm = scene.bpm;
 
     for (let ai = 0; ai < activeGroups.length; ai++) {
@@ -4827,10 +4813,10 @@ export class LyricDancePlayer {
         // ═══ BEAT-GRID GLOW, SCALE, NUDGE via SubsystemResponse ═══
         // Use the pre-computed per-emphasis-level response so every word dances
         // to the beat proportional to its semantic weight.
-        const empBeat = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
+        const emp = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
         // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
         const beatResp = _hasBeatResponses
-          ? (isHeroWord ? _beatResponsesHero[empBeat] : _beatResponses[empBeat])
+          ? (isHeroWord ? _beatResponsesHero[emp] : _beatResponses[emp])
           : null;
 
         let wordGlow = 0;
@@ -4860,8 +4846,8 @@ export class LyricDancePlayer {
           }
         }
 
-        const chunk = _outChunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
-        _outChunks[ci] = chunk;
+        const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
+        chunks[ci] = chunk;
         chunk.id = word.id;
         chunk.text = word.text;
 
@@ -4948,7 +4934,7 @@ export class LyricDancePlayer {
         ci++;
       }
     }
-    _outChunks.length = ci;
+    chunks.length = ci;
 
     if (!this._evalFrame) {
       this._evalFrame = {
@@ -4969,7 +4955,7 @@ export class LyricDancePlayer {
     frame.bgBlend = 0;
     (frame as any).beatPulse = beatPulse;
     frame.atmosphere = (chapter?.atmosphere ?? 'cinematic') as any;
-    frame.chunks = _outChunks;
+    frame.chunks = chunks;
     frame.particles = [];
     return frame;
   }
