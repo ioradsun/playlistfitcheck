@@ -113,10 +113,13 @@ export function FitTab({
       });
   }, [publishedDanceId]);
 
+  // ── CrowdFit publish state ─────────────────────────────────────────
+  const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
+  const [crowdfitToggling, setCrowdfitToggling] = useState(false);
+
   // ── Battle publish state ──────────────────────────────────────────────
   const [battlePublishing, setBattlePublishing] = useState(false);
   const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(null);
-
   // Simple hash of lyrics to detect transcript changes
   const computeLyricsHash = useCallback((lns: LyricLine[]) => {
     const text = lns.filter(l => l.tag !== "adlib").map(l => `${l.text}|${l.start}|${l.end}`).join("\n");
