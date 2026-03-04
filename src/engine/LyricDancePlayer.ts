@@ -4828,7 +4828,7 @@ export class LyricDancePlayer {
         const empBeat = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
         // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
         const beatResp = _hasBeatResponses
-          ? (isHeroWord ? _beatResponsesHero[emp] : _beatResponses[emp])
+          ? (isHeroWord ? _beatResponsesHero[empBeat] : _beatResponses[empBeat])
           : null;
 
         let wordGlow = 0;
