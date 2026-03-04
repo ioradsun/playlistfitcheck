@@ -25,6 +25,7 @@ import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { AudioSection } from "@/engine/sectionDetector";
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus } from "./LyricFitTab";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 
 const PEAK_SAMPLES = 200;
 
@@ -99,12 +100,12 @@ export function FitTab({
   const dancePlayerRef = useRef<InlineLyricDanceHandle>(null);
 
   // Prefetch dance data as soon as we know the ID — so the player is instant
-  const DANCE_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,artist_dna";
+
   useEffect(() => {
     if (!publishedDanceId) { setPrefetchedDanceData(null); return; }
     supabase
       .from("shareable_lyric_dances" as any)
-      .select(DANCE_COLUMNS)
+      .select(LYRIC_DANCE_COLUMNS)
       .eq("id", publishedDanceId)
       .maybeSingle()
       .then(({ data: row }) => {
