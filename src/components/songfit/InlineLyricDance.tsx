@@ -1,11 +1,11 @@
 /**
- * InlineLyricDance — Renders a live lyric dance canvas inside a CrowdFit card.
- * Auto-inits player on visibility, renders first frame as poster.
- * Tap to play (muted), tap again to unmute.
+ * InlineLyricDance — Embeds the full lyric dance player inside a card.
+ * Shows a cover with "Listen Now" button, then plays with audio — 
+ * consistent with the shareable lyric dance page experience.
  */
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
-import { Loader2, Volume2, VolumeX, Maximize2, Play } from "lucide-react";
+import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withInitLimit } from "@/engine/initQueue";
@@ -48,7 +48,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [muted, setMuted] = useState(true);
-  const [playing, setPlaying] = useState(false);
+  const [showCover, setShowCover] = useState(true);
   const [playerReady, setPlayerReady] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -100,7 +100,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
     };
   }, [data]);
 
-  // Auto-init player when visible + data ready — renders first frame as poster
+  // Auto-init player when visible + data ready — plays muted in background behind cover
   useEffect(() => {
     if (initRef.current) return;
     if (!isVisible || !data || !data.words?.length || !data.cinematic_direction) return;
@@ -117,7 +117,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         canvasRef.current!,
         textCanvasRef.current!,
         containerRef.current as HTMLDivElement,
-        { bootMode: "full" },
+        { bootMode: "minimal" },
       );
       playerRef.current = player;
 
@@ -133,8 +133,8 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
 
       if (!destroyed) {
         player.audio.muted = true;
-        // Draw first frame as a real poster — no fake gradient needed
-        player.drawAtTime(0);
+        // Start playing muted behind the cover — gives visual life
+        player.play();
         setPlayerReady(true);
         console.info("[InlineLyricDance boot]", player.getBootMetrics());
       }
@@ -152,16 +152,16 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
     };
   }, [isVisible, data?.id, data?.words?.length, !!data?.cinematic_direction]);
 
-  // Play/pause based on visibility
+  // Pause/resume based on visibility
   useEffect(() => {
     const player = playerRef.current;
-    if (!player || !playing) return;
+    if (!player || !playerReady) return;
     if (isVisible) {
       player.play();
     } else {
       player.pause();
     }
-  }, [isVisible, playing]);
+  }, [isVisible, playerReady]);
 
   // Mute sync
   useEffect(() => {
@@ -169,6 +169,18 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       playerRef.current.audio.muted = muted;
     }
   }, [muted]);
+
+  const handleListenNow = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const player = playerRef.current;
+    if (player) {
+      player.seek(0);
+      player.setMuted(false);
+      player.play();
+    }
+    setMuted(false);
+    setShowCover(false);
+  }, []);
 
   const toggleMute = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -181,13 +193,9 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   }, [lyricDanceUrl]);
 
   const handleCanvasClick = useCallback(() => {
-    if (!playing) {
-      setPlaying(true);
-      playerRef.current?.play();
-      return;
-    }
+    if (showCover) return; // cover handles its own click
     setMuted(m => !m);
-  }, [playing]);
+  }, [showCover]);
 
   if (error) {
     return (
@@ -212,7 +220,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       style={{ minHeight: 352, height: 352 }}
       onClick={handleCanvasClick}
     >
-      {/* Canvas — always visible once player inits so first frame shows as poster */}
+      {/* Canvas — always rendered so player can draw behind cover */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full"
@@ -234,20 +242,42 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         </div>
       )}
 
-      {/* Play button overlay — shown on the real first frame before user taps */}
-      {playerReady && !playing && (
-        <div className="absolute inset-0 flex items-center justify-center z-[5]">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-black/50 transition-colors">
-              <Play size={28} className="text-white ml-1" fill="white" />
+      {/* Cover overlay — matches the full shareable page "Listen Now" experience */}
+      {playerReady && showCover && (
+        <div
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex flex-col items-center gap-4">
+            {/* Artist initial */}
+            <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+              <span className="text-lg font-mono text-white/40">
+                {(artistName || data?.artist_name || songTitle || "?")[0].toUpperCase()}
+              </span>
             </div>
-            <p className="text-[11px] text-white/50 font-mono uppercase tracking-wider">Tap to play</p>
+            {/* Song info */}
+            <div className="text-center px-6">
+              <h3 className="text-lg font-bold text-white leading-tight">{songTitle}</h3>
+              {(artistName || data?.artist_name) && (
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mt-1">
+                  {artistName || data?.artist_name}
+                </p>
+              )}
+            </div>
+            {/* Listen Now button */}
+            <button
+              onClick={handleListenNow}
+              className="px-6 py-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors mt-2"
+            >
+              Listen Now
+            </button>
           </div>
         </div>
       )}
 
-      {/* Title overlay top-left */}
-      {(playing || playerReady) && (
+      {/* Title + expand — shown after cover dismissed */}
+      {!showCover && playerReady && (
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
           onClick={(e) => e.stopPropagation()}
         >
@@ -263,8 +293,8 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         </div>
       )}
 
-      {/* Bottom controls */}
-      {playing && (
+      {/* Bottom mute control — shown after cover dismissed */}
+      {!showCover && playerReady && (
         <div className="absolute bottom-0 left-0 p-2 z-10"
           onClick={(e) => e.stopPropagation()}
         >
