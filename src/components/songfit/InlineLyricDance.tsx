@@ -1,19 +1,17 @@
 /**
- * InlineLyricDance — Embeds the full lyric dance player inside a card.
- * Shows a cover with "Listen Now" button, then plays with audio — 
- * consistent with the shareable lyric dance page experience.
+ * InlineLyricDance — Embeds the lyric dance player inside a card.
+ * Player lifecycle is fully owned by useLyricDancePlayer.
  */
 
 import { useState, useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle } from "react";
 import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
-import { withInitLimit } from "@/engine/initQueue";
-
-const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,artist_dna";
+import { type LyricDanceData } from "@/engine/LyricDancePlayer";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 
 export interface InlineLyricDanceHandle {
-  getPlayer: () => LyricDancePlayer | null;
+  getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
   reloadTranscript: (lines: any[], words?: any[] | null) => Promise<void>;
 }
 
@@ -22,311 +20,163 @@ interface Props {
   lyricDanceUrl: string;
   songTitle: string;
   artistName: string;
-  /** Pre-fetched dance data — skips the internal Supabase fetch when provided */
   prefetchedData?: LyricDanceData | null;
-  /** Boot mode — "full" includes particles, beat visualizer, lighting; "minimal" defers them */
   bootMode?: "minimal" | "full";
 }
 
+// Shared IntersectionObserver across all embedded players
 type VisibilityListener = (visible: boolean) => void;
-
 const visibilityListeners = new Map<Element, VisibilityListener>();
-let sharedVisibilityObserver: IntersectionObserver | null = null;
-
-function getSharedVisibilityObserver() {
-  if (!sharedVisibilityObserver) {
-    sharedVisibilityObserver = new IntersectionObserver(
+let sharedIO: IntersectionObserver | null = null;
+function getSharedIO() {
+  if (!sharedIO) {
+    sharedIO = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) {
-          const listener = visibilityListeners.get(entry.target);
-          if (listener) {
-            listener(entry.isIntersecting && entry.intersectionRatio > 0.2);
-          }
-        }
+        for (const e of entries) visibilityListeners.get(e.target)?.(e.isIntersecting && e.intersectionRatio > 0.2);
       },
       { threshold: [0, 0.2, 0.6], rootMargin: "180px" },
     );
   }
-  return sharedVisibilityObserver;
+  return sharedIO;
 }
 
-function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal" }: Props, ref: React.Ref<InlineLyricDanceHandle>) {
-  const [data, setData] = useState<LyricDanceData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+function InlineLyricDanceInner(
+  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal" }: Props,
+  ref: React.Ref<InlineLyricDanceHandle>,
+) {
+  const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
+  const [loading, setLoading] = useState(!prefetchedData);
+  const [fetchError, setFetchError] = useState(false);
   const [muted, setMuted] = useState(true);
   const [showCover, setShowCover] = useState(true);
-  const [playerReady, setPlayerReady] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
-  const playerRef = useRef<LyricDancePlayer | null>(null);
-  const initRef = useRef(false);
-  const [isVisible, setIsVisible] = useState(false);
+  const pendingRef = useRef<{ lines: any[]; words?: any[] | null } | null>(null);
 
-  // Pending transcript — applied when engine becomes ready if it wasn't yet
-  const pendingTranscriptRef = useRef<{ lines: any[]; words?: any[] | null } | null>(null);
-
-  // Expose player to parent via ref
-  useImperativeHandle(ref, () => ({
-    getPlayer: () => playerRef.current,
-    reloadTranscript: async (lines: any[], newWords?: any[] | null) => {
-      const player = playerRef.current;
-      if (!player) {
-        console.log('[SYNC:E] reloadTranscript called but playerRef.current is null — storing pending. playerReady:', playerReady, 'isVisible:', isVisible, 'initRef:', initRef.current, 'dataReady:', !!(data && data.words?.length && data.cinematic_direction));
-        pendingTranscriptRef.current = { lines, words: newWords };
-        return;
-      }
-      console.log('[SYNC:F] reloadTranscript calling updateTranscript. lines:', lines.length);
-      player.updateTranscript(lines as any, newWords as any ?? undefined);
-    },
-  }), [playerReady, isVisible, data]);
-
-  // Apply pending transcript once player is ready (covers the rare cold-start case)
+  // ── Fetch (skipped when prefetchedData provided) ──────────────────────
   useEffect(() => {
-    if (!playerReady || !playerRef.current) return;
-    const pending = pendingTranscriptRef.current;
-    if (!pending) return;
-    pendingTranscriptRef.current = null;
-    console.log('[SYNC:G] applying pending transcript. lines:', pending.lines.length);
-    playerRef.current.updateTranscript(pending.lines as any, pending.words as any ?? undefined);
-  }, [playerReady]);
-
-  // Use prefetched data if available, otherwise fetch
-  useEffect(() => {
-    if (prefetchedData) {
-      setData(prefetchedData);
-      setLoading(false);
-      return;
-    }
+    if (prefetchedData) { setFetchedData(prefetchedData); setLoading(false); return; }
     if (!lyricDanceId) return;
     setLoading(true);
-
     supabase
       .from("shareable_lyric_dances" as any)
-      .select(COLUMNS)
+      .select(LYRIC_DANCE_COLUMNS)
       .eq("id", lyricDanceId)
       .maybeSingle()
-      .then(({ data: row, error: err }) => {
-        if (err || !row) {
-          setError(true);
-          setLoading(false);
-          return;
-        }
-        setData(row as any as LyricDanceData);
+      .then(({ data: row, error }) => {
+        if (error || !row) { setFetchError(true); setLoading(false); return; }
+        setFetchedData(row as any as LyricDanceData);
         setLoading(false);
       });
   }, [lyricDanceId, prefetchedData]);
 
-  // Realtime subscription — picks up DB changes to lyrics/words for internal-fetch path
+  // Realtime — only when we own the fetch (no prefetchedData)
   useEffect(() => {
-    if (prefetchedData) return; // parent controls data in this path
-    if (!lyricDanceId) return;
-    const channel = supabase
+    if (prefetchedData || !lyricDanceId) return;
+    const ch = supabase
       .channel(`inline-dance-${lyricDanceId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'shareable_lyric_dances',
-          filter: `id=eq.${lyricDanceId}`,
-        },
-        (payload: any) => {
-          const next = payload.new;
-          if (!next) return;
-          setData(prev => {
-            if (!prev) return prev;
-            const updated = { ...prev };
-            if (next.lyrics) updated.lyrics = next.lyrics;
-            if (next.words !== undefined) updated.words = next.words;
-            return updated;
-          });
-        }
-      )
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public",
+        table: "shareable_lyric_dances", filter: `id=eq.${lyricDanceId}`,
+      }, ({ new: next }: any) => {
+        if (!next) return;
+        setFetchedData(prev => prev ? {
+          ...prev,
+          ...(next.lyrics && { lyrics: next.lyrics }),
+          ...(next.words !== undefined && { words: next.words }),
+        } : prev);
+      })
       .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(ch); };
   }, [lyricDanceId, !!prefetchedData]);
 
-  // Hot-patch transcript on player when data.lyrics/words change
-  const transcriptMountRef = useRef(false);
-  const transcriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!playerRef.current || !playerReady || !data?.lyrics) return;
-    // Skip initial mount — player already loaded with this data
-    if (!transcriptMountRef.current) {
-      transcriptMountRef.current = true;
-      return;
-    }
-    if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
-    transcriptTimerRef.current = setTimeout(() => {
-      playerRef.current?.updateTranscript(data.lyrics, data.words ?? null);
-    }, 300);
-    return () => {
-      if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
-    };
-  }, [data?.lyrics, data?.words, playerReady]);
+  // ── Player lifecycle ──────────────────────────────────────────────────
+  const { player, playerReady, data } = useLyricDancePlayer(
+    fetchedData, canvasRef, textCanvasRef, containerRef, { bootMode },
+  );
 
-  // Visibility updates via shared observer
+  // Apply transcript buffered before player was ready
   useEffect(() => {
-    if (!data || !data.words?.length || !data.cinematic_direction) return;
+    if (!playerReady || !player) return;
+    const p = pendingRef.current;
+    if (!p) return;
+    pendingRef.current = null;
+    player.updateTranscript(p.lines as any, p.words as any ?? undefined);
+  }, [playerReady, player]);
+
+  // Hot-patch when data.lyrics changes (realtime path)
+  const transcriptMountRef = useRef(false);
+  useEffect(() => {
+    if (!player || !playerReady || !data?.lyrics) return;
+    if (!transcriptMountRef.current) { transcriptMountRef.current = true; return; }
+    const t = setTimeout(() => player.updateTranscript(data.lyrics, data.words ?? null), 300);
+    return () => clearTimeout(t);
+  }, [data?.lyrics, data?.words, playerReady, player]);
+
+  // Expose handle to FitTab
+  useImperativeHandle(ref, () => ({
+    getPlayer: () => player,
+    reloadTranscript: async (lines: any[], newWords?: any[] | null) => {
+      if (!player) { pendingRef.current = { lines, words: newWords }; return; }
+      player.updateTranscript(lines as any, newWords as any ?? undefined);
+    },
+  }), [player]);
+
+  // Visibility
+  useEffect(() => {
+    if (!data?.words?.length || !data?.cinematic_direction) return;
     const el = containerRef.current;
     if (!el) return;
-
-    const observer = getSharedVisibilityObserver();
+    const io = getSharedIO();
     visibilityListeners.set(el, setIsVisible);
-    observer.observe(el);
-
-    return () => {
-      visibilityListeners.delete(el);
-      observer.unobserve(el);
-    };
+    io.observe(el);
+    return () => { visibilityListeners.delete(el); io.unobserve(el); };
   }, [data]);
 
-  // Init player as soon as data is ready — do NOT gate on isVisible.
-  // When FitTab is rendered with display:none (always-mounted architecture),
-  // IntersectionObserver never fires so isVisible stays false permanently.
-  // The canvas falls back to 960x540 if offsetWidth/Height are 0, and the
-  // ResizeObserver corrects dimensions the moment the tab becomes visible.
-  const dataReady = !!(data && data.words?.length && data.cinematic_direction);
   useEffect(() => {
-    console.log('[SYNC:J] init-gate check — initRef:', initRef.current, 'dataReady:', dataReady, 'data.id:', data?.id);
-    if (initRef.current) return;
-    if (!dataReady) return;
-    if (!canvasRef.current || !textCanvasRef.current || !containerRef.current) return;
-
-    initRef.current = true;
-    let destroyed = false;
-    let ro: ResizeObserver | null = null;
-
-    console.log('[SYNC:H] player init starting. data.id:', data?.id, 'dataReady:', dataReady);
-    withInitLimit(async () => {
-      if (destroyed) return;
-      const player = new LyricDancePlayer(
-        data!,
-        canvasRef.current!,
-        textCanvasRef.current!,
-        containerRef.current as HTMLDivElement,
-        { bootMode },
-      );
-      playerRef.current = player;
-
-      ro = new ResizeObserver((entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-        const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) player.resize(width, height);
-      });
-      ro.observe(containerRef.current!);
-
-      await player.init();
-
-      if (!destroyed) {
-        player.audio.muted = true;
-        player.play();
-        setPlayerReady(true);
-        console.info("[SYNC:I] player ready. boot metrics:", player.getBootMetrics());
-      }
-    }).catch((err) => {
-      console.error("[InlineLyricDance] init failed:", err);
-    });
-
-    // Cleanup only on unmount or dance ID change — NOT on visibility change.
-    return () => {
-      destroyed = true;
-      ro?.disconnect();
-      playerRef.current?.destroy();
-      playerRef.current = null;
-      initRef.current = false;
-      setPlayerReady(false);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataReady, data?.id]); // dataReady = init trigger; data.id = different dance → reinit
-
-  // Pause/resume based on visibility
-  useEffect(() => {
-    const player = playerRef.current;
     if (!player || !playerReady) return;
-    if (isVisible) {
-      player.play();
-    } else {
-      player.pause();
-    }
-  }, [isVisible, playerReady]);
+    if (isVisible) player.play(); else player.pause();
+  }, [isVisible, playerReady, player]);
 
   // Mute sync
-  useEffect(() => {
-    if (playerRef.current) {
-      playerRef.current.audio.muted = muted;
-    }
-  }, [muted]);
+  useEffect(() => { if (player) player.audio.muted = muted; }, [muted, player]);
 
+  // ── Handlers ─────────────────────────────────────────────────────────
   const handleListenNow = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    const player = playerRef.current;
-    if (player) {
-      player.seek(0);
-      player.setMuted(false);
-      player.play();
-    }
-    setMuted(false);
-    setShowCover(false);
-  }, []);
+    player?.seek(0); player?.setMuted(false); player?.play();
+    setMuted(false); setShowCover(false);
+  }, [player]);
 
-  const toggleMute = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setMuted(m => !m);
-  }, []);
+  const toggleMute = useCallback((e: React.MouseEvent) => { e.stopPropagation(); setMuted(m => !m); }, []);
+  const openFullPage = useCallback((e: React.MouseEvent) => { e.stopPropagation(); window.open(lyricDanceUrl, "_blank"); }, [lyricDanceUrl]);
 
-  const openFullPage = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    window.open(lyricDanceUrl, "_blank");
-  }, [lyricDanceUrl]);
-
-  const handleCanvasClick = useCallback(() => {
-    if (showCover) return; // cover handles its own click
-    setMuted(m => !m);
-  }, [showCover]);
-
-  if (error) {
+  // ── Render ────────────────────────────────────────────────────────────
+  if (fetchError) {
     return (
-      <a
-        href={lyricDanceUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block mx-3 my-2 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors p-4 text-center"
-      >
+      <a href={lyricDanceUrl} target="_blank" rel="noopener noreferrer"
+        className="block mx-3 my-2 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors p-4 text-center">
         <p className="text-sm font-semibold">{songTitle}</p>
         <p className="text-xs text-muted-foreground mt-1">Tap to watch lyric dance →</p>
       </a>
     );
   }
 
-  const canPlay = data && data.words?.length && data.cinematic_direction;
-
   return (
-    <div
-      ref={containerRef}
+    <div ref={containerRef}
       className="relative w-full overflow-hidden bg-black cursor-pointer rounded-xl"
       style={{ minHeight: 352, height: 352 }}
-      onClick={handleCanvasClick}
+      onClick={() => { if (!showCover) setMuted(m => !m); }}
     >
-      {/* Canvas — always rendered so player can draw behind cover */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
-        style={{ display: playerReady ? "block" : "none" }}
-      />
-      <canvas
-        ref={textCanvasRef}
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ display: "none" }}
-      />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
+        style={{ display: playerReady ? "block" : "none" }} />
+      <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ display: "none" }} />
 
-      {/* Loading state */}
-      {(loading || (!canPlay && !error && !playerReady)) && (
+      {(loading || (!playerReady && !fetchError)) && (
         <div className="absolute inset-0 flex items-center justify-center bg-black">
           <div className="text-center space-y-2">
             <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto" />
@@ -335,21 +185,16 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         </div>
       )}
 
-      {/* Cover overlay — matches the full shareable page "Listen Now" experience */}
       {playerReady && showCover && (
-        <div
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center"
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center"
           style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
-          onClick={(e) => e.stopPropagation()}
-        >
+          onClick={e => e.stopPropagation()}>
           <div className="flex flex-col items-center gap-4">
-            {/* Artist initial */}
             <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
               <span className="text-lg font-mono text-white/40">
                 {(artistName || data?.artist_name || songTitle || "?")[0].toUpperCase()}
               </span>
             </div>
-            {/* Song info */}
             <div className="text-center px-6">
               <h3 className="text-lg font-bold text-white leading-tight">{songTitle}</h3>
               {(artistName || data?.artist_name) && (
@@ -358,43 +203,31 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
                 </p>
               )}
             </div>
-            {/* Listen Now button */}
-            <button
-              onClick={handleListenNow}
-              className="px-6 py-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors mt-2"
-            >
+            <button onClick={handleListenNow}
+              className="px-6 py-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors mt-2">
               Listen Now
             </button>
           </div>
         </div>
       )}
 
-      {/* Title + expand — shown after cover dismissed */}
       {!showCover && playerReady && (
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
-          onClick={(e) => e.stopPropagation()}
-        >
+          onClick={e => e.stopPropagation()}>
           <span className="text-[10px] font-mono text-white/60 uppercase tracking-wider bg-black/40 backdrop-blur-sm rounded px-1.5 py-0.5">
             {songTitle}
           </span>
-          <button
-            onClick={openFullPage}
-            className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
-          >
+          <button onClick={openFullPage}
+            className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors">
             <Maximize2 size={14} />
           </button>
         </div>
       )}
 
-      {/* Bottom mute control — shown after cover dismissed */}
       {!showCover && playerReady && (
-        <div className="absolute bottom-0 left-0 p-2 z-10"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={toggleMute}
-            className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
-          >
+        <div className="absolute bottom-0 left-0 p-2 z-10" onClick={e => e.stopPropagation()}>
+          <button onClick={toggleMute}
+            className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors">
             {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </button>
         </div>
