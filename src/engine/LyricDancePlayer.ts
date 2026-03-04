@@ -2689,17 +2689,8 @@ export class LyricDancePlayer {
 
     let drawCalls = 0;
     const sortBuf = this._sortBuffer;
-    // PERF: compute a lightweight hash of visible chunk ids for sort-skip optimisation
-    let sortHash = 2166136261;
-    for (let i = 0; i < frame.chunks.length; i += 1) {
-      const id = frame.chunks[i].id;
-      for (let ci = 0; ci < id.length; ci += 1) {
-        sortHash ^= id.charCodeAt(ci);
-        sortHash = Math.imul(sortHash, 16777619);
-      }
-      sortHash ^= 44;
-      sortHash = Math.imul(sortHash, 16777619);
-    }
+    // PERF: skip sort when visible set hasn't changed — hash already computed for collision solver above
+    const sortHash = visibleHash; // reuse the FNV hash computed for collision detection
     if (sortHash !== this._lastSortHash || sortBuf.length !== frame.chunks.length) {
       this._lastSortHash = sortHash;
       sortBuf.length = 0;
@@ -3016,23 +3007,19 @@ export class LyricDancePlayer {
         const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
         if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
 
-        // ═══ HERO EFFECTS: depth stack, bloom pulse, underline sweep, beat bounce ═══
+        // ═══ HERO EFFECTS: bloom pulse, underline sweep ═══
         const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
         const beatState = this._lastBeatState;
         const beatPulse = beatState?.pulse ?? 0;
         // PERF: sub-pixel snap draw coordinates to device pixel grid
         // Fractional positions cause shimmer during scale transitions (especially hero pop-in).
         const dpr = this._effectiveDpr;
-        let heroDrawX = Math.round(drawX * dpr) / dpr;
-        let heroDrawY = Math.round(finalDrawY * dpr) / dpr;
+        const heroDrawX = Math.round(drawX * dpr) / dpr;
+        const heroDrawY = Math.round(finalDrawY * dpr) / dpr;
+        // NOTE: beat bounce Y is now handled in evaluateFrame via SubsystemResponse.wordNudgeY
+        // so every word (not just heroes) dances to the grid.
 
         if (isHeroChunk && entry >= 0.5 && drawAlpha > 0.1) {
-          // Beat bounce: gentle Y offset for words on screen > 500ms
-          if (visibleMs > 500 && beatPulse > 0.05) {
-            const bounceAmt = beatPulse * safeFontSize * 0.04; // subtle: ~4% of font size
-            heroDrawY -= bounceAmt;
-          }
-
           // Bloom pulse: amplified glow synced to beat
           const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
           const bloomGlow = baseGlow + beatPulse * 0.35;
@@ -4483,7 +4470,19 @@ export class LyricDancePlayer {
 
     // Line transition easing removed — active chunk always at center
 
-    const chunks = this._evalChunkPool;
+    // ═══ BEAT-TO-TEXT: pre-compute subsystem response per emphasis tier ═══
+    // getSubsystemResponse() is cheap (pure math, no lookups) but calling it
+    // N times per word per frame adds up. Pre-computing 6 buckets costs 6 calls
+    // total per frame regardless of word count.
+    // hitStrength drives punch/slam impulses; pulse drives the softer dance motion.
+    type SR = import('@/engine/BeatConductor').SubsystemResponse;
+    const _beatResponses: SR[] = [];
+    if (beatState && this.conductor) {
+      for (let eLevel = 0; eLevel <= 5; eLevel++) {
+        _beatResponses[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel);
+      }
+    }
+    const _hasBeatResponses = _beatResponses.length > 0;
     let ci = 0;
     const bpm = scene.bpm;
 
@@ -4813,14 +4812,37 @@ export class LyricDancePlayer {
           }
         }
 
-        // ═══ SIMPLIFIED GLOW: spoken words glow, solo hero words glow stronger ═══
+        // ═══ BEAT-GRID GLOW, SCALE, NUDGE via SubsystemResponse ═══
+        // Use the pre-computed per-emphasis-level response so every word dances
+        // to the beat proportional to its semantic weight.
+        const emp = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
+        const beatResp = _hasBeatResponses ? _beatResponses[emp] : null;
+
         let wordGlow = 0;
-        if (isAnchor && lineRole === 'current') {
-          // Currently spoken word — clean bright glow
-          wordGlow = 0.6 + beatPulse * 0.3;
-        } else if (isSoloHero && groupHasActiveSoloHero && lineRole === 'current') {
-          // Solo hero during its center-screen moment
-          wordGlow = 0.7;
+        let beatScaleMult = 1.0;
+        let beatNudgeY = 0;
+
+        if (lineRole === 'current') {
+          if (beatResp) {
+            // All active words scale and nudge to the beat — emphasis level controls how much.
+            // Hero words (isHero=true) already got 1.6x multiplier inside getSubsystemResponse.
+            beatScaleMult = beatResp.wordScale;
+            beatNudgeY = beatResp.wordNudgeY;
+
+            // Glow: currently-spoken anchor glows brightest, then hero words, then rest.
+            if (isAnchor) {
+              wordGlow = Math.min(1, 0.5 + beatResp.wordGlow * 0.8);
+            } else if (isSoloHero && groupHasActiveSoloHero) {
+              wordGlow = Math.min(1, 0.6 + beatResp.wordGlow * 0.6);
+            } else if (emp >= 2) {
+              // High-emphasis non-hero words get subtle glow on hits
+              wordGlow = beatResp.wordGlow * 0.5;
+            }
+          } else {
+            // Fallback if beat state unavailable
+            if (isAnchor) wordGlow = 0.6;
+            else if (isSoloHero && groupHasActiveSoloHero) wordGlow = 0.7;
+          }
         }
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
@@ -4838,11 +4860,11 @@ export class LyricDancePlayer {
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
         chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY) * sy;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale;
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale;
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
