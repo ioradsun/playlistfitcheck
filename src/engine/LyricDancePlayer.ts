@@ -2581,7 +2581,8 @@ export class LyricDancePlayer {
   private _draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
     this.currentTSec = tSec;
     this.frameCount++;
-    this._updateQualityTier(performance.now());
+    // Skip adaptive quality during export — tier is locked to 0
+    if (!this._exportMode) this._updateQualityTier(performance.now());
     const qTier = this._qualityTier;
 
     // ── During minimal-boot upgrade gap: keep the first frame visible ──
