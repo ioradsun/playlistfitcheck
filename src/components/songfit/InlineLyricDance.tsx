@@ -74,24 +74,22 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
     reloadTranscript: async (lines: any[], newWords?: any[] | null) => {
       const player = playerRef.current;
       if (!player) {
-        // Engine not ready yet — store for when playerReady fires
-        console.log('[transcript-reload] engine not ready, storing pending transcript');
+        console.log('[SYNC:E] reloadTranscript called but playerRef.current is null — storing pending. playerReady:', playerReady, 'isVisible:', isVisible, 'initRef:', initRef.current, 'dataReady:', !!(data && data.words?.length && data.cinematic_direction));
         pendingTranscriptRef.current = { lines, words: newWords };
         return;
       }
-      console.log('[transcript-reload] engine ready, calling updateTranscript');
+      console.log('[SYNC:F] reloadTranscript calling updateTranscript. lines:', lines.length);
       player.updateTranscript(lines as any, newWords as any ?? undefined);
-      // updateTranscript already preserves audio position internally; no seek needed
     },
-  }), []);
+  }), [playerReady, isVisible, data]);
 
-  // Apply any pending transcript update once the engine is ready
+  // Apply pending transcript once player is ready (covers the rare cold-start case)
   useEffect(() => {
     if (!playerReady || !playerRef.current) return;
     const pending = pendingTranscriptRef.current;
     if (!pending) return;
     pendingTranscriptRef.current = null;
-    console.log('[transcript-reload] playerReady fired, applying pending transcript');
+    console.log('[SYNC:G] applying pending transcript. lines:', pending.lines.length);
     playerRef.current.updateTranscript(pending.lines as any, pending.words as any ?? undefined);
   }, [playerReady]);
 
@@ -187,20 +185,29 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
     };
   }, [data]);
 
-  // Auto-init player when visible + data ready — plays muted in background behind cover
+  // Init player once when data is ready — isVisible is only used as a first-paint gate,
+  // not as a lifecycle trigger. Once created the player stays alive until unmount or
+  // dance ID changes. Tying cleanup to isVisible caused the player to be destroyed
+  // every time the user switched tabs (display:none → IntersectionObserver fires → isVisible=false)
+  // which meant transcript updates were always applied to a freshly-created stale player.
+  const dataReady = !!(data && data.words?.length && data.cinematic_direction);
   useEffect(() => {
+    console.log('[SYNC:J] init-gate check — initRef:', initRef.current, 'isVisible:', isVisible, 'dataReady:', dataReady, 'data.id:', data?.id);
     if (initRef.current) return;
-    if (!isVisible || !data || !data.words?.length || !data.cinematic_direction) return;
+    // Wait until visible for the first time — avoids initializing off-screen players.
+    // But once initialized we never destroy on visibility loss (only on unmount/id change).
+    if (!isVisible || !dataReady) return;
     if (!canvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
     initRef.current = true;
     let destroyed = false;
     let ro: ResizeObserver | null = null;
 
+    console.log('[SYNC:H] player init starting. data.id:', data?.id, 'dataReady:', dataReady);
     withInitLimit(async () => {
       if (destroyed) return;
       const player = new LyricDancePlayer(
-        data,
+        data!,
         canvasRef.current!,
         textCanvasRef.current!,
         containerRef.current as HTMLDivElement,
@@ -220,15 +227,15 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
 
       if (!destroyed) {
         player.audio.muted = true;
-        // Start playing muted behind the cover — gives visual life
         player.play();
         setPlayerReady(true);
-        console.info("[InlineLyricDance boot]", player.getBootMetrics());
+        console.info("[SYNC:I] player ready. boot metrics:", player.getBootMetrics());
       }
     }).catch((err) => {
       console.error("[InlineLyricDance] init failed:", err);
     });
 
+    // Cleanup only on unmount or dance ID change — NOT on visibility change.
     return () => {
       destroyed = true;
       ro?.disconnect();
@@ -237,7 +244,8 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       initRef.current = false;
       setPlayerReady(false);
     };
-  }, [isVisible, data?.id, data?.words?.length, !!data?.cinematic_direction]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible, data?.id]); // isVisible = first-paint gate only; data.id = different dance
 
   // Pause/resume based on visibility
   useEffect(() => {
