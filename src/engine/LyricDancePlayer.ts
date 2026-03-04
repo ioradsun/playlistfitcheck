@@ -964,6 +964,9 @@ export class LyricDancePlayer {
 
   // Data
   private data: LyricDanceData;
+
+  /** Read-only accessor — used by auto-save to retrieve reconciled words after updateTranscript */
+  get currentData(): LyricDanceData { return this.data; }
   private payload: ScenePayload | null = null;
 
   // Runtime chunks
