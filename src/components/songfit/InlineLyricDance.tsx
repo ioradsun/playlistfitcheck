@@ -65,22 +65,35 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   const initRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
 
+  // Pending transcript — applied when engine becomes ready if it wasn't yet
+  const pendingTranscriptRef = useRef<{ lines: any[]; words?: any[] | null } | null>(null);
+
   // Expose player to parent via ref
   useImperativeHandle(ref, () => ({
     getPlayer: () => playerRef.current,
     reloadTranscript: async (lines: any[], newWords?: any[] | null) => {
       const player = playerRef.current;
-      if (!player || !data) return;
+      if (!player) {
+        // Engine not ready yet — store for when playerReady fires
+        pendingTranscriptRef.current = { lines, words: newWords };
+        return;
+      }
       const t = player.audio.currentTime;
-      // Update the data object in-place so internal buildScenePayload uses new values
-      (player as any).data.lyrics = lines;
-      // Only update words if explicitly provided — preserve existing word timings otherwise
-      if (newWords !== undefined && newWords !== null) (player as any).data.words = newWords;
-      const payload = (player as any).buildScenePayload();
-      await player.load(payload, () => {});
+      player.updateTranscript(lines as any, newWords as any ?? undefined);
       player.seek(t);
     },
-  }), [data]);
+  }), []);
+
+  // Apply any pending transcript update once the engine is ready
+  useEffect(() => {
+    if (!playerReady || !playerRef.current) return;
+    const pending = pendingTranscriptRef.current;
+    if (!pending) return;
+    pendingTranscriptRef.current = null;
+    const t = playerRef.current.audio.currentTime;
+    playerRef.current.updateTranscript(pending.lines as any, pending.words as any ?? undefined);
+    playerRef.current.seek(t);
+  }, [playerReady]);
 
   // Use prefetched data if available, otherwise fetch
   useEffect(() => {
