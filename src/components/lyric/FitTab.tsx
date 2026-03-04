@@ -95,6 +95,8 @@ export function FitTab({
   const [publishedDanceId, setPublishedDanceId] = useState<string | null>(null);
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const dancePlayerRef = useRef<InlineLyricDanceHandle>(null);
 
   // Prefetch dance data as soon as we know the ID — so the player is instant
   const DANCE_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,artist_dna";
