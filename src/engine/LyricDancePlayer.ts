@@ -4509,7 +4509,6 @@ export class LyricDancePlayer {
               yPos += line.h;
             }
           }
-        }
 
              // Store in cache only for current groups - offscreen passes must never
           // prime the cache with isMultiLine=false + empty dx/dy.
