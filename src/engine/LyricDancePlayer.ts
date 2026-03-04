@@ -3285,7 +3285,7 @@ export class LyricDancePlayer {
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._lastVisibleChunkIds = '';
+    this._lastVisibleMidChunkId = '';
   }
 
   private getCachedMetrics(text: string, font: string): { width: number; ascent: number; descent: number } {
