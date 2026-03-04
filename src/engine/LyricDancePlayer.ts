@@ -1707,10 +1707,21 @@ export class LyricDancePlayer {
   }
 
   teardownExportResolution(): void {
+    // Restore DPR + quality tier
+    this.dpr = this._savedDpr;
+    this._qualityTier = this._savedQualityTier;
+    this._exportMode = false;
+
     this.setResolution(this.displayWidth, this.displayHeight);
     // Restore normal GPU-backed context
     this.ctx = this.canvas.getContext('2d')!;
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+
+    // Invalidate caches baked at export resolution
+    this._bgSnapshotSection = -999;
+    this._bgSnapshotQTier = -1 as any;
+    this._lightingOverlayCanvas = null;
+    this._lightingOverlayKey = '';
   }
 
   resize(logicalW: number, logicalH: number): void {
