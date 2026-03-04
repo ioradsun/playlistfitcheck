@@ -62,6 +62,11 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   const initRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
 
+  // Expose player to parent via ref
+  useImperativeHandle(ref, () => ({
+    getPlayer: () => playerRef.current,
+  }), []);
+
   // Use prefetched data if available, otherwise fetch
   useEffect(() => {
     if (prefetchedData) {
