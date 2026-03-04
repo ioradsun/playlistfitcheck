@@ -4200,8 +4200,8 @@ export class LyricDancePlayer {
     }
 
     // ═══ Beat visualizer strip — bottom ~25% of canvas, synced to actual beatmap ═══
-    // Skip at tier 2+ (full-width drawImage with alpha composite)
-    if (this._globalBeatVis && this._qualityTier < 2) {
+    // Always render — it's a single drawImage (cheap) and core to the visual identity.
+    if (this._globalBeatVis) {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
