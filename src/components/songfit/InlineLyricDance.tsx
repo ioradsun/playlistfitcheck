@@ -72,9 +72,9 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       const player = playerRef.current;
       if (!player || !data) return;
       const t = player.audio.currentTime;
-      // Mutate the underlying data so buildScenePayload picks up new lyrics/words
-      (data as any).lyrics = lines;
-      if (newWords) (data as any).words = newWords;
+      // Update the data object in-place so internal buildScenePayload uses new values
+      (player as any).data.lyrics = lines;
+      if (newWords) (player as any).data.words = newWords;
       const payload = (player as any).buildScenePayload();
       await player.load(payload, () => {});
       player.seek(t);
