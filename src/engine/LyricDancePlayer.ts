@@ -2685,7 +2685,7 @@ export class LyricDancePlayer {
     let drawCalls = 0;
     const sortBuf = this._sortBuffer;
     // PERF: skip sort when visible set hasn't changed — hash already computed for collision solver above
-    // Inline FNV-1a hash of visible chunk ids (same logic as visibleHash below, but computed earlier for sort-skip)
+    // Inline FNV-1a hash of visible chunk ids — computed here for sort-skip
     let sortHash = 2166136261;
     for (let shi = 0; shi < frame.chunks.length; shi += 1) {
       const sid = frame.chunks[shi].id;
