@@ -306,83 +306,73 @@ export default function ShareableLyricDance() {
         supabase.from("profiles").select("display_name, avatar_url").eq("id", d.user_id).maybeSingle()
           .then(({ data: pData }) => { if (pData) setProfile(pData as ProfileInfo); }, () => {});
 
-        // Phase 2: cinematic direction
-        Promise.resolve(
-          supabase.from("shareable_lyric_dances" as any).select(DIRECTION_COLUMNS).eq("id", d.id).maybeSingle()
-        ).then(({ data: dirRow }) => {
-          const rawDir = (dirRow as any)?.cinematic_direction;
-          const dir = rawDir && !Array.isArray(rawDir) ? rawDir : null;
-          if (dir) setDataRaw(prev => prev ? { ...prev, cinematic_direction: dir } : prev);
-        }).catch(() => {}).finally(async () => {
-          // Check if cinematic_direction already exists in DB
-          const { data: existingRow } = await supabase
+        // Phase 2: cinematic direction + section images — one async IIFE, properly caught.
+        // async finally() swallows its own rejections; IIFE + terminal .catch() doesn't.
+        (async () => {
+          // Step 1: fast read of already-stored direction
+          const { data: dirRow } = await supabase
             .from("shareable_lyric_dances" as any)
-            .select("cinematic_direction, section_images")
+            .select(DIRECTION_COLUMNS + ",cinematic_direction,section_images")
             .eq("id", d.id)
             .maybeSingle();
-          const existingDir = (existingRow as any)?.cinematic_direction;
-          const existingImages = (existingRow as any)?.section_images;
 
-          if (existingDir && !Array.isArray(existingDir) && existingDir.sections?.length > 0) {
-            // Use cached direction — skip generation
+          const existingDir = (dirRow as any)?.cinematic_direction;
+          const existingImages = (dirRow as any)?.section_images;
+
+          // Patch direction immediately if cached
+          if (existingDir && !Array.isArray(existingDir)) {
             setDataRaw(prev => prev ? { ...prev, cinematic_direction: existingDir } : prev);
+          }
 
-            // Check if section images also already exist
-            const imagesAlreadyExist =
-              Array.isArray(existingImages) &&
-              existingImages.length >= 3 &&
-              existingImages.every((url: string) => !!url);
+          // Patch section images if complete set exists
+          const imagesComplete =
+            Array.isArray(existingImages) &&
+            existingImages.length >= 3 &&
+            existingImages.every((url: string) => !!url);
+          if (imagesComplete) {
+            setDataRaw(prev => prev ? { ...prev, section_images: existingImages } : prev);
+          }
 
-            if (imagesAlreadyExist) {
-              setDataRaw(prev => prev ? { ...prev, section_images: existingImages } : prev);
-            } else {
-              // Generate section images from existing direction
-              const sections = existingDir.sections;
-              if (Array.isArray(sections) && sections.length > 0) {
-                supabase.functions.invoke("generate-section-images", {
-                  body: {
-                    lyric_dance_id: d.id,
-                  },
-                }).then(({ data: imgResult }) => {
-                  const nextImages = imgResult?.section_images ?? imgResult?.urls;
-                  if (nextImages) {
-                      setDataRaw(prev => prev ? { ...prev, section_images: nextImages } : prev);
-                  }
+          // If direction is already good, only generate images if missing
+          if (existingDir && !Array.isArray(existingDir) && existingDir.sections?.length > 0) {
+            if (!imagesComplete) {
+              supabase.functions.invoke("generate-section-images", { body: { lyric_dance_id: d.id } })
+                .then(({ data: imgResult }) => {
+                  const urls = imgResult?.section_images ?? imgResult?.urls;
+                  if (urls) setDataRaw(prev => prev ? { ...prev, section_images: urls } : prev);
                 }).catch(() => {});
-              }
             }
             return;
           }
 
           // No cached direction — generate fresh
-          if (d.lyrics?.length > 0) {
-            const linesForDir = (d.lyrics as any[]).filter((l: any) => l.tag !== "adlib").map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-            supabase.functions.invoke("cinematic-direction", {
-              body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
-            }).then(({ data: dirResult }) => {
-              if (dirResult?.cinematicDirection) {
-                setDataRaw(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+          if (!d.lyrics?.length) return;
+          const linesForDir = (d.lyrics as any[])
+            .filter((l: any) => l.tag !== "adlib")
+            .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
-                // Fire-and-forget: generate section background images
-                const sections = dirResult.cinematicDirection?.sections;
-                if (Array.isArray(sections) && sections.length > 0) {
-                  supabase.functions.invoke("generate-section-images", {
-                    body: {
-                      lyric_dance_id: d.id,
-                    },
-                  }).then(({ data: imgResult }) => {
-                    const nextImages = imgResult?.section_images ?? imgResult?.urls;
-                    if (nextImages) {
-                      setDataRaw(prev => prev ? { ...prev, section_images: nextImages } : prev);
-                    }
-                  }).catch(() => {});
-                }
-              }
-            }).catch(() => {});
+          const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
+            body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
+          });
+
+          if (dirResult?.cinematicDirection) {
+            setDataRaw(prev => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
+            const sections = dirResult.cinematicDirection?.sections;
+            if (Array.isArray(sections) && sections.length > 0) {
+              supabase.functions.invoke("generate-section-images", { body: { lyric_dance_id: d.id } })
+                .then(({ data: imgResult }) => {
+                  const urls = imgResult?.section_images ?? imgResult?.urls;
+                  if (urls) setDataRaw(prev => prev ? { ...prev, section_images: urls } : prev);
+                }).catch(() => {});
+            }
           }
-        });
-        // Profile already fetched in parallel above. Fetch comments here (no earlier counterpart).
-        supabase.from("lyric_dance_comments" as any).select("id, text, submitted_at").eq("dance_id", d.id).order("submitted_at", { ascending: true }).limit(100).then(() => {}, () => {});
+        })().catch(() => {});
+
+        // Comments — fire and forget
+        supabase.from("lyric_dance_comments" as any)
+          .select("id, text, submitted_at").eq("dance_id", d.id)
+          .order("submitted_at", { ascending: true }).limit(100)
+          .then(() => {}, () => {});
       });
   }, [artistSlug, songSlug]);
 
@@ -484,7 +474,7 @@ export default function ShareableLyricDance() {
     return () => { style.remove(); };
   }, []);
 
-  // ── Loading / Not Found ─────────────────────────────────────────────
+  // ── Not Found ───────────────────────────────────────────────────────
 
   if (notFound) {
     return (
@@ -495,74 +485,18 @@ export default function ShareableLyricDance() {
     );
   }
 
-  // ── Unified cover skeleton ───────────────────────────────────────────
-  // Shown for ALL pre-player states: initial DB fetch AND waiting for cinematic_direction.
-  // One gate, one component — no janky transition between two spinners.
-  // Uses section_images[0] as blurred background when available (arrives in Phase 1 data).
+  // ── Derived cover state ──────────────────────────────────────────────
+  // isWaitingForPlayer folds into the cover overlay — no separate skeleton component.
+  // Same DOM, same layout, content slots shimmer/fill as data arrives.
   const isWaitingForPlayer = loading || !data || !data.cinematic_direction || Array.isArray(data.cinematic_direction);
-  if (isWaitingForPlayer) {
-    const bgImage = !loading && data?.section_images?.[0];
-    const accentColor = !loading && Array.isArray(data?.palette) ? (data!.palette[1] ?? null) : null;
-    const artistInitial = (data?.artist_name || data?.song_name || "♪")[0].toUpperCase();
-    return (
-      <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-50 overflow-hidden">
-        {/* Blurred section image bg — free content we already have */}
-        {bgImage && (
-          <div
-            className="absolute inset-0 scale-110"
-            style={{
-              backgroundImage: `url(${bgImage})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              filter: "blur(32px) brightness(0.25) saturate(0.6)",
-            }}
-          />
-        )}
-        <div className="relative z-10 flex flex-col items-center">
-          {/* Avatar / initial */}
-          <div className="mb-5">
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt={profile.display_name || data?.artist_name} className="w-20 h-20 rounded-full object-cover border border-white/10" />
-            ) : (
-              <div className="w-20 h-20 rounded-full flex items-center justify-center border border-white/10"
-                style={{ background: accentColor ? `${accentColor}22` : "rgba(255,255,255,0.06)" }}>
-                <span className="text-2xl font-mono text-white/40">{artistInitial}</span>
-              </div>
-            )}
-          </div>
-          {/* Song info — shown as soon as Phase 1 data arrives */}
-          {data?.song_name && (
-            <>
-              <p className="text-lg font-semibold text-white/90 mb-1 text-center max-w-[260px] leading-snug">{data.song_name}</p>
-              {(profile?.display_name || data?.artist_name) && (
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/35 mb-6">
-                  {profile?.display_name || data.artist_name}
-                </p>
-              )}
-            </>
-          )}
-          {/* Beat bars */}
-          <div className="flex items-end gap-[3px] h-5">
-            {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
-              <div
-                key={i}
-                className="w-[3px] rounded-full"
-                style={{
-                  height: `${h * 100}%`,
-                  background: accentColor ?? "rgba(255,255,255,0.2)",
-                  opacity: accentColor ? 0.5 : 1,
-                  animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite`,
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const coverSongName  = data?.song_name  ?? "";
+  const coverArtist    = profile?.display_name ?? data?.artist_name ?? "";
+  const coverAvatarUrl = profile?.avatar_url ?? null;
+  const coverInitial   = (data?.artist_name || data?.song_name || "♪")[0].toUpperCase();
 
   // ── Render ──────────────────────────────────────────────────────────
 
+  return (
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
       {/* Close button */}
@@ -599,61 +533,88 @@ export default function ShareableLyricDance() {
         <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
         <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-        {/* Cover overlay */}
+        {/* Cover overlay — doubles as loading skeleton.
+            isWaitingForPlayer = cover IS the skeleton, same DOM, content fills in.
+            showCover = player ready but user hasn't tapped yet.
+            No separate loading component exists. */}
         <AnimatePresence>
-          {showCover && (
+          {(showCover || isWaitingForPlayer) && (
             <motion.div
               initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: "easeOut" }}
               className="absolute inset-0 z-20 flex flex-col items-center justify-center"
               style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(2px)" }}
             >
+              {/* Avatar slot — shimmer ring while loading, real avatar/initial when ready */}
               <div className="mb-5">
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt={profile.display_name || data.artist_name} className="w-20 h-20 rounded-full object-cover border border-white/10" />
+                {coverAvatarUrl ? (
+                  <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-20 h-20 rounded-full object-cover border border-white/10" />
                 ) : (
-                  <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center">
-                    <span className="text-2xl font-mono text-white/40">{(data.artist_name || "?")[0].toUpperCase()}</span>
+                  <div className={`w-20 h-20 rounded-full border flex items-center justify-center transition-colors ${isWaitingForPlayer && !coverInitial ? "border-white/5 bg-white/[0.04] animate-pulse" : "border-white/10 bg-white/10"}`}>
+                    {coverInitial && <span className="text-2xl font-mono text-white/40">{coverInitial}</span>}
                   </div>
                 )}
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[80%] mb-1">{data.song_name}</h2>
-              <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-white/40 mb-8">{profile?.display_name || data.artist_name}</p>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowCover(false);
-                  playerRef.current?.setMuted(false);
-                  playerRef.current?.seek(0);
-                  playerRef.current?.play();
-                  setMuted(false);
-                }}
-                className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
-              >
-                Listen Now
-              </button>
+
+              {/* Song name — shimmer bar while loading */}
+              {coverSongName ? (
+                <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[80%] mb-1">{coverSongName}</h2>
+              ) : (
+                <div className="h-8 w-48 rounded bg-white/[0.07] animate-pulse mb-1" />
+              )}
+
+              {/* Artist — shimmer bar while loading */}
+              {coverArtist ? (
+                <p className="text-[11px] font-mono uppercase tracking-[0.25em] text-white/40 mb-8">{coverArtist}</p>
+              ) : (
+                <div className="h-3 w-28 rounded bg-white/[0.05] animate-pulse mb-8" />
+              )}
+
+              {/* Listen Now — only shown when player is ready. Pulse dot while loading. */}
+              {isWaitingForPlayer ? (
+                <div className="flex items-end gap-[3px] h-4">
+                  {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
+                    <div key={i} className="w-[3px] rounded-full bg-white/20"
+                      style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }} />
+                  ))}
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowCover(false);
+                    playerRef.current?.setMuted(false);
+                    playerRef.current?.seek(0);
+                    playerRef.current?.play();
+                    setMuted(false);
+                  }}
+                  className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+                >
+                  Listen Now
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Identity label */}
-        {!showCover && (
+        {/* Identity label — only when cover dismissed and data ready */}
+        {!showCover && !isWaitingForPlayer && (
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2.5">
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt={profile.display_name || data.artist_name} className="w-8 h-8 rounded-full object-cover border border-white/10" />
+            {coverAvatarUrl ? (
+              <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-8 h-8 rounded-full object-cover border border-white/10" />
             ) : (
               <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                <span className="text-xs font-mono text-white/40">{(data.artist_name || "?")[0].toUpperCase()}</span>
+                <span className="text-xs font-mono text-white/40">{coverInitial}</span>
               </div>
             )}
             <div className="flex flex-col">
-              <span className="text-[11px] font-semibold text-white/70 leading-tight truncate max-w-[180px]">{data.song_name}</span>
-              <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{profile?.display_name || data.artist_name}</span>
+              <span className="text-[11px] font-semibold text-white/70 leading-tight truncate max-w-[180px]">{coverSongName}</span>
+              <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{coverArtist}</span>
             </div>
           </div>
         )}
 
         {/* Progress bar */}
-        {!showCover && (
+        {!showCover && !isWaitingForPlayer && data && (
           <ProgressBar
             player={playerRef.current}
             data={data}
