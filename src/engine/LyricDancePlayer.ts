@@ -4523,7 +4523,7 @@ export class LyricDancePlayer {
             resolvedFont: _resolvedFontForML,
           });
         } // end cache-miss
-      } // end lineRole === current
+      
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
