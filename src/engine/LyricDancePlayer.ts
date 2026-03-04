@@ -1103,6 +1103,7 @@ export class LyricDancePlayer {
   // Tier 0 = full, 1 = reduced, 2 = low, 3 = survival
   // Downgrades instantly on low FPS; upgrades only after sustained recovery.
   private _qualityTier: 0 | 1 | 2 | 3 = 0;
+  private _exportMode = false;       // When true, forces tier 0 and skips adaptive quality
   private _qFrameCount = 0;          // frames in current 1-second window
   private _qWindowStart = 0;         // timestamp of current window start
   private _qUpgradeStreak = 0;       // consecutive good windows (need 3 to upgrade)
