@@ -41,7 +41,7 @@ export default function About() {
             <p className="text-sm text-muted-foreground leading-relaxed">
               {about.origin_intro || (
                 <>
-                  I'm{" "}
+                   I'm{" "}
                   <a
                     href="https://open.spotify.com/artist/1PlkAOmfFYqBYFpN8jDj4v"
                     target="_blank"
@@ -50,12 +50,12 @@ export default function About() {
                   >
                     ajan
                   </a>
-                  . I make music, so I know the 3am doubt—is the mix ready, is it actually good? My dad builds tech. So we built tools to try and answer those questions.
+                  . I make music, so I know the 3am doubt—is the mix ready, is it actually good? My dad builds tech. So we built tools to try and answer those questions. Every tool here exists because we needed it ourselves first.
                 </>
               )}
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              {about.origin_body || "We're trying everything. Some will work. Some won't. That's how music works too. But at least we're not guessing alone."}
+              {about.origin_body || "We're trying everything. Some will work. Some won't. That's how music works too. But at least we're not guessing alone. Recently we started saving your audio in LyricFit—because if your lyrics are synced, your visuals should be ready whenever you come back. No re-uploading. No lost work. Just pick up where you left off. That's the kind of thing we'd want as artists, so we built it."}
             </p>
             <p className="text-sm text-primary font-semibold leading-relaxed">
               {about.origin_tagline}
