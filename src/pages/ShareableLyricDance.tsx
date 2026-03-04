@@ -300,6 +300,13 @@ export default function ShareableLyricDance() {
         setDataRaw({ ...d, cinematic_direction: null });
         setLoading(false);
 
+        // ── PROFILE: fire immediately in parallel — don't wait for direction ──
+        // Was inside .finally() of direction chain → avatar arrived AFTER cover
+        // was already showing, causing a letter→avatar pop.
+        supabase.from("profiles").select("display_name, avatar_url").eq("id", d.user_id).maybeSingle()
+          .then(({ data: pData }) => { if (pData) setProfile(pData as ProfileInfo); })
+          .catch(() => {});
+
         // Phase 2: cinematic direction
         Promise.resolve(
           supabase.from("shareable_lyric_dances" as any).select(DIRECTION_COLUMNS).eq("id", d.id).maybeSingle()
@@ -375,11 +382,8 @@ export default function ShareableLyricDance() {
             }).catch(() => {});
           }
         });
-        const [profileResult, commentsResult] = await Promise.all([
-          supabase.from("profiles").select("display_name, avatar_url").eq("id", d.user_id).maybeSingle(),
-          supabase.from("lyric_dance_comments" as any).select("id, text, submitted_at").eq("dance_id", d.id).order("submitted_at", { ascending: true }).limit(100),
-        ]);
-        if (profileResult.data) setProfile(profileResult.data as ProfileInfo);
+        // Profile already fetched in parallel above. Fetch comments here (no earlier counterpart).
+        supabase.from("lyric_dance_comments" as any).select("id, text, submitted_at").eq("dance_id", d.id).order("submitted_at", { ascending: true }).limit(100).then(() => {}).catch(() => {});
       });
   }, [artistSlug, songSlug]);
 
@@ -483,26 +487,7 @@ export default function ShareableLyricDance() {
 
   // ── Loading / Not Found ─────────────────────────────────────────────
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-50">
-        <div className="w-14 h-14 rounded-full bg-white/[0.06] flex items-center justify-center mb-5">
-          <span className="text-lg font-mono text-white/30">♪</span>
-        </div>
-        <div className="flex items-end gap-[3px] h-6">
-          {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
-            <div
-              key={i}
-              className="w-[3px] rounded-full bg-white/20"
-              style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (notFound || !data) {
+  if (notFound) {
     return (
       <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 z-50">
         <p className="text-white/40 text-lg font-mono">Lyric Dance not found.</p>
@@ -511,27 +496,67 @@ export default function ShareableLyricDance() {
     );
   }
 
-  // Gate: don't render player until cinematic_direction is a real object (not null, not [])
-  if (!data.cinematic_direction || Array.isArray(data.cinematic_direction)) {
+  // ── Unified cover skeleton ───────────────────────────────────────────
+  // Shown for ALL pre-player states: initial DB fetch AND waiting for cinematic_direction.
+  // One gate, one component — no janky transition between two spinners.
+  // Uses section_images[0] as blurred background when available (arrives in Phase 1 data).
+  const isWaitingForPlayer = loading || !data || !data.cinematic_direction || Array.isArray(data.cinematic_direction);
+  if (isWaitingForPlayer) {
+    const bgImage = !loading && data?.section_images?.[0];
+    const accentColor = !loading && Array.isArray(data?.palette) ? (data!.palette[1] ?? null) : null;
+    const artistInitial = (data?.artist_name || data?.song_name || "♪")[0].toUpperCase();
     return (
-      <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-50">
-        <div className="w-14 h-14 rounded-full bg-white/[0.06] flex items-center justify-center mb-4">
-          <span className="text-lg font-mono text-white/30">
-            {(data.artist_name || data.song_name || "?")[0].toUpperCase()}
-          </span>
-        </div>
-        <p className="text-sm font-semibold text-white/80 mb-1">{data.song_name}</p>
-        {data.artist_name && (
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 mb-5">{data.artist_name}</p>
+      <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-50 overflow-hidden">
+        {/* Blurred section image bg — free content we already have */}
+        {bgImage && (
+          <div
+            className="absolute inset-0 scale-110"
+            style={{
+              backgroundImage: `url(${bgImage})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              filter: "blur(32px) brightness(0.25) saturate(0.6)",
+            }}
+          />
         )}
-        <div className="flex items-end gap-[3px] h-6">
-          {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
-            <div
-              key={i}
-              className="w-[3px] rounded-full bg-white/20"
-              style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }}
-            />
-          ))}
+        <div className="relative z-10 flex flex-col items-center">
+          {/* Avatar / initial */}
+          <div className="mb-5">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt={profile.display_name || data?.artist_name} className="w-20 h-20 rounded-full object-cover border border-white/10" />
+            ) : (
+              <div className="w-20 h-20 rounded-full flex items-center justify-center border border-white/10"
+                style={{ background: accentColor ? `${accentColor}22` : "rgba(255,255,255,0.06)" }}>
+                <span className="text-2xl font-mono text-white/40">{artistInitial}</span>
+              </div>
+            )}
+          </div>
+          {/* Song info — shown as soon as Phase 1 data arrives */}
+          {data?.song_name && (
+            <>
+              <p className="text-lg font-semibold text-white/90 mb-1 text-center max-w-[260px] leading-snug">{data.song_name}</p>
+              {(profile?.display_name || data?.artist_name) && (
+                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/35 mb-6">
+                  {profile?.display_name || data.artist_name}
+                </p>
+              )}
+            </>
+          )}
+          {/* Beat bars */}
+          <div className="flex items-end gap-[3px] h-5">
+            {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
+              <div
+                key={i}
+                className="w-[3px] rounded-full"
+                style={{
+                  height: `${h * 100}%`,
+                  background: accentColor ?? "rgba(255,255,255,0.2)",
+                  opacity: accentColor ? 0.5 : 1,
+                  animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite`,
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -635,7 +660,7 @@ export default function ShareableLyricDance() {
             data={data}
             onSeekStart={() => {}}
             onSeekEnd={() => {}}
-            palette={Array.isArray(data.palette) ? data.palette : ["#ffffff", "#a855f7", "#ec4899"]}
+            palette={Array.isArray(data.palette) ? data.palette : ["#ffffff", "#ffffff", "#ffffff"]}
           />
         )}
 
