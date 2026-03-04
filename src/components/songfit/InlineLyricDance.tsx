@@ -17,6 +17,8 @@ interface Props {
   lyricDanceUrl: string;
   songTitle: string;
   artistName: string;
+  /** Pre-fetched dance data — skips the internal Supabase fetch when provided */
+  prefetchedData?: LyricDanceData | null;
 }
 
 type VisibilityListener = (visible: boolean) => void;
@@ -41,7 +43,7 @@ function getSharedVisibilityObserver() {
   return sharedVisibilityObserver;
 }
 
-function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName }: Props) {
+function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData }: Props) {
   const [data, setData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -56,8 +58,13 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   const initRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
 
-  // Fetch dance data
+  // Use prefetched data if available, otherwise fetch
   useEffect(() => {
+    if (prefetchedData) {
+      setData(prefetchedData);
+      setLoading(false);
+      return;
+    }
     if (!lyricDanceId) return;
     setLoading(true);
 
@@ -75,7 +82,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         setData(row as any as LyricDanceData);
         setLoading(false);
       });
-  }, [lyricDanceId]);
+  }, [lyricDanceId, prefetchedData]);
 
   // Visibility updates via shared observer
   useEffect(() => {
