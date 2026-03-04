@@ -17,6 +17,8 @@ interface Props {
   lyricDanceUrl: string;
   songTitle: string;
   artistName: string;
+  /** Pre-fetched dance data — skips the internal Supabase fetch when provided */
+  prefetchedData?: LyricDanceData | null;
 }
 
 type VisibilityListener = (visible: boolean) => void;
