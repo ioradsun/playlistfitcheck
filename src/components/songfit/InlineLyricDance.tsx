@@ -49,7 +49,7 @@ function getSharedVisibilityObserver() {
   return sharedVisibilityObserver;
 }
 
-function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData }: Props, ref: React.Ref<InlineLyricDanceHandle>) {
+function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal" }: Props, ref: React.Ref<InlineLyricDanceHandle>) {
   const [data, setData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
