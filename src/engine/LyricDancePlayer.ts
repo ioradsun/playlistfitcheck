@@ -970,8 +970,23 @@ export class LyricDancePlayer {
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
   private _boundsBuffer: ChunkBounds[] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
-  private _lastVisibleChunkIds = '';
+  private _lastVisibleChunkSetHash = 0;
+  private _lastVisibleChunkCount = 0;
+  private _lastVisibleFirstChunkId = "";
+  private _lastVisibleMidChunkId = "";
+  private _lastVisibleLastChunkId = "";
   private _solvedBounds: ChunkBounds[] = [];
+  private _collisionCellSize = 96;
+  private _collisionCols = 0;
+  private _collisionRows = 0;
+  private _collisionCellHeads = new Int32Array(0);
+  private _collisionCellStamp = new Uint32Array(0);
+  private _collisionNext = new Int32Array(0);
+  private _collisionCellX = new Int32Array(0);
+  private _collisionCellY = new Int32Array(0);
+  private _collisionStamp = 1;
+  private _pairsTestedLast = 0;
+  private _pairsCollidingLast = 0;
 
   // ═══ Compiled Scene (replaces timeline) ═══
   private compiledScene: CompiledScene | null = null;
@@ -1126,6 +1141,11 @@ export class LyricDancePlayer {
     tClockStart: null,
     tFullModeEnabled: null,
   };
+  private perfDebugEnabled = false;
+  private frameBudget = { dtAvgMs: 16.67, fpsAvg: 60, spikeFrames: 0, frames: 0 };
+  private _firstPaintMarked = false;
+  private _fontStabilized = false;
+  private _fontLayoutReflowPending = false;
 
   constructor(
     data: LyricDanceData,
@@ -1183,31 +1203,63 @@ export class LyricDancePlayer {
     });
   }
 
+  private markFirstPaintOnce(): void {
+    if (this._firstPaintMarked) return;
+    this._firstPaintMarked = true;
+    performance.mark("engine:firstPaint");
+  }
+
+  private kickFontStabilizationLoad(): void {
+    const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
+    if (!fontsApi || this._fontStabilized) return;
+    Promise.all([
+      fontsApi.load('400 16px Montserrat'),
+      fontsApi.load('700 16px Montserrat'),
+      fontsApi.load('800 16px Montserrat'),
+      fontsApi.load('900 16px Montserrat'),
+    ]).then(() => {
+      this._fontStabilized = true;
+      this._fontLayoutReflowPending = true;
+      performance.mark("engine:fontReady");
+    }).catch(() => {
+      // font preload best-effort
+    });
+  }
+
   // Compatibility with existing React shell
   async init(): Promise<void> {
+    this.perfDebugEnabled = Boolean((window as Window & { __LYRIC_DANCE_DEBUG_PERF?: boolean }).__LYRIC_DANCE_DEBUG_PERF);
+    this._firstPaintMarked = false;
+    this._fontLayoutReflowPending = false;
+    performance.clearMarks("engine:start");
+    performance.clearMarks("engine:firstPaint");
+    performance.clearMarks("engine:initDone");
+    performance.clearMarks("engine:fontReady");
+    performance.clearMeasures("engine:ttfp");
+    performance.mark("engine:start");
     this.perfMarks.tInitStart = performance.now();
 
     if (this.bootMode === "full") {
-      await Promise.all([
-        document.fonts.load('400 16px Montserrat'),
-        document.fonts.load('700 16px Montserrat'),
-        document.fonts.load('800 16px Montserrat'),
-        document.fonts.load('900 16px Montserrat'),
-      ]).catch(() => { /* font preload best-effort */ });
+      this.kickFontStabilizationLoad();
     }
 
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
     this.displayWidth = this.width;
     this.displayHeight = this.height;
     this.drawMinimalFirstFrame();
+    if (this._firstPaintMarked) {
+      performance.measure("engine:ttfp", "engine:start", "engine:firstPaint");
+    }
 
     if (this.bootMode === "minimal") {
+      performance.mark("engine:initDone");
       this.startPlaybackClock();
       this.scheduleFullModeUpgrade();
       return;
     }
 
     await this.prepareFullMode();
+    performance.mark("engine:initDone");
     this.startPlaybackClock();
   }
 
@@ -1346,13 +1398,19 @@ export class LyricDancePlayer {
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(0, 0, this.width, this.height);
 
-    const firstLine = this.data.lyrics?.[0]?.text?.trim() || 'Loading lyrics…';
+    const firstLine = this.data.lyrics?.[0]?.text?.trim() || 'Preparing typography…';
     this.ctx.fillStyle = isLight ? 'rgba(26,26,46,0.92)' : 'rgba(255,255,255,0.92)';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    this.ctx.font = '700 32px "Montserrat", sans-serif';
+    this.ctx.font = '700 30px system-ui, -apple-system, "Segoe UI", sans-serif';
     this.ctx.fillText(firstLine, this.width / 2, this.height / 2);
     this.perfMarks.tFirstFrameDrawn = this.perfMarks.tFirstFrameDrawn ?? performance.now();
+    this.markFirstPaintOnce();
+  }
+
+  setCollisionGridCellSize(nextSize: number): void {
+    if (!Number.isFinite(nextSize)) return;
+    this._collisionCellSize = Math.max(32, Math.min(512, Math.round(nextSize)));
   }
 
   getBootMetrics(): {
@@ -1809,6 +1867,16 @@ export class LyricDancePlayer {
     try {
       const deltaMs = Math.min(timestamp - (this.lastTimestamp || timestamp), 100);
       this.lastTimestamp = timestamp;
+      this.updateFrameBudget(deltaMs);
+      if (this._fontLayoutReflowPending) {
+        this._fontLayoutReflowPending = false;
+        this._textMetricsCache.clear();
+        this._lastVisibleChunkCount = -1;
+        this._lastVisibleChunkSetHash = 0;
+        this._lastVisibleFirstChunkId = "";
+        this._lastVisibleMidChunkId = "";
+        this._lastVisibleLastChunkId = "";
+      }
 
       // ALWAYS start frame with this exact sequence
       this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -1891,6 +1959,26 @@ export class LyricDancePlayer {
       }
     }
   };
+
+  private updateFrameBudget(deltaMs: number): void {
+    const alpha = 0.12;
+    this.frameBudget.dtAvgMs += (deltaMs - this.frameBudget.dtAvgMs) * alpha;
+    this.frameBudget.fpsAvg = 1000 / Math.max(1, this.frameBudget.dtAvgMs);
+    this.frameBudget.frames += 1;
+    if (deltaMs > 24) {
+      this.frameBudget.spikeFrames += 1;
+      if (this.perfDebugEnabled && this.frameBudget.spikeFrames % 30 === 0) {
+        console.warn('[LyricEngine] frame spike', {
+          dtMs: Number(deltaMs.toFixed(2)),
+          fpsAvg: Number(this.frameBudget.fpsAvg.toFixed(1)),
+          entities: this._boundsBuffer.length,
+          collisionPairsTested: this._pairsTestedLast,
+          collisionPairsHit: this._pairsCollidingLast,
+          drawCalls: this.debugState.drawCalls,
+        });
+      }
+    }
+  }
 
   private smoothAudioTime(rawTime: number): number {
     // On first call or after seek, snap immediately
@@ -2054,12 +2142,17 @@ export class LyricDancePlayer {
           console.log(`[fonts] injected Google Fonts link for "${fontName}"`);
         }
         // Wait for font to actually load (with timeout)
-        await Promise.race([
-          document.fonts.load(`700 48px "${fontName}"`),
-          new Promise<void>(resolve => setTimeout(resolve, 2000)),
-        ]);
-        const loaded = document.fonts.check(`700 48px "${fontName}"`);
-        console.log(`[fonts] "${fontName}" loaded: ${loaded}`);
+        const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
+        if (fontsApi) {
+          await Promise.race([
+            fontsApi.load(`700 48px "${fontName}"`),
+            new Promise<void>(resolve => setTimeout(resolve, 2000)),
+          ]);
+          const loaded = fontsApi.check(`700 48px "${fontName}"`);
+            if (loaded) {
+            this._fontStabilized = true;
+          }
+        }
       }
     } catch (e) {
       console.warn(`[fonts] Failed to load "${fontName}":`, e);
@@ -2486,15 +2579,28 @@ export class LyricDancePlayer {
     }
 
     // Build a signature of which chunks are visible — only re-solve when this changes
-    let visibleSig = '';
+    let visibleHash = 2166136261;
     for (let i = 0; i < bounds.length; i++) {
-      visibleSig += bounds[i].chunk.id;
-      visibleSig += ',';
+      const id = bounds[i].chunk.id;
+      for (let ci = 0; ci < id.length; ci += 1) {
+        visibleHash ^= id.charCodeAt(ci);
+        visibleHash = Math.imul(visibleHash, 16777619);
+      }
+      visibleHash ^= 44;
+      visibleHash = Math.imul(visibleHash, 16777619);
     }
+    const firstVisibleId = bounds.length > 0 ? bounds[0].chunk.id : "";
+    const midVisibleId = bounds.length > 2 ? bounds[(bounds.length / 2) | 0].chunk.id : firstVisibleId;
+    const lastVisibleId = bounds.length > 0 ? bounds[bounds.length - 1].chunk.id : "";
     // Compile-time solver in sceneCompiler handles static layout.
     // Runtime solver fixes dynamic overlaps from entry/exit offsets.
-    // Only re-solve when the visible word set changes (prevents jitter).
-    const setChanged = visibleSig !== this._lastVisibleChunkIds;
+    // Hash+count+sentinel ids protects against hash collision stale states.
+    const setChanged =
+      bounds.length !== this._lastVisibleChunkCount
+      || visibleHash !== this._lastVisibleChunkSetHash
+      || firstVisibleId !== this._lastVisibleFirstChunkId
+      || midVisibleId !== this._lastVisibleMidChunkId
+      || lastVisibleId !== this._lastVisibleLastChunkId;
     if (setChanged && bounds.length >= 2) {
       this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
     }
@@ -2508,7 +2614,11 @@ export class LyricDancePlayer {
       b.cx = Math.max(minX, Math.min(maxX, b.cx));
       b.cy = Math.max(minY, Math.min(maxY, b.cy));
     }
-    this._lastVisibleChunkIds = visibleSig;
+    this._lastVisibleChunkCount = bounds.length;
+    this._lastVisibleChunkSetHash = visibleHash;
+    this._lastVisibleFirstChunkId = firstVisibleId;
+    this._lastVisibleMidChunkId = midVisibleId;
+    this._lastVisibleLastChunkId = lastVisibleId;
     this._solvedBounds.length = bounds.length;
     for (let i = 0; i < bounds.length; i++) {
       if (!this._solvedBounds[i]) {
@@ -2828,7 +2938,40 @@ export class LyricDancePlayer {
     this.updateAndDrawDecomp(frameNowSec);
 
     this.drawWatermark();
+    if (this.perfDebugEnabled) this.drawPerfOverlay();
     this.debugState.drawCalls = drawCalls;
+  }
+
+  private drawPerfOverlay(): void {
+    const x = 16;
+    const y = 16;
+    const h = 66;
+    this.ctx.save();
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.fillStyle = 'rgba(0,0,0,0.58)';
+    this.ctx.fillRect(x, y, 300, h);
+    this.ctx.fillStyle = '#9df7c4';
+    this.ctx.font = '600 12px "Montserrat", sans-serif';
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'top';
+    this.ctx.fillText(`fps(avg): ${this.frameBudget.fpsAvg.toFixed(1)}  dt(avg): ${this.frameBudget.dtAvgMs.toFixed(2)}ms`, x + 8, y + 8);
+    this.ctx.fillText(`entities: ${this._boundsBuffer.length}  pairs: ${this._pairsTestedLast}  hits: ${this._pairsCollidingLast}`, x + 8, y + 26);
+    this.ctx.fillText(`drawCalls: ${this.debugState.drawCalls}  qualityTier: ${this._qualityTier}`, x + 8, y + 44);
+    this.ctx.restore();
+  }
+
+  private ensureCollisionBuffers(entityCount: number, cellCount: number): void {
+    if (this._collisionNext.length < entityCount) {
+      const nextSize = Math.max(entityCount, this._collisionNext.length * 2, 64);
+      this._collisionNext = new Int32Array(nextSize);
+      this._collisionCellX = new Int32Array(nextSize);
+      this._collisionCellY = new Int32Array(nextSize);
+    }
+    if (this._collisionCellHeads.length < cellCount) {
+      const headSize = Math.max(cellCount, this._collisionCellHeads.length * 2, 128);
+      this._collisionCellHeads = new Int32Array(headSize);
+      this._collisionCellStamp = new Uint32Array(headSize);
+    }
   }
 
   private drawWatermark(): void {
@@ -4496,9 +4639,25 @@ export class LyricDancePlayer {
     wallBottom: number,
   ): void {
     const MAX_ITERS = 4;
+    this._pairsTestedLast = 0;
+    this._pairsCollidingLast = 0;
+    const cellSize = this._collisionCellSize;
+    const cols = Math.max(1, Math.ceil((wallRight - wallLeft) / cellSize));
+    const rows = Math.max(1, Math.ceil((wallBottom - wallTop) / cellSize));
+    this._collisionCols = cols;
+    this._collisionRows = rows;
+    const cellCount = cols * rows;
+    this.ensureCollisionBuffers(bounds.length, cellCount);
+
     for (let iter = 0; iter < MAX_ITERS; iter += 1) {
       let hadCollision = false;
       let hadWallProjection = false;
+      this._collisionStamp = (this._collisionStamp + 1) >>> 0;
+      if (this._collisionStamp === 0) {
+        this._collisionCellStamp.fill(0);
+        this._collisionStamp = 1;
+      }
+      const stamp = this._collisionStamp;
 
       for (let i = 0; i < bounds.length; i += 1) {
         const b = bounds[i];
@@ -4513,39 +4672,81 @@ export class LyricDancePlayer {
           b.cy = nextY;
           hadWallProjection = true;
         }
+
+        const cellX = Math.max(0, Math.min(cols - 1, ((b.cx - wallLeft) / cellSize) | 0));
+        const cellY = Math.max(0, Math.min(rows - 1, ((b.cy - wallTop) / cellSize) | 0));
+        this._collisionCellX[i] = cellX;
+        this._collisionCellY[i] = cellY;
+        const cellIdx = (cellY * cols) + cellX;
+        if (this._collisionCellStamp[cellIdx] !== stamp) {
+          this._collisionCellStamp[cellIdx] = stamp;
+          this._collisionCellHeads[cellIdx] = -1;
+        }
+        this._collisionNext[i] = this._collisionCellHeads[cellIdx];
+        this._collisionCellHeads[cellIdx] = i;
       }
 
       for (let i = 0; i < bounds.length; i += 1) {
         const a = bounds[i];
-        for (let j = i + 1; j < bounds.length; j += 1) {
-          const b = bounds[j];
-          const dx = a.cx - b.cx;
-          const dy = a.cy - b.cy;
-          const overlapX = (a.halfW + b.halfW) - Math.abs(dx);
-          const overlapY = (a.halfH + b.halfH) - Math.abs(dy);
-          if (overlapX <= 0 || overlapY <= 0) continue;
-          hadCollision = true;
+        const baseCellX = this._collisionCellX[i];
+        const baseCellY = this._collisionCellY[i];
+        const radX = Math.min(cols - 1, Math.max(1, Math.ceil((a.halfW * 2) / cellSize)));
+        const radY = Math.min(rows - 1, Math.max(1, Math.ceil((a.halfH * 2) / cellSize)));
 
-          let moveA = 0.5;
-          let moveB = 0.5;
-          if (a.priority < b.priority) {
-            moveA = 0.2;
-            moveB = 0.8;
-          } else if (b.priority < a.priority) {
-            moveA = 0.8;
-            moveB = 0.2;
-          }
+        for (let oy = -radY; oy <= radY; oy += 1) {
+          const ny = baseCellY + oy;
+          if (ny < 0 || ny >= rows) continue;
+          for (let ox = -radX; ox <= radX; ox += 1) {
+            const nx = baseCellX + ox;
+            if (nx < 0 || nx >= cols) continue;
+            const cellIdx = ny * cols + nx;
+            if (this._collisionCellStamp[cellIdx] !== stamp) continue;
 
-          if (overlapX < overlapY) {
-            const sign = dx >= 0 ? 1 : -1;
-            const sep = overlapX;
-            a.cx += sign * sep * moveA;
-            b.cx -= sign * sep * moveB;
-          } else {
-            const sign = dy >= 0 ? 1 : -1;
-            const sep = overlapY;
-            a.cy += sign * sep * moveA;
-            b.cy -= sign * sep * moveB;
+            let j = this._collisionCellHeads[cellIdx];
+            while (j !== -1) {
+              if (j <= i) {
+                j = this._collisionNext[j];
+                continue;
+              }
+
+              this._pairsTestedLast += 1;
+              const b = bounds[j];
+              const dx = a.cx - b.cx;
+              const dy = a.cy - b.cy;
+              const overlapX = (a.halfW + b.halfW) - Math.abs(dx);
+              const overlapY = (a.halfH + b.halfH) - Math.abs(dy);
+              if (overlapX <= 0 || overlapY <= 0) {
+                j = this._collisionNext[j];
+                continue;
+              }
+
+              hadCollision = true;
+              this._pairsCollidingLast += 1;
+
+              let moveA = 0.5;
+              let moveB = 0.5;
+              if (a.priority < b.priority) {
+                moveA = 0.2;
+                moveB = 0.8;
+              } else if (b.priority < a.priority) {
+                moveA = 0.8;
+                moveB = 0.2;
+              }
+
+              if (overlapX < overlapY) {
+                const sign = dx >= 0 ? 1 : -1;
+                const sep = overlapX;
+                a.cx += sign * sep * moveA;
+                b.cx -= sign * sep * moveB;
+              } else {
+                const sign = dy >= 0 ? 1 : -1;
+                const sep = overlapY;
+                a.cy += sign * sep * moveA;
+                b.cy -= sign * sep * moveB;
+              }
+
+              j = this._collisionNext[j];
+            }
           }
         }
       }
@@ -4563,6 +4764,7 @@ export class LyricDancePlayer {
       b.cy = Math.max(minY, Math.min(maxY, b.cy));
     }
   }
+
 
 
   private drawBackground(frame: ScaledKeyframe): void {
