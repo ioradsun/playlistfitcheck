@@ -907,6 +907,8 @@ interface CommentChunk {
   direction: 1 | -1;  // 1 = left-to-right, -1 = right-to-left
   trailLength: number;
   fontSize: number;
+  // Cached gradient — re-used while comet position hasn't changed > 2px
+  _cachedTrailGrad?: { grad: CanvasGradient; x1: number; x2: number; alphaHex: string };
 }
 
 
@@ -1012,6 +1014,18 @@ export class LyricDancePlayer {
   // Runtime evaluator state
   private _evalChunkPool: Array<ScaledKeyframe['chunks'][number]> = [];
   private _activeGroupIndices: number[] = [];
+
+  // ═══ Multi-line layout cache — computed once per group, invalidated on font change ═══
+  private _mlLayoutCache = new Map<number, {
+    isMultiLine: boolean;
+    dx: number[];
+    dy: number[];
+    groupIdx: number;
+    resolvedFont: string;
+  }>();
+
+  // ═══ Watermark cache — invalidated on resize ═══
+  private _watermarkCache: { font: string; w: number; h: number; x: number; y: number } | null = null;
 
   // Beat-reactive state (evaluated incrementally)
   private _beatCursor = 0;
@@ -1170,7 +1184,7 @@ export class LyricDancePlayer {
     this.audio.loop = true;
     this.audio.muted = true;
     this.audio.preload = "auto";
-    this.bootMode = options?.bootMode ?? "full";
+    this.bootMode = options?.bootMode ?? "minimal";
 
     console.info(LYRIC_DANCE_PLAYER_BUILD_STAMP);
 
@@ -1238,9 +1252,9 @@ export class LyricDancePlayer {
     performance.mark("engine:start");
     this.perfMarks.tInitStart = performance.now();
 
-    if (this.bootMode === "full") {
-      this.kickFontStabilizationLoad();
-    }
+    // Always kick font stabilization in the background — no gate on bootMode.
+    // This ensures Montserrat / custom font is ready well before first vocal line.
+    this.kickFontStabilizationLoad();
 
     this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
     this.displayWidth = this.width;
@@ -1249,16 +1263,17 @@ export class LyricDancePlayer {
     if (this._firstPaintMarked) {
       performance.measure("engine:ttfp", "engine:start", "engine:firstPaint");
     }
+    performance.mark("engine:initDone");
 
     if (this.bootMode === "minimal") {
-      performance.mark("engine:initDone");
-      this.startPlaybackClock();
-      this.scheduleFullModeUpgrade();
+      // ── MINIMAL BOOT ──
+      // First frame is already painted. Do NOT start RAF or audio here.
+      // Everything waits for play() — user gesture, zero wasted CPU/network.
       return;
     }
 
+    // ── FULL BOOT (explicit opt-in only) ──
     await this.prepareFullMode();
-    performance.mark("engine:initDone");
     this.startPlaybackClock();
   }
 
@@ -1280,13 +1295,15 @@ export class LyricDancePlayer {
     };
 
     const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    // 100ms delay (was 400ms) — upgrade starts fast after first play().
+    // rIC timeout 800ms (was 1200ms) — don't wait too long on busy tabs.
     window.setTimeout(() => {
       if (idle) {
-        idle(run, { timeout: 1200 });
+        idle(run, { timeout: 800 });
       } else {
         run();
       }
-    }, 400);
+    }, 100);
   }
 
   private async prepareFullMode(): Promise<void> {
@@ -1462,6 +1479,14 @@ export class LyricDancePlayer {
     this.playing = true;
     this.audio.play().catch(() => {});
     this.startHealthMonitor();
+
+    // ── Lazy full-mode upgrade on first play() call ──
+    // In minimal boot, compileScene / fonts / images haven't loaded yet.
+    // Trigger the upgrade now that we have a user gesture (network + CPU fair game).
+    if (!this.fullModeEnabled && !this._bakePromise) {
+      this.scheduleFullModeUpgrade();
+    }
+
     // Restart the RAF loop — it stops when playing becomes false
     if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
     this.rafHandle = requestAnimationFrame(this.tick);
@@ -1486,6 +1511,7 @@ export class LyricDancePlayer {
     this._springOffset = 0;
     this._springVelocity = 0;
     this._timeInitialized = false;
+    this._mlLayoutCache.clear(); // group context changes on seek
     this.conductor?.resetCursor();
     this.cameraRig.reset();
     this._heroDecompBursts.length = 0;
@@ -1661,11 +1687,13 @@ export class LyricDancePlayer {
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
     this._preBlurredImages = []; // invalidate — will use runtime blur fallback until reload
+    this._watermarkCache = null; // invalidate — dimensions depend on this.width
+    this._mlLayoutCache.clear(); // invalidate — viewport scale changed
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._lastVisibleMidChunkId = '';
+    this._lastVisibleChunkIds = '';
     this.cameraRig.setViewport(w, h);
 
     // Keep compile-time layout in sync with meaningful viewport changes.
@@ -1700,6 +1728,7 @@ export class LyricDancePlayer {
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
     this._textMetricsCache.clear();
+    this._mlLayoutCache.clear(); // cinematic direction can change font/layout
     // ═══ V2: Recompute timing budgets with conductor ═══
     if (this.compiledScene?.phraseGroups?.length > 0 && this.conductor) {
       this.timingBudgets = computeTimingBudgets(this.compiledScene.phraseGroups as any, this.conductor);
@@ -1778,6 +1807,8 @@ export class LyricDancePlayer {
     this._grainCanvas = null;
     this._grainPool = [];
     this._textMetricsCache.clear();
+    this._mlLayoutCache.clear();
+    this._watermarkCache = null;
     revokeAnalyzerWorker();          // free blob URL (safe to call multiple times)
     this.ctx = null as any;
     this.canvas = null as any;
@@ -1866,6 +1897,7 @@ export class LyricDancePlayer {
       if (this._fontLayoutReflowPending) {
         this._fontLayoutReflowPending = false;
         this._textMetricsCache.clear();
+        this._mlLayoutCache.clear();
         this._lastVisibleChunkCount = -1;
         this._lastVisibleChunkSetHash = 0;
         this._lastVisibleFirstChunkId = "";
@@ -2254,8 +2286,14 @@ export class LyricDancePlayer {
 
     // Heavy debug state — only when debug panel is open
     if ((this as any)._debugPanelOpen) {
-      const visibleChunks = frame?.chunks.filter((c: any) => c.visible) ?? [];
-      ds.wordCount = visibleChunks.length;
+      // Allocation-free visible count — avoid frame.chunks.filter() creating a temp array
+      let visibleCount = 0;
+      if (frame) {
+        for (let _vi = 0; _vi < frame.chunks.length; _vi++) {
+          if ((frame.chunks[_vi] as any).visible) visibleCount++;
+        }
+      }
+      ds.wordCount = visibleCount;
       ds.particleCount = this.ambientParticleEngine?.getActiveCount() ?? 0;
 
       const currentChapter = section;
@@ -2303,10 +2341,14 @@ export class LyricDancePlayer {
       ds.wordDirectiveGhostDir = activeWordDirective?.ghostDirection ?? '—';
 
       const lines = this.payload?.lines ?? [];
-      const visibleLines = lines.filter((l: any) => clamped >= (l.start ?? 0) && clamped < (l.end ?? 0));
-      const activeLine = visibleLines.length === 0
-        ? null
-        : visibleLines.reduce((latest: any, l: any) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
+      // Allocation-free active line detection — avoid filter() + reduce() temp arrays
+      let activeLine: any = null;
+      for (let _li = 0; _li < lines.length; _li++) {
+        const _l = lines[_li];
+        if (clamped >= (_l.start ?? 0) && clamped < (_l.end ?? 0)) {
+          if (!activeLine || (_l.start ?? 0) > (activeLine.start ?? 0)) activeLine = _l;
+        }
+      }
       const storyboard = cd?.storyboard ?? [];
       const activeLineIdx = activeLine ? lines.indexOf(activeLine) : -1;
       const lineStory = activeLineIdx >= 0 ? (storyboard as any[])[activeLineIdx] : null;
@@ -2379,15 +2421,19 @@ export class LyricDancePlayer {
     this._updateQualityTier(performance.now());
     const qTier = this._qualityTier;
 
-    // Mood grade is computed inside drawChapterImage() which runs before text rendering.
-    // _activeMoodGrade is set by drawChapterImage (song-level grade).
+    // ── During minimal-boot upgrade gap: keep the first frame visible ──
+    // compiledScene is null until prepareFullMode() completes. Rather than
+    // showing a blank canvas, re-draw the gradient + first lyric placeholder
+    // every tick so the user always sees something meaningful.
+    if (!precomputedFrame) {
+      if (!this.fullModeEnabled) {
+        this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        this.drawMinimalFirstFrame();
+      }
+      return;
+    }
 
-    // ═══ V2: Use pre-computed frame (single evaluateFrame per tick) ═══
     const frame = precomputedFrame;
-    if (!frame) return;
-
-
-
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -2652,7 +2698,20 @@ export class LyricDancePlayer {
 
     if (shrinkOccurred) {
       this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
-      this._solvedBounds = bounds.map(b => ({ ...b }));
+      // In-place copy — avoid allocating N new objects on every shrink frame.
+      // Only fall back to map() when the array must grow (rare).
+      if (this._solvedBounds.length !== bounds.length) {
+        this._solvedBounds = bounds.map(b => ({ ...b }));
+      } else {
+        for (let si = 0; si < bounds.length; si++) {
+          this._solvedBounds[si].cx = bounds[si].cx;
+          this._solvedBounds[si].cy = bounds[si].cy;
+          this._solvedBounds[si].fontSize = bounds[si].fontSize;
+          this._solvedBounds[si].halfW = bounds[si].halfW;
+          this._solvedBounds[si].halfH = bounds[si].halfH;
+          this._solvedBounds[si].baseTextWidth = bounds[si].baseTextWidth;
+        }
+      }
     }
 
     this.ctx.save();
@@ -2976,19 +3035,34 @@ export class LyricDancePlayer {
     const padY = 8;
     const text = "♥ tools.FMLY";
     const fontSize = Math.max(12, this.width * 0.013);
+    const font = `400 ${fontSize}px "Space Mono", "Geist Mono", monospace`;
+
+    // Recompute only when font changes (i.e. on resize). measureText is a DOM
+    // layout call — calling it every frame burns ~0.1ms for no reason.
+    if (!this._watermarkCache || this._watermarkCache.font !== font) {
+      this.ctx.save();
+      this.ctx.font = font;
+      const tw = this.ctx.measureText(text).width;
+      this.ctx.restore();
+      const badgeW = tw + padX * 2;
+      const badgeH = fontSize + padY * 2;
+      this._watermarkCache = {
+        font,
+        w: badgeW,
+        h: badgeH,
+        x: this.width - badgeW - margin,
+        y: this.height - badgeH - margin,
+      };
+    }
+
+    const { w: badgeW, h: badgeH, x, y } = this._watermarkCache;
+    const radius = badgeH / 2;
 
     this.ctx.save();
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.ctx.font = `400 ${fontSize}px "Space Mono", "Geist Mono", monospace`;
+    this.ctx.font = font;
     (this.ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = "0.08em";
 
-    const textWidth = this.ctx.measureText(text).width;
-    const badgeW = textWidth + padX * 2;
-    const badgeH = fontSize + padY * 2;
-    const x = this.width - badgeW - margin;
-    const y = this.height - badgeH - margin;
-
-    const radius = badgeH / 2;
     this.ctx.beginPath();
     this.ctx.moveTo(x + radius, y);
     this.ctx.lineTo(x + badgeW - radius, y);
@@ -3088,9 +3162,20 @@ export class LyricDancePlayer {
 
       // Trail — thinner, more transparent
       const trailX = x - comment.direction * comment.trailLength;
-      const trail = this.ctx.createLinearGradient(trailX, y, x, y);
-      trail.addColorStop(0, 'transparent');
-      trail.addColorStop(1, `${comment.color}${Math.floor(alpha * 120).toString(16).padStart(2, '0')}`);
+      // Cache the gradient — re-create only when comet has moved > 2px or alpha changed.
+      // createLinearGradient allocates a GPU gradient object every call — avoid it.
+      const alphaHex = Math.floor(alpha * 120).toString(16).padStart(2, '0');
+      let trail: CanvasGradient;
+      const gc = comment._cachedTrailGrad;
+      if (!gc || Math.abs(gc.x1 - trailX) > 2 || Math.abs(gc.x2 - x) > 2 || gc.alphaHex !== alphaHex) {
+        const g = this.ctx.createLinearGradient(trailX, y, x, y);
+        g.addColorStop(0, 'transparent');
+        g.addColorStop(1, `${comment.color}${alphaHex}`);
+        comment._cachedTrailGrad = { grad: g, x1: trailX, x2: x, alphaHex };
+        trail = g;
+      } else {
+        trail = gc.grad;
+      }
       this.ctx.strokeStyle = trail;
       this.ctx.lineWidth = comment.fontSize * 0.15;
       this.ctx.lineCap = 'round';
@@ -3248,16 +3333,16 @@ export class LyricDancePlayer {
           this.ctx.arc(p.x, p.y, p.size * 0.5, 0, Math.PI * 2);
           this.ctx.fill();
         } else {
-          // Glow dots — radial gradient, no ctx.filter
+          // Glow dots — shadowBlur gives the same soft halo with zero allocation.
+          // createRadialGradient allocates a GPU gradient object per particle per frame.
           const r = p.size;
-          const grad = this.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2);
-          grad.addColorStop(0, p.color);
-          grad.addColorStop(0.4, p.color);
-          grad.addColorStop(1, 'transparent');
-          this.ctx.fillStyle = grad;
+          this.ctx.fillStyle = p.color;
+          this.ctx.shadowColor = p.color;
+          this.ctx.shadowBlur = r * 4;
           this.ctx.beginPath();
-          this.ctx.arc(p.x, p.y, r * 2, 0, Math.PI * 2);
+          this.ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
           this.ctx.fill();
+          this.ctx.shadowBlur = 0;
         }
       }
     }
@@ -3285,7 +3370,7 @@ export class LyricDancePlayer {
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._lastVisibleMidChunkId = '';
+    this._lastVisibleChunkIds = '';
   }
 
   private getCachedMetrics(text: string, font: string): { width: number; ascent: number; descent: number } {
@@ -4251,122 +4336,152 @@ export class LyricDancePlayer {
         }
       }
 
-      // ═══ MULTI-LINE LAYOUT ═══
-      // Triggers when: (a) any word has emphasis >= 2 or isHeroWord, OR
-      //                (b) phrase is too wide for a single line (> ~85% of 960px compile space)
-      // Scaled words get their own line. Non-scaled words wrap at max 3 per line.
-      const _mlDy: number[] = [];    // per-word Y offset in compile space
-      const _mlDx: number[] = [];    // per-word X re-centering offset
-      let _isMultiLine = false;
+      // ═══ MULTI-LINE LAYOUT — cached per group ═══
+      // Layout is stable for the lifetime of a group: font, word list, emphasis levels
+      // don't change mid-group. We compute it once and cache by groupIdx + resolvedFont.
+      // Invalidated on: font reflow, resize, seek, cinematic direction change.
       const MAX_WORDS_PER_LINE = 3;
       const MAX_LINE_WIDTH = 960 * 0.85; // 816px in compile space
+      let _isMultiLine = false;
+      let _mlDx: number[];
+      let _mlDy: number[];
 
-      if (lineRole === 'current' && !groupHasActiveSoloHero && group.words.length > 1) {
-        const mCtx = this._measureCtx;
-        const resolvedFontML = this.getResolvedFont();
+      const _resolvedFontForML = this.getResolvedFont();
+      const _mlCached = this._mlLayoutCache.get(groupIdx);
+      if (
+        _mlCached &&
+        _mlCached.groupIdx === groupIdx &&
+        _mlCached.resolvedFont === _resolvedFontForML
+      ) {
+        // Cache hit — reuse precomputed layout, zero measureText calls
+        _isMultiLine = _mlCached.isMultiLine;
+        _mlDx = _mlCached.dx;
+        _mlDy = _mlCached.dy;
+      } else {
+        // Cache miss — compute layout and store
+        _mlDx = [];
+        _mlDy = [];
 
-        // Measure total line width and detect scaled words in one pass
-        let hasScaledWord = false;
-        let totalLineW = 0;
-        for (let wi = 0; wi < group.words.length; wi++) {
-          const w = group.words[wi];
-          if (w.isHeroWord || (w.emphasisLevel ?? 0) >= 2) hasScaledWord = true;
-          const fs = Math.round(w.baseFontSize);
-          const fontStr = `${w.fontWeight ?? 700} ${fs}px ${w.fontFamily ?? resolvedFontML}`;
-          if (mCtx.font !== fontStr) mCtx.font = fontStr;
-          totalLineW += mCtx.measureText(w.text).width;
-          if (wi < group.words.length - 1) {
-            const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
-            if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-            totalLineW += mCtx.measureText(' ').width * 1.15;
-          }
-        }
+        if (lineRole === 'current' && !groupHasActiveSoloHero && group.words.length > 1) {
+          const mCtx = this._measureCtx;
+          const resolvedFontML = _resolvedFontForML;
 
-        // Trigger multi-line for scaled words OR wide lines
-        const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
-
-        if (needsWrap) {
-          _isMultiLine = true;
-          const normalFS = group.words[0].baseFontSize;
-          const normalLineH = normalFS * 1.3;
-
-          // Build line list: scaled words get solo lines, others wrap at max 3
-          type LineRange = { words: number[]; isHero: boolean; h: number };
-          const lines: LineRange[] = [];
-          let nonHeroBuf: number[] = [];
-
-          const flushNonHero = () => {
-            while (nonHeroBuf.length > 0) {
-              const take = nonHeroBuf.splice(0, MAX_WORDS_PER_LINE);
-              lines.push({ words: take, isHero: false, h: normalLineH });
-            }
-          };
-
+          // Measure total line width and detect scaled words in one pass
+          let hasScaledWord = false;
+          let totalLineW = 0;
           for (let wi = 0; wi < group.words.length; wi++) {
             const w = group.words[wi];
-            const isScaled = w.isHeroWord || (w.emphasisLevel ?? 0) >= 2;
-            if (isScaled) {
-              flushNonHero();
-              const heroEmp = w.emphasisLevel ?? 0;
-              const heroFS = w.baseFontSize;
-              const heroScale = 1.0 + Math.max(0, heroEmp - 1) * 0.25;
-              lines.push({ words: [wi], isHero: true, h: heroFS * heroScale * 1.4 });
-            } else {
-              nonHeroBuf.push(wi);
+            if (w.isHeroWord || (w.emphasisLevel ?? 0) >= 2) hasScaledWord = true;
+            const fs = Math.round(w.baseFontSize);
+            const fontStr = `${w.fontWeight ?? 700} ${fs}px ${w.fontFamily ?? resolvedFontML}`;
+            if (mCtx.font !== fontStr) mCtx.font = fontStr;
+            totalLineW += mCtx.measureText(w.text).width;
+            if (wi < group.words.length - 1) {
+              const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
+              if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
+              totalLineW += mCtx.measureText(' ').width * 1.15;
             }
           }
-          flushNonHero();
 
-          // Compute total height and center vertically around 0
-          const totalH = lines.reduce((sum, l) => sum + l.h, 0);
-          let yPos = -totalH / 2;
+          // Trigger multi-line for scaled words OR wide lines
+          const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
 
-          for (const line of lines) {
-            const lineY = yPos + line.h / 2;
+          if (needsWrap) {
+            _isMultiLine = true;
+            const normalFS = group.words[0].baseFontSize;
+            const normalLineH = normalFS * 1.3;
 
-            // Measure total line width to center it
-            let lineW = 0;
-            const wordWidths: number[] = [];
-            for (let i = 0; i < line.words.length; i++) {
-              const w = group.words[line.words[i]];
-              const fs = Math.round(w.baseFontSize);
-              const weight = w.fontWeight ?? 700;
-              const family = w.fontFamily ?? resolvedFontML;
-              const emp = w.emphasisLevel ?? 0;
-              const scale = line.isHero ? (1.0 + Math.max(0, emp - 1) * 0.25) : 1.0;
-              const fontStr = `${weight} ${fs}px ${family}`;
-              if (mCtx.font !== fontStr) mCtx.font = fontStr;
-              const ww = mCtx.measureText(w.text).width * scale;
-              wordWidths.push(ww);
-              lineW += ww;
-              if (i < line.words.length - 1) {
-                const spaceStr = `400 ${fs}px ${family}`;
-                if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-                lineW += mCtx.measureText(' ').width * 1.15;
+            // Build line list: scaled words get solo lines, others wrap at max 3
+            type LineRange = { words: number[]; isHero: boolean; h: number };
+            const mlLines: LineRange[] = [];
+            let nonHeroBuf: number[] = [];
+
+            const flushNonHero = () => {
+              while (nonHeroBuf.length > 0) {
+                const take = nonHeroBuf.splice(0, MAX_WORDS_PER_LINE);
+                mlLines.push({ words: take, isHero: false, h: normalLineH });
               }
-            }
+            };
 
-            // Position words left-to-right centered at x=480
-            const startX = 480 - lineW / 2;
-            let cursor = startX;
-            for (let i = 0; i < line.words.length; i++) {
-              const wi = line.words[i];
+            for (let wi = 0; wi < group.words.length; wi++) {
               const w = group.words[wi];
-              const wordCenterX = cursor + wordWidths[i] / 2;
-              _mlDx[wi] = wordCenterX - w.layoutX;
-              _mlDy[wi] = lineY;
-              cursor += wordWidths[i];
-              if (i < line.words.length - 1) {
-                const fs = Math.round(w.baseFontSize);
-                const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
-                if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-                cursor += mCtx.measureText(' ').width * 1.15;
+              const isScaled = w.isHeroWord || (w.emphasisLevel ?? 0) >= 2;
+              if (isScaled) {
+                flushNonHero();
+                const heroEmp = w.emphasisLevel ?? 0;
+                const heroFS = w.baseFontSize;
+                const heroScale = 1.0 + Math.max(0, heroEmp - 1) * 0.25;
+                mlLines.push({ words: [wi], isHero: true, h: heroFS * heroScale * 1.4 });
+              } else {
+                nonHeroBuf.push(wi);
               }
             }
+            flushNonHero();
 
-            yPos += line.h;
+            // Compute total height and center vertically around 0
+            let totalH = 0;
+            for (const l of mlLines) totalH += l.h;
+            let yPos = -totalH / 2;
+
+            for (const line of mlLines) {
+              const lineY = yPos + line.h / 2;
+
+              // Measure total line width to center it
+              let lineW = 0;
+              const wordWidths: number[] = [];
+              for (let i = 0; i < line.words.length; i++) {
+                const w = group.words[line.words[i]];
+                const fs = Math.round(w.baseFontSize);
+                const weight = w.fontWeight ?? 700;
+                const family = w.fontFamily ?? resolvedFontML;
+                const emp = w.emphasisLevel ?? 0;
+                const scale = line.isHero ? (1.0 + Math.max(0, emp - 1) * 0.25) : 1.0;
+                const fontStr = `${weight} ${fs}px ${family}`;
+                if (mCtx.font !== fontStr) mCtx.font = fontStr;
+                const ww = mCtx.measureText(w.text).width * scale;
+                wordWidths.push(ww);
+                lineW += ww;
+                if (i < line.words.length - 1) {
+                  const spaceStr = `400 ${fs}px ${family}`;
+                  if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
+                  lineW += mCtx.measureText(' ').width * 1.15;
+                }
+              }
+
+              // Position words left-to-right centered at x=480
+              const startX = 480 - lineW / 2;
+              let cursor = startX;
+              for (let i = 0; i < line.words.length; i++) {
+                const wi = line.words[i];
+                const w = group.words[wi];
+                const wordCenterX = cursor + wordWidths[i] / 2;
+                _mlDx[wi] = wordCenterX - w.layoutX;
+                _mlDy[wi] = lineY;
+                cursor += wordWidths[i];
+                if (i < line.words.length - 1) {
+                  const fs = Math.round(w.baseFontSize);
+                  const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
+                  if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
+                  cursor += mCtx.measureText(' ').width * 1.15;
+                }
+              }
+
+              yPos += line.h;
+            }
           }
         }
+
+        // Store computed layout — evict if cache grows beyond reasonable size
+        if (this._mlLayoutCache.size >= 32) {
+          this._mlLayoutCache.delete(this._mlLayoutCache.keys().next().value!);
+        }
+        this._mlLayoutCache.set(groupIdx, {
+          isMultiLine: _isMultiLine,
+          dx: _mlDx.slice(),
+          dy: _mlDy.slice(),
+          groupIdx,
+          resolvedFont: _resolvedFontForML,
+        });
       }
 
       for (let wi = 0; wi < group.words.length; wi++) {

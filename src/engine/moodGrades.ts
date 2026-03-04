@@ -222,13 +222,25 @@ export function getMoodGrade(visualMood: string | undefined | null): MoodGrade {
  * @param beatMod - 0-1 from beat spring (brightness pulse on beats)
  * @param blurOverride - optional blur px override (for rack focus)
  */
+// Module-level LRU cache for filter strings — max 12 entries.
+// beatMod changes every frame but is quantized to 0.02 steps so most frames
+// hit the same key rather than building a new string each call.
+const _gradeFilterCache = new Map<string, string>();
+
 export function buildGradeFilter(
   grade: MoodGrade,
   intensityMod: number = 0,
   beatMod: number = 0,
   blurOverride?: number,
 ): string {
-  const brightness = Math.min(0.90, grade.brightness + intensityMod * 0.15 + beatMod * grade.beatBrightnessGain);
+  // Quantize beatMod to 0.02 steps — eliminates cache misses from sub-visual jitter
+  const bModQ = Math.round(beatMod * 50) / 50;
+  const key = `${grade.brightness.toFixed(2)}-${grade.saturation.toFixed(2)}-${grade.contrast.toFixed(2)}-${grade.temperature.toFixed(2)}-${intensityMod.toFixed(2)}-${bModQ.toFixed(2)}-${blurOverride ?? 'x'}`;
+
+  const cached = _gradeFilterCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const brightness = Math.min(0.90, grade.brightness + intensityMod * 0.15 + bModQ * grade.beatBrightnessGain);
   const parts: string[] = [
     `brightness(${brightness.toFixed(2)})`,
     `saturate(${grade.saturation.toFixed(2)})`,
@@ -249,7 +261,14 @@ export function buildGradeFilter(
     parts.push(`blur(${blurPx.toFixed(1)}px)`);
   }
 
-  return parts.join(' ');
+  const result = parts.join(' ');
+
+  // Evict oldest entry when over limit (simple FIFO)
+  if (_gradeFilterCache.size >= 12) {
+    _gradeFilterCache.delete(_gradeFilterCache.keys().next().value!);
+  }
+  _gradeFilterCache.set(key, result);
+  return result;
 }
 
 /**
