@@ -643,7 +643,11 @@ export function LyricFitTab({
                     .eq("song_slug", songSlugVal)
                     .maybeSingle();
                   resolvedDanceId = newRow?.id ?? null;
-                  if (resolvedDanceId) console.log(`[Pipeline] Draft dance row created: ${resolvedDanceId}`);
+                  if (resolvedDanceId) {
+                    console.log(`[Pipeline] Draft dance row created: ${resolvedDanceId}`);
+                    setAutoDanceId(resolvedDanceId);
+                    setAutoDanceSlug({ artist: artistSlugVal, song: songSlugVal });
+                  }
                 }
 
                 if (!resolvedDanceId) {
