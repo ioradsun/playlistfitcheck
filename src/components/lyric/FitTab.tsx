@@ -63,6 +63,8 @@ interface Props {
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
   onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
+  autoDanceId?: string | null;
+  autoDanceSlug?: { artist: string; song: string } | null;
 }
 
 export function FitTab({
