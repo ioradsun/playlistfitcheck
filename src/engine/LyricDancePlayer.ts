@@ -1723,6 +1723,8 @@ export class LyricDancePlayer {
     }
   }
 
+  }
+
   /** Apply current effective DPR to canvas backing-store dimensions.
    *  Called by resize() and by _updateQualityTier when the DPR bucket changes.
    *  At tier ≥ 2 the effective DPR is capped at 1.5 (from the device DPR which may
@@ -2582,16 +2584,12 @@ export class LyricDancePlayer {
         snapCtx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
         snapCtx.clearRect(0, 0, this.width, this.height);
 
-        // Draw bg gradient
-        this.cameraRig.applyTransform(snapCtx, 'far');
+        // Draw bg gradient — no parallax needed for a static snapshot
         this._drawBackgroundToCtx(snapCtx, frame);
         const imgIdx = Math.min(frame.sectionIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
-        this._drawChapterImageToCtx(snapCtx, imgIdx, imgIdx, 0); // no crossfade in snapshot
-        this.cameraRig.resetTransform(snapCtx);
+        this._drawChapterImageToCtx(snapCtx, imgIdx, imgIdx, 0);
         if (qTier < 2) {
-          this.cameraRig.applyTransform(snapCtx, 'mid');
           this._drawSimLayerToCtx(snapCtx, frame);
-          this.cameraRig.resetTransform(snapCtx);
         }
         snapCtx.setTransform(1, 0, 0, 1, 0, 0);
 
@@ -2600,8 +2598,7 @@ export class LyricDancePlayer {
       }
 
       if (qTier === 0) {
-        // Full quality path — Ken Burns, crossfade, filter all live
-        this.cameraRig.applyTransform(this.ctx, 'far');
+        // Full quality path — Ken Burns, crossfade, filter all live. No parallax on bg.
         this.drawBackground(frame);
         const imgIdx = Math.min(frame.sectionIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
         const nextImgIdx = Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
@@ -2618,11 +2615,8 @@ export class LyricDancePlayer {
           }
         }
         this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
-        this.cameraRig.resetTransform(this.ctx);
-        this.cameraRig.applyTransform(this.ctx, 'mid');
         this.drawSimLayer(frame);
-        if (qTier < 2) this.drawLightingOverlay(frame, tSec);
-        this.cameraRig.resetTransform(this.ctx);
+        this.drawLightingOverlay(frame, tSec);
       }
     }
 
@@ -2636,9 +2630,7 @@ export class LyricDancePlayer {
     if (qTier < 3) {
       try { this.checkEmotionalEvents(tSec, songProgress); } catch (e) { console.error('[LyricEngine] emotional events crash:', e); }
       this.drawEmotionalEvents(tSec);
-      this.cameraRig.applyTransform(this.ctx, 'near');
       this.ambientParticleEngine?.draw(this.ctx, "far");
-      this.cameraRig.resetTransform(this.ctx);
     }
 
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
@@ -4257,8 +4249,8 @@ export class LyricDancePlayer {
     }
 
     // ═══ Beat visualizer strip — bottom ~25% of canvas, synced to actual beatmap ═══
-    // Always render — single drawImage is cheap
-    if (this._globalBeatVis) {
+    // Skip at tier 2+ (full-width drawImage with alpha composite)
+    if (this._globalBeatVis && this._qualityTier < 2) {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
