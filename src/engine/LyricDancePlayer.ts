@@ -1845,6 +1845,24 @@ export class LyricDancePlayer {
         // Climax = high energy + past halfway through the song
         const isClimax = (beatState?.energy ?? 0) > 0.65 && songProg > 0.50;
 
+        // ── Feed section + energy to camera ──
+        {
+          const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+          const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+          const secIdx = this._frameSectionIdx;
+          const currentSection = sections[secIdx];
+
+          if (currentSection) {
+            this.cameraRig.setSectionFromMood(
+              currentSection.atmosphere
+                ?? currentSection.mood
+                ?? currentSection.description
+                ?? ''
+            );
+          }
+          this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
+        }
+
         const focus: SubjectFocus = {
           x: this.width / 2,
           y: this.height / 2,
@@ -2534,8 +2552,8 @@ export class LyricDancePlayer {
     // entire matrix and would wipe any parent zoom.
     const subjectT = this.cameraRig.getSubjectTransform();
     const camZoom = subjectT.zoom;
-    const camShakeX = subjectT.shakeX;
-    const camShakeY = subjectT.shakeY;
+    const camShakeX = subjectT.shakeX + subjectT.offsetX;
+    const camShakeY = subjectT.shakeY + subjectT.offsetY;
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
@@ -3231,6 +3249,14 @@ export class LyricDancePlayer {
     const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
     const resolved = resolveCinematicState(direction, payload.lines as any[], durationSec);
     const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
+    const currentSection = chapters[sectionIndex];
+    this.cameraRig.setSectionFromMood(
+      currentSection?.atmosphere
+        ?? currentSection?.mood
+        ?? currentSection?.backgroundDirective
+        ?? currentSection?.title
+        ?? 'verse'
+    );
     const texture = this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, direction);
     this.resolvedState = {
       chapters,
