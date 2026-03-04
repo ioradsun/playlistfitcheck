@@ -5,7 +5,7 @@
  * v2: removed lyrics column, single-column report.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -233,6 +233,37 @@ export function FitTab({
     return () => onHeaderProject(null);
   }, [lyricData.title, audioFile.name, onHeaderProject, onBack]);
 // CinematicDirectionCard extracted to top-level — see below FitTab
+
+  // ── Auto-update canvas when transcript changes ────────────────────────
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const linesRef = useRef(lyricData?.lines);
+  const wordsRef = useRef(words);
+  linesRef.current = lyricData?.lines;
+  wordsRef.current = words;
+
+  // Hash lines+words identity for change detection
+  const transcriptKey = useMemo(() => {
+    if (!lyricData?.lines) return '';
+    const linesStr = lyricData.lines.map(l => `${l.text}|${l.start}|${l.end}`).join('\n');
+    const wordsStr = words ? words.map(w => `${w.word}|${w.start}|${w.end}`).join(',') : '';
+    return linesStr + '||' + wordsStr;
+  }, [lyricData?.lines, words]);
+
+  const initialTranscriptKeyRef = useRef(transcriptKey);
+
+  useEffect(() => {
+    // Skip the initial render — only react to actual changes
+    if (transcriptKey === initialTranscriptKeyRef.current) return;
+    if (!prefetchedDanceData || !dancePlayerRef.current) return;
+
+    if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+    reloadTimerRef.current = setTimeout(() => {
+      const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
+      dancePlayerRef.current?.reloadTranscript(mainLines, wordsRef.current ?? null);
+    }, 400);
+
+    return () => { if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current); };
+  }, [transcriptKey, prefetchedDanceData]);
 
 
   const handleDance = useCallback(async () => {

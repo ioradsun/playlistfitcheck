@@ -1,48 +1,31 @@
 
 
-## Plan: Fix Build Errors + Auto-Update Canvas on Transcript Changes
+# Download Export Modal — Implementation Complete
 
-### Part 1: Fix Build Errors (3 locations in LyricDancePlayer.ts)
+## Summary
 
-**Line 1696** — `this._lastVisibleChunkIds` → `this._lastVisibleMidChunkId`
-**Line 3373** — `this._lastVisibleChunkIds` → `this._lastVisibleMidChunkId`
-**Line 2401** — `visibleChunks[0]` → `this._solvedBounds[0]` (the variable `visibleChunks` doesn't exist in that scope; `_solvedBounds` is the array that holds visible chunk bounds)
+Replaced the "Republish" button in the FIT tab with a "Download" button that opens a full export modal (`FitExportModal`). Removed the download popover from the `ShareableLyricDance` page.
 
-### Part 2: Auto-Update Canvas When Transcript Changes
+## Files Changed
 
-The `InlineLyricDance` in the FIT tab currently only renders from the published dance data fetched from the database. When a user edits their transcript in the Lyrics tab, the embedded player doesn't reflect those changes until they republish.
+| File | Action |
+|------|--------|
+| `src/components/lyric/FitExportModal.tsx` | **Created** — Export modal with format/quality selection, progress states, download |
+| `src/components/songfit/InlineLyricDance.tsx` | **Edited** — Added `forwardRef` + `useImperativeHandle` to expose player |
+| `src/components/lyric/FitTab.tsx` | **Edited** — Replaced Republish with Download button + FitExportModal |
+| `src/pages/ShareableLyricDance.tsx` | **Edited** — Removed download popover, export state, and handleExport |
 
-**Approach**: Expose `load()` on the `InlineLyricDanceHandle` interface and add a `useEffect` in `FitTab` that calls it when `lyricData.lines` or `words` change.
+## Architecture
 
-**File changes:**
+- `InlineLyricDance` exposes `InlineLyricDanceHandle.getPlayer()` via `forwardRef`
+- `FitTab` holds a ref to `InlineLyricDance` and passes `getPlayer` to `FitExportModal`
+- `FitExportModal` uses `exportVideoAsMP4` from `src/engine/exportVideo.ts` (WebCodecs + mp4-muxer)
+- Export is video-only; audio notice is displayed in the modal
 
-1. **`src/engine/LyricDancePlayer.ts`** — Fix the 3 build errors (property name corrections).
+## Export Options
 
-2. **`src/components/songfit/InlineLyricDance.tsx`** — Extend the `InlineLyricDanceHandle` to also expose a `reloadTranscript(lines, words)` method that calls `player.load()` with the updated payload while preserving playback position.
-
-3. **`src/components/lyric/FitTab.tsx`** — Add a `useEffect` watching `lyricData.lines` and `words` that calls `dancePlayerRef.current.reloadTranscript(lines, words)` with a 400ms debounce to avoid recompiling on every keystroke.
-
-**Debounced reload logic (in FitTab):**
-```text
-useEffect:
-  if no player or no prefetched data → skip
-  debounce 400ms:
-    save currentTime
-    rebuild payload with new lines/words
-    call player.load(newPayload)
-    seek back to saved time
-```
-
-**reloadTranscript method (on InlineLyricDanceHandle):**
-```text
-reloadTranscript(lines, words):
-  player = getPlayer()
-  if !player → return
-  t = player.getCurrentTime()
-  merge new lines/words into existing payload
-  await player.load(mergedPayload, noop)
-  player.seek(t)
-```
-
-This keeps audio playing, images cached, and position preserved — exactly the pattern described.
-
+| Quality | 9:16 | 16:9 | 1:1 |
+|---------|------|------|-----|
+| 1080p | 1080×1920 | 1920×1080 | 1080×1080 |
+| 720p | 720×1280 | 1280×720 | 720×720 |
+| 480p | 480×854 | 854×480 | 480×480 |

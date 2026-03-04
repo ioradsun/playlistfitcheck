@@ -1693,7 +1693,7 @@ export class LyricDancePlayer {
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._lastVisibleChunkIds = '';
+    this._lastVisibleMidChunkId = '';
     this.cameraRig.setViewport(w, h);
 
     // Keep compile-time layout in sync with meaningful viewport changes.
@@ -2398,7 +2398,7 @@ export class LyricDancePlayer {
       ds.scale = frame?.cameraZoom ?? 1;
       ds.lineColor = this.getResolvedPalette()?.[2] ?? '#ffffff';
       ds.effectKey = activeLine?.tag ?? '—';
-      const firstVisible = visibleChunks[0];
+      const firstVisible = this._solvedBounds[0] as any;
       ds.entryProgress = firstVisible?.entryProgress ?? 0;
       ds.exitProgress = firstVisible?.exitProgress ?? 0;
     } // end debug panel guard
@@ -3370,7 +3370,7 @@ export class LyricDancePlayer {
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._lastVisibleChunkIds = '';
+    this._lastVisibleMidChunkId = '';
   }
 
   private getCachedMetrics(text: string, font: string): { width: number; ascent: number; descent: number } {

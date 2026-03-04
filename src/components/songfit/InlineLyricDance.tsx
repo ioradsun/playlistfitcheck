@@ -14,6 +14,7 @@ const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_ur
 
 export interface InlineLyricDanceHandle {
   getPlayer: () => LyricDancePlayer | null;
+  reloadTranscript: (lines: any[], words: any[] | null) => Promise<void>;
 }
 
 interface Props {
@@ -67,7 +68,18 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   // Expose player to parent via ref
   useImperativeHandle(ref, () => ({
     getPlayer: () => playerRef.current,
-  }), []);
+    reloadTranscript: async (lines: any[], newWords: any[] | null) => {
+      const player = playerRef.current;
+      if (!player || !data) return;
+      const t = player.audio.currentTime;
+      // Update the data object in-place so internal buildScenePayload uses new values
+      (player as any).data.lyrics = lines;
+      if (newWords) (player as any).data.words = newWords;
+      const payload = (player as any).buildScenePayload();
+      await player.load(payload, () => {});
+      player.seek(t);
+    },
+  }), [data]);
 
   // Use prefetched data if available, otherwise fetch
   useEffect(() => {
