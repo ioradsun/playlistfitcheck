@@ -156,6 +156,86 @@ export function FitTab({
       });
   }, [user, lyricData, computeLyricsHash]);
 
+  // Check for existing CrowdFit post when we know the dance ID
+  useEffect(() => {
+    if (!publishedDanceId || !user) { setCrowdfitPostId(null); return; }
+    supabase
+      .from("songfit_posts" as any)
+      .select("id, status")
+      .eq("user_id", user.id)
+      .eq("lyric_dance_id", publishedDanceId)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data && data.status !== "removed") {
+          setCrowdfitPostId(data.id);
+        } else {
+          setCrowdfitPostId(null);
+        }
+      });
+  }, [publishedDanceId, user]);
+
+  // CrowdFit toggle handler
+  const handleCrowdfitToggle = useCallback(async () => {
+    if (!user || !publishedDanceId || !publishedUrl || crowdfitToggling) return;
+    setCrowdfitToggling(true);
+    try {
+      if (crowdfitPostId) {
+        // Remove from CrowdFit
+        await supabase
+          .from("songfit_posts" as any)
+          .update({ status: "removed" })
+          .eq("id", crowdfitPostId);
+        setCrowdfitPostId(null);
+        toast.success("Removed from CrowdFit");
+      } else {
+        // Check for existing removed post to reactivate
+        const { data: existing }: any = await supabase
+          .from("songfit_posts" as any)
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("lyric_dance_id", publishedDanceId)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase
+            .from("songfit_posts" as any)
+            .update({ status: "live" })
+            .eq("id", existing.id);
+          setCrowdfitPostId(existing.id);
+        } else {
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 21);
+          const { data: inserted }: any = await supabase
+            .from("songfit_posts" as any)
+            .insert({
+              user_id: user.id,
+              track_title: lyricData.title || "Untitled",
+              caption: "",
+              lyric_dance_url: publishedUrl,
+              lyric_dance_id: publishedDanceId,
+              spotify_track_url: null,
+              spotify_track_id: null,
+              album_art_url: null,
+              tags_json: [],
+              track_artists_json: [],
+              status: "live",
+              submitted_at: new Date().toISOString(),
+              expires_at: expiresAt.toISOString(),
+            })
+            .select("id")
+            .single();
+          if (inserted) setCrowdfitPostId(inserted.id);
+        }
+        window.dispatchEvent(new Event("songfit:dance-published"));
+        toast.success("Published to CrowdFit!");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "CrowdFit toggle failed");
+    } finally {
+      setCrowdfitToggling(false);
+    }
+  }, [user, publishedDanceId, publishedUrl, crowdfitPostId, crowdfitToggling, lyricData.title]);
+
   // ── Audio playback + waveform ─────────────────────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
