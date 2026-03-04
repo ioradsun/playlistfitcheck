@@ -2693,11 +2693,12 @@ export class LyricDancePlayer {
 
           // Bloom pulse: amplified glow synced to beat
           const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
-          const bloomGlow = baseGlow + beatPulse * 0.5;
+          const bloomGlow = baseGlow + beatPulse * 0.35;
           // ═══ Adaptive quality: reduce shadow blur at lower tiers ═══
-          const blurCap = this._qualityTier === 0 ? 14 : this._qualityTier === 1 ? 4 : 0;
-          this.ctx.shadowColor = '#ffffff';
-          this.ctx.shadowBlur = Math.min(blurCap, bloomGlow * 16);
+          const blurCap = this._qualityTier === 0 ? 8 : this._qualityTier === 1 ? 3 : 0;
+          const glowColor = chunk.color ?? '#ffffff';
+          this.ctx.shadowColor = glowColor;
+          this.ctx.shadowBlur = Math.min(blurCap, bloomGlow * 12);
 
           // Depth stack: 3 shadow layers behind the hero word
           // Skip at tier 2+ (each layer = setTransform + fillText — very expensive)
@@ -2706,11 +2707,11 @@ export class LyricDancePlayer {
             const layerSpacing = safeFontSize * 0.025;
             this.ctx.save();
             for (let layer = depthLayers; layer >= 1; layer--) {
-              const layerAlpha = drawAlpha * (0.12 / layer);
+              const layerAlpha = drawAlpha * (0.10 / layer);
               const offsetY = layer * layerSpacing;
               this.ctx.globalAlpha = layerAlpha;
               this.ctx.shadowBlur = 0;
-              this.ctx.fillStyle = 'rgba(255,255,255,0.15)';
+              this.ctx.fillStyle = glowColor;
               const [da, db, dc, dd, de, df] = this.computeTransformMatrix(
                 camShakeX + camCX + (heroDrawX - camCX) * camZoom,
                 camShakeY + camCY + ((heroDrawY + offsetY) - camCY) * camZoom,
@@ -2726,13 +2727,13 @@ export class LyricDancePlayer {
           }
           this.ctx.globalAlpha = drawAlpha;
           this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
-          this.ctx.shadowColor = '#ffffff';
-          this.ctx.shadowBlur = Math.min(blurCap, bloomGlow * 16);
+          this.ctx.shadowColor = chunk.color ?? '#ffffff';
+          this.ctx.shadowBlur = Math.min(blurCap, bloomGlow * 12);
           if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         } else if (chunk.glow > 0) {
-          const glowCap = this._qualityTier === 0 ? 14 : this._qualityTier === 1 ? 4 : 0;
-          this.ctx.shadowColor = '#ffffff';
-          this.ctx.shadowBlur = Math.min(glowCap, chunk.glow * 16);
+          const glowCap = this._qualityTier === 0 ? 8 : this._qualityTier === 1 ? 3 : 0;
+          this.ctx.shadowColor = chunk.color ?? '#ffffff';
+          this.ctx.shadowBlur = Math.min(glowCap, chunk.glow * 12);
         }
 
         const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01 && this._qualityTier < 3;
