@@ -63,6 +63,8 @@ interface Props {
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
   onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
+  autoDanceId?: string | null;
+  autoDanceSlug?: { artist: string; song: string } | null;
 }
 
 export function FitTab({
@@ -85,6 +87,8 @@ export function FitTab({
   onHeaderProject,
   onBack,
   onImageGenerationStatusChange,
+  autoDanceId,
+  autoDanceSlug,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
@@ -132,6 +136,17 @@ export function FitTab({
         }
       });
   }, [user, lyricData, computeLyricsHash]);
+
+  // Pick up auto-created dance from pipeline
+  useEffect(() => {
+    if (autoDanceId && autoDanceSlug && !publishedDanceId) {
+      setPublishedDanceId(autoDanceId);
+      setPublishedUrl(`/${autoDanceSlug.artist}/${autoDanceSlug.song}/lyric-dance`);
+      if (lyricData?.lines) {
+        setPublishedLyricsHash(computeLyricsHash(lyricData.lines));
+      }
+    }
+  }, [autoDanceId, autoDanceSlug, publishedDanceId, lyricData, computeLyricsHash]);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);

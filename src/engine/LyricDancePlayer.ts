@@ -3300,8 +3300,6 @@ export class LyricDancePlayer {
       }
     }
 
-    fontScale = Math.min(fontScale, sx);
-
     this._viewportSx = sx;
     this._viewportSy = sy;
     this._viewportFontScale = fontScale;
