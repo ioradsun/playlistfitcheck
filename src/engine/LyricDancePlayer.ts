@@ -4945,7 +4945,7 @@ export class LyricDancePlayer {
         ci++;
       }
     }
-    chunks.length = ci;
+    this.chunks.length = ci;
 
     if (!this._evalFrame) {
       this._evalFrame = {
