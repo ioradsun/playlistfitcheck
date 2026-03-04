@@ -1576,6 +1576,7 @@ export class LyricDancePlayer {
   }
 
   teardownExportResolution(): void {
+    this._exportMode = false;
     this.setResolution(this.displayWidth, this.displayHeight);
     // Restore normal GPU-backed context
     this.ctx = this.canvas.getContext('2d')!;
