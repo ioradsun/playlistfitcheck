@@ -1740,6 +1740,33 @@ export class LyricDancePlayer {
     this.buildEmotionalEvents();
   }
 
+  /**
+   * Hot-patch lyrics/words without a full load() — skips images, sims, bg cache.
+   * Only recompiles the scene and rebuilds chunk/timing caches.
+   */
+  updateTranscript(lines: LyricLine[], words?: Array<{ word: string; start: number; end: number }> | null): void {
+    this.data = { ...this.data, lyrics: lines };
+    if (words !== undefined) this.data = { ...this.data, words: words ?? undefined };
+    if (!this.payload) return;
+    const t = this.audio.currentTime;
+    const payload = this.buildScenePayload();
+    this.payload = payload;
+    this.songStartSec = payload.songStart;
+    this.songEndSec = payload.songEnd;
+    this.compiledScene = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
+    this._markCompiledViewport(this.width || 960, this.height || 540);
+    this._buildChunkCacheFromScene(this.compiledScene);
+    this._textMetricsCache.clear();
+    this._mlLayoutCache.clear();
+    if (this.compiledScene?.phraseGroups?.length > 0 && this.conductor) {
+      this.timingBudgets = computeTimingBudgets(this.compiledScene.phraseGroups as any, this.conductor);
+      this._buildWordBudgetMap();
+    }
+    this._updateViewportScale();
+    this.audio.currentTime = t;
+    console.info('[LyricDancePlayer] updateTranscript: recompiled', lines.length, 'lines');
+  }
+
   updateSectionImages(urls: string[]): void {
     
     this.data = { ...this.data, section_images: urls };
