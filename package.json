@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:pipeline-guards": "bash scripts/check-render-pipeline-guards.sh"
+    "check:pipeline-guards": "bash scripts/check-render-pipeline-guards.sh",
+    "perf:collision-harness": "node scripts/collision-perf-harness.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
