@@ -627,6 +627,7 @@ export function FitTab({
         <div className="space-y-3">
           <div className="rounded-xl overflow-hidden">
             <InlineLyricDance
+              ref={dancePlayerRef}
               lyricDanceId={publishedDanceId}
               lyricDanceUrl={publishedUrl}
               songTitle={lyricData.title || "Untitled"}
@@ -645,18 +646,20 @@ export function FitTab({
               Watch Dance
             </a>
             <button
-              onClick={handleDance}
-              disabled={republishDisabled}
-              className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              onClick={() => setShowExportModal(true)}
+              className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
             >
-              {publishing ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>{publishStatus || "Republishing…"}</span>
-                </span>
-              ) : "Republish"}
+              <Download size={14} />
+              Download
             </button>
           </div>
+          <FitExportModal
+            isOpen={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            getPlayer={dancePlayerRef.current ? () => dancePlayerRef.current?.getPlayer() ?? null : null}
+            songTitle={lyricData.title || "Untitled"}
+            artistName=""
+          />
         </div>
       ) : hasRealAudio ? (
         <div className="glass-card rounded-xl p-3">
