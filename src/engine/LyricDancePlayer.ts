@@ -977,6 +977,7 @@ export class LyricDancePlayer {
   private chunks: Map<string, ChunkState> = new Map();
   private _lastFont = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
+  private _outChunks: ScaledKeyframe['chunks'] = [];
   private _boundsBuffer: ChunkBounds[] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
   private _lastVisibleChunkSetHash = 0;
@@ -2690,7 +2691,12 @@ export class LyricDancePlayer {
     let drawCalls = 0;
     const sortBuf = this._sortBuffer;
     // PERF: skip sort when visible set hasn't changed — hash already computed for collision solver above
-    const sortHash = visibleHash; // reuse the FNV hash computed for collision detection
+    let sortHash = 2166136261;
+    for (let si = 0; si < frame.chunks.length; si += 1) {
+      const sid = frame.chunks[si].id;
+      for (let sc = 0; sc < sid.length; sc += 1) { sortHash ^= sid.charCodeAt(sc); sortHash = Math.imul(sortHash, 16777619); }
+      sortHash ^= 44; sortHash = Math.imul(sortHash, 16777619);
+    }
     if (sortHash !== this._lastSortHash || sortBuf.length !== frame.chunks.length) {
       this._lastSortHash = sortHash;
       sortBuf.length = 0;
@@ -4488,6 +4494,8 @@ export class LyricDancePlayer {
     }
     const _hasBeatResponses = _beatResponses.length > 0;
     let ci = 0;
+    if (!this._outChunks) this._outChunks = [] as ScaledKeyframe['chunks'];
+    const _outChunks = this._outChunks;
     const bpm = scene.bpm;
 
     for (let ai = 0; ai < activeGroups.length; ai++) {
@@ -4819,10 +4827,10 @@ export class LyricDancePlayer {
         // ═══ BEAT-GRID GLOW, SCALE, NUDGE via SubsystemResponse ═══
         // Use the pre-computed per-emphasis-level response so every word dances
         // to the beat proportional to its semantic weight.
-        const emp = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
+        const empBeat = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
         // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
         const beatResp = _hasBeatResponses
-          ? (isHeroWord ? _beatResponsesHero[emp] : _beatResponses[emp])
+          ? (isHeroWord ? _beatResponsesHero[empBeat] : _beatResponses[empBeat])
           : null;
 
         let wordGlow = 0;
@@ -4852,8 +4860,8 @@ export class LyricDancePlayer {
           }
         }
 
-        const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
-        chunks[ci] = chunk;
+        const chunk = _outChunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
+        _outChunks[ci] = chunk;
         chunk.id = word.id;
         chunk.text = word.text;
 
@@ -4940,7 +4948,7 @@ export class LyricDancePlayer {
         ci++;
       }
     }
-    chunks.length = ci;
+    _outChunks.length = ci;
 
     if (!this._evalFrame) {
       this._evalFrame = {
@@ -4961,7 +4969,7 @@ export class LyricDancePlayer {
     frame.bgBlend = 0;
     (frame as any).beatPulse = beatPulse;
     frame.atmosphere = (chapter?.atmosphere ?? 'cinematic') as any;
-    frame.chunks = chunks;
+    frame.chunks = _outChunks;
     frame.particles = [];
     return frame;
   }
