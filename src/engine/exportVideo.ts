@@ -65,6 +65,11 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
   const keyFrameInterval = Math.round(fps * 2); // every 2s
   const effectiveBitrate = bitrate ?? defaultBitrate(width, height, fps);
 
+  // ── Prime render pipeline (images/Ken Burns/sims) before resize/export ──
+  if (typeof player.prepareExportFramePipeline === 'function') {
+    await player.prepareExportFramePipeline();
+  }
+
   // ── Resize player once ──
   player.setupExportResolution(width, height);
 

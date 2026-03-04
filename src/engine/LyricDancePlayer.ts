@@ -4027,7 +4027,7 @@ export class LyricDancePlayer {
       const audioDur = this.audio?.duration || 1;
       const chapterDur = audioDur / chapterCount;
       const chapterStart = chapterIdx * chapterDur;
-      const localT = Math.max(0, Math.min(1, ((this.audio?.currentTime ?? 0) - chapterStart) / chapterDur));
+      const localT = Math.max(0, Math.min(1, (this.currentTSec - chapterStart) / chapterDur));
       const eased = localT * localT * (3 - 2 * localT);
       if (kb) {
         const zoom = kb.zoomStart + (kb.zoomEnd - kb.zoomStart) * eased;
