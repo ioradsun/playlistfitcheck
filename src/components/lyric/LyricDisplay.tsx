@@ -932,7 +932,7 @@ export function LyricDisplay({
       if (songSlug) {
         await supabase
           .from("shareable_lyric_dances" as any)
-          .update({ lyrics: publishedLines } as any)
+          .update({ lyrics: publishedLines, words: null } as any)
           .eq("user_id", user.id)
           .eq("song_slug", songSlug);
       }
