@@ -88,22 +88,22 @@ export type SectionRigName = 'verse' | 'chorus' | 'bridge' | 'drop' | 'intro' | 
 // ─── Defaults ────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: CameraConfig = {
-  // Beat dance — visible on every beat
-  beatBounceY: 6,
-  beatBounceX: 3,
-  beatZoom: 0.02,
-  bassMultiplier: 2.0,
+  // Beat dance — every beat should be clearly visible
+  beatBounceY: 10,
+  beatBounceX: 5,
+  beatZoom: 0.025,
+  bassMultiplier: 1.8,
   transientMultiplier: 1.5,
   swaySmoothing: 2.0,
   // Drop detection
   dropEnergyThreshold: 0.25,
   dropMinEnergy: 0.55,
-  dropShakePx: 4,
-  dropIntensity: 2.2,
+  dropShakePx: 5,
+  dropIntensity: 2.0,
   dropDecayRate: 1.5,
   // Hero punch
   heroZoom: 0.10,
-  heroShakePx: 4,
+  heroShakePx: 5,
   heroDurationFrames: 3,
   heroTaperMs: 150,
   heroStillMs: 120,
@@ -276,9 +276,12 @@ export class CameraRig {
     // 3. BEAT DANCE — every beat, camera moves
     // ═══════════════════════════════════════════════════════════
 
-    if (isNewBeat && energy > 0.05) {
-      const strength = beatState!.strength * Math.max(hitStrength, 0.3);
-      const amp = strength * energy * dropMult;
+    if (isNewBeat && energy > 0.02) {
+      // Amplitude: additive blend, NOT triple-multiply.
+      // Floor of 0.4 so every beat is visible. Energy and strength boost it further.
+      const base = 0.4 + energy * 0.4 + beatState!.strength * 0.2;
+      const hitBoost = hitStrength > 0.3 ? 1.0 + hitStrength * 0.5 : 1.0;
+      const amp = base * hitBoost * dropMult;
 
       if (hitType === 'bass') {
         // Bass → downward punch
@@ -289,17 +292,17 @@ export class CameraRig {
         // Transient → lateral snap
         const dir = (beatState!.beatIndex % 2 === 0) ? 1 : -1;
         this.beatImpulseX = cfg.beatBounceX * amp * cfg.transientMultiplier * dir;
-        this.beatImpulseY = cfg.beatBounceY * amp * 0.3;
-        this.beatImpulseRot = dir * 0.003 * amp;
+        this.beatImpulseY = cfg.beatBounceY * amp * 0.4;
+        this.beatImpulseRot = dir * 0.005 * amp;
       } else {
-        // Generic → balanced bounce
+        // Generic → alternating bounce
         const dir = (beatState!.beatIndex % 2 === 0) ? 1 : -1;
-        this.beatImpulseY = cfg.beatBounceY * amp * 0.7;
-        this.beatImpulseX = cfg.beatBounceX * amp * 0.4 * dir;
+        this.beatImpulseY = cfg.beatBounceY * amp * 0.8;
+        this.beatImpulseX = cfg.beatBounceX * amp * 0.5 * dir;
         this.beatImpulseRot = 0;
       }
 
-      // Zoom on every beat
+      // Zoom on every beat — downbeats harder
       const downbeatMult = beatState!.isDownbeat ? 1.5 : 1.0;
       this.beatImpulseZoom = cfg.beatZoom * amp * downbeatMult;
     }
