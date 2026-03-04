@@ -114,21 +114,23 @@ interface BreathTarget {
   driftY: number;     // target drift direction −1 to +1
   rotation: number;   // target rotation in radians
   speed: number;      // multiplier on breath transition speed (1.0 = normal)
+  intensity: number;  // multiplier on pulse + punch amplitude (1.0 = normal)
+  shake: number;      // continuous shake amplitude in px (0 = none)
 }
 
 const SECTION_BREATH: Record<SectionRigName, BreathTarget> = {
   // Verses push in — intimacy, background slides left
-  verse:  { zoom: +0.04,  driftX: -0.6, driftY: -0.2,  rotation: 0,      speed: 1.0 },
-  // Choruses pull out — expansive, wide, centered
-  chorus: { zoom: -0.03,  driftX:  0.0, driftY:  0.0,  rotation: 0,      speed: 1.5 },
+  verse:  { zoom: +0.04,  driftX: -0.6, driftY: -0.2,  rotation: 0,      speed: 1.0, intensity: 0.8,  shake: 0   },
+  // Choruses pull out — expansive, wide, centered, slightly boosted
+  chorus: { zoom: -0.03,  driftX:  0.0, driftY:  0.0,  rotation: 0,      speed: 1.5, intensity: 1.2,  shake: 0   },
   // Bridges hold still — suspended, slow tilt (~0.7°)
-  bridge: { zoom:  0.0,   driftX:  0.0, driftY:  0.0,  rotation: 0.012,  speed: 0.6 },
-  // Drops snap forward fast — aggressive push-in
-  drop:   { zoom: +0.06,  driftX:  0.0, driftY: -0.5,  rotation: 0,      speed: 3.0 },
+  bridge: { zoom:  0.0,   driftX:  0.0, driftY:  0.0,  rotation: 0.012,  speed: 0.6, intensity: 0.5,  shake: 0   },
+  // Drops — aggressive push-in, high intensity, continuous shake
+  drop:   { zoom: +0.06,  driftX:  0.0, driftY: -0.5,  rotation: 0,      speed: 3.0, intensity: 1.8,  shake: 3.0 },
   // Intro: gentle drift in from right
-  intro:  { zoom: +0.03,  driftX:  0.5, driftY:  0.0,  rotation: 0,      speed: 0.7 },
+  intro:  { zoom: +0.03,  driftX:  0.5, driftY:  0.0,  rotation: 0,      speed: 0.7, intensity: 0.6,  shake: 0   },
   // Outro: slow pull-back with slight tilt
-  outro:  { zoom: -0.05,  driftX:  0.0, driftY:  0.2,  rotation: 0.005,  speed: 0.5 },
+  outro:  { zoom: -0.05,  driftX:  0.0, driftY:  0.2,  rotation: 0.005,  speed: 0.5, intensity: 0.4,  shake: 0   },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -168,6 +170,8 @@ export class CameraRig {
   private breathDriftY = 0;        // current drift px
   private breathRotation = 0;      // current rotation rad
   private breathBrightness = 0.5;  // modulates breath amplitude
+  private breathIntensity = 1.0;   // smoothed section intensity multiplier
+  private breathShake = 0;         // smoothed continuous shake amplitude
 
   // ═══ PULSE state ═══
   private bpm = 120;
@@ -296,6 +300,9 @@ export class CameraRig {
         transitionRate,
         dtSec,
       );
+      // Smooth section intensity + continuous shake
+      this.breathIntensity = expLerp(this.breathIntensity, target.intensity, transitionRate * 2, dtSec);
+      this.breathShake = expLerp(this.breathShake, target.shake, transitionRate * 2, dtSec);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -440,34 +447,41 @@ export class CameraRig {
       // Pulse: continuous sine bob from beat phase
       // phase 0 = on beat, we want peak displacement at phase 0
       const pulseSine = Math.cos(this.pulsePhase * Math.PI * 2);
-      const pulseAmp = this.pulseEnergy * (1 + this.climaxIntensity * 0.5);
+      const pulseAmp = this.pulseEnergy * (1 + this.climaxIntensity * 0.5) * this.breathIntensity;
       const pulseOffsetY = pulseSine * cfg.pulseAmplitudeY * pulseAmp;
       const pulseOffsetX = Math.sin(this.pulsePhase * Math.PI * 2 * 0.5) * cfg.pulseAmplitudeX * pulseAmp * 0.5;
-      const pulseZoom = this.lastPulseDownbeatZoom;
+      const pulseZoom = this.lastPulseDownbeatZoom * this.breathIntensity;
 
       // Silence pull-back (negative zoom = wide shot)
       const silenceZoom = -this.silencePullback * 0.02;
+
+      // Continuous section shake (e.g. drops) — high-freq noise
+      const shakeT = nowMs * 0.013; // ~13Hz wobble base
+      const contShakeX = this.breathShake * Math.sin(shakeT * 7.1 + 1.3) * this.pulseEnergy;
+      const contShakeY = this.breathShake * Math.cos(shakeT * 5.7 + 2.9) * this.pulseEnergy;
 
       // Raw composite
       let zoom = 1.0
         + this.breathZoom
         + pulseZoom
-        + this.punchZoom * punchFrac
+        + this.punchZoom * punchFrac * this.breathIntensity
         + silenceZoom;
 
       let offsetX = this.breathDriftX
         + pulseOffsetX
-        + this.punchShakeX * punchFrac;
+        + this.punchShakeX * punchFrac
+        + contShakeX;
 
       let offsetY = this.breathDriftY
         + pulseOffsetY
-        + this.punchShakeY * punchFrac;
+        + this.punchShakeY * punchFrac
+        + contShakeY;
 
       let rotation = this.breathRotation
         + this.punchRotation * punchFrac;
 
-      let shakeX = this.punchShakeX * punchFrac;
-      let shakeY = this.punchShakeY * punchFrac;
+      let shakeX = this.punchShakeX * punchFrac + contShakeX;
+      let shakeY = this.punchShakeY * punchFrac + contShakeY;
 
       // ── Safety envelope ──
       zoom = clamp(zoom, 2 - cfg.maxZoom, cfg.maxZoom); // symmetric around 1.0
@@ -587,6 +601,8 @@ export class CameraRig {
     this.breathDriftX = 0;
     this.breathDriftY = 0;
     this.breathRotation = 0;
+    this.breathIntensity = 1.0;
+    this.breathShake = 0;
     this.pulsePhase = 0;
     this.pulseEnergy = 0.5;
     this.lastPulseDownbeatZoom = 0;
