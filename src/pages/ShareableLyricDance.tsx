@@ -1,3 +1,4 @@
+/* cache-bust: 2026-03-04-V4 */
 /**
  * ShareableLyricDance — Public page for a full-song lyric dance.
  * Route: /:artistSlug/:songSlug/lyric-dance
