@@ -45,7 +45,7 @@ import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 
-const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-01';
+const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-04-PERF';
 
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
@@ -1107,6 +1107,18 @@ export class LyricDancePlayer {
   private readonly _measureCanvas = (() => { const c = document.createElement('canvas'); c.width = 1; c.height = 1; return c; })();
   private readonly _measureCtx = this._measureCanvas.getContext('2d')!;
 
+  // ═══ PERF: pre-allocated transform matrix buffer — eliminates per-chunk array allocation
+  // computeTransformMatrix() writes into this buffer instead of returning a new array.
+  // At 60fps with 4-8 visible chunks this saves ~300-500 GC objects/sec → no GC jitter.
+  private readonly _tmBuf: [number, number, number, number, number, number] = [1, 0, 0, 1, 0, 0];
+
+  // ═══ PERF: shadow state tracking — skip redundant GPU state writes
+  private _lastShadowBlur = 0;
+  private _lastShadowColor = '';
+
+  // ═══ PERF: sort-skip when visible set is unchanged
+  private _lastSortHash = 0;
+
   // Comment comets
   private activeComments: CommentChunk[] = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
@@ -2134,13 +2146,20 @@ export class LyricDancePlayer {
 
     this._lastRawTime = rawTime;
 
-    // Lerp toward real time — smooths out audio buffer jitter
-    // 0.2 = responsive enough to not drift, smooth enough to hide 1-frame jitter
-    const alpha = 0.2;
-    this._smoothedTime += (rawTime - this._smoothedTime) * alpha;
+    // PERF: audio buffers step in ~5.8ms increments at 44100Hz.
+    // Alpha=0.2 can accumulate up to ~25ms of drift before self-correcting,
+    // causing word entry/exit to fire a full frame late.
+    // Fix: use 0.5 alpha (snappier convergence) + hard-snap when within 4ms of real time.
+    const diff = rawTime - this._smoothedTime;
+    if (Math.abs(diff) < 0.004) {
+      // Within 4ms — just snap to avoid micro-drift accumulation
+      this._smoothedTime = rawTime;
+    } else {
+      this._smoothedTime += diff * 0.5;
+    }
 
-    // Never drift more than 100ms from real time
-    if (Math.abs(this._smoothedTime - rawTime) > 0.1) {
+    // Never drift more than 50ms from real time (down from 100ms)
+    if (Math.abs(this._smoothedTime - rawTime) > 0.05) {
       this._smoothedTime = rawTime;
     }
 
@@ -2306,8 +2325,8 @@ export class LyricDancePlayer {
   /**
    * Computes a combined 2D affine matrix for:
    *   translate(tx, ty) → rotate(r) → skewX(s) → scale(sx, sy)
-   * Returns the 6 parameters for ctx.setTransform(a, b, c, d, e, f)
-   * Pre-multiplied by DPR.
+   * PERF: writes into this._tmBuf instead of allocating a new array.
+   * Caller must use the return value immediately (or read _tmBuf) — it is overwritten next call.
    */
   private computeTransformMatrix(
     tx: number,
@@ -2318,22 +2337,24 @@ export class LyricDancePlayer {
     sy: number,
   ): [number, number, number, number, number, number] {
     const dpr = this._effectiveDpr;
+    const buf = this._tmBuf;
     if (rotation === 0 && skewXDeg === 0 && sx === 1 && sy === 1) {
-      return [dpr, 0, 0, dpr, tx * dpr, ty * dpr];
+      buf[0] = dpr; buf[1] = 0; buf[2] = 0; buf[3] = dpr;
+      buf[4] = tx * dpr; buf[5] = ty * dpr;
+      return buf;
     }
 
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
     const skewTan = skewXDeg !== 0 ? Math.tan((skewXDeg * Math.PI) / 180) : 0;
 
-    const a = cos * sx * dpr;
-    const b = sin * sx * dpr;
-    const c = (cos * skewTan - sin) * sy * dpr;
-    const d = (sin * skewTan + cos) * sy * dpr;
-    const e = tx * dpr;
-    const f = ty * dpr;
-
-    return [a, b, c, d, e, f];
+    buf[0] = cos * sx * dpr;
+    buf[1] = sin * sx * dpr;
+    buf[2] = (cos * skewTan - sin) * sy * dpr;
+    buf[3] = (sin * skewTan + cos) * sy * dpr;
+    buf[4] = tx * dpr;
+    buf[5] = ty * dpr;
+    return buf;
   }
 
   private update(deltaMs: number, timeSec: number, frame: ScaledKeyframe | null, beatState: BeatState | null): void {
@@ -2668,24 +2689,29 @@ export class LyricDancePlayer {
 
     let drawCalls = 0;
     const sortBuf = this._sortBuffer;
-    sortBuf.length = 0;
-    for (let i = 0; i < frame.chunks.length; i += 1) sortBuf.push(frame.chunks[i]);
-    for (let i = 1; i < sortBuf.length; i += 1) {
-      const v = sortBuf[i];
-      const vKey = ((v.exitProgress ?? 0) > 0) ? 1 : 0;
-      const vSort = (v.fontWeight ?? 700) * 10000 + (v.fontSize ?? 36);
-      let j = i - 1;
-      while (j >= 0) {
-        const jKey = ((sortBuf[j].exitProgress ?? 0) > 0) ? 1 : 0;
-        const jSort = (sortBuf[j].fontWeight ?? 700) * 10000 + (sortBuf[j].fontSize ?? 36);
-        if (jKey > vKey || (jKey === vKey && jSort > vSort)) {
-          sortBuf[j + 1] = sortBuf[j];
-          j -= 1;
-        } else {
-          break;
+    // PERF: skip sort when visible set hasn't changed — hash already computed for collision solver above
+    const sortHash = visibleHash; // reuse the FNV hash computed for collision detection
+    if (sortHash !== this._lastSortHash || sortBuf.length !== frame.chunks.length) {
+      this._lastSortHash = sortHash;
+      sortBuf.length = 0;
+      for (let i = 0; i < frame.chunks.length; i += 1) sortBuf.push(frame.chunks[i]);
+      for (let i = 1; i < sortBuf.length; i += 1) {
+        const v = sortBuf[i];
+        const vKey = ((v.exitProgress ?? 0) > 0) ? 1 : 0;
+        const vSort = (v.fontWeight ?? 700) * 10000 + (v.fontSize ?? 36);
+        let j = i - 1;
+        while (j >= 0) {
+          const jKey = ((sortBuf[j].exitProgress ?? 0) > 0) ? 1 : 0;
+          const jSort = (sortBuf[j].fontWeight ?? 700) * 10000 + (sortBuf[j].fontSize ?? 36);
+          if (jKey > vKey || (jKey === vKey && jSort > vSort)) {
+            sortBuf[j + 1] = sortBuf[j];
+            j -= 1;
+          } else {
+            break;
+          }
         }
+        sortBuf[j + 1] = v;
       }
-      sortBuf[j + 1] = v;
     }
     const frameNowMs = performance.now(); // hoisted — used everywhere below
     const frameNowSec = frameNowMs / 1000;
@@ -2696,6 +2722,8 @@ export class LyricDancePlayer {
     if (qTier >= 2) {
       this.ctx.shadowBlur = 0;
       this.ctx.shadowColor = 'transparent';
+      this._lastShadowBlur = 0;
+      this._lastShadowColor = 'transparent';
     }
 
     const isPortraitLocal = this.height > this.width;
@@ -2983,8 +3011,11 @@ export class LyricDancePlayer {
         const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
         const beatState = this._lastBeatState;
         const beatPulse = beatState?.pulse ?? 0;
-        let heroDrawX = drawX;
-        let heroDrawY = finalDrawY;
+        // PERF: sub-pixel snap draw coordinates to device pixel grid
+        // Fractional positions cause shimmer during scale transitions (especially hero pop-in).
+        const dpr = this._effectiveDpr;
+        let heroDrawX = Math.round(drawX * dpr) / dpr;
+        let heroDrawY = Math.round(finalDrawY * dpr) / dpr;
 
         if (isHeroChunk && entry >= 0.5 && drawAlpha > 0.1) {
           // Beat bounce: gentle Y offset for words on screen > 500ms
@@ -2999,8 +3030,10 @@ export class LyricDancePlayer {
           // ═══ Adaptive quality: reduce shadow blur at lower tiers ═══
           const blurCap = this._qualityTier === 0 ? 8 : this._qualityTier === 1 ? 3 : 0;
           const glowColor = chunk.color ?? '#ffffff';
-          this.ctx.shadowColor = glowColor;
-          this.ctx.shadowBlur = Math.min(blurCap, bloomGlow * 12);
+          const targetBlur = Math.min(blurCap, bloomGlow * 12);
+          // PERF: skip GPU state write if shadow hasn't changed
+          if (glowColor !== this._lastShadowColor) { this.ctx.shadowColor = glowColor; this._lastShadowColor = glowColor; }
+          if (targetBlur !== this._lastShadowBlur) { this.ctx.shadowBlur = targetBlur; this._lastShadowBlur = targetBlur; }
 
           // Depth stack: 3 shadow layers behind the hero word
           // Skip at tier 2+ (each layer = setTransform + fillText — very expensive)
@@ -3034,8 +3067,11 @@ export class LyricDancePlayer {
           if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         } else if (chunk.glow > 0) {
           const glowCap = this._qualityTier === 0 ? 8 : this._qualityTier === 1 ? 3 : 0;
-          this.ctx.shadowColor = chunk.color ?? '#ffffff';
-          this.ctx.shadowBlur = Math.min(glowCap, chunk.glow * 12);
+          const gc = chunk.color ?? '#ffffff';
+          const gb = Math.min(glowCap, chunk.glow * 12);
+          // PERF: skip GPU write if unchanged
+          if (gc !== this._lastShadowColor) { this.ctx.shadowColor = gc; this._lastShadowColor = gc; }
+          if (gb !== this._lastShadowBlur) { this.ctx.shadowBlur = gb; this._lastShadowBlur = gb; }
         }
 
         const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01 && this._qualityTier < 3;
@@ -3110,6 +3146,7 @@ export class LyricDancePlayer {
       }
       this.ctx.shadowBlur = 0;
       this.ctx.globalAlpha = 1;
+      this._lastShadowBlur = 0;
       drawCalls += 1;
     }
     this.ctx.restore();
