@@ -1039,6 +1039,8 @@ export function LyricFitTab({
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
           onBack={() => handleViewChange("lyrics")}
+          autoDanceId={autoDanceId}
+          autoDanceSlug={autoDanceSlug}
           onImageGenerationStatusChange={(status) => {
             setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
           }}
