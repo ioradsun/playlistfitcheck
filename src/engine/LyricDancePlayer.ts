@@ -2552,8 +2552,10 @@ export class LyricDancePlayer {
     // entire matrix and would wipe any parent zoom.
     const subjectT = this.cameraRig.getSubjectTransform();
     const camZoom = subjectT.zoom;
-    const camShakeX = subjectT.shakeX + subjectT.offsetX;
-    const camShakeY = subjectT.shakeY + subjectT.offsetY;
+    // Text is the nearest layer — use full camera offset (beat dance + sway + drop shake).
+    // shakeX/shakeY is a subset used by parallax layers; offsetX/offsetY is the real camera.
+    const camShakeX = subjectT.offsetX;
+    const camShakeY = subjectT.offsetY;
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
