@@ -339,6 +339,7 @@ export function FitTab({
 
       const url = `/${artistSlug}/${songSlug}/lyric-dance`;
       setPublishedUrl(url);
+      setPublishedDanceId(danceRow?.id ?? null);
       setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
 
