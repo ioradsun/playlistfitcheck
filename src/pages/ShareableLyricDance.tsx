@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download } from "lucide-react";
+import { Download, Sun, Moon } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
@@ -265,6 +265,7 @@ export default function ShareableLyricDance() {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
   const [exportProgress, setExportProgress] = useState(0);
+  const [themeMode, setThemeMode] = useState<'auto' | 'light' | 'dark'>('auto');
   const abortRef = useRef<AbortController | null>(null);
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -273,6 +274,13 @@ export default function ShareableLyricDance() {
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const [playerInstance, setPlayerInstance] = useState<LyricDancePlayer | null>(null);
   const playerInitializedRef = useRef(false);
+
+  // Sync theme override to player engine
+  useEffect(() => {
+    if (playerInstance) {
+      playerInstance.themeOverride = themeMode;
+    }
+  }, [themeMode, playerInstance]);
 
   const handleExport = useCallback(async (ratio: "16:9" | "9:16") => {
     if (!playerRef.current) return;
@@ -845,6 +853,26 @@ export default function ShareableLyricDance() {
                 )}
               </PopoverContent>
             </Popover>
+
+            {/* Theme toggle */}
+            <button
+              onClick={() => {
+                setThemeMode(prev =>
+                  prev === 'auto' ? 'light' : prev === 'light' ? 'dark' : 'auto'
+                );
+              }}
+              className="w-10 h-10 flex items-center justify-center rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/5 transition-all shrink-0 relative"
+              aria-label="Toggle theme"
+              title={`Theme: ${themeMode}`}
+            >
+              {themeMode === 'light' ? (
+                <Sun size={16} />
+              ) : themeMode === 'dark' ? (
+                <Moon size={16} />
+              ) : (
+                <span className="text-[9px] font-mono uppercase tracking-wider opacity-60">A</span>
+              )}
+            </button>
 
             {/* Comment input */}
             <div className="flex-1">
