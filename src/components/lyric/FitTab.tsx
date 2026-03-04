@@ -14,6 +14,7 @@ import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { LyricWaveform } from "./LyricWaveform";
+import { InlineLyricDance } from "@/components/songfit/InlineLyricDance";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
