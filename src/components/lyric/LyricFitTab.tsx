@@ -106,6 +106,8 @@ export function LyricFitTab({
   const [songSignature, setSongSignature] = useState<SongSignature | null>(null);
   const [audioSections, setAudioSections] = useState<any[]>([]);
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
+  const [autoDanceId, setAutoDanceId] = useState<string | null>(null);
+  const [autoDanceSlug, setAutoDanceSlug] = useState<{ artist: string; song: string } | null>(null);
   // bgImageUrl and frameState removed — V3 derives from cinematicDirection
 
   const [fitReadiness, setFitReadiness] = useState<FitReadiness>("not_started");
