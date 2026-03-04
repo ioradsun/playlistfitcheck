@@ -1010,6 +1010,8 @@ export class LyricDancePlayer {
   private _bakedChunkCache: Map<string, ChunkState> | null = null;
   private _bakedVersion = 0;
   private _bakedHasCinematicDirection = false;
+  /** Incremented by updateTranscript() to cancel any in-flight bake closure */
+  private _bakeGeneration = 0;
 
   // Runtime evaluator state
   private _evalChunkPool: Array<ScaledKeyframe['chunks'][number]> = [];
@@ -1323,6 +1325,7 @@ export class LyricDancePlayer {
 
     if (!this._bakePromise) {
       this._bakeLock = true;
+      const bakeGen = this._bakeGeneration; // snapshot — if updateTranscript() fires mid-bake it increments this
       this._bakePromise = (async () => {
         // Ensure real viewport dimensions before compiling
         if (this.width === 0 && this.container) {
@@ -1369,6 +1372,11 @@ export class LyricDancePlayer {
         this._updateViewportScale();
         this._textMetricsCache.clear();
 
+        // Only commit to cache if updateTranscript() hasn't fired since we started
+        if (this._bakeGeneration !== bakeGen) {
+          this._bakeLock = false;
+          return; // stale bake — discard, updateTranscript already set compiledScene fresh
+        }
         this._bakedScene = compiled;
         this._bakedChunkCache = new Map(this.chunks);
         this._bakedHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
@@ -1379,9 +1387,12 @@ export class LyricDancePlayer {
 
     await this._bakePromise;
 
-    // Restore from instance cache
-    this.compiledScene = this._bakedScene;
-    this.chunks = new Map(this._bakedChunkCache!);
+    // Restore from instance cache — but only if the bake wasn't invalidated by updateTranscript()
+    // (if it was, _bakedScene is null and compiledScene is already fresh)
+    if (this._bakedScene) {
+      this.compiledScene = this._bakedScene;
+      this.chunks = new Map(this._bakedChunkCache!);
+    }
     this._updateViewportScale();
     this._textMetricsCache.clear();
     if (this.audio.currentTime <= 0) {
@@ -1749,15 +1760,16 @@ export class LyricDancePlayer {
     if (words !== undefined) this.data = { ...this.data, words: words ?? undefined };
     if (!this.payload) return;
 
-    // ── Invalidate bake cache ──────────────────────────────────────────────
-    // ensureTimelineReady() ends with `this.compiledScene = this._bakedScene`,
-    // which would silently overwrite the scene we're about to compile here if
-    // an in-flight scheduleFullModeUpgrade() idle callback fires afterwards.
-    // Clear both the promise and the cached scene so the next upgrade bakes
-    // from the new lyrics instead of restoring the stale ones.
-    this._bakePromise = null;
+    // ── Invalidate any in-flight bake ────────────────────────────────────
+    // The bake closure captures _bakeGeneration at start and checks it before
+    // committing. Incrementing here causes it to discard its stale compiled
+    // scene instead of writing _bakedScene — which would otherwise get
+    // restored to compiledScene by ensureTimelineReady() after the await.
+    this._bakeGeneration++;
     this._bakedScene = null;
     this._bakedChunkCache = null;
+    // Keep _bakePromise alive so ensureTimelineReady() can still await it;
+    // the closure will return early without touching _bakedScene.
 
     const t = this.audio.currentTime;
     const payload = this.buildScenePayload();
