@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-04-V4 */
+/* cache-bust: 2026-03-04-V6 */
 /**
  * InlineLyricDance — Embeds the lyric dance player inside a card.
  * Player lifecycle is fully owned by useLyricDancePlayer.
